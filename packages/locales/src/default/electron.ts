@@ -29,6 +29,7 @@ export default {
   'navigation.image': 'Image',
   'navigation.knowledgeBase': 'Knowledge Base',
   'navigation.lobehub': 'LobeHub',
+  'navigation.mail': 'Mail',
   'navigation.memory': 'Memory',
   'navigation.memoryContexts': 'Memory - Contexts',
   'navigation.memoryIdentities': 'Memory - Identities',

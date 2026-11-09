@@ -18,7 +18,7 @@ vi.mock('i18next', () => ({
 
 const initialStore = initialState as ChatStore;
 
-const mockMessages = [
+const createMessageFixture = () => [
   {
     id: 'msg1',
     content: 'Hello World',
@@ -43,7 +43,24 @@ const mockMessages = [
       },
     ],
   },
-] as UIChatMessage[];
+];
+
+const createTestTool = (): NonNullable<UIChatMessage['tools']>[number] => ({
+  id: 'tool-1',
+  identifier: 'test',
+  apiName: 'test',
+  arguments: '{}',
+  type: 'default',
+});
+
+const createDisplayState = (message: UIChatMessage): Partial<ChatStore> => ({
+  activeAgentId: 'test-id',
+  messagesMap: {
+    [messageMapKey({ agentId: 'test-id' })]: [message],
+  },
+});
+
+const mockMessages = createMessageFixture() as UIChatMessage[];
 
 const mockReasoningMessages = [
   {
@@ -66,32 +83,7 @@ const mockReasoningMessages = [
   },
 ] as UIChatMessage[];
 
-const mockedChats = [
-  {
-    id: 'msg1',
-    content: 'Hello World',
-    role: 'user',
-  },
-  {
-    id: 'msg2',
-    content: 'Goodbye World',
-    role: 'user',
-  },
-  {
-    id: 'msg3',
-    content: 'Function Message',
-    role: 'tool',
-    tools: [
-      {
-        arguments: ['arg1', 'arg2'],
-        identifier: 'func1',
-        apiName: 'ttt',
-        type: 'pluginType',
-        id: 'abc',
-      },
-    ],
-  },
-] as UIChatMessage[];
+const mockedChats = createMessageFixture() as UIChatMessage[];
 
 const mockChatStore = {
   messagesMap: {
@@ -406,15 +398,7 @@ describe('displayMessageSelectors', () => {
           {
             id: 'child-1',
             content: 'First response',
-            tools: [
-              {
-                id: 'tool-1',
-                identifier: 'test',
-                apiName: 'test',
-                arguments: '{}',
-                type: 'default',
-              },
-            ],
+            tools: [createTestTool()],
           },
           {
             id: 'child-2',
@@ -428,12 +412,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-1')(
         state as ChatStore,
@@ -456,25 +435,12 @@ describe('displayMessageSelectors', () => {
           {
             id: 'child-2',
             content: 'Second response with tools',
-            tools: [
-              {
-                id: 'tool-1',
-                identifier: 'test',
-                apiName: 'test',
-                arguments: '{}',
-                type: 'default',
-              },
-            ],
+            tools: [createTestTool()],
           },
         ],
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-2')(
         state as ChatStore,
@@ -491,15 +457,7 @@ describe('displayMessageSelectors', () => {
           {
             id: 'child-1',
             content: 'First response with tools',
-            tools: [
-              {
-                id: 'tool-1',
-                identifier: 'test',
-                apiName: 'test',
-                arguments: '{}',
-                type: 'default',
-              },
-            ],
+            tools: [createTestTool()],
           },
           {
             id: 'child-2',
@@ -509,12 +467,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-3')(
         state as ChatStore,
@@ -531,12 +484,7 @@ describe('displayMessageSelectors', () => {
         content: 'Regular message',
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [assistantMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(assistantMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('msg-1')(
         state as ChatStore,
@@ -552,12 +500,7 @@ describe('displayMessageSelectors', () => {
         children: undefined,
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-4')(
         state as ChatStore,
@@ -573,12 +516,7 @@ describe('displayMessageSelectors', () => {
         children: [],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-5')(
         state as ChatStore,
@@ -595,15 +533,7 @@ describe('displayMessageSelectors', () => {
           {
             id: 'child-1',
             content: 'First response',
-            tools: [
-              {
-                id: 'tool-1',
-                identifier: 'test',
-                apiName: 'test',
-                arguments: '{}',
-                type: 'default',
-              },
-            ],
+            tools: [createTestTool()],
           },
           {
             id: 'child-2',
@@ -621,12 +551,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-6')(
         state as ChatStore,
@@ -648,12 +573,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.getGroupLatestMessageWithoutTools('group-7')(
         state as ChatStore,
@@ -685,12 +605,7 @@ describe('displayMessageSelectors', () => {
         content: 'Simple message',
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [message],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(message);
 
       const result = displayMessageSelectors.findLastMessageId('msg-1')(state as ChatStore);
       expect(result).toBe('msg-1');
@@ -713,12 +628,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [groupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(groupMessage);
 
       const result = displayMessageSelectors.findLastMessageId('group-1')(state as ChatStore);
       expect(result).toBe('child-2');
@@ -749,12 +659,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [messageWithTools],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(messageWithTools);
 
       const result = displayMessageSelectors.findLastMessageId('msg-with-tools')(
         state as ChatStore,
@@ -785,12 +690,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [message],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(message);
 
       const result = displayMessageSelectors.findLastMessageId('msg-1')(state as ChatStore);
       expect(result).toBe('child-1');
@@ -835,12 +735,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [messageWithChildrenAndTools],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(messageWithChildrenAndTools);
 
       const result = displayMessageSelectors.findLastMessageId('msg-1')(state as ChatStore);
       expect(result).toBe('child-2');
@@ -887,12 +782,7 @@ describe('displayMessageSelectors', () => {
         ],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [assistantGroup],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(assistantGroup);
 
       const result = displayMessageSelectors.findLastMessageId('assistant-group-1')(
         state as ChatStore,
@@ -911,12 +801,7 @@ describe('displayMessageSelectors', () => {
         pinnedMessages: [],
       } as unknown as UIChatMessage;
 
-      const state: Partial<ChatStore> = {
-        activeAgentId: 'test-id',
-        messagesMap: {
-          [messageMapKey({ agentId: 'test-id' })]: [compressedGroupMessage],
-        },
-      };
+      const state: Partial<ChatStore> = createDisplayState(compressedGroupMessage);
 
       const result = displayMessageSelectors.findLastMessageId('mg_123456')(state as ChatStore);
       expect(result).toBe('msg-999');

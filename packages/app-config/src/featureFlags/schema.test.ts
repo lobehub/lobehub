@@ -290,6 +290,16 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(state.enableMobileNewTierSales).toBeUndefined();
   });
 
+  it('should keep the mobile sandbox grant off by default and out of the client state', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_sandbox_grant).toBe(false);
+    expect(FeatureFlagsSchema.parse({ mobile_sandbox_grant: ['tester-123'] })).toEqual({
+      mobile_sandbox_grant: ['tester-123'],
+    });
+    expect(
+      mapFeatureFlagsEnvToState({ mobile_sandbox_grant: ['tester-123'] }, 'tester-123'),
+    ).toEqual(mapFeatureFlagsEnvToState({}, 'tester-123'));
+  });
+
   it('should keep topic previews off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(
@@ -338,6 +348,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     const config = { mcp_apps: ['user-123'] };
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApps).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
+  });
+
+  it('should keep agent knowledge spaces off by default and enable them per user', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentKnowledgeSpace,
+    ).toBe(false);
+
+    const config = { agent_knowledge_space: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableAgentKnowledgeSpace).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentKnowledgeSpace).toBe(false);
   });
 
   it('should keep the rail layout off by default and enable it per user or globally', () => {

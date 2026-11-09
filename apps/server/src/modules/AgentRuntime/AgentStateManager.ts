@@ -221,7 +221,11 @@ export class AgentStateManager {
       messages?: unknown;
       operationToolSet?: unknown;
     };
-    if (hasNonPersistedMessage(persistable.messages)) {
+    if (
+      !state.origin?.agentId ||
+      !state.origin.topicId ||
+      hasNonPersistedMessage(persistable.messages)
+    ) {
       return JSON.stringify(persistable);
     }
     const { messages: _messages, ...rest } = persistable;

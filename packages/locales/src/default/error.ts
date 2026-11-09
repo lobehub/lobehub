@@ -1,6 +1,8 @@
 export default {
   'asyncState.desc': 'Something went wrong while loading. Please try again.',
+  'asyncState.hideDetails': 'Hide details',
   'asyncState.metricLabel': 'Failed to load',
+  'asyncState.showDetails': 'Show details',
   'asyncState.title': 'Failed to load',
   'otherScope.desc': 'It belongs to {{name}}, not the space you are in now.',
   'otherScope.personal': 'your personal space',

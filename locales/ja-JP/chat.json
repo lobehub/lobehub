@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} 件のスキル",
   "agentProfile.skills_other": "{{count}} 件のスキル",
   "agentSender.sourceTopic": "ソーストピック",
-  "agentSignal.receipts.agentSignalLabel": "エージェントシグナル",
   "agentSignal.receipts.memory.detail": "将来の返信のために保存しました",
   "agentSignal.receipts.memory.openInMemory": "メモリで開く",
   "agentSignal.receipts.memory.title": "メモリーが保存されました",

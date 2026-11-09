@@ -2,7 +2,11 @@ import { type ServerConfigStore } from './store';
 
 export const featureFlagsSelectors = (s: ServerConfigStore) => s.featureFlags;
 
+const EMPTY_PROVIDERS: string[] = [];
+
 export const serverConfigSelectors = {
+  agentIdentityProviders: (s: ServerConfigStore) =>
+    s.serverConfig.agentIdentityProviders ?? EMPTY_PROVIDERS,
   disableEmailPassword: (s: ServerConfigStore) => s.serverConfig.disableEmailPassword || false,
   enableBusinessFeatures: (s: ServerConfigStore) => s.serverConfig.enableBusinessFeatures || false,
   enableEmailVerification: (s: ServerConfigStore) =>
@@ -20,6 +24,8 @@ export const serverConfigSelectors = {
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
   enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
+  enableAgentKnowledgeSpace: (s: ServerConfigStore) =>
+    s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
   enablePageCollab: (s: ServerConfigStore) => s.serverConfig.enablePageCollab || false,

@@ -421,6 +421,21 @@ export const ERROR_CODE_SPECS: SpecMap = {
     description:
       'A relayed model request on the user device missed its first-output or total deadline.',
   },
+  [AgentRuntimeErrorType.ProviderStreamInterrupted]: {
+    code: AgentRuntimeErrorType.ProviderStreamInterrupted,
+    numericId: 6005,
+    category: 'network',
+    severity: 'warning',
+    // The provider ended the response without a terminal event. Nothing on our
+    // side failed to parse, so this is not a harness stream error.
+    attribution: 'provider',
+    httpStatus: 502,
+    retryable: true,
+    routeFallback: true,
+    countAsFailure: false,
+    description:
+      'Provider closed the stream before sending a terminal event (stop / usage / error).',
+  },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
   [AgentRuntimeErrorType.StreamChunkError]: {

@@ -235,6 +235,11 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     return result;
   }
 
+  /** Storage-only: clients already received the removed entries live. */
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    return this.inner.deleteStreamEvents(operationId, eventIds);
+  }
+
   async publishStreamChunk(
     operationId: string,
     stepIndex: number,

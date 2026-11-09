@@ -10,6 +10,7 @@ import {
   cx,
   Flexbox,
   Icon,
+  Segmented,
   Select,
   SliderWithInput,
   Spin,
@@ -38,6 +39,9 @@ import { systemAgentSelectors } from '@/store/user/selectors';
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useEffectiveAgentMode } from '../../hooks/useEffectiveAgentMode';
+import { useToggleAgentMode } from '../../hooks/useToggleAgentMode';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useParamsModelConfig } from './useParamsModelConfig';
 
@@ -426,8 +430,12 @@ const SliderField = ({
 );
 
 const Controls = ({ variant = 'popover' }: ControlsProps) => {
-  const { t } = useTranslation(['setting', 'components']);
+  const { t } = useTranslation(['setting', 'components', 'chat']);
   const agentId = useAgentId();
+  const toggleAgentMode = useToggleAgentMode();
+  const { canUseResource } = useChatInputResourceAccess();
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+    useEffectiveAgentMode(agentId);
   const { updateAgentConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
   // Saving feedback belongs to this form. Keeping it here prevents a write from
@@ -737,6 +745,36 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
         </div>
         <div className={styles.body}>
           <div className={styles.commonSection}>
+            <ControlRow
+              tag="agentMode"
+              title={t('settingModel.params.panel.chatMode')}
+              action={
+                <Segmented
+                  disabled={!canCreate || !canUseResource}
+                  size={'small'}
+                  value={currentMode}
+                  options={[
+                    {
+                      disabled: !canSelectAgentMode,
+                      label: t('chatMode.agent', { ns: 'chat' }),
+                      value: 'agent',
+                    },
+                    { label: t('chatMode.chat', { ns: 'chat' }), value: 'chat' },
+                  ]}
+                  onChange={(value) => {
+                    if (value === 'agent' && !canSelectAgentMode) return;
+                    void toggleAgentMode(value === 'agent');
+                  }}
+                />
+              }
+              tooltip={
+                isAgentModeUnavailable
+                  ? t('chatMode.agentUnsupported', { ns: 'chat' })
+                  : t(currentMode === 'agent' ? 'chatMode.agentDesc' : 'chatMode.chatDesc', {
+                      ns: 'chat',
+                    })
+              }
+            />
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}

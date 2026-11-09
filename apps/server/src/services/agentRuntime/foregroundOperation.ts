@@ -14,11 +14,13 @@ export const BACKGROUND_OPERATION_TRIGGERS: ReadonlySet<string> = new Set<string
   RequestTrigger.Cron,
   RequestTrigger.Eval,
   RequestTrigger.Goal,
+  RequestTrigger.Inbox,
   RequestTrigger.Notify,
   RequestTrigger.Openapi,
   RequestTrigger.Scheduled,
   RequestTrigger.Scm,
   RequestTrigger.Task,
+  RequestTrigger.TaskCallback,
   RequestTrigger.Verify,
 ]);
 
@@ -29,16 +31,17 @@ export const isForegroundOperationTrigger = (trigger: string | null | undefined)
  * Whether a composer send should retire this run when it still owns the
  * topic's `runningOperation` marker.
  *
- * Foreground runs, plus Agent Signal runs: a run that holds the main-spine
- * marker with that trigger (e.g. the creator wakeup that processes task
- * results) continues the user's own conversation, yet the server started it,
- * so the client has no local op to queue behind. Leaving it live next to the
- * send forks the spine, and the user's message ends up on a branch the
- * conversation never shows. Agent Signal runs on isolation threads never own
- * the marker, so they are unaffected.
+ * Foreground runs, plus server-started runs that can hold the main-spine
+ * marker: the creator wakeup that processes task results (`TaskCallback`), and
+ * an Agent Signal run that fell back to the main topic without an isolation
+ * thread. The client never started either, so it has no local op to queue
+ * behind. Leaving one live next to the send forks the spine, and the user's
+ * message ends up on a branch the conversation never shows.
  */
 export const isComposerSupersedableTrigger = (trigger: string | null | undefined): boolean =>
-  isForegroundOperationTrigger(trigger) || trigger === RequestTrigger.AgentSignal;
+  isForegroundOperationTrigger(trigger) ||
+  trigger === RequestTrigger.AgentSignal ||
+  trigger === RequestTrigger.TaskCallback;
 
 /**
  * How a composer send found the topic's previous foreground run still `running`.

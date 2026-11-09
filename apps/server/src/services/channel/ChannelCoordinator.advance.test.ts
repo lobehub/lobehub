@@ -75,7 +75,7 @@ describe('Channel concurrent startup', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     executions.input.mockResolvedValue([]);
-    executions.recentContext.mockResolvedValue([]);
+    executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     executions.claim.mockImplementation(async (_channelId, id: string) => ({

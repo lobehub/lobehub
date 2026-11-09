@@ -8,6 +8,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeProcessorContext } from '../../../runtime/context';
 import { createFeedbackSatisfactionJudgeProcessor } from '../feedbackSatisfaction';
+import { createFeedbackTestContext } from './testUtils';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
@@ -113,17 +114,7 @@ describe('feedbackSatisfactionJudge', () => {
       result: 'satisfied',
     });
 
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
 
     const processor = createFeedbackSatisfactionJudgeProcessor({
       db: {} as LobeChatDatabase,
@@ -205,17 +196,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -259,17 +240,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'not_satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -314,17 +285,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'not_satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -363,17 +324,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(

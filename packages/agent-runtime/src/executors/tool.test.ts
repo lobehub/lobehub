@@ -190,6 +190,53 @@ describe('single tool executors', () => {
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'client-tool-msg' });
   });
 
+  it('merges a result into a row the tool created, keeping the state it wrote', async () => {
+    // A background sub-agent writes its placeholder with `state.background`
+    // and returns only the start receipt; replacing the state dropped the flag,
+    // so the completion bridge never delivered the sub-agent's answer.
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: { content: 'Started in the background.', executionTime: 5, success: true },
+      toolMessageId: 'background-placeholder',
+    });
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      type: 'call_tool',
+    };
+
+    await callTool(host)(instruction, createState());
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).toHaveBeenCalledWith(
+      'background-placeholder',
+      expect.objectContaining({
+        content: 'Started in the background.',
+        pluginState: {},
+        replacePluginState: false,
+      }),
+    );
+  });
+
+  it('replaces the state of a row the tool created when its result is withheld', async () => {
+    runTool.mockResolvedValueOnce({
+      attempts: 1,
+      result: { content: 'Withheld by policy.', success: false, state: { reason: 'denied' } },
+      resultBlocked: true,
+      toolMessageId: 'background-placeholder',
+    });
+    const instruction: Extract<AgentInstruction, { type: 'call_tool' }> = {
+      payload: { parentMessageId: 'assistant-msg-1', toolCalling: createToolCall() },
+      type: 'call_tool',
+    };
+
+    await callTool(host)(instruction, createState());
+
+    expect(updateToolMessage).toHaveBeenCalledWith(
+      'background-placeholder',
+      expect.objectContaining({ pluginState: { reason: 'denied' }, replacePluginState: true }),
+    );
+  });
+
   it('settles the existing row when the transport reports cancellation', async () => {
     runTool.mockResolvedValueOnce({
       attempts: 0,

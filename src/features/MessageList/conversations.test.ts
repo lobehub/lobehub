@@ -5,6 +5,7 @@ import {
   buildConversationEntries,
   buildConversationSections,
   formatConversationTime,
+  inboxActivity,
   latestActivity,
   latestTopicOf,
 } from './conversations';
@@ -232,6 +233,23 @@ describe('latestTopicOf', () => {
     expect(latestTopicOf(recents, 'missing')).toBeUndefined();
     // No owner id (inbox unresolved) must not match every topic.
     expect(latestTopicOf(recents, undefined)).toBeUndefined();
+  });
+});
+
+describe('inboxActivity', () => {
+  const direct = (createdAt: string) =>
+    ({ lastMessage: { content: 'hi', createdAt } }) as unknown as ChannelListItem;
+
+  it('follows the direct Channel instead of the legacy topics', () => {
+    expect(
+      inboxActivity('2026-10-02', topic({ updatedAt: '2026-10-09' }), direct('2026-10-05')),
+    ).toEqual(new Date('2026-10-05'));
+  });
+
+  it('falls back to the latest topic without a direct Channel', () => {
+    expect(inboxActivity('2026-10-02', topic({ updatedAt: '2026-10-09' }))).toEqual(
+      new Date('2026-10-09'),
+    );
   });
 });
 

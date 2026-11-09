@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} vaardigheid",
   "agentProfile.skills_other": "{{count}} vaardigheden",
   "agentSender.sourceTopic": "Brononderwerp",
-  "agentSignal.receipts.agentSignalLabel": "Agent Signaal",
   "agentSignal.receipts.memory.detail": "Opgeslagen voor toekomstige antwoorden",
   "agentSignal.receipts.memory.openInMemory": "Openen in Geheugen",
   "agentSignal.receipts.memory.title": "Geheugen opgeslagen",

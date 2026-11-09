@@ -23,8 +23,6 @@ export interface ConversationRowProps {
   contextMenuItems?: ComponentProps<typeof ContextMenuTrigger>['items'];
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
   onMouseEnter?: () => void;
-  /** Pinned rows keep a tinted background, like WeChat's 置顶. */
-  pinned?: boolean;
   preview?: string;
   /** The row element, e.g. the anchor for an inline rename popover. */
   ref?: Ref<HTMLElement>;
@@ -67,7 +65,6 @@ const ConversationRow = memo<ConversationRowProps>(
     contextMenuItems,
     onClick,
     onMouseEnter,
-    pinned,
     preview,
     ref,
     running,
@@ -81,7 +78,7 @@ const ConversationRow = memo<ConversationRowProps>(
       'aria-current': active ? 'page' : undefined,
       'aria-label': title,
       ref,
-      ...stylex.props(styles.row, pinned && styles.rowPinned, active && styles.rowActive),
+      ...stylex.props(styles.row, active && styles.rowActive),
       'to': url,
       onClick,
       onMouseEnter,
@@ -95,14 +92,20 @@ const ConversationRow = memo<ConversationRowProps>(
             <span {...stylex.props(styles.unread)}>{unread > 99 ? '99+' : unread}</span>
           )}
         </span>
-        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+        <Flexbox
+          flex={1}
+          gap={2}
+          justify={'center'}
+          {...stylex.props(styles.rowText, singleLine && styles.rowTextSingleLine)}
+        >
           <Flexbox horizontal align={'center'} gap={8}>
             <span {...stylex.props(styles.title)}>{title}</span>
             {activeAt && (
               <span {...stylex.props(styles.time)}>{formatConversationTime(activeAt)}</span>
             )}
           </Flexbox>
-          {!singleLine && (
+          {/* No preview: the title sits centered at the full row height, not over a blank line. */}
+          {!singleLine && (running || preview) && (
             <Flexbox horizontal align={'center'} gap={8}>
               {running ? (
                 <Flexbox
@@ -115,7 +118,7 @@ const ConversationRow = memo<ConversationRowProps>(
                   {t('messageList.running')}
                 </Flexbox>
               ) : (
-                <span {...stylex.props(styles.preview)}>{preview || ' '}</span>
+                <span {...stylex.props(styles.preview)}>{preview}</span>
               )}
             </Flexbox>
           )}
