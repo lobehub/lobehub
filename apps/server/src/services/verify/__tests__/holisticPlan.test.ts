@@ -207,6 +207,22 @@ describe('verify plan generation model', () => {
     );
   });
 
+  it('falls back to the verify service model when the pinned provider has no key', async () => {
+    generateObjectMock
+      .mockRejectedValueOnce({ errorType: 'InvalidProviderAPIKey', provider: 'deepseek' })
+      .mockResolvedValueOnce({ criteria: [] });
+    getUserSettingsMock.mockResolvedValue({
+      systemAgent: { verify: { model: 'gpt-4o', provider: 'openai' } },
+    });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({ goal: 'Ship it' });
+
+    expect(generateObjectMock.mock.calls.map(([input]) => [input.provider, input.model])).toEqual([
+      [VERIFY_PLAN_MODEL_CONFIG.provider, VERIFY_PLAN_MODEL_CONFIG.model],
+      ['openai', 'gpt-4o'],
+    ]);
+  });
+
   /**
    * Regression: a Task's run goal opens with English scaffolding ("Verify only
    * this Task…") around a Chinese brief, and "write in the language of the run
