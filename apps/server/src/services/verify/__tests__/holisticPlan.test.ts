@@ -65,6 +65,10 @@ vi.mock('@/database/models/document', () => ({
     return {};
   }),
 }));
+// The pinned plan model is runnable here; its fallback is covered in planModelConfig.test.ts.
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(async () => ({})),
+}));
 vi.mock('@/server/services/aiGeneration', () => ({
   AiGenerationService: vi.fn(function () {
     return { generateObject: generateObjectMock };

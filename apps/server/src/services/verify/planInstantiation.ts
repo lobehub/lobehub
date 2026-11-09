@@ -139,7 +139,7 @@ const instantiatePlan = async (
     // spend one generation call splitting the requirement into named criteria,
     // so the checklist reads as distinguishable items instead of one generic
     // "Task delivery acceptance" row. The split runs on the pinned plan model
-    // (VERIFY_PLAN_MODEL_CONFIG), not the verifier agent's chat model.
+    // (resolveVerifyPlanModelConfig), not the verifier agent's chat model.
     await planGenerator.generateDraftPlan({
       // Ground the generated criteria in the acceptance text, not just the title.
       context: requirement,
