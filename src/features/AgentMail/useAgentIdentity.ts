@@ -1,6 +1,7 @@
 import type { AgentInboxMessageSummary } from '@lobechat/types';
 import { useState } from 'react';
 import useSWR from 'swr';
+import useSWRImmutable from 'swr/immutable';
 import useSWRInfinite from 'swr/infinite';
 
 import { agentAccountService } from '@/services/agentAccount';
@@ -29,6 +30,24 @@ export const useInboxMessage = (id?: string) =>
   );
 
 /**
+ * A message reached through its URL rather than a list row: read it and clear
+ * its unread mark before the list and count load, so neither shows it as unread.
+ */
+const openMessageFromUrl = async (id: string) => {
+  const message = await agentAccountService.getInboxMessage(id);
+  if (message.readAt) return message;
+
+  try {
+    await agentAccountService.markInboxRead([id]);
+  } catch (error) {
+    // The message still opens; a failed read-mark only affects the dot.
+    console.error('[AgentIdentity] mark read failed', error);
+  }
+
+  return message;
+};
+
+/**
  * The mailbox being read, out of the addresses the agent still holds.
  *
  * Derived rather than stored as a fallback, so releasing the selected address
@@ -38,7 +57,11 @@ export const useInboxMessage = (id?: string) =>
 export const useMailbox = (agentId: string, messageId?: string) => {
   const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
   const [selectedId, select] = useState<string>();
-  const openMessage = useInboxMessage(selectedId ? undefined : messageId);
+  // Immutable: one open is one read, so a focus refetch must not stamp it again.
+  const openMessage = useSWRImmutable(
+    !selectedId && messageId ? ['agent-inbox-open-message', messageId] : null,
+    ([, id]) => openMessageFromUrl(id),
+  );
   const accounts = (data ?? []).filter((account) => account.status !== 'revoked');
   const preferredId = selectedId ?? openMessage.data?.accountId;
 

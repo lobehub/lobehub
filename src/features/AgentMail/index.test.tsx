@@ -167,6 +167,32 @@ describe('AgentMail', () => {
     );
   });
 
+  it('marks a message read when it is opened straight from its URL', async () => {
+    page('/agent/agt_1/mail/msg_a');
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    await waitFor(() => expect(service.markInboxRead).toHaveBeenCalledWith(['msg_a']));
+    expect(service.markInboxRead).toHaveBeenCalledTimes(1);
+    // The list and count load after the mark, so neither shows it as unread.
+    expect(service.markInboxRead.mock.invocationCallOrder[0]).toBeLessThan(
+      service.listInbox.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not re-stamp a read message opened from its URL', async () => {
+    service.getInboxMessage.mockResolvedValue({
+      ...row('msg_a', 'For A'),
+      attachments: [],
+      readAt: new Date(),
+      text: 'Full body of msg_a',
+      to: 'a@lobe.id',
+    });
+    page('/agent/agt_1/mail/msg_a');
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    expect(service.markInboxRead).not.toHaveBeenCalled();
+  });
+
   it('asks for confirmation before releasing the mailbox on screen', async () => {
     page();
 
