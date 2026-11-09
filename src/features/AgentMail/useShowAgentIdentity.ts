@@ -1,4 +1,3 @@
-import { useAgentStore } from '@/store/agent';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -7,7 +6,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import { useAgentAccounts } from './useAgentIdentity';
 
 /**
- * Whether the identity tab has anything to offer: the user opted into the Labs
+ * Whether the mail page has anything to offer: the user opted into the Labs
  * experiment, and either this deployment can open an address (a provider is
  * configured) or the agent already owns one.
  *
@@ -15,19 +14,18 @@ import { useAgentAccounts } from './useAgentIdentity';
  * address that already exists must stay reachable after its provider's
  * credentials are removed, so it can still be read, copied and released.
  */
-export const useShowAgentIdentity = (): boolean => {
+export const useShowAgentIdentity = (agentId: string): boolean => {
   const enabled = useUserStore(labPreferSelectors.enableAgentIdentity);
   const providers = useServerConfigStore(serverConfigSelectors.agentIdentityProviders);
-  const agentId = useAgentStore((s) => s.activeAgentId);
 
   // Only ask for the agent's accounts when they are what decides it.
   const needsAccounts = enabled && providers.length === 0 && !!agentId;
-  const { data: accounts, error } = useAgentAccounts(needsAccounts ? agentId! : '');
+  const { data: accounts, error } = useAgentAccounts(needsAccounts ? agentId : '');
 
   if (!enabled) return false;
   if (providers.length > 0) return true;
   // The read that decides it failed: the agent may own an address, so keep the
-  // tab — it shows the failure and a retry — rather than hide it on a guess.
+  // entry — the page shows the failure and a retry — rather than hide it on a guess.
   if (error && !accounts) return true;
 
   return (accounts ?? []).some((account) => account.status !== 'revoked');

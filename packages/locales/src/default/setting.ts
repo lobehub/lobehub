@@ -328,7 +328,6 @@ export default {
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
   'agentTab.graph': 'Graph Runtime',
-  'agentTab.identity': 'Identity',
   'agentTab.opening': 'Opening Settings',
   'agentTab.plugin': 'Skill Settings',
   'agentTab.prompt': 'Agent Profile',
@@ -373,7 +372,7 @@ export default {
   'identity.status.provisioning': 'Opening',
   'identity.status.revoked': 'Released',
   'identity.status.suspended': 'Suspended',
-  'identity.title': 'Identity',
+  'identity.title': 'Addresses',
   'permission.accessTag.useOnlyTip':
     'Your member permission here is "Can use" — you can view and use it, but not edit. Ask the creator or a workspace owner for edit access.',
   'permission.accessTag.viewOnlyTip':

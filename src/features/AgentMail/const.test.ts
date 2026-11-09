@@ -1,7 +1,7 @@
 import { AGENT_ACCOUNT_PERSISTED_KINDS } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { IDENTITY_CHANNELS, isChannelAccount, isUnchanneledAccount,KIND_ICONS } from './const';
+import { IDENTITY_CHANNELS, isChannelAccount, isUnchanneledAccount, KIND_ICONS } from './const';
 
 const mailChannel = IDENTITY_CHANNELS.find((channel) => channel.provider === 'agent-mail')!;
 
