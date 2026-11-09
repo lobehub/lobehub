@@ -9,7 +9,7 @@
 把 Super-Agents 拉进你们团队的群。<br/>
 它们会自己接活，每周都在进步。
 
-[English](./README.md) · **简体中文** · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
+[English](./README.md) · **简体中文** · [日本語](./README.ja-JP.md) · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
 
 <!-- SHIELD GROUP -->
 
