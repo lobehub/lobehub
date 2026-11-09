@@ -5,7 +5,7 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { MarketService } from '@/server/services/market';
-import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import { injectSandboxCreds, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
 import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
@@ -149,8 +149,12 @@ export class ServerCredsService implements ICredsService {
     // that, appending a masked `export` line after market's real one. Since
     // re-sourcing ~/.creds/env applies `export`s in file order, the masked
     // line silently shadowed the real credential for every later command.
-    const result = await this.marketService.market.creds.inject({
+    // On Onlyboxes, Market's sandbox is not where commands run, so
+    // `injectSandboxCreds` writes the values into the Onlyboxes session itself.
+    const result = await injectSandboxCreds({
+      getCredsAccessor: () => this.credsAccessor(),
       keys: params.keys,
+      marketService: this.marketService,
       sandbox: params.sandbox,
       topicId: params.topicId,
       userId: params.userId,
