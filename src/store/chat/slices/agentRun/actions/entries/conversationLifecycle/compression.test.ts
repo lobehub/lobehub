@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { agentSelectors } from '@/store/agent/selectors';
+import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useChatStore } from '../../../../../store';
@@ -179,7 +180,7 @@ describe('executeCompression', () => {
   });
 
   describe('summary model', () => {
-    const runWithSummary = async () => {
+    const runWithSummary = async (options?: Parameters<ChatStore['executeCompression']>[2]) => {
       vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({ messages: [] });
       const fetchSpy = vi
         .spyOn(chatService, 'fetchPresetTaskResult')
@@ -187,12 +188,12 @@ describe('executeCompression', () => {
           onMessageHandle?.({ text: 'summary', type: 'text' });
         });
       await act(async () => {
-        await useChatStore.getState().executeCompression(context, '');
+        await useChatStore.getState().executeCompression(context, '', options);
       });
       return fetchSpy.mock.calls[0][0].params;
     };
 
-    it('uses the model pinned to the topic over the agent default', async () => {
+    const pinTopicModel = () =>
       act(() => {
         useChatStore.setState({
           topicDataMap: {
@@ -203,7 +204,19 @@ describe('executeCompression', () => {
         });
       });
 
+    it('uses the model pinned to the topic over the agent default', async () => {
+      pinTopicModel();
+
       const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'claude-opus-4-8', provider: 'anthropic' });
+    });
+
+    it('uses the pinned model for the exceeded-context compact-and-retry', async () => {
+      pinTopicModel();
+
+      // Same options the ExceededContextWindowError card passes.
+      const params = await runWithSummary({ beforeMessageId: 'assistant-1', onRetry: vi.fn() });
 
       expect(params).toMatchObject({ model: 'claude-opus-4-8', provider: 'anthropic' });
     });
