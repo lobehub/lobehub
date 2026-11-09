@@ -5,15 +5,13 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
-
-import { agentAccountService } from '@/services/agentAccount';
 
 import InlineError from './InlineError';
+import { useInboxMessage } from './useAgentIdentity';
 
 dayjs.extend(relativeTime);
 
-export interface InboxMessageModalProps {
+export interface InboxMessageDetailProps {
   id: string;
 }
 
@@ -43,11 +41,9 @@ const formatAttachmentSize = (bytes?: number): string | undefined => {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
-const InboxMessageModal = memo<InboxMessageModalProps>(({ id }) => {
+const InboxMessageDetail = memo<InboxMessageDetailProps>(({ id }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, mutate } = useSWR(['agent-inbox-message', id], ([, messageId]) =>
-    agentAccountService.getInboxMessage(messageId),
-  );
+  const { data, error, isLoading, mutate } = useInboxMessage(id);
 
   // A failed read must say so: a skeleton that never resolves reads as "still
   // loading" forever.
@@ -124,6 +120,6 @@ const InboxMessageModal = memo<InboxMessageModalProps>(({ id }) => {
   );
 });
 
-InboxMessageModal.displayName = 'AgentInboxMessageModal';
+InboxMessageDetail.displayName = 'AgentInboxMessageDetail';
 
-export default InboxMessageModal;
+export default InboxMessageDetail;

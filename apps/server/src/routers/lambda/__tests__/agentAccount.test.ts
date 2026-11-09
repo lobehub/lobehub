@@ -396,7 +396,7 @@ describe('agentAccountRouter', () => {
       await caller.inbox.markAllRead({ agentId: 'agt_1' });
 
       expect(assertAgentUsableBy).toHaveBeenCalledWith({}, 'agt_1', expect.anything());
-      expect(inbox.markAllRead).toHaveBeenCalledWith('agt_1');
+      expect(inbox.markAllRead).toHaveBeenCalledWith('agt_1', undefined);
     });
   });
 });

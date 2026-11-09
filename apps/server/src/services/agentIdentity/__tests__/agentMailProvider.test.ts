@@ -226,6 +226,18 @@ describe('agent-mail provider — provisioning', () => {
     });
   });
 
+  it('opens a further mailbox for a different prefix instead of returning the first', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
+
+    await provider.provision({ agentId: 'agent_7', prefix: 'sales', userId: 'user_1' });
+
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes')?.body).toMatchObject({
+      clientId: 'agent_7-sales',
+      username: 'sales',
+    });
+  });
+
   it('does not register a second webhook for an inbox a live account already holds', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({
