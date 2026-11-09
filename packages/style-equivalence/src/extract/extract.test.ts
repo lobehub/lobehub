@@ -142,6 +142,26 @@ export const A = () => <div className={styles.box}><span {...stylex.props(atomic
     expect(result.elements[0].flags).toEqual(['CROSS_COMPONENT']);
   });
 
+  it('takes only the accessed member of an imported style object', () => {
+    const modules: Record<string, string> = {
+      './Card': `import * as stylex from '@stylexjs/stylex';
+const mediaStyles = stylex.create({ image: { width: '100%' }, video: { display: 'block' } });
+export const media = {
+  image: { classNames: { image: stylex.props(mediaStyles.image).className } },
+  video: mediaStyles.video,
+};
+`,
+    };
+    const code = `import { media } from './Card';
+export const A = ({ flat }) => <Image {...(flat ? media.image : { variant: 'outlined' })} />;
+`;
+    const [element] = extractFile(code, 'src/A.tsx', {
+      ...options,
+      readModule: (_from, specifier) => modules[specifier],
+    }).elements;
+    expect(element.slots).toEqual(['media$mediaStyles.image']);
+  });
+
   it('imports JSX tags used by a kept top-level statement', () => {
     const code = `import { Spin } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
