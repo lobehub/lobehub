@@ -123,6 +123,17 @@ describe('MeetingModel minutes', () => {
     expect(await stranger.startMinutes(id)).toBeUndefined();
   });
 
+  it('has nothing to complete or fail for a meeting it cannot manage', async () => {
+    const id = await refinedMeeting();
+    const stranger = new MeetingModel(serverDB, otherUserId);
+
+    expect(await stranger.completeMinutes(id, { summary: 'x' })).toBeUndefined();
+    expect(
+      await stranger.failMinutes(id, { code: 'quota_exceeded', stage: 'minutes' }),
+    ).toBeUndefined();
+    expect((await model.findById(id))!.status).toBe('summarizing');
+  });
+
   it('has nothing to update before minutes exist', async () => {
     const id = await refinedMeeting();
     expect(await model.updateActionItems(id, (items) => items)).toBeUndefined();

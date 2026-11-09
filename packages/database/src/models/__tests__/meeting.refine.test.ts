@@ -121,6 +121,16 @@ describe('MeetingModel refine', () => {
     expect((await model.getDetail(id))?.segmentSource).toBe('realtime');
   });
 
+  it('falls back to the draft when a refined pass landed no segments', async () => {
+    const id = await finishedMeeting();
+    await model.startRefine(id);
+    await model.completeRefine(id, []);
+
+    // The meeting is refined-status but holds no refine rows, so the draft is
+    // still the only transcript there is.
+    expect((await model.getDetail(id))?.segmentSource).toBe('realtime');
+  });
+
   it('only records a failure for a refine in progress', async () => {
     const meeting = await model.create(base);
     const error = { code: 'transcription_failed' as const, stage: 'refine' as const };
