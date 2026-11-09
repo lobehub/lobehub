@@ -8,7 +8,12 @@ import { persistPageState } from '../persist';
 
 const { redisStore, store } = vi.hoisted(() => ({
   redisStore: new Map<string, string>(),
-  store: { row: null as any, updates: [] as any[] },
+  store: {
+    calls: [] as string[],
+    row: null as any,
+    savedHistories: [] as any[],
+    updates: [] as any[],
+  },
 }));
 
 vi.mock('@/server/services/redis', () => ({
@@ -29,7 +34,13 @@ vi.mock('@/server/services/resourcePermission', () => ({
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
     getDocumentById = async () => store.row;
+    trySaveCurrentDocumentHistory = async (id: string, saveSource: string) => {
+      store.calls.push('saveHistory');
+      store.savedHistories.push({ editorData: store.row.editorData, id, saveSource });
+      return { historyId: 'h1', savedAt: new Date() };
+    };
     updateDocument = async (_id: string, params: any) => {
+      store.calls.push('update');
       store.updates.push(params);
       store.row = { ...store.row, editorData: params.editorData };
       return { historyAppended: true, updatedAt: new Date() };
@@ -53,6 +64,8 @@ const persist = (state: Uint8Array) =>
 describe('persistPageState', () => {
   beforeEach(() => {
     redisStore.clear();
+    store.calls = [];
+    store.savedHistories = [];
     store.updates = [];
     store.row = { content: 'old\n', editorData: null, title: 'Page' };
   });
@@ -99,5 +112,30 @@ describe('persistPageState', () => {
     await persist(await roomOf('two\n'));
 
     expect(store.updates[1].saveSource).toBe('autosave');
+  });
+
+  it('keeps the previous body as its own version before a projection that drops most of it', async () => {
+    const previous = { root: { children: [{ type: 'paragraph' }], type: 'root' } };
+    store.row = {
+      ...store.row,
+      content: `# Plan\n\n${'a long paragraph that the room is about to lose. '.repeat(8)}\n`,
+      editorData: previous,
+    };
+
+    await persist(await roomOf('# Plan\n'));
+
+    expect(store.calls).toEqual(['saveHistory', 'update']);
+    expect(store.savedHistories).toEqual([
+      { editorData: previous, id: 'doc_1', saveSource: 'system' },
+    ]);
+    expect(store.updates[0].saveSource).toBe('autosave');
+  });
+
+  it('writes a projection that keeps most of the body without an extra version', async () => {
+    store.row = { ...store.row, content: '# Plan\n\nfirst\n' };
+
+    await persist(await roomOf('# Plan\n\nfirst\n\nsecond\n'));
+
+    expect(store.calls).toEqual(['update']);
   });
 });

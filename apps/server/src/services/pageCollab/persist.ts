@@ -82,6 +82,19 @@ export const persistPageState = async (
   const writtenOutsideRoom = lastProjected !== null && lastProjected !== bodyDigest(row.editorData);
   if (writtenOutsideRoom) log('page %s body was written outside its room', documentId);
 
+  // A projection that drops most of the body may be a real delete or a room
+  // that lost its content; either way the previous body stays recoverable.
+  const previousLength = row.content?.length ?? 0;
+  if (previousLength > 0 && markdown.length * 2 < previousLength) {
+    console.warn(
+      '[page-collab] room %s shrank the page from %d to %d characters',
+      documentId,
+      previousLength,
+      markdown.length,
+    );
+    await service.trySaveCurrentDocumentHistory(documentId, 'system');
+  }
+
   await service.updateDocument(documentId, {
     content: toStoredMarkdown(row, markdown),
     editorData: editorData as unknown as Record<string, unknown>,
