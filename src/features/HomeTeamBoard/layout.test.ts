@@ -97,14 +97,22 @@ describe('layoutLaneTopics', () => {
     expect(layout.overflow).toBe(2);
   });
 
-  it('splits a waiting run at the moment it asked', () => {
+  it('shows every topic once expanded, still reporting the overflow', () => {
+    const runs = Array.from({ length: 7 }, (_, i) => run(`r${i}`, i, i + 1));
+    const layout = layoutLaneTopics(runs, start, end, { expanded: true });
+
+    expect(layout.rows).toHaveLength(7);
+    expect(layout.overflow).toBe(2);
+  });
+
+  it('ends a waiting run at the moment it asked', () => {
     const { rows } = layoutLaneTopics(
       [run('a', 0, null, { status: 'needs_human', waitingSince: at(45) })],
       start,
       end,
     );
 
-    expect(rows[0].runs[0].runningShare).toBeCloseTo(75);
+    expect(rows[0].runs[0].width).toBeCloseTo(67.5);
     expect(rows[0].startedBy).toBe('u');
   });
 
@@ -120,7 +128,6 @@ describe('resolveRowLabel', () => {
   const placed = (left: number, width: number) => ({
     left,
     run: run('a', 0, 1),
-    runningShare: null,
     width,
   });
 
@@ -130,6 +137,12 @@ describe('resolveRowLabel', () => {
       offset: 10,
       room: 90,
     });
+  });
+
+  it('keeps a waiting row left of its wait mark, however early it starts', () => {
+    const waiting = { ...placed(10, 30), run: run('w', 0, null, { status: 'needs_human' }) };
+
+    expect(resolveRowLabel([waiting])).toEqual({ anchor: 'end', offset: 60, room: 40 });
   });
 
   it('hangs a late row back from its last bar, using the room on its left', () => {

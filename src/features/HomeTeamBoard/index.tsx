@@ -12,6 +12,7 @@ import { agentRunBoardService } from '@/services/agentRunBoard';
 
 import ActivityPanel from './ActivityPanel';
 import AttentionList from './AttentionList';
+import BoardFilters from './BoardFilters';
 import DayCalendar from './DayCalendar';
 import Timeline from './Timeline';
 
@@ -49,10 +50,18 @@ const HomeTeamBoard = () => {
   const cacheScope = useCacheScope();
   const [windowHours, setWindowHours] = useState<AgentRunBoardWindowHours>(1);
   const [scope, setScope] = useState<AgentRunBoardScope>('all');
+  const [agentId, setAgentId] = useState<string>();
+  const [userId, setUserId] = useState<string>();
+
+  // The options depend on the scope and window, so a pick may not exist in the next one.
+  const clearPicks = () => {
+    setAgentId(undefined);
+    setUserId(undefined);
+  };
 
   const { data, error, mutate } = useClientPollingSWR(
-    ['agentRunBoard', cacheScope, windowHours, scope],
-    () => agentRunBoardService.get(windowHours, scope),
+    ['agentRunBoard', cacheScope, windowHours, scope, agentId, userId],
+    () => agentRunBoardService.get({ agentId, scope, userId, windowHours }),
     {
       // The polling default dedupes for 30s, which would swallow every other tick.
       dedupingInterval: POLL_INTERVAL / 2,
@@ -82,7 +91,10 @@ const HomeTeamBoard = () => {
                     { label: t('team.scope.all'), value: 'all' },
                     { label: t('team.scope.involved'), value: 'involved' },
                   ]}
-                  onChange={(value) => setScope(value as AgentRunBoardScope)}
+                  onChange={(value) => {
+                    setScope(value as AgentRunBoardScope);
+                    clearPicks();
+                  }}
                 />
                 <Segmented
                   size={'small'}
@@ -91,10 +103,20 @@ const HomeTeamBoard = () => {
                     label: t('team.window', { count: value }),
                     value: String(value),
                   }))}
-                  onChange={(value) => setWindowHours(Number(value) as AgentRunBoardWindowHours)}
+                  onChange={(value) => {
+                    setWindowHours(Number(value) as AgentRunBoardWindowHours);
+                    clearPicks();
+                  }}
                 />
               </Flexbox>
             }
+          />
+          <BoardFilters
+            agentId={agentId}
+            options={data.filterOptions}
+            userId={userId}
+            onAgentChange={setAgentId}
+            onUserChange={setUserId}
           />
           <div {...stylex.props(styles.columns)}>
             {!data.lanes?.length ? (

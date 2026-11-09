@@ -54,7 +54,14 @@ beforeEach(async () => {
     { id: otherWorkspaceId, name: 'B', primaryOwnerId: owner, slug: otherWorkspaceId },
   ]);
   await serverDB.insert(agents).values([
-    { id: 'public-agent', title: 'Public', userId: teammate, visibility: 'public', workspaceId },
+    {
+      id: 'public-agent',
+      name: 'Named',
+      title: 'Public',
+      userId: teammate,
+      visibility: 'public',
+      workspaceId,
+    },
     { id: 'private-agent', title: 'Secret', userId: owner, visibility: 'private', workspaceId },
   ]);
   await serverDB.insert(topics).values({ id: 'base-topic', userId: teammate, workspaceId });
@@ -87,6 +94,7 @@ describe('AgentRunBoardModel.listRuns', () => {
     const [row] = await new AgentRunBoardModel(serverDB, workspaceId).listRuns({ now, since });
 
     expect(row).toMatchObject({
+      agentName: 'Named',
       agentOwnerId: teammate,
       agentTitle: 'Public',
       errorMessage: 'boom',

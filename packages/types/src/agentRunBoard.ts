@@ -73,9 +73,16 @@ export interface AgentRunBoardActivityBucket extends AgentRunBoardSummary {
   startedAt: Date;
 }
 
+/** What the board can be narrowed to, independent of the current agent and member picks. */
+export interface AgentRunBoardFilterOptions {
+  agents: { id: string; title: string | null }[];
+  memberIds: string[];
+}
+
 export interface AgentRunBoardData {
   activity: AgentRunBoardActivityBucket[];
   attention: AgentRunBoardAttentionItem[];
+  filterOptions: AgentRunBoardFilterOptions;
   generatedAt: Date;
   /** Active agents left out of `lanes` by the lane cap. */
   hiddenLaneCount: number;

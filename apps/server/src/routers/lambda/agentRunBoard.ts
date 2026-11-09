@@ -6,7 +6,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentRunBoardModel } from '@/database/models/agentRunBoard';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { buildAgentRunBoard } from '@/server/services/agentRunBoard';
+import { buildAgentRunBoard, filterRunsBy } from '@/server/services/agentRunBoard';
 
 const agentRunBoardProcedure = wsCompatProcedure.use(serverDatabase);
 
@@ -14,7 +14,9 @@ export const agentRunBoardRouter = router({
   get: agentRunBoardProcedure
     .input(
       z.object({
+        agentId: z.string().optional(),
         scope: z.enum(AGENT_RUN_BOARD_SCOPES).default('all'),
+        userId: z.string().optional(),
         windowHours: z
           .number()
           .refine((value) => (AGENT_RUN_BOARD_WINDOW_HOURS as readonly number[]).includes(value)),
@@ -30,14 +32,20 @@ export const agentRunBoardRouter = router({
         const model = new AgentRunBoardModel(ctx.serverDB, ctx.workspaceId);
         // The involved scope narrows in the query: the model caps the workspace
         // at 500 runs, so filtering afterwards could show an empty board.
-        const rows = await model.listRuns({
+        const scopedRows = await model.listRuns({
           involvedUserId: input.scope === 'involved' ? ctx.userId : undefined,
           now: generatedAt,
           since: windowStart,
         });
 
         return {
-          data: buildAgentRunBoard({ generatedAt, rows, viewerId: ctx.userId, windowStart }),
+          data: buildAgentRunBoard({
+            filterOptionRows: scopedRows,
+            generatedAt,
+            rows: filterRunsBy(scopedRows, input),
+            viewerId: ctx.userId,
+            windowStart,
+          }),
           success: true,
         };
       } catch (error) {

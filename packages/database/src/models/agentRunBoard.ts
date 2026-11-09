@@ -26,6 +26,7 @@ export interface AgentRunBoardRow {
   agentAvatar: string | null;
   agentBackgroundColor: string | null;
   agentId: string;
+  agentName: string | null;
   agentOwnerId: string;
   agentTitle: string | null;
   completedAt: Date | null;
@@ -132,7 +133,7 @@ export class AgentRunBoardModel {
   };
 
   /**
-   * The same three predicates as `filterInvolvedRuns`, expressed in SQL so the
+   * Started it, wrote in its topic, or must approve it; in SQL so the
    * limits bound matching runs instead of the unfiltered workspace.
    */
   private involvedCondition = (userId: string) =>
@@ -163,6 +164,7 @@ export class AgentRunBoardModel {
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentId: agents.id,
+        agentName: agents.name,
         agentOwnerId: agents.userId,
         agentTitle: agents.title,
         completedAt: agentOperations.completedAt,

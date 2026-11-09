@@ -29,8 +29,6 @@ export interface PlacedRun {
   /** Inline-start offset, as a percentage of the time axis. */
   left: number;
   run: AgentRunBoardRun;
-  /** For a run waiting on a person: how much of its bar, in %, it ran before asking. */
-  runningShare: number | null;
   width: number;
 }
 
@@ -45,7 +43,7 @@ export interface TopicRow {
 }
 
 export interface LaneLayout {
-  /** Topics that did not fit in {@link MAX_TOPIC_ROWS}. */
+  /** Topics beyond {@link MAX_TOPIC_ROWS}, whether or not the lane is expanded. */
   overflow: number;
   rows: TopicRow[];
 }
@@ -58,19 +56,13 @@ const toPercent = (time: number, start: number, end: number) =>
   Math.min(100, Math.max(0, ((time - start) / (end - start)) * 100));
 
 const placeRun = (run: AgentRunBoardRun, start: number, end: number, now: Date): PlacedRun => {
+  // A run waiting on a person stops at the moment it asked; the wait is a fixed mark there.
+  const barEnd = run.waitingSince ?? run.endedAt ?? now;
   const from = toPercent(run.startedAt.getTime(), start, end);
-  const to = toPercent((run.endedAt ?? now).getTime(), start, end);
+  const to = toPercent(barEnd.getTime(), start, end);
   const width = Math.max(to - from, MIN_BAR_PERCENT);
-  const left = Math.min(from, 100 - width);
-  const waitingAt = run.waitingSince && toPercent(run.waitingSince.getTime(), start, end);
 
-  return {
-    left,
-    run,
-    runningShare:
-      waitingAt === null ? null : Math.min(100, Math.max(0, ((waitingAt - left) / width) * 100)),
-    width,
-  };
+  return { left: Math.min(from, 100 - width), run, width };
 };
 
 const latestStart = (runs: PlacedRun[]) =>
@@ -86,6 +78,7 @@ export const layoutLaneTopics = (
   runs: AgentRunBoardRun[],
   windowStart: Date,
   now: Date,
+  { expanded = false }: { expanded?: boolean } = {},
 ): LaneLayout => {
   const start = windowStart.getTime();
   const end = resolveAxisEnd(windowStart, now).getTime();
@@ -108,7 +101,7 @@ export const layoutLaneTopics = (
 
   return {
     overflow: Math.max(0, rows.length - MAX_TOPIC_ROWS),
-    rows: rows.slice(0, MAX_TOPIC_ROWS),
+    rows: expanded ? rows : rows.slice(0, MAX_TOPIC_ROWS),
   };
 };
 
@@ -122,14 +115,15 @@ export interface RowLabelPlacement {
 
 /**
  * Where a topic's title sits along its row: from the first bar's start, or back
- * from the last bar's end when the row begins too late to fit it.
+ * from the last bar's end when the row begins too late to fit it or is waiting.
  */
 export const resolveRowLabel = (runs: PlacedRun[]): RowLabelPlacement => {
   const first = runs[0];
-  if (first.left <= LABEL_FLIP_PERCENT)
+  const last = runs.at(-1)!;
+  // The wait mark sits right after a waiting bar's end, so its title must stop there.
+  if (first.left <= LABEL_FLIP_PERCENT && last.run.status !== 'needs_human')
     return { anchor: 'start', offset: first.left, room: 100 - first.left };
 
-  const last = runs.at(-1)!;
   const end = last.left + last.width;
   return { anchor: 'end', offset: 100 - end, room: end };
 };

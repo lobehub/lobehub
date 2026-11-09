@@ -1,8 +1,10 @@
 import type { AgentRunBoardData, AgentRunBoardLane, AgentRunBoardRunStatus } from '@lobechat/types';
-import { Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
@@ -25,6 +27,7 @@ import { RUN_STATUS_VISUALS } from './statusVisuals';
 import { useOpenRunDrawer } from './useOpenRunDrawer';
 
 const BAR_HEIGHT = 22;
+const WAIT_MARK_WIDTH = 28;
 
 const shineSweep = stylex.keyframes({
   from: { transform: 'translateX(-100%)' },
@@ -32,7 +35,31 @@ const shineSweep = stylex.keyframes({
 });
 
 const styles = stylex.create({
-  agent: { paddingBlock: 6 },
+  agent: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
+    borderWidth: 0,
+    color: 'inherit',
+    cursor: 'pointer',
+    display: 'flex',
+    font: 'inherit',
+    gap: 8,
+    maxWidth: '100%',
+    paddingBlock: 6,
+    paddingInline: 0,
+    textAlign: 'start',
+  },
+  moreButton: {
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
+    borderWidth: 0,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    cursor: 'pointer',
+    fontSize: 12,
+    paddingBlock: 2,
+    paddingInline: 0,
+  },
   axis: { height: 20, position: 'relative' },
   bar: {
     borderRadius: 5,
@@ -106,12 +133,27 @@ const styles = stylex.create({
   },
   barLabelAuthor: { flexShrink: 0, pointerEvents: 'auto' },
   barLabelText: {
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
+    borderWidth: 0,
+    color: 'inherit',
+    cursor: { 'default': 'pointer', ':disabled': 'default' },
+    font: 'inherit',
     minWidth: 0,
     overflow: 'hidden',
+    paddingBlock: 0,
+    paddingInline: 0,
+    pointerEvents: 'auto',
+    textDecorationLine: { 'default': 'none', ':hover:not(:disabled)': 'underline' },
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  askMark: { borderInlineStartStyle: 'solid', borderInlineStartWidth: 2, boxSizing: 'border-box' },
+  waitIcon: {
+    alignItems: 'center',
+    display: 'flex',
+    height: '100%',
+    justifyContent: 'center',
+  },
   segment: { display: 'block', height: '100%', overflow: 'hidden', position: 'relative' },
   live: { borderInlineEndStyle: 'solid', borderInlineEndWidth: 2, boxSizing: 'border-box' },
   shine: {
@@ -166,7 +208,8 @@ const Bar = ({
   const { t } = useTranslation('home');
   const openDrawer = useOpenRunDrawer();
   const profiles = useWorkspaceMemberProfiles();
-  const { left, run, runningShare, width } = placed;
+  const { left, run, width } = placed;
+  const waiting = run.status === 'needs_human';
   const member = profiles.get(run.userId);
   const duration = formatDuration((run.endedAt ?? now).getTime() - run.startedAt.getTime());
 
@@ -190,7 +233,7 @@ const Bar = ({
         type={'button'}
         {...sx(styles.bar, {
           insetInlineStart: `${left}%`,
-          width: `${width}%`,
+          width: waiting ? `calc(${width}% + ${WAIT_MARK_WIDTH}px)` : `${width}%`,
         })}
         onClick={() =>
           openDrawer({
@@ -201,40 +244,45 @@ const Bar = ({
           })
         }
       >
-        {runningShare !== null && (
-          <span
-            data-testid={'team-board-run-before-ask'}
-            {...sx(styles.segment, {
-              backgroundImage: `linear-gradient(to right, ${mix('running', 10)}, ${mix('running', 38)})`,
-              flexBasis: `${runningShare}%`,
-            })}
-          />
-        )}
-        {run.status === 'running' ? (
+        {waiting ? (
+          <>
+            <span
+              {...sx(styles.segment, {
+                backgroundImage: `linear-gradient(to right, ${mix('running', 10)}, ${mix('running', 38)})`,
+                flexGrow: 1,
+              })}
+            />
+            <span
+              data-testid={'team-board-run-wait-mark'}
+              {...sx(styles.segment, {
+                backgroundColor: RUN_STATUS_VISUALS.needs_human.color,
+                flexBasis: WAIT_MARK_WIDTH,
+                flexShrink: 0,
+              })}
+            >
+              <span {...stylex.props(styles.waitIcon)}>
+                <Icon
+                  color={cssVar.colorBgContainer}
+                  icon={RUN_STATUS_VISUALS.needs_human.icon}
+                  size={14}
+                />
+              </span>
+            </span>
+          </>
+        ) : run.status === 'running' ? (
           <LiveSegment />
         ) : (
-          <span
-            {...sx(
-              styles.segment,
-              runningShare !== null && styles.askMark,
-              {
-                backgroundColor:
-                  run.status === 'needs_human' ? mix('needs_human', 62) : tint(run.status),
-                flexGrow: 1,
-              },
-              runningShare !== null && {
-                borderInlineStartColor: RUN_STATUS_VISUALS.needs_human.color,
-              },
-            )}
-          />
+          <span {...sx(styles.segment, { backgroundColor: tint(run.status), flexGrow: 1 })} />
         )}
       </button>
     </Tooltip>
   );
 };
 
-const RowLabel = ({ row, title }: { row: TopicRow; title: string }) => {
+const RowLabel = ({ agentId, row, title }: { agentId: string; row: TopicRow; title: string }) => {
+  const openDrawer = useOpenRunDrawer();
   const { anchor, offset, room } = resolveRowLabel(row.runs);
+  const latestRun = row.runs.at(-1)!.run;
 
   return (
     <span
@@ -249,7 +297,22 @@ const RowLabel = ({ row, title }: { row: TopicRow; title: string }) => {
       <span {...stylex.props(styles.barLabelAuthor)}>
         <AuthorChip avatarOnly trigger={row.trigger} userId={row.startedBy} />
       </span>
-      <span {...stylex.props(styles.barLabelText)}>{title}</span>
+      <button
+        data-testid={'team-board-topic-open'}
+        disabled={!row.topicId}
+        type={'button'}
+        {...stylex.props(styles.barLabelText)}
+        onClick={() =>
+          openDrawer({
+            agentId,
+            runningOperation: latestRun.runningOperation,
+            title,
+            topicId: row.topicId,
+          })
+        }
+      >
+        {title}
+      </button>
     </span>
   );
 };
@@ -265,12 +328,25 @@ const Lane = ({
 }) => {
   const { t } = useTranslation('home');
   const meta = useAgentDisplayMeta(lane.agentId);
-  const { overflow, rows } = layoutLaneTopics(lane.runs, windowStart, now);
+  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const { overflow, rows } = layoutLaneTopics(lane.runs, windowStart, now, { expanded });
   const agentTitle = lane.title || meta?.title || t('team.agent.untitled');
 
   return (
     <div {...stylex.props(styles.lane)} data-testid={'team-board-lane'}>
-      <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.agent)}>
+      <button
+        aria-expanded={!collapsed}
+        data-testid={'team-board-lane-toggle'}
+        type={'button'}
+        {...stylex.props(styles.agent)}
+        onClick={() => setCollapsed((value) => !value)}
+      >
+        <Icon
+          color={cssVar.colorTextQuaternary}
+          icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
+          size={14}
+        />
         <AgentAvatar
           agentId={lane.agentId}
           avatar={lane.avatar ?? undefined}
@@ -282,37 +358,43 @@ const Lane = ({
           {agentTitle}
         </Text>
         <AuthorChip avatarOnly userId={lane.ownerUserId} />
-      </Flexbox>
-      {rows.map((row) => {
-        const title = row.title || t('team.run.untitled');
+      </button>
+      {!collapsed &&
+        rows.map((row) => {
+          const title = row.title || t('team.run.untitled');
 
-        return (
-          <Flexbox
-            horizontal
-            align={'center'}
-            data-testid={'team-board-topic'}
-            key={row.key}
-            {...stylex.props(styles.row)}
-          >
-            <div {...stylex.props(styles.track)}>
-              {row.runs.map((placed) => (
-                <Bar
-                  agentId={lane.agentId}
-                  key={placed.run.id}
-                  now={now}
-                  placed={placed}
-                  title={title}
-                />
-              ))}
-              <RowLabel row={row} title={title} />
-            </div>
-          </Flexbox>
-        );
-      })}
-      {overflow > 0 && (
-        <span {...sx(styles.meta, { paddingInlineStart: 0 })}>
-          {t('team.lane.more', { count: overflow })}
-        </span>
+          return (
+            <Flexbox
+              horizontal
+              align={'center'}
+              data-testid={'team-board-topic'}
+              key={row.key}
+              {...stylex.props(styles.row)}
+            >
+              <div {...stylex.props(styles.track)}>
+                {row.runs.map((placed) => (
+                  <Bar
+                    agentId={lane.agentId}
+                    key={placed.run.id}
+                    now={now}
+                    placed={placed}
+                    title={title}
+                  />
+                ))}
+                <RowLabel agentId={lane.agentId} row={row} title={title} />
+              </div>
+            </Flexbox>
+          );
+        })}
+      {!collapsed && overflow > 0 && (
+        <button
+          data-testid={'team-board-lane-more'}
+          type={'button'}
+          {...stylex.props(styles.moreButton)}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? t('team.lane.showLess') : t('team.lane.more', { count: overflow })}
+        </button>
       )}
     </div>
   );
