@@ -23,14 +23,23 @@ vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => ({}) }))
 
 vi.mock('@/server/services/pageCollab', () => ({ persistPageState, resolvePageAccess }));
 
-const buildContext = (options: { body?: unknown; query?: Record<string, string> }) =>
-  ({
+const buildContext = (options: {
+  body?: unknown;
+  bytes?: Uint8Array;
+  headers?: Record<string, string>;
+  query?: Record<string, string>;
+}) => {
+  const headers = new Headers(options.headers);
+  return {
     json: (b: any, status = 200) => Response.json(b, { status }),
     req: {
+      arrayBuffer: async () => options.bytes?.slice().buffer ?? new ArrayBuffer(0),
+      header: (name: string) => headers.get(name) ?? undefined,
       json: async () => options.body,
       query: (name: string) => options.query?.[name],
     },
-  }) as any;
+  } as any;
+};
 
 describe('documentAccess', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -90,17 +99,70 @@ describe('documentProjection', () => {
     });
   });
 
-  it('answers 404 for a page that no longer exists', async () => {
+  it('answers 404 DOCUMENT_NOT_FOUND for a page that no longer exists', async () => {
     persistPageState.mockResolvedValue(false);
 
-    expect((await project({ documentId: 'doc_1', update: '' })).status).toBe(404);
+    const res = await project({ documentId: 'doc_1', update: '' });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'DOCUMENT_NOT_FOUND' });
   });
 
-  it('answers 409 when the projection would erase blocks the room holds', async () => {
+  it('answers 409 PROJECTION_REJECTED when the projection would erase blocks the room holds', async () => {
     const { PageProjectionRejectedError } = await import('@/server/services/pageCollab/persist');
     persistPageState.mockRejectedValue(new PageProjectionRejectedError('doc_1'));
 
-    expect((await project({ documentId: 'doc_1', update: '' })).status).toBe(409);
+    const res = await project({ documentId: 'doc_1', update: '' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'PROJECTION_REJECTED' });
+  });
+
+  it('persists a binary room state sent with its document, epoch and actors outside the body', async () => {
+    const res = await documentProjection(
+      buildContext({
+        bytes: new Uint8Array([4, 5, 6]),
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Room-Actors': JSON.stringify(['u1', 'agent:u1']),
+          'X-Room-Size-Bytes': '3',
+        },
+        query: { documentId: 'doc_1', epoch: 'e1' },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(persistPageState).toHaveBeenCalledWith({}, 'doc_1', new Uint8Array([4, 5, 6]), {
+      history: { editorIds: ['u1'] },
+      saveSource: 'autosave',
+    });
+  });
+
+  it('requires a document for a binary projection', async () => {
+    const res = await documentProjection(
+      buildContext({
+        bytes: new Uint8Array([4]),
+        headers: { 'Content-Type': 'application/octet-stream' },
+        query: {},
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(persistPageState).not.toHaveBeenCalled();
+  });
+
+  it('answers 413 DOC_TOO_LARGE for a room state over what a projection may carry', async () => {
+    const res = await documentProjection(
+      buildContext({
+        bytes: new Uint8Array(4 * 1024 * 1024 + 1),
+        headers: { 'Content-Type': 'application/octet-stream' },
+        query: { documentId: 'doc_1' },
+      }),
+    );
+
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ code: 'DOC_TOO_LARGE' });
+    expect(persistPageState).not.toHaveBeenCalled();
   });
 
   it('answers 422 with the limit when the room grew the page past it', async () => {
