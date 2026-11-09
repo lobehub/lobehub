@@ -91,4 +91,66 @@ describe('htmlToMarkdown', () => {
     expect(result).toBeDefined();
     expect(result.content).toContain('Small content');
   });
+  describe('table cells', () => {
+    const convert = (body: string) =>
+      htmlToMarkdown(`<html><body><article>${body}</article></body></html>`, {
+        filterOptions: { enableReadability: false },
+        url: 'https://example.com',
+      }).content;
+
+    /** Read the markdown table back the way a reader does. */
+    const rows = (markdown: string) =>
+      markdown
+        .split('\n')
+        .filter((line) => line.trim().startsWith('|'))
+        .map((line) =>
+          line
+            .trim()
+            .replaceAll(/^\||\|$/g, '')
+            .split(/(?<!\\)\|/)
+            .map((cell) => cell.replaceAll(/\\(.)/g, '$1').trim()),
+        );
+
+    it('keeps the word boundary a line break inside a cell stands for', () => {
+      // The cell's child translators hold no block element, so the break used
+      // to vanish without a trace and the two values ran into one word.
+      const markdown = convert(
+        '<table><tr><th>Day</th><th>Hours</th></tr><tr><td>Mon</td><td>09:00<br>17:00</td></tr></table>',
+      );
+
+      expect(rows(markdown)[2]).toEqual(['Mon', '09:00 17:00']);
+    });
+
+    it.each([
+      ['<p>first</p><p>second</p>', 'first second'],
+      ['<div>first</div><div>second</div>', 'first second'],
+      ['<ul><li>first</li><li>second</li></ul>', 'first second'],
+    ])('keeps the boundary between two blocks in a cell (%s)', (cell, expected) => {
+      const markdown = convert(`<table><tr><th>Note</th></tr><tr><td>${cell}</td></tr></table>`);
+
+      expect(rows(markdown)[2]).toEqual([expected]);
+    });
+
+    it('escapes every pipe in a cell, not only the first', () => {
+      // node-html-markdown escapes with a string argument, so the second pipe
+      // survived and split the row into columns the header does not have.
+      const markdown = convert(
+        '<table><tr><th>Name</th><th>Modes</th></tr><tr><td>codec</td><td>a|b|c</td></tr></table>',
+      );
+
+      expect(rows(markdown)[2]).toEqual(['codec', 'a|b|c']);
+    });
+
+    it('leaves a cell that needs neither alone', () => {
+      const markdown = convert(
+        '<table><tr><th>Name</th></tr><tr><td><strong>bold</strong> and <a href="https://example.com/d">docs</a></td></tr></table>',
+      );
+
+      expect(rows(markdown)[2]).toEqual(['**bold** and [docs](https://example.com/d)']);
+    });
+
+    it('leaves a line break outside a table alone', () => {
+      expect(convert('<p>first<br>second</p>')).toContain('first  \nsecond');
+    });
+  });
 });
