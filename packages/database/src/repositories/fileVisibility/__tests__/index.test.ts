@@ -1,63 +1,74 @@
 // @vitest-environment node
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { DocumentModel } from '../../../models/document';
-import { FileModel } from '../../../models/file';
 import { FileVisibilityRepository } from '../index';
 
-const { mockDocumentModel, mockFileModel } = vi.hoisted(() => ({
-  mockDocumentModel: { setVisibilityByFileId: vi.fn() },
-  mockFileModel: { setVisibility: vi.fn() },
-}));
+/**
+ * `vitest.config.server.mts` runs the suite with `isolate: false`, so by the time
+ * this file runs the model modules can already be in the shared module cache and
+ * a `vi.mock('../../../models/file')` silently keeps the real class. Drive the
+ * real models against a fake connection instead: the lock contract is about the
+ * statements the repository issues and their order, not about replacing the
+ * models.
+ */
+const LOCK_SQL = 'pg_advisory_xact_lock';
 
-vi.mock('../../../models/document', () => ({ DocumentModel: vi.fn() }));
-vi.mock('../../../models/file', () => ({ FileModel: vi.fn() }));
+const makeDb = (returning: unknown[][] = [[{ id: 'file-1' }], [{ id: 'doc-1' }]]) => {
+  const queue = [...returning];
+  const statements: { params: unknown[]; sql: string }[] = [];
+  const setCalls: any[] = [];
 
-const makeDb = () => {
-  const execute = vi.fn().mockResolvedValue(undefined);
-  const trx = { execute };
+  const execute = vi.fn(async (statement: any) => {
+    statements.push(new PgDialect().sqlToQuery(statement));
+  });
+
+  const update = vi.fn(() => {
+    const chain: any = {
+      returning: async () => queue.shift() ?? [],
+      set: (values: any) => {
+        setCalls.push(values);
+        return chain;
+      },
+      where: () => chain,
+    };
+
+    return chain;
+  });
+
+  const trx = { execute, update };
   const db = { transaction: vi.fn(async (callback: any) => callback(trx)) };
 
-  return { db: db as any, execute };
+  return { db: db as any, execute, setCalls, statements, update };
 };
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.mocked(DocumentModel).mockImplementation(function () {
-    return mockDocumentModel as any;
-  });
-  vi.mocked(FileModel).mockImplementation(function () {
-    return mockFileModel as any;
-  });
-});
 
 describe('FileVisibilityRepository', () => {
   it('should take the per-file parse lock before it touches either aggregate', async () => {
-    mockFileModel.setVisibility.mockResolvedValue([{ id: 'file-1' }]);
-    const { db, execute } = makeDb();
+    const { db, execute, setCalls, statements, update } = makeDb();
 
     await new FileVisibilityRepository(db, 'user-1', 'ws-1').setVisibility('file-1', 'public');
 
     expect(execute).toHaveBeenCalledTimes(1);
-    // Render the statement the way the driver receives it, so the assertion
-    // covers the real SQL and its bound parameter.
-    const lockStatement = new PgDialect().sqlToQuery(execute.mock.calls[0][0]);
-    expect(lockStatement.sql).toContain('pg_advisory_xact_lock');
+    expect(statements[0].sql).toContain(LOCK_SQL);
     // The key has to match `DocumentService.parseFile`, otherwise the two do not
     // exclude each other and the publish can still land mid-parse.
-    expect(lockStatement.params).toEqual(['parseFile:file-1']);
-    expect(execute.mock.invocationCallOrder[0]).toBeLessThan(
-      mockFileModel.setVisibility.mock.invocationCallOrder[0],
-    );
-    expect(mockDocumentModel.setVisibilityByFileId).toHaveBeenCalledWith('file-1', 'public');
+    expect(statements[0].params).toEqual(['parseFile:file-1']);
+
+    // Lock first, then the two updates: a publish that starts mid-parse waits on
+    // the lock the parse already holds instead of committing between the parse's
+    // visibility read and its write.
+    expect(execute.mock.invocationCallOrder[0]).toBeLessThan(update.mock.invocationCallOrder[0]);
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(setCalls).toEqual([
+      expect.objectContaining({ visibility: 'public' }),
+      { visibility: 'public' },
+    ]);
   });
 
   it('should leave the documents alone when the file row did not change', async () => {
     // The visibility guard in `FileModel.setVisibility` matched nothing, so the
     // file is already in the requested state and there is nothing to mirror.
-    mockFileModel.setVisibility.mockResolvedValue([]);
-    const { db } = makeDb();
+    const { db, setCalls, update } = makeDb([[]]);
 
     const updated = await new FileVisibilityRepository(db, 'user-1', 'ws-1').setVisibility(
       'file-1',
@@ -65,6 +76,7 @@ describe('FileVisibilityRepository', () => {
     );
 
     expect(updated).toEqual([]);
-    expect(mockDocumentModel.setVisibilityByFileId).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(setCalls).toHaveLength(1);
   });
 });

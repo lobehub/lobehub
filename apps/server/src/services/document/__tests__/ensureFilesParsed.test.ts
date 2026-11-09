@@ -30,6 +30,7 @@ const parsedFile = (overrides: Record<string, unknown> = {}) => ({
 
 describe('DocumentService.ensureFilesParsed', () => {
   const findByIds = vi.fn();
+  const findFileById = vi.fn();
   const findByFileId = vi.fn();
   const create = vi.fn();
   const downloadFileToLocal = vi.fn();
@@ -37,6 +38,7 @@ describe('DocumentService.ensureFilesParsed', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    findFileById.mockResolvedValue(undefined);
     findByFileId.mockResolvedValue(null);
     create.mockResolvedValue({ id: 'doc-1' });
     downloadFileToLocal.mockImplementation(async (id: string) => ({
@@ -56,7 +58,7 @@ describe('DocumentService.ensureFilesParsed', () => {
       return { create, findByFileId } as any;
     });
     vi.mocked(FileModel).mockImplementation(function () {
-      return { findByIds } as any;
+      return { findById: findFileById, findByIds } as any;
     });
     vi.mocked(FileService).mockImplementation(function () {
       return { downloadFileToLocal } as any;
@@ -85,6 +87,20 @@ describe('DocumentService.ensureFilesParsed', () => {
     await service.ensureFilesParsed(['file-md']);
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'private' }));
+  });
+
+  it('takes the visibility a publish committed while the file was parsing', async () => {
+    findByIds.mockResolvedValue([parsedFile()]);
+    // The row read before the download was private, then a publish landed while
+    // the whole file was being parsed. The row re-read under the parse lock is
+    // the value the insert has to carry, otherwise the text stays private while
+    // the file itself is already in the workspace.
+    findFileById.mockResolvedValue({ ...parsedFile(), visibility: 'public' });
+
+    await service.ensureFilesParsed(['file-md']);
+
+    expect(findFileById).toHaveBeenCalledWith('file-md', expect.anything());
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
   });
 
   it('only parses files that can hold searchable text', async () => {
