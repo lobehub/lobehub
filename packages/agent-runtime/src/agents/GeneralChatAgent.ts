@@ -807,7 +807,9 @@ export class GeneralChatAgent implements Agent {
           // loop that ends the operation. Say why and who can switch instead;
           // any other unresolved name in the batch keeps the typo feedback.
           const lockedPickerNote = state.plan?.execution
-            ? describeWithheldDevicePicker(state.plan.execution)
+            ? describeWithheldDevicePicker(state.plan.execution, {
+                canUseDevice: state.principal?.policy?.deviceAccess?.canUseDevice,
+              })
             : undefined;
           const isPickerCall = (name: string) =>
             name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === REMOTE_DEVICE_IDENTIFIER;

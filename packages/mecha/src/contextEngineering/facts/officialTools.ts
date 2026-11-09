@@ -1,9 +1,19 @@
-import { builtinTools } from '@lobechat/builtin-tools';
+import { builtinTools, runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import { type ConnectorCatalogItem, getConnectorCatalog } from '@lobechat/const';
 import type { AvailablePluginInfo, OfficialToolItem } from '@lobechat/context-engine';
 
 import { isDeviceToolIdentifier } from '../../toolSet/deviceTools';
 import type { ContextFactRequest } from './types';
+
+/**
+ * Device tools whose enablement the run's device plan owns (local-system,
+ * remote-device, browser). Pinning one on an agent changes nothing. Computer
+ * Use is a device tool too, but pinning it is the user's opt-in, so it stays
+ * attachable.
+ */
+const RUNTIME_OWNED_DEVICE_TOOL_IDS = new Set(
+  runtimeManagedToolIds.filter((identifier) => isDeviceToolIdentifier(identifier)),
+);
 
 const connectorIdentifier = (item: ConnectorCatalogItem) =>
   item.type === 'lobehub' ? item.provider.id : item.serverType.identifier;
@@ -83,7 +93,7 @@ export const listOfficialTools = (params: {
  * except the internal ones (hidden builtins included — web browsing and the
  * sandbox are real capabilities), plus the connector catalog.
  *
- * Device tools (local-system, remote-device, browser, Computer Use) are left
+ * Runtime-owned device tools (local-system, remote-device, browser) are left
  * out. The run's device plan turns them on or off, so pinning one on an agent
  * does nothing. Listing them also made the model treat this catalog as the
  * list of tools it could activate: it called `activateTools(["lobe-remote-device"])`
@@ -104,7 +114,7 @@ export const listAvailablePlugins = (
     if (
       connectorIdentifiers.has(tool.identifier) ||
       INTERNAL_TOOLS.has(tool.identifier) ||
-      isDeviceToolIdentifier(tool.identifier)
+      RUNTIME_OWNED_DEVICE_TOOL_IDS.has(tool.identifier)
     )
       continue;
     plugins.push({

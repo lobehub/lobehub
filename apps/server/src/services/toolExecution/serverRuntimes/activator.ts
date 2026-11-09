@@ -155,7 +155,9 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // user to the device selector instead of retrying a "Not found".
       explainNotFound: (identifier) =>
         identifier === REMOTE_DEVICE_TOOL_IDENTIFIER && context.executionPlan
-          ? describeWithheldDevicePicker(context.executionPlan)
+          ? describeWithheldDevicePicker(context.executionPlan, {
+              canUseDevice: context.canUseDevice,
+            })
           : undefined,
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {

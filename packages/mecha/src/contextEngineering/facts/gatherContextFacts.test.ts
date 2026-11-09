@@ -421,8 +421,10 @@ describe('gatherContextFacts', () => {
       for (const id of ['lobe-remote-device', 'lobe-local-system', 'lobe-browser']) {
         expect(ids).not.toContain(id);
       }
-      // Hidden-but-real capabilities stay attachable.
+      // Hidden-but-real capabilities stay attachable, and so does Computer Use:
+      // pinning it is the opt-in that enables it on a supported device.
       expect(ids).toContain('lobe-web-browsing');
+      expect(ids).toContain('lobe-computer-use');
     });
 
     it('carries mentioned agents even without the tool or auto mode', async () => {

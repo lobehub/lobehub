@@ -160,6 +160,22 @@ describe('activatorRuntime', () => {
       expect(result.content).not.toContain('Not found');
     });
 
+    it('does not send a caller without device access to the device selector', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        canUseDevice: false,
+        executionPlan: { kind: 'none', target: 'none' },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-remote-device'] });
+
+      expect(result.content).toContain('not available in this conversation');
+      expect(result.content).not.toContain('device selector');
+    });
+
     it('keeps "Not found" while the picker is offered but missing from the map', async () => {
       const { activatorRuntime } = await import('../activator');
       const runtime = await activatorRuntime.factory({

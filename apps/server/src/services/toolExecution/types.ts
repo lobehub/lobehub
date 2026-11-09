@@ -224,6 +224,13 @@ export interface ToolExecutionContext {
    * the topic. Absent outside bot conversations.
    */
   botContext?: ChatTopicBotContext;
+  /**
+   * The run's device access policy (`principal.policy.deviceAccess.canUseDevice`).
+   * `false` for share visitors and untrusted bot senders, whose runs collapse
+   * to a `none` / `sandbox` plan. A runtime that explains a missing device tool
+   * must not send those callers to a device selector they cannot use.
+   */
+  canUseDevice?: boolean;
   /** Originating request IP propagated through the operation metadata. */
   clientIp?: string;
   /**

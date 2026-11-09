@@ -83,6 +83,17 @@ describe('describeWithheldDevicePicker', () => {
     );
   });
 
+  it('promises no device selector when device access is denied', async () => {
+    const describeWithheldDevicePicker = await load();
+    const hint = describeWithheldDevicePicker(
+      { kind: 'none', target: 'none' } as unknown as ExecutionPlan,
+      { canUseDevice: false },
+    );
+
+    expect(hint).toContain('not available in this conversation');
+    expect(hint).not.toContain('device selector');
+  });
+
   it('returns nothing while the picker is offered', async () => {
     const describeWithheldDevicePicker = await load();
 
