@@ -13,7 +13,7 @@ import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorFo
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
-  runVerifyOnCompletion,
+  scheduleVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -262,6 +262,11 @@ export class CompletionLifecycle {
       const messageModel = new MessageModel(this.serverDB, userId, undefined, undefined, {
         includeShareVisitor: this.includeShareVisitor,
       });
+      // One card per run. A producer that retries its terminal call (a
+      // heterogeneous `heteroFinish` the edge timed out) re-enters here for
+      // the same operation, and each pass used to stack another card.
+      if (await messageModel.findVerifyMessageByOperationId(operationId, op.topicId)) return;
+
       await messageModel.create({
         agentId: op.agentId ?? undefined,
         content: '',
@@ -510,24 +515,20 @@ export class CompletionLifecycle {
           metadata?.assistantMessageId,
           runOrigin.userId || this.userId,
         );
-        // `after`, not a bare `void`: judging is minutes of LLM calls and the
-        // step handler must not wait for it, but a detached promise has nobody
-        // keeping it scheduled — on the serverless path the instance is free to
-        // stop running it the moment this response returns. That is not merely a
-        // lost verification: entering `verifying` is a durable write, so a run
-        // cut off mid-judge stays `verifying` forever. `after` hands the work to
-        // the host as post-response work instead (no-op fallback off Next).
-        after(() =>
-          runVerifyOnCompletion(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            {
-              deliverable: event.lastAssistantContent ?? '',
-              goal,
-              operationId,
-            },
-            this.workspaceId,
-          ),
+        // Judging is minutes of LLM calls and must not ride this request:
+        // entering `verifying` is a durable write, so a gate cut off with the
+        // request (proxy timeout, function limit) leaves the round claimed and
+        // never judged. The gate runs in its own QStash delivery instead, which
+        // also collapses a producer's retried completions into one gate.
+        await scheduleVerifyOnCompletion(
+          this.serverDB,
+          runOrigin.userId || this.userId,
+          {
+            deliverable: event.lastAssistantContent ?? '',
+            goal,
+            operationId,
+          },
+          this.workspaceId,
         );
       }
 
