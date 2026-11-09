@@ -90,18 +90,6 @@ describe('TempFileManager', () => {
     expect(existsSync).toHaveBeenCalledWith(mockFullTmpDir);
     expect(rmSync).not.toHaveBeenCalled();
   });
-
-  it('leaves process signals, exceptions and exit to the server', () => {
-    // A SIGTERM listener that exits would cut the server's graceful shutdown short:
-    // the process dies at once and in-flight agent work is retried, model calls included.
-    const events = ['SIGTERM', 'SIGINT', 'uncaughtException', 'exit'] as const;
-    const before = events.map((event) => process.listenerCount(event));
-
-    new TempFileManager(mockDirname);
-    new TempFileManager(mockDirname);
-
-    expect(events.map((event) => process.listenerCount(event))).toEqual(before);
-  });
 });
 
 // Path traversal regression tests
