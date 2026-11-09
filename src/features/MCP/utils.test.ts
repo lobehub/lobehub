@@ -39,6 +39,24 @@ describe('genServerConfig', () => {
     });
   });
 
+  it('should preserve the package from deployment args when it differs from the marketplace identifier', () => {
+    const result = genServerConfig('ising-tech-isingq-toolkit', {
+      args: ['-y', '@ising-tech/isingq-mcp', 'serve'],
+      command: 'npx',
+      type: 'stdio',
+    } as any);
+
+    const config = JSON.parse(result);
+
+    expect(config.mcpServers['ising-tech-isingq-toolkit']).toEqual({
+      args: ['-y', '@ising-tech/isingq-mcp', 'serve'],
+      command: 'npx',
+    });
+    expect(config.mcpServers['ising-tech-isingq-toolkit'].args).not.toContain(
+      'ising-tech-isingq-toolkit',
+    );
+  });
+
   it('should handle empty connection config', () => {
     const result = genServerConfig('test-plugin', {} as any);
 
