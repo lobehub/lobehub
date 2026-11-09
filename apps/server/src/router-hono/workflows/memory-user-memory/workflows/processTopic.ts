@@ -9,6 +9,7 @@ import { type WorkflowContext } from '@upstash/workflow';
 import { WorkflowAbort, WorkflowNonRetryableError } from '@upstash/workflow';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { UserModel } from '@/database/models/user';
 import { getServerDB } from '@/database/server';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
@@ -64,6 +65,17 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
         if (!payload.sources.includes(MemorySourceType.ChatTopic)) {
           span.setStatus({ code: SpanStatusCode.OK });
           return { message: 'Source not supported in topic workflow.' };
+        }
+
+        // Runs already queued when the account was banned must not reach the model.
+        const banned = await runStep(
+          context,
+          `memory:user-memory:extract:users:${userId}:banned-check`,
+          async () => UserModel.isBanned(await getServerDB(), userId),
+        );
+        if (banned) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return { message: 'User is banned, skipping memory extraction.', skipped: true };
         }
 
         if (payload.asyncTaskId) {

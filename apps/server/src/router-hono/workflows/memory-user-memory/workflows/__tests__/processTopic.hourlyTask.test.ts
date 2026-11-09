@@ -6,6 +6,7 @@ import { createStepRunner } from '@/server/workflows/testing/stepContext';
 import { processTopicHandler } from '../processTopic';
 
 const mocks = vi.hoisted(() => ({
+  isBanned: vi.fn(),
   createExecutor: vi.fn(),
   extractTopic: vi.fn(),
   isHourlyMemoryExtractionCancellationRequested: vi.fn(),
@@ -53,6 +54,10 @@ vi.mock('@/database/models/asyncTask', () => ({
   }),
 }));
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: { isBanned: mocks.isBanned },
+}));
+
 vi.mock('@/database/server', () => ({
   getServerDB: vi.fn(async () => ({
     query: {
@@ -78,6 +83,7 @@ describe('processTopicHandler hourly task behavior', () => {
     vi.clearAllMocks();
     mocks.createExecutor.mockResolvedValue({ extractTopic: mocks.extractTopic });
     mocks.extractTopic.mockResolvedValue(undefined);
+    mocks.isBanned.mockResolvedValue(false);
     mocks.isHourlyMemoryExtractionCancellationRequested.mockResolvedValue(false);
   });
 
@@ -101,6 +107,20 @@ describe('processTopicHandler hourly task behavior', () => {
 
     expect(mocks.isHourlyMemoryExtractionCancellationRequested).toHaveBeenCalledTimes(2);
     expect(mocks.extractTopic).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not extract for a banned user, including runs queued before the ban', async () => {
+    mocks.isBanned.mockResolvedValue(true);
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await expect(processTopicHandler(context as never)).resolves.toMatchObject({ skipped: true });
+
+    expect(mocks.extractTopic).not.toHaveBeenCalled();
   });
 
   it('never asks the extractor for the retired experience layer', async () => {
