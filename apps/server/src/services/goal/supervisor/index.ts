@@ -143,11 +143,29 @@ export class GoalSupervisorService {
     // identity and settlement redesigned, so it still reaches a person for now.
     if (!latest?.operationId) return null;
     const failedOperation = await operations.findById(latest.operationId);
-    const state = graph.goal.config.supervisorState ?? (await this.initialize(graph));
+    let state = graph.goal.config.supervisorState ?? (await this.initialize(graph));
     let incident = state.incidents.find((item) => item.failedOperationId === latest.operationId);
     if (!incident) {
-      if (state.incidents.some((item) => item.status === 'diagnosing'))
+      // An incident is only re-read while its own Task is the failing one, so a
+      // diagnosis abandoned by a Task that later finished stays `diagnosing` for
+      // good. Waiting on it unbounded polled every five seconds and, with the
+      // sweep seeding another chain each pass, took the database pool down.
+      const diagnosing = state.incidents.filter((item) => item.status === 'diagnosing');
+      const expired = diagnosing.filter(
+        (item) => Date.now() - new Date(item.createdAt).getTime() > SUPERVISOR_DIAGNOSIS_TIMEOUT_MS,
+      );
+      if (expired.length < diagnosing.length)
         return waiting('Another interruption is being diagnosed');
+      if (expired.length > 0) {
+        for (const stale of expired) {
+          await this.updateIncident(goalId, stale.id, {
+            reason: 'Supervisor diagnosis never settled; no recovery was applied',
+            status: 'escalated',
+          });
+        }
+        const fresh = await new GoalModel(this.db, this.userId, this.workspaceId).findById(goalId);
+        state = fresh?.config?.supervisorState ?? state;
+      }
       if (state.incidents.length >= supervisionLimit(graph.goal)) {
         for (const previous of state.incidents.filter(
           (item) => item.taskId === task.id && item.status === 'retrying',

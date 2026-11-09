@@ -7,6 +7,9 @@ const log = debug('goal-scheduler:qstash');
 
 export const GOAL_ADVANCE_PATH = '/api/workflows/goal/advance';
 
+/** Delayed advances of one goal aimed within this window are the same wake-up. */
+const DELAYED_ADVANCE_WINDOW_MS = 5000;
+
 export interface QStashGoalSchedulerConfig {
   /** Absolute base URL (e.g. `process.env.APP_URL`) used to build the callback URL. */
   baseUrl: string;
@@ -34,11 +37,21 @@ export class QStashGoalScheduler implements GoalSchedulerImpl {
     const { delay = 0, goalId, trigger, userId, workspaceId } = params;
     const url = `${this.baseUrl}${GOAL_ADVANCE_PATH}`;
 
+    // Every advance that ends in a poll books the next one, so without this each
+    // extra message (a sweep, a retry) starts a chain that never merges back. The
+    // id is the target time: chains collapse, and a chain's own next poll, aimed
+    // later, still goes through. Immediate advances report an event, so they stay.
+    const deduplicationId =
+      delay > 0
+        ? `goal-advance-${goalId}-${Math.floor((Date.now() + delay * 1000) / DELAYED_ADVANCE_WINDOW_MS)}`
+        : undefined;
+
     log('publishing advance: goal=%s delay=%ds url=%s', goalId, delay, url);
     const response = await this.qstashClient.publishJSON({
       body: { goalId, trigger, userId, workspaceId },
       delay,
       url,
+      ...(deduplicationId ? { deduplicationId } : {}),
     });
 
     return 'messageId' in response ? response.messageId : '';
