@@ -1,4 +1,4 @@
-import type { WorkspaceUserPreference } from '@lobechat/types';
+import type { WorkspaceMemberConfig, WorkspaceUserPreference } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -54,15 +54,6 @@ export const workspaces = pgTable(
 
 export type WorkspaceItem = typeof workspaces.$inferSelect;
 export type NewWorkspace = typeof workspaces.$inferInsert;
-
-/**
- * A workspace member's own display settings, kept with their membership so
- * they go when the member leaves. Absent keys mean the default.
- */
-export interface WorkspaceMemberConfig {
-  /** The color the member picked for their profile card, `#rrggbb`. */
-  badgeColor?: string;
-}
 
 export const workspaceMembers = pgTable(
   'workspace_members',
