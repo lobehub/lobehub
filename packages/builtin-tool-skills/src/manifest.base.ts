@@ -51,7 +51,7 @@ export const exportFileApi: LobeChatPluginApi = {
       },
       path: {
         description:
-          'The path of the file in the skill execution environment to export (e.g., "./output/result.csv")',
+          'The path of the file to export, relative (e.g., "./output/result.csv") or absolute. If the file is reported as not found, run `realpath <file>` with runCommand in the same sandbox and pass the absolute path it prints.',
         type: 'string',
       },
     },
