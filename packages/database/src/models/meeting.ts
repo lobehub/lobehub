@@ -82,6 +82,14 @@ const SUMMARIZABLE_STATUSES = new Set<MeetingStatus>(['ready', 'summarizing']);
 /** Statuses a refine pass may (re)start from: audio is stored and nothing is recording. */
 const REFINABLE_STATUSES = new Set<MeetingStatus>(['failed', 'ready', 'transcribing']);
 
+/**
+ * PostgreSQL binds at most 65,535 parameters in one statement and every
+ * transcript row binds seven, so a long local recording (a 10,000-segment
+ * transcript is explicitly accepted by `refineLocal`) cannot be written in a
+ * single INSERT. 500 rows per statement keeps a chunk at ~3,500 parameters.
+ */
+const SEGMENT_UPSERT_CHUNK_SIZE = 500;
+
 const isLive = (status: MeetingStatus) =>
   (MEETING_LIVE_STATUSES as readonly MeetingStatus[]).includes(status);
 
@@ -665,30 +673,40 @@ export class MeetingModel {
     );
 
     const now = new Date();
-    return tx
-      .insert(meetingSegments)
-      .values(
-        batch.map((segment) => ({
-          endMs: segment.endMs,
-          meetingId,
-          seq: segment.seq,
-          source: segment.source,
-          speakerId: segment.speakerLabel ? speakerIds.get(segment.speakerLabel) : null,
-          startMs: segment.startMs,
-          text: segment.text,
-        })),
-      )
-      .onConflictDoUpdate({
-        set: {
-          endMs: sql`excluded.end_ms`,
-          speakerId: sql`excluded.speaker_id`,
-          startMs: sql`excluded.start_ms`,
-          text: sql`excluded.text`,
-          updatedAt: now,
-        },
-        target: [meetingSegments.meetingId, meetingSegments.source, meetingSegments.seq],
-      })
-      .returning();
+    const writeChunk = (chunk: AppendMeetingSegmentInput[]) =>
+      tx
+        .insert(meetingSegments)
+        .values(
+          chunk.map((segment) => ({
+            endMs: segment.endMs,
+            meetingId,
+            seq: segment.seq,
+            source: segment.source,
+            speakerId: segment.speakerLabel ? speakerIds.get(segment.speakerLabel) : null,
+            startMs: segment.startMs,
+            text: segment.text,
+          })),
+        )
+        .onConflictDoUpdate({
+          set: {
+            endMs: sql`excluded.end_ms`,
+            speakerId: sql`excluded.speaker_id`,
+            startMs: sql`excluded.start_ms`,
+            text: sql`excluded.text`,
+            updatedAt: now,
+          },
+          target: [meetingSegments.meetingId, meetingSegments.source, meetingSegments.seq],
+        })
+        .returning();
+
+    // A long transcript has to be written in bounded statements; the caller's
+    // transaction still makes the write all-or-nothing.
+    let rows: Awaited<ReturnType<typeof writeChunk>> = [];
+    for (let start = 0; start < batch.length; start += SEGMENT_UPSERT_CHUNK_SIZE) {
+      rows = rows.concat(await writeChunk(batch.slice(start, start + SEGMENT_UPSERT_CHUNK_SIZE)));
+    }
+
+    return rows;
   }
 
   private async ensureSpeakers(tx: Transaction, meetingId: string, labels: string[]) {
