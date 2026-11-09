@@ -436,7 +436,9 @@ export const searchEvalMemory = async (
       baseSignals,
       items: [...items.values()],
       lexicalLists: lexicalLists.map(asItems),
-      queries: appliedQueries,
+      // Same as the account's Memory (`searchHybrid*`): a query too long for
+      // the lexical pass is not fuzzy-matched either.
+      queries: lexicalSearch ? appliedQueries : [],
       queryParams: params,
       semanticLists: semanticLists.map(asItems),
     });
