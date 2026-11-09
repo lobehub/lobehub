@@ -1,8 +1,10 @@
 const INDENT = '  ';
-/** Larger documents stay raw: re-indenting can multiply the line count past what the highlighter renders smoothly. */
+/** Larger documents stay raw without scanning them. */
 const MAX_FORMAT_LENGTH = 256 * 1024;
 /** Deeper nesting stays raw: indentation grows with depth, so pathological nesting would explode the output. */
 const MAX_FORMAT_DEPTH = 64;
+/** Output budget: past this many lines the highlighter no longer renders the preview smoothly. */
+const MAX_FORMAT_LINES = 10_000;
 
 const isWhitespace = (char: string) =>
   char === ' ' || char === '\n' || char === '\r' || char === '\t';
@@ -16,14 +18,19 @@ const isWhitespace = (char: string) =>
  * Returns:
  * - The same tokens with two-space indentation; numbers, strings and escape
  *   sequences are copied verbatim, so large integers keep their precision.
- * - `null` when nesting exceeds `MAX_FORMAT_DEPTH`.
+ * - `null` when nesting exceeds `MAX_FORMAT_DEPTH` or the output would exceed
+ *   `MAX_FORMAT_LINES`; with both caps each line stays short, so the output is bounded.
  */
 const reindentJson = (text: string): string | null => {
   const out: string[] = [];
   let depth = 0;
+  let lines = 1;
   let i = 0;
 
-  const newline = () => `\n${INDENT.repeat(depth)}`;
+  const newline = () => {
+    lines += 1;
+    return `\n${INDENT.repeat(depth)}`;
+  };
 
   while (i < text.length) {
     const char = text[i];
@@ -68,6 +75,7 @@ const reindentJson = (text: string): string | null => {
       continue;
     }
 
+    if (lines > MAX_FORMAT_LINES) return null;
     i += 1;
   }
 
@@ -86,13 +94,14 @@ const reindentJson = (text: string): string | null => {
  * Returns:
  * - Indented JSON for valid single-line (minified) documents; the original text
  *   for other languages, invalid JSON, files the author already laid out across
- *   several lines, and documents too large or too deeply nested to format.
+ *   several lines (LF, CRLF or CR), and documents too large, too deeply nested
+ *   or producing too many lines to format.
  */
 export const formatJsonForPreview = (text: string, language: string): string => {
   if (language !== 'json') return text;
 
   const trimmed = text.trim();
-  if (!trimmed || trimmed.length > MAX_FORMAT_LENGTH || trimmed.includes('\n')) return text;
+  if (!trimmed || trimmed.length > MAX_FORMAT_LENGTH || /[\n\r]/.test(trimmed)) return text;
 
   try {
     JSON.parse(trimmed);

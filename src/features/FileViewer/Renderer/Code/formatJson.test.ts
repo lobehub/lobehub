@@ -87,4 +87,19 @@ describe('formatJsonForPreview', () => {
     expect(formatJsonForPreview(large, 'json')).toBe(large);
     expect(formatJsonForPreview(deep, 'json')).toBe(deep);
   });
+
+  it('keeps documents that would format into too many lines raw', () => {
+    const manyValues = JSON.stringify(Array.from({ length: 20_000 }, () => 0));
+
+    expect(manyValues.length).toBeLessThan(256 * 1024);
+    expect(formatJsonForPreview(manyValues, 'json')).toBe(manyValues);
+  });
+
+  it('keeps CR-only and CRLF multi-line JSON in the author layout', () => {
+    const crOnly = '{\r  "a": 1\r}';
+    const crlf = '{\r\n  "a": 1\r\n}';
+
+    expect(formatJsonForPreview(crOnly, 'json')).toBe(crOnly);
+    expect(formatJsonForPreview(crlf, 'json')).toBe(crlf);
+  });
 });
