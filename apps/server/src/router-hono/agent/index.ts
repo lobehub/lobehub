@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { agentAccountDigestFlush } from './handlers/agentAccountDigestFlush';
 import { agentAccountWebhook, agentAccountWebhookBodyLimit } from './handlers/agentAccountWebhook';
+import { agentInboxReport } from './handlers/agentInboxReport';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
@@ -47,6 +48,10 @@ app.get('/run', runStepHealth);
 
 app.post('/channel/advance', qstashAuth(), channelAdvance);
 app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
+
+// POST /api/agent/webhooks/inbox-report — a mail-woken run finished: post its answer to the
+// owner's direct Channel (QStash)
+app.post('/webhooks/inbox-report', qstashAuth(), agentInboxReport);
 
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);

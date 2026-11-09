@@ -249,6 +249,32 @@ describe('AgentEvalRunService', () => {
       expect(runTopic?.evalResult?.error).toBe('No assistant output');
     });
 
+    it('grades an attempt that hit its step cap without answering as failed, not error', async () => {
+      const { run, testCase } = await setupEvalChain({
+        assistantOutput: null,
+        benchmarkRubrics: [{ config: {}, id: 'r1', name: 'contains', type: 'contains', weight: 1 }],
+        expected: '42',
+        totalCases: 1,
+      });
+      await new AgentEvalRunModel(serverDB, userId).update(run.id, { config: { maxSteps: 20 } });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.recordTrajectoryCompletion({
+        runId: run.id,
+        telemetry: { completionReason: 'done', duration: 100, steps: 21 },
+        testCaseId: testCase.id,
+      });
+
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+
+      expect(runTopic?.status).toBe('failed');
+      expect(runTopic?.score).toBe(0);
+      expect(runTopic?.evalResult?.error).toBe(
+        'Reached the step limit (20) without a final answer',
+      );
+    });
+
     it('should write status=failed when evaluation does not pass', async () => {
       const { run, testCase } = await setupEvalChain({
         assistantOutput: 'completely wrong answer',

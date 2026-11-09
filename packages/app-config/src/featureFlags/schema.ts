@@ -56,6 +56,14 @@ export const FeatureFlagsSchema = z.object({
   agent_llm_relay: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for deferring an operation's init: a plain chat send returns
+   * once its messages are durable and the step-0 worker runs tool discovery and
+   * context assembly. Off: the send path runs them before returning. Array
+   * values are user ids.
+   */
+  agent_deferred_init: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -115,6 +123,7 @@ export const FeatureFlagsSchema = z.object({
   onboarding_v2: FeatureFlagValue.optional(),
   new_tier_plans: FeatureFlagValue.optional(),
   mobile_new_tier_sales: FeatureFlagValue.optional(),
+  mobile_sandbox_grant: FeatureFlagValue.optional(),
   storage_overage: FeatureFlagValue.optional(),
   workspace: FeatureFlagValue.optional(),
 
@@ -205,6 +214,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
+  agent_deferred_init: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -234,6 +244,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // publishes a whitelist (array of user IDs) or flips it to true.
   new_tier_plans: false,
   mobile_new_tier_sales: false,
+  // Server-only: Cloud lets a store sandbox purchase grant entitlement only for user IDs listed
+  // explicitly; `true` and percentage rollout count as off, and it never reaches the client state.
+  mobile_sandbox_grant: false,
   storage_overage: true,
   workspace: isDev,
 
@@ -266,6 +279,11 @@ export const mapFeatureFlagsEnvToState = (
       'agent_gateway_mux_mobile',
     ),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableDeferredInit: evaluateFeatureFlag(
+      config.agent_deferred_init,
+      userId,
+      'agent_deferred_init',
+    ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
     enableAgentKnowledgeSpace: evaluateFeatureFlag(

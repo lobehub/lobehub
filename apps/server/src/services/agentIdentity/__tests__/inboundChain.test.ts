@@ -323,7 +323,14 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     // The sender's words reach the run only inside the untrusted fence on the
     // user side: the sentence we write ourselves carries no sender content.
     const prompt: string = agentCalls[0].execAgent.prompt;
-    const [ownSentence, fenced] = prompt.split('\n\n');
+    const [ownSentence, instruction, fenced] = prompt.split('\n\n');
+    // The run reports to its owner's Channel; that sentence is ours too.
+    expect(instruction).toContain('direct Channel');
+    // Nobody watches this run: it must end, not park on an approval its report would miss.
+    expect(agentCalls[0].execAgent.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(agentCalls[0].execAgent.hooks).toEqual([
+      expect.objectContaining({ id: `agent-inbox-report:${accountId}`, type: 'onComplete' }),
+    ]);
     expect(ownSentence).not.toContain('login@service.com');
     expect(ownSentence).not.toContain('839201');
     expect(fenced.startsWith('<untrusted_inbox>')).toBe(true);

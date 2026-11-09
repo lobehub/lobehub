@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
+import { buildInboxTopicTitle } from '../untrusted';
 import { createAgentInboundWaker } from '../waker';
 
 const { execAgent, findThreadTopicId, findTopic, markWoken } = vi.hoisted(() => ({
@@ -83,5 +84,33 @@ describe('inbound waker — thread topics', () => {
     expect(execAgent).toHaveBeenCalledTimes(1);
     expect(markWoken).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('inbound waker — topic title', () => {
+  it('titles the topic with the mail subject rather than the prompt', async () => {
+    findThreadTopicId.mockResolvedValue(undefined);
+    execAgent.mockResolvedValueOnce({ topicId: 'tpc_new' });
+
+    await waker.wake({ account, message });
+
+    expect(execAgent).toHaveBeenCalledWith(expect.objectContaining({ title: 'Re: hello' }));
+  });
+});
+
+describe('buildInboxTopicTitle', () => {
+  it('counts the other messages of a digest behind the first subject', () => {
+    expect(buildInboxTopicTitle([{ subject: null }, { subject: 'B' }, { subject: 'C' }])).toBe(
+      'B +2',
+    );
+  });
+
+  it('flattens folded whitespace and caps a long subject', () => {
+    expect(buildInboxTopicTitle([{ subject: ' a\r\n  b ' }])).toBe('a b');
+    expect(buildInboxTopicTitle([{ subject: 'x'.repeat(120) }])).toBe(`${'x'.repeat(100)}…`);
+  });
+
+  it.each([null, '', '   '])('leaves the title to the run for subject %j', (subject) => {
+    expect(buildInboxTopicTitle([{ subject }])).toBeUndefined();
   });
 });

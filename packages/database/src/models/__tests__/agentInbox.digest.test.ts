@@ -181,6 +181,21 @@ describe('AgentInboxModel.releaseWakes', () => {
       (await AgentInboxModel.claimDigest(serverDB, { accountId, limit: 10, since })).sort(),
     ).toEqual(items.map((item) => item.id).sort());
   });
+
+  it('leaves the claims alone when the run released nothing', async () => {
+    const item = await deliver('spare', 1);
+    const since = new Date(Date.now() - 24 * 60 * 60_000);
+    await AgentInboxModel.claimDigest(serverDB, { accountId, limit: 10, since });
+
+    // An empty digest run never reaches the claim it would have to give back.
+    await AgentInboxModel.releaseWakes(serverDB, []);
+
+    const [row] = await serverDB
+      .select()
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.id, item.id));
+    expect(row.wakeClaimedAt).not.toBeNull();
+  });
 });
 
 describe('AgentInboxModel.markManyWoken', () => {
@@ -198,6 +213,18 @@ describe('AgentInboxModel.markManyWoken', () => {
     const rows = await serverDB.select().from(agentInboxMessages);
     expect(rows.find((row) => row.id === earlier.id)?.readAt).toEqual(readAt);
     expect(rows.find((row) => row.id === later.id)?.readAt).not.toBeNull();
+  });
+
+  it('marks nothing when the digest run has no items', async () => {
+    const item = await deliver('untouched', 1);
+
+    await AgentInboxModel.markManyWoken(serverDB, [], undefined);
+
+    const [row] = await serverDB
+      .select()
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.id, item.id));
+    expect(row.readAt).toBeNull();
   });
 });
 

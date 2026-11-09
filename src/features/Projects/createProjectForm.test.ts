@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCreateProjectRequest,
   DEFAULT_MAIN_AGENT_MODE,
+  doesConflictApplyTo,
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
+  isProjectIdentifierTaken,
   isProjectIdentifierValid,
   isProjectSlugValid,
   PROJECT_SLUG_MAX_LENGTH,
@@ -48,6 +51,48 @@ describe('createProjectForm', () => {
     expect(isProjectIdentifierValid('LOBE')).toBe(true);
     expect(isProjectIdentifierValid('LH')).toBe(false);
     expect(isProjectIdentifierValid('1LOBE')).toBe(false);
+  });
+
+  it('flags an identifier that another project in the scope already uses', () => {
+    const projects = [{ identifier: 'LOBE' }, { identifier: 'MOBILE' }];
+
+    expect(isProjectIdentifierTaken('LOBE', projects)).toBe(true);
+    expect(isProjectIdentifierTaken(' lobe ', projects)).toBe(true);
+    expect(isProjectIdentifierTaken('LOB', projects)).toBe(false);
+    // An empty field is "not yet filled in", not "taken".
+    expect(isProjectIdentifierTaken('  ', projects)).toBe(false);
+    expect(isProjectIdentifierTaken('LOBE', [])).toBe(false);
+  });
+
+  it('attributes a server conflict only to the identifier that was submitted', () => {
+    // Unchanged field: the conflict the server reported still describes it.
+    expect(doesConflictApplyTo('LOBE', 'LOBE')).toBe(true);
+    expect(doesConflictApplyTo('LOBE', ' lobe ')).toBe(true);
+
+    // Typed a new value while the request was in flight: the verdict is stale.
+    expect(doesConflictApplyTo('LOBE', 'MOBILE')).toBe(false);
+
+    // Nothing was submitted, so there is no identifier to blame.
+    expect(doesConflictApplyTo('', '')).toBe(false);
+    expect(doesConflictApplyTo('', 'MOBILE')).toBe(false);
+  });
+
+  it('routes a conflict to the field the server named', () => {
+    const conflict = (code: string, message: string) => ({ data: { code }, message });
+
+    expect(getProjectConflictField(conflict('CONFLICT', 'DUPLICATE_PROJECT_IDENTIFIER'))).toBe(
+      'identifier',
+    );
+    expect(getProjectConflictField(conflict('CONFLICT', 'DUPLICATE_PROJECT_SLUG'))).toBe('slug');
+
+    // A conflict without a field code, or a failure of another kind, stays
+    // generic — the form must not blame a field it cannot name.
+    expect(getProjectConflictField(conflict('CONFLICT', 'SOMETHING_ELSE'))).toBeUndefined();
+    expect(
+      getProjectConflictField(conflict('BAD_REQUEST', 'DUPLICATE_PROJECT_SLUG')),
+    ).toBeUndefined();
+    expect(getProjectConflictField(new Error('boom'))).toBeUndefined();
+    expect(getProjectConflictField(undefined)).toBeUndefined();
   });
 
   it('normalizes and includes a user-provided slug', () => {

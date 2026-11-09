@@ -11,11 +11,20 @@ import {
   toast,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Copy, GitBranch, MessagesSquare, MoreHorizontal, Reply } from 'lucide-react';
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Copy,
+  GitBranch,
+  MessagesSquare,
+  MoreHorizontal,
+  Reply,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -131,6 +140,11 @@ export const ChannelMessage = ({
     ? detail.members.find((member) => member.agentId === agentAuthorId)
     : undefined;
   const sourceTopicId = message.sourceTopicId;
+  // A direct conversation is a chat with one Agent; folding its answers only adds a click.
+  const collapsible = !detail.channel.agentId;
+  // Long messages stay open by default; folding one is an explicit choice from "more".
+  const [collapsed, setCollapsed] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
   const moreItems = [
     ...(agentAuthorId && sourceTopicId && onOpenTopic
       ? [
@@ -161,10 +175,18 @@ export const ChannelMessage = ({
           },
         ]
       : []),
+    ...(collapsible && overflowing
+      ? [
+          {
+            icon: collapsed ? ChevronsUpDown : ChevronsDownUp,
+            key: 'toggleCollapse',
+            label: t(collapsed ? 'message.expand' : 'message.collapse'),
+            onClick: () => setCollapsed(!collapsed),
+          },
+        ]
+      : []),
   ];
   const hasToolbar = !!onReply || canBranch || moreItems.length > 0;
-  // A direct conversation is a chat with one Agent; folding its answers only adds a click.
-  const collapsible = !detail.channel.agentId;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
     .map((member) => memberName(member, ''))
@@ -230,7 +252,15 @@ export const ChannelMessage = ({
                   title: message.author.name,
                 }}
               >
-                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <AgentAvatar
+                    agentId={agentAuthorId}
+                    avatar={message.author.avatar}
+                    name={message.author.name}
+                    shape={'circle'}
+                    size={36}
+                  />
+                </span>
               </AgentProfilePopup>
             ) : (
               avatar
@@ -266,7 +296,14 @@ export const ChannelMessage = ({
             )}
             {message.content &&
               (collapsible ? (
-                <CollapsibleContent key={message.id} maxHeight={160}>
+                <CollapsibleContent
+                  hideCollapseToggle
+                  collapsed={collapsed}
+                  key={message.id}
+                  maxHeight={160}
+                  onCollapsedChange={setCollapsed}
+                  onOverflowChange={setOverflowing}
+                >
                   <MessageText content={message.content} names={mentionNames} />
                 </CollapsibleContent>
               ) : (

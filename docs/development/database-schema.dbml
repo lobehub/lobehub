@@ -849,6 +849,7 @@ table agent_operations {
     parent_operation_id [name: 'agent_operations_parent_operation_id_idx']
     status [name: 'agent_operations_status_idx']
     (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
+    (workspace_id, created_at) [name: 'agent_operations_workspace_id_created_at_idx']
     metadata [name: 'agent_operations_metadata_idx']
   }
 }
@@ -2809,6 +2810,7 @@ table meetings {
   duration_ms integer
   audio_file_id text
   local_audio_path text
+  error jsonb
   visibility text [not null, default: 'private']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]

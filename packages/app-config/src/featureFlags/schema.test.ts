@@ -290,6 +290,16 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(state.enableMobileNewTierSales).toBeUndefined();
   });
 
+  it('should keep the mobile sandbox grant off by default and out of the client state', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_sandbox_grant).toBe(false);
+    expect(FeatureFlagsSchema.parse({ mobile_sandbox_grant: ['tester-123'] })).toEqual({
+      mobile_sandbox_grant: ['tester-123'],
+    });
+    expect(
+      mapFeatureFlagsEnvToState({ mobile_sandbox_grant: ['tester-123'] }, 'tester-123'),
+    ).toEqual(mapFeatureFlagsEnvToState({}, 'tester-123'));
+  });
+
   it('should keep topic previews off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(

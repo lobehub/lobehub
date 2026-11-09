@@ -2,6 +2,7 @@ import {
   ChartColumnBigIcon,
   FileUserIcon,
   GraduationCapIcon,
+  MailIcon,
   MessageSquare,
   MessagesSquareIcon,
   RadioTowerIcon,
@@ -85,6 +86,12 @@ export const agentProfileRouteMeta = routeMeta({
   icon: FileUserIcon,
   Skeleton: ProfileSkeleton,
   titleKey: 'navigation.profile',
+});
+
+export const agentMailRouteMeta = routeMeta({
+  icon: MailIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.mail',
 });
 
 export const agentChannelRouteMeta = routeMeta({

@@ -42,10 +42,23 @@ export const SKILL_BUNDLE_FILE_TYPE = 'skills/bundle';
 /** File type used by the SKILL.md index document inside a managed skill bundle. */
 export const SKILL_INDEX_FILE_TYPE = 'skills/index';
 
-/** File type of a script file inside a skill bundle; its language sits in `metadata.language`. */
+/**
+ * File type of a file beside `SKILL.md` in a skill bundle, its path in
+ * `filename`. Text sits in `content`; a binary file links its `files` row
+ * through `fileId`. Its MIME type and a script's language sit in `metadata`.
+ */
+export const SKILL_FILE_FILE_TYPE = 'skills/file';
+
+/**
+ * What a bundle's files were written as before they held more than scripts.
+ * Still read; rewritten as `skills/file` the next time one is written.
+ */
 export const SKILL_SCRIPT_FILE_TYPE = 'skills/script';
 
-/** File type of one frozen version of a user skill's `SKILL.md`, kept under its bundle. */
+/**
+ * File type of a version snapshot of a user skill's `SKILL.md`, from before
+ * versions were published as archives in `files`. Still read, never written.
+ */
 export const SKILL_VERSION_FILE_TYPE = 'skills/version';
 
 /**

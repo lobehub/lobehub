@@ -1,6 +1,5 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -9,7 +8,7 @@ import { SquareArrowOutUpRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { ModelIcon } from '@/components/LobeIcons';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
@@ -104,12 +103,11 @@ const AgentProfilePanel = memo<AgentProfilePanelProps>(({ agentId, workspace }) 
           title={t('workingPanel.overview.profile.view')}
           onClick={() => navigate(`/agent/${agentId}/profile`)}
         />
-        <Avatar
-          emojiScaleWithBackground
-          avatar={meta.avatar || DEFAULT_AVATAR}
+        <AgentAvatar
+          agentId={agentId}
+          avatar={meta.avatar}
           background={meta.backgroundColor || undefined}
           name={title}
-          shape={'square'}
           size={64}
         />
         <Text ellipsis fontSize={17} style={{ maxWidth: '100%' }} weight={600}>

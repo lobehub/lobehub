@@ -97,10 +97,11 @@ describe('GoalService', () => {
     // v2 when the break revised it — each version kept whole.
     const planSkill = next.planSkill!;
     expect(planSkill.name).toMatch(/^goal-plan-/);
-    const skill = await new UserSkillService(serverDB, userId).getSkill(planSkill.id);
+    const skills = new UserSkillService(serverDB, userId);
+    const skill = await skills.getSkill(planSkill.id);
     expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);
     expect(skill?.content).toContain('### v2\n补上冷启动这一步');
-    expect(skill?.versions[0].content).not.toContain('### v2');
+    expect((await skills.getVersion(planSkill.id, 1))?.content).not.toContain('### v2');
     // A re-opened unit names the skill, which carries every later revision…
     expect(reopened.description).toContain(`user-skills:${planSkill.name}`);
     // …and still carries the revised plan, in case the skill does not load.
@@ -340,11 +341,13 @@ describe('GoalService', () => {
     await service.decide(graph.goal.id, decision!.id, 'revise', '补上 SSR 播种这一步');
 
     const next = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
-    const skill = await new UserSkillService(serverDB, userId).getSkill(next.planSkill!.id);
+    const skills = new UserSkillService(serverDB, userId);
+    const skill = await skills.getSkill(next.planSkill!.id);
     // The plan's earlier version becomes v1 and the revision v2, so version N
     // still reads as round N.
     expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);
-    expect(skill?.versions[0].content).toContain('把 store 换成 replica 支撑的实现');
-    expect(skill?.versions[1].content).toContain('### v2\n补上 SSR 播种这一步');
+    const [v1, v2] = await Promise.all([1, 2].map((n) => skills.getVersion(skill!.id, n)));
+    expect(v1?.content).toContain('把 store 换成 replica 支撑的实现');
+    expect(v2?.content).toContain('### v2\n补上 SSR 播种这一步');
   });
 });
