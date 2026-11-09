@@ -28,6 +28,7 @@ import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotif
 import { resolveSystemAgentModelConfig } from '../../systemAgent/modelConfig';
 import { MeetingTranscriptionError, toMeetingErrorCode, toMeetingErrorMessage } from '../errors';
 import { type AssigneeCandidate, matchAssignee } from './assignee';
+import { mergeActionItems } from './mergeActionItems';
 import { generatedMinutesSchema, type MinutesTranscriptLine, normalizeMinutes } from './normalize';
 import { buildTaskInstruction } from './taskInstruction';
 
@@ -187,12 +188,9 @@ export class MeetingMinutesService {
         meetingId,
         { ...minutes, model: `${provider}/${model}` },
         (stored) => {
-          const kept = stored.filter((item) => item.status === 'created');
-          const takenSegments = new Set(kept.flatMap((item) => item.segmentIds));
-          fresh = minutes.actionItems.filter(
-            (item) => !item.segmentIds.some((id) => takenSegments.has(id)),
-          );
-          return [...kept, ...fresh];
+          const merged = mergeActionItems(stored, minutes.actionItems);
+          fresh = merged.fresh;
+          return merged.items;
         },
       );
       log('minutes %s: %d action items in %dms', meetingId, fresh.length, Date.now() - startedAt);
