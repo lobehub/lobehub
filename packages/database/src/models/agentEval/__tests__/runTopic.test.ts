@@ -529,6 +529,62 @@ describe('AgentEvalRunTopicModel', () => {
         error: 'Execution error: insufficient_user_quota',
       });
     });
+
+    it('guards the write by the execution that owns the row', async () => {
+      await serverDB
+        .update(agentEvalRunTopics)
+        .set({ evalResult: { executionId: 'exec-1' } })
+        .where(eq(agentEvalRunTopics.topicId, topicId1));
+
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.5 },
+          { executionId: 'exec-2' },
+        ),
+      ).toBeUndefined();
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.5 },
+          { executionId: 'exec-1' },
+        ),
+      ).toMatchObject({ score: 0.5 });
+    });
+
+    it('treats an explicit undefined execution id as "no execution yet"', async () => {
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.1 },
+          { executionId: undefined },
+        ),
+      ).toMatchObject({ score: 0.1 });
+    });
+
+    it('requires the expected status when a status guard is supplied', async () => {
+      await runTopicModel.updateByRunAndTopic(runId, topicId1, { status: 'running' });
+
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.2 },
+          { status: 'passed' },
+        ),
+      ).toBeUndefined();
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.2 },
+          { status: 'running' },
+        ),
+      ).toMatchObject({ score: 0.2 });
+    });
   });
 
   describe('batchMarkTimeout', () => {
