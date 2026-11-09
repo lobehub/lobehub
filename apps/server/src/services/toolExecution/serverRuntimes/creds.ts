@@ -1,17 +1,49 @@
+import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsIdentifier, type ICredsService } from '@lobechat/builtin-tool-creds';
 import { CredsExecutionRuntime } from '@lobechat/builtin-tool-creds/executionRuntime';
+import type { InjectCredsRequest } from '@lobehub/market-sdk';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { MarketService } from '@/server/services/market';
-import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import {
+  resolveSandboxSessionConfig,
+  type SandboxSessionSpecification,
+} from '@/server/services/sandbox';
 
 import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:creds-runtime');
+
+/**
+ * Which sandbox the topic's tool calls run in, as the cloud-sandbox runtime
+ * names it on every call. Injection has to name the same one: the runtime
+ * binds a session to whatever its first call asks for, so an injection that
+ * names nothing lands in the throwaway sandbox and the next persistent or
+ * drive command replaces it — reporting "session expired and was recreated"
+ * and discarding the `~/.creds` it just wrote.
+ */
+export interface CredsSandboxPlacement {
+  sandboxInstanceId?: string;
+  sandboxMode?: SandboxMode;
+  /**
+   * Not part of the session's identity, but an injection that creates the
+   * session builds the sandbox from it, so it travels too.
+   */
+  sandboxSpecification?: SandboxSessionSpecification;
+}
+
+/**
+ * Market accepts `sandboxSpecification` on injection from the release that
+ * added it, while the published SDK still types the request without it.
+ * Drop the extension with the SDK bump.
+ */
+type InjectCredsPlacedRequest = InjectCredsRequest & {
+  sandboxSpecification?: SandboxSessionSpecification;
+};
 
 /**
  * Server-side Creds Service implementation
@@ -36,6 +68,7 @@ export class ServerCredsService implements ICredsService {
      * the allowlist alone.
      */
     isShareVisitor = false,
+    private readonly sandboxPlacement: CredsSandboxPlacement = {},
   ) {
     this.marketService = marketService;
     this.workspaceId = workspaceId;
@@ -127,7 +160,13 @@ export class ServerCredsService implements ICredsService {
     success: boolean;
     unsupportedInSandbox?: string[];
   }> {
-    log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
+    log(
+      'injectCreds: keys=%O, topicId=%s, mode=%s, instance=%s',
+      params.keys,
+      params.topicId,
+      this.sandboxPlacement.sandboxMode,
+      this.sandboxPlacement.sandboxInstanceId,
+    );
 
     // Refuse before the Market call, not after: Market's inject endpoint
     // writes the creator's REAL credentials into the sandbox's ~/.creds/env
@@ -149,12 +188,20 @@ export class ServerCredsService implements ICredsService {
     // that, appending a masked `export` line after market's real one. Since
     // re-sourcing ~/.creds/env applies `export`s in file order, the masked
     // line silently shadowed the real credential for every later command.
-    const result = await this.marketService.market.creds.inject({
+    //
+    // Named one by one, like the sandbox provider's call context, so the
+    // placement cannot silently drop out of the request again.
+    const { sandboxInstanceId, sandboxMode, sandboxSpecification } = this.sandboxPlacement;
+    const request: InjectCredsPlacedRequest = {
       keys: params.keys,
       sandbox: params.sandbox,
+      sandboxInstanceId,
+      sandboxMode,
+      sandboxSpecification,
       topicId: params.topicId,
       userId: params.userId,
-    });
+    };
+    const result = await this.marketService.market.creds.inject(request);
 
     log('injectCreds success: notFound=%d', result.notFound?.length || 0);
 
@@ -246,6 +293,11 @@ export const credsRuntime: ServerRuntimeRegistration = {
       marketService,
       workspaceId,
       Boolean(context.agentShareVisitor),
+      {
+        sandboxInstanceId: sandbox.environment,
+        sandboxMode: sandbox.mode,
+        sandboxSpecification: sandbox.specification,
+      },
     );
 
     return new CredsExecutionRuntime(credsService, {
