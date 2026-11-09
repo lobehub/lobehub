@@ -68,12 +68,11 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
         }
 
         // Runs already queued when the account was banned must not reach the model.
-        const banned = await runStep(
-          context,
-          `memory:user-memory:extract:users:${userId}:banned-check`,
-          async () => UserModel.isBanned(await getServerDB(), userId),
-        );
-        if (banned) {
+        // NOTICE: A plain read, not a step: a new persisted step would change the replay sequence
+        // and fail runs already in flight with `Incompatible step name`.
+        const banned = await UserModel.isBanned(await getServerDB(), userId);
+        // A tracked run skips extraction below but still reports progress, or its task never ends.
+        if (banned && !(payload.asyncTaskId && payload.userInitiated)) {
           span.setStatus({ code: SpanStatusCode.OK });
           return { message: 'User is banned, skipping memory extraction.', skipped: true };
         }
@@ -130,9 +129,11 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
         // An explicit request is narrowed to the layers this block owns. When nothing survives
         // (e.g. a queued request naming only the retired Experience layer) the block is skipped:
         // the executor treats an empty layer list as "extract everything", not "extract nothing".
-        const cepaLayers = payload.layers.length
-          ? payload.layers.filter((layer) => CEPA_LAYERS.includes(layer))
-          : CEPA_LAYERS;
+        const cepaLayers = banned
+          ? []
+          : payload.layers.length
+            ? payload.layers.filter((layer) => CEPA_LAYERS.includes(layer))
+            : CEPA_LAYERS;
         if (cepaLayers.length > 0) {
           const layers = cepaLayers;
 
@@ -211,9 +212,11 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             }
           }
 
-          const identityLayers = payload.layers.length
-            ? payload.layers.filter((layer) => IDENTITY_LAYERS.includes(layer))
-            : IDENTITY_LAYERS;
+          const identityLayers = banned
+            ? []
+            : payload.layers.length
+              ? payload.layers.filter((layer) => IDENTITY_LAYERS.includes(layer))
+              : IDENTITY_LAYERS;
           if (identityLayers.length > 0) {
             const layers = identityLayers;
 

@@ -6,6 +6,7 @@ import { createStepRunner } from '@/server/workflows/testing/stepContext';
 import { processTopicHandler } from '../processTopic';
 
 const mocks = vi.hoisted(() => ({
+  incrementProgress: vi.fn(),
   isBanned: vi.fn(),
   createExecutor: vi.fn(),
   extractTopic: vi.fn(),
@@ -50,6 +51,8 @@ vi.mock('@/database/models/asyncTask', () => ({
     return {
       isHourlyMemoryExtractionCancellationRequested:
         mocks.isHourlyMemoryExtractionCancellationRequested,
+      incrementUserMemoryExtractionProgress: mocks.incrementProgress,
+      isUserMemoryExtractionCancellationRequested: vi.fn(async () => false),
     };
   }),
 }));
@@ -121,6 +124,23 @@ describe('processTopicHandler hourly task behavior', () => {
     await expect(processTopicHandler(context as never)).resolves.toMatchObject({ skipped: true });
 
     expect(mocks.extractTopic).not.toHaveBeenCalled();
+  });
+
+  it('still reports progress for a banned user tracked task, without extracting', async () => {
+    mocks.isBanned.mockResolvedValue(true);
+    const context = createContext({
+      asyncTaskId: '00000000-0000-4000-8000-000000000002',
+      baseUrl: 'https://app.example.com',
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+      userInitiated: true,
+    });
+
+    await processTopicHandler(context as never);
+
+    expect(mocks.extractTopic).not.toHaveBeenCalled();
+    expect(mocks.incrementProgress).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000002');
   });
 
   it('never asks the extractor for the retired experience layer', async () => {
