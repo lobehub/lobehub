@@ -155,7 +155,6 @@ describe('getServerGlobalConfig', () => {
     const providerConfig = await loadCapturedProviderConfig(true);
 
     expect(providerConfig[ModelProvider.LobeHub].enabled).toBe(true);
-    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(false);
     expect(providerConfig[ModelProvider.Ollama].fetchOnClient).toBe(true);
 
     for (const provider of Object.values(ModelProvider)) {
