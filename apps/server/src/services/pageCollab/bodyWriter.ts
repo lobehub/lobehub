@@ -11,10 +11,10 @@ import {
   createDocumentHeadlessEditor,
   withHeadlessEditorLock,
 } from '@/server/services/agentDocuments/headlessEditor';
-import type { DocumentService } from '@/server/services/document';
+import { DocumentService } from '@/server/services/document';
 import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/services/document/types';
 
-import { isPageCollabEnabled } from './config';
+import { isLegacyPageCollabEnabled, isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
 import { runPageExclusive } from './queue';
 import { PageRoomStaleBaseError } from './roomClient';
@@ -32,6 +32,17 @@ export interface PageBody {
 // read it; writing anyway would merge both block replacements as duplicates.
 const MAX_STALE_BASE_RETRIES = 5;
 const STALE_BASE_BACKOFF_MS = 40;
+
+// Only workspace pages have rooms, unless older clients may still hold one open
+// on a personal page; a write around that room would be projected over.
+const mayHaveRoom = async (db: LobeChatDatabase, documentId: string, writer: PageWriter) => {
+  if (!isPageCollabEnabled()) return false;
+  if (isLegacyPageCollabEnabled()) return true;
+  const row = await new DocumentService(db, writer.userId, writer.workspaceId).getDocumentById(
+    documentId,
+  );
+  return !!row?.workspaceId;
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,7 +96,7 @@ export const writePageBodyThroughRoom = async (
   body: PageBody,
   writer: PageWriter,
 ): Promise<boolean> => {
-  if (!isPageCollabEnabled()) return false;
+  if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
   const writeOnce = () =>
     withHeadlessEditorLock(async () => {
@@ -171,7 +182,7 @@ export const snapshotPageThroughRoom = async (
   documentId: string,
   writer: PageWriter,
 ): Promise<boolean> => {
-  if (!isPageCollabEnabled()) return false;
+  if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
   return runPageExclusive(documentId, () =>
     withHeadlessEditorLock(async () => {

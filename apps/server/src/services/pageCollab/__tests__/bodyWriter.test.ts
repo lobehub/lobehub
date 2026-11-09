@@ -7,7 +7,8 @@ import { updateDocumentThroughRoom, writePageBodyThroughRoom } from '../bodyWrit
 import { openPageFork, projectPageState } from '../fork';
 
 const room = vi.hoisted(() => ({ bootstrapped: true, doc: null as any, pushes: [] as any[] }));
-const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true }));
+const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true, ENABLE_WORKSPACE_PAGE_COLLAB: false }));
+const stored = vi.hoisted(() => ({ workspaceId: undefined as string | undefined }));
 const persisted = vi.hoisted(() => [] as any[]);
 
 vi.mock('@/envs/app', () => ({ appEnv: env }));
@@ -40,7 +41,7 @@ vi.mock('@/server/services/pageCollab/persist', () => ({
 
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
-    getDocumentById = async () => ({ title: 'Page' });
+    getDocumentById = async () => ({ title: 'Page', workspaceId: stored.workspaceId });
   },
 }));
 
@@ -67,6 +68,8 @@ const markdownOfRoom = async () =>
 describe('writePageBodyThroughRoom', () => {
   beforeEach(async () => {
     env.ENABLE_PAGE_COLLAB = true;
+    env.ENABLE_WORKSPACE_PAGE_COLLAB = false;
+    stored.workspaceId = undefined;
     room.bootstrapped = true;
     room.pushes = [];
     persisted.length = 0;
@@ -132,6 +135,27 @@ describe('writePageBodyThroughRoom', () => {
     expect(
       await writePageBodyThroughRoom({} as any, 'doc_1', { markdown: 'replaced\n' }, writer),
     ).toBe(false);
+  });
+
+  it('writes a personal page to its row once only workspace pages have rooms', async () => {
+    env.ENABLE_PAGE_COLLAB = false;
+    env.ENABLE_WORKSPACE_PAGE_COLLAB = true;
+
+    expect(
+      await writePageBodyThroughRoom({} as any, 'doc_1', { markdown: 'replaced\n' }, writer),
+    ).toBe(false);
+    expect(room.pushes).toEqual([]);
+  });
+
+  it('writes a workspace page through its room once only workspace pages have rooms', async () => {
+    env.ENABLE_PAGE_COLLAB = false;
+    env.ENABLE_WORKSPACE_PAGE_COLLAB = true;
+    stored.workspaceId = 'ws_1';
+
+    expect(
+      await writePageBodyThroughRoom({} as any, 'doc_1', { markdown: 'replaced\n' }, writer),
+    ).toBe(true);
+    expect(room.pushes).toHaveLength(1);
   });
 
   it('pushes nothing when the body already matches the room', async () => {

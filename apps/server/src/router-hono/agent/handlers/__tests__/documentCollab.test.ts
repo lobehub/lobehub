@@ -8,12 +8,12 @@ import {
   documentSeed,
 } from '../documentCollab';
 
-const { buildPageSeed, getPageRoomStatus, persistPageState, resolvePageAccess } = vi.hoisted(
+const { buildPageSeed, getPageRoomStatus, persistPageState, resolveRoomAccess } = vi.hoisted(
   () => ({
     buildPageSeed: vi.fn(),
     getPageRoomStatus: vi.fn(),
     persistPageState: vi.fn(),
-    resolvePageAccess: vi.fn(),
+    resolveRoomAccess: vi.fn(),
   }),
 );
 
@@ -21,7 +21,7 @@ vi.mock('@/server/services/pageCollab/seed', () => ({ buildPageSeed, getPageRoom
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => ({}) }));
 
-vi.mock('@/server/services/pageCollab', () => ({ persistPageState, resolvePageAccess }));
+vi.mock('@/server/services/pageCollab', () => ({ persistPageState, resolveRoomAccess }));
 
 const buildContext = (options: {
   body?: unknown;
@@ -48,18 +48,18 @@ describe('documentAccess', () => {
     const res = await documentAccess(buildContext({ query: { documentId: 'doc_1' } }));
 
     expect(res.status).toBe(400);
-    expect(resolvePageAccess).not.toHaveBeenCalled();
+    expect(resolveRoomAccess).not.toHaveBeenCalled();
   });
 
   it('returns the user access to the page', async () => {
-    resolvePageAccess.mockResolvedValue('view');
+    resolveRoomAccess.mockResolvedValue('view');
 
     const res = await documentAccess(
       buildContext({ query: { documentId: 'doc_1', userId: 'u1' } }),
     );
 
     expect(await res.json()).toEqual({ access: 'view' });
-    expect(resolvePageAccess).toHaveBeenCalledWith({}, 'u1', 'doc_1');
+    expect(resolveRoomAccess).toHaveBeenCalledWith({}, 'u1', 'doc_1');
   });
 });
 

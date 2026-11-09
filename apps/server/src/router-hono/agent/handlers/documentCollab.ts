@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { getDocumentCharLimitErrorData } from '@/server/services/document/writeLimit';
-import { persistPageState, resolvePageAccess } from '@/server/services/pageCollab';
+import { persistPageState, resolveRoomAccess } from '@/server/services/pageCollab';
 import { PageProjectionRejectedError } from '@/server/services/pageCollab/persist';
 import { fromBase64 } from '@/server/services/pageCollab/roomClient';
 import { buildPageSeed, getPageRoomStatus } from '@/server/services/pageCollab/seed';
@@ -15,7 +15,7 @@ export async function documentAccess(c: Context): Promise<Response> {
   const userId = c.req.query('userId');
   if (!documentId || !userId) return c.json({ error: 'documentId and userId are required' }, 400);
 
-  const access = await resolvePageAccess(await getServerDB(), userId, documentId);
+  const access = await resolveRoomAccess(await getServerDB(), userId, documentId);
   return c.json({ access });
 }
 
