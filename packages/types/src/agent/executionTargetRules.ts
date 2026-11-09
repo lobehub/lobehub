@@ -73,3 +73,21 @@ export const describeLockedDevicePicker = (plan: ExecutionPlan): string | undefi
     }
   }
 };
+
+/**
+ * Why the remote-device picker is missing from this run, for any plan that
+ * withholds it: a locked run (see {@link describeLockedDevicePicker}), or a
+ * run with no device at all (`none` / `sandbox`). A bare "Not found" in the
+ * no-device case reads as a typo, so the model retries or tells the user the
+ * tool is broken. It should tell them the run has no device and how to pick
+ * one. Returns `undefined` when the picker is offered, so an unresolved name
+ * there really is a typo.
+ */
+export const describeWithheldDevicePicker = (plan: ExecutionPlan): string | undefined => {
+  if (plan.kind !== 'none' && plan.kind !== 'sandbox') return describeLockedDevicePicker(plan);
+
+  const environment =
+    plan.kind === 'sandbox' ? 'runs in the cloud sandbox' : 'has no execution environment';
+
+  return `This run ${environment} and no device, so device tools (Remote Device, Local System) are not offered and no other device can be activated from here. If the user wants this done on one of their computers, tell them to pick that device in the device selector of the chat input and send the message again.`;
+};

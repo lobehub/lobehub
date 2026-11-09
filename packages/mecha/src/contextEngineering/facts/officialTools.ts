@@ -2,6 +2,7 @@ import { builtinTools } from '@lobechat/builtin-tools';
 import { type ConnectorCatalogItem, getConnectorCatalog } from '@lobechat/const';
 import type { AvailablePluginInfo, OfficialToolItem } from '@lobechat/context-engine';
 
+import { isDeviceToolIdentifier } from '../../toolSet/deviceTools';
 import type { ContextFactRequest } from './types';
 
 const connectorIdentifier = (item: ConnectorCatalogItem) =>
@@ -81,6 +82,13 @@ export const listOfficialTools = (params: {
  * Plugins the agent-management tool may attach to a new agent: every builtin
  * except the internal ones (hidden builtins included — web browsing and the
  * sandbox are real capabilities), plus the connector catalog.
+ *
+ * Device tools (local-system, remote-device, browser, Computer Use) are left
+ * out. The run's device plan turns them on or off, so pinning one on an agent
+ * does nothing. Listing them also made the model treat this catalog as the
+ * list of tools it could activate: it called `activateTools(["lobe-remote-device"])`
+ * on a run without a device and got "Not found" for a tool it had just been
+ * shown.
  */
 export const listAvailablePlugins = (
   features: ContextFactRequest['features'],
@@ -93,7 +101,12 @@ export const listAvailablePlugins = (
   const plugins: AvailablePluginInfo[] = [];
 
   for (const tool of builtinTools) {
-    if (connectorIdentifiers.has(tool.identifier) || INTERNAL_TOOLS.has(tool.identifier)) continue;
+    if (
+      connectorIdentifiers.has(tool.identifier) ||
+      INTERNAL_TOOLS.has(tool.identifier) ||
+      isDeviceToolIdentifier(tool.identifier)
+    )
+      continue;
     plugins.push({
       description: tool.manifest?.meta?.description,
       identifier: tool.identifier,

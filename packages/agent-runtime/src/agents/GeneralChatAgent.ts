@@ -1,7 +1,7 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import {
   type ChatToolPayload,
-  describeLockedDevicePicker,
+  describeWithheldDevicePicker,
   type ExtendedHumanInterventionConfig,
   type HumanInterventionConfig,
   type HumanInterventionPolicy,
@@ -802,12 +802,12 @@ export class GeneralChatAgent implements Agent {
             );
           }
 
-          // A picker call on a locked run is not a typo: the tool was withheld on
-          // purpose, and "copy the name exactly" sends the model into a retry
+          // A picker call on a locked or device-less run is not a typo: the tool
+          // was withheld on purpose, and "copy the name exactly" sends the model into a retry
           // loop that ends the operation. Say why and who can switch instead;
           // any other unresolved name in the batch keeps the typo feedback.
           const lockedPickerNote = state.plan?.execution
-            ? describeLockedDevicePicker(state.plan.execution)
+            ? describeWithheldDevicePicker(state.plan.execution)
             : undefined;
           const isPickerCall = (name: string) =>
             name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === REMOTE_DEVICE_IDENTIFIER;
