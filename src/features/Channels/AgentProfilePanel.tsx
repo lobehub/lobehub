@@ -29,7 +29,6 @@ const styles = stylex.create({
     borderBlockStartColor: cssVar.colorBorderSecondary,
   },
   hero: {
-    position: 'relative',
     paddingBlockStart: '28px',
     paddingBlockEnd: '16px',
     paddingInline: '40px',
@@ -87,17 +86,19 @@ export function AgentProfilePanel({
       id={id}
       label={t('profile.title')}
       title={t('profile.title')}
+      actions={
+        <ActionIcon
+          aria-label={t('profile.view')}
+          icon={SquareArrowOutUpRightIcon}
+          size="small"
+          title={t('profile.view')}
+          onClick={() => navigate(`/agent/${agentId}/profile`)}
+        />
+      }
       onClose={onClose}
     >
       <Flexbox style={{ minHeight: 0, overflowY: 'auto' }}>
         <Flexbox align="center" gap={6} {...stylex.props(styles.hero)}>
-          <ActionIcon
-            icon={SquareArrowOutUpRightIcon}
-            size="small"
-            style={{ insetBlockStart: 10, insetInlineEnd: 10, position: 'absolute' }}
-            title={t('profile.view')}
-            onClick={() => navigate(`/agent/${agentId}/profile`)}
-          />
           <MemberAvatar member={member} size={64} />
           <Text ellipsis fontSize={17} style={{ maxWidth: '100%' }} weight={600}>
             {name}
