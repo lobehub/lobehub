@@ -88,7 +88,6 @@ export default {
   'openAgentNamed': 'Open {{name}}',
   'profile.about': 'About',
   'profile.hide': 'Hide Agent profile',
-  'profile.model': 'Model',
   'profile.noDescription': 'No description yet',
   'profile.show': 'Show Agent profile',
   'profile.title': 'Agent profile',

@@ -6,7 +6,6 @@ import * as stylex from '@stylexjs/stylex';
 import { SquareArrowOutUpRightIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { ModelIcon } from '@/components/LobeIcons';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -39,14 +38,6 @@ const styles = stylex.create({
   label: {
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
-  },
-  model: {
-    display: 'inline-flex',
-    gap: '6px',
-    alignItems: 'center',
-    maxWidth: '100%',
-    fontSize: '13px',
-    color: cssVar.colorText,
   },
   placeholder: {
     fontSize: '13px',
@@ -84,7 +75,6 @@ export function AgentProfilePanel({
   useHydrateAgentConfig(true, agentId);
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
-  const model = useAgentStore((s) => s.agentMap[agentId]?.model);
   const name = memberName(member, t('deletedMember'));
   const roleLine = [agentSecondaryDisplayName(meta), slug ? `@${slug}` : undefined]
     .filter(Boolean)
@@ -123,15 +113,6 @@ export function AgentProfilePanel({
               <span {...stylex.props(styles.placeholder)}>{t('profile.noDescription')}</span>
             )}
           </Flexbox>
-          {model && (
-            <Flexbox gap={6}>
-              <span {...stylex.props(styles.label)}>{t('profile.model')}</span>
-              <span {...stylex.props(styles.model)}>
-                <ModelIcon model={model} size={14} />
-                <Text ellipsis>{model}</Text>
-              </span>
-            </Flexbox>
-          )}
         </Flexbox>
       </Flexbox>
     </ChannelSidePanel>
