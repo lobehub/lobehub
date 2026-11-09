@@ -311,7 +311,7 @@ export const submitPlan = async (
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message:
-            'Every option of a takeover question needs an effect (retry or retire) for the blocked Task',
+            'Every option of a takeover question needs an effect (retry, retry_after_reset or retire) for the blocked Task',
         });
     } else if (plan.action === 'escalate' && !state.problem && plan.ask) {
       // A question with answers is asked, not parked: it opens a gate the
