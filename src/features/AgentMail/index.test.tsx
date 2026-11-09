@@ -212,7 +212,8 @@ describe('AgentMail', () => {
 
     expect(service.revoke).toHaveBeenCalledWith('acc_a');
     expect(await screen.findByText('preview of For B')).toBeInTheDocument();
-    expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument();
+    // B's inbox and the route change off msg_a land in separate commits; wait for the latter.
+    await waitFor(() => expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument());
   });
 
   it('adds another mailbox through a dialog', async () => {
