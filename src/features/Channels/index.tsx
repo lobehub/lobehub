@@ -15,6 +15,7 @@ import { useChatStore } from '@/store/chat';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { AcceptancePanel, CHANNEL_ENTITY_PORTAL_SCOPE } from './AcceptancePanel';
+import { AgentProfilePanel } from './AgentProfilePanel';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
@@ -49,8 +50,11 @@ function EnabledChannelPage() {
   // explicitly opening another panel closes the report.
   const threadId = acceptanceOpen ? null : panel.threadId;
   const threadDraft = acceptanceOpen ? null : panel.draft;
+  // A direct conversation's side panel is its Agent's profile; a workspace group's is the roster.
+  const hasMemberPanel =
+    !!directAgent || (!!detail?.channel.workspaceId && !detail.channel.agentId);
   const membersOpen =
-    !!detail?.channel.workspaceId &&
+    hasMemberPanel &&
     membersChannelId === channelId &&
     !threadId &&
     !threadDraft &&
@@ -83,7 +87,7 @@ function EnabledChannelPage() {
             <MemberStatus
               detail={detail}
               memberPanel={
-                detail.channel.workspaceId
+                hasMemberPanel
                   ? {
                       id: memberPanelId,
                       open: membersOpen,
@@ -132,14 +136,25 @@ function EnabledChannelPage() {
               panel.openDraft(draft);
             }}
           />
-          {detail && membersOpen && (
-            <MemberPanel
-              availableWidth={conversationWidth}
-              detail={detail}
-              id={memberPanelId}
-              onClose={() => setMembersChannelId(null)}
-            />
-          )}
+          {detail &&
+            membersOpen &&
+            (directAgent?.agentId ? (
+              <AgentProfilePanel
+                agentId={directAgent.agentId}
+                availableWidth={conversationWidth}
+                id={memberPanelId}
+                key={directAgent.agentId}
+                member={directAgent}
+                onClose={() => setMembersChannelId(null)}
+              />
+            ) : (
+              <MemberPanel
+                availableWidth={conversationWidth}
+                detail={detail}
+                id={memberPanelId}
+                onClose={() => setMembersChannelId(null)}
+              />
+            ))}
           <ReplyTopicPanel
             availableWidth={conversationWidth}
             topic={openTopic}
