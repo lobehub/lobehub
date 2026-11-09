@@ -161,6 +161,13 @@ export const documents = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
+     * Agent that created this document through a tool (e.g. notebook or
+     * knowledge base), used to separate agent output from user-authored
+     * documents. `NULL` means user-created.
+     */
+    createdByAgentId: text('created_by_agent_id'),
+
+    /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see the document; `private` constrains it to the
      * creator (`user_id`). Within a documents tree (folder/Page hierarchy) the

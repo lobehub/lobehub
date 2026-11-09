@@ -2164,6 +2164,7 @@ table documents {
   editor_data jsonb
   slug varchar(255)
   workspace_id text
+  created_by_agent_id text
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
