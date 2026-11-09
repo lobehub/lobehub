@@ -372,7 +372,7 @@ export default {
   'identity.status.provisioning': 'Opening',
   'identity.status.revoked': 'Released',
   'identity.status.suspended': 'Suspended',
-  'identity.title': 'Identity',
+  'identity.title': 'Addresses',
   'permission.accessTag.useOnlyTip':
     'Your member permission here is "Can use" — you can view and use it, but not edit. Ask the creator or a workspace owner for edit access.',
   'permission.accessTag.viewOnlyTip':

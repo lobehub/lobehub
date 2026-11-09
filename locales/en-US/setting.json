@@ -1071,7 +1071,7 @@
   "identity.status.provisioning": "Opening",
   "identity.status.revoked": "Released",
   "identity.status.suspended": "Suspended",
-  "identity.title": "Identity",
+  "identity.title": "Addresses",
   "llm.aesGcm": "Your keys and proxy address will be encrypted using the <1>AES-GCM</1> encryption algorithm",
   "llm.apiKey.desc": "Please enter your {{name}} API Key",
   "llm.apiKey.placeholder": "{{name}} API Key",
