@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-import { aliasDeclaration, aliasOf } from './aliases';
+import { aliasDeclaration, aliasOf, constInitializer } from './aliases';
 import { booleanAttribute, isStateAttribute } from './attributes';
 import { collectChildren, literalOf } from './children';
 import { localCondition, renderGuards } from './constraints';
@@ -94,6 +94,13 @@ export const extractFile = (
         !!aliasOf(identifier, top.styleSymbols) ||
         (CLASS_PROPS.has(prop ?? '') && derived.has(identifier.text)),
     );
+  const styledConst = (expression: ts.Expression, prop: string) => {
+    if (!ts.isIdentifier(expression) || referencesStyle(expression, prop)) return expression;
+    const initializer = constInitializer(expression);
+    return initializer && !ts.isIdentifier(initializer) && referencesStyle(initializer, prop)
+      ? initializer
+      : expression;
+  };
   const slotsOf = (node: ts.Node) => {
     const slots = new Set<string>();
     const visit = (current: ts.Node) => {
@@ -254,12 +261,13 @@ export const extractFile = (
       let lastForeign = -1;
       for (const [position, attribute] of opening.attributes.properties.entries()) {
         if (ts.isJsxSpreadAttribute(attribute)) {
-          if (!referencesStyle(attribute.expression, '...')) {
+          const spread = styledConst(attribute.expression, '...');
+          if (!referencesStyle(spread, '...')) {
             lastForeign = position;
             continue;
           }
           lastStyle = position;
-          bindingOf(attribute.expression, '...', true);
+          bindingOf(spread, '...', true);
           continue;
         }
         const name = attribute.name.getText(ast);

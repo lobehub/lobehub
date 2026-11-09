@@ -64,6 +64,40 @@ describe('extractFile', () => {
     }
   });
 
+  it('binds a spread of a local const that holds stylex.props', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({ video: { maxHeight: '360px' }, flat: { width: '100%' } });
+export const Item = ({ flat }: { flat?: boolean }) => {
+  const videoProps = stylex.props(styles.video, flat && styles.flat);
+  return <video controls {...videoProps} />;
+};
+`;
+    const { elements } = extractFile(code, 'a.tsx', options);
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({
+      bindings: [
+        { expr: 'stylex.props(styles.video, flat && styles.flat)', prop: '...', spread: true },
+      ],
+      slots: ['styles.flat', 'styles.video'],
+      tag: 'video',
+      variables: [{ kind: 'boolean', name: 'flat' }],
+    });
+  });
+
+  it('leaves a spread of an unrelated local const alone', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({ a: { color: 'red' } });
+export const Item = () => {
+  const rest = { title: 'x' };
+  return <span {...rest} {...stylex.props(styles.a)} />;
+};
+`;
+    const { elements } = extractFile(code, 'a.tsx', options);
+    expect(elements[0].bindings).toEqual([
+      { expr: 'stylex.props(styles.a)', prop: '...', spread: true },
+    ]);
+  });
+
   it('keeps only the style declaration closure in the prelude', () => {
     const { prelude } = extractFile(base, 'a.tsx', options);
     expect(prelude).toContain("import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';");
