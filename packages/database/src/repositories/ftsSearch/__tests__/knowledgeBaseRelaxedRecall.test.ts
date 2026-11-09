@@ -148,6 +148,8 @@ describe('Elasticsearch partial matching', () => {
     } as never);
 
     const multiMatch = search.mock.calls[0][0].body.query.bool.must[0].multi_match;
-    expect(multiMatch).toMatchObject({ minimum_should_match: '60%', operator: 'or' });
+    // `3<60%` keeps every clause mandatory up to three terms and only then applies the share, so a
+    // short query never drops to the single clause a plain `60%` would round down to.
+    expect(multiMatch).toMatchObject({ minimum_should_match: '3<60%', operator: 'or' });
   });
 });

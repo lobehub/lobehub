@@ -2,6 +2,7 @@ import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
 
 import { DOCUMENT_FOLDER_TYPE } from '../../../schemas';
 import { getFtsSearchIndexAlias } from '../../ftsSearchDocument';
+import { PARTIAL_MATCH_MINIMUM_TERMS } from '../postgres/dialect';
 import type {
   FtsSearchBackendFilters,
   FtsSearchBackendRequest,
@@ -74,6 +75,19 @@ const sliceQueryAtLexicalBoundary = (characters: string[], maximumCharacters: nu
   );
 
   return boundaryIndex > 0 ? executedCharacters.slice(0, boundaryIndex) : executedCharacters;
+};
+
+/**
+ * Elasticsearch rounds a percentage `minimum_should_match` down and has no rounding-up form, so a
+ * short query would end up requiring fewer clauses than the two-term floor every other provider
+ * keeps: three terms at 60% need 1.8 clauses, which becomes 1. Require every clause up to the
+ * point where the share alone can cover that floor, and let Elasticsearch apply the share to its
+ * own analyzed clause count above it.
+ */
+const relaxedMinimumShouldMatch = (ratio: number) => {
+  const clausesRequiringEveryTerm = Math.max(1, Math.ceil(PARTIAL_MATCH_MINIMUM_TERMS / ratio) - 1);
+
+  return `${clausesRequiringEveryTerm}<${Math.round(ratio * 100)}%`;
 };
 
 const prepareMultiMatchQuery = (query: string, fieldCount: number) => {
@@ -380,7 +394,9 @@ export const searchElasticsearchCandidates = async (
                   ...(request.query.minimumMatchRatio === undefined
                     ? { operator: 'and' }
                     : {
-                        minimum_should_match: `${Math.round(request.query.minimumMatchRatio * 100)}%`,
+                        minimum_should_match: relaxedMinimumShouldMatch(
+                          request.query.minimumMatchRatio,
+                        ),
                         operator: 'or',
                       }),
                   query: preparedQuery.executedQuery,

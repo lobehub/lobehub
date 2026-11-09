@@ -23,9 +23,12 @@ export interface PostgresFtsSearchPartialQuery {
 
 export const POSTGRES_PARTIAL_MATCH_MAX_TERMS = 48;
 
-/** A partial match always needs two terms, or one common word would qualify a document. */
+/** A partial match always needs this many terms, or one common word would qualify a document. */
+export const PARTIAL_MATCH_MINIMUM_TERMS = 2;
+
+/** Provider-neutral floor every backend must keep, however it expresses the threshold. */
 export const minimumTermMatches = (termCount: number, ratio: number) =>
-  Math.max(Math.min(2, termCount), Math.ceil(termCount * ratio));
+  Math.max(Math.min(PARTIAL_MATCH_MINIMUM_TERMS, termCount), Math.ceil(termCount * ratio));
 
 /** Provider-specific SQL fragments consumed by the shared PostgreSQL query layer. */
 export interface PostgresFtsSearchDialect {
