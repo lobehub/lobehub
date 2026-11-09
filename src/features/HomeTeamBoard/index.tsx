@@ -74,7 +74,9 @@ const HomeTeamBoard = () => {
 
   if (error && !data) return <AsyncError error={error} variant={'inline'} onRetry={mutate} />;
 
-  const hasAttention = Boolean(data?.attention.length);
+  // An older server can omit the field; the board must still render.
+  const attention = data?.attention ?? [];
+  const hasAttention = attention.length > 0;
 
   return (
     <Flexbox data-testid={'team-board'} gap={20} {...stylex.props(styles.root)}>
@@ -133,7 +135,7 @@ const HomeTeamBoard = () => {
             ) : (
               <Timeline board={data} />
             )}
-            {hasAttention && <AttentionList items={data.attention} now={data.generatedAt} />}
+            {hasAttention && <AttentionList items={attention} now={data.generatedAt} />}
           </div>
         </Flexbox>
       )}
