@@ -17,6 +17,7 @@ import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/servic
 import { isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
 import { runPageExclusive } from './queue';
+import { PageRoomStaleBaseError } from './roomClient';
 import { RoomPageSessions } from './roomSession';
 import type { PageWriter } from './session';
 
@@ -26,6 +27,13 @@ export interface PageBody {
   /** The room carries the title too; one written only to the row would be projected over. */
   title?: string;
 }
+
+// A stale base means another server instance wrote the room after this one
+// read it; writing anyway would merge both block replacements as duplicates.
+const MAX_STALE_BASE_RETRIES = 5;
+const STALE_BASE_BACKOFF_MS = 40;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toHeadlessOperation = (operation: ModifyOperation): HeadlessLiteXMLOperation => {
   if (operation.action === 'modify') return { action: 'replace', litexml: operation.litexml };
@@ -79,7 +87,7 @@ export const writePageBodyThroughRoom = async (
 ): Promise<boolean> => {
   if (!isPageCollabEnabled()) return false;
 
-  return runPageExclusive(documentId, () =>
+  const writeOnce = () =>
     withHeadlessEditorLock(async () => {
       const session = await new RoomPageSessions(db, writer).openLiveSession(documentId);
       if (!session) return false;
@@ -95,8 +103,20 @@ export const writePageBodyThroughRoom = async (
       } finally {
         session.draft.destroy();
       }
-    }),
-  );
+    });
+
+  return runPageExclusive(documentId, async () => {
+    for (let retry = 0; ; retry++) {
+      try {
+        return await writeOnce();
+      } catch (error) {
+        if (!(error instanceof PageRoomStaleBaseError) || retry >= MAX_STALE_BASE_RETRIES) {
+          throw error;
+        }
+        await sleep(STALE_BASE_BACKOFF_MS * (retry + 1) * (0.5 + Math.random()));
+      }
+    }
+  });
 };
 
 /**

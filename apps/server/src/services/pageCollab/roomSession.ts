@@ -98,7 +98,10 @@ export class RoomPageSessions implements PageSessions {
           userId: this.writer.userId,
           workspaceId: this.writer.workspaceId,
         });
-        await room.pushUpdate(documentId, fork.diff(), { actor });
+        await room.pushUpdate(documentId, fork.diff(), {
+          actor,
+          baseServerWriteSeq: state.serverWriteSeq,
+        });
         try {
           await this.persist(documentId, fork);
         } catch (error) {
