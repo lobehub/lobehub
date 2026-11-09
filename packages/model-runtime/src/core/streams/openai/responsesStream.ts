@@ -31,6 +31,7 @@ const toResponsesError = (error: { code?: string | null; message?: string | null
   }) satisfies ChatMessageError;
 
 type ResponsesStreamContext = StreamContext & {
+  refusalParts?: Set<string>;
   responseTools?: Map<number, { id: string; index: number; name: string; namespace?: string }>;
 };
 
@@ -148,6 +149,23 @@ const transformOpenAIStream = (
           type: 'tool_calls',
         } satisfies StreamProtocolToolCallChunk;
       }
+      case 'response.refusal.delta':
+      case 'response.refusal.done': {
+        const part = `${chunk.item_id}:${chunk.content_index}`;
+        const text = chunk.type === 'response.refusal.delta' ? chunk.delta : chunk.refusal;
+
+        // A final event repeats all streamed deltas. Use its text only if this part
+        // has not produced visible output yet.
+        if (
+          !text ||
+          (chunk.type === 'response.refusal.done' && streamContext.refusalParts?.has(part))
+        )
+          return { data: null, id: chunk.item_id, type: 'text' };
+
+        (streamContext.refusalParts ??= new Set()).add(part);
+        return { data: text, id: chunk.item_id, type: 'text' };
+      }
+
       case 'response.output_text.delta': {
         return { data: chunk.delta, id: chunk.item_id, type: 'text' };
       }
