@@ -24,13 +24,12 @@ export async function documentSeed(c: Context): Promise<Response> {
   if (!documentId) return c.json({ code: 'INVALID', error: 'documentId is required' }, 400);
 
   const seed = await buildPageSeed(await getServerDB(), documentId);
-  if (seed.status === 'not_found') {
-    return c.json({ code: 'DOCUMENT_NOT_FOUND', error: 'Document not found' }, 404);
+  if (seed.status !== 'ok') {
+    return seed.status === 'not_found'
+      ? c.json({ code: 'DOCUMENT_NOT_FOUND', error: 'Document not found' }, 404)
+      : c.json({ code: 'ROOM_NOT_ALLOWED', error: 'Only workspace pages have rooms' }, 403);
   }
-  if (seed.status === 'not_allowed') {
-    return c.json({ code: 'ROOM_NOT_ALLOWED', error: 'Only workspace pages have rooms' }, 403);
-  }
-  return new Response(seed.update, {
+  return new Response(Buffer.from(seed.update), {
     headers: { 'Content-Type': 'application/octet-stream', 'X-Workspace-Id': seed.workspaceId },
   });
 }
