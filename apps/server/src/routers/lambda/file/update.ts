@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { FileVisibilityRepository } from '@/database/repositories/fileVisibility';
 import { router } from '@/libs/trpc/lambda';
 import { stripAgentShareFileProvenance } from '@/types/files';
 
@@ -94,7 +95,11 @@ export const updateRouter = router({
 
       if (file.visibility === 'public') return { success: true };
 
-      await ctx.fileModel.publishToWorkspace(input.id);
+      await new FileVisibilityRepository(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId,
+      ).publishToWorkspace(input.id);
       return { success: true };
     }),
   /**
@@ -129,7 +134,10 @@ export const updateRouter = router({
 
       if (file.visibility === input.visibility) return { success: true };
 
-      await ctx.fileModel.setVisibility(input.id, input.visibility);
+      await new FileVisibilityRepository(ctx.serverDB, ctx.userId, ctx.workspaceId).setVisibility(
+        input.id,
+        input.visibility,
+      );
       return { success: true };
     }),
 });

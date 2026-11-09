@@ -3,16 +3,16 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { FileVisibilityRepository } from '../../repositories/fileVisibility';
 import { documents, files, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { FileModel } from '../file';
 
 const ownerId = 'visibility-sync-owner';
 const memberId = 'visibility-sync-member';
 const workspaceId = 'visibility-sync-ws';
 const fileId = 'visibility-sync-file';
 const serverDB: LobeChatDatabase = await getTestDB();
-const ownerFiles = new FileModel(serverDB, ownerId, workspaceId);
+const ownerFiles = new FileVisibilityRepository(serverDB, ownerId, workspaceId);
 
 const documentVisibility = async (id: string) =>
   (await serverDB.query.documents.findFirst({ where: eq(documents.id, id) }))?.visibility;
@@ -58,7 +58,7 @@ beforeEach(async () => {
   });
 });
 
-describe('FileModel.setVisibility parsed document sync', () => {
+describe('FileVisibilityRepository.setVisibility parsed document sync', () => {
   it('publishes the parsed document with its file', async () => {
     await insertFile('private');
     await insertDocument('parsed');

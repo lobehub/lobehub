@@ -859,6 +859,10 @@ export class FileModel {
    * operation to the creator's own row and make it idempotent against rows
    * already at the target visibility.
    *
+   * Single-aggregate on purpose: this only touches `files`. The parsed
+   * `documents` rows that mirror the file are a second aggregate, so the
+   * transaction that keeps both in step lives in `FileVisibilityRepository`.
+   *
    * Unpublishing is safe by design — after the flip, `buildWorkspaceWhere` and
    * any downstream file-access checks hide the file from other members on the
    * next read; blobs already fetched by clients stay cached until they expire.
@@ -866,40 +870,18 @@ export class FileModel {
   setVisibility = async (fileId: string, visibility: 'private' | 'public') => {
     const fromVisibility = visibility === 'public' ? 'private' : 'public';
 
-    return this.db.transaction(async (trx) => {
-      const updated = await trx
-        .update(files)
-        .set({ updatedAt: new Date(), visibility })
-        .where(
-          and(
-            eq(files.id, fileId),
-            this.ownership(),
-            eq(files.userId, this.userId),
-            eq(files.visibility, fromVisibility),
-          ),
-        )
-        .returning({ id: files.id });
-
-      // Text parsed from the file is searchable on its own, so it follows the file. Any member's
-      // read may have produced it, and the file update above already authorized this. Scope by
-      // tenant only: a visibility-aware filter would hide another member's private row.
-      if (updated.length > 0) {
-        await trx
-          .update(documents)
-          .set({ visibility })
-          .where(
-            and(
-              eq(documents.fileId, fileId),
-              eq(documents.sourceType, 'file'),
-              this.workspaceId
-                ? eq(documents.workspaceId, this.workspaceId)
-                : eq(documents.userId, this.userId),
-            ),
-          );
-      }
-
-      return updated;
-    });
+    return this.db
+      .update(files)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(files.id, fileId),
+          this.ownership(),
+          eq(files.userId, this.userId),
+          eq(files.visibility, fromVisibility),
+        ),
+      )
+      .returning({ id: files.id });
   };
 
   findByNames = async (fileNames: string[]) =>
