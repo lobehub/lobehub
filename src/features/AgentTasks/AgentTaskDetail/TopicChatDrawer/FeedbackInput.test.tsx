@@ -162,6 +162,7 @@ describe('FeedbackInput', () => {
       forceRuntime: 'gateway',
       message: 'why so slow',
       onBeforeSendFailure: expect.any(Function),
+      onMessageAccepted: expect.any(Function),
     });
   });
 });

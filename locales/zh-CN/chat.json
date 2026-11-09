@@ -2506,6 +2506,7 @@
   "taskDetail.gateway.error.title": "任务回复配置加载失败",
   "taskDetail.gateway.loading.description": "正在加载执行配置，暂不发送你的草稿。",
   "taskDetail.gateway.loading.title": "正在检查任务回复功能",
+  "taskDetail.gateway.retry": "重试配置",
   "taskDetail.gateway.unavailable.description": "请联系管理员为当前部署配置并启用 Agent Gateway，然后刷新页面。已有消息仍可查看。",
   "taskDetail.gateway.unavailable.title": "任务回复暂不可用",
   "taskDetail.gatewayRequired": "任务对话需要 Agent Gateway，请联系管理员配置并启用。输入内容已保留。",

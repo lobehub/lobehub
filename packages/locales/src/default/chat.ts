@@ -2191,6 +2191,7 @@ export default {
   'taskDetail.gateway.unavailable.title': 'Task replies are unavailable',
   'taskDetail.gateway.unavailable.description':
     'Ask your administrator to configure and enable Agent Gateway for this deployment, then reload the page. Existing messages remain available.',
+  'taskDetail.gateway.retry': 'Retry configuration',
   'taskDetail.followUpFailed': 'Couldn’t send the follow-up. Your message is kept — try again.',
   'taskDetail.gatewayRequired':
     'Task replies require Agent Gateway. Ask your administrator to configure and enable it. Your message has been kept.',

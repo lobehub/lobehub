@@ -59,7 +59,7 @@ describe('failed send draft recovery', () => {
     const { result } = renderHook(() => useFailedSendDrafts(key));
     act(() => result.current.restore(draft));
     expect(mocks.write).toHaveBeenCalledWith(draft.editorData);
-    expect(result.current.drafts).toEqual([]);
+    expect(result.current.drafts).toEqual([draft]);
   });
 
   it('restores the original rich document and removes only that failed item', () => {
@@ -68,7 +68,10 @@ describe('failed send draft recovery', () => {
     const { result } = renderHook(() => useFailedSendDrafts(key));
     act(() => result.current.restore(draft));
     expect(mocks.write).toHaveBeenCalledWith('json', JSON.stringify(draft.editorData));
-    expect(result.current.drafts).toEqual([other]);
+    expect(result.current.drafts).toEqual([
+      draft,
+      expect.objectContaining({ ...other, createdAt: expect.any(Number) }),
+    ]);
   });
 
   it('keeps both drafts if the composer has newer text', () => {

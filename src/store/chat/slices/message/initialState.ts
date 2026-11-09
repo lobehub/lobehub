@@ -1,15 +1,20 @@
-import { type UIChatMessage } from '@lobechat/types';
+import { type ChatContextContent, type PageSelection, type UIChatMessage } from '@lobechat/types';
 
 import { type ChatGroupAgentItem } from '@/database/schemas/chatGroup';
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { type ConversationMessagePage } from '@/services/message/replica';
+import { type UploadFileItem } from '@/types/files/upload';
 
 import { type TranscriptPaging } from './transcript/lens';
 
 export interface FailedSendDraft {
+  contextSelections?: ChatContextContent[];
+  createdAt?: number;
   editorData?: Record<string, unknown>;
+  files?: UploadFileItem[];
   id: string;
   message: string;
+  pageSelections?: PageSelection[];
 }
 
 export interface ChatMessageState {

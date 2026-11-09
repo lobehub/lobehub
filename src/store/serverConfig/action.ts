@@ -39,7 +39,11 @@ export class ServerConfigActionImpl {
       {
         onError: () => {
           setDesktopBusinessFeaturesFlag(false);
-          this.#set({ serverConfigInit: true }, false, 'initServerConfigFallback');
+          this.#set(
+            { serverConfigInit: true, serverConfigLoaded: false },
+            false,
+            'initServerConfigFallback',
+          );
         },
         onSuccess: (data) => {
           setDesktopBusinessFeaturesFlag(data.serverConfig.enableBusinessFeatures);

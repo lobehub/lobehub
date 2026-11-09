@@ -72,6 +72,9 @@ export const useTaskFollowUpSubmit = ({
         editorData,
         forceRuntime: 'gateway',
         message: markdown,
+        onMessageAccepted: () => {
+          useChatStore.getState().removeFailedSendDraftByMessage(contextKey, markdown);
+        },
         onBeforeSendFailure: recoverPreflight,
       });
     } catch {

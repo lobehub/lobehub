@@ -9,6 +9,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type {
   ChatAudioItem,
+  ChatContextContent,
   ChatImageItem,
   ChatTopicMetadata,
   ChatVideoItem,
@@ -144,17 +145,14 @@ import { type ContextCompressionOptions, executeContextCompression } from './com
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
 import { readSendEditorState } from './sendEditorState';
 import { showSendErrorInContext } from './sendErrorNotice';
-import { recoverFailedSend } from './sendFailureRecovery';
+import { createFailedSendRecovery } from './sendFailureRecovery';
 
 /**
  * Extended params for sendMessage with context
  */
 export interface SendMessageWithContextParams extends SendMessageParams {
-  /**
-   * Conversation context (required for cross-store usage)
-   * Contains sessionId, topicId, and threadId
-   */
   context: ConversationContext;
+  failedDraftContextSelections?: ChatContextContent[];
   /**
    * Editor owned by the calling ConversationProvider. Embedded conversations
    * must not fall back to ChatStore's global editor, which may belong to a
@@ -166,7 +164,7 @@ export interface SendMessageWithContextParams extends SendMessageParams {
   /** A provider can reuse its editor for another conversation while a send is pending. */
   isInputEditorCurrent?: () => boolean;
   /** Restore composer-owned context when sending fails before a message owns it. */
-  onPreflightFailure?: () => void;
+  onPreflightFailure?: (editorRestored?: boolean) => void;
   /**
    * Called as soon as the backend reports a newly created topic id, so callers
    * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
@@ -280,6 +278,7 @@ export class ConversationLifecycleActionImpl {
     onlyAddUserMessage,
     context,
     contextSelections,
+    failedDraftContextSelections,
     inputEditor,
     inputEditorSnapshot,
     isInputEditorCurrent,
@@ -884,30 +883,34 @@ export class ConversationLifecycleActionImpl {
       this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
     };
     // Refusals must preserve newer input and the editor's conversation ownership.
+    const recoverComposer = createFailedSendRecovery({
+      context,
+      editor: targetInputEditor,
+      get: this.#get,
+      isEditorCurrent:
+        isInputEditorCurrent ??
+        (() => {
+          const state = this.#get();
+          const key = messageMapKey({
+            agentId: state.activeAgentId,
+            groupId: state.activeGroupId,
+            threadId: state.activeThreadId,
+            topicId: state.activeTopicId,
+          });
+          return key === contextKey || key === currentContextKey;
+        }),
+      message,
+      onPreflightFailure,
+      operationId,
+      retainFailedDraft: inputEditor !== null,
+      files,
+      contextSelections: failedDraftContextSelections,
+      pageSelections,
+      snapshot: sendEditorSnapshot,
+    });
     const restoreComposerAfterFailedSend = (error: unknown) => {
       if (preserveComposer || hasNotifiedMessageAccepted) return;
-      recoverFailedSend({
-        context,
-        editor: targetInputEditor,
-        error,
-        get: this.#get,
-        isEditorCurrent:
-          isInputEditorCurrent ??
-          (() => {
-            const state = this.#get();
-            const key = messageMapKey({
-              agentId: state.activeAgentId,
-              groupId: state.activeGroupId,
-              threadId: state.activeThreadId,
-              topicId: state.activeTopicId,
-            });
-            return key === contextKey || key === currentContextKey;
-          }),
-        message,
-        onPreflightFailure,
-        operationId,
-        snapshot: sendEditorSnapshot,
-      });
+      recoverComposer(error);
     };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;

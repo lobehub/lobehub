@@ -4,6 +4,7 @@ import { type Action } from '@/utils/storeDebug';
 
 import { type ChatStoreState } from '../../../initialState';
 import { preventLeavingFn, toggleBooleanList } from '../../../utils';
+import { persistFailedSendDrafts } from '../failedSendDraftStorage';
 import type { FailedSendDraft } from '../initialState';
 
 /**
@@ -27,11 +28,13 @@ export class MessageRuntimeStateActionImpl {
 
   retainFailedSendDraft = (contextKey: string, draft: FailedSendDraft): void => {
     const drafts = this.#get().failedSendDrafts;
-    this.#set(
-      { failedSendDrafts: { ...drafts, [contextKey]: [...(drafts[contextKey] ?? []), draft] } },
-      false,
-      'message/retainFailedSendDraft',
-    );
+    const nextDraft = { ...draft, createdAt: draft.createdAt ?? Date.now() };
+    const next = {
+      ...drafts,
+      [contextKey]: [...(drafts[contextKey] ?? []), nextDraft],
+    };
+    this.#set({ failedSendDrafts: next }, false, 'message/retainFailedSendDraft');
+    persistFailedSendDrafts(next);
   };
 
   removeFailedSendDraft = (contextKey: string, id: string): void => {
@@ -41,6 +44,21 @@ export class MessageRuntimeStateActionImpl {
     if (remaining?.length) next[contextKey] = remaining;
     else delete next[contextKey];
     this.#set({ failedSendDrafts: next }, false, 'message/removeFailedSendDraft');
+    persistFailedSendDrafts(next);
+  };
+
+  removeFailedSendDraftByMessage = (contextKey: string, message: string): void => {
+    const drafts = this.#get().failedSendDrafts;
+    const current = drafts[contextKey];
+    if (!current) return;
+    const index = current.findIndex((draft) => draft.message === message);
+    if (index < 0) return;
+    const remaining = current.filter((_, currentIndex) => currentIndex !== index);
+    const next = { ...drafts };
+    if (remaining.length) next[contextKey] = remaining;
+    else delete next[contextKey];
+    this.#set({ failedSendDrafts: next }, false, 'message/removeFailedSendDraftByMessage');
+    persistFailedSendDrafts(next);
   };
 
   internal_toggleLoadingArrays = (

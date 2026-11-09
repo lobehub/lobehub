@@ -8,6 +8,7 @@ import { useChatStore } from '@/store/chat';
 import { restoreSendEditorState } from '@/store/chat/slices/agentRun/actions/entries/conversationLifecycle/sendEditorState';
 import type { FailedSendDraft } from '@/store/chat/slices/message/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useFileStore } from '@/store/file';
 
 const EMPTY_DRAFTS: FailedSendDraft[] = [];
 
@@ -29,7 +30,11 @@ export const useFailedSendDrafts = (contextKey: string) => {
       return;
     }
     if (restoreSendEditorState(editor, draft.editorData, draft.message)) {
-      useChatStore.getState().removeFailedSendDraft(contextKey, draft.id);
+      const fileStore = useFileStore.getState();
+      fileStore.restoreChatUploadFileList(draft.files ?? []);
+      if (draft.contextSelections?.length) {
+        fileStore.restoreChatContextSelections(contextKey, draft.contextSelections);
+      }
       editor.focus?.();
     }
   };

@@ -1,8 +1,9 @@
-import type { ConversationContext } from '@lobechat/types';
+import type { ChatContextContent, ConversationContext, PageSelection } from '@lobechat/types';
 
 import type { ChatInputEditor } from '@/features/ChatInput';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import { restoreSendEditorState } from './sendEditorState';
 
@@ -15,6 +16,10 @@ export const recoverFailedSend = ({
   message,
   onPreflightFailure,
   operationId,
+  retainFailedDraft,
+  files,
+  contextSelections,
+  pageSelections,
   snapshot,
 }: {
   context: ConversationContext;
@@ -23,8 +28,12 @@ export const recoverFailedSend = ({
   get: () => ChatStore;
   isEditorCurrent: () => boolean;
   message: string;
-  onPreflightFailure?: () => void;
+  onPreflightFailure?: (editorRestored?: boolean) => void;
   operationId: string;
+  retainFailedDraft: boolean;
+  files?: UploadFileItem[];
+  contextSelections?: ChatContextContent[];
+  pageSelections?: PageSelection[];
   snapshot: { json: string | undefined };
 }) => {
   if (error instanceof Error && (error.message.includes('aborted') || error.name === 'AbortError'))
@@ -37,12 +46,19 @@ export const recoverFailedSend = ({
   const editorData = get().operations[operationId]?.metadata.inputEditorTempState;
   const restored =
     isEditorCurrent() && restoreSendEditorState(editor, editorData, message, snapshot);
-  if (!restored) {
+  if (!restored && retainFailedDraft) {
     store.retainFailedSendDraft(messageMapKey(context), {
+      contextSelections,
       editorData,
+      files,
       id: operationId,
       message,
+      pageSelections,
     });
   }
-  onPreflightFailure?.();
+  onPreflightFailure?.(restored);
 };
+
+export const createFailedSendRecovery =
+  (params: Omit<Parameters<typeof recoverFailedSend>[0], 'error'>) => (error: unknown) =>
+    recoverFailedSend({ ...params, error });

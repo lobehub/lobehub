@@ -4,6 +4,7 @@ import { $getRoot } from 'lexical';
 import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSWRConfig } from 'swr';
 
 import { NoticeAlert } from '@/components/NoticeAlert';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
@@ -21,6 +22,7 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
+import { serverConfigKeys } from '@/libs/swr/keys';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import { taskGatewayAvailability } from './taskGatewayAvailability';
@@ -46,6 +48,8 @@ const FeedbackInput = memo<FeedbackInputProps>(
     const { t } = useTranslation('chat');
     const editor = useEditor();
     const gatewayAvailability = useServerConfigStore(taskGatewayAvailability);
+    const { mutate: retryServerConfig } = useSWRConfig();
+    const [retryingServerConfig, setRetryingServerConfig] = useState(false);
     const stopGenerating = useConversationStore((s) => s.stopGenerating);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
@@ -116,9 +120,29 @@ const FeedbackInput = memo<FeedbackInputProps>(
         <Flexbox gap={8}>
           <FailedSendDrafts />
           <NoticeAlert
-            description={t(`taskDetail.gateway.${gatewayAvailability}.description`)}
             title={t(`taskDetail.gateway.${gatewayAvailability}.title`)}
             type={'secondary'}
+            description={
+              <Flexbox gap={8}>
+                <span>{t(`taskDetail.gateway.${gatewayAvailability}.description`)}</span>
+                {gatewayAvailability === 'error' && (
+                  <Button
+                    loading={retryingServerConfig}
+                    size={'small'}
+                    onClick={async () => {
+                      setRetryingServerConfig(true);
+                      try {
+                        await retryServerConfig(serverConfigKeys.get);
+                      } finally {
+                        setRetryingServerConfig(false);
+                      }
+                    }}
+                  >
+                    {t('taskDetail.gateway.retry')}
+                  </Button>
+                )}
+              </Flexbox>
+            }
           />
           <OpStatusTray seamless />
         </Flexbox>

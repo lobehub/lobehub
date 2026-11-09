@@ -92,6 +92,7 @@ describe('useTaskFollowUpSubmit', () => {
       forceRuntime: 'gateway',
       message: 'follow-up',
       onBeforeSendFailure: expect.any(Function),
+      onMessageAccepted: expect.any(Function),
     });
     expect(mocks.toastError).not.toHaveBeenCalled();
   });

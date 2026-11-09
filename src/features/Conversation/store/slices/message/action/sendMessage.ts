@@ -1,4 +1,8 @@
-import { type ConversationContext, type SendMessageParams } from '@lobechat/types';
+import {
+  type ChatContextContent,
+  type ConversationContext,
+  type SendMessageParams,
+} from '@lobechat/types';
 
 import { useChatStore } from '@/store/chat';
 import { readSendEditorState } from '@/store/chat/slices/agentRun/actions/entries/conversationLifecycle/sendEditorState';
@@ -15,12 +19,16 @@ const throwIfAborted = (signal?: AbortSignal) => {
     : new DOMException('Message send was cancelled', 'AbortError');
 };
 
-export interface ConversationSendMessageParams extends SendMessageParams {
+export interface ConversationSendMessageParams extends Omit<
+  SendMessageParams,
+  'onPreflightFailure'
+> {
   /** Internal override used by long-lived media transactions after a topic is created. */
   conversationContext?: ConversationContext;
+  failedDraftContextSelections?: ChatContextContent[];
   /** Recover a composer cleared before an asynchronous provider hook refuses the send. */
-  onBeforeSendFailure?: () => void;
-  onPreflightFailure?: () => void;
+  onBeforeSendFailure?: (editorRestored?: boolean) => void;
+  onPreflightFailure?: (editorRestored?: boolean) => void;
 }
 
 /**
@@ -97,6 +105,7 @@ export const sendMessage = (
         get().editor === editor && messageMapKey(get().context) === messageMapKey(targetContext),
       ...(messages ? { messages } : undefined),
       onTopicCreated: hooks.onTopicCreated,
+      failedDraftContextSelections: params.failedDraftContextSelections,
     });
 
     // ===== Hook: onAfterMessageCreate =====

@@ -2506,6 +2506,7 @@
   "taskDetail.gateway.error.title": "Task reply settings could not be loaded",
   "taskDetail.gateway.loading.description": "Loading the execution settings. Your draft will not be sent yet.",
   "taskDetail.gateway.loading.title": "Checking task replies",
+  "taskDetail.gateway.retry": "Retry configuration",
   "taskDetail.gateway.unavailable.description": "Ask your administrator to configure and enable Agent Gateway for this deployment, then reload the page. Existing messages remain available.",
   "taskDetail.gateway.unavailable.title": "Task replies are unavailable",
   "taskDetail.gatewayRequired": "Task replies require Agent Gateway. Ask your administrator to configure and enable it. Your message has been kept.",

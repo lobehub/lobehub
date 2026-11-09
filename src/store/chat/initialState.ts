@@ -5,6 +5,7 @@ import { type ChatAIAgentState } from './slices/aiAgent/initialState';
 import { initialAiAgentState } from './slices/aiAgent/initialState';
 import { type ChatToolState } from './slices/builtinTool/initialState';
 import { initialToolState } from './slices/builtinTool/initialState';
+import { loadFailedSendDrafts } from './slices/message/failedSendDraftStorage';
 import { type ChatMessageState } from './slices/message/initialState';
 import { initialMessageState } from './slices/message/initialState';
 import { type ChatOperationState } from './slices/operation/initialState';
@@ -30,6 +31,7 @@ export type ChatStoreState = ChatTopicState &
 
 export const initialState: ChatStoreState = {
   ...initialMessageState,
+  failedSendDrafts: loadFailedSendDrafts(),
   ...initialAiChatState,
   ...initialTopicState,
   ...initialToolState,
