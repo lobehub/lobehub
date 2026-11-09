@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, css, cx, Icon, Upload } from '@lobehub/ui';
-import { ChevronRight, FileUp, LibraryBig, PlusIcon, TypeIcon } from 'lucide-react';
+import { FileUp, LibraryBig, PlusIcon, TypeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +11,7 @@ import { openLibraryFilePicker } from '@/features/LibraryModal';
 import ActionDropdown, {
   type ActionDropdownMenuItems,
 } from '../ChatInput/ActionBar/components/ActionDropdown';
+import SubmenuChevron from '../ChatInput/ActionBar/components/SubmenuChevron';
 
 const hotArea = css`
   &::before {
@@ -66,7 +67,7 @@ const AttachmentMenu = memo<AttachmentMenuProps>(
               },
             },
           ],
-          extra: <Icon className={'lobe-submenu-chevron'} icon={ChevronRight} size={16} />,
+          extra: <SubmenuChevron />,
           icon: LibraryBig,
           key: 'attachments',
           label: t('plus.addAttachments', { ns: 'chat' }),

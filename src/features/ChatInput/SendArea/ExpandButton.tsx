@@ -1,4 +1,5 @@
 import { ActionIcon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Maximize2Icon, Minimize2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,13 +7,25 @@ import { useTranslation } from 'react-i18next';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { usePermission } from '@/hooks/usePermission';
 
+import { composerHoverMarker } from '../markers.stylex';
+
+const styles = stylex.create({
+  revealOnComposerHover: {
+    opacity: {
+      default: null,
+      [stylex.when.ancestor(':not(:hover)', composerHoverMarker)]: 0,
+      [stylex.when.ancestor(':hover', composerHoverMarker)]: 1,
+    },
+  },
+});
+
 const ExpandButton = memo(() => {
   const { t } = useTranslation('editor');
   const [expand, setExpand, editor] = useChatInputStore((s) => [s.expand, s.setExpand, s.editor]);
   const { allowed: canUseChatInputAction, reason } = usePermission('create_content');
   return (
     <ActionIcon
-      className="show-on-hover"
+      className={stylex.props(styles.revealOnComposerHover).className}
       disabled={!canUseChatInputAction}
       icon={expand ? Minimize2Icon : Maximize2Icon}
       size={{ blockSize: 32, size: 16, strokeWidth: 2.3 }}
