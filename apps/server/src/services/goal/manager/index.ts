@@ -116,6 +116,7 @@ export class GoalManagerService {
       userId: this.userId,
       workspaceId: this.workspaceId,
       delay: goalPollDelay(since),
+      poll: true,
     });
     return { goalId, outcome: 'waiting_external', message };
   };

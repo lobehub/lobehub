@@ -127,6 +127,7 @@ export class GoalSupervisorService {
     const waiting = async (message: string, since?: string): Promise<GoalTickResult> => {
       await scheduleGoalAdvance({
         delay: goalPollDelay(since),
+        poll: true,
         goalId,
         userId: this.userId,
         workspaceId: this.workspaceId,
