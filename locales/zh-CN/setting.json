@@ -216,7 +216,6 @@
   "agentSkillModal.url.urlPlaceholder": "https://example.com/path/to/SKILL.md",
   "agentSkillTag": "Agent 技能",
   "agentTab.graph": "Graph 运行时",
-  "agentTab.identity": "身份",
   "agentTab.opening": "开场设置",
   "agentTab.plugin": "技能设置",
   "agentTab.prompt": "助理档案",

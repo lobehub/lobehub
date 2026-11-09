@@ -216,7 +216,6 @@
   "agentSkillModal.url.urlPlaceholder": "https://example.com/path/to/SKILL.md",
   "agentSkillTag": "Agent Skill",
   "agentTab.graph": "Graph Runtime",
-  "agentTab.identity": "Identity",
   "agentTab.opening": "Opening Settings",
   "agentTab.plugin": "Skill Settings",
   "agentTab.prompt": "Agent Profile",

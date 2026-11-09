@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { useShowAgentIdentity } from '@/features/AgentMail/useShowAgentIdentity';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -23,6 +24,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
   const canManageShare =
     !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const { visible: shareVisible } = useAgentShareSupported(agentId);
+  const mailSupported = useShowAgentIdentity(agentId);
 
   return useMemo(
     () =>
@@ -31,6 +33,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
         canConfigure,
         labels: {
           channel: t('tab.integration'),
+          mail: t('tab.mail'),
           // Inside the profile group the whole surface *is* the agent profile,
           // so the first entry is the "basic" tab, not "Agent Profile" again —
           // that broader name stays on the sidebar entry that opens the group.
@@ -38,8 +41,9 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
           share: t('share', { ns: 'common' }),
           statistics: t('usageStats.title', { ns: 'spend' }),
         },
+        mailSupported,
         shareSupported: shareVisible === true && canManageShare,
       }),
-    [active, canConfigure, canManageShare, shareVisible, t],
+    [active, canConfigure, canManageShare, mailSupported, shareVisible, t],
   );
 };
