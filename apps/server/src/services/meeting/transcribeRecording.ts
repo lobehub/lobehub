@@ -36,6 +36,7 @@ export interface TranscribeRecordingInput {
 export const DEFAULT_MAX_CHUNK_MS = 10 * 60_000;
 /** Providers that accept one upload cap it near 25 MB; stay under it for whole-file requests. */
 const MAX_WHOLE_FILE_BYTES = 24 * 1024 * 1024;
+const WAV_HEADER_BYTES = 44;
 const MAX_KNOWN_SPEAKERS = 4;
 const MIN_REFERENCE_MS = 2000;
 const MAX_REFERENCE_MS = 8000;
@@ -193,7 +194,11 @@ export const transcribeRecording = async ({
 
   if (frameCount(audio) === 0) throw new MeetingTranscriptionError('audio_missing');
 
-  const chunks = planChunks(audio, { maxChunkMs });
+  // Duration alone is not a size limit: 48 kHz stereo is twelve times the bytes of 16 kHz mono.
+  const maxFrames = Math.floor((MAX_WHOLE_FILE_BYTES - WAV_HEADER_BYTES) / (2 * audio.channels));
+  const chunks = planChunks(audio, {
+    maxChunkMs: Math.min(maxChunkMs, (maxFrames / audio.sampleRate) * 1000),
+  });
   const sendChunk = (chunk: AudioChunk, index: number, extra = {}) =>
     request(encodePcmWav(audio, chunk), `chunk-${index}.wav`, 'audio/wav', extra);
 

@@ -96,14 +96,18 @@ export class MeetingJobService {
     begin: () => Promise<T | undefined>,
   ) {
     // First, so a caller who may not manage the meeting learns nothing about its jobs.
-    const meeting = await begin();
-    if (!meeting) return undefined;
+    const current = await this.meetingModel.findById(meetingId);
+    if (!current || current.userId !== this.userId) return undefined;
 
+    // Before `begin`: joining must not move the meeting into a stage nobody will work on.
     const running = await this.findActiveJob(meetingId);
     if (running) {
-      if (!this.isStale(running)) return { meeting, taskId: running.id };
+      if (!this.isStale(running)) return { meeting: current, taskId: running.id };
       await this.markTimedOut(running.id);
     }
+
+    const meeting = await begin();
+    if (!meeting) return undefined;
 
     const taskId = await this.asyncTaskModel.create({
       metadata: { meetingId } satisfies MeetingJobMetadata,

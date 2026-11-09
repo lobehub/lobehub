@@ -213,6 +213,27 @@ describe('transcribeRecording', () => {
     expect(segments).toEqual([{ endMs, startMs: 0, text: 'hello' }]);
   });
 
+  it('keeps every chunk of a high-rate stereo recording under the upload limit', async () => {
+    const sampleRate = 48_000;
+    const audio = { channels: 2, sampleRate, samples: new Int16Array(200 * sampleRate * 2) };
+    const sizes: number[] = [];
+
+    await transcribeRecording({
+      bytes: encodePcmWav(audio),
+      fileName: 'meeting.wav',
+      mimeType: 'audio/wav',
+      model: 'whisper-1',
+      transcribe: vi.fn(async ({ file }: { file: Blob }) => {
+        sizes.push(file.size);
+        return { text: '' };
+      }) as any,
+    });
+
+    expect(sizes.length).toBeGreaterThan(1);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(24 * 1024 * 1024);
+    expect(sizes.reduce((sum, size) => sum + size - 44, 0)).toBe(audio.samples.length * 2);
+  });
+
   it('fails the whole pass when any chunk fails, so no speech is silently dropped', async () => {
     const audio = makeAudio(130, [[0, 130]]);
     let call = 0;

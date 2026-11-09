@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { asyncTasks, files } from '@lobechat/database/schemas';
+import { asyncTasks, files, meetings } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { AsyncTaskStatus, AsyncTaskType, FileSource } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
@@ -178,6 +178,20 @@ describe('meeting background jobs', () => {
     expect(second.taskId).toBe(first.taskId);
     expect(await tasksOf()).toHaveLength(1);
     expect(scheduled).toHaveLength(1);
+  });
+
+  it('leaves the meeting alone when joining a job that is still finishing', async () => {
+    const { id, owner } = await recordedMeeting();
+    const first = await owner.refine({ id });
+    // Minutes are saved, but the job is still creating their tasks.
+    await testDB.update(meetings).set({ status: 'ready' }).where(eq(meetings.id, id));
+    await testDB.update(asyncTasks).set({ status: AsyncTaskStatus.Processing });
+
+    const joined = await owner.refine({ id });
+
+    expect(joined.taskId).toBe(first.taskId);
+    expect(joined.data).toMatchObject({ status: 'ready' });
+    expect((await owner.detail({ id })).data).toMatchObject({ status: 'ready' });
   });
 
   it('runs one job when two starts race', async () => {
