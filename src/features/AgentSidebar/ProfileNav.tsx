@@ -1,15 +1,15 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
   ChevronLeftIcon,
   DnaIcon,
-  FileUserIcon,
   MailIcon,
   RadioTowerIcon,
   Share2Icon,
+  UserRoundIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -31,7 +31,7 @@ import Agent from './Header/Agent';
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
   'channel': RadioTowerIcon,
   'mail': MailIcon,
-  'profile': FileUserIcon,
+  'profile': UserRoundIcon,
   'self-evolving': DnaIcon,
   'share': Share2Icon,
   'statistics': ChartColumnBigIcon,
@@ -83,11 +83,14 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
           <SideBarHeaderLayout
             showBack={false}
             left={
-              <NavItem
+              <Button
                 icon={ChevronLeftIcon}
-                title={t('tab.backToChat')}
+                size={'small'}
+                type={'text'}
                 onClick={() => navigate(urlJoin('/agent', agentId))}
-              />
+              >
+                {t('tab.backToChat')}
+              </Button>
             }
           />
           <Flexbox paddingBlock={'0 8px'} paddingInline={6}>

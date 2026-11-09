@@ -183,13 +183,14 @@ describe('groupAgentProfileTabOptions', () => {
     value,
   });
 
-  it('puts the profile, mail and IM bots under identity', () => {
+  it('keeps the profile on top and puts mail and IM bots under identity', () => {
     const groups = groupAgentProfileTabOptions(
       (['profile', 'mail', 'channel', 'self-evolving', 'statistics', 'share'] as const).map(option),
     );
 
     expect(groups.map((group) => [group.key, group.options.map((item) => item.value)])).toEqual([
-      ['identity', ['profile', 'mail', 'channel']],
+      ['profile', ['profile']],
+      ['identity', ['mail', 'channel']],
       ['general', ['self-evolving', 'statistics', 'share']],
     ]);
   });
