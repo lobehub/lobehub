@@ -102,7 +102,7 @@
   "caseDetail.failureReason": "Failure Reason",
   "caseDetail.input": "Input",
   "caseDetail.judgeComment": "Judge Comment",
-  "caseDetail.judgeError.regradeHint": "The original answer is retained. Return to the experiment to re-grade it without running the model again.",
+  "caseDetail.judgeError.regradeHint": "The original answer is kept. On the experiment page, Rerun runs this case again and grades the new attempts.",
   "caseDetail.memory.agent": "written during the attempt",
   "caseDetail.memory.empty": "No memory entries.",
   "caseDetail.memory.removed": "removed",

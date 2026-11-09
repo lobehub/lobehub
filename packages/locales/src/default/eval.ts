@@ -1159,7 +1159,7 @@ export default {
   'lobeBench.overview.attention.ungraded': 'Grading unfinished for {{count}} cases',
   'lobeBench.overview.attention.external': '{{count}} cases awaiting external grading',
   'caseDetail.judgeError.regradeHint':
-    'The original answer is retained. Return to the experiment to re-grade it without running the model again.',
+    'The original answer is kept. On the experiment page, Rerun runs this case again and grades the new attempts.',
   'connections.title': 'Mock MCP connections',
   'connections.hint':
     'Choose a connection for each service. Each connection manages its own address and authentication. The same connection can serve several services.',

@@ -102,7 +102,7 @@
   "caseDetail.failureReason": "失败原因",
   "caseDetail.input": "输入",
   "caseDetail.judgeComment": "裁判评语",
-  "caseDetail.judgeError.regradeHint": "原答案已保留，返回实验可重新评分，无需再次运行模型。",
+  "caseDetail.judgeError.regradeHint": "原答案已保留。在实验页点「重跑」，会把这道题重新跑一遍并评分。",
   "caseDetail.memory.agent": "作答中写入",
   "caseDetail.memory.empty": "没有记忆条目。",
   "caseDetail.memory.removed": "已删除",
