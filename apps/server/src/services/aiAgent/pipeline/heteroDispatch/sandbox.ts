@@ -4,7 +4,10 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { CLAUDE_CODE_TOKEN_CRED_KEY } from '@/helpers/claudeCodeTokenCred';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
-import { spawnHeteroSandbox } from '@/server/services/heterogeneousAgent/sandboxRunner';
+import {
+  resolveSandboxRunTTL,
+  spawnHeteroSandbox,
+} from '@/server/services/heterogeneousAgent/sandboxRunner';
 
 import {
   getHeterogeneousAgentTitle,
@@ -152,7 +155,7 @@ export const spawnInCloudSandbox = async (
   // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
   // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
   // so it outlives a multi-hour run.
-  const sandboxJwt = await signUserJWT(deps.userId, '4h');
+  const sandboxJwt = await signUserJWT(deps.userId, resolveSandboxRunTTL());
   spawnHeteroSandbox({
     ...heteroParams,
     agentType: heteroType as 'claude-code' | 'codex',
