@@ -3,8 +3,12 @@
 import { createStaticStyles, cssVar, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
-import { skillVersionContent } from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
+import {
+  unreadableVersions,
+  useSkillVersion,
+} from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
 import { getLanguage } from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { skillFileTree } from '@/features/SkillViewer/skillFileTree';
@@ -58,16 +62,33 @@ const SkillDirectory = memo<SkillDirectoryProps>(
     const { data: skill, isLoading } = useClientDataSWR(['goal-gate-plan-skill', skillId], () =>
       userSkillService.get(skillId),
     );
-    const files = useMemo(() => skill?.files ?? [], [skill]);
+    const {
+      data: shipped,
+      error,
+      isLoading: isVersionLoading,
+      mutate,
+    } = useSkillVersion(skillId, revision);
+    // The package as the reviewed version shipped it, when that version kept its files.
+    const files = useMemo(() => shipped?.files ?? skill?.files ?? [], [shipped, skill]);
     const resourceTree = useMemo(() => skillFileTree(files), [files]);
     const contentMap = useMemo(
       () => Object.fromEntries(files.map((file) => [file.path, file.content])),
       [files],
     );
 
-    if (isLoading) return <Loading />;
+    if (isLoading || isVersionLoading) return <Loading />;
+    // Unread, the fallback and the latest files would pass as this version.
+    if (unreadableVersions([{ body: shipped?.content, error }]).length > 0)
+      return (
+        <AsyncError
+          error={error}
+          onRetry={() => {
+            void mutate();
+          }}
+        />
+      );
 
-    const index = skillVersionContent(skill?.versions, revision) ?? fallbackContent;
+    const index = shipped?.content ?? fallbackContent;
     // Folded, the tree can't switch files: the viewer is back on `SKILL.md`.
     const shown = filesOpen ? selectedFile : SKILL_INDEX;
 

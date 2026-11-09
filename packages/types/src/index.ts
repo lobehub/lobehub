@@ -83,6 +83,7 @@ export * from './trash';
 export * from './understanding';
 export * from './user';
 export * from './userMemory';
+export * from './userSkill';
 export * from './verify';
 export * from './widget';
 export * from './work';
