@@ -281,6 +281,25 @@ describe('Channel Agent submission guard', () => {
   });
 });
 
+describe('Channel runtime support', () => {
+  const withRuntime = (type: string) =>
+    environment({
+      agencyConfig: { ...environment().agencyConfig, heterogeneousProvider: { type } as never },
+    });
+  const selection = { agentId: 'agent', deviceId: 'bound', workingDirectory: '/project' };
+
+  it.each(['kimi-code', 'codebuddy', 'cursor', 'opencode', 'deepseek-harness'])(
+    'accepts the local %s runtime',
+    (type) => {
+      expect(getChannelAgentIssue(selection, withRuntime(type))).toBeUndefined();
+    },
+  );
+
+  it.each(['openclaw', 'hermes'])('rejects the remote-task %s runtime', (type) => {
+    expect(getChannelAgentIssue(selection, withRuntime(type))).toBe('unsupportedRuntime');
+  });
+});
+
 describe('Channel member submission guard', () => {
   const ready = { agentId: 'native', initialized: true };
   const pending = { agentId: 'pi', initialized: true, issue: 'deviceRequired' as const };
