@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
   ChevronLeftIcon,
+  DnaIcon,
   FileUserIcon,
   MailIcon,
   RadioTowerIcon,
@@ -28,11 +29,12 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
-  channel: RadioTowerIcon,
-  mail: MailIcon,
-  profile: FileUserIcon,
-  share: Share2Icon,
-  statistics: ChartColumnBigIcon,
+  'channel': RadioTowerIcon,
+  'mail': MailIcon,
+  'profile': FileUserIcon,
+  'self-evolving': DnaIcon,
+  'share': Share2Icon,
+  'statistics': ChartColumnBigIcon,
 };
 
 interface ProfileNavProps {
