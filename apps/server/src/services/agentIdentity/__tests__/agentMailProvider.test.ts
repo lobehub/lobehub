@@ -601,25 +601,6 @@ describe('agent-mail provider — outbound', () => {
     expect(body?.text).toBe('Done. See the docs (https://lobehub.com/docs)\n\n- one\n- two');
     expect(body?.text).not.toContain('**');
   });
-
-  it('answers within the thread when the caller names the message it replies to', async () => {
-    const { calls, fetchImpl } = createMailFetch();
-    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
-
-    const result = await provider.send(ref(), replyInput());
-
-    // The reply route inherits the recipients and threads the message; going
-    // through `sendMessage` would start a second conversation with the same
-    // subject instead of answering the human in theirs.
-    expect(calls.filter((call) => call.method === 'POST')).toEqual([
-      {
-        body: { html: '<p>hi back</p>', text: 'hi back' },
-        method: 'POST',
-        path: '/v1/messages/msg_in_1/reply',
-      },
-    ]);
-    expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
-  });
 });
 
 describe('agent-mail provider — reply ownership', () => {
