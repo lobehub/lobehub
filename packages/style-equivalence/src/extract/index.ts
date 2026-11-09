@@ -106,6 +106,12 @@ export const extractFile = (
     const visit = (current: ts.Node) => {
       if (isJsxNode(current)) return;
       if (
+        ts.isIdentifier(current) &&
+        top.cssConstants.has(current.text) &&
+        !(ts.isPropertyAccessExpression(current.parent) && current.parent.name === current)
+      )
+        slots.add(`${current.text}.${current.text}`);
+      if (
         ts.isPropertyAccessExpression(current) &&
         ts.isIdentifier(current.expression) &&
         (top.styleSymbols.has(current.expression.text) ||
@@ -117,7 +123,7 @@ export const extractFile = (
       ts.forEachChild(current, visit);
     };
     if (!isJsxNode(node)) ts.forEachChild(node, visit);
-    if (ts.isPropertyAccessExpression(node)) visit(node);
+    if (ts.isPropertyAccessExpression(node) || ts.isIdentifier(node)) visit(node);
     return slots;
   };
 
