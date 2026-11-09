@@ -1,4 +1,5 @@
 import debug from 'debug';
+import pMap from 'p-map';
 
 import type { SandboxProvider } from './types';
 
@@ -97,14 +98,16 @@ export const resolveInjectedEnvVarsByKey = async (
 
   try {
     const injectedNames = new Set(envNames);
-    const entries = await Promise.all(
-      injected.map(async (key) => {
+    const entries = await pMap(
+      injected,
+      async (key) => {
         const single = await injectWithoutSandbox(key);
         const names = Object.keys(single.credentials?.env ?? {}).filter((name) =>
           injectedNames.has(name),
         );
         return [key, names] as const;
-      }),
+      },
+      { concurrency: 4 },
     );
     return Object.fromEntries(entries);
   } catch (error) {
