@@ -39,17 +39,26 @@ import type { QQApiClient } from '@lobechat/chat-adapter-qq';
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+const QQ_THREAD_TYPES = new Set(['c2c', 'dms', 'group', 'guild']);
+
 /**
  * Parse channelId into thread type and target ID.
- * QQ channelId format: "type:id" (e.g., "group:123", "guild:456", "c2c:789", "dms:abc")
- * If no type prefix, defaults to "group".
+ * QQ channelId format: "type:id" (e.g., "group:123", "guild:456", "c2c:789", "dms:abc"); the
+ * full platform thread id ("qq:c2c:789") is accepted too. A bare id carries no type, so it is
+ * sent as a group message — `typeInferred` lets the caller explain a failure caused by that.
  */
-const parseChannelId = (channelId: string): { targetId: string; threadType: string } => {
+export const parseChannelId = (
+  channelId: string,
+): { targetId: string; threadType: string; typeInferred: boolean } => {
   const parts = channelId.split(':');
-  if (parts.length >= 2) {
-    return { targetId: parts.slice(1).join(':'), threadType: parts[0] };
+  if (parts[0] === 'qq') parts.shift();
+  if (parts.length >= 2 && QQ_THREAD_TYPES.has(parts[0])) {
+    // guild thread ids carry a trailing guild id ("guild:<channelId>:<guildId>") — the send
+    // endpoint only takes the channel id.
+    const targetId = parts[0] === 'guild' ? parts[1] : parts.slice(1).join(':');
+    return { targetId, threadType: parts[0], typeInferred: false };
   }
-  return { targetId: channelId, threadType: 'group' };
+  return { targetId: channelId, threadType: 'group', typeInferred: true };
 };
 
 const sendQQMessage = async (
@@ -88,8 +97,22 @@ export class QQMessageService implements MessageRuntimeService {
     // Active messages have been disabled since April 2025.
     // Guild channel messages (v1 API) may still support active sending.
     // We attempt the send and let the QQ API return specific errors if unsupported.
-    const { threadType, targetId } = parseChannelId(params.channelId);
-    const messageId = await sendQQMessage(this.api, threadType, targetId, params.content);
+    const { threadType, targetId, typeInferred } = parseChannelId(params.channelId);
+    let messageId: string | undefined;
+    try {
+      messageId = await sendQQMessage(this.api, threadType, targetId, params.content);
+    } catch (error) {
+      if (!typeInferred) throw error;
+      // QQ answers a group send to a c2c openid with "用户/群已注销" (11255), which reads as
+      // "the group was dissolved". Say what actually went wrong instead.
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `QQ channelId "${params.channelId}" has no conversation-type prefix, so it was sent as a ` +
+          `group message and QQ rejected it. The conversation type may not match: use ` +
+          `"c2c:${targetId}" for a direct chat or "group:${targetId}" for a group. QQ error: ${reason}`,
+        { cause: error },
+      );
+    }
     return {
       channelId: params.channelId,
       messageId: messageId ?? undefined,

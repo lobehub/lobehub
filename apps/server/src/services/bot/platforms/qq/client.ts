@@ -42,6 +42,19 @@ function extractThreadType(platformThreadId: string): string {
   return platformThreadId.split(':')[1] || 'group';
 }
 
+/**
+ * The `channelId` the `lobe-message` tool gets for the current conversation.
+ * QQ routes c2c / group / guild / dms through different endpoints and their
+ * openids look alike, so the bare id `extractChatId` returns is ambiguous —
+ * `QQMessageService` would send it as a group message. Keep the type prefix
+ * (`c2c:<openid>`, `group:<openid>`, `guild:<channelId>`, `dms:<guildId>`).
+ */
+function extractConversationId(platformThreadId: string): string | undefined {
+  const [, threadType, targetId] = platformThreadId.split(':');
+  if (!threadType || !targetId) return undefined;
+  return `${threadType}:${targetId}`;
+}
+
 async function sendQQMessage(
   api: QQApiClient,
   threadType: string,
@@ -292,6 +305,10 @@ class QQGatewayClient implements PlatformClient {
     return extractChatId(platformThreadId);
   }
 
+  extractConversationId(platformThreadId: string): string | undefined {
+    return extractConversationId(platformThreadId);
+  }
+
   formatMarkdown(markdown: string): string {
     return stripMarkdown(markdown);
   }
@@ -396,6 +413,10 @@ class QQWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
+  }
+
+  extractConversationId(platformThreadId: string): string | undefined {
+    return extractConversationId(platformThreadId);
   }
 
   formatMarkdown(markdown: string): string {
