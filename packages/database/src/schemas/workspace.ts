@@ -55,6 +55,15 @@ export const workspaces = pgTable(
 export type WorkspaceItem = typeof workspaces.$inferSelect;
 export type NewWorkspace = typeof workspaces.$inferInsert;
 
+/**
+ * A workspace member's own display settings, kept with their membership so
+ * they go when the member leaves. Absent keys mean the default.
+ */
+export interface WorkspaceMemberConfig {
+  /** The color the member picked for their profile card, `#rrggbb`. */
+  badgeColor?: string;
+}
+
 export const workspaceMembers = pgTable(
   'workspace_members',
   {
@@ -69,6 +78,8 @@ export const workspaceMembers = pgTable(
     // duties in each workspace. Lengths are enforced by the API, not the column.
     title: text('title'),
     responsibilities: text('responsibilities'),
+    /** Per-member display settings; see {@link WorkspaceMemberConfig}. */
+    config: jsonb('config').$type<WorkspaceMemberConfig>().notNull().default({}),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
     deletedAt: timestamptz('deleted_at'),
