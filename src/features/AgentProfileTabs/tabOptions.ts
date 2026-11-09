@@ -10,6 +10,22 @@ export interface AgentProfileTabOption {
 export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) =>
   urlJoin('/agent', agentId, tab);
 
+const AGENT_PROFILE_ROUTE =
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|channel(?:\/[^/]+)?|statistics|share)\/?$/;
+
+/**
+ * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
+ * not substrings: `/channels/:id` and workspace slugs such as `channel-team`
+ * are not part of the group.
+ */
+export const getAgentProfileTab = (pathname: string): AgentProfileTab | undefined => {
+  const segment = AGENT_PROFILE_ROUTE.exec(
+    pathname.replace(/^\/_dangerous_local_dev_proxy(?=\/)/, ''),
+  )?.[1];
+
+  return segment?.split('/')[0] as AgentProfileTab | undefined;
+};
+
 /**
  * Which segments the profile-group switcher shows.
  *
