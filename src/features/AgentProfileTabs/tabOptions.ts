@@ -8,7 +8,7 @@ export interface AgentProfileTabOption {
   value: AgentProfileTab;
 }
 
-export type AgentProfileTabGroupKey = 'general' | 'identity';
+export type AgentProfileTabGroupKey = 'general' | 'identity' | 'profile';
 
 export interface AgentProfileTabGroup {
   key: AgentProfileTabGroupKey;
@@ -82,7 +82,8 @@ export const buildAgentProfileTabOptions = ({
 };
 
 const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfileTab[] }[] = [
-  { key: 'identity', tabs: ['profile', 'mail', 'channel'] },
+  { key: 'profile', tabs: ['profile'] },
+  { key: 'identity', tabs: ['mail', 'channel'] },
   { key: 'general', tabs: ['self-evolving', 'statistics', 'share'] },
 ];
 

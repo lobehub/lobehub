@@ -6,10 +6,10 @@ import {
   ChartColumnBigIcon,
   ChevronLeftIcon,
   DnaIcon,
-  FileUserIcon,
   MailIcon,
   RadioTowerIcon,
   Share2Icon,
+  UserRoundIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -31,7 +31,7 @@ import Agent from './Header/Agent';
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
   'channel': RadioTowerIcon,
   'mail': MailIcon,
-  'profile': FileUserIcon,
+  'profile': UserRoundIcon,
   'self-evolving': DnaIcon,
   'share': Share2Icon,
   'statistics': ChartColumnBigIcon,
