@@ -4559,6 +4559,10 @@ When I am ___, I need ___
   'environments.github.noRepositories': 'This connection cannot see any repositories yet',
   'environments.github.connect': 'Connect GitHub',
   'environments.github.reviewAccess': 'Review access',
+  'environments.github.truncated':
+    'Only {{count}} repositories are listed, so some may be missing. Limit the GitHub App to fewer repositories to see the rest.',
+  'environments.github.unconfigured':
+    "GitHub isn't set up on this server, so repositories can't be listed.",
   'environments.instances.create': 'New copy',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',

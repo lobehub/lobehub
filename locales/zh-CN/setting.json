@@ -773,6 +773,8 @@
   "environments.github.repositoryPending": "请先选择组织",
   "environments.github.repositoryPlaceholder": "搜索仓库",
   "environments.github.reviewAccess": "检查授权范围",
+  "environments.github.truncated": "这里只列出了 {{count}} 个仓库，可能有遗漏。把 GitHub App 的授权范围缩小到更少的仓库即可看到其余仓库。",
+  "environments.github.unconfigured": "当前服务器未配置 GitHub，无法列出仓库。",
   "environments.hasInstances": "请先删掉它的其他副本",
   "environments.inProject": "仍有项目在使用这个环境——请先把它从项目中移除",
   "environments.instances.add": "新建副本",
