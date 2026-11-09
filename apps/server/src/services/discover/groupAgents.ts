@@ -1,4 +1,5 @@
 import { type CategoryListQuery } from '@lobehub/market-sdk';
+import pMap from 'p-map';
 
 import type { DiscoverService } from './index';
 import { withoutUnavailableModel } from './marketModelAvailability';
@@ -37,8 +38,9 @@ export const getGroupAgentDetail = async (
     // carry it flat or under `currentVersion`, and the fork reads both.
     if (!response?.memberAgents) return response;
     const email = service.userInfo?.email;
-    const memberAgents = await Promise.all(
-      response.memberAgents.map(async (member) => {
+    const memberAgents = await pMap(
+      response.memberAgents,
+      async (member) => {
         const { currentVersion } = member as { currentVersion?: { config?: Record<string, any> } };
         return {
           ...member,
@@ -50,7 +52,8 @@ export const getGroupAgentDetail = async (
             },
           }),
         };
-      }),
+      },
+      { concurrency: 5 },
     );
     return { ...response, memberAgents };
   } catch (error) {
