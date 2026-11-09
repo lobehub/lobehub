@@ -1088,6 +1088,19 @@ export class DocumentService {
         const raced = await transactionDocumentModel.findByFileId(fileId, accessScope);
         if (raced) return raced;
 
+        // `file` was read before the download, so a publish into the workspace
+        // can have committed while the file was being parsed. Re-read the row
+        // under the lock: publishing takes the same per-file lock
+        // (`FileVisibilityRepository.setVisibility`), so the value seen here is
+        // the one that will still hold when this row is inserted. Without it the
+        // parsed text is written as private while the file itself is public, and
+        // the text stays unsearchable until the file is published again.
+        const currentFile = await new FileModel(
+          transactionDb,
+          this.userId,
+          this.workspaceId,
+        ).findById(fileId, { accessScope });
+
         return transactionDocumentModel.create({
           content: fileDocument.content,
           fileId,
@@ -1101,7 +1114,9 @@ export class DocumentService {
           title,
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,
-          visibility: file.visibility,
+          // The re-read wins; the download-time value is only a fallback for the
+          // case where the row stopped being visible to this scope mid-parse.
+          visibility: currentFile?.visibility ?? file.visibility,
         });
       });
 
