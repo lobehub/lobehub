@@ -229,3 +229,8 @@ export const defaultReworkNote = (item: DifferenceView) => {
   const rest = groups.length - parts.length;
   return `不一样：${parts.join('；')}${rest > 0 ? `；另有 ${rest} 种差异` : ''}`;
 };
+
+export const showsAgentNote = (
+  item: { needsAgent: boolean; note?: unknown },
+  notes: 'needed' | 'written' = 'needed',
+) => Boolean(item.note) || (notes === 'needed' && item.needsAgent);

@@ -14,6 +14,7 @@ import {
   nextSelection,
   reviewGrid,
   shotNotes,
+  showsAgentNote,
   standInNote,
 } from './review';
 
@@ -379,5 +380,22 @@ describe('rework reason', () => {
       '不一样：间距 0 → 8px',
     );
     expect(defaultReworkNote(view())).toBe('');
+  });
+});
+
+describe('showsAgentNote', () => {
+  it('shows a written agent note even when the item did not wait for one', () => {
+    expect(showsAgentNote({ needsAgent: false, note: { finding: 'x', suggestion: 'pass' } })).toBe(
+      true,
+    );
+  });
+
+  it('asks for an agent note only on an item that waits for one', () => {
+    expect(showsAgentNote({ needsAgent: true })).toBe(true);
+    expect(showsAgentNote({ needsAgent: false })).toBe(false);
+  });
+
+  it('shows only written notes on the case page', () => {
+    expect(showsAgentNote({ needsAgent: true }, 'written')).toBe(false);
   });
 });
