@@ -6,6 +6,7 @@ import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { TransferErrorCode } from '@/types/transferError';
 
 const mocks = vi.hoisted(() => ({
+  dropPageRooms: vi.fn(),
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertCanEditResource: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
@@ -32,6 +33,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/business/server/document-mention/notifyActivity', () => ({
   notifyDocumentMention: mocks.notifyDocumentMention,
 }));
+vi.mock('@/server/services/pageCollab/notify', () => ({ dropPageRooms: mocks.dropPageRooms }));
+
 vi.mock('@/database/models/rbac', () => ({
   RbacModel: { getWorkspaceUsersPermissions: mocks.getWorkspaceUsersPermissions },
 }));
@@ -150,6 +153,20 @@ describe('documentRouter transferDocument', () => {
     expect(mocks.transferTo).toHaveBeenCalledWith('doc-1', null, 'member-1', undefined, {
       forbidForeignRows: true,
     });
+  });
+
+  it('drops the rooms of pages moved out of the workspace', async () => {
+    mocks.transferTo.mockResolvedValueOnce({ documentIds: ['doc-1', 'doc-2'], fileIds: [] });
+    const caller = documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'owner',
+    } as any);
+
+    await caller.transferDocument({ documentId: 'doc-1', targetWorkspaceId: null });
+
+    expect(mocks.dropPageRooms).toHaveBeenCalledWith(['doc-1', 'doc-2']);
   });
 
   it("lets a member move another creator's visible document between visible parents", async () => {

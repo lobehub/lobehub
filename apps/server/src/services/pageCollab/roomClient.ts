@@ -81,6 +81,13 @@ export class PageRoomClient {
     throw new Error(`Page room update failed: ${res.status}`);
   }
 
+  async dropRoom(documentId: string): Promise<void> {
+    const url = new URL('/api/documents/room', this.baseUrl);
+    url.searchParams.set('documentId', documentId);
+    const res = await fetch(url, { headers: this.headers(), method: 'DELETE' });
+    if (!res.ok) throw new Error(`Page room drop failed: ${res.status}`);
+  }
+
   private headers() {
     return { Authorization: `Bearer ${this.serviceToken}` };
   }

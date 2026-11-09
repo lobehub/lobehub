@@ -23,6 +23,7 @@ vi.mock('../history');
 // Spy on the realtime broadcast so we can assert lock.changed is published only
 // on a genuine state change (holder edge / actual release).
 vi.mock('../../resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+vi.mock('../../pageCollab/notify', () => ({ dropPageRooms: vi.fn() }));
 
 const publishResourceEventMock = vi.mocked(publishResourceEvent);
 vi.mock('@lobechat/file-loaders', () => ({
@@ -696,6 +697,35 @@ describe('DocumentService', () => {
 
       expect(mockDocumentModel.delete).not.toHaveBeenCalled();
       expect(mockFileModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('drops the collaboration room of a deleted workspace page', async () => {
+      const { dropPageRooms } = await import('../../pageCollab/notify');
+      mockDocumentModel.findById.mockResolvedValue({
+        fileId: null,
+        fileType: 'custom/document',
+        id: 'doc-1',
+        workspaceId: 'ws-1',
+      });
+
+      await service.deleteDocument('doc-1');
+
+      expect(vi.mocked(dropPageRooms)).toHaveBeenCalledWith(['doc-1']);
+    });
+
+    it('leaves rooms alone when deleting a personal page', async () => {
+      const { dropPageRooms } = await import('../../pageCollab/notify');
+      vi.mocked(dropPageRooms).mockClear();
+      mockDocumentModel.findById.mockResolvedValue({
+        fileId: null,
+        fileType: 'custom/document',
+        id: 'doc-1',
+        workspaceId: null,
+      });
+
+      await service.deleteDocument('doc-1');
+
+      expect(vi.mocked(dropPageRooms)).not.toHaveBeenCalled();
     });
 
     it('should delete a simple document without fileId', async () => {

@@ -32,6 +32,7 @@ import { type LobeDocument } from '@/types/document';
 
 import { EditLockService } from '../editLock';
 import { FileService } from '../file';
+import { dropPageRooms } from '../pageCollab/notify';
 import { publishResourceEvent } from '../resourceEvents';
 import { countEditorDataText } from './editorData';
 import { DocumentHistoryService } from './history';
@@ -700,7 +701,9 @@ export class DocumentService {
     }
 
     // Finally delete the document itself
-    return this.documentModel.delete(id);
+    const deleted = await this.documentModel.delete(id);
+    if (document.workspaceId) dropPageRooms([id]);
+    return deleted;
   }
 
   /**
