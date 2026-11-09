@@ -1,3 +1,5 @@
+import { TRPCError } from '@trpc/server';
+
 import { appEnv } from '@/envs/app';
 
 export interface PageRoomState {
@@ -20,6 +22,17 @@ export class PageRoomStaleBaseError extends Error {
   constructor() {
     super('Page room changed after this writer read it');
     this.name = 'PageRoomStaleBaseError';
+  }
+}
+
+export const PAGE_TOO_LARGE_MESSAGE =
+  'This page is too large to store more content. Remove some content from the page, or ask support to trim its history.';
+
+/** The room is at its size cap and refuses updates that add content. */
+export class PageRoomTooLargeError extends TRPCError {
+  constructor() {
+    super({ code: 'PAYLOAD_TOO_LARGE', message: PAGE_TOO_LARGE_MESSAGE });
+    this.name = 'PageRoomTooLargeError';
   }
 }
 
@@ -65,6 +78,7 @@ export class PageRoomClient {
 
     const code = await errorCodeOf(res);
     if (code === 'STALE_BASE') throw new PageRoomStaleBaseError();
+    if (code === 'DOC_TOO_LARGE') throw new PageRoomTooLargeError();
     if (res.status === 409) throw new PageRoomConflictError();
     throw new Error(`Page room update failed: ${res.status}`);
   }
