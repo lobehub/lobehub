@@ -117,6 +117,15 @@ const createTopic = async () => {
   return topic;
 };
 
+/** Lands a failing check on the head commit, which is what a `ci_failed` wake reports. */
+const failOnHead = async (rowId: string) =>
+  (await ScmChangeRequestModel.applyChecks(serverDB, rowId, {
+    checks: [
+      { conclusion: 'failure', externalId: 'check_run:1', name: 'Test', status: 'completed' },
+    ],
+    headSha: baseRow.headSha,
+  }))!.row;
+
 describe('ScmControlService — merge', () => {
   it('accepts the linked acceptance, stamps the round, and flips the Work', async () => {
     const [acceptance] = await serverDB
@@ -298,11 +307,15 @@ describe('ScmControlService — wake', () => {
 
   it('skips drafts, unlinked rows, self comments, debounced bursts, and the wake cap', async () => {
     const topic = await createTopic();
-    const linked = await ScmChangeRequestModel.upsert(serverDB, {
-      ...baseRow,
-      authorExternalLogin: 'the-agent',
-      links: { topicId: topic.id },
-    });
+    const linked = await failOnHead(
+      (
+        await ScmChangeRequestModel.upsert(serverDB, {
+          ...baseRow,
+          authorExternalLogin: 'the-agent',
+          links: { topicId: topic.id },
+        })
+      ).id,
+    );
 
     expect(
       await control().handle({
@@ -423,10 +436,14 @@ describe('ScmControlService — wake', () => {
 
   it('delivers a failure the debounce window swallowed on the next event', async () => {
     const topic = await createTopic();
-    const row = await ScmChangeRequestModel.upsert(serverDB, {
-      ...baseRow,
-      links: { topicId: topic.id },
-    });
+    const row = await failOnHead(
+      (
+        await ScmChangeRequestModel.upsert(serverDB, {
+          ...baseRow,
+          links: { topicId: topic.id },
+        })
+      ).id,
+    );
 
     // Second job of the burst: the window is still held by the first wake,
     // so nothing is sent — not by this event, and not by the flush either.
@@ -453,6 +470,89 @@ describe('ScmControlService — wake', () => {
     expect(
       (await ScmChangeRequestModel.findById(serverDB, row.id))?.metadata.pendingWake,
     ).toBeUndefined();
+  });
+
+  it('drops a pending failure once a push replaced the commit it was about', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      headRef: 'feat/x',
+      links: { topicId: topic.id },
+    });
+    // A job on the old head fails while the window is held by an earlier
+    // wake, so the failure is parked as a pending wake.
+    const failed = await ScmChangeRequestModel.applyChecks(serverDB, row.id, {
+      checks: [
+        {
+          conclusion: 'failure',
+          externalId: 'check_run:901',
+          name: 'Install deps',
+          status: 'completed',
+        },
+      ],
+      headSha: baseRow.headSha,
+    });
+    mocks.redisSet.mockResolvedValue(null);
+    expect(
+      await control().handle({ event: checksEvent, kind: 'ci_failed', row: failed!.row }),
+    ).toMatchObject({ detail: 'debounced', outcome: 'skipped' });
+
+    // The agent pushes again. `synchronize` moves the head and resets the
+    // rollup, so the parked failure no longer describes anything on the row.
+    mocks.redisSet.mockResolvedValue('OK');
+    const pushed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      eventKind: 'synchronized',
+      headSha: 'd'.repeat(40),
+    });
+    expect(pushed.checks ?? []).toHaveLength(0);
+    await control().handle({
+      event: changeRequestEvent('opened'),
+      kind: 'synchronized',
+      row: pushed,
+    });
+
+    // Waking here would name the new head with no failing check under it
+    // and spend one of the pull request's wakes on nothing.
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.metadata.pendingWake).toBeUndefined();
+    expect(after?.wakeCount).toBe(0);
+  });
+
+  it('does not wake for a failure when the head carries no failing check', async () => {
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { topicId: topic.id },
+    });
+
+    expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toEqual({
+      detail: 'no failing check on the head commit',
+      outcome: 'skipped',
+    });
+    // Checks for a commit the row has since moved past do not count either.
+    expect(
+      await control().handle({
+        event: checksEvent,
+        kind: 'ci_failed',
+        row: {
+          ...row,
+          checks: [
+            {
+              conclusion: 'failure',
+              externalId: 'check_run:902',
+              name: 'Test',
+              status: 'completed',
+            },
+          ],
+          ciHeadSha: 'e'.repeat(40),
+        },
+      }),
+    ).toMatchObject({ detail: 'no failing check on the head commit', outcome: 'skipped' });
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
   });
 
   it('respects the automation switches of the user who connected the installation', async () => {
@@ -560,10 +660,14 @@ describe('ScmControlService — wake', () => {
 
   it('drops a pending wake when the automation was switched off in between', async () => {
     const topic = await createTopic();
-    const row = await ScmChangeRequestModel.upsert(serverDB, {
-      ...baseRow,
-      links: { topicId: topic.id },
-    });
+    const row = await failOnHead(
+      (
+        await ScmChangeRequestModel.upsert(serverDB, {
+          ...baseRow,
+          links: { topicId: topic.id },
+        })
+      ).id,
+    );
 
     // A burst leaves a marker behind.
     mocks.redisSet.mockResolvedValue(null);
@@ -595,10 +699,14 @@ describe('ScmControlService — wake', () => {
 
   it('holds the wake cap when two deliveries race on the same stale row', async () => {
     const topic = await createTopic();
-    const row = await ScmChangeRequestModel.upsert(serverDB, {
-      ...baseRow,
-      links: { topicId: topic.id },
-    });
+    const row = await failOnHead(
+      (
+        await ScmChangeRequestModel.upsert(serverDB, {
+          ...baseRow,
+          links: { topicId: topic.id },
+        })
+      ).id,
+    );
     // One slot left, and both deliveries hold the snapshot that says so —
     // which is what a Redis-less deployment looks like, since nothing
     // debounces them.
@@ -751,10 +859,14 @@ describe('ScmControlService — wake', () => {
 
   it('reports a failed wake without counting it', async () => {
     const topic = await createTopic();
-    const row = await ScmChangeRequestModel.upsert(serverDB, {
-      ...baseRow,
-      links: { topicId: topic.id },
-    });
+    const row = await failOnHead(
+      (
+        await ScmChangeRequestModel.upsert(serverDB, {
+          ...baseRow,
+          links: { topicId: topic.id },
+        })
+      ).id,
+    );
     mocks.execAgent.mockRejectedValueOnce(new Error('topic busy'));
 
     expect(await control().handle({ event: checksEvent, kind: 'ci_failed', row })).toMatchObject({
@@ -909,6 +1021,7 @@ describe('ScmControlService — the tracking comment in GitHub', () => {
   it('reflects the merge and the notifications in the comment', async () => {
     const row = await bindAndOpen({ metadata: { repoPrivate: true } });
     await control().handle({ event: changeRequestEvent('opened'), kind: 'opened', row });
+    await failOnHead(row.id);
     const stored = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
 
     await control().handle({ event: checksEvent, kind: 'ci_failed', row: stored });
