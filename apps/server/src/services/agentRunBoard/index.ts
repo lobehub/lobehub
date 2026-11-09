@@ -1,10 +1,12 @@
-import type {
-  AgentRunBoardActivityBucket,
-  AgentRunBoardAttentionItem,
-  AgentRunBoardData,
-  AgentRunBoardLane,
-  AgentRunBoardRun,
-  AgentRunBoardRunStatus,
+import {
+  agentDisplayName,
+  type AgentRunBoardActivityBucket,
+  type AgentRunBoardAttentionItem,
+  type AgentRunBoardData,
+  type AgentRunBoardFilterOptions,
+  type AgentRunBoardLane,
+  type AgentRunBoardRun,
+  type AgentRunBoardRunStatus,
 } from '@lobechat/types';
 
 import type {
@@ -77,6 +79,10 @@ const ownRunningOperation = (row: AgentRunBoardRow, viewerId: string) =>
     ? row.runningOperation
     : null;
 
+// `title` is becoming a role marker; people know an agent by its `name`.
+const agentLabel = (row: AgentRunBoardRow) =>
+  agentDisplayName({ name: row.agentName, title: row.agentTitle }) ?? null;
+
 const oldestPending = (row: AgentRunBoardRow, now: number) =>
   pendingInterventions(row, now).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
 
@@ -117,7 +123,7 @@ const attentionBase = (row: AgentRunBoardRow, viewerId: string) => ({
   agentAvatar: row.agentAvatar,
   agentBackgroundColor: row.agentBackgroundColor,
   agentId: row.agentId,
-  agentTitle: row.agentTitle,
+  agentTitle: agentLabel(row),
   operationId: row.id,
   runningOperation: ownRunningOperation(row, viewerId),
   title: runTitle(row),
@@ -134,7 +140,7 @@ const toNeedsHuman = (
 
   return {
     ...attentionBase(row, viewerId),
-    detail: first?.canonicalToolKey ?? null,
+    detail: null,
     isMine: ownerUserId === viewerId,
     kind: 'needs_human',
     ownerUserId,
@@ -187,12 +193,30 @@ const buildActivity = (
   return buckets;
 };
 
+/** Runs the viewer started, spoke in (`spokenTopicIds`), or is asked to approve. */
+const buildFilterOptions = (rows: AgentRunBoardRow[]): AgentRunBoardFilterOptions => ({
+  agents: [
+    ...new Map(rows.map((r) => [r.agentId, { id: r.agentId, title: agentLabel(r) }])).values(),
+  ],
+  memberIds: [...new Set(rows.map((r) => r.userId))],
+});
+
+/** Narrow to one agent and/or the member who started the run. */
+export const filterRunsBy = (
+  rows: AgentRunBoardRow[],
+  { agentId, userId }: { agentId?: string; userId?: string },
+) =>
+  rows.filter((row) => (!agentId || row.agentId === agentId) && (!userId || row.userId === userId));
+
 export const buildAgentRunBoard = ({
+  filterOptionRows,
   generatedAt,
   rows,
   viewerId,
   windowStart,
 }: {
+  /** The rows before the agent and member picks, so picking one keeps the others offered. */
+  filterOptionRows?: AgentRunBoardRow[];
   generatedAt: Date;
   rows: AgentRunBoardRow[];
   viewerId: string;
@@ -236,7 +260,7 @@ export const buildAgentRunBoard = ({
       backgroundColor: row.agentBackgroundColor,
       ownerUserId: row.agentOwnerId,
       runs: [run],
-      title: row.agentTitle,
+      title: agentLabel(row),
     });
   }
 
@@ -255,6 +279,7 @@ export const buildAgentRunBoard = ({
         .sort((a, b) => b.since.getTime() - a.since.getTime())
         .slice(0, MAX_FAILED_ATTENTION),
     ],
+    filterOptions: buildFilterOptions(filterOptionRows ?? rows),
     generatedAt,
     hiddenLaneCount: Math.max(0, lanes.length - MAX_LANES),
     lanes: lanes.slice(0, MAX_LANES),

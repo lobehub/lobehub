@@ -5,6 +5,11 @@ export type AgentRunBoardRunningOperation = NonNullable<ChatTopicMetadata['runni
 
 export const AGENT_RUN_BOARD_WINDOW_HOURS = [1, 6, 24] as const;
 
+/** `involved`: runs the viewer started, spoke in, or is asked to approve. */
+export const AGENT_RUN_BOARD_SCOPES = ['all', 'involved'] as const;
+
+export type AgentRunBoardScope = (typeof AGENT_RUN_BOARD_SCOPES)[number];
+
 export type AgentRunBoardWindowHours = (typeof AGENT_RUN_BOARD_WINDOW_HOURS)[number];
 
 export type AgentRunBoardRunStatus = 'done' | 'failed' | 'needs_human' | 'running' | 'stopped';
@@ -41,7 +46,7 @@ export interface AgentRunBoardAttentionItem {
   agentBackgroundColor: string | null;
   agentId: string;
   agentTitle: string | null;
-  /** Failure message, or the tool awaiting approval. */
+  /** Failure message. */
   detail: string | null;
   /** Whether the viewer is the member who can act on this item. */
   isMine: boolean;
@@ -68,9 +73,16 @@ export interface AgentRunBoardActivityBucket extends AgentRunBoardSummary {
   startedAt: Date;
 }
 
+/** What the board can be narrowed to, independent of the current agent and member picks. */
+export interface AgentRunBoardFilterOptions {
+  agents: { id: string; title: string | null }[];
+  memberIds: string[];
+}
+
 export interface AgentRunBoardData {
   activity: AgentRunBoardActivityBucket[];
   attention: AgentRunBoardAttentionItem[];
+  filterOptions: AgentRunBoardFilterOptions;
   generatedAt: Date;
   /** Active agents left out of `lanes` by the lane cap. */
   hiddenLaneCount: number;

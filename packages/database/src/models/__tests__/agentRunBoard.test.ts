@@ -6,6 +6,7 @@ import {
   agentInterventions,
   agentOperations,
   agents,
+  messages,
   tasks,
   taskTopics,
   topics,
@@ -53,7 +54,14 @@ beforeEach(async () => {
     { id: otherWorkspaceId, name: 'B', primaryOwnerId: owner, slug: otherWorkspaceId },
   ]);
   await serverDB.insert(agents).values([
-    { id: 'public-agent', title: 'Public', userId: teammate, visibility: 'public', workspaceId },
+    {
+      id: 'public-agent',
+      name: 'Named',
+      title: 'Public',
+      userId: teammate,
+      visibility: 'public',
+      workspaceId,
+    },
     { id: 'private-agent', title: 'Secret', userId: owner, visibility: 'private', workspaceId },
   ]);
   await serverDB.insert(topics).values({ id: 'base-topic', userId: teammate, workspaceId });
@@ -86,6 +94,7 @@ describe('AgentRunBoardModel.listRuns', () => {
     const [row] = await new AgentRunBoardModel(serverDB, workspaceId).listRuns({ now, since });
 
     expect(row).toMatchObject({
+      agentName: 'Named',
       agentOwnerId: teammate,
       agentTitle: 'Public',
       errorMessage: 'boom',
@@ -208,9 +217,66 @@ describe('AgentRunBoardModel.listRuns', () => {
 
     expect(row.interventions).toHaveLength(1);
     expect(row.interventions[0]).toMatchObject({
-      canonicalToolKey: 'stripe.refund',
       status: 'pending',
       userId: teammate,
     });
+  });
+});
+
+describe('AgentRunBoardModel.listRuns involved scope', () => {
+  it('keeps the viewer’s own runs, topics they wrote in and asks addressed to them', async () => {
+    await serverDB.insert(topics).values({ id: 'spoken-topic', userId: teammate, workspaceId });
+    await serverDB.insert(messages).values([
+      {
+        content: 'hi',
+        id: 'm-user',
+        role: 'user',
+        topicId: 'spoken-topic',
+        userId: owner,
+        workspaceId,
+      },
+      {
+        content: 'reply',
+        id: 'm-assistant',
+        role: 'assistant',
+        topicId: 'base-topic',
+        userId: owner,
+        workspaceId,
+      },
+    ]);
+    await insertRun('own-run', { userId: owner });
+    await insertRun('spoken-run', { topicId: 'spoken-topic' });
+    await insertRun('assistant-only-run');
+    await insertRun('asked-run', { status: 'waiting_for_human' });
+    await serverDB.insert(agentInterventions).values({
+      activityKey: 'activity',
+      allowedActions: [],
+      batchId: 'batch',
+      canonicalToolKey: 'stripe.refund',
+      deadline: new Date('2026-11-08T13:00:00Z'),
+      interactionKind: 'approval',
+      itemCount: 1,
+      itemIndex: 0,
+      operationId: 'asked-run',
+      requestRevisionHash: 'a'.repeat(64),
+      reviewContext: {},
+      reviewTokenHash: 'b'.repeat(64),
+      sanitizedRequest: {},
+      source: 'server',
+      stepIndex: 0,
+      surface: 'chat',
+      systemActionEligibility: 'none',
+      toolCallId: 'call',
+      userId: owner,
+      workspaceId,
+    } as never);
+
+    const rows = await new AgentRunBoardModel(serverDB, workspaceId).listRuns({
+      involvedUserId: owner,
+      now,
+      since,
+    });
+
+    expect(rows.map((r) => r.id).sort()).toEqual(['asked-run', 'own-run', 'spoken-run']);
   });
 });

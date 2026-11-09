@@ -1,10 +1,17 @@
-import type { AgentRunBoardWindowHours } from '@lobechat/types';
+import type { AgentRunBoardScope, AgentRunBoardWindowHours } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
+export interface AgentRunBoardQuery {
+  agentId?: string;
+  scope: AgentRunBoardScope;
+  userId?: string;
+  windowHours: AgentRunBoardWindowHours;
+}
+
 class AgentRunBoardService {
-  get = async (windowHours: AgentRunBoardWindowHours) => {
-    const { data } = await lambdaClient.agentRunBoard.get.query({ windowHours });
+  get = async (query: AgentRunBoardQuery) => {
+    const { data } = await lambdaClient.agentRunBoard.get.query(query);
     return data;
   };
 }

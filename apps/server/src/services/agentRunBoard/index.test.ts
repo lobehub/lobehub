@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentRunBoardRow } from '@/database/models/agentRunBoard';
 
-import { buildAgentRunBoard, classifyRun } from './index';
+import { buildAgentRunBoard, classifyRun, filterRunsBy } from './index';
 
 const generatedAt = new Date('2026-11-08T12:00:00Z');
 const now = generatedAt.getTime();
@@ -14,6 +14,7 @@ const row = (overrides: Partial<AgentRunBoardRow> = {}): AgentRunBoardRow => ({
   agentAvatar: null,
   agentBackgroundColor: null,
   agentId: 'a1',
+  agentName: null,
   agentOwnerId: 'owner',
   agentTitle: 'Agent',
   completedAt: null,
@@ -37,7 +38,6 @@ const row = (overrides: Partial<AgentRunBoardRow> = {}): AgentRunBoardRow => ({
 });
 
 const intervention = (overrides = {}) => ({
-  canonicalToolKey: 'stripe.refund',
   createdAt: minutesAgo(14),
   deadline: minutesAgo(-60),
   operationId: 'op',
@@ -128,7 +128,8 @@ describe('buildAgentRunBoard', () => {
       ['mine', true],
       ['older-team', false],
     ]);
-    expect(board.attention[0].detail).toBe('stripe.refund');
+    // Internal tool keys mean nothing to the person who has to act.
+    expect(board.attention[0].detail).toBeNull();
     const older = board.lanes[0].runs.find((run) => run.id === 'older-team');
     expect(older?.waitingSince).toEqual(minutesAgo(50));
     expect(board.lanes[0].ownerUserId).toBe('owner');
@@ -193,11 +194,52 @@ describe('buildAgentRunBoard', () => {
     expect(board.activity).toHaveLength(12);
   });
 
+  it('labels an agent by its name, falling back to its title', () => {
+    const board = build([
+      row({ agentId: 'named', agentName: 'Dario', agentTitle: 'CAO', id: '1' }),
+      row({ agentId: 'titled', agentTitle: 'CAO', id: '2' }),
+    ]);
+
+    expect(board.lanes.map((lane) => lane.title).sort()).toEqual(['CAO', 'Dario']);
+    expect(board.filterOptions.agents.find((a) => a.id === 'named')?.title).toBe('Dario');
+  });
+
   it('caps lanes and reports how many were left out', () => {
     const rows = Array.from({ length: 33 }, (_, i) => row({ agentId: `a${i}`, id: `${i}` }));
     const board = build(rows);
 
     expect(board.lanes).toHaveLength(30);
     expect(board.hiddenLaneCount).toBe(3);
+  });
+});
+
+describe('filterRunsBy', () => {
+  const rows = [
+    row({ agentId: 'a1', id: '1', userId: 'u1' }),
+    row({ agentId: 'a2', id: '2', userId: 'u1' }),
+    row({ agentId: 'a1', id: '3', userId: 'u2' }),
+  ];
+  const ids = (filter: { agentId?: string; userId?: string }) =>
+    filterRunsBy(rows, filter).map((r) => r.id);
+
+  it('narrows by agent, member, or both', () => {
+    expect(ids({ agentId: 'a1' })).toEqual(['1', '3']);
+    expect(ids({ userId: 'u1' })).toEqual(['1', '2']);
+    expect(ids({ agentId: 'a1', userId: 'u2' })).toEqual(['3']);
+    expect(ids({})).toEqual(['1', '2', '3']);
+  });
+
+  it('keeps every option offered once a pick narrows the board', () => {
+    const board = buildAgentRunBoard({
+      filterOptionRows: rows,
+      generatedAt,
+      rows: filterRunsBy(rows, { agentId: 'a2' }),
+      viewerId: 'me',
+      windowStart,
+    });
+
+    expect(board.lanes.map((lane) => lane.agentId)).toEqual(['a2']);
+    expect(board.filterOptions.agents.map((agent) => agent.id)).toEqual(['a1', 'a2']);
+    expect(board.filterOptions.memberIds).toEqual(['u1', 'u2']);
   });
 });
