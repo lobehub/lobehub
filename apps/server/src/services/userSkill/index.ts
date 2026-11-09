@@ -1,7 +1,7 @@
 import { buildUserSkillIdentifier, USER_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { resourcesTreePrompt } from '@lobechat/prompts';
-import type { SkillResourceMeta } from '@lobechat/types';
+import type { SkillResourceMeta, UserSkillVersionDetail } from '@lobechat/types';
 import { sha256 } from 'js-sha256';
 import pMap from 'p-map';
 
@@ -18,7 +18,7 @@ import {
 
 import { mergePackageFiles, packageSizeProblem } from '../skill/packageFiles';
 import { renderSkillIndexContent, validateSkillName } from '../skillManagement/frontmatter';
-import { packSkillArchive, type SkillArchiveFile, unpackSkillArchive } from './archive';
+import { packSkillArchive, unpackSkillArchive } from './archive';
 import { skillStorage } from './storage';
 
 /** Storage reads one publish runs at once. */
@@ -82,25 +82,11 @@ export interface UserSkillDetail extends UserSkillItem {
   versions: Omit<UserSkillVersion, 'archive' | 'content'>[];
 }
 
-/** One version as it shipped: its `SKILL.md` and the files beside it. */
-export interface UserSkillVersionDetail {
-  content: string;
-  /**
-   * The files that version shipped. Absent on a version from before archives,
-   * which kept only its `SKILL.md`: read the skill's current files.
-   */
-  files?: SkillArchiveFile[];
-  note?: string;
-  origin?: UserSkillOrigin;
-  version: number;
-}
-
 const MAX_NAME_ATTEMPTS = 50;
 
 /** Writes that lose the race to another publish rebuild their archive this many times. */
 const MAX_PUBLISH_ATTEMPTS = 3;
 
-/** The package after `edits`: removed paths dropped, upserted ones replaced or added. */
 const toResources = (all: UserSkillFile[]): Record<string, SkillResourceMeta> | undefined => {
   // Resources are served inline as text. A binary file's bytes sit in its
   // `files` row, which the skills runtime does not read for user skills yet, so

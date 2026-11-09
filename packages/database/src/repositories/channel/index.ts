@@ -1,4 +1,9 @@
-import type { ChannelMemberConfig, ChannelMemberRole, ChannelVisibility } from '@lobechat/types';
+import type {
+  ChannelMemberConfig,
+  ChannelMemberRole,
+  ChannelReplyJob,
+  ChannelVisibility,
+} from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
@@ -24,6 +29,8 @@ import {
 import { findThread } from './delivery';
 import { ChannelError } from './error';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
+import type { ChannelAgentPostInput } from './post';
+import { postAgentMessage } from './post';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -44,6 +51,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
@@ -411,6 +419,7 @@ export class ChannelRepository {
       ChannelItem & {
         canDelete: boolean;
         lastMessage: { content: string; createdAt: Date } | null;
+        replyJobs: ChannelReplyJob[];
         unreadCount: number;
       }
     >
@@ -450,10 +459,51 @@ export class ChannelRepository {
       latest.map(({ channelId, ...message }) => [channelId, message] as const),
     );
 
+    // Main-conversation replies the list row shows as in progress: ones that can still publish,
+    // and stopped ones whose writer has not exited yet.
+    const pending = rows.length
+      ? await this.db
+          .select({
+            blockedCode: channelJobs.blockedCode,
+            channelId: channelJobs.channelId,
+            id: channelJobs.id,
+            memberId: channelJobs.memberId,
+            publicationRevoked: channelJobs.publicationRevoked,
+            status: channelJobs.status,
+            threadId: channelJobs.threadId,
+            writerHeld: channelJobs.writerHeld,
+          })
+          .from(channelJobs)
+          .where(
+            and(
+              inArray(
+                channelJobs.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              isNull(channelJobs.threadId),
+              or(
+                and(
+                  eq(channelJobs.publicationRevoked, false),
+                  inArray(channelJobs.status, ['queued', 'running']),
+                ),
+                and(eq(channelJobs.publicationRevoked, true), eq(channelJobs.writerHeld, true)),
+              ),
+            ),
+          )
+          .orderBy(desc(channelJobs.createdAt))
+      : [];
+    const replyJobsOf = new Map<string, ChannelReplyJob[]>();
+    for (const { channelId, ...job } of pending) {
+      const jobs = replyJobsOf.get(channelId) ?? [];
+      jobs.push(job);
+      replyJobsOf.set(channelId, jobs);
+    }
+
     return rows.map(({ channel, lastReadSequence, role }) => ({
       ...channel,
       canDelete: hasRole(role, 'admin'),
       lastMessage: lastMessageOf.get(channel.id) ?? null,
+      replyJobs: replyJobsOf.get(channel.id) ?? [],
       unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
     }));
   };
@@ -506,6 +556,16 @@ export class ChannelRepository {
 
       return fn(tx, access);
     });
+
+  /**
+   * Posts what an Agent member wrote outside any job into a Channel the caller belongs to.
+   * See {@link postAgentMessage}.
+   */
+  postAgentMessage = async (
+    channelId: string,
+    input: ChannelAgentPostInput,
+  ): Promise<ChannelMessageItem> =>
+    this.write(channelId, (tx) => postAgentMessage(tx, channelId, input));
 
   /** Posts a message as the caller. See {@link sendMessage} for routing. */
   send = async (channelId: string, input: ChannelSendInput): Promise<ChannelMessageItem> =>

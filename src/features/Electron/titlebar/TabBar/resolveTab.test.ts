@@ -62,6 +62,21 @@ describe('resolveTab', () => {
     expect(live.meta.avatarSeed).toBe('Alpha');
   });
 
+  it('carries the agent avatar identity from the snapshot', () => {
+    const cold = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', {
+        avatar: '/avatars/agent-default.png',
+        avatarKind: 'agent',
+        avatarSeed: 'abc',
+      }),
+      false,
+      t,
+    );
+    expect(cold.meta.avatarKind).toBe('agent');
+    expect(cold.meta.avatarSeed).toBe('abc');
+  });
+
   it('carries the workspace avatar kind from the snapshot', () => {
     const cold = resolveTab(
       fixtureRoutes,

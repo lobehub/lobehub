@@ -35,7 +35,7 @@ import {
   channelActivity,
   type Conversation,
   type ConversationEntry,
-  latestActivity,
+  inboxActivity,
   latestTopicOf,
 } from './conversations';
 import GroupConversation from './GroupConversation';
@@ -151,15 +151,31 @@ const Body = memo(() => {
     [recents, inboxAgentId],
   );
 
+  const inboxChannel = inboxAgentId ? directChannels.get(inboxAgentId) : undefined;
+
   const entries = useMemo(
     () =>
       buildConversationEntries(
         buildConversationSections(items, recents, directChannels),
-        { activeAt: latestActivity(inboxUpdatedAt, inboxTopic), title: inboxTitle },
+        {
+          activeAt: inboxActivity(inboxUpdatedAt, inboxTopic, inboxChannel),
+          channel: inboxChannel,
+          title: inboxTitle,
+        },
         query,
         channels,
       ),
-    [items, recents, directChannels, inboxUpdatedAt, inboxTitle, inboxTopic, query, channels],
+    [
+      items,
+      recents,
+      directChannels,
+      inboxUpdatedAt,
+      inboxTitle,
+      inboxTopic,
+      inboxChannel,
+      query,
+      channels,
+    ],
   );
 
   // Pinned rows lead the list; they render as one block rather than a card each.
@@ -169,7 +185,12 @@ const Body = memo(() => {
 
   const renderEntry = (entry: ConversationEntry) =>
     entry.type === 'inbox' ? (
-      <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
+      <InboxConversation
+        activeAt={entry.activeAt}
+        activeRouteId={activeRouteId}
+        channel={entry.channel}
+        key={'inbox'}
+      />
     ) : entry.type === 'channel' ? (
       <ChannelConversation
         active={entry.channel.id === activeRouteId}

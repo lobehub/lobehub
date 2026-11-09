@@ -712,6 +712,12 @@ export interface VerifyRunMetadata {
    * and never absorbs another flow, even while it holds no results yet.
    */
   replayOfRunId?: string;
+  /**
+   * When the stuck-run sweep re-drove this round's judging after its first
+   * attempt died before any verifier started. A round is re-driven at most
+   * once; a second stall is closed as `errored`.
+   */
+  verifierRedrivenAt?: string;
 }
 
 export type VerifyVisualizationValue = boolean | null | number | string;

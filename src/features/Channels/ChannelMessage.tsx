@@ -11,15 +11,25 @@ import {
   toast,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Copy, GitBranch, MessagesSquare, MoreHorizontal, Reply } from 'lucide-react';
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Copy,
+  GitBranch,
+  MessagesSquare,
+  MoreHorizontal,
+  Reply,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import Markdown from '@/features/Conversation/Markdown';
+import EntityLinkElement from '@/features/EntityLink/element';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -38,7 +48,12 @@ import type { ChannelReplyTarget } from './useReplyTarget';
 const MentionChip = ({ children }: { children?: ReactNode }) => (
   <span {...stylex.props(styles.mention)}>{children}</span>
 );
-const mentionComponents = { [CHANNEL_MENTION_TAG]: MentionChip };
+// GitHub and LobeHub links render as the same chips the conversation shows.
+const messageComponents = {
+  [CHANNEL_MENTION_TAG]: MentionChip,
+  [EntityLinkElement.tag]: EntityLinkElement.Component,
+};
+const rehypePlugins = [EntityLinkElement.rehypePlugin];
 
 /** Message text with the members it mentioned shown as chips. */
 const MessageText = ({ content, names }: { content: string; names: string[] }) => {
@@ -47,7 +62,11 @@ const MessageText = ({ content, names }: { content: string; names: string[] }) =
   // memoized Markdown parse each message again on every refresh.
   const remarkPlugins = useMemo(() => [remarkChannelMentions(key ? key.split('\n') : [])], [key]);
   return (
-    <Markdown components={mentionComponents} remarkPlugins={remarkPlugins}>
+    <Markdown
+      components={messageComponents}
+      rehypePlugins={rehypePlugins}
+      remarkPlugins={remarkPlugins}
+    >
       {content}
     </Markdown>
   );
@@ -121,6 +140,11 @@ export const ChannelMessage = ({
     ? detail.members.find((member) => member.agentId === agentAuthorId)
     : undefined;
   const sourceTopicId = message.sourceTopicId;
+  // A direct conversation is a chat with one Agent; folding its answers only adds a click.
+  const collapsible = !detail.channel.agentId;
+  // Long messages stay open by default; folding one is an explicit choice from "more".
+  const [collapsed, setCollapsed] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
   const moreItems = [
     ...(agentAuthorId && sourceTopicId && onOpenTopic
       ? [
@@ -133,6 +157,7 @@ export const ChannelMessage = ({
                 agentId: agentAuthorId,
                 avatar: message.author.avatar,
                 name: message.author.name || t('unnamedAgent'),
+                title: message.sourceTopicTitle,
                 topicId: sourceTopicId,
               }),
           },
@@ -151,10 +176,18 @@ export const ChannelMessage = ({
           },
         ]
       : []),
+    ...(collapsible && overflowing
+      ? [
+          {
+            icon: collapsed ? ChevronsUpDown : ChevronsDownUp,
+            key: 'toggleCollapse',
+            label: t(collapsed ? 'message.expand' : 'message.collapse'),
+            onClick: () => setCollapsed(!collapsed),
+          },
+        ]
+      : []),
   ];
   const hasToolbar = !!onReply || canBranch || moreItems.length > 0;
-  // A direct conversation is a chat with one Agent; folding its answers only adds a click.
-  const collapsible = !detail.channel.agentId;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
     .map((member) => memberName(member, ''))
@@ -179,7 +212,7 @@ export const ChannelMessage = ({
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
-        avatarProps={{ size: 36 }}
+        avatarProps={{ shape: 'circle', size: 36 }}
         gap={4}
         id={message.id}
         paddingBlock={compact ? 2 : 8}
@@ -208,7 +241,7 @@ export const ChannelMessage = ({
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
             {isOwnMessage ? (
-              <UserAvatar size={36} />
+              <UserAvatar shape={'circle'} size={36} />
             ) : agentAuthorId ? (
               // Same profile card an Agent shows on hover in goals and tasks.
               <AgentProfilePopup
@@ -220,7 +253,15 @@ export const ChannelMessage = ({
                   title: message.author.name,
                 }}
               >
-                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <AgentAvatar
+                    agentId={agentAuthorId}
+                    avatar={message.author.avatar}
+                    name={message.author.name}
+                    shape={'circle'}
+                    size={36}
+                  />
+                </span>
               </AgentProfilePopup>
             ) : (
               avatar
@@ -256,7 +297,14 @@ export const ChannelMessage = ({
             )}
             {message.content &&
               (collapsible ? (
-                <CollapsibleContent key={message.id} maxHeight={160}>
+                <CollapsibleContent
+                  hideCollapseToggle
+                  collapsed={collapsed}
+                  key={message.id}
+                  maxHeight={160}
+                  onCollapsedChange={setCollapsed}
+                  onOverflowChange={setOverflowing}
+                >
                   <MessageText content={message.content} names={mentionNames} />
                 </CollapsibleContent>
               ) : (

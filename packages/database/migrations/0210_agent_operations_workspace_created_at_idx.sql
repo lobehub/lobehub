@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "agent_operations_workspace_id_created_at_idx" ON "agent_operations" USING btree ("workspace_id","created_at");

@@ -409,10 +409,16 @@ describe('UserMemoryConsolidationModel', () => {
     expect(evidence).toHaveLength(2);
     expect(evidence).toEqual(
       expect.arrayContaining([
-        { contextId: filed.contextId, count: 1, key: 'product/tasks' },
-        { contextId: null, count: 1, key: 'product/tasks' },
+        { contextId: filed.contextId, count: 1, domain: null, key: 'product/tasks' },
+        { contextId: null, count: 1, domain: null, key: 'product/tasks' },
       ]),
     );
+
+    await model.saveQueueDomains('run_a', { 'product/tasks': 'product/task-system' });
+    expect((await model.listQueueEvidence('run_a')).map((e) => e.domain)).toEqual([
+      'product/task-system',
+      'product/task-system',
+    ]);
   });
 });
 

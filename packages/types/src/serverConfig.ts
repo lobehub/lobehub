@@ -67,6 +67,8 @@ export type IFeatureFlagsState = {
    * as an executor only when this is on; the server checks it again.
    */
   enableLlmRelay: boolean | undefined;
+  /** A plain chat send leaves its init to the step-0 worker (`agent_deferred_init`). */
+  enableDeferredInit: boolean | undefined;
   /**
    * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
    * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
@@ -78,6 +80,11 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
+  /**
+   * Agent documents move into a dedicated knowledge base at runtime
+   * (`agent_knowledge_space`). Off by default.
+   */
+  enableAgentKnowledgeSpace: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;

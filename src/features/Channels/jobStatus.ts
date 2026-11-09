@@ -1,6 +1,7 @@
-import type { ChannelDetail, ChannelPublicJob } from '@lobechat/types';
+import type { ChannelDetail, ChannelReplyJob } from '@lobechat/types';
+import type { AgentAvatarState } from '@lobehub/ui';
 
-export const channelJobStatus = (job: ChannelPublicJob) =>
+export const channelJobStatus = (job: ChannelReplyJob) =>
   job.publicationRevoked && job.writerHeld
     ? 'status.stopping'
     : job.status === 'queued'
@@ -9,10 +10,16 @@ export const channelJobStatus = (job: ChannelPublicJob) =>
         : 'status.preparing'
       : (`status.${job.status}` as const);
 
+/** On a member's own row, a running reply is described by what the Agent is doing. */
+export const memberJobStatus = (job: ChannelReplyJob) => {
+  const status = channelJobStatus(job);
+  return status === 'status.running' ? ('status.working' as const) : status;
+};
+
 /** Colour family of a status: working blue, attention amber, error red, settled grey. */
 export type ChannelStatusTone = 'attention' | 'done' | 'error' | 'quiet' | 'working';
 
-export const channelJobTone = (job: ChannelPublicJob): ChannelStatusTone => {
+export const channelJobTone = (job: ChannelReplyJob): ChannelStatusTone => {
   if (job.status === 'failed') return 'error';
   if (job.publicationRevoked) return job.writerHeld ? 'attention' : 'quiet';
   if (job.status === 'queued') return job.blockedCode ? 'attention' : 'working';
@@ -22,18 +29,18 @@ export const channelJobTone = (job: ChannelPublicJob): ChannelStatusTone => {
 };
 
 /** Still able to publish a reply, so the user can stop it. */
-export const isChannelJobActive = (job: ChannelPublicJob) =>
+export const isChannelJobActive = (job: ChannelReplyJob) =>
   !job.publicationRevoked && (job.status === 'queued' || job.status === 'running');
 
 /** Work the conversation is still waiting on: shown above the composer, not on messages. */
-export const replyActivityJobs = (jobs: ChannelPublicJob[]) =>
+export const replyActivityJobs = <T extends ChannelReplyJob>(jobs: T[]) =>
   jobs.filter((job) => isChannelJobActive(job) || (job.publicationRevoked && job.writerHeld));
 
 /**
  * Each member's newest job when it failed. A later reply, stop or retry by the same member
  * settles the failure, so the header does not stay red forever. Jobs arrive newest first.
  */
-export const unresolvedFailures = (jobs: ChannelPublicJob[]) => {
+export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
   const seen = new Set<string>();
   return jobs.filter((job) => {
     if (seen.has(job.memberId)) return false;
@@ -43,7 +50,7 @@ export const unresolvedFailures = (jobs: ChannelPublicJob[]) => {
 };
 
 /** What a member is busy with now: a running reply first, then the next queued one. */
-export const memberCurrentJob = (jobs: ChannelPublicJob[], memberId: string) => {
+export const memberCurrentJob = <T extends ChannelReplyJob>(jobs: T[], memberId: string) => {
   const own = jobs.filter((job) => job.memberId === memberId);
   return (
     own.find((job) => isChannelJobActive(job) && job.status === 'running') ??
@@ -71,4 +78,26 @@ export const directReplyStatus = (detail: ChannelDetail) => {
   const job = jobs[0] && memberCurrentJob(jobs, jobs[0].memberId);
   if (!job) return receiving ? { jobs } : null;
   return channelJobTone(job) === 'working' ? { jobs } : { jobs, waiting: job };
+};
+
+/**
+ * How a direct conversation's Agent avatar acts out its pending replies: `working` while it
+ * writes, `thinking` while a message is routed or the reply is prepared, `waiting` when blocked
+ * or stopping. Undefined when nothing is pending, so the avatar stays idle.
+ */
+export const replyAvatarState = (
+  jobs: ChannelReplyJob[],
+  receiving = false,
+): AgentAvatarState | undefined => {
+  const pending = replyActivityJobs(jobs);
+  const job = pending[0] && memberCurrentJob(pending, pending[0].memberId);
+  if (!job) return receiving ? 'thinking' : undefined;
+  if (channelJobTone(job) !== 'working') return 'waiting';
+  return job.status === 'running' ? 'working' : 'thinking';
+};
+
+/** The avatar state of a loaded direct conversation; see `replyAvatarState`. */
+export const directAvatarState = (detail: ChannelDetail) => {
+  const { jobs, receiving } = conversationReplies(detail, null);
+  return replyAvatarState(jobs, receiving);
 };

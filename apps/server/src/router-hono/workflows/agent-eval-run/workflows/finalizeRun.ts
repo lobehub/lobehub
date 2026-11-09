@@ -21,6 +21,15 @@ const log = debug('lobe-server:workflows:finalize-run');
  * 3. Aggregate metrics across all RunTopics
  * 4. Update run status to 'completed'
  */
+type RunMetrics = Awaited<ReturnType<AgentEvalRunService['evaluateAndFinalizeRun']>>;
+
+/** external: a topic awaits external scoring; failed: every case errored or timed out. */
+const statusOf = (metrics: RunMetrics) => {
+  const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
+  if ((metrics.externalCases || 0) > 0) return 'external' as const;
+  return nonSuccessCases >= metrics.totalCases ? ('failed' as const) : ('completed' as const);
+};
+
 export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPayload>) => {
   const { runId, userId } = context.requestPayload ?? {};
 
@@ -36,7 +45,15 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   // Step 1: Get run details
   const run = await runStep(context, 'agent-eval-run:get-run', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.findById(runId);
+    const row = await runModel.findSummaryById(runId);
+    return row
+      ? {
+          config: { k: row.config?.k },
+          metrics: row.metrics,
+          startedAt: row.startedAt,
+          status: row.status,
+        }
+      : undefined;
   });
 
   if (!run) {
@@ -51,7 +68,16 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   // Step 2: Get all RunTopics (already evaluated in recordTrajectoryCompletion)
   const runTopics = await runStep(context, 'agent-eval-run:get-run-topics', async () => {
     const runTopicModel = new AgentEvalRunTopicModel(db, userId, wsId);
-    return runTopicModel.findByRunId(runId);
+    return (await runTopicModel.findByRunId(runId)).map(
+      ({ evalResult, passed, runId, score, status, topicId }) => ({
+        evalResult,
+        passed,
+        runId,
+        score,
+        status,
+        topicId,
+      }),
+    );
   });
 
   log('Total RunTopics: %d', runTopics.length);
@@ -71,15 +97,36 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   // external: any topic awaits external scoring → whole run waits too
   // failed: all cases are non-success (error/timeout)
   // completed: everything else
-  const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
-  const externalCount = metrics.externalCases || 0;
-  const runStatus =
-    externalCount > 0 ? 'external' : nonSuccessCases >= metrics.totalCases ? 'failed' : 'completed';
+  const runStatus = statusOf(metrics);
 
-  await runStep(context, 'agent-eval-run:update-run', async () => {
+  const finalized = await runStep(context, 'agent-eval-run:update-run', async () => {
+    // Steps 2-3 are checkpoints that may predate the last verdicts: finalization
+    // only succeeds once no case is pending or running, so it must write metrics
+    // aggregated from the topics as they are now, in this same step.
+    const runTopicModel = new AgentEvalRunTopicModel(db, userId, wsId);
+    const currentTopics = (await runTopicModel.findByRunId(runId)).map(
+      ({ evalResult, passed, runId, score, status, topicId }) => ({
+        evalResult,
+        passed,
+        runId,
+        score,
+        status,
+        topicId,
+      }),
+    );
+    const current = await new AgentEvalRunService(db, userId, wsId).evaluateAndFinalizeRun({
+      run: { config: run.config, id: runId, metrics: run.metrics, startedAt: run.startedAt },
+      runTopics: currentTopics,
+    });
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.update(runId, { metrics, status: runStatus });
+    return !!(await runModel.finalize(
+      runId,
+      { metrics: current, status: statusOf(current) },
+      { startedAt: run.startedAt },
+    ));
   });
+
+  if (!finalized) return { cancelled: true };
 
   console.info(
     `[finalize-run] Run ${runId} ${runStatus}: score=${metrics.averageScore.toFixed(2)} pass=${metrics.passedCases}/${metrics.totalCases} error=${metrics.errorCases || 0}`,

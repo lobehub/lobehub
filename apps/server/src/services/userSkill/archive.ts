@@ -1,4 +1,5 @@
 import { SKILL_INDEX_FILENAME } from '@lobechat/database/schemas';
+import type { SkillArchiveFile } from '@lobechat/types';
 import { unzipSync, zipSync } from 'fflate';
 import { sha256 } from 'js-sha256';
 
@@ -21,14 +22,6 @@ export interface SkillArchiveEntry {
   /** Text, or the bytes of a binary file. */
   data: string | Uint8Array;
   path: string;
-}
-
-/** A file read back from an archive: text, or a binary one by size alone. */
-export interface SkillArchiveFile {
-  binary?: boolean;
-  content: string;
-  path: string;
-  size: number;
 }
 
 /** Zips `SKILL.md` and the files beside it; the hash names the bytes in storage. */

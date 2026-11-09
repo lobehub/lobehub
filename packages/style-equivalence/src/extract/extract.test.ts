@@ -64,6 +64,40 @@ describe('extractFile', () => {
     }
   });
 
+  it('binds a spread of a local const that holds stylex.props', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({ video: { maxHeight: '360px' }, flat: { width: '100%' } });
+export const Item = ({ flat }: { flat?: boolean }) => {
+  const videoProps = stylex.props(styles.video, flat && styles.flat);
+  return <video controls {...videoProps} />;
+};
+`;
+    const { elements } = extractFile(code, 'a.tsx', options);
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({
+      bindings: [
+        { expr: 'stylex.props(styles.video, flat && styles.flat)', prop: '...', spread: true },
+      ],
+      slots: ['styles.flat', 'styles.video'],
+      tag: 'video',
+      variables: [{ kind: 'boolean', name: 'flat' }],
+    });
+  });
+
+  it('leaves a spread of an unrelated local const alone', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({ a: { color: 'red' } });
+export const Item = () => {
+  const rest = { title: 'x' };
+  return <span {...rest} {...stylex.props(styles.a)} />;
+};
+`;
+    const { elements } = extractFile(code, 'a.tsx', options);
+    expect(elements[0].bindings).toEqual([
+      { expr: 'stylex.props(styles.a)', prop: '...', spread: true },
+    ]);
+  });
+
   it('keeps only the style declaration closure in the prelude', () => {
     const { prelude } = extractFile(base, 'a.tsx', options);
     expect(prelude).toContain("import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';");
@@ -106,6 +140,26 @@ export const A = () => <div className={styles.box}><span {...stylex.props(atomic
     ]);
     expect(result.prelude).toContain("import { styles } from './style';");
     expect(result.elements[0].flags).toEqual(['CROSS_COMPONENT']);
+  });
+
+  it('takes only the accessed member of an imported style object', () => {
+    const modules: Record<string, string> = {
+      './Card': `import * as stylex from '@stylexjs/stylex';
+const mediaStyles = stylex.create({ image: { width: '100%' }, video: { display: 'block' } });
+export const media = {
+  image: { classNames: { image: stylex.props(mediaStyles.image).className } },
+  video: mediaStyles.video,
+};
+`,
+    };
+    const code = `import { media } from './Card';
+export const A = ({ flat }) => <Image {...(flat ? media.image : { variant: 'outlined' })} />;
+`;
+    const [element] = extractFile(code, 'src/A.tsx', {
+      ...options,
+      readModule: (_from, specifier) => modules[specifier],
+    }).elements;
+    expect(element.slots).toEqual(['media$mediaStyles.image']);
   });
 
   it('imports JSX tags used by a kept top-level statement', () => {

@@ -1,3 +1,4 @@
+import type { UserSkillVersionDetail } from '@lobechat/types';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -29,7 +30,7 @@ export const userSkillRouter = router({
   getVersion: userSkillProcedure
     .input(z.object({ id: z.string(), version: z.number().int().min(1) }))
     .query(
-      async ({ ctx, input }) =>
+      async ({ ctx, input }): Promise<UserSkillVersionDetail | null> =>
         (await ctx.userSkillService.getVersion(input.id, input.version)) ?? null,
     ),
 });

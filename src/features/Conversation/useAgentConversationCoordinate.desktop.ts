@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from 'react-router';
 
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
+import { useProjectIdByRef } from '@/store/project';
 import { useProjectTopics } from '@/store/projectWorkingDirectory';
 
 export const useAgentConversationCoordinate = () => {
@@ -10,7 +11,9 @@ export const useAgentConversationCoordinate = () => {
   // Project conversation routes carry :projectId/:topicId instead of :aid, so the
   // owning agent resolves from the project topic — still route-derived per tab,
   // never the global pointer (another tab may own it).
-  const projectTopics = useProjectTopics(params.aid ? undefined : params.projectId);
+  // The route param may be the project's slug, while the topics are keyed by its id.
+  const { id: projectId } = useProjectIdByRef(params.aid ? undefined : params.projectId);
+  const projectTopics = useProjectTopics(projectId);
   // A blank draft a sidebar "+" opened has no topic yet; its owner rides in the
   // route (`?agent=`) and stays there through the first send's topic switch,
   // until the project list has the new topic.

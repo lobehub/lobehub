@@ -7,6 +7,7 @@ import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
+  agentMailRouteMeta,
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
@@ -80,6 +81,11 @@ export const agentPageChildren: RouteObject[] = [
     ),
     handle: { meta: agentProfileRouteMeta },
     path: 'profile',
+  },
+  {
+    element: dynamicElement(() => import('@/routes/(main)/agent/mail'), 'Desktop > Chat > Mail'),
+    handle: { meta: agentMailRouteMeta },
+    path: 'mail/:messageId?',
   },
   {
     element: dynamicElement(

@@ -161,6 +161,13 @@ export const documents = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
+     * Agent that created this document through a tool (e.g. notebook or
+     * knowledge base), used to separate agent output from user-authored
+     * documents. `NULL` means user-created.
+     */
+    createdByAgentId: text('created_by_agent_id'),
+
+    /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see the document; `private` constrains it to the
      * creator (`user_id`). Within a documents tree (folder/Page hierarchy) the
@@ -330,6 +337,14 @@ export type FileUploadItem = typeof fileUploads.$inferSelect;
 
 /** Knowledge-base visibility — shared by column def and insert schema. */
 export const KNOWLEDGE_BASE_VISIBILITY = ['private', 'public'] as const;
+
+/**
+ * `knowledge_bases.type` values marking a library dedicated to one owner (an
+ * agent's or project's own space). A NULL type is an ordinary user library.
+ * Owned libraries are reached through their owner, never through library lists.
+ */
+export const DEDICATED_KNOWLEDGE_BASE_TYPES = ['agent', 'project'] as const;
+export type DedicatedKnowledgeBaseType = (typeof DEDICATED_KNOWLEDGE_BASE_TYPES)[number];
 
 export const knowledgeBases = pgTable(
   'knowledge_bases',
