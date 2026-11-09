@@ -14,7 +14,7 @@ import {
   INBOX_RUN_INTERVENTION,
   OWNER_CHANNEL_INSTRUCTION,
 } from './ownerChannel';
-import { fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
+import { buildInboxTopicTitle, fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
 
 /** Body budget for the wake prompt; the full text stays readable through the tool. */
 const WAKE_BODY_PREVIEW_CHARS = 2000;
@@ -65,6 +65,7 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
         appContext: { scope: 'agent', topicId },
         hooks: [createOwnerChannelReportHook(db, account.id)],
         prompt: buildInboundPrompt(account, message),
+        title: buildInboxTopicTitle([message]),
         trigger: RequestTrigger.Inbox,
         userInterventionConfig: INBOX_RUN_INTERVENTION,
       });

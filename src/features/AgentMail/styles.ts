@@ -2,7 +2,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 /**
- * Shared surfaces for the identity tab.
+ * Shared surfaces for the mail page.
  *
  * Filled-and-rounded rather than outlined: a border here would read as a
  * card-inside-a-card boundary (the settings panel is already the container),

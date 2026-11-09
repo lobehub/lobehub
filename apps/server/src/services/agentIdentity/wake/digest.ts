@@ -16,7 +16,7 @@ import {
   INBOX_RUN_INTERVENTION,
   OWNER_CHANNEL_INSTRUCTION,
 } from '../ownerChannel';
-import { fenceUntrustedInbox, toUntrustedInboxEntry } from '../untrusted';
+import { buildInboxTopicTitle, fenceUntrustedInbox, toUntrustedInboxEntry } from '../untrusted';
 import type { ResolvedWakeConfig } from './config';
 import { resolveWakeConfig } from './config';
 
@@ -120,6 +120,7 @@ export const createDigestRunStarter =
       appContext: { scope: 'agent' },
       hooks: [createOwnerChannelReportHook(db, account.id)],
       prompt: buildDigestPrompt(account, messages),
+      title: buildInboxTopicTitle(messages),
       trigger: RequestTrigger.Inbox,
       userInterventionConfig: INBOX_RUN_INTERVENTION,
     });

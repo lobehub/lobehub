@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import { KeyRound, Mail, Phone, Wallet } from 'lucide-react';
 
 /**
- * One address channel the identity tab can open.
+ * One address channel the mail page can open.
  *
  * The pair (kind, provider) is what the control plane is asked for; the icon
  * and copy are presentation. `prefixable` marks the channels where the caller
