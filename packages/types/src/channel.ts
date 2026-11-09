@@ -356,6 +356,7 @@ export interface ChannelPublicMessage {
   sequence: number;
   /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
   sourceTopicId?: string | null;
+  sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
 }

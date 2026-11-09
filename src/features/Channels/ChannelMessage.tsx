@@ -157,6 +157,7 @@ export const ChannelMessage = ({
                 agentId: agentAuthorId,
                 avatar: message.author.avatar,
                 name: message.author.name || t('unnamedAgent'),
+                title: message.sourceTopicTitle,
                 topicId: sourceTopicId,
               }),
           },
