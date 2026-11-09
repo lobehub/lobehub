@@ -37,7 +37,7 @@ const MAX_AWARENESS_AVATAR_LENGTH = 512;
 // exist only where the server enables page collaboration (LobeHub Cloud).
 const readGatewayUrl = () => {
   const serverConfig = getServerConfigStoreState()?.serverConfig;
-  return serverConfig?.agentGatewayUrl && serverConfig.enablePageCollab
+  return serverConfig?.agentGatewayUrl && serverConfig.enableWorkspacePageCollab
     ? serverConfig.agentGatewayUrl
     : undefined;
 };

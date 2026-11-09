@@ -5,11 +5,13 @@ import { useDocumentStore } from '@/store/document';
 
 import { usePageCollabEligible } from './usePageCollab';
 
+const serverConfig = vi.hoisted(() => ({
+  value: {} as Record<string, unknown>,
+}));
+
 vi.mock('@/store/serverConfig', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  getServerConfigStoreState: () => ({
-    serverConfig: { agentGatewayUrl: 'wss://gateway.example.com', enablePageCollab: true },
-  }),
+  getServerConfigStoreState: () => ({ serverConfig: serverConfig.value }),
 }));
 
 const loadDocument = (workspaceId: string | null) =>
@@ -20,6 +22,10 @@ const loadDocument = (workspaceId: string | null) =>
 
 describe('usePageCollabEligible', () => {
   beforeEach(() => {
+    serverConfig.value = {
+      agentGatewayUrl: 'wss://gateway.example.com',
+      enableWorkspacePageCollab: true,
+    };
     useDocumentStore.setState({ documentDetailMap: {}, documents: {} });
   });
 
@@ -37,5 +43,12 @@ describe('usePageCollabEligible', () => {
 
   it('leaves the room path only once the page is known to be personal', () => {
     expect(renderHook(() => usePageCollabEligible('doc_1')).result.current).toBe(true);
+  });
+
+  it('stays out of rooms when only the flag for older clients is on', () => {
+    serverConfig.value = { agentGatewayUrl: 'wss://gateway.example.com', enablePageCollab: true };
+    loadDocument('ws_1');
+
+    expect(renderHook(() => usePageCollabEligible('doc_1')).result.current).toBe(false);
   });
 });
