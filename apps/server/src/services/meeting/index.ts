@@ -9,6 +9,7 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
+import { assertFileNotInRestrictedKnowledgeBase } from '@/server/services/knowledgeBaseAccess';
 
 import { resolveSystemAgentModelConfig } from '../systemAgent/modelConfig';
 import { MeetingTranscriptionError, toMeetingErrorCode, toMeetingErrorMessage } from './errors';
@@ -67,6 +68,19 @@ export class MeetingTranscriptionService {
    * caller's. Throws `MeetingStateError` while the meeting is still recording.
    */
   async refine(meetingId: string) {
+    // A recording can sit in a knowledge base the caller may read when it is attached and
+    // not any more afterwards; the meeting detail endpoint re-checks that on every read, so
+    // the pass that streams the bytes to a provider has to check too. Read the meeting first:
+    // a refused check must leave the meeting in the state the caller can still act on.
+    const current = await this.meetingModel.findById(meetingId);
+    if (!current || current.userId !== this.userId) return undefined;
+    if (current.audioFileId) {
+      await assertFileNotInRestrictedKnowledgeBase(
+        { serverDB: this.db, userId: this.userId, workspaceId: this.workspaceId },
+        current.audioFileId,
+      );
+    }
+
     const meeting = await this.meetingModel.startRefine(meetingId);
     if (!meeting) return undefined;
 
