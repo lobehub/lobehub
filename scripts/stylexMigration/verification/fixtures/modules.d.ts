@@ -99,6 +99,23 @@ declare module 'verification:component' {
     selected: boolean;
     onToggle: () => void;
   }>;
+  export const VoiceMessageControl: ComponentType<{
+    actionLabel: string;
+    actionText?: string;
+    cancelLabel: string;
+    durationLabel: string;
+    errorText?: string;
+    expanded?: boolean;
+    groupLabel: string;
+    isRetry?: boolean;
+    onAction: () => void;
+    onCancel: () => void;
+    progress?: number;
+    sendDisabled?: boolean;
+    statusAnnouncement: string;
+    tooltip?: string;
+    waveform: number[];
+  }>;
   export const OptionRow: ComponentType<{
     active: boolean;
     desc: string;

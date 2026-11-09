@@ -9,7 +9,11 @@ export const migrationFixtures = [
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
   ['AcceptanceReport', 'src/features/Acceptance/Report/ReportViewer.tsx'],
   ['AcceptanceEvidenceList', 'src/features/Acceptance/Viewer/Evidence/EvidenceList.tsx'],
+  ['VoiceMessageControl', 'src/features/ChatInput/VoiceMessage/index.tsx'],
 ] as const;
+
+const voiceMessageImporter = 'src/features/ChatInput/VoiceMessage/index.tsx';
+const voiceMessageData = 'fixtures/VoiceMessageFixtureData.ts';
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
   AskUserQuestionView: {
@@ -22,6 +26,30 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
       { id: 'escape' },
       { id: 'dark-questions', appearance: 'dark' },
     ],
+  },
+  VoiceMessageControl: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'VoiceMessageControl',
+    selector: '[data-component-mount] [data-testid="voice-message-pill"] button',
+    settleFrames: 2,
+    variants: [
+      { id: 'recording', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'busy' },
+      { id: 'retry', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'hover-expanded' },
+      { id: 'retry-hover-expanded' },
+      { id: 'disabled', states: ['default', 'hover'] },
+      { id: 'progress' },
+      { id: 'dark-recording', appearance: 'dark', states: ['default', 'focus-visible'] },
+    ],
+    boundaries: [
+      '../ActionBar/components/ChatInputAction',
+      '../hooks/useAgentId',
+      '../hooks/useEffectiveModel',
+      '../store',
+      './useVoiceMessageCapability',
+      './useVoiceMessageRecorder',
+    ].map((source) => ({ importer: voiceMessageImporter, source, replacement: voiceMessageData })),
   },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
