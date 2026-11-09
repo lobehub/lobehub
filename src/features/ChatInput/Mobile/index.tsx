@@ -11,6 +11,7 @@ import dynamic from '@/libs/next/dynamic';
 
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
+import { McpAppContextChips } from '../McpAppContextChips';
 import SendArea from '../SendArea';
 
 const FilePreview = dynamic(() => import('./FilePreview'), { ssr: false });
@@ -87,6 +88,7 @@ const DesktopChatInput = memo(() => {
           }
         >
           {expand && fileNode}
+          <McpAppContextChips />
           <InputEditor defaultRows={1} />
         </ChatInput>
       </Flexbox>

@@ -1,15 +1,27 @@
 import { CURRENT_VERSION } from '@lobechat/const';
+import type { McpAppDisplayMode } from '@lobechat/const/mcpApp';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import {
   AppBridge,
   type McpUiHostContext,
   type McpUiSizeChangedNotification,
+  type McpUiUpdateModelContextRequest,
   PostMessageTransport,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
 
-export const buildHostContext = (isDark: boolean): McpUiHostContext => ({
-  availableDisplayModes: ['inline'],
-  displayMode: 'inline',
+export interface AppDisplayContext {
+  availableDisplayModes: McpAppDisplayMode[];
+  containerDimensions?: McpUiHostContext['containerDimensions'];
+  displayMode: McpAppDisplayMode;
+}
+
+export const buildHostContext = (
+  isDark: boolean,
+  display?: AppDisplayContext,
+): McpUiHostContext => ({
+  availableDisplayModes: display?.availableDisplayModes ?? ['inline'],
+  displayMode: display?.displayMode ?? 'inline',
+  ...(display?.containerDimensions && { containerDimensions: display.containerDimensions }),
   locale: navigator.language,
   platform: 'web',
   theme: isDark ? 'dark' : 'light',
@@ -26,7 +38,20 @@ export interface McpAppBridgeHost {
     args: Record<string, unknown>,
     signal: AbortSignal,
   ) => Promise<CallToolResult>;
+  /** Latest complete context, including theme changes after connection. */
+  getHostContext?: () => McpUiHostContext;
   hostContext: McpUiHostContext;
+  /** Only supplied by a feature-enabled host. */
+  lifecycle?: {
+    getDisplayContext: () => AppDisplayContext;
+    onInitialized?: (appModes?: McpAppDisplayMode[]) => void;
+    onRequestDisplayMode: (
+      mode: McpAppDisplayMode,
+      appModes?: McpAppDisplayMode[],
+    ) => McpAppDisplayMode;
+    onTeardown: () => void;
+    onUpdateModelContext: (params: McpUiUpdateModelContextRequest['params']) => void;
+  };
   onSizeChange: (height: number) => void;
   /**
    * Open an http(s) link the view asked for; resolves `false` when the host
@@ -52,9 +77,41 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   const bridge = new AppBridge(
     null,
     { name: 'LobeHub', version: CURRENT_VERSION },
-    { message: { text: {} }, openLinks: {}, serverTools: {} },
+    {
+      message: { text: {} },
+      openLinks: {},
+      serverTools: {},
+      ...(host.lifecycle && { updateModelContext: { text: {} } }),
+    },
     { hostContext: host.hostContext },
   );
+
+  if (host.lifecycle) {
+    let teardownRequested = false;
+    bridge.onrequestdisplaymode = async ({ mode }) => {
+      const display = host.lifecycle!.getDisplayContext();
+      const current = display.displayMode;
+      const appModes = bridge.getAppCapabilities()?.availableDisplayModes;
+      if (!display.availableDisplayModes.includes(mode) || (appModes && !appModes.includes(mode)))
+        return { mode: current };
+      const actual = host.lifecycle!.onRequestDisplayMode(mode, appModes);
+      bridge.setHostContext({
+        ...(host.getHostContext?.() ?? host.hostContext),
+        ...display,
+        displayMode: actual,
+      });
+      return { mode: actual };
+    };
+    bridge.onupdatemodelcontext = async (params) => {
+      host.lifecycle!.onUpdateModelContext(params);
+      return {};
+    };
+    bridge.onrequestteardown = () => {
+      if (teardownRequested) return;
+      teardownRequested = true;
+      void teardown(3000).then(() => host.lifecycle!.onTeardown());
+    };
+  }
 
   bridge.oncalltool = ({ arguments: args, name }, { mcpReq }) =>
     host.callTool(name, args ?? {}, mcpReq.signal);
@@ -83,6 +140,7 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   let initialized = false;
   const handleInitialized = () => {
     initialized = true;
+    host.lifecycle?.onInitialized?.(bridge.getAppCapabilities()?.availableDisplayModes);
     void bridge.sendToolInput({ arguments: host.toolInput() });
     void Promise.resolve(host.toolResult()).then((result) => bridge.sendToolResult(result));
   };
@@ -91,22 +149,25 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   bridge.addEventListener('initialized', handleInitialized);
   void bridge.connect(new PostMessageTransport(target, target));
 
+  let disposed = false;
   const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     bridge.removeEventListener('sizechange', handleSizeChange);
     bridge.removeEventListener('initialized', handleInitialized);
     void bridge.close();
   };
 
-  return {
-    bridge,
-    dispose,
-    /**
-     * Tell the view it is going away (`ui/resource-teardown`) and give it up to
-     * `timeoutMs` to finish (save pending edits) before the session closes. A
-     * view that never initialized has nothing to finish.
-     */
-    teardown: async (timeoutMs: number) => {
-      if (initialized) {
+  /**
+   * Tell the view it is going away (`ui/resource-teardown`) and give it up to
+   * `timeoutMs` to finish (save pending edits) before the session closes. A
+   * view that never initialized has nothing to finish.
+   */
+  let teardownPromise: Promise<void> | undefined;
+  const teardown = (timeoutMs: number): Promise<void> => {
+    // A notification and host unmount can race. They share one handshake and close.
+    teardownPromise ??= (async () => {
+      if (initialized && !disposed) {
         let timer: ReturnType<typeof setTimeout> | undefined;
         await Promise.race([
           bridge.teardownResource({}).catch(() => {}),
@@ -115,6 +176,12 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
         clearTimeout(timer);
       }
       dispose();
-    },
+    })();
+    return teardownPromise;
+  };
+  return {
+    bridge,
+    dispose,
+    teardown,
   };
 };

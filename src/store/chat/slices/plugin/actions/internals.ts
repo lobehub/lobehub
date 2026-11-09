@@ -1,8 +1,13 @@
 import { builtinTools } from '@lobechat/builtin-tools';
-import { ToolArgumentsRepairer, ToolNameResolver } from '@lobechat/context-engine';
+import {
+  type ResolvedToolSet,
+  ToolArgumentsRepairer,
+  ToolNameResolver,
+} from '@lobechat/context-engine';
 import { type ChatToolPayload, type MessageToolCall, type ToolManifest } from '@lobechat/types';
 
 import { type ChatStore } from '@/store/chat/store';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
   composioStoreSelectors,
@@ -30,6 +35,7 @@ export class PluginInternalsActionImpl {
   internal_transformToolCalls = (
     toolCalls: MessageToolCall[],
     offeredToolNames?: string[],
+    resolvedTools?: Pick<ResolvedToolSet, 'manifestMap' | 'sourceMap'>,
   ): ChatToolPayload[] => {
     const toolNameResolver = new ToolNameResolver();
 
@@ -72,6 +78,19 @@ export class PluginInternalsActionImpl {
       if (tool.manifest) {
         manifests[tool.identifier] = tool.manifest as ToolManifest;
         sourceMap[tool.identifier] = 'lobehubSkill';
+      }
+    }
+
+    // Connector manifests live in the operation snapshot, not installedPlugins. Use the
+    // same manifest that advertised the tool so hashed API names can be restored.
+    const serverConfig = resolvedTools && getServerConfigStoreState();
+    if (resolvedTools && serverConfig && serverConfigSelectors.enableMcpApps(serverConfig)) {
+      for (const [identifier, manifest] of Object.entries(resolvedTools.manifestMap)) {
+        // Client runs may omit sourceMap; connector manifests still carry type=mcp.
+        const source = resolvedTools.sourceMap[identifier];
+        if (source ? source !== 'mcp' : manifest.type !== 'mcp') continue;
+        manifests[identifier] = manifest as ToolManifest;
+        sourceMap[identifier] = 'mcp';
       }
     }
 

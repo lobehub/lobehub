@@ -34,6 +34,7 @@ const makeClient = (overrides: Record<string, unknown> = {}) => ({
   callTool: vi.fn().mockResolvedValue({ content: [{ text: 'sunny', type: 'text' }] }),
   disconnect: vi.fn().mockResolvedValue(undefined),
   getProtocolEra: vi.fn().mockReturnValue('legacy'),
+  getToolUiMeta: vi.fn().mockResolvedValue(undefined),
   getToolUiResourceUri: vi.fn().mockResolvedValue('ui://weather/view'),
   initialize: vi.fn().mockResolvedValue(undefined),
   isToolCallableByApp: vi.fn().mockResolvedValue(true),
@@ -51,8 +52,39 @@ describe('McpCtr MCP Apps', () => {
     ctr = new McpCtr(mockApp);
   });
 
+  it.each([false, true])(
+    'validates thread entrypoints on the desktop (flag=%s)',
+    async (mcpApps) => {
+      const client = makeClient({
+        getToolUiMeta: vi
+          .fn()
+          .mockResolvedValue({ resourceUri: 'ui://app', entrypoints: [{ type: 'thread' }] }),
+        isToolCallableByApp: vi.fn().mockResolvedValue(false),
+        isToolHiddenFromModel: vi.fn().mockResolvedValue(true),
+      });
+      mcpClientMocks.mockReturnValue(client);
+      const result = await ctr.runStdioMcpTool({
+        args: '{"ignored":1}',
+        params: stdioParams,
+        toolName: 'open',
+        mcpApps,
+        fromEntrypoint: true,
+      } as any);
+      expect(result.success).toBe(mcpApps);
+      if (mcpApps) expect(client.callTool).toHaveBeenCalledWith('open', {});
+      else {
+        expect(client.callTool).not.toHaveBeenCalled();
+        expect(client.getToolUiMeta).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it('marks results of tools that declare a ui:// view while MCP Apps are on', async () => {
-    mcpClientMocks.mockReturnValue(makeClient());
+    mcpClientMocks.mockReturnValue(
+      makeClient({
+        getToolUiMeta: vi.fn().mockResolvedValue({ preferredModelDisplayMode: 'fullscreen' }),
+      }),
+    );
 
     const result = await ctr.runStdioMcpTool({
       args: '{}',
@@ -65,6 +97,7 @@ describe('McpCtr MCP Apps', () => {
     expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: true });
     // With the server the view may be read back from
     expect((result.state as any).mcpApp).toEqual({
+      preferredModelDisplayMode: 'fullscreen',
       resourceUri: 'ui://weather/view',
       server: await getMcpServerFingerprint({ ...stdioParams, type: 'stdio' }),
     });
@@ -83,6 +116,7 @@ describe('McpCtr MCP Apps', () => {
 
     expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: false });
     expect(client.getToolUiResourceUri).not.toHaveBeenCalled();
+    expect(client.getToolUiMeta).not.toHaveBeenCalled();
     expect((result.state as any).mcpApp).toBeUndefined();
   });
 

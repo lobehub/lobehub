@@ -277,7 +277,9 @@ export class ClientLLMTransport implements LLMTransport {
         onToolCallsUpdate: (tools) => this.dispatchMessage(assistantMessageId, { tools }),
         toggleToolCallingStreaming: this.context.get().internal_toggleToolCallingStreaming,
         transformToolCalls: (calls) =>
-          this.context.get().internal_transformToolCalls(calls, offeredToolNames),
+          this.context
+            .get()
+            .internal_transformToolCalls(calls, offeredToolNames, input.context.resolvedTools),
         uploadBase64Image: (data) =>
           getFileStoreState()
             .uploadBase64FileWithProgress(data)

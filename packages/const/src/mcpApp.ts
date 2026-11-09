@@ -1,4 +1,13 @@
+import type { McpAppThreadEntry } from './mcpAppEntrypoints';
+import type { McpUiToolMeta } from './mcpUiMeta';
+import { resolveMcpUiToolMeta } from './mcpUiMeta';
 import { sha256Hex } from './sha256';
+
+export * from './mcpAppEntrypoints';
+export * from './mcpUiMeta';
+
+/** Maximum text/serialized structured context accepted from a single App view. */
+export const MCP_APP_CONTEXT_MAX_LENGTH = 32_768;
 
 /**
  * Who may call an MCP tool, per MCP Apps (SEP-1865) `_meta.ui.visibility`:
@@ -8,12 +17,8 @@ import { sha256Hex } from './sha256';
 export type McpToolAudience = 'app' | 'model';
 
 /** The `_meta.ui.visibility` a tool declares, or `undefined` when it declares none. */
-export const getMcpToolVisibility = (meta: unknown): string[] | undefined => {
-  const visibility = (meta as { ui?: { visibility?: unknown } } | undefined)?.ui?.visibility;
-  if (!Array.isArray(visibility)) return;
-
-  return visibility.filter((item): item is string => typeof item === 'string');
-};
+export const getMcpToolVisibility = (meta: unknown, enabled = false): string[] | undefined =>
+  resolveMcpUiToolMeta(meta, enabled).visibility;
 
 /**
  * Whether `audience` may call a tool with this declared visibility. Unset means
@@ -30,7 +35,21 @@ export const isMcpToolVisibleTo = (
  */
 export const buildMcpToolMetadata = (
   visibility: readonly string[] | undefined,
-): { visibility: string[] } | null => (visibility ? { visibility: [...visibility] } : null);
+  ui?: Pick<McpUiToolMeta, 'entrypoints' | 'preferredModelDisplayMode' | 'visibility'> & {
+    threadEntry?: McpAppThreadEntry;
+  },
+) => {
+  const metadata = {
+    ...(ui?.entrypoints && { entrypoints: ui.entrypoints }),
+    ...(ui?.preferredModelDisplayMode && {
+      preferredModelDisplayMode: ui.preferredModelDisplayMode,
+    }),
+    ...(ui?.threadEntry && { threadEntry: ui.threadEntry }),
+    ...(ui?.visibility && { mcpAppVisibility: ui.visibility }),
+    ...(visibility && { visibility: [...visibility] }),
+  };
+  return Object.keys(metadata).length ? metadata : null;
+};
 
 /**
  * Whether `audience` may call a synced tool, read from the row `metadata`
@@ -40,8 +59,11 @@ export const buildMcpToolMetadata = (
 export const isSyncedMcpToolVisibleTo = (
   tool: { metadata?: Record<string, unknown> | null },
   audience: McpToolAudience,
+  enabled = false,
 ): boolean => {
-  const visibility = tool.metadata?.visibility;
+  const visibility = enabled
+    ? (tool.metadata?.mcpAppVisibility ?? tool.metadata?.visibility)
+    : tool.metadata?.visibility;
 
   return isMcpToolVisibleTo(
     Array.isArray(visibility)
@@ -58,9 +80,10 @@ export const isSyncedMcpToolVisibleTo = (
  */
 export const partitionMcpToolsForViews = <T extends { _meta?: unknown; name: string }>(
   tools: readonly T[],
+  enabled = false,
 ) => {
   const audiences = tools.map((tool) => {
-    const visibility = getMcpToolVisibility(tool._meta);
+    const visibility = getMcpToolVisibility(tool._meta, enabled);
     return {
       app: isMcpToolVisibleTo(visibility, 'app'),
       model: isMcpToolVisibleTo(visibility, 'model'),
@@ -81,12 +104,27 @@ interface UiResourceItem {
   uri?: string;
 }
 
-const uiMetaOf = (item: UiResourceItem | undefined) =>
-  (item?._meta as { ui?: unknown } | undefined)?.ui;
+const uiMetaOf = (item: UiResourceItem | undefined, enabled = false) => {
+  const meta = item?._meta as Record<string, unknown> | undefined;
+  if (!enabled) return meta?.ui ? { ui: meta.ui } : undefined;
+  const entries = Object.entries(meta ?? {}).filter(([key]) =>
+    [
+      'ui',
+      'openai/ui',
+      'lobehub/ui',
+      'openai/widgetCSP',
+      'openai/widgetDomain',
+      'openai/widgetPrefersBorder',
+    ].includes(key),
+  );
+  return entries.length ? Object.fromEntries(entries) : undefined;
+};
 
 /** Whether some `resources/read` content item declares no `_meta.ui` of its own. */
-export const lacksUiResourceMeta = (result: { contents?: readonly UiResourceItem[] }): boolean =>
-  (result.contents ?? []).some((item) => !uiMetaOf(item));
+export const lacksUiResourceMeta = (
+  result: { contents?: readonly UiResourceItem[] },
+  enabled = false,
+): boolean => (result.contents ?? []).some((item) => !uiMetaOf(item, enabled));
 
 /**
  * MCP Apps reads a view's `_meta.ui` (CSP, permissions, border) from its
@@ -98,16 +136,20 @@ export const withListingUiMeta = <R extends { contents?: UiResourceItem[] }>(
   result: R,
   uri: string,
   listed: readonly UiResourceItem[] | undefined,
+  enabled = false,
 ): R => {
-  const listingUi = uiMetaOf(listed?.find((entry) => entry.uri === uri));
+  const listingUi = uiMetaOf(
+    listed?.find((entry) => entry.uri === uri),
+    enabled,
+  );
   if (!listingUi || !result.contents) return result;
 
   return {
     ...result,
     contents: result.contents.map((item) =>
-      uiMetaOf(item)
+      uiMetaOf(item, enabled)
         ? item
-        : { ...item, _meta: { ...(item._meta as object | undefined), ui: listingUi } },
+        : { ...item, _meta: { ...(item._meta as object | undefined), ...listingUi } },
     ),
   };
 };

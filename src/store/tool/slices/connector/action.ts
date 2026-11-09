@@ -511,6 +511,7 @@ export class ConnectorActionImpl {
         inputSchema: tool.inputSchema,
         toolName: tool.name,
         visibility: tool.visibility,
+        ...(tool.mcpAppMeta && { mcpAppMeta: tool.mcpAppMeta }),
       })),
     });
     return true;

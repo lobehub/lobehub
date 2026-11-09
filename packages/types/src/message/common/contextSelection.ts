@@ -110,12 +110,26 @@ export interface ElementContextSelection extends ContextSelectionBase {
   source: 'element';
 }
 
+export const McpAppContextSelectionSchema = ContextSelectionBaseSchema.extend({
+  identifier: z.string(),
+  source: z.literal('mcpApp'),
+});
+export interface McpAppContextSelection extends ContextSelectionBase {
+  identifier: string;
+  source: 'mcpApp';
+}
+
 export const ContextSelectionSchema = z.discriminatedUnion('source', [
   PageContextSelectionSchema,
   CodeContextSelectionSchema,
   TextContextSelectionSchema,
   ElementContextSelectionSchema,
+  McpAppContextSelectionSchema,
 ]);
 
 export type ContextSelection =
-  PageContextSelection | CodeContextSelection | TextContextSelection | ElementContextSelection;
+  | PageContextSelection
+  | CodeContextSelection
+  | TextContextSelection
+  | ElementContextSelection
+  | McpAppContextSelection;

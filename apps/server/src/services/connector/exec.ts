@@ -1,4 +1,5 @@
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { getDisabledPluginIds } from '@lobechat/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -27,7 +28,7 @@ export class ConnectorToolCallError extends Error {
 
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
-  agentModel: Pick<AgentModel, 'existsById'>;
+  agentModel: Pick<AgentModel, 'existsById' | 'getAgentConfigById'>;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
@@ -86,6 +87,7 @@ export const callConnectorToolById = async (
     args?: string;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
+    fromEntrypoint?: boolean;
     identifier: string;
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
@@ -94,6 +96,14 @@ export const callConnectorToolById = async (
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   const [connector] = await findConnector(params, ctx);
+  if (
+    params.fromEntrypoint &&
+    params.agentId &&
+    getDisabledPluginIds(
+      (await ctx.agentModel.getAgentConfigById(params.agentId))?.plugins ?? undefined,
+    ).includes(params.identifier)
+  )
+    throw new ConnectorToolCallError('FORBIDDEN', 'This app is disabled for the agent');
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }
@@ -111,6 +121,7 @@ export const callConnectorToolById = async (
   // The tool MUST be present in the synced list — this is the single source of
   // truth for what is callable. Unknown names (unsynced or hand-crafted) are
   // rejected before reaching the remote server.
+  const mcpApps = await isMcpAppsEnabled(ctx.userId);
   const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
   const tool = tools.find((t) => t.toolName === params.toolName);
   if (!tool) {
@@ -127,7 +138,11 @@ export const callConnectorToolById = async (
   }
   // A view-only tool never enters the model's tool list; refuse a model call
   // that names it anyway.
-  if (!params.fromApp && !isSyncedMcpToolVisibleTo(tool, 'model')) {
+  if (
+    !params.fromEntrypoint &&
+    !params.fromApp &&
+    !isSyncedMcpToolVisibleTo(tool, 'model', mcpApps)
+  ) {
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       `Tool '${params.toolName}' can only be called from its interactive view`,
@@ -178,7 +193,8 @@ export const callConnectorToolById = async (
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,
-    mcpApps: await isMcpAppsEnabled(ctx.userId),
+    fromEntrypoint: params.fromEntrypoint,
+    mcpApps,
     toolName: params.toolName,
   });
 };

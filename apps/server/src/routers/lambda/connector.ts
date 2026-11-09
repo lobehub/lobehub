@@ -45,6 +45,7 @@ import {
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -817,6 +818,7 @@ export const connectorRouter = router({
         args: z.string().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
         identifier: z.string().min(1),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
@@ -973,6 +975,7 @@ export const connectorRouter = router({
             toolName: z.string(),
             /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
             visibility: z.array(z.string()).optional(),
+            mcpAppMeta: z.record(z.string(), z.unknown()).optional(),
           }),
         ),
       }),
@@ -983,11 +986,12 @@ export const connectorRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
+      const mcpApps = await isMcpAppsEnabled(ctx.userId);
       const syncInputs = input.tools.map((t) => ({
         crudType: inferCrudType(t.toolName),
         description: t.description,
         inputSchema: t.inputSchema,
-        metadata: buildMcpToolMetadata(t.visibility),
+        metadata: mcpApps && t.mcpAppMeta ? t.mcpAppMeta : buildMcpToolMetadata(t.visibility),
         toolName: t.toolName,
       }));
 

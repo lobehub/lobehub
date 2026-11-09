@@ -79,6 +79,7 @@ export interface ContextRunSnapshot {
    */
   enableAgentMode?: boolean;
   enableExpertise?: boolean;
+  enableMcpAppContext?: boolean;
   expertise?: ExpertiseContextSnapshot;
   /** maxSteps exceeded: tools are stripped and a summary prompt is injected. */
   forceFinish?: boolean;

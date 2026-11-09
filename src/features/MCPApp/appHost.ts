@@ -8,6 +8,7 @@ import { getToolStoreState } from '@/store/tool';
 
 import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
+import type { AppDisplayContext, McpAppBridgeHost } from './bridge';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
 import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
 import { isAppFrameNavigatedNotice } from './frameDocument';
@@ -30,8 +31,10 @@ export interface AppViewContext {
    * read-only one (a thread a tool started) keeps the view from posting too.
    */
   canSendMessage: boolean;
+  display?: AppDisplayContext;
   identifier: string;
   isDark: boolean;
+  lifecycle?: McpAppBridgeHost['lifecycle'];
   /** This desktop's own MCP process produced the result; the view's calls run there. */
   onThisDevice: boolean;
   /** Tool call result envelope (`{ content, state, success }`). */
@@ -125,6 +128,16 @@ export const connectAppView = ({
   };
 
   const { bridge, dispose, teardown } = connectMcpAppBridge(target, {
+    ...(getContext().lifecycle && {
+      lifecycle: {
+        getDisplayContext: () => getContext().lifecycle!.getDisplayContext(),
+        onInitialized: (modes) => getContext().lifecycle!.onInitialized?.(modes),
+        onRequestDisplayMode: (mode, modes) =>
+          getContext().lifecycle!.onRequestDisplayMode(mode, modes),
+        onTeardown: () => getContext().lifecycle!.onTeardown(),
+        onUpdateModelContext: (params) => getContext().lifecycle!.onUpdateModelContext(params),
+      } satisfies NonNullable<McpAppBridgeHost['lifecycle']>,
+    }),
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
@@ -184,7 +197,8 @@ export const connectAppView = ({
         disposeCall();
       }
     },
-    hostContext: buildHostContext(getContext().isDark),
+    hostContext: buildHostContext(getContext().isDark, getContext().display),
+    getHostContext: () => buildHostContext(getContext().isDark, getContext().display),
     onSizeChange: (nextHeight) => onHeight(Math.min(nextHeight, MAX_APP_VIEW_HEIGHT)),
     // A view can ask without a gesture and carry data in the URL, so the
     // user sees the link before it opens

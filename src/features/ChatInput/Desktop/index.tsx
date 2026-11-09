@@ -27,6 +27,7 @@ import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import { useDocumentDrop } from '../InputEditor/ReferDocument/useDocumentDrop';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
+import { McpAppContextChips } from '../McpAppContextChips';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -184,7 +185,12 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const shouldShowContextContainer =
       leftActions.flat().includes('fileUpload') || hasContextSelections || hasFiles;
-    const contextContainerNode = shouldShowContextContainer && <ContextContainer />;
+    const contextContainerNode = (
+      <>
+        <McpAppContextChips />
+        {shouldShowContextContainer && <ContextContainer />}
+      </>
+    );
 
     const loadingLeftSlot = isConfigLoading ? (
       <Flexbox horizontal align="center" gap={6} paddingInline={4}>

@@ -1,9 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Globe2Icon, PanelsTopLeftIcon } from 'lucide-react';
-import { Activity, lazy, memo } from 'react';
+import { Activity, lazy, memo, useEffect } from 'react';
 
 import { canvasIdOfTab } from '@/store/global/initialState';
+import { useMcpAppStore } from '@/store/mcpApp/store';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import type { ComposerTarget } from '../types';
 import CanvasPane from './Canvas/CanvasPane';
@@ -15,7 +17,13 @@ import {
   isCanvasTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
+import { McpAppTabIcon, McpAppTabLabel } from './McpAppTabLabel';
+import { McpEntryTabIcon, McpEntryTabLabel } from './McpEntryTabLabel';
 
+const McpAppPane = lazy(() => import('./McpAppPane').then((m) => ({ default: m.McpAppPane })));
+const McpEntryPane = lazy(() =>
+  import('./McpEntryPane').then((m) => ({ default: m.McpEntryPane })),
+);
 const BrowserPane = lazy(() => import('./Browser'));
 
 // Inline, because StyleX layout rules can lose to the `.lobe-flex` class of
@@ -36,7 +44,22 @@ export const dynamicTabDescriptor = (
   tab: string,
   browserMetadata: BrowserTabMetadata | undefined,
   browserFallbackLabel: string,
+  agentId?: string,
 ): SidebarTabDescriptor | undefined => {
+  if (tab.startsWith('mcp-entry:'))
+    return {
+      icon: PanelsTopLeftIcon,
+      key: tab,
+      iconNode: <McpEntryTabIcon agentId={agentId} tab={tab} />,
+      label: <McpEntryTabLabel agentId={agentId} tab={tab} />,
+    };
+  if (tab.startsWith('mcp-app:'))
+    return {
+      icon: PanelsTopLeftIcon,
+      iconNode: <McpAppTabIcon id={tab.slice(8)} />,
+      key: tab,
+      label: <McpAppTabLabel id={tab.slice(8)} />,
+    };
   const canvasId = canvasIdOfTab(tab);
   if (canvasId) {
     return { icon: PanelsTopLeftIcon, key: tab, label: <CanvasTabLabel canvasId={canvasId} /> };
@@ -60,6 +83,7 @@ interface DynamicTabPanesProps {
   browserSessionId: string;
   composerTarget: ComposerTarget;
   onBrowserMetadataChange: (tab: string, metadata: BrowserTabMetadata) => void;
+  onCloseTab: (tab: string) => void;
   openedTabs: string[];
   visible: boolean;
 }
@@ -73,33 +97,77 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
     composerTarget,
     onBrowserMetadataChange,
     openedTabs,
+    onCloseTab,
     visible,
-  }) => (
-    <>
-      {browserAvailable &&
-        openedTabs.filter(isBrowserTab).map((tab) => {
-          const sessionId = browserSessionIdOfTab(browserSessionId, tab);
+  }) => {
+    const enabled = useServerConfigStore(serverConfigSelectors.enableMcpApps);
+    const views = useMcpAppStore((s) => s.views);
+    useEffect(() => {
+      if (!enabled) return;
+      for (const tab of openedTabs) {
+        const view = views[tab.slice(8)];
+        if (
+          tab.startsWith('mcp-app:') &&
+          view?.placed &&
+          (view.dismissed || view.mode === 'inline')
+        )
+          onCloseTab(tab);
+      }
+    }, [views, openedTabs, onCloseTab, enabled]);
+    return (
+      <>
+        {enabled &&
+          composerTarget.writable &&
+          openedTabs
+            .filter((tab) => tab.startsWith('mcp-app:'))
+            .map((tab) => (
+              <Flexbox flex={1} key={tab} style={activeTab === tab ? PANE : HIDDEN_PANE}>
+                <McpAppPane id={tab.slice(8)} scope={composerTarget.contextKey} />
+              </Flexbox>
+            ))}
+        {enabled &&
+          composerTarget.writable &&
+          openedTabs
+            .filter((tab) => tab.startsWith('mcp-entry:'))
+            .map((tab) => (
+              <Flexbox
+                flex={1}
+                key={`${composerTarget.contextKey}:${tab}`}
+                style={activeTab === tab ? PANE : HIDDEN_PANE}
+              >
+                <McpEntryPane
+                  agentId={agentId}
+                  scope={composerTarget.contextKey}
+                  tab={tab}
+                  onClose={onCloseTab}
+                />
+              </Flexbox>
+            ))}
+        {browserAvailable &&
+          openedTabs.filter(isBrowserTab).map((tab) => {
+            const sessionId = browserSessionIdOfTab(browserSessionId, tab);
 
-          return (
-            <Flexbox flex={1} key={sessionId} style={activeTab === tab ? PANE : HIDDEN_PANE}>
-              <BrowserPane
-                agentId={agentId}
-                composerTarget={composerTarget}
-                sessionId={sessionId}
-                onMetadataChange={(metadata) => onBrowserMetadataChange(tab, metadata)}
-              />
+            return (
+              <Flexbox flex={1} key={sessionId} style={activeTab === tab ? PANE : HIDDEN_PANE}>
+                <BrowserPane
+                  agentId={agentId}
+                  composerTarget={composerTarget}
+                  sessionId={sessionId}
+                  onMetadataChange={(metadata) => onBrowserMetadataChange(tab, metadata)}
+                />
+              </Flexbox>
+            );
+          })}
+        {openedTabs.filter(isCanvasTab).map((tab) => (
+          <Activity key={tab} mode={visible && activeTab === tab ? 'visible' : 'hidden'}>
+            <Flexbox flex={1} style={PANE}>
+              <CanvasPane canvasId={canvasIdOfTab(tab)!} />
             </Flexbox>
-          );
-        })}
-      {openedTabs.filter(isCanvasTab).map((tab) => (
-        <Activity key={tab} mode={visible && activeTab === tab ? 'visible' : 'hidden'}>
-          <Flexbox flex={1} style={PANE}>
-            <CanvasPane canvasId={canvasIdOfTab(tab)!} />
-          </Flexbox>
-        </Activity>
-      ))}
-    </>
-  ),
+          </Activity>
+        ))}
+      </>
+    );
+  },
 );
 
 DynamicTabPanes.displayName = 'WorkingSidebarDynamicTabPanes';

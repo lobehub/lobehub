@@ -554,6 +554,12 @@ export const fileKeys = {
 
 // ---- MCP Apps (interactive tool result views) -----------------------------
 export const mcpAppKeys = {
+  /** A thread entrypoint's `{}` tool call, per open tab instance (`id` holds its topic scope). */
+  entrypoint: def('mcpApp:entrypoint', (id: string, agentId?: string) => [
+    'mcpApp:entrypoint',
+    id,
+    agentId ?? null,
+  ]),
   resource: def(
     'mcpApp:resource',
     (

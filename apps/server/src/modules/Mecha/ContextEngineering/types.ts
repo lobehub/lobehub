@@ -98,6 +98,7 @@ export interface ServerMessagesEngineParams {
   expertise?: ExpertiseContextSnapshot;
   /** Whether to inject the operation expertise snapshot. */
   enableExpertise?: boolean;
+  enableMcpAppContext?: boolean;
   /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
   userTimezone?: string;
   // ========== Extended contexts ==========

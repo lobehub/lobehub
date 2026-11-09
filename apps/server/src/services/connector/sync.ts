@@ -1,4 +1,8 @@
-import { buildMcpToolMetadata, getMcpToolVisibility } from '@lobechat/const/mcpApp';
+import {
+  buildMcpToolMetadata,
+  getMcpAppEntrypoints,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -115,12 +119,13 @@ export const syncConnectorToolsById = async (
 
   const mcpParams = buildConnectorMcpParams(connector);
 
+  const mcpApps = await isMcpAppsEnabled(ctx.userId);
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
     rawTools = await mcpService.listRawTools(mcpParams, {
-      mcpApps: await isMcpAppsEnabled(ctx.userId),
+      mcpApps,
     });
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
@@ -133,7 +138,16 @@ export const syncConnectorToolsById = async (
     inputSchema: t.inputSchema as Record<string, unknown>,
     // Kept even for view-only tools: a view's call must find the tool synced,
     // while the manifest build leaves it out of the model's tool list.
-    metadata: buildMcpToolMetadata(getMcpToolVisibility(t._meta)),
+    metadata: buildMcpToolMetadata(
+      resolveMcpUiToolMeta(t._meta, false).visibility,
+      mcpApps
+        ? {
+            ...resolveMcpUiToolMeta(t._meta),
+            entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
+            threadEntry: getMcpAppEntrypoints([t], true)[0],
+          }
+        : undefined,
+    ),
     toolName: t.name,
   }));
 
