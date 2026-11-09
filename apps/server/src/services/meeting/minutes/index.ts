@@ -292,12 +292,19 @@ export class MeetingMinutesService {
    * minutes (`status: 'created'`, `taskId`); an item that fails stays
    * `suggested` and is reported, so a retry only re-sends what is missing.
    * Items already turned into tasks are skipped, never duplicated.
+   *
+   * A private meeting only ever produces private tasks: the minutes carry its
+   * title and transcript excerpts, so a public task would hand the content to
+   * every workspace member. `TaskService.createTask` then rejects an assignee
+   * that a private task cannot have (anyone but its creator) per item, so the
+   * user sees which choice was incompatible instead of a leaked task.
    */
   async createTasks(meetingId: string, items: CreateTasksItemInput[]) {
     const detail = await this.meetingModel.getDetail(meetingId);
     if (!detail?.minutes) return undefined;
 
     const stored = new Map(detail.minutes.actionItems.map((item) => [item.id, item]));
+    const isPrivate = detail.visibility === 'private';
     const candidates = await this.listAssigneeCandidates();
     const findCandidate = (assignee?: Pick<MeetingAssignee, 'id' | 'type'> | null) =>
       assignee
@@ -308,10 +315,14 @@ export class MeetingMinutesService {
     const ctx = { userId: this.userId, workspaceId: this.workspaceId };
     const result: CreateTasksResult = { created: [], failed: [] };
     const updates = new Map<string, Partial<MeetingActionItem>>();
+    // One accepted request can repeat an item id; the stored minutes only learn
+    // about the first task at the end of the loop, so claim ids as we go.
+    const claimed = new Set<string>();
 
     for (const input of items) {
       const item = stored.get(input.id);
-      if (!item || item.status === 'created') continue;
+      if (!item || item.status === 'created' || claimed.has(item.id)) continue;
+      claimed.add(item.id);
 
       const text = input.text.trim() || item.text;
       const candidate = findCandidate(input.assignee);
@@ -336,6 +347,7 @@ export class MeetingMinutesService {
             text,
           }),
           name: text.length > MAX_TASK_NAME ? `${text.slice(0, MAX_TASK_NAME - 1)}…` : text,
+          ...(isPrivate && { visibility: 'private' as const }),
         });
         notifyAssignedBestEffort(ctx, task);
 
