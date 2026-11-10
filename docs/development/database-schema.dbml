@@ -1196,6 +1196,202 @@ table api_keys {
   }
 }
 
+table artboard_boards {
+  id text [pk, not null]
+  artboard_id text [not null]
+  page_id text [not null]
+  group_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  project_id text
+  acceptance_flow_node_id uuid
+  title text [not null]
+  expected text
+  x real [not null]
+  y real [not null]
+  w real [not null]
+  h real [not null]
+  source_work_version_id uuid
+  source_path text
+  source_file_id text
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    
+    artboard_id [name: 'artboard_boards_artboard_id_idx']
+    page_id [name: 'artboard_boards_page_id_idx']
+    group_id [name: 'artboard_boards_group_id_idx']
+    project_id [name: 'artboard_boards_project_id_idx']
+    acceptance_flow_node_id [name: 'artboard_boards_acceptance_flow_node_id_unique', unique]
+    source_work_version_id [name: 'artboard_boards_source_work_version_id_idx']
+    user_id [name: 'artboard_boards_user_id_idx']
+    workspace_id [name: 'artboard_boards_workspace_id_idx']
+  }
+}
+
+table artboard_comments {
+  id text [pk, not null]
+  artboard_id text [not null]
+  parent_comment_id text
+  author_user_id text
+  author_agent_id text
+  user_id text [not null]
+  workspace_id text
+  page_id text
+  group_id text
+  board_id text
+  content text [not null]
+  client_id text [not null]
+  resolved_at "timestamp with time zone"
+  resolved_by_user_id text
+  anchor_x real
+  anchor_y real
+  node_path text
+  node_offset_x real
+  node_offset_y real
+  anchor_work_version_id uuid
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (artboard_id, author_user_id, client_id) [name: 'artboard_comments_artboard_id_author_user_id_client_id_unique', unique]
+    (artboard_id, created_at) [name: 'artboard_comments_artboard_id_created_at_idx']
+    parent_comment_id [name: 'artboard_comments_parent_comment_id_idx']
+    board_id [name: 'artboard_comments_board_id_idx']
+    user_id [name: 'artboard_comments_user_id_idx']
+    workspace_id [name: 'artboard_comments_workspace_id_idx']
+    page_id [name: 'artboard_comments_page_id_idx']
+    group_id [name: 'artboard_comments_group_id_idx']
+  }
+}
+
+table artboard_edges {
+  id text [pk, not null]
+  artboard_id text [not null]
+  source_board_id text [not null]
+  target_board_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  acceptance_flow_edge_id uuid
+  label text [not null, default: '']
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_edges_artboard_id_idx']
+    source_board_id [name: 'artboard_edges_source_board_id_idx']
+    target_board_id [name: 'artboard_edges_target_board_id_idx']
+    acceptance_flow_edge_id [name: 'artboard_edges_acceptance_flow_edge_id_unique', unique]
+    user_id [name: 'artboard_edges_user_id_idx']
+    workspace_id [name: 'artboard_edges_workspace_id_idx']
+  }
+}
+
+table artboard_groups {
+  id text [pk, not null]
+  artboard_id text [not null]
+  page_id text [not null]
+  round_id text
+  user_id text [not null]
+  workspace_id text
+  kind text [not null]
+  title text [not null]
+  description text
+  recommended_board_id text
+  chosen_board_id text
+  chosen_by text
+  chosen_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_groups_artboard_id_idx']
+    page_id [name: 'artboard_groups_page_id_idx']
+    round_id [name: 'artboard_groups_round_id_idx']
+    user_id [name: 'artboard_groups_user_id_idx']
+    workspace_id [name: 'artboard_groups_workspace_id_idx']
+    recommended_board_id [name: 'artboard_groups_recommended_board_id_idx']
+    chosen_board_id [name: 'artboard_groups_chosen_board_id_idx']
+  }
+}
+
+table artboard_pages {
+  id text [pk, not null]
+  artboard_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  name text [not null]
+  sort_order integer [not null, default: 0]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (artboard_id, sort_order) [name: 'artboard_pages_artboard_id_sort_order_idx']
+    user_id [name: 'artboard_pages_user_id_idx']
+    workspace_id [name: 'artboard_pages_workspace_id_idx']
+  }
+}
+
+table artboard_rounds {
+  id text [pk, not null]
+  artboard_id text [not null]
+  page_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  title text [not null]
+  status text [not null, default: 'open']
+  submitted_by text
+  submitted_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_rounds_artboard_id_idx']
+    page_id [name: 'artboard_rounds_page_id_idx']
+    user_id [name: 'artboard_rounds_user_id_idx']
+    workspace_id [name: 'artboard_rounds_workspace_id_idx']
+  }
+}
+
+table artboards {
+  id text [pk, not null]
+  task_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  project_id text
+  acceptance_id uuid
+  origin_topic_id text
+  title text [not null]
+  description text
+  phase text [not null, default: 'discuss']
+  revision integer [not null, default: 1]
+  comments_delivered_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'artboards_task_id_unique', unique]
+    project_id [name: 'artboards_project_id_idx']
+    user_id [name: 'artboards_user_id_idx']
+    workspace_id [name: 'artboards_workspace_id_idx']
+  }
+}
+
 table async_tasks {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   type text
