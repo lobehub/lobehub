@@ -16,7 +16,7 @@ interface FavoriteMenuItemOptions {
   showHotkey?: boolean;
 }
 
-/** "Add to Favorites" / "Remove from Favorites" for a ⋯ menu. */
+/** "Add to Home Favorites" / "Remove from Favorites" for a ⋯ menu. */
 export const useFavoriteMenuItem = (
   target: FavoriteTarget | undefined,
   { showHotkey = true }: FavoriteMenuItemOptions = {},

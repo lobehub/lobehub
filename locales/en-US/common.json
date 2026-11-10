@@ -214,7 +214,7 @@
   "exportType.allAgent": "Export All Agent Settings",
   "exportType.allAgentWithMessage": "Export All Agents and Messages",
   "exportType.globalSetting": "Export Global Settings",
-  "favorite.add": "Add to Favorites",
+  "favorite.add": "Add to Home Favorites",
   "favorite.limitReached": "Favorites can hold up to {{count}} items. Remove one to add another.",
   "favorite.remove": "Remove from Favorites",
   "favorite.reorderError": "Couldn't save the order of your favorites. Try again.",
