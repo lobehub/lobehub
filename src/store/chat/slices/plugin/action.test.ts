@@ -50,6 +50,32 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const mcpMessageState = (
+  optimisticUpdateToolMessageMock: Mock,
+): Partial<ReturnType<typeof useChatStore.getState>> => ({
+  activeAgentId: 'session-id',
+  messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
+  optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
+  replaceMessages: vi.fn(),
+  messageOperationMap: {},
+  operations: {},
+});
+
+const builtinActionPayload = () => ({
+  identifier: 'test-tool',
+  apiName: 'mockBuiltinAction',
+  arguments: JSON.stringify({ input: 'test' }),
+  id: 'tool-call-1',
+  type: 'builtin',
+});
+
+const groupSpeakPayload = () => ({
+  identifier: 'lobe-group-management',
+  apiName: 'speak',
+  arguments: JSON.stringify({ agentId: 'agent-1' }),
+  type: 'builtin',
+});
+
 describe('ChatPluginAction', () => {
   describe('updatePluginState', () => {
     it('should update the plugin state for a message', async () => {
@@ -346,13 +372,7 @@ describe('ChatPluginAction', () => {
         },
       );
 
-      const payload = {
-        identifier: 'test-tool',
-        apiName: 'mockBuiltinAction',
-        arguments: JSON.stringify({ input: 'test' }),
-        id: 'tool-call-1',
-        type: 'builtin',
-      } as ChatToolPayload;
+      const payload = builtinActionPayload() as ChatToolPayload;
 
       await act(async () => {
         await result.current.invokeBuiltinTool(messageId, payload);
@@ -402,13 +422,7 @@ describe('ChatPluginAction', () => {
         },
       );
 
-      const payload = {
-        identifier: 'test-tool',
-        apiName: 'mockBuiltinAction',
-        arguments: JSON.stringify({ input: 'test' }),
-        id: 'tool-call-1',
-        type: 'builtin',
-      } as ChatToolPayload;
+      const payload = builtinActionPayload() as ChatToolPayload;
 
       await act(async () => {
         await result.current.invokeBuiltinTool(messageId, payload);
@@ -456,13 +470,7 @@ describe('ChatPluginAction', () => {
         },
       );
 
-      const payload = {
-        identifier: 'test-tool',
-        apiName: 'mockBuiltinAction',
-        arguments: JSON.stringify({ input: 'test' }),
-        id: 'tool-call-1',
-        type: 'builtin',
-      } as ChatToolPayload;
+      const payload = builtinActionPayload() as ChatToolPayload;
 
       await act(async () => {
         await result.current.invokeBuiltinTool(messageId, payload);
@@ -530,12 +538,7 @@ describe('ChatPluginAction', () => {
           },
         );
 
-        const payload = {
-          identifier: 'lobe-group-management',
-          apiName: 'speak',
-          arguments: JSON.stringify({ agentId: 'agent-1' }),
-          type: 'builtin',
-        } as ChatToolPayload;
+        const payload = groupSpeakPayload() as ChatToolPayload;
 
         await act(async () => {
           await result.current.invokeBuiltinTool(messageId, payload);
@@ -578,12 +581,7 @@ describe('ChatPluginAction', () => {
           },
         );
 
-        const payload = {
-          identifier: 'lobe-group-management',
-          apiName: 'speak',
-          arguments: JSON.stringify({ agentId: 'agent-1' }),
-          type: 'builtin',
-        } as ChatToolPayload;
+        const payload = groupSpeakPayload() as ChatToolPayload;
 
         await act(async () => {
           await result.current.invokeBuiltinTool(messageId, payload);
@@ -641,12 +639,7 @@ describe('ChatPluginAction', () => {
           },
         );
 
-        const payload = {
-          identifier: 'lobe-group-management',
-          apiName: 'speak',
-          arguments: JSON.stringify({ agentId: 'agent-1' }),
-          type: 'builtin',
-        } as ChatToolPayload;
+        const payload = groupSpeakPayload() as ChatToolPayload;
 
         await act(async () => {
           await result.current.invokeBuiltinTool(messageId, payload);
@@ -1323,14 +1316,7 @@ describe('ChatPluginAction', () => {
         const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: 'session-id',
-            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
-            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
-            replaceMessages: vi.fn(),
-            messageOperationMap: {},
-            operations: {},
-          });
+          useChatStore.setState(mcpMessageState(optimisticUpdateToolMessageMock));
         });
 
         const { result } = renderHook(() => useChatStore());
@@ -1364,14 +1350,7 @@ describe('ChatPluginAction', () => {
         const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: 'session-id',
-            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
-            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
-            replaceMessages: vi.fn(),
-            messageOperationMap: {},
-            operations: {},
-          });
+          useChatStore.setState(mcpMessageState(optimisticUpdateToolMessageMock));
         });
 
         const { result } = renderHook(() => useChatStore());
@@ -1412,14 +1391,7 @@ describe('ChatPluginAction', () => {
         const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
 
         act(() => {
-          useChatStore.setState({
-            activeAgentId: 'session-id',
-            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
-            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
-            replaceMessages: vi.fn(),
-            messageOperationMap: {},
-            operations: {},
-          });
+          useChatStore.setState(mcpMessageState(optimisticUpdateToolMessageMock));
         });
 
         const { result } = renderHook(() => useChatStore());

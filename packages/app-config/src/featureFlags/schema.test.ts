@@ -192,27 +192,12 @@ describe('evaluateFeatureFlag', () => {
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
-  it('should enable auth captcha by default', () => {
+  it('should map the default feature flags', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
     expect(mappedState.enableAuthCaptcha).toBe(true);
-  });
-
-  it('should enable storage overage by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
     expect(mappedState.enableStorageOverage).toBe(true);
-  });
-
-  it('should keep realtime voice dictation disabled by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
     expect(mappedState.enableVoiceDictation).toBe(false);
-  });
-
-  it('should keep onboarding v2 off by default outside development', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
     expect(mappedState.enableOnboardingV2).toBe(false);
   });
 
