@@ -76,6 +76,7 @@ export default {
 
   'response.contentSafetyNotice':
     'This reply was limited for content safety reasons. If this happens often, you may temporarily lose access to this model.',
+  'goalBatch.cell.accepted': 'Accepted',
   'goalBatch.cell.backlog': 'Not run',
   'goalBatch.cell.done': 'Done',
   'goalBatch.cell.human': 'Needs you',

@@ -10,8 +10,11 @@ import {
   Icon,
   Spin,
   Text,
+  Tooltip,
 } from '@lobehub/ui';
+import dayjs from 'dayjs';
 import {
+  BadgeCheck,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -254,12 +257,32 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // through the acceptance page. Its own 验收检查清单 header replaces the
   // section header; the report link rides in the inventory toolbar.
   if (variant === 'result' && acceptanceSubject && !subjectError) {
+    // Signed off is finished: the verdict moves up beside the title, and the
+    // decision bar — which has nothing left to offer — stops covering the
+    // evidence below it.
+    const accepted = bundle?.acceptance.status === 'accepted';
+    const acceptedAt = accepted ? bundle?.acceptance.completedAt : undefined;
+    const acceptedBadge = accepted && (
+      <Tooltip
+        title={t('acceptance.banner.accepted', {
+          ns: 'verify',
+          time: acceptedAt ? dayjs(acceptedAt).format('YYYY-MM-DD HH:mm') : '',
+        })}
+      >
+        <Flexbox data-task-acceptance-accepted horizontal align={'center'} gap={4}>
+          <Icon color={cssVar.colorSuccess} icon={BadgeCheck} size={14} />
+          <Text fontSize={12} style={{ color: cssVar.colorSuccess, whiteSpace: 'nowrap' }}>
+            {t('taskDetail.acceptanceState.accepted')}
+          </Text>
+        </Flexbox>
+      </Tooltip>
+    );
     return (
       <AcceptanceScope embedded acceptanceId={acceptanceSubject.id}>
         <AcceptanceBundleGate height={160}>
           <Flexbox gap={16}>
-            <AcceptanceCheckInventory toolbar={reportButton} />
-            <AcceptanceDecision />
+            <AcceptanceCheckInventory titleExtra={acceptedBadge} toolbar={reportButton} />
+            {!accepted && <AcceptanceDecision />}
           </Flexbox>
         </AcceptanceBundleGate>
       </AcceptanceScope>
