@@ -1,12 +1,23 @@
-import type { CreatableAcceptanceSubjectType, VerifyRubricConfig } from '@lobechat/types';
+import type {
+  AcceptanceCommentList,
+  CreatableAcceptanceSubjectType,
+  VerifyRubricConfig,
+} from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
-import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
+import { acceptanceCommentService } from '@/services/acceptanceComment';
 import { documentService } from '@/services/document';
-import type { AcceptanceBundle, AcceptanceBySubject } from '@/services/verify';
+import type { AcceptanceBundle, AcceptanceBySubject, AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
@@ -17,6 +28,15 @@ import {
   acceptanceBundleResource,
   acceptanceBySubjectKey,
   acceptanceBySubjectResource,
+  acceptanceCommentResource,
+  acceptanceListEntity,
+  acceptanceListKey,
+  type AcceptanceListParams,
+  acceptanceListResource,
+  type AcceptancePageData,
+  acceptancePageKey,
+  type AcceptancePageParams,
+  acceptancePageResource,
   toPersistedVerifyRun,
   verifyRunResource,
   type VerifyRunSnapshot,
@@ -31,6 +51,19 @@ type Setter = StoreSetter<Store>;
 const acceptanceBundleLens = recordLens<Store, AcceptanceBundle>('acceptanceBundleMap');
 const acceptanceBySubjectLens = recordLens<Store, AcceptanceBySubject>('acceptanceBySubjectMap');
 const verifyRunLens = recordLens<Store, VerifyRunSnapshot>('verifyRunMap');
+const acceptanceCommentLens = recordLens<Store, AcceptanceCommentList>('acceptanceCommentMap');
+const acceptanceListLens = recordLens<Store, AcceptanceListItem[]>('acceptanceListMap');
+const acceptancePageLens = recordLens<Store, AcceptancePageData>('acceptancePageMap');
+
+/** Server page size of the list panel's scroll feed. */
+export const ACCEPTANCE_PAGE_SIZE = 30;
+
+/**
+ * The workspace shell, the list panel's empty-state probe and the merge picker
+ * can mount the same list read together; one request answers all of them.
+ * Explicit revalidations (after a write, a retry) are not deduped.
+ */
+const ACCEPTANCE_LIST_DEDUPE_MS = 10_000;
 
 /**
  * The verify store owns the write-back loop for the delivery-check config
@@ -47,6 +80,14 @@ export class ActionImpl {
   readonly #bySubject;
   /** The Agent Run verify card replica, behind `verifyRunMap[operationId]`. */
   readonly #run;
+  /** The flat acceptance list reads, behind `acceptanceListMap`. */
+  readonly #list;
+  /** The list panel's keyset feeds, behind `acceptancePageMap`. */
+  readonly #page;
+  /** One acceptance row in every list and feed that holds it. */
+  readonly #listEntity;
+  /** Each acceptance's discussion, behind `acceptanceCommentMap[acceptanceId]`. */
+  readonly #comments;
 
   /** Pending writes coalesced per id and flushed together on a debounce. */
   #pendingCriteria = new Map<string, VerifyCriterionEdit>();
@@ -106,7 +147,131 @@ export class ActionImpl {
       toPersisted: toPersistedVerifyRun,
       view: verifyRunLens,
     });
+    this.#list = createReplicaSlice(acceptanceListResource, {
+      actionPrefix: 'acceptanceList',
+      entity: acceptanceListEntity,
+      fetcher: (params) => verifyService.listAcceptances(params),
+      get,
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'acceptanceListReplica',
+      view: acceptanceListLens,
+    });
+    this.#page = createReplicaSlice(acceptancePageResource, {
+      actionPrefix: 'acceptancePage',
+      fetcher: this.#fetchAcceptancePage,
+      get,
+      set,
+      stateKey: 'acceptancePageReplica',
+      view: acceptancePageLens,
+    });
+    this.#listEntity = linkReplicaEntity<AcceptanceListItem>([this.#list, this.#page]);
+    this.#comments = createReplicaSlice(acceptanceCommentResource, {
+      actionPrefix: 'acceptanceComment',
+      fetcher: (acceptanceId) => acceptanceCommentService.list(acceptanceId),
+      get,
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'acceptanceCommentReplica',
+      view: acceptanceCommentLens,
+    });
   }
+
+  /** One scroll page of the list panel: `cursor` undefined = the head (newest first). */
+  #fetchAcceptancePage = async (
+    params: AcceptancePageParams,
+    cursor?: string,
+  ): Promise<ReplicaPageResult<AcceptanceListItem, string>> => {
+    const { items, nextCursor } = await verifyService.listAcceptancePage({
+      ...params,
+      cursor,
+      limit: ACCEPTANCE_PAGE_SIZE,
+    });
+    return { items, nextCursor };
+  };
+
+  /**
+   * Fetch orchestration only; the caller reads the rows through
+   * `acceptanceListMap` (`verifySelectors.acceptanceList`). A persisted browse
+   * paints first; search entries live in memory only.
+   */
+  useFetchAcceptanceList = (
+    params: AcceptanceListParams | null,
+    options: { enabled?: boolean; fresh?: boolean } = {},
+  ): ReplicaSyncResult =>
+    this.#list.useSync(params, {
+      // A decision surface (the merge picker) asks for a fresh read on open.
+      dedupingInterval: options.fresh ? 0 : ACCEPTANCE_LIST_DEDUPE_MS,
+      enabled: options.enabled ?? true,
+    });
+
+  /**
+   * Fetch orchestration only; the caller reads the feed through
+   * `acceptancePageMap` (`verifySelectors.acceptancePage`). `null` disables the
+   * feed — the panel hands off to the flat search read.
+   */
+  useFetchAcceptancePage = (params: AcceptancePageParams | null): ReplicaSyncResult =>
+    this.#page.useSync(params, { dedupingInterval: ACCEPTANCE_LIST_DEDUPE_MS });
+
+  /** Pull the next page of one scroll feed. */
+  loadMoreAcceptancePage = async (params: AcceptancePageParams): Promise<void> => {
+    await this.#page.loadMore(acceptancePageKey(params), params);
+  };
+
+  /**
+   * Switching back to a feed starts again from its head page instead of the
+   * depth an earlier visit had scrolled to.
+   */
+  collapseAcceptancePage = (params: AcceptancePageParams): void => {
+    this.#page.collapse(acceptancePageKey(params));
+  };
+
+  /** Re-read every acceptance list and feed of the active scope (after any write). */
+  refreshAcceptanceLists = async (): Promise<void> => {
+    await Promise.all([this.#list.revalidate(), this.#page.revalidate()]);
+  };
+
+  /** Re-read one flat list entry. */
+  refreshAcceptanceList = async (params: AcceptanceListParams): Promise<void> => {
+    await this.#list.revalidate(acceptanceListKey(params));
+  };
+
+  /**
+   * Drop deleted / merged-away acceptances from every list and feed, in memory
+   * and in the persisted rows, so a reload cannot paint them back before the
+   * revalidation lands.
+   */
+  removeAcceptancesFromLists = (acceptanceIds: string[]): void => {
+    for (const id of acceptanceIds) this.#listEntity.remove(id);
+  };
+
+  /**
+   * Fetch orchestration only; the caller reads the discussion through
+   * `acceptanceCommentMap` (`verifySelectors.acceptanceComments`).
+   */
+  useFetchAcceptanceComments = (acceptanceId?: string | null): ReplicaSyncResult =>
+    this.#comments.useSync(acceptanceId || null, {
+      dedupingInterval: ACCEPTANCE_LIST_DEDUPE_MS,
+      revalidateOnFocus: true,
+    });
+
+  /** Re-read one acceptance's discussion (after a comment write). */
+  refreshAcceptanceComments = async (acceptanceId: string): Promise<void> => {
+    await this.#comments.revalidate(acceptanceId);
+  };
+
+  /**
+   * Apply a discussion change on screen at once and settle it with the server's
+   * read-back; a failed write rolls back to the confirmed discussion.
+   */
+  optimisticAcceptanceComments = async (
+    acceptanceId: string,
+    apply: (current: AcceptanceCommentList) => AcceptanceCommentList,
+    serverCall: () => Promise<unknown>,
+  ): Promise<void> => {
+    await this.#comments.optimistic(acceptanceId, apply, serverCall);
+    await this.refreshAcceptanceComments(acceptanceId);
+  };
 
   /** Re-read one acceptance bundle (after a review, merge, delete or status sweep). */
   refreshAcceptanceBundle = async (acceptanceId: string): Promise<void> => {

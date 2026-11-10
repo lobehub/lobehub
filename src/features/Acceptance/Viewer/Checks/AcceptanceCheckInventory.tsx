@@ -18,9 +18,8 @@ import { useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useSingleton } from '@/hooks/useSingleton';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { hasVisualEvidence } from '../Evidence/evidence';
@@ -194,7 +193,7 @@ const AcceptanceCheckInventory = ({
     try {
       await action();
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       return true;
     } catch (cause) {
       console.error('[acceptance:review]', cause);

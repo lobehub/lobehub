@@ -2,14 +2,7 @@ import { replicaKeys } from 'local-replica';
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import {
-  documentCommentKeys,
-  isAcceptanceListKey,
-  isDocumentCommentKeyForEvent,
-  recentKeys,
-  verifyKeys,
-  workKeys,
-} from './keys';
+import { documentCommentKeys, isDocumentCommentKeyForEvent, recentKeys, workKeys } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
@@ -53,39 +46,6 @@ describe('replica sync keys', () => {
         [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
       ).toBe(false);
     }
-  });
-});
-
-describe('isAcceptanceListKey', () => {
-  it('matches every Acceptance list variant without matching detail keys', () => {
-    expect(isAcceptanceListKey(['verify:acceptances', '', '', 'active'])).toBe(true);
-    expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
-      true,
-    );
-    expect(isAcceptanceListKey(['verify:acceptancePurgePreview', 'acceptance-1'])).toBe(false);
-  });
-
-  it('keeps project-scoped acceptance feeds in separate cache entries', () => {
-    expect(
-      verifyKeys.acceptances(undefined, undefined, { filter: 'all', projectId: 'project-1' }),
-    ).not.toEqual(
-      verifyKeys.acceptances(undefined, undefined, { filter: 'all', projectId: 'project-2' }),
-    );
-    expect(
-      verifyKeys.acceptancePage('workspace-1', { filter: 'all', projectId: 'project-1' }),
-    ).not.toEqual(
-      verifyKeys.acceptancePage('workspace-1', { filter: 'all', projectId: 'project-2' }),
-    );
-  });
-
-  it('keeps the unfiled, scope and source narrowings in separate cache entries', () => {
-    const base = { filter: 'all' };
-    const page = (query: Parameters<typeof verifyKeys.acceptancePage>[1]) =>
-      verifyKeys.acceptancePage('workspace-1', query);
-
-    expect(page({ ...base, projectId: null })).not.toEqual(page(base));
-    expect(page({ ...base, scope: 'participated' })).not.toEqual(page(base));
-    expect(page({ ...base, source: 'goal' })).not.toEqual(page({ ...base, source: 'task' }));
   });
 });
 

@@ -14,7 +14,6 @@ import * as keyRegistry from './keys';
  */
 const LEGACY_SWR_KEYS = [
   'acceptanceCollaborationKeys.conversation',
-  'acceptanceCommentKeys.list',
   'agentConfigKeys.search',
   'agentHomeKeys.topics',
   'agentSignalKeys.receipts',
@@ -179,10 +178,7 @@ const LEGACY_SWR_KEYS = [
   'userMemoryKeys.preferences',
   'userMemoryKeys.retrieve',
   'userMemoryKeys.tags',
-  'verifyKeys.acceptancePage',
   'verifyKeys.acceptancePurgePreview',
-  'verifyKeys.acceptanceStatuses',
-  'verifyKeys.acceptances',
   'verifyKeys.criteria',
   'verifyKeys.instruction',
   'verifyKeys.reportBundle',
