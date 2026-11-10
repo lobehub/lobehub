@@ -667,27 +667,11 @@ export const verifyKeys = {
     'verify:acceptancePurgePreview',
     acceptanceId,
   ]),
-  criteria: def('verify:criteria', () => ['verify:criteria']),
-  instruction: def('verify:instruction', (documentId: string) => [
-    'verify:instruction',
-    documentId,
-  ]),
-  reportBundle: def('verify:reportBundle', (verifyRunId: string) => [
-    'verify:reportBundle',
-    verifyRunId,
-  ]),
-  rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
   /** The acceptance round an old `/verify/:runId` link redirects to. */
   runAcceptanceRound: def('verify:runAcceptanceRound', (verifyRunId: string) => [
     'verify:runAcceptanceRound',
     verifyRunId,
   ]),
-  rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
-    'verify:rubricCriteria',
-    rubricId,
-  ]),
-  rubrics: def('verify:rubrics', () => ['verify:rubrics']),
-  tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
 // ---- inbox / notifications ----------------------------------------------

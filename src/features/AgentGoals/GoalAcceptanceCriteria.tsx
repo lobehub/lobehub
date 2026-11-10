@@ -16,8 +16,8 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openCriterionEditModal } from '@/features/Acceptance';
+import { useGoalCriteria } from '@/features/Acceptance/hooks';
 import { usePermission } from '@/hooks/usePermission';
-import { useClientDataSWR } from '@/libs/swr';
 import { goalService } from '@/services/goal';
 import type { GoalCriterionWithInstruction } from '@/services/verify';
 import { verifyService } from '@/services/verify';
@@ -55,10 +55,7 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
     const { allowed: canEdit } = usePermission('create_content');
     const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
 
-    const { data: criteria, mutate } = useClientDataSWR(
-      criteriaIds.length > 0 ? ['goal-acceptance-criteria', goalId, criteriaIds.join(',')] : null,
-      () => verifyService.getCriteria(criteriaIds),
-    );
+    const { data: criteria, mutate } = useGoalCriteria(criteriaIds);
 
     const rebind = useCallback(
       async (nextIds: string[]) => {
