@@ -296,6 +296,7 @@
   "creditsChip.rolling.topup": "充值",
   "creditsChip.title": "剩余额度",
   "creditsChip.tooltip": "当前计费周期剩余额度",
+  "creditsChip.viewDetails": "查看详情",
   "creditsChip.viewUsage": "查看用量",
   "crossPlatform.desc": "此订阅通过移动端应用购买，无法在此修改。请在移动设备上管理你的订阅。",
   "crossPlatform.manageOnMobile": "前往移动端管理",

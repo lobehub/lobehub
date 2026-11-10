@@ -296,6 +296,7 @@
   "creditsChip.rolling.topup": "Top up",
   "creditsChip.title": "Usage left",
   "creditsChip.tooltip": "Usage left in the current billing cycle",
+  "creditsChip.viewDetails": "View details",
   "creditsChip.viewUsage": "View usage",
   "crossPlatform.desc": "This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.",
   "crossPlatform.manageOnMobile": "Manage on mobile device",
