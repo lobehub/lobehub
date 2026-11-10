@@ -1,7 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -17,8 +17,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     line-height: 1;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
   `,
   hud: css`
     pointer-events: none;

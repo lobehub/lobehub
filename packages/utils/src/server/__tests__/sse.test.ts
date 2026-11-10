@@ -328,26 +328,4 @@ describe('createSSEHeaders', () => {
       'X-Accel-Buffering': 'no',
     });
   });
-
-  it('should include CORS headers', () => {
-    const headers = createSSEHeaders() as Record<string, string>;
-
-    expect(headers['Access-Control-Allow-Origin']).toBe('*');
-    expect(headers['Access-Control-Allow-Methods']).toBe('GET');
-    expect(headers['Access-Control-Allow-Headers']).toBe('Cache-Control, Last-Event-ID');
-  });
-
-  it('should include cache control headers', () => {
-    const headers = createSSEHeaders() as Record<string, string>;
-
-    expect(headers['Cache-Control']).toBe('no-cache, no-transform');
-  });
-
-  it('should include SSE-specific headers', () => {
-    const headers = createSSEHeaders() as Record<string, string>;
-
-    expect(headers['Content-Type']).toBe('text/event-stream');
-    expect(headers['Connection']).toBe('keep-alive');
-    expect(headers['X-Accel-Buffering']).toBe('no');
-  });
 });

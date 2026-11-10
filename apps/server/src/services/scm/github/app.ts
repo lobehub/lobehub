@@ -2,6 +2,7 @@ import type {
   ScmActorAssociation,
   ScmInstallationRepository,
   ScmInstallationSnapshot,
+  ScmRepositoryListItem,
 } from '@lobechat/types';
 import debug from 'debug';
 import { App, Octokit } from 'octokit';
@@ -122,6 +123,51 @@ export const fetchGitHubInstallation = async (
   return snapshot;
 };
 
+/**
+ * Mint an installation token narrowed to ONE repository and ONE permission,
+ * for a build that is about to clone it.
+ *
+ * `app.getInstallationOctokit` would hand back the installation's full grant —
+ * every repository it was given, every permission the App declares. A build
+ * only ever reads one checkout, so the token it carries is scoped down to
+ * exactly that: a request that names `repositories` and `permissions` gets a
+ * token that can do nothing else, and it expires within the hour on its own.
+ *
+ * Narrowing can only ever subtract. Asking for `contents: read` on an App that
+ * was not granted it fails here rather than producing a token that fails later
+ * inside a sandbox, which is why this returns null instead of throwing: the
+ * caller falls back to the other credential path, and the clone still reports
+ * its own failure in the build log where someone can read it.
+ *
+ * Never log the returned token.
+ */
+export const mintGitHubRepositoryToken = async (params: {
+  installationId: string;
+  repoFullName: string;
+}): Promise<{ expiresAt: string; token: string } | null> => {
+  const app = getGitHubApp();
+  if (!app) return null;
+
+  try {
+    const { data } = await app.octokit.request(
+      'POST /app/installations/{installation_id}/access_tokens',
+      {
+        installation_id: Number(params.installationId),
+        permissions: { contents: 'read' },
+        // The short name, not `owner/name`: this endpoint scopes by repository
+        // within the installation's own account.
+        repositories: [parseRepo(params.repoFullName).repo],
+      },
+    );
+
+    return { expiresAt: data.expires_at, token: data.token };
+  } catch (error) {
+    // By shape, never by content — the one path here that holds a credential.
+    log('could not mint a clone token for %s: %s', params.repoFullName, (error as Error)?.message);
+    return null;
+  }
+};
+
 export const listGitHubInstallationRepositories = async (
   installationId: string,
 ): Promise<ScmInstallationRepository[]> => {
@@ -144,6 +190,42 @@ export const listGitHubInstallationRepositories = async (
 
   log('installation %s has %d repositories', installationId, repositories.length);
   return repositories;
+};
+
+/**
+ * The repositories an installation can read, with what a picker shows. Bounded
+ * by `limit` because an all-repositories organization installation can reach
+ * thousands. GitHub returns them in its own order, not by push time, so a
+ * bounded list can miss recent work — `truncated` says so, and the picker
+ * points to pasting the URL instead.
+ */
+export const listGitHubInstallationRepositoryDetails = async (
+  installationId: string,
+  { limit = 500 }: { limit?: number } = {},
+): Promise<{ repositories: ScmRepositoryListItem[]; truncated: boolean }> => {
+  const app = getGitHubApp();
+  if (!app) throw new Error('GitHub App is not configured');
+
+  const octokit = await app.getInstallationOctokit(Number(installationId));
+  const repositories: ScmRepositoryListItem[] = [];
+  for await (const { data } of octokit.paginate.iterator('GET /installation/repositories', {
+    per_page: 100,
+  })) {
+    for (const repo of data) {
+      repositories.push({
+        defaultBranch: repo.default_branch,
+        description: repo.description ?? null,
+        fullName: repo.full_name,
+        htmlUrl: repo.html_url,
+        ownerAvatarUrl: repo.owner?.avatar_url ?? null,
+        private: repo.private,
+        pushedAt: repo.pushed_at ?? null,
+      });
+    }
+    if (repositories.length > limit) break;
+  }
+
+  return { repositories: repositories.slice(0, limit), truncated: repositories.length > limit };
 };
 
 /**

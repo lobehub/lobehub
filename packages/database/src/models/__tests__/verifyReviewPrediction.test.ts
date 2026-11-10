@@ -23,12 +23,14 @@ const operationId = 'verify-prediction-test-op';
 const identity = { model: 'gemini-3.6-flash', promptVersion: 'v1', provider: 'google' };
 
 let resultIds: string[];
+let runId: string;
 
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }]);
   await new AgentOperationModel(serverDB, userId).recordStart({ operationId });
   const run = await new VerifyRunModel(serverDB, userId).ensureForOperation(operationId);
+  runId = run.id;
   const rows = await new VerifyCheckResultModel(serverDB, userId).createMany([
     { checkItemId: 'a', checkItemIndex: 0, verifierType: 'llm', verifyRunId: run.id },
     { checkItemId: 'b', checkItemIndex: 1, verifierType: 'llm', verifyRunId: run.id },
@@ -108,5 +110,179 @@ describe('VerifyReviewPredictionModel.resetUnadjudicated', () => {
     await model.resetUnadjudicated([], identity);
 
     expect(await model.findById(row.id)).toBeDefined();
+  });
+});
+
+describe('VerifyReviewPredictionModel.upsert', () => {
+  it('replaces the previous opinion in place and clears the stale adjudication', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    const first = await model.upsert({
+      action: 'accept',
+      checkResultId: resultIds[0],
+      comment: 'looks good',
+      confidence: 0.9,
+      status: 'judged',
+      ...identity,
+    });
+    await model.adjudicate(first.id, { adjudication: 'confirmed', edit: 'verbatim' });
+
+    // A re-run that produced no verdict must land on the same row and drop the previous
+    // action / comment / adjudication, instead of stacking a second vote.
+    const replacement = await model.upsert({
+      checkResultId: resultIds[0],
+      status: 'skipped',
+      statusReason: 'no frame to look at',
+      ...identity,
+    });
+
+    expect(replacement.id).toBe(first.id);
+    expect(replacement.status).toBe('skipped');
+    expect(replacement.action).toBeNull();
+    expect(replacement.comment).toBeNull();
+    expect(replacement.confidence).toBeNull();
+    expect(replacement.adjudication).toBeNull();
+    expect(replacement.adjudicatedAt).toBeNull();
+    expect(replacement.adjudicationEdit).toBeNull();
+    expect(replacement.statusReason).toBe('no frame to look at');
+    expect(await model.listByCheckResult(resultIds[0])).toHaveLength(1);
+  });
+});
+
+describe('VerifyReviewPredictionModel.adjudicate', () => {
+  it('does not answer a proposal the caller cannot see', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    const row = await model.upsert({
+      action: 'reject',
+      checkResultId: resultIds[0],
+      status: 'judged',
+      ...identity,
+    });
+
+    const otherModel = new VerifyReviewPredictionModel(serverDB, 'someone-else');
+    expect(await otherModel.adjudicate(row.id, { adjudication: 'confirmed' })).toBeUndefined();
+
+    expect((await model.findById(row.id))?.adjudication).toBeNull();
+  });
+});
+
+describe('VerifyReviewPredictionModel.findAdjudicated', () => {
+  it('returns the answered proposal only for the exact result + model identity', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    const row = await model.upsert({
+      action: 'accept',
+      checkResultId: resultIds[0],
+      status: 'judged',
+      ...identity,
+    });
+
+    // an unanswered proposal is not a recorded label
+    expect(
+      await model.findAdjudicated(
+        resultIds[0],
+        identity.provider,
+        identity.model,
+        identity.promptVersion,
+      ),
+    ).toBeUndefined();
+
+    await model.adjudicate(row.id, { adjudication: 'not-an-issue' });
+
+    const found = await model.findAdjudicated(
+      resultIds[0],
+      identity.provider,
+      identity.model,
+      identity.promptVersion,
+    );
+    expect(found?.id).toBe(row.id);
+
+    // any other identity axis misses the label
+    expect(
+      await model.findAdjudicated(resultIds[0], identity.provider, identity.model, 'v0'),
+    ).toBeUndefined();
+    expect(
+      await model.findAdjudicated(resultIds[0], identity.provider, 'other-model', 'v1'),
+    ).toBeUndefined();
+    expect(
+      await model.findAdjudicated(resultIds[0], 'openai', identity.model, 'v1'),
+    ).toBeUndefined();
+    expect(
+      await model.findAdjudicated(resultIds[1], identity.provider, identity.model, 'v1'),
+    ).toBeUndefined();
+
+    // ownership: another user never sees the label
+    const otherModel = new VerifyReviewPredictionModel(serverDB, 'someone-else');
+    expect(
+      await otherModel.findAdjudicated(
+        resultIds[0],
+        identity.provider,
+        identity.model,
+        identity.promptVersion,
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe('VerifyReviewPredictionModel.listByRuns', () => {
+  it('is a no-op for an empty run list', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    expect(await model.listByRuns([])).toEqual([]);
+  });
+
+  it('annotates every opinion with its check item and run', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    await model.upsert({
+      action: 'accept',
+      checkResultId: resultIds[0],
+      status: 'judged',
+      ...identity,
+    });
+    await model.upsert({
+      action: 'reject',
+      checkResultId: resultIds[1],
+      status: 'judged',
+      ...identity,
+      model: 'deepseek-v4-pro',
+    });
+
+    const rows = await model.listByRuns([runId]);
+    expect(rows).toHaveLength(2);
+    expect([...rows.map((r) => r.checkItemId)].sort()).toEqual(['a', 'b']);
+    expect(rows.every((r) => r.verifyRunId === runId)).toBe(true);
+
+    const otherModel = new VerifyReviewPredictionModel(serverDB, 'someone-else');
+    expect(await otherModel.listByRuns([runId])).toEqual([]);
+  });
+
+  it('returns nothing for a run that has no predictions', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    expect(await model.listByRuns(['00000000-0000-0000-0000-000000000000'])).toEqual([]);
+  });
+});
+
+describe('VerifyReviewPredictionModel.listByCheckResult', () => {
+  it('returns every opinion recorded on a result, scoped to the caller', async () => {
+    const model = new VerifyReviewPredictionModel(serverDB, userId);
+    await model.upsert({
+      action: 'accept',
+      checkResultId: resultIds[0],
+      status: 'judged',
+      ...identity,
+    });
+    await model.upsert({
+      action: 'unjudgeable',
+      checkResultId: resultIds[0],
+      status: 'judged',
+      ...identity,
+      model: 'deepseek-v4-pro',
+    });
+
+    const rows = await model.listByCheckResult(resultIds[0]);
+    expect(rows).toHaveLength(2);
+    expect([...rows.map((r) => r.model)].sort()).toEqual(['deepseek-v4-pro', 'gemini-3.6-flash']);
+
+    expect(await model.listByCheckResult(resultIds[1])).toHaveLength(0);
+
+    const otherModel = new VerifyReviewPredictionModel(serverDB, 'someone-else');
+    expect(await otherModel.listByCheckResult(resultIds[0])).toHaveLength(0);
   });
 });

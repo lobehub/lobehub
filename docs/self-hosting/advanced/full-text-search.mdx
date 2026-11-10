@@ -26,12 +26,12 @@ LobeHub supports three product-search backends:
 fall back to another backend when the selected provider is unavailable.
 
 <Callout type="warning">
-  `FTS_SEARCH_PROVIDER=elasticsearch` does not make historical database migrations skip
-  `pg_search`. The current Elasticsearch migration workflow is intended for an existing LobeHub
-  database that has already applied the `pg_search` migrations. A fresh database on a service that
-  cannot install `pg_search` is not currently supported merely by selecting Elasticsearch:
-  `bun run db:migrate` still reaches migrations that create the extension and BM25 indexes, and
-  fails when the database service does not provide them.
+  Database migrations install `pg_search` and its BM25 indexes only when the database provides the
+  extension, and skip that step otherwise. On PostgreSQL without `pg_search`, set
+  `FTS_SEARCH_PROVIDER=pg_like` or `elasticsearch` before starting LobeHub. While the provider is
+  `pg_search`, including when it is unset, the database migration step stops with an error naming
+  the fix if the extension or any LobeHub BM25 index is missing, so the Docker container does not
+  start and a Vercel build fails.
 </Callout>
 
 ## Choose a backend
@@ -48,6 +48,14 @@ migrations to install the extension and the LobeHub-managed BM25 indexes, then k
 
 ```bash
 FTS_SEARCH_PROVIDER=pg_search
+```
+
+If you install `pg_search` on a database that ran the LobeHub migrations without it, create the
+extension and the BM25 indexes from a LobeHub source checkout before selecting this provider:
+
+```bash
+psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS pg_search'
+psql "$DATABASE_URL" -f packages/database/migrations/0093_add_bm25_indexes_with_icu.sql
 ```
 
 ### Use `pg_like` on plain PostgreSQL
@@ -73,9 +81,10 @@ What to expect compared with the other backends:
   personal and small-team instances; for large message or memory tables, prefer `pg_search` or
   Elasticsearch.
 
-The same migration limitation as Elasticsearch applies: `pg_like` does not remove the historical
-`pg_search` migrations, so a fresh database still has to run on an image that provides the
-extension until those migrations become optional.
+New databases and upgrades both work on PostgreSQL without `pg_search`: the migrations skip the
+extension and BM25 indexes there. If you previously replaced the `0090_enable_pg_search.sql` or
+`0093_add_bm25_indexes_with_icu.sql` migration files to get past a failed upgrade, remove that
+override.
 
 ### Use Elasticsearch
 
@@ -87,9 +96,9 @@ service-free `pg_like` backend first.
 Neon stopped offering `pg_search` to new projects on March 19, 2026. Retirement timelines for
 existing projects follow the notice Neon sends for that project. LobeHub users who receive such a
 notice should use
-[Migrate from pg\_search on Neon](/docs/self-hosting/advanced/neon-pg-search-migration) to choose
+[Migrate from pg_search on Neon](/docs/self-hosting/advanced/neon-pg-search-migration) to choose
 `pg_like` or Elasticsearch. Check Neon's
-[current pg\_search notice](https://neon.com/docs/extensions/pg_search) before acting.
+[current pg_search notice](https://neon.com/docs/extensions/pg_search) before acting.
 
 There are two supported ways to run Elasticsearch. Both use the same backfill and incremental
 sync commands and the same `ES_INDEX_NAMESPACE`; they differ only in how LobeHub reaches the
@@ -116,15 +125,14 @@ Elasticsearch runs with security disabled and is reachable only inside the Compo
 plaintext, no-API-key connection must be enabled explicitly with `ES_ALLOW_INSECURE_HTTP=true`. See
 [Run Elasticsearch with Docker Compose](#run-elasticsearch-with-docker-compose) below.
 
-#### Database requirement for both options
+#### Database support for both options
 
-Selecting Elasticsearch does not remove the historical `pg_search` migrations. Until that
-follow-up ships, every LobeHub database, including a fresh Docker Compose install, must still run on
-a PostgreSQL image that can install `pg_search`, such as the bundled `paradedb/paradedb:latest-pg17`.
-Elasticsearch then takes over search traffic after the backfill; the `pg_search` objects can be
-removed later with the supported cleanup command.
+Elasticsearch works with PostgreSQL with or without `pg_search`: LobeHub migrations skip the
+BM25 setup on a database that does not provide the extension. When the database already has
+`pg_search` objects, Elasticsearch takes over search traffic after the backfill, and the objects can
+be removed later with the supported cleanup command.
 
-See [Migrate from pg\_search on Neon](/docs/self-hosting/advanced/neon-pg-search-migration) for
+See [Migrate from pg_search on Neon](/docs/self-hosting/advanced/neon-pg-search-migration) for
 guidance on choosing a backend and starting the migration.
 
 ## How Elasticsearch synchronization works

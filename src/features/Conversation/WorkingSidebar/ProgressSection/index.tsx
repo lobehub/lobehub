@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Checkbox, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,8 +43,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 10.5px;
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   `,
   headerRow: css`
     cursor: pointer;

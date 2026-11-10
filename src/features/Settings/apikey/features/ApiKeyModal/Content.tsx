@@ -1,11 +1,20 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { type Dayjs } from 'dayjs';
+import {
+  Button,
+  CopyButton,
+  Flexbox,
+  Icon,
+  Input,
+  Select,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import { CheckCircle2 } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,25 +25,25 @@ import { type CreateApiKeyParams } from '@/types/apiKey';
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
 import ScopeSelector from './ScopeSelector';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  keyBlock: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  keyText: css`
-    flex: 1;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    word-break: break-all;
-  `,
-  successIcon: css`
-    color: ${cssVar.colorSuccess};
-  `,
-}));
+const styles = stylex.create({
+  keyBlock: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  keyText: {
+    flex: '1',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    wordBreak: 'break-all',
+  },
+  successIcon: { color: cssVar.colorSuccess },
+});
 
 type FormValues = Omit<CreateApiKeyParams, 'expiresAt' | 'scopes'>;
 
@@ -60,7 +69,6 @@ export interface ApiKeyModalContentProps {
 const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
   const { t } = useTranslation('auth');
   const { close } = useModalContext();
-  const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
   const [fullAccess, setFullAccess] = useState(true);
   const [selectedScopes, setSelectedScopes] = useState<ApiKeyScope[]>([]);
@@ -101,15 +109,26 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
     }
   };
 
+  const form = useForm<FormValues>({ onSubmit: handleFinish });
+
   if (createdKey) {
     return (
       <Flexbox gap={16}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <Icon className={styles.successIcon} icon={CheckCircle2} size={18} />
+          <Icon
+            className={stylex.props(styles.successIcon).className}
+            icon={CheckCircle2}
+            size={18}
+          />
           <Text style={{ fontWeight: 500 }}>{t('apikey.created.title')}</Text>
         </Flexbox>
-        <Flexbox horizontal align={'center'} className={styles.keyBlock} gap={8}>
-          <span className={styles.keyText}>{createdKey}</span>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.keyBlock).className}
+          gap={8}
+        >
+          <span {...stylex.props(styles.keyText)}>{createdKey}</span>
           <CopyButton content={createdKey} size={'small'} title={t('apikey.display.copy')} />
         </Flexbox>
         <Text style={{ fontSize: 12 }} type={'secondary'}>
@@ -122,21 +141,21 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
     );
   }
 
-  const itemStyle = { marginBottom: 0 };
+  const itemStyle = { paddingBlock: 0 };
 
   return (
-    <Form colon={false} form={form} layout={'vertical'} onFinish={handleFinish}>
+    <Form form={form} layout={'vertical'}>
       <Flexbox gap={16}>
-        <Form.Item
+        <Form.Field
+          required
           label={t('apikey.form.fields.name.label')}
           name={'name'}
-          rules={[{ required: true }]}
           style={itemStyle}
         >
           <Input placeholder={t('apikey.form.fields.name.placeholder')} />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item label={t('apikey.form.fields.expiresAt.label')} style={itemStyle}>
+        <Form.Field label={t('apikey.form.fields.expiresAt.label')} style={itemStyle}>
           <Flexbox gap={8}>
             <Select
               value={expiryPreset}
@@ -155,13 +174,18 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
               />
             )}
           </Flexbox>
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
-          help={scopeMissing ? t('apikey.form.fields.scopes.required') : undefined}
+        <Form.Field
           label={t('apikey.form.fields.scopes.label')}
           style={itemStyle}
-          validateStatus={scopeMissing ? 'error' : undefined}
+          extra={
+            scopeMissing ? (
+              <Text style={{ fontSize: 12 }} type={'danger'}>
+                {t('apikey.form.fields.scopes.required')}
+              </Text>
+            ) : undefined
+          }
         >
           <ScopeSelector
             fullAccess={fullAccess}
@@ -169,7 +193,7 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
             onFullAccessChange={setFullAccess}
             onSelectedChange={setSelectedScopes}
           />
-        </Form.Item>
+        </Form.Field>
 
         <Button
           block

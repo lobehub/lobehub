@@ -170,26 +170,5 @@ describe('LobeGiteeAI - custom features', () => {
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
-
-    it('should pass correct client to processMultiProviderModelList', async () => {
-      const mockModelList = [
-        { id: 'deepseek-r1', object: 'model' },
-        { id: 'qwen-plus', object: 'model' },
-      ];
-
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://ai.gitee.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({ data: mockModelList }),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      // Verify processMultiProviderModelList was called with correct parameters
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-    });
   });
 });

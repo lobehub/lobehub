@@ -11,6 +11,9 @@ import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
+import { getChatGroupStoreState, useAgentGroupStore } from '@/store/agentGroup';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import * as serverConfigStore from '@/store/serverConfig';
 
@@ -29,6 +32,7 @@ vi.mock('@/services/aiAgent', () => ({
 vi.mock('@/services/shareChat', () => ({
   shareChatService: {
     execAgentTask: vi.fn(),
+    getTopics: vi.fn().mockResolvedValue([]),
     interruptTask: vi.fn(),
     refreshGatewayToken: vi.fn(),
   },
@@ -42,14 +46,17 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
+    // Defaults to "no detail readable" so the silent-end reconcile stays
+    // fail-safe unless a test opts in by returning a row.
+    getTopicDetail: vi.fn().mockResolvedValue(null),
     settleRunningOperation: vi.fn().mockResolvedValue(undefined),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-const moveChatContextSelections = vi.hoisted(() => vi.fn());
+const moveChatComposerAttachments = vi.hoisted(() => vi.fn());
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections }),
+  getFileStoreState: () => ({ moveChatComposerAttachments }),
 }));
 
 const mockUserDefaultConfig = vi.hoisted(() => ({
@@ -71,8 +78,6 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
-  // Lab flag off: this suite pins the v1 per-operation socket path.
-  labPreferSelectors: { enableGatewayMux: () => false },
   settingsSelectors: {
     defaultAgentConfig: () => ({
       chatConfig: { disableGatewayMode: mockUserDefaultConfig.disableGatewayMode },
@@ -183,7 +188,8 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
-    moveChatContextSelections.mockClear();
+    moveChatComposerAttachments.mockClear();
+    vi.mocked(topicService.getTopicDetail).mockResolvedValue(null as never);
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
@@ -282,6 +288,49 @@ describe('GatewayActionImpl', () => {
       expect(mockClient.connect).toHaveBeenCalledOnce();
     });
 
+    it('preserves the local run across a transport handoff and ignores the old reconcile', async () => {
+      const { action, mockClient, state } = createTestAction();
+      state.operations = {
+        'local-1': {
+          id: 'local-1',
+          type: 'execServerAgentRuntime',
+          status: 'running',
+          metadata: { serverOperationId: 'op-1' },
+        },
+      };
+      state.completeOperation = vi.fn();
+      let resolveRunOver!: (value: boolean) => void;
+      const onSilentEnd = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveRunOver = resolve;
+          }),
+      );
+      const onSessionComplete = vi.fn();
+      const params = {
+        gatewayUrl: 'https://gateway.test.com',
+        localOperationId: 'local-1',
+        operationId: 'op-1',
+        token: 'test-token',
+        topicId: TEST_TOPIC_ID,
+        onSilentEnd,
+        onSessionComplete,
+      };
+      action.connectToGateway(params);
+      mockClient.emitEvent('reconnecting', 1000);
+      await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+      const replacement = createMockClient();
+      action.createClient = vi.fn(() => replacement);
+      action.connectToGateway(params);
+      resolveRunOver(true);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      expect(state.completeOperation).not.toHaveBeenCalled();
+      expect(onSessionComplete).not.toHaveBeenCalled();
+      expect(state.gatewayConnections['op-1'].client).toBe(replacement);
+      replacement.emitEvent('session_complete', { source: 'raw_session_complete' });
+      expect(onSessionComplete).toHaveBeenCalledOnce();
+    });
+
     it('should wire up status_changed listener', () => {
       const { action, mockClient, state } = createTestAction();
 
@@ -356,6 +405,283 @@ describe('GatewayActionImpl', () => {
 
       mockClient.emitEvent('disconnected');
       expect(state.gatewayConnections['op-1']).toBeUndefined();
+    });
+
+    // A socket that ends without the op's terminal frame is the one end the
+    // transport cannot read: the run may still be alive (a drop that will
+    // reconnect) or already over with its terminal lost. Completing the op
+    // unconditionally would settle live runs; doing nothing left the local
+    // operation stuck `running` forever. So the transport defers to the caller.
+    describe('silent end (disconnected without a terminal frame)', () => {
+      it('leaves the op running while the caller reports the run still alive', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('disconnected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        expect(onComplete).not.toHaveBeenCalled();
+      });
+
+      it('fires the terminal-missing onSessionComplete once the caller proves the run is over', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd: () => true,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('disconnected');
+
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith({
+            authFailed: false,
+            completion: undefined,
+            succeeded: false,
+            terminalReceived: false,
+          }),
+        );
+      });
+
+      it('keeps waiting when the reconcile itself fails', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onSilentEnd = vi.fn(() => {
+          throw new Error('read failed');
+        });
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('disconnected');
+        await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+
+        expect(onComplete).not.toHaveBeenCalled();
+      });
+
+      it('skips the reconcile when the terminal frame already arrived', () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('agent_event', {
+          data: { reason: 'done' },
+          operationId: 'op-1',
+          stepIndex: 0,
+          timestamp: Date.now(),
+          type: 'agent_runtime_end',
+        } satisfies AgentStreamEvent);
+        mockClient.emitEvent('disconnected');
+
+        expect(onSilentEnd).not.toHaveBeenCalled();
+        expect(onComplete).toHaveBeenCalledWith(
+          expect.objectContaining({ terminalReceived: true }),
+        );
+      });
+
+      // A per-op `disconnected` follows terminal completion, auth failure or an
+      // explicit unsubscribe — never an unintentional socket loss. v1 takes its
+      // `reconnecting` branch on a close and the mux only broadcasts a per-op
+      // `reconnecting` / `status_changed` while it backs off, so hooking
+      // `disconnected` alone left the reconcile unreachable for every case the
+      // fix targets: the local op stayed `running` forever.
+      it('reconciles on the `reconnecting` signal an unintentional socket loss emits', async () => {
+        const { action, mockClient, state } = createTestAction();
+        const onComplete = vi.fn();
+        const onEvent = vi.fn();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onEvent,
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ succeeded: false, terminalReceived: false }),
+          ),
+        );
+
+        // The missed terminal is the path that applies the run's final state, so
+        // the retire must ask the handler to re-read the DB — otherwise the last
+        // text/tool state stays stale, and the teardown below cancels the reconnect
+        // that could have replayed it.
+        expect(onEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { reason: 'silent_end' }, type: 'notify_update' }),
+        );
+
+        // A retired run must not leave its transport running: dropping the store
+        // handle alone leaves a v1 reconnect timer opening sockets and a mux
+        // operation subscribed for a run nobody will ever read.
+        await vi.waitFor(() => expect(mockClient.disconnect).toHaveBeenCalled());
+        expect(state.gatewayConnections['op-1']).toBeUndefined();
+      });
+
+      it('reconciles when the mux broadcasts a per-op status_changed(disconnected)', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        // A redial in progress is not yet the end.
+        mockClient.emitEvent('status_changed', 'reconnecting');
+        expect(onSilentEnd).not.toHaveBeenCalled();
+        expect(mockClient.disconnect).not.toHaveBeenCalled();
+
+        mockClient.emitEvent('status_changed', 'disconnected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+        // The caller answered "still running", so the transport stays up.
+        expect(mockClient.disconnect).not.toHaveBeenCalled();
+      });
+
+      it('stops reconciling once the run has been retired', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        mockClient.emitEvent('reconnecting', 2000);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(onSilentEnd).toHaveBeenCalledOnce();
+      });
+
+      // A loss-time read can fail outright (offline while the dial backs off), and
+      // the dial that then succeeds emits no further loss signal — so nothing else
+      // would ever re-check and the op would stay `running`.
+      it('re-checks once the transport reconnects after a "not over" answer', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledTimes(1));
+
+        mockClient.emitEvent('connected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ terminalReceived: false }),
+          ),
+        );
+      });
+
+      it('does not read the topic on a plain initial connect', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('connected');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(onSilentEnd).not.toHaveBeenCalled();
+      });
+
+      it('leaves a replacement transport alone when a stale reconcile resolves', async () => {
+        const { action, mockClient, set, state } = createTestAction();
+        let resolveRunOver: ((value: boolean) => void) | undefined;
+        const onSilentEnd = vi.fn(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveRunOver = resolve;
+            }),
+        );
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        // The mux → v1 fallback re-enters `connectToGateway` under the SAME
+        // operation id while this read is still in flight.
+        const replacement = createMockClient();
+        set({ gatewayConnections: { 'op-1': { client: replacement, status: 'connecting' } } });
+
+        resolveRunOver!(true);
+        await vi.waitFor(() => expect(mockClient.disconnect).toHaveBeenCalled());
+
+        expect(state.gatewayConnections['op-1']?.client).toBe(replacement);
+      });
     });
 
     it('should cleanup on auth_failed', () => {
@@ -556,6 +882,7 @@ describe('GatewayActionImpl', () => {
       const onOperationCancel = vi.fn();
       const replaceMessages = vi.fn();
       const refreshTopic = vi.fn().mockResolvedValue(undefined);
+      const refreshTopicDetail = vi.fn().mockResolvedValue(undefined);
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const switchTopic = vi.fn();
       const updateTopicStatus = vi.fn();
@@ -578,6 +905,7 @@ describe('GatewayActionImpl', () => {
         onOperationCancel,
         replaceMessages,
         refreshTopic,
+        refreshTopicDetail,
         startOperation,
         switchTopic,
         updateTopicStatus,
@@ -608,6 +936,7 @@ describe('GatewayActionImpl', () => {
         onOperationCancel,
         replaceMessages,
         refreshTopic,
+        refreshTopicDetail,
         set,
         startOperation,
         state,
@@ -659,6 +988,75 @@ describe('GatewayActionImpl', () => {
       expect(connectToGateway).toHaveBeenCalled();
     });
 
+    /** @example A run dispatched by this client may recover from one live overloaded error. */
+    it('grants one automatic heterogeneous retry to a run started from this client', async () => {
+      const { action, startOperation } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'topic-1',
+        userMessageId: 'user-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+        message: 'run it',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ heteroAutoRetryAvailable: true }),
+          type: 'execServerAgentRuntime',
+        }),
+      );
+    });
+
+    it('refreshes the Topic detail key after heterogeneous follow-up dispatch', async () => {
+      const { action, state, connectToGateway, refreshTopicDetail } = createExecuteTestAction();
+      state.topicDetailMap = {
+        'target-topic': {
+          id: 'target-topic',
+          metadata: {
+            heteroRuntimeConfig: { fields: [], operationId: 'old-operation' },
+          },
+        },
+      };
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'target-agent',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        heteroType: 'codex',
+        message: 'ok',
+        operationId: 'new-operation',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'target-topic',
+        userMessageId: 'user-1',
+      });
+      await action.executeGatewayAgent({
+        context: {
+          agentId: 'target-agent',
+          isolatedTopic: true,
+          scope: 'main',
+          topicId: 'target-topic',
+        },
+        message: 'Continue after changing Agent speed',
+      });
+      expect(refreshTopicDetail).toHaveBeenCalledWith('target-topic');
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
     const precreatedInterventionResult: ExecAgentResult = {
       agentId: 'agent-1',
       assistantMessageId: 'ast-resumed',
@@ -673,6 +1071,124 @@ describe('GatewayActionImpl', () => {
       topicId: 'topic-1',
       userMessageId: 'user-1',
     };
+
+    it.each(['reconnect-first', 'primary-first', 'primary-completed', 'token-rejected'] as const)(
+      'keeps one local owner when continuation races reconnect: %s',
+      async (order) => {
+        const reconnectFirst = order === 'reconnect-first';
+        const { action, get, state } = createExecuteTestAction();
+        const operations: ChatStore['operations'] = {};
+        state.operations = operations;
+        let startedOperations = 0;
+        state.messagesMap = {};
+        const originalGet = get.getMockImplementation()!;
+        const completeOperation = vi.fn((id: string) => {
+          operations[id].status = 'completed';
+        });
+        const clients: ReturnType<typeof createMockClient>[] = [];
+        action.createClient = vi.fn(() => {
+          const client = createMockClient();
+          client.disconnect.mockImplementation(() => client.emitEvent('disconnected'));
+          clients.push(client);
+          return client;
+        });
+        get.mockImplementation(() => ({
+          ...originalGet(),
+          completeOperation,
+          connectToGateway: action.connectToGateway,
+          internal_pinTopicStatus: vi.fn(),
+          startOperation: (params: Parameters<ChatStore['startOperation']>[0]) => {
+            const id = `local-${++startedOperations}`;
+            operations[id] = {
+              ...params,
+              abortController: new AbortController(),
+              context: params.context ?? {},
+              metadata: { startTime: Date.now(), ...params.metadata },
+              id,
+              status: 'running',
+            };
+            return { operationId: id };
+          },
+        }));
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: { runningOperation: { operationId: 'server-op-resumed' } },
+        } as never);
+        let releaseToken!: (value: { token: string }) => void;
+        let rejectToken!: (error: Error) => void;
+        vi.mocked(aiAgentService.refreshGatewayToken).mockImplementationOnce(
+          () =>
+            new Promise((resolve, reject) => {
+              releaseToken = resolve;
+              rejectToken = reject;
+            }),
+        );
+        const reconnect = action.reconnectToGatewayOperation({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-resumed',
+          heteroType: null,
+          operationId: 'server-op-resumed',
+          topicId: 'topic-1',
+        });
+        operations.unrelated = {
+          ...operations['local-1'],
+          id: 'unrelated',
+          metadata: { startTime: Date.now(), serverOperationId: 'other-server-run' },
+        };
+        if (reconnectFirst) {
+          releaseToken({ token: 'fresh-token' });
+          await reconnect;
+          operations.reasoning = {
+            ...operations['local-1'],
+            id: 'reasoning',
+            type: 'reasoning',
+            parentOperationId: 'local-1',
+            metadata: { startTime: Date.now() },
+          };
+        }
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          message: '',
+          parentMessageId: 'answered-tool',
+          precreatedResult: precreatedInterventionResult,
+        });
+        if (order === 'primary-completed') {
+          clients.at(-1)!.emitEvent('session_complete', { source: 'raw_session_complete' });
+        }
+        if (!reconnectFirst) {
+          if (order === 'token-rejected') rejectToken(new Error('superseded token request failed'));
+          else releaseToken({ token: 'fresh-token' });
+          await reconnect;
+        }
+        // The primary must remain the executor; a passive token refresh cannot replace it.
+        expect(clients).toHaveLength(reconnectFirst ? 2 : 1);
+        const running = Object.values(operations).filter(
+          (op) => op.id !== 'unrelated' && op.status === 'running',
+        );
+        expect(running.map((op) => op.id)).toEqual(
+          order === 'primary-completed' ? [] : ['local-2'],
+        );
+        expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+        expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+        if (reconnectFirst) {
+          // Late signals from the replaced subscription must not delete or settle its successor.
+          clients[0].emitEvent('session_complete', { source: 'raw_session_complete' });
+          clients[0].emitEvent('auth_failed', 'late auth failure');
+          clients[0].emitEvent('status_changed', 'disconnected');
+          expect(state.gatewayConnections['server-op-resumed']?.client).toBe(clients[1]);
+          expect(operations['local-2'].status).toBe('running');
+        }
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+        clients.at(-1)!.emitEvent('session_complete', { source: 'raw_session_complete' });
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+        expect(operations.unrelated.status).toBe('running');
+        if (reconnectFirst) expect(operations.reasoning.status).toBe('completed');
+        expect(['local-1', 'local-2'].map((id) => operations[id].status)).toEqual([
+          'completed',
+          'completed',
+        ]);
+      },
+    );
 
     it.each(['approved', 'rejected'] as const)(
       'removes a %s question from pending interventions before connecting the precreated continuation',
@@ -852,6 +1368,9 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce();
         expect(action.createClient).toHaveBeenLastCalledWith({
+          // The page-scoped relay client id, so the gateway can route
+          // `llm_execute` to the tab that started the run.
+          clientId: expect.any(String),
           gatewayUrl: expectedUrl,
           operationId: 'server-op-1',
           resumeOnConnect: undefined,
@@ -869,6 +1388,9 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledWith('topic-1');
         expect(action.createClient).toHaveBeenLastCalledWith({
+          // The page-scoped relay client id, so the gateway can route
+          // `llm_execute` to the tab that started the run.
+          clientId: expect.any(String),
           gatewayUrl: expectedUrl,
           operationId: 'server-op-1',
           resumeOnConnect: true,
@@ -956,8 +1478,227 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'user-msg-123',
           prompt: 'Original question',
         }),
-        expect.anything(),
       );
+    });
+
+    // G-05: an approval on a group member's tool continues that member under
+    // the supervisor's run.
+    describe('group member approval continuation', () => {
+      const groupId = 'cg_team';
+      const execResult = {
+        agentId: 'agt_sup',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      } as const;
+      let previousGroupMap: ReturnType<typeof getChatGroupStoreState>['groupMap'];
+
+      beforeEach(() => {
+        previousGroupMap = getChatGroupStoreState().groupMap;
+        useAgentGroupStore.setState({
+          groupMap: {
+            ...previousGroupMap,
+            [groupId]: { id: groupId, supervisorAgentId: 'agt_sup' } as any,
+          },
+        });
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(execResult as any);
+      });
+
+      afterEach(() => {
+        useAgentGroupStore.setState({ groupMap: previousGroupMap });
+      });
+
+      // An approval on a member's tool continues that member under the
+      // supervisor's run. The supervisor keeps the topic, and its open stream
+      // carries the continuation and the closing — taking the marker over and
+      // dropping that stream left a reloaded page with no closing and a run
+      // that never ended (G-05).
+      it("keeps the supervisor's marker and stream when an approval continues a member", async () => {
+        const { action, internalDispatchTopic } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          agentId: 'agt_carol',
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+        const topicSpy = vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+          () =>
+            ({
+              id: 'topic-1',
+              metadata: { runningOperation: { operationId: 'server-supervisor-op' } },
+            }) as any,
+        );
+        const disconnect = vi.spyOn(action, 'disconnectFromGateway');
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'carol-tool',
+        });
+
+        expect(disconnect).not.toHaveBeenCalledWith('server-supervisor-op');
+        expect(internalDispatchTopic).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            value: expect.objectContaining({
+              metadata: expect.objectContaining({
+                runningOperation: expect.objectContaining({ operationId: 'server-member-op' }),
+              }),
+            }),
+          }),
+        );
+        topicSpy.mockRestore();
+      });
+
+      // Codex P2 on #20093: the supervisor can dispatch itself as a member, so
+      // the continuation is told apart by the server's flag, not by agent ids.
+      it("keeps the supervisor's marker when the continued member is the supervisor itself", async () => {
+        const { action, internalDispatchTopic } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+        const topicSpy = vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+          () =>
+            ({
+              id: 'topic-1',
+              metadata: { runningOperation: { operationId: 'server-supervisor-op' } },
+            }) as any,
+        );
+        const disconnect = vi.spyOn(action, 'disconnectFromGateway');
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'sup-self-tool',
+        });
+
+        expect(disconnect).not.toHaveBeenCalledWith('server-supervisor-op');
+        expect(internalDispatchTopic).not.toHaveBeenCalledWith(
+          expect.objectContaining({
+            value: expect.objectContaining({
+              metadata: expect.objectContaining({
+                runningOperation: expect.objectContaining({ operationId: 'server-member-op' }),
+              }),
+            }),
+          }),
+        );
+        topicSpy.mockRestore();
+      });
+
+      // Codex P1 on #20093: the server names the supervisor's run as operationId
+      // so older clients keep following it; this client runs the member op.
+      it('follows the member continuation op the server sets aside', async () => {
+        const { action, connectToGateway } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          agentId: 'agt_carol',
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'carol-tool',
+        });
+
+        expect(connectToGateway.mock.calls[0][0]).toMatchObject({
+          operationId: 'server-member-op',
+        });
+      });
+
+      it("still takes over a stale marker for the supervisor's own new run", async () => {
+        const { action } = createExecuteTestAction();
+        const topicSpy = vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+          () =>
+            ({
+              id: 'topic-1',
+              metadata: { runningOperation: { operationId: 'server-old-op' } },
+            }) as any,
+        );
+        const disconnect = vi.spyOn(action, 'disconnectFromGateway');
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: 'hi',
+        });
+
+        expect(disconnect).toHaveBeenCalledWith('server-old-op');
+        topicSpy.mockRestore();
+      });
+      // The continuation ends while the supervisor keeps running: the topic is
+      // still the supervisor's to settle (G-05).
+      it("leaves the topic settle to the supervisor when a member's continuation ends", async () => {
+        const { action, connectToGateway } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          ...execResult,
+          agentId: 'agt_carol',
+          groupMemberContinuation: true,
+          memberOperationId: 'server-member-op',
+          operationId: 'server-supervisor-op',
+        } as any);
+        (action as any).clearLocalRunningOperation = vi.fn();
+        vi.mocked(topicService.settleRunningOperation).mockClear();
+
+        await action.executeGatewayAgent({
+          context: {
+            agentId: 'agt_sup',
+            groupId,
+            scope: 'group',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: '',
+          parentMessageId: 'carol-tool',
+        });
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        (action as any).completeOperation = vi.fn();
+
+        onSessionComplete({
+          authFailed: false,
+          completion: { source: 'resume_status', status: 'completed' },
+          succeeded: true,
+          terminalReceived: true,
+        });
+
+        expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      });
     });
 
     it('should not include parentMessageId when not provided (normal send)', async () => {
@@ -988,7 +1729,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: undefined,
           prompt: 'Hello',
         }),
-        expect.anything(),
       );
     });
 
@@ -1033,7 +1773,6 @@ describe('GatewayActionImpl', () => {
           agentId: 'target-agent',
           appContext: expect.objectContaining({ scope: 'sub_agent', topicId: 'topic-1' }),
         }),
-        expect.anything(),
       );
       expect(startOperation).toHaveBeenCalledWith(
         expect.objectContaining({ context: messageContext }),
@@ -1115,7 +1854,7 @@ describe('GatewayActionImpl', () => {
           title: '666',
         },
       });
-      expect(moveChatContextSelections).toHaveBeenCalledWith(
+      expect(moveChatComposerAttachments).toHaveBeenCalledWith(
         messageMapKey({
           agentId: 'agent-1',
           scope: 'main',
@@ -1210,7 +1949,6 @@ describe('GatewayActionImpl', () => {
           prompt: 'Hello',
           trigger: 'onboarding',
         }),
-        expect.anything(),
       );
     });
 
@@ -1243,7 +1981,6 @@ describe('GatewayActionImpl', () => {
 
       expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({ prompt: 'Follow up', steer: true }),
-        expect.anything(),
       );
     });
 
@@ -1280,7 +2017,6 @@ describe('GatewayActionImpl', () => {
             approvalMode: 'allow-list',
           },
         }),
-        expect.anything(),
       );
     });
 
@@ -1321,8 +2057,66 @@ describe('GatewayActionImpl', () => {
             taskId: 'T-1',
           }),
         }),
-        expect.anything(),
       );
+    });
+
+    // Regression: the directory a project group "+" staged never reached the
+    // server, so the first send created the topic outside the project.
+    it('forwards the staged project directory when creating a topic', async () => {
+      const { action } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-new',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main' },
+        message: 'Start in the directory',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({ projectWorkingDirectoryId: 'dir-1' }),
+        }),
+      );
+    });
+
+    it('does not forward a project directory for a send into an existing topic', async () => {
+      const { action } = createExecuteTestAction();
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+        message: 'Keep going',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+
+      const appContext = vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)![0].appContext;
+      expect(appContext).not.toHaveProperty('projectWorkingDirectoryId');
     });
 
     it('should forward empty prompt for continue generation', async () => {
@@ -1354,7 +2148,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'assistant-msg-456',
           prompt: '',
         }),
-        expect.anything(),
       );
     });
 
@@ -1365,10 +2158,11 @@ describe('GatewayActionImpl', () => {
       const connectToGateway = vi.fn();
       const moveQueuedMessages = vi.fn();
       const onOperationCancel = vi.fn();
-      const onMessageAccepted = vi.fn();
-      const replaceMessages = vi.fn();
-
       const controller = new AbortController();
+      // The Stop lands exactly as the persisted response arrives: the server
+      // task exists and this client already knows its operation id.
+      const onMessageAccepted = vi.fn(() => controller.abort('user cancelled'));
+      const replaceMessages = vi.fn();
 
       const mockClient = createMockClient();
       const internalDispatchTopic = vi.fn();
@@ -1454,15 +2248,10 @@ describe('GatewayActionImpl', () => {
         parentOperationId: 'parent-send-msg-op',
       });
       await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
-      controller.abort('user cancelled');
       resolvePersistence(persistedResult);
 
       await expect(execution).resolves.toEqual(persistedResult);
 
-      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ signal: controller.signal }),
-      );
       // Server task was created before the signal flipped — best-effort
       // interrupt must fire so the agent run stops server-side.
       await vi.waitFor(() =>
@@ -1592,10 +2381,10 @@ describe('GatewayActionImpl', () => {
       const execution = action.executeGatewayAgent({
         context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: null },
         message: 'Hello',
+        onMessageAccepted: () => controller.abort('user cancelled'),
         parentOperationId: 'parent-send-msg-op',
       });
       await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
-      controller.abort('user cancelled');
       resolvePersistence(persisted);
       await execution;
 
@@ -1619,6 +2408,135 @@ describe('GatewayActionImpl', () => {
         }),
       );
     });
+
+    /**
+     * @example A Stop while the start request is in flight still stops the run the server creates.
+     */
+    it.each(['owner', 'share'] as const)(
+      'interrupts the %s server run when cancel aborts the in-flight start request',
+      async (surface) => {
+        // ROOT CAUSE:
+        //
+        // The caller abort signal was forwarded into the execAgentTask fetch.
+        // Aborting it rejected only the client promise; the server still
+        // persisted the turn and dispatched the run (for a connected device it
+        // spawned the native CLI). The client never learned the operation id,
+        // so nothing stopped that run, and the next send on the same Codex
+        // thread failed with "already has an active writer".
+        //
+        // Before: no interrupt ever reached the orphaned server run.
+        // After: the send still rejects at once, and the run is interrupted
+        // when the server result arrives.
+        const controller = new AbortController();
+        const connectToGateway = vi.fn();
+        const onMessageAccepted = vi.fn();
+        const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
+        const set = vi.fn((updater: any) => {
+          if (typeof updater === 'function') Object.assign(state, updater(state));
+          else Object.assign(state, updater);
+        });
+        const get = vi.fn(() => ({
+          ...state,
+          associateMessageWithOperation: vi.fn(),
+          completeOperation: vi.fn(),
+          connectToGateway,
+          getOperationAbortSignal: vi.fn(() => controller.signal),
+          internal_dispatchTopic: vi.fn(),
+          internal_pinTopicStatus: vi.fn(),
+          moveQueuedMessages: vi.fn(),
+          moveVoiceMessages: vi.fn(),
+          onOperationCancel: vi.fn(),
+          replaceMessages: vi.fn(),
+          startOperation: vi.fn(() => ({ operationId: 'gw-op-local' })),
+          switchTopic: vi.fn(),
+        })) as any;
+        (globalThis as any).window = {
+          global_serverConfigStore: {
+            getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+          },
+        };
+        const action = new GatewayActionImpl(set as any, get, undefined);
+        action.createClient = vi.fn(() => createMockClient());
+
+        const persisted = {
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'ok',
+          operationId: 'server-op-inflight',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'test-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        } as const;
+        let finishOnServer!: () => void;
+        const serverFinished = new Promise<void>((resolve) => {
+          finishOnServer = resolve;
+        });
+        // Models fetch: an abort rejects the client promise immediately, while
+        // the server keeps executing the request it already received.
+        const startRequest = (_params: unknown, options?: { signal?: AbortSignal }) =>
+          new Promise<typeof persisted>((resolve, reject) => {
+            options?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('The operation was aborted.', 'AbortError')),
+            );
+            void serverFinished.then(() => resolve(persisted));
+          });
+        vi.mocked(aiAgentService.execAgentTask).mockImplementation(startRequest as any);
+        vi.mocked(shareChatService.execAgentTask).mockImplementation(startRequest as any);
+        vi.mocked(aiAgentService.interruptTask).mockResolvedValue({
+          deviceCancellationConfirmed: true,
+          operationId: 'server-op-inflight',
+          success: true,
+        });
+        vi.mocked(shareChatService.interruptTask).mockResolvedValue({ success: true } as any);
+
+        const execution = action.executeGatewayAgent({
+          context: {
+            agentId: 'agent-1',
+            ...(surface === 'share' ? { agentShareId: 'share-1' } : {}),
+            scope: 'main',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: 'Hello',
+          onMessageAccepted,
+          parentOperationId: 'parent-send-msg-op',
+        });
+        const start =
+          surface === 'share' ? shareChatService.execAgentTask : aiAgentService.execAgentTask;
+        await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+
+        controller.abort('user cancelled');
+        /** @example The send still settles as cancelled right away. */
+        await expect(execution).rejects.toMatchObject({ name: 'AbortError' });
+        expect(connectToGateway).not.toHaveBeenCalled();
+        expect(onMessageAccepted).not.toHaveBeenCalled();
+
+        finishOnServer();
+        /** @example The orphaned server run is interrupted by its real operation id. */
+        if (surface === 'share') {
+          await vi.waitFor(() =>
+            expect(shareChatService.interruptTask).toHaveBeenCalledWith(
+              'share-1',
+              'topic-1',
+              'server-op-inflight',
+            ),
+          );
+          expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+        } else {
+          await vi.waitFor(() =>
+            expect(aiAgentService.interruptTask).toHaveBeenCalledWith({
+              operationId: 'server-op-inflight',
+              topicId: 'topic-1',
+            }),
+          );
+        }
+      },
+    );
 
     /**
      * @example Send now receives the server's physical device cancellation result.
@@ -2181,6 +3099,7 @@ describe('GatewayActionImpl', () => {
           moveQueuedMessages: vi.fn(),
           moveVoiceMessages: vi.fn(),
           onOperationCancel: vi.fn(),
+          refreshTopicDetail: vi.fn().mockResolvedValue(undefined),
           startOperation,
           updateTopicStatus: vi.fn(),
         })) as any;
@@ -2411,6 +3330,227 @@ describe('GatewayActionImpl', () => {
       });
     });
 
+    // A follow-up on an existing topic starts with no local
+    // `runningOperation` marker (run start only rewrites a stale one), so the
+    // terminal status write must not depend on the marker naming this run.
+    describe('follow-up run on an existing topic without a local marker', () => {
+      const setupFollowUpRun = (extraState: Record<string, any> = {}) => {
+        const connectToGateway = vi.fn();
+        const internalDispatchTopic = vi.fn();
+        const internalPinTopicStatus = vi.fn();
+        const refreshTopic = vi.fn(async () => {});
+        const state: Record<string, any> = {
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-1',
+          gatewayConnections: {},
+          topicDataMap: {
+            'agent_agent-1': {
+              items: [
+                {
+                  id: 'topic-1',
+                  metadata: { model: 'gpt-4', runningOperation: null },
+                  status: 'running',
+                },
+              ],
+            },
+          },
+          ...extraState,
+        };
+        const set = vi.fn((updater: any) => {
+          if (typeof updater === 'function') Object.assign(state, updater(state));
+          else Object.assign(state, updater);
+        });
+        const get = vi.fn(() => ({
+          ...state,
+          associateMessageWithOperation: vi.fn(),
+          completeOperation: vi.fn(),
+          connectToGateway,
+          internal_dispatchTopic: internalDispatchTopic,
+          internal_pinTopicStatus: internalPinTopicStatus,
+          moveQueuedMessages: vi.fn(),
+          moveVoiceMessages: vi.fn(),
+          onOperationCancel: vi.fn(),
+          refreshTopic,
+          startOperation: vi.fn(() => ({ operationId: 'gw-op-1' })),
+          updateTopicStatus: vi.fn(),
+        })) as any;
+
+        (globalThis as any).window = {
+          global_serverConfigStore: {
+            getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+          },
+        };
+
+        const action = new GatewayActionImpl(set as any, get, undefined);
+        action.createClient = vi.fn(() => createMockClient());
+
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'ok',
+          operationId: 'server-op-1',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'test-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        });
+        vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
+
+        return {
+          action,
+          connectToGateway,
+          internalDispatchTopic,
+          internalPinTopicStatus,
+          refreshTopic,
+        };
+      };
+
+      it('resets the local status to active when the watched run completes', async () => {
+        const { action, connectToGateway, internalDispatchTopic, internalPinTopicStatus } =
+          setupFollowUpRun();
+
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Follow-up',
+        });
+
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        internalDispatchTopic.mockClear();
+        internalPinTopicStatus.mockClear();
+
+        onSessionComplete({ succeeded: true, terminalReceived: true });
+
+        expect(internalPinTopicStatus).toHaveBeenCalledWith({
+          agentId: 'agent-1',
+          groupId: undefined,
+          status: 'active',
+          topicId: 'topic-1',
+        });
+        // Nothing to clear: there was no marker in the local row.
+        expect(internalDispatchTopic).not.toHaveBeenCalled();
+      });
+
+      // A run started from another tab or device replaces the server marker
+      // without appearing in this tab's operations; only the server can tell.
+      it('restores running when the server reports another run owns the topic', async () => {
+        const { action, connectToGateway, internalPinTopicStatus, refreshTopic } =
+          setupFollowUpRun();
+        vi.mocked(topicService.settleRunningOperation).mockResolvedValue({
+          activeOperationId: 'server-op-other-tab',
+          status: 'conflict',
+        } as never);
+
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Follow-up',
+        });
+
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        internalPinTopicStatus.mockClear();
+
+        onSessionComplete({ succeeded: true, terminalReceived: true });
+        await vi.waitFor(() => expect(refreshTopic).toHaveBeenCalledWith('agent_agent-1'));
+
+        expect(internalPinTopicStatus.mock.calls.map(([params]) => params.status)).toEqual([
+          'active',
+          'running',
+        ]);
+      });
+
+      it('keeps the active status when the server settle does not conflict', async () => {
+        const { action, connectToGateway, internalPinTopicStatus, refreshTopic } =
+          setupFollowUpRun();
+        vi.mocked(topicService.settleRunningOperation).mockResolvedValue({
+          status: 'missing',
+        } as never);
+
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Follow-up',
+        });
+
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        internalPinTopicStatus.mockClear();
+
+        onSessionComplete({ succeeded: true, terminalReceived: true });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(internalPinTopicStatus.mock.calls.map(([params]) => params.status)).toEqual([
+          'active',
+        ]);
+        expect(refreshTopic).not.toHaveBeenCalled();
+      });
+
+      it('leaves the status alone when a newer local turn already started on the topic', async () => {
+        const { action, connectToGateway, internalPinTopicStatus } = setupFollowUpRun({
+          operations: {
+            'newer-send': {
+              context: { agentId: 'agent-1', topicId: 'topic-1' },
+              id: 'newer-send',
+              metadata: {},
+              status: 'running',
+              type: 'sendMessage',
+            },
+          },
+          operationsByType: { sendMessage: ['newer-send'] },
+        });
+
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Follow-up',
+        });
+
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        internalPinTopicStatus.mockClear();
+
+        onSessionComplete({ succeeded: true, terminalReceived: true });
+
+        expect(internalPinTopicStatus).not.toHaveBeenCalled();
+      });
+
+      it('ignores live operations that belong to the completing run itself', async () => {
+        const { action, connectToGateway, internalPinTopicStatus } = setupFollowUpRun({
+          operations: {
+            'own-runtime': {
+              context: { agentId: 'agent-1', topicId: 'topic-1' },
+              id: 'own-runtime',
+              metadata: { serverOperationId: 'server-op-1' },
+              status: 'running',
+              type: 'execServerAgentRuntime',
+            },
+            'own-member': {
+              context: { agentId: 'agent-1', topicId: 'topic-1' },
+              id: 'own-member',
+              metadata: { serverOperationId: 'member-op-1' },
+              parentOperationId: 'own-runtime',
+              status: 'running',
+              type: 'execServerAgentRuntime',
+            },
+          },
+          operationsByType: { execServerAgentRuntime: ['own-runtime', 'own-member'] },
+        });
+
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Follow-up',
+        });
+
+        const { onSessionComplete } = connectToGateway.mock.calls[0][0];
+        internalPinTopicStatus.mockClear();
+
+        onSessionComplete({ succeeded: true, terminalReceived: true });
+
+        expect(internalPinTopicStatus).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
+        );
+      });
+    });
+
     // The clean, unwatched-completion case is owned by `markTopicUnread`
     // elsewhere — the local mirror here must NOT also write 'active' for it,
     // or the two would race over the status field.
@@ -2564,7 +3704,6 @@ describe('GatewayActionImpl', () => {
             deviceId: 'device-local-1',
             localDeviceId: 'device-local-1',
           }),
-          expect.anything(),
         );
       });
 
@@ -2628,7 +3767,6 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
           expect.objectContaining({ deviceId: 'device-local-member' }),
-          expect.anything(),
         );
       });
 
@@ -2668,7 +3806,6 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
           expect.objectContaining({ localDeviceId: 'this-desktop' }),
-          expect.anything(),
         );
         expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
           'deviceId',
@@ -2840,6 +3977,42 @@ describe('GatewayActionImpl', () => {
       );
     });
 
+    // ROOT CAUSE:
+    // Reconnecting only observes a server run that another client or an earlier
+    // page load started; it must not authorize re-executing its tool steps.
+    /** @example Reconnect never grants an automatic heterogeneous retry. */
+    it('does not grant automatic retry to a reconnected run', async () => {
+      const { action, startOperation } = createReconnectTestAction({ id: 'ast-1' });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      const [[params]] = startOperation.mock.calls as unknown as [[{ metadata: object }]];
+      expect(params.metadata).not.toHaveProperty('heteroAutoRetryAvailable');
+    });
+
+    it('shares one attempt between concurrent reconnects to the same run', async () => {
+      const { action, startOperation } = createReconnectTestAction({ id: 'ast-1' });
+      const params = {
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      };
+
+      // E.g. the topic's own reconnect and a waiting_for_client card, both
+      // before the token refresh lands.
+      await Promise.all([
+        action.reconnectToGatewayOperation(params),
+        action.reconnectToGatewayOperation(params),
+      ]);
+
+      expect(startOperation).toHaveBeenCalledTimes(1);
+      expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledTimes(1);
+    });
+
     it('omits startTime when createdAt is not a parseable date', async () => {
       const { action, startOperation } = createReconnectTestAction({
         createdAt: 'not-a-date',
@@ -3006,6 +4179,10 @@ describe('GatewayActionImpl', () => {
         return { action, connectToGateway, getCancelHandler: () => cancelHandler, startOperation };
       }
 
+      beforeEach(() => {
+        vi.mocked(shareChatService.getTopics).mockReset().mockResolvedValue([]);
+      });
+
       afterEach(() => {
         delete (globalThis as any).window;
       });
@@ -3072,6 +4249,68 @@ describe('GatewayActionImpl', () => {
         );
         expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
       });
+
+      // The silent-end reconcile must read the topic through the share surface
+      // too: `topic.getTopicDetail` resolves with `findOwnTopicById`, so a
+      // visitor's read cannot see the creator-owned row and the reconcile would
+      // always answer "still running" — leaving a terminal-less share run stuck
+      // exactly like the owner path this fix repairs.
+      async function runSilentEnd(action: GatewayActionImpl, connectToGateway: any) {
+        await action.reconnectToGatewayOperation({
+          agentShareId: 'share-1',
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        return connectToGateway.mock.calls[0]![0].onSilentEnd as () => Promise<boolean>;
+      }
+
+      it('reads the visitor topic through the share-authorized list, not the owner-scoped read', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(topicService.getTopicDetail).mockClear();
+        vi.mocked(shareChatService.getTopics).mockResolvedValue([
+          { id: 'topic-1', runningOperation: null },
+        ] as any);
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(true);
+        expect(shareChatService.getTopics).toHaveBeenCalledWith('share-1');
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      it('keeps waiting while the share projection still names a run on the topic', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(shareChatService.getTopics).mockResolvedValue([
+          { id: 'topic-1', runningOperation: { operationId: 'server-op-1' } },
+        ] as any);
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(false);
+      });
+
+      it('keeps waiting when the share read itself fails', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(shareChatService.getTopics).mockRejectedValue(new Error('offline'));
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(false);
+        expect(consoleError).toHaveBeenCalled();
+      });
     });
 
     // Captures the onSessionComplete handed to connectToGateway so we can drive
@@ -3116,7 +4355,9 @@ describe('GatewayActionImpl', () => {
       const action = new GatewayActionImpl(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
 
-      return { action, captured, completeOperation, updateTopicStatus };
+      // `state` is returned live so a test can mutate the topic map mid-stream —
+      // modelling another run claiming the topic after this reconnect attached.
+      return { action, captured, completeOperation, state, updateTopicStatus };
     }
 
     // The core black-hole guard: a reconnect that closes WITHOUT witnessing a
@@ -3214,6 +4455,64 @@ describe('GatewayActionImpl', () => {
       });
       expect(rawHetero.completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
       expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+    });
+
+    // One settle this tab's own topic map must not be able to veto.
+    //
+    // The map is only a guess about whether another run claimed the topic, while
+    // the call it used to skip is authoritative in a way the guess cannot be: the
+    // server compares the operation id itself and answers `conflict` for a newer
+    // run, which `#restoreRunningOnSettleConflict` already consumes. Skipping on
+    // the guess dropped the settle whenever the map was stale or the newer run
+    // never landed its server-side mark — and nothing retried it, so the row kept
+    // `status='running'` with a `runningOperation` naming a finished operation.
+    // Observed 2026-10-13: a topic shown "running" for 45 minutes whose operation
+    // row had been `interrupted` since 03:33:58Z, `topics.updated_at` frozen at
+    // the run's start (settling always bumps it, so that is proof no settle ever
+    // reached the row), 16 rows of the same shape in the database.
+    //
+    // Reconnect is the path a page refresh takes, which is why the symptom read
+    // as "still spinning after a reload". `executeGatewayAgent`'s
+    // onSessionComplete — the path this one mirrors — has never had the guard.
+    it('settles the server row even when this tab already names a newer operation', async () => {
+      const { action, captured, state } = createOnSessionCompleteHarness();
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        heteroType: null,
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      // A newer run claims the topic while this reconnect is streaming. The
+      // pre-attach re-check already bails when the map names another operation
+      // BEFORE the connect, so this is the only window in which the removed guard
+      // could still fire.
+      state.topicDataMap['agent_agent-1'] = {
+        items: [
+          {
+            id: 'topic-1',
+            metadata: { runningOperation: { operationId: 'server-newer-op' } },
+            status: 'running',
+          },
+        ],
+      };
+
+      vi.mocked(topicService.settleRunningOperation).mockClear();
+      captured.onSessionComplete!({
+        authFailed: false,
+        completion: { source: 'resume_status', status: 'completed' },
+        succeeded: false,
+        terminalReceived: false,
+      });
+
+      // Issued, and left to the server to arbitrate: it writes only while its own
+      // mark still names this operation, so the newer run above keeps its mark.
+      expect(topicService.settleRunningOperation).toHaveBeenCalledWith(
+        'topic-1',
+        'server-op-1',
+        'active',
+      );
     });
 
     // A genuine terminal event (agent_runtime_end / error) still finalizes the
@@ -3371,9 +4670,13 @@ describe('GatewayActionImpl', () => {
     // internal_dispatchTopic + connectToGateway capture, so we can assert the local
     // store clear on both the NOT_FOUND refresh path and onSessionComplete.
     function createSeededReconnectHarness() {
-      const captured: { onSessionComplete?: (p: any) => void } = {};
+      const captured: {
+        onSessionComplete?: (p: any) => void;
+        onSilentEnd?: () => boolean | Promise<boolean>;
+      } = {};
       const connectToGateway = vi.fn((params: any) => {
         captured.onSessionComplete = params.onSessionComplete;
+        captured.onSilentEnd = params.onSilentEnd;
       });
       const internalDispatchTopic = vi.fn();
       const completeOperation = vi.fn();
@@ -3431,6 +4734,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internalDispatchTopic,
         startOperation,
+        state,
       };
     }
 
@@ -3465,31 +4769,14 @@ describe('GatewayActionImpl', () => {
       expect(connectToGateway).toHaveBeenCalled();
     });
 
-    // The operation is created optimistically off the marker, so every bail-out
-    // has to retire it — otherwise a stale marker leaves the composer spinning
-    // on a run that nothing will ever settle.
-    it('retires the optimistic operation when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, completeOperation } = createSeededReconnectHarness();
-      vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
-        data: { code: 'NOT_FOUND' },
-      });
-
-      await action.reconnectToGatewayOperation({
-        assistantMessageId: 'ast-1',
-        operationId: 'server-op-1',
-        topicId: 'topic-1',
-      });
-
-      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-    });
-
     // Regression: a stale local runningOperation fires a reconnect,
     // but the server already cleared its marker and answers refreshGatewayToken
     // with TRPC NOT_FOUND. The reconnect must clear the local marker and bail
     // silently (no connect, no throw) so the SWR fetcher resolves instead of
     // looping 404s.
-    it('clears the local marker and bails when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, connectToGateway, internalDispatchTopic } = createSeededReconnectHarness();
+    it('retires the local operation and clears the marker on NOT_FOUND', async () => {
+      const { action, completeOperation, connectToGateway, internalDispatchTopic } =
+        createSeededReconnectHarness();
       vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
         data: { code: 'NOT_FOUND' },
       });
@@ -3501,6 +4788,11 @@ describe('GatewayActionImpl', () => {
           topicId: 'topic-1',
         }),
       ).resolves.toBeUndefined();
+
+      // The operation is created optimistically off the marker, so every bail-out
+      // has to retire it — otherwise a stale marker leaves the composer spinning
+      // on a run that nothing will ever settle.
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
 
       expect(internalDispatchTopic).toHaveBeenCalledWith({
         id: 'topic-1',
@@ -3575,6 +4867,182 @@ describe('GatewayActionImpl', () => {
       });
 
       expect(internalDispatchTopic).not.toHaveBeenCalled();
+    });
+
+    // ─── Silent-end reconcile ───
+    //
+    // `disconnected` without the run's terminal frame is the one end the
+    // transport cannot read. These pin the decision the reconnect hands back:
+    // retire the op only when the server's own reservation of the topic proves
+    // the run is over, and otherwise keep waiting (never guess from silence).
+    describe('silent-end reconcile', () => {
+      const readSilentEnd = (captured: { onSilentEnd?: any }) => captured.onSilentEnd!();
+
+      it('reports the run over once the server no longer reserves the topic for it', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: { runningOperation: null },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      it('keeps the run alive while the server still reserves the topic for it', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-1', operationId: 'server-op-1' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+      });
+
+      // A newer run replacing the marker means THIS run no longer owns the topic —
+      // it is over, and its spinner must not outlive the newer run's.
+      it('reports the run over once a newer operation owns the topic', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-2', operationId: 'server-op-2' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      // Regression: this branch used to return early whenever a newer turn in the
+      // same tab owned the topic, skipping the authoritative read — and the
+      // transport is torn down right after, so no later loss signal ever retried
+      // and the superseded operation stayed locally `running` forever. The
+      // completion path is ownership-guarded, so the read must still run.
+      it('still reads the server row when a newer local turn owns the topic', async () => {
+        const { action, captured, state } = createSeededReconnectHarness();
+        state.operations = {
+          'op-newer': {
+            context: { topicId: 'topic-1' },
+            metadata: {},
+            status: 'running',
+            type: 'execServerAgentRuntime',
+          },
+        };
+        state.operationsByType = { execServerAgentRuntime: ['op-newer'] };
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-2', operationId: 'server-op-2' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      it('keeps waiting when the topic read fails', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(topicService.getTopicDetail).mockRejectedValueOnce(new Error('network down'));
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+        expect(consoleError).toHaveBeenCalled();
+      });
+
+      // An external hetero producer's output never travelled over this socket, so
+      // no transport observation can prove it stopped — same guard as the
+      // terminal path, and it must not even read the topic.
+      it('never reconciles a heterogeneous producer', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: 'claude-code',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      // An older server that omits `heteroType` cannot be told apart from a hetero
+      // producer, so the rolling-deploy fallback stays fail-safe.
+      it('keeps waiting when the marker omits heteroType', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: { runningOperation: null },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      // A member continuation rides the supervisor's root marker instead of owning
+      // one, so a root marker naming another op is not proof that this member ended.
+      it('keeps the run alive while the supervisor still lists it as a child operation', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: {
+              childOperations: [{ operationId: 'server-op-1' }],
+              operationId: 'server-op-root',
+            },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+      });
     });
   });
 });

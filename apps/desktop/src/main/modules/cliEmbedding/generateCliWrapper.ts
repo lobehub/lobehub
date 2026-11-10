@@ -25,9 +25,13 @@ function resolveElectronBinary(): string {
 export function resolveCliScript(): string {
   if (app.isPackaged) {
     return path.join(
-      globalThis.__SHELL__?.coreDir ?? path.join(process.resourcesPath, 'core'),
+      (globalThis.__SHELL__?.coreDir ?? path.join(process.resourcesPath, 'core.asar')).replace(
+        /\.asar$/,
+        '.asar.unpacked',
+      ),
       'cli',
-      'lobe-cli.js',
+      'dist',
+      'index.js',
     );
   }
   // Dev mode: app.getAppPath() points to apps/desktop/, go up to apps/cli/

@@ -14,6 +14,7 @@ type LayoutNode = Omit<GoalGraphNode, 'kind'> & { kind: GoalGraphNodeKind };
  */
 
 export const NODE_WIDTH = {
+  batch: 260,
   decision: 250,
   experiment: 260,
   finding: 240,
@@ -21,6 +22,7 @@ export const NODE_WIDTH = {
   task: 260,
 } as const;
 export const NODE_HEIGHT = {
+  batch: 112,
   decision: 76,
   experiment: 112,
   finding: 76,
@@ -69,6 +71,8 @@ export interface LayoutBox {
 
 /** A synthetic edge standing in for a ranked chain that runs through hidden nodes. */
 export interface GraphBridge {
+  /** How many nodes left off the map the link stands in for, when the host knows. */
+  hops?: number;
   sourceNodeId: string;
   targetNodeId: string;
 }

@@ -1,30 +1,56 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { sortTreeItems, toTreeItem, toTreeItemFromResource, TreeActionImpl } from './actions';
+import { hierarchySearchResource } from '@/features/ResourceManager/store/projection';
+import type * as ReplicaModule from '@/libs/replica';
+import { createReplicaState } from '@/libs/replica';
+
+import {
+  isExpandable,
+  sortTreeItems,
+  toTreeItem,
+  toTreeItemFromResource,
+  TreeActionImpl,
+} from './actions';
 import type { TreeState } from './types';
 
 const {
   mockApplyMovedResourceToCaches,
+  mockCollapseHierarchySearch,
   mockDeleteResources,
   mockGetKnowledgeItems,
+  mockPatchSearchHit,
   mockRefreshFileList,
   mockResourceMove,
+  mockRevalidateReplica,
   mockStoreMove,
-  mockSwrMutate,
   mockUpdateResource,
 } = vi.hoisted(() => ({
   mockApplyMovedResourceToCaches: vi.fn(),
+  mockCollapseHierarchySearch: vi.fn(),
   mockDeleteResources: vi.fn(),
   mockGetKnowledgeItems: vi.fn(),
+  mockPatchSearchHit: vi.fn(),
   mockRefreshFileList: vi.fn(),
   mockResourceMove: vi.fn(),
+  mockRevalidateReplica: vi.fn(),
   mockStoreMove: vi.fn(),
-  mockSwrMutate: vi.fn(),
   mockUpdateResource: vi.fn(),
 }));
 
-vi.mock('swr', () => ({ mutate: mockSwrMutate }));
+vi.mock('@/libs/replica', async () => ({
+  ...(await vi.importActual<typeof ReplicaModule>('@/libs/replica')),
+  revalidateReplica: mockRevalidateReplica,
+}));
+
+vi.mock('@/features/ResourceManager/store', () => ({
+  useResourceManagerStore: {
+    getState: () => ({
+      collapseHierarchySearch: mockCollapseHierarchySearch,
+      patchSearchHit: mockPatchSearchHit,
+    }),
+  },
+}));
 
 vi.mock('@/services/file', () => ({
   fileService: {
@@ -75,8 +101,13 @@ const createState = (): TreeState => ({
   reconcile: vi.fn(),
   removeItems: vi.fn(),
   renameItem: vi.fn(),
+  forgetLibrary: vi.fn(),
+  forgetSnapshot: vi.fn(),
   reset: vi.fn(),
+  preHydrate: vi.fn(),
   revalidate: vi.fn(),
+  snapshotMap: {},
+  snapshotReplica: createReplicaState(),
   status: {},
   toggle: vi.fn(),
 });
@@ -258,25 +289,25 @@ describe('TreeActionImpl folder key resolution', () => {
     expect(state.children['docs_unloaded']).toEqual([doc]);
   });
 
-  it('revalidate also refreshes the hierarchy-scoped search caches', async () => {
+  it('revalidate drops the sidebar search depth and refreshes the replica', async () => {
     const state = createState();
     const actions = new TreeActionImpl(
       createSetter(() => state),
       () => state,
     );
-    mockSwrMutate.mockClear();
+    mockCollapseHierarchySearch.mockClear();
+    mockRevalidateReplica.mockClear();
     mockGetKnowledgeItems.mockResolvedValue({ items: [] });
 
     await actions.revalidate('folder-a');
 
-    expect(mockSwrMutate).toHaveBeenCalledTimes(1);
-    const [matcher, , options] = mockSwrMutate.mock.calls[0];
-    expect(options).toEqual({ revalidate: true });
-    // Only the sidebar search entries match — not the explorer's own search.
-    expect(matcher(['resource:search', { q: 'a', scope: 'hierarchy' }, 'ws-1'])).toBe(true);
-    expect(matcher(['resource:search', { q: 'a' }, 'ws-1'])).toBe(false);
-    expect(matcher(['resource:list', { q: 'a', scope: 'hierarchy' }, 'ws-1'])).toBe(false);
-    expect(matcher('resource:search')).toBe(false);
+    // The sidebar's flat search list is a replica now; a rename/move/delete in
+    // the tree must drop the loaded search depth (so a stale tail row cannot
+    // survive) and revalidate it (so the head is fresh).
+    await vi.waitFor(() => {
+      expect(mockCollapseHierarchySearch).toHaveBeenCalled();
+      expect(mockRevalidateReplica).toHaveBeenCalledWith(hierarchySearchResource);
+    });
   });
 
   it('a revalidate requested during an in-flight root load runs once that load settles', async () => {
@@ -457,6 +488,10 @@ describe('TreeActionImpl optimistic moves (destination and other mutations)', ()
     mockRefreshFileList.mockReset();
     mockResourceMove.mockReset();
     mockStoreMove.mockReset();
+    // Reset explicitly rather than relying on the runner's `clearMocks`: the
+    // rename tests assert both a patch call and the absence of one.
+    mockPatchSearchHit.mockReset();
+    mockUpdateResource.mockReset();
     fileStoreState.resourceMap = new Map();
     mockResourceMove.mockResolvedValue({});
     mockRefreshFileList.mockResolvedValue(undefined);
@@ -507,6 +542,24 @@ describe('TreeActionImpl optimistic moves (destination and other mutations)', ()
     expect(mockUpdateResource).toHaveBeenCalledWith('doc-a', { name: 'Renamed' });
     expect(state.children['']?.find((i) => i.id === 'doc-a')?.name).toBe('Renamed');
     expect(revalidateSpy).toHaveBeenCalledWith('');
+    // Regression: the search surfaces keep their own persisted hits, so a
+    // sidebar rename has to reach them or they repaint the old name.
+    expect(mockPatchSearchHit).toHaveBeenCalledWith('doc-a', { name: 'Renamed' });
+  });
+
+  it('renameItem leaves the cached searches alone when the rename fails', async () => {
+    const state = createState();
+    state.children = { '': [folder, docA] };
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    vi.spyOn(actions, 'revalidate').mockResolvedValue();
+    mockUpdateResource.mockRejectedValue(new Error('boom'));
+
+    await withTimeout(actions.renameItem('doc-a', '', 'Renamed')).catch(() => undefined);
+
+    expect(mockPatchSearchHit).not.toHaveBeenCalled();
   });
 
   it('removeItems settles, drops the folder caches, and revalidates the parent', async () => {
@@ -724,5 +777,29 @@ describe('toTreeItemFromResource', () => {
 
   it('produces the same row as the tree fetch does for the same input', () => {
     expect(toTreeItemFromResource(row)).toEqual(toTreeItem(row));
+  });
+
+  it('keeps a document with children expandable', () => {
+    // Dropping `hasChildren` here would take the caret off a parent page on
+    // every explorer refresh.
+    const parent = toTreeItemFromResource({ ...row, hasChildren: true });
+
+    expect(parent).toMatchObject({ hasChildren: true, isFolder: false });
+    expect(isExpandable(parent)).toBe(true);
+  });
+});
+
+describe('toTreeItem hasChildren', () => {
+  const doc = { fileType: 'custom/document', id: 'docs_1', name: 'Page' };
+
+  it('carries hasChildren from the server row', () => {
+    expect(toTreeItem({ ...doc, hasChildren: true }).hasChildren).toBe(true);
+    expect(toTreeItem({ ...doc, hasChildren: false }).hasChildren).toBe(false);
+  });
+
+  it('treats folders and documents with children as expandable, leaves as not', () => {
+    expect(isExpandable(toTreeItem({ ...doc, hasChildren: true }))).toBe(true);
+    expect(isExpandable(toTreeItem(doc))).toBe(false);
+    expect(isExpandable(toTreeItem({ ...doc, fileType: CUSTOM_FOLDER_FILE_TYPE }))).toBe(true);
   });
 });

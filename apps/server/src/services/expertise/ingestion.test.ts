@@ -14,6 +14,13 @@ const dueForConsolidation = vi.fn();
 const consolidate = vi.fn();
 const listDomainsForAgent = vi.fn();
 const listLessons = vi.fn();
+const listTopicActivity = vi.fn();
+
+vi.mock('@/database/models/agentSignal/reviewContext', () => ({
+  AgentSignalReviewContextModel: class {
+    listTopicActivity = listTopicActivity;
+  },
+}));
 
 vi.mock('@/database/models/expertise', () => ({
   ExpertiseModel: class {
@@ -85,6 +92,70 @@ describe('ExpertiseIngestionService.ingestSelfReview', () => {
 
     expect(result).toEqual({ ingested: 0, reason: 'not-review' });
     expect(ingestCompletion).not.toHaveBeenCalled();
+  });
+});
+
+describe('ExpertiseIngestionService.ingestSelfReview nightly topic quota', () => {
+  const nightlyCompletion = () =>
+    completion({
+      artifacts: [],
+      marker: {
+        agentId: 'agent_1',
+        kind: 'nightly-review',
+        localDate: '2026-10-11',
+        reviewWindowEnd: '2026-10-12T00:00:00.000Z',
+        reviewWindowStart: '2026-10-11T00:00:00.000Z',
+        sourceId: 'nightly_1',
+      },
+      mutations: [],
+      userId: 'user_1',
+    });
+
+  /**
+   * The nightly expertise pass shares the user's 50-topics-per-night quota with the review:
+   * only admitted topics are ingested.
+   */
+  it('ingests only the topics the nightly topic quota admits', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    const ingestCompletion = vi
+      .spyOn(service, 'ingestCompletion')
+      .mockResolvedValue({ ingested: 1, reason: 'matched' } as never);
+    listTopicActivity.mockResolvedValue([
+      { topicId: 'topic_1' },
+      { topicId: 'topic_2' },
+      { topicId: 'topic_3' },
+    ]);
+    const claimNightlyTopics = vi
+      .fn()
+      .mockResolvedValue({ admitted: ['topic_1'], reason: 'exhausted' });
+
+    await service.ingestSelfReview(nightlyCompletion(), { claimNightlyTopics });
+
+    expect(claimNightlyTopics).toHaveBeenCalledWith({
+      localDate: '2026-10-11',
+      topicIds: ['topic_1', 'topic_2', 'topic_3'],
+      userId: 'user_1',
+    });
+    expect(ingestCompletion.mock.calls.map(([input]) => input.topicId)).toEqual(['topic_1']);
+  });
+
+  it('does not meter self-reflection ingestion', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'ingestCompletion').mockResolvedValue({ ingested: 1 } as never);
+    const claimNightlyTopics = vi.fn();
+
+    await service.ingestSelfReview(
+      completion({
+        artifacts: [],
+        marker: { agentId: 'agent_1', kind: 'self-reflection', sourceId: 'r', topicId: 'topic_1' },
+        mutations: [],
+        userId: 'user_1',
+      }),
+      { claimNightlyTopics },
+    );
+
+    expect(claimNightlyTopics).not.toHaveBeenCalled();
+    expect(service.ingestCompletion).toHaveBeenCalledOnce();
   });
 });
 
@@ -205,7 +276,7 @@ describe('ExpertiseIngestionService.ingestCompletion', () => {
       }),
       expect.objectContaining({
         tracing: expect.objectContaining({
-          promptVersion: 'v2',
+          promptVersion: 'v3',
           scenario: 'expertise_topic_ingestion',
         }),
       }),
@@ -441,6 +512,31 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(lesson?.title).toBe('Separate the runtime plane');
     // P-07 is taken even while retired, so the new row has to claim the next number.
     expect(lesson?.code).toBe('P-08');
+  });
+
+  it('links a conversation hit to the message it was read from', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [observation({ sourceMessageId: 'msg_2' })]);
+
+    expect(fake.inserted.get(expertiseHits)?.[0].sourceMessageId).toBe('msg_2');
+  });
+
+  it('marks a new standard the model could not lift above one delivery as a one-off', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [observation({ specificity: 'one-off' })]);
+
+    expect(fake.inserted.get(expertiseLessons)?.[0].specificity).toBe('one-off');
+  });
+
+  it('lifts the one-off mark once another round attaches to the standard', async () => {
+    const fake = createTx([
+      { code: 'P-07', id: 'lesson_7', status: 'active', title: 'Separate the runtime plane' },
+    ]);
+    await persistRun(fake, [observation({ existingLessonCode: 'P-07' })]);
+
+    // Recurring in a second round is exactly what a one-off does not do.
+    const lessonUpdate = fake.updates.find((update) => 'hitCount' in update);
+    expect(lessonUpdate).toHaveProperty('specificity');
   });
 
   it('collapses observations that restate the same rule inside one run', async () => {

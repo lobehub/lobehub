@@ -1,50 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  goalAcceptanceState,
-  isFinalAcceptanceReady,
-  latestRunStatus,
-  pickFinalDeliverable,
-} from './goalAcceptanceReport';
-
-describe('goalAcceptanceState', () => {
-  /**
-   * Regression: the terminal acceptance only ever showed a small "待你确认" chip,
-   * which read the same for a Goal awaiting sign-off and one that failed.
-   */
-  it('tells a passed delivery awaiting sign-off from one that needs a decision', () => {
-    expect(goalAcceptanceState('delivered', 'passed')).toBe('awaitingAcceptance');
-    expect(goalAcceptanceState('delivered', 'failed')).toBe('awaitingDecision');
-    expect(goalAcceptanceState('delivered', undefined)).toBe('awaitingDecision');
-  });
-
-  it('maps the running and settled statuses', () => {
-    expect(goalAcceptanceState('verifying')).toBe('inProgress');
-    expect(goalAcceptanceState('repairing')).toBe('inProgress');
-    expect(goalAcceptanceState('planned')).toBe('inProgress');
-    expect(goalAcceptanceState('accepted')).toBe('accepted');
-    expect(goalAcceptanceState('rejected')).toBe('rejected');
-    expect(goalAcceptanceState('errored')).toBe('errored');
-    expect(goalAcceptanceState('closed')).toBeUndefined();
-  });
-});
-
-describe('isFinalAcceptanceReady', () => {
-  /**
-   * Regression: the report view showed on an acceptance that was still lost and
-   * retrying, next to a ledger of failed attempts. It belongs only to a Goal
-   * whose final acceptance finished and waits on sign-off.
-   */
-  it('shows the report only once the acceptance task finished and passed', () => {
-    expect(isFinalAcceptanceReady('resolved', 'awaitingAcceptance')).toBe(true);
-    expect(isFinalAcceptanceReady('resolved', 'accepted')).toBe(true);
-    expect(isFinalAcceptanceReady('active', 'awaitingAcceptance')).toBe(false);
-    expect(isFinalAcceptanceReady('waiting', 'awaitingDecision')).toBe(false);
-    expect(isFinalAcceptanceReady('resolved', 'awaitingDecision')).toBe(false);
-    expect(isFinalAcceptanceReady('resolved', 'inProgress')).toBe(false);
-    expect(isFinalAcceptanceReady('resolved', undefined)).toBe(false);
-  });
-});
+import { pickFinalDeliverable } from './goalAcceptanceReport';
 
 describe('pickFinalDeliverable', () => {
   const artifact = (
@@ -105,18 +61,5 @@ describe('pickFinalDeliverable', () => {
     expect(
       pickFinalDeliverable([artifact('file_1', 1, 'task_work', 'file')], 'task_acceptance'),
     ).toBeUndefined();
-  });
-});
-
-describe('latestRunStatus', () => {
-  it('reads the newest round', () => {
-    expect(
-      latestRunStatus([
-        { run: { status: 'failed' } },
-        { run: { status: 'failed' } },
-        { run: { status: 'repairing' } },
-      ]),
-    ).toBe('repairing');
-    expect(latestRunStatus([])).toBeUndefined();
   });
 });

@@ -1,8 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import { cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import FollowUpChips from '../FollowUp/FollowUpChips';
@@ -22,6 +21,7 @@ const ChatItem = memo<ChatItemProps>(
     customAvatarRender,
     afterActions,
     actionAddon,
+    agentId,
     actions,
     className,
     loading,
@@ -41,6 +41,7 @@ const ChatItem = memo<ChatItemProps>(
     belowMessage,
     headerAddon,
     showAvatar = true,
+    showHeader = true,
     titleAddon,
     disabled = false,
     id,
@@ -57,6 +58,7 @@ const ChatItem = memo<ChatItemProps>(
 
     const avatarContent = (
       <Avatar
+        agentId={agentId}
         alt={avatarProps?.alt || agentDisplayName(avatar, 'avatar')}
         loading={loading}
         shape={'square'}
@@ -79,17 +81,25 @@ const ChatItem = memo<ChatItemProps>(
         }}
         {...rest}
       >
-        <Flexbox
-          align={'center'}
-          className={'message-header'}
-          direction={isUser ? 'horizontal-reverse' : 'horizontal'}
-          gap={8}
-        >
-          {showAvatar &&
-            (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
-          {headerAddon}
-          <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
-        </Flexbox>
+        {showHeader && (
+          <Flexbox
+            align={'center'}
+            className={'message-header'}
+            direction={isUser ? 'horizontal-reverse' : 'horizontal'}
+            gap={8}
+            // The row wraps nothing, so without a cap it is sized by its content and
+            // simply overflows its lane — on a narrow viewport that is a header
+            // wider than the conversation pane (the source-topic link, a long agent
+            // name). Capped, the shrinkable addons yield to the space actually
+            // available and truncate instead.
+            style={{ maxInlineSize: '100%', minInlineSize: 0 }}
+          >
+            {showAvatar &&
+              (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
+            {headerAddon}
+            <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
+          </Flexbox>
+        )}
         <Flexbox
           className={'message-body'}
           gap={8}

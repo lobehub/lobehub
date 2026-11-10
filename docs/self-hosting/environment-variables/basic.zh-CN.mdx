@@ -52,7 +52,7 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 配置项类型 | 示例                                                                                                                | 解释                                             |
 | ----- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 基本键值对 | `model=gpt-4`                                                                                                     | 设置模型为 `gpt-4`。                                 |
-| 嵌套字段  | `tts.voice.openai=nova`                                                                                           | 设置 OpenAI 文本转语音的默认音色为 `nova`。                    |
+| 嵌套字段  | `tts.voice.openai=nova`                                                                                           | 设置 OpenAI 文本转语音的默认音色为 `nova`。                  |
 | 数组    | `plugins=search-engine,lobe-image-designer`                                                                       | 启用 `search-engine` 和 `lobe-image-designer` 插件。 |
 | 中文逗号  | `plugins=search-engine，lobe-image-designer`                                                                       | 同上，演示支持中文逗号分隔。                                 |
 | 多个配置项 | `model=glm-4;provider=zhipu`                                                                                      | 设置模型为 `glm-4` 且模型服务商为 `zhipu`。                 |
@@ -93,7 +93,6 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 | 主题生成   | `topic`           | 根据聊天内容自动生成主题名称和摘要                |
 | 翻译     | `translation`     | 文本翻译使用的助手                        |
 | 元数据生成  | `agentMeta`       | 为助手生成描述性信息和元数据                   |
-| 历史记录压缩 | `historyCompress` | 压缩和整理长对话的历史记录，优化上下文管理            |
 | 分支对话   | `thread`          | 自动生成分支对话的标题                      |
 | 图片生成命名 | `generationTopic` | AI 图片自动命名话题                      |
 | 输入自动补全 | `inputCompletion` | 输入自动补全建议（类似 GitHub Copilot 幽灵文本） |
@@ -145,6 +144,20 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 描述：Agent Gateway 验证 Token，用于 Gateway Mode 与自部署 Agent Gateway 的鉴权
 - 默认值：-
 - 示例：`dev-secret`
+
+### `DEVICE_GATEWAY_URL`
+
+- 类型：可选
+- 描述：服务端访问设备网关的内部地址，不会下发给客户端。
+- 默认值：-
+- 示例：`http://gateway:8788`
+
+### `DEVICE_GATEWAY_PUBLIC_URL`
+
+- 类型：可选
+- 描述：桌面端和 CLI 自动获取的设备网关地址。不配置时可在客户端手动指定。使用不带 `/ws` 后缀的 HTTP 或 HTTPS 地址，不含账号密码、查询参数或 `#` 片段。
+- 默认值：-
+- 示例：`https://device-gateway.example.com` 或 `http://your_server_ip:8788`
 
 ### `PROXY_URL`
 

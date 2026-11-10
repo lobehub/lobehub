@@ -1,3 +1,4 @@
+import { DOWNLOAD_URL } from '@lobechat/const/url';
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,6 +40,8 @@ const createMockApp = () => {
       'file.preferences': 'Preferences',
       'file.quit': 'Quit',
       'common.checkUpdates': 'Check for Updates',
+      'common.restartToUpdate': 'Restart to update',
+      'common.updateUnsupported': 'Download latest version...',
       'window.close': 'Close',
       'window.minimize': 'Minimize',
       'window.title': 'Window',
@@ -110,6 +113,8 @@ const createMockApp = () => {
     },
     updaterManager: {
       checkForUpdates: vi.fn(),
+      getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
+      installNow: vi.fn(),
     },
     storeManager: {
       get: vi.fn(),
@@ -197,6 +202,42 @@ describe('LinuxMenu', () => {
     });
   });
 
+  describe('image context menu', () => {
+    it.each(['default', 'chat'])('copies the right-clicked image itself in the %s menu', (type) => {
+      const imageData = {
+        mediaType: 'image' as const,
+        srcURL: 'https://example.com/a.png',
+        x: 12,
+        y: 34,
+      };
+      linuxMenu.buildContextMenu(type, imageData);
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage).toBeDefined();
+
+      const copyImageAt = vi.fn();
+      const win = { isDestroyed: () => false, webContents: { copyImageAt } };
+      copyImage.click({}, win);
+
+      expect(copyImageAt).toHaveBeenCalledWith(12, 34);
+    });
+
+    it('disables Copy Image when the image has no decoded contents', () => {
+      linuxMenu.buildContextMenu('default', {
+        hasImageContents: false,
+        mediaType: 'image',
+        srcURL: 'https://example.com/broken.png',
+        x: 12,
+        y: 34,
+      });
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage.enabled).toBe(false);
+    });
+  });
+
   describe('buildTrayMenu', () => {
     it('should build tray menu', () => {
       const menu = linuxMenu.buildTrayMenu();
@@ -265,6 +306,37 @@ describe('LinuxMenu', () => {
       expect(mockApp.updaterManager.checkForUpdates).toHaveBeenCalledWith({ manual: true });
     });
 
+    // Regression: the Linux menu used to hard-code "Check for Updates" and never
+    // read the updater stage, so a downloaded update could not be installed from
+    // the menu at all — unlike macOS and Windows. Issue #19564.
+    it('offers restart-to-update once an update is downloaded', () => {
+      mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'downloaded' })) as any;
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const item = fileMenu.submenu.find((entry: any) => entry.label === 'Restart to update');
+
+      expect(item).toBeDefined();
+      item.click();
+      expect(mockApp.updaterManager.installNow).toHaveBeenCalled();
+    });
+
+    it('sends the user to the download page when the install format cannot self-update', () => {
+      mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'unsupported' })) as any;
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const item = fileMenu.submenu.find(
+        (entry: any) => entry.label === 'Download latest version...',
+      );
+
+      expect(item).toBeDefined();
+      item.click();
+      expect(shell.openExternal).toHaveBeenCalledWith(DOWNLOAD_URL.default);
+    });
+
     it('should handle visit website click', async () => {
       linuxMenu.buildAndSetAppMenu();
 
@@ -286,7 +358,7 @@ describe('LinuxMenu', () => {
 
       expect(githubItem).toBeDefined();
       await githubItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobe-chat');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
     });
 
     it('should handle about dialog click', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 
 import type { DraftAnnotation } from './Annotation';

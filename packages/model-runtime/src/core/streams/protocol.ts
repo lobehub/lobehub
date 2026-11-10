@@ -31,6 +31,10 @@ export type ChatPayloadForTransformStream = {
 export interface StreamContext {
   chunkIndex?: number;
   id: string;
+  /** Options used to price `usage.cost`, forwarded so hooks can reprice the same usage. */
+  pricingOptions?: ComputeChatCostOptions;
+  /** Latest USD charge the upstream provider reported in a chunk. Server-side only. */
+  providerReportedCost?: number;
   /**
    * As pplx citations is in every chunk, but we only need to return it once
    * this flag is used to check if the pplx citation is returned,and then not return it again.
@@ -78,31 +82,6 @@ export interface StreamContext {
   usage?: ModelUsage;
   usageMissingDiagnostics?: UsageMissingDiagnostics;
 }
-
-export const setOpenAIChatCompletionUsageMissingDiagnostics = (
-  streamContext: StreamContext,
-  payload: ChatPayloadForTransformStream | undefined,
-  {
-    finishReason,
-    responseId,
-  }: {
-    finishReason?: string | null;
-    responseId?: string;
-  },
-) => {
-  streamContext.usageMissingDiagnostics = {
-    apiMode: 'chat_completions',
-    chunkIndex: streamContext.chunkIndex,
-    finishReason,
-    hasUsageMetadata: false,
-    includeUsageRequested: payload?.includeUsageRequested,
-    model: payload?.model,
-    provider: payload?.provider,
-    responseId,
-    source: 'openai_chat_completions',
-    terminalEventType: 'chat.completion.chunk',
-  };
-};
 
 export interface StreamProtocolChunk {
   data: any;
@@ -409,14 +388,16 @@ export const createSSEProtocolTransformer = (
 
   return new TransformStream({
     flush(controller) {
-      // If the upstream closes without sending a terminal event, emit a final error event
+      // If the upstream closes without sending a terminal event, emit a final error event.
+      // The provider cut the response short; no chunk failed to parse, so this is not a
+      // `StreamChunkError`.
       if (requireTerminalEvent && !hasTerminalEvent) {
         const id = streamStack?.id || 'stream_end';
         const data = {
           body: { name: 'Stream parsing error', reason: 'unexpected_end' },
           message: 'Stream ended unexpectedly',
           name: 'Stream parsing error',
-          type: 'StreamChunkError',
+          type: AgentRuntimeErrorType.ProviderStreamInterrupted,
         };
         controller.enqueue(`id: ${id}\n`);
         controller.enqueue(`event: error\n`);
@@ -496,6 +477,9 @@ export function createCallbacksTransformer(
         ? undefined
         : options?.streamStack?.usageMissingDiagnostics;
       if (usageMissingDiagnostics) data.usageMissingDiagnostics = usageMissingDiagnostics;
+      const { pricingOptions, providerReportedCost } = options?.streamStack ?? {};
+      if (providerReportedCost !== undefined) data.providerReportedCost = providerReportedCost;
+      if (pricingOptions) data.pricingOptions = pricingOptions;
 
       if (callbacks.onCompletion) {
         await callbacks.onCompletion(data);

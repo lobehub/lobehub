@@ -6,7 +6,7 @@ import { useRouteSkeletonChrome } from '@/spa/router/routeSkeletonChrome';
 import { useRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
 import DelayedFallback from './Delayed';
-import { markSkeletonVisible } from './skeletonHandover';
+import { retainSkeleton } from './skeletonHandover';
 
 // Same component the route Suspense fallback renders, so a page's data wait
 // continues the chunk wait's skeleton instead of swapping to a second one.
@@ -16,8 +16,7 @@ export const RouteLoading = () => {
 
   useLayoutEffect(() => {
     if (!Skeleton) return;
-    markSkeletonVisible();
-    return markSkeletonVisible;
+    return retainSkeleton();
   }, [Skeleton]);
 
   if (!Skeleton) return null;

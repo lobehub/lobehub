@@ -46,6 +46,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
       tryClaimStep: vi.fn().mockResolvedValue(true),
+      refreshStepLock: vi.fn().mockResolvedValue(true),
     };
   }),
   createStreamEventManager: vi.fn(function () {
@@ -78,9 +79,7 @@ vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/server/featureFlags', () => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: vi
-    .fn()
-    .mockResolvedValue({ enableAgentSelfIteration: true }),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('../../agentSignal/featureGate', () => ({
   isAgentSignalEnabledForUser: vi.fn().mockResolvedValue(true),

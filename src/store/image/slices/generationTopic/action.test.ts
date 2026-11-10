@@ -1,38 +1,30 @@
 import { RequestTrigger } from '@lobechat/types';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import React from 'react';
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createReplicaState } from '@/libs/replica';
+import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
-import { useImageStore } from '@/store/image';
+import { type ImageStore, useImageStore } from '@/store/image';
 import { type ImageGenerationTopic } from '@/types/generation';
 
-// Mock @/libs/swr mutate
-vi.mock('@/libs/swr', async () => {
-  const actual = await vi.importActual('@/libs/swr');
-  return {
-    ...actual,
-    mutate: vi.fn(),
-  };
-});
-
-vi.mock('swr', async () => {
-  const actual = await vi.importActual('swr');
-  return {
-    ...(actual as any),
-    mutate: vi.fn(),
-  };
+// The replica driver revalidates through the scoped `mutate`; mock it so the
+// imperative refresh assertions below can observe the call.
+vi.mock('@/libs/swr', async (importOriginal) => {
+  const actual = await importOriginal<typeof SwrModule>();
+  return { ...actual, mutate: vi.fn() };
 });
 
 // Mock services and dependencies
 vi.mock('@/services/generationTopic', () => ({
   generationTopicService: {
     createTopic: vi.fn(),
-    updateTopic: vi.fn(),
     deleteTopic: vi.fn(),
     getAllGenerationTopics: vi.fn(),
+    setTopicVisibility: vi.fn(),
+    updateTopic: vi.fn(),
     updateTopicCover: vi.fn(),
   },
 }));
@@ -43,28 +35,22 @@ vi.mock('@/services/chat', () => ({
   },
 }));
 
-vi.mock('@/store/user', () => ({
-  useUserStore: {
-    getState: vi.fn(),
-  },
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  systemAgentSelectors: {
-    generationTopic: vi.fn().mockReturnValue({
-      model: 'gpt-4',
-      provider: 'openai',
-    }),
-  },
-  userGeneralSettingsSelectors: {
-    currentResponseLanguage: vi.fn(() => 'en-US'),
-  },
-}));
+/** Seed the topic-list replica view (init true, so `internal_dispatch*` reduces over it). */
+const seedTopics = (topics: ImageGenerationTopic[], extra: Partial<ImageStore> = {}) => {
+  useImageStore.setState({
+    generationTopics: topics,
+    generationTopicsReplica: createReplicaState(),
+    isGenerationTopicsInit: true,
+    ...extra,
+  });
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   useImageStore.setState({
     generationTopics: [],
+    generationTopicsReplica: createReplicaState(),
+    isGenerationTopicsInit: false,
     activeGenerationTopicId: null,
     loadingGenerationTopicIds: [],
     newGenerationTopicVisibility: 'private',
@@ -163,7 +149,7 @@ describe('GenerationTopicAction', () => {
       ] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({ generationTopics: topics });
+        seedTopics(topics);
       });
 
       act(() => {
@@ -179,10 +165,7 @@ describe('GenerationTopicAction', () => {
       const topics = [{ id: 'gt_topic_1', title: 'Topic 1' }] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({
-          generationTopics: topics,
-          activeGenerationTopicId: topicId,
-        });
+        seedTopics(topics, { activeGenerationTopicId: topicId });
       });
 
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -200,7 +183,7 @@ describe('GenerationTopicAction', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        useImageStore.setState({ generationTopics: [] });
+        seedTopics([]);
       });
 
       act(() => {
@@ -235,14 +218,12 @@ describe('GenerationTopicAction', () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
       const prompts = ['A beautiful sunset over mountains'];
-      const topics = [{ id: topicId, title: 'Original Title' }] as ImageGenerationTopic[];
       const generatedTitle = 'Mountain Sunset Landscape';
 
       act(() => {
-        useImageStore.setState({ generationTopics: topics });
+        seedTopics([{ id: topicId, title: 'Original Title' }] as ImageGenerationTopic[]);
       });
 
-      // Mock successful AI response
       vi.mocked(chatService.fetchPresetTaskResult).mockImplementation((params) => {
         if (params.onFinish) {
           params.onFinish(generatedTitle, { type: 'done' });
@@ -266,13 +247,11 @@ describe('GenerationTopicAction', () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
       const prompts = ['A beautiful sunset over mountains with clear sky'];
-      const topics = [{ id: topicId, title: 'Original Title' }] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({ generationTopics: topics });
+        seedTopics([{ id: topicId, title: 'Original Title' }] as ImageGenerationTopic[]);
       });
 
-      // Mock AI error
       vi.mocked(chatService.fetchPresetTaskResult).mockImplementation((params) => {
         if (params.onError) {
           params.onError(new Error('AI service failed'));
@@ -295,7 +274,7 @@ describe('GenerationTopicAction', () => {
       const { result } = renderHook(() => useImageStore());
 
       act(() => {
-        useImageStore.setState({ generationTopics: [] });
+        seedTopics([]);
       });
 
       await act(async () => {
@@ -309,10 +288,9 @@ describe('GenerationTopicAction', () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
       const prompts = ['Test prompt'];
-      const topics = [{ id: topicId, title: 'Original Title' }] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({ generationTopics: topics });
+        seedTopics([{ id: topicId, title: 'Original Title' }] as ImageGenerationTopic[]);
       });
 
       const updateTitleSpy = vi.spyOn(
@@ -320,7 +298,6 @@ describe('GenerationTopicAction', () => {
         'internal_updateGenerationTopicTitleInSummary',
       );
 
-      // Mock streaming response
       vi.mocked(chatService.fetchPresetTaskResult).mockImplementation((params) => {
         if (params.onMessageHandle) {
           params.onMessageHandle({ type: 'text', text: 'Streaming' });
@@ -344,17 +321,16 @@ describe('GenerationTopicAction', () => {
   describe('removeGenerationTopic', () => {
     it('should remove topic and switch to next topic when removing active topic', async () => {
       const { result } = renderHook(() => useImageStore());
-      const topics = [
-        { id: 'gt_topic_1', title: 'Topic 1' },
-        { id: 'gt_topic_2', title: 'Topic 2' },
-        { id: 'gt_topic_3', title: 'Topic 3' },
-      ] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({
-          generationTopics: topics,
-          activeGenerationTopicId: 'gt_topic_2',
-        });
+        seedTopics(
+          [
+            { id: 'gt_topic_1', title: 'Topic 1' },
+            { id: 'gt_topic_2', title: 'Topic 2' },
+            { id: 'gt_topic_3', title: 'Topic 3' },
+          ] as ImageGenerationTopic[],
+          { activeGenerationTopicId: 'gt_topic_2' },
+        );
       });
 
       vi.mocked(generationTopicService.getAllGenerationTopics).mockResolvedValue([
@@ -374,23 +350,17 @@ describe('GenerationTopicAction', () => {
 
     it('should open new topic when removing the last topic', async () => {
       const { result } = renderHook(() => useImageStore());
-      const topics = [{ id: 'gt_topic_1', title: 'Topic 1' }] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({
-          generationTopics: topics,
+        seedTopics([{ id: 'gt_topic_1', title: 'Topic 1' }] as ImageGenerationTopic[], {
           activeGenerationTopicId: 'gt_topic_1',
         });
       });
-
-      // Mock getAllGenerationTopics to return empty array after deletion
-      vi.mocked(generationTopicService.getAllGenerationTopics).mockResolvedValue([]);
 
       const openNewTopicSpy = vi.spyOn(result.current, 'openNewGenerationTopic');
       const refreshSpy = vi
         .spyOn(result.current, 'refreshGenerationTopics')
         .mockImplementation(async () => {
-          // Simulate state update after refresh - empty topics array
           useImageStore.setState({ generationTopics: [] });
         });
 
@@ -405,16 +375,15 @@ describe('GenerationTopicAction', () => {
 
     it('should not switch topic when removing non-active topic', async () => {
       const { result } = renderHook(() => useImageStore());
-      const topics = [
-        { id: 'gt_topic_1', title: 'Topic 1' },
-        { id: 'gt_topic_2', title: 'Topic 2' },
-      ] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({
-          generationTopics: topics,
-          activeGenerationTopicId: 'gt_topic_1',
-        });
+        seedTopics(
+          [
+            { id: 'gt_topic_1', title: 'Topic 1' },
+            { id: 'gt_topic_2', title: 'Topic 2' },
+          ] as ImageGenerationTopic[],
+          { activeGenerationTopicId: 'gt_topic_1' },
+        );
       });
 
       const switchTopicSpy = vi.spyOn(result.current, 'switchGenerationTopic');
@@ -431,36 +400,6 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('useFetchGenerationTopics', () => {
-    it('should fetch generation topics when enabled', async () => {
-      const topics = [
-        { id: 'gt_topic_1', title: 'Topic 1', createdAt: new Date(), updatedAt: new Date() },
-        { id: 'gt_topic_2', title: 'Topic 2', createdAt: new Date(), updatedAt: new Date() },
-      ] as ImageGenerationTopic[];
-
-      vi.mocked(generationTopicService.getAllGenerationTopics).mockResolvedValue(topics);
-
-      await act(async () => {
-        renderHook(() => {
-          const store = useImageStore();
-          // Actually call the SWR hook to trigger the service call
-          const swrResult = store.useFetchGenerationTopics(true);
-
-          // Simulate the SWR onSuccess callback behavior
-          React.useEffect(() => {
-            useImageStore.setState({ generationTopics: topics });
-          }, []);
-
-          return swrResult;
-        });
-      });
-
-      // Wait for service to be called and state to be updated
-      await waitFor(() => {
-        expect(generationTopicService.getAllGenerationTopics).toHaveBeenCalled();
-        expect(useImageStore.getState().generationTopics).toEqual(topics);
-      });
-    });
-
     it('should not fetch when disabled', async () => {
       const { result } = renderHook(() => useImageStore().useFetchGenerationTopics(false));
 
@@ -470,18 +409,15 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('refreshGenerationTopics', () => {
-    afterEach(() => {
-      vi.resetAllMocks();
-    });
-
-    it('should call mutate to refresh topics', async () => {
+    it('should revalidate the topic list replica', async () => {
       const { result } = renderHook(() => useImageStore());
 
       await act(async () => {
         await result.current.refreshGenerationTopics();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['image:generationTopics']);
+      // The replica driver revalidates through the scoped mutate with a matcher.
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
     });
   });
 
@@ -490,10 +426,9 @@ describe('GenerationTopicAction', () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
       const coverUrl = 'https://example.com/cover.jpg';
-      const topics = [{ id: topicId, title: 'Topic 1', coverUrl: '' }] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({ generationTopics: topics });
+        seedTopics([{ id: topicId, title: 'Topic 1', coverUrl: '' }] as ImageGenerationTopic[]);
       });
 
       const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchGenerationTopic');
@@ -502,11 +437,14 @@ describe('GenerationTopicAction', () => {
         await result.current.updateGenerationTopicCover(topicId, coverUrl);
       });
 
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        { type: 'updateTopic', id: topicId, value: { coverUrl } },
-        'internal_updateGenerationTopicCover/optimistic',
-      );
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        type: 'updateTopic',
+        id: topicId,
+        value: { coverUrl },
+      });
       expect(generationTopicService.updateTopicCover).toHaveBeenCalledWith(topicId, coverUrl);
+      // the optimistic cover is written into the replica view
+      expect(result.current.generationTopics[0].coverUrl).toBe(coverUrl);
     });
   });
 
@@ -543,12 +481,11 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('internal_dispatchGenerationTopic', () => {
-    it('should update topics when state changes', async () => {
+    it('should write the reduced topics into the replica view', async () => {
       const { result } = renderHook(() => useImageStore());
-      const initialTopics = [{ id: 'gt_topic_1', title: 'Topic 1' }] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({ generationTopics: initialTopics });
+        seedTopics([{ id: 'gt_topic_1', title: 'Topic 1' }] as ImageGenerationTopic[]);
       });
 
       act(() => {
@@ -562,20 +499,19 @@ describe('GenerationTopicAction', () => {
       expect(result.current.generationTopics.find((t) => t.id === 'gt_topic_2')).toBeDefined();
     });
 
-    it('should not update when topics are equal', async () => {
+    it('should update a topic in place', async () => {
       const { result } = renderHook(() => useImageStore());
       const existingDate = new Date('2024-01-01T00:00:00.000Z');
-      const topics = [
-        {
-          id: 'gt_topic_1',
-          title: 'Topic 1',
-          createdAt: existingDate,
-          updatedAt: existingDate,
-        },
-      ] as ImageGenerationTopic[];
 
       act(() => {
-        useImageStore.setState({ generationTopics: topics });
+        seedTopics([
+          {
+            id: 'gt_topic_1',
+            title: 'Topic 1',
+            createdAt: existingDate,
+            updatedAt: existingDate,
+          },
+        ] as ImageGenerationTopic[]);
       });
 
       const stateBefore = result.current.generationTopics;
@@ -584,15 +520,12 @@ describe('GenerationTopicAction', () => {
         result.current.internal_dispatchGenerationTopic({
           type: 'updateTopic',
           id: 'gt_topic_1',
-          value: { title: 'Topic 1' }, // Same title, but updatedAt will still change
+          value: { title: 'Renamed' },
         });
       });
 
-      // The state object reference should change due to updatedAt being updated
       expect(result.current.generationTopics).not.toBe(stateBefore);
-      // But the topic should still exist with updated timestamp
-      expect(result.current.generationTopics[0].id).toBe('gt_topic_1');
-      expect(result.current.generationTopics[0].title).toBe('Topic 1');
+      expect(result.current.generationTopics[0].title).toBe('Renamed');
       expect(result.current.generationTopics[0].updatedAt.getTime()).toBeGreaterThan(
         existingDate.getTime(),
       );
@@ -653,6 +586,10 @@ describe('GenerationTopicAction', () => {
       const topicId = 'gt_topic_1';
       const updateData = { title: 'Updated Title' };
 
+      act(() => {
+        seedTopics([{ id: topicId, title: 'Topic 1' }] as ImageGenerationTopic[]);
+      });
+
       const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchGenerationTopic');
       const loadingSpy = vi.spyOn(result.current, 'internal_updateGenerationTopicLoading');
       const refreshSpy = vi.spyOn(result.current, 'refreshGenerationTopics');
@@ -674,21 +611,26 @@ describe('GenerationTopicAction', () => {
   });
 
   describe('internal_updateGenerationTopicTitleInSummary', () => {
-    it('should dispatch title update action', async () => {
+    it('should write the streamed title into the replica view', async () => {
       const { result } = renderHook(() => useImageStore());
       const topicId = 'gt_topic_1';
-      const title = 'Summary Title';
+
+      act(() => {
+        seedTopics([{ id: topicId, title: 'Original' }] as ImageGenerationTopic[]);
+      });
 
       const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchGenerationTopic');
 
       act(() => {
-        result.current.internal_updateGenerationTopicTitleInSummary(topicId, title);
+        result.current.internal_updateGenerationTopicTitleInSummary(topicId, 'Summary Title');
       });
 
-      expect(dispatchSpy).toHaveBeenCalledWith(
-        { type: 'updateTopic', id: topicId, value: { title } },
-        'updateGenerationTopicTitleInSummary',
-      );
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        type: 'updateTopic',
+        id: topicId,
+        value: { title: 'Summary Title' },
+      });
+      expect(result.current.generationTopics[0].title).toBe('Summary Title');
     });
   });
 

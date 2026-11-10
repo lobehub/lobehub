@@ -1,8 +1,6 @@
 'use client';
 
-import { TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Button, createStaticStyles, cssVar, Text, TextArea } from '@lobehub/ui';
 import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -116,7 +114,9 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
     activeAnnotations,
     activeEvidence,
     activeIndex,
-    annotations,
+    // Only what this phone can edit — videos' notes are kept in the model and
+    // submitted untouched, but have no stage here to point back to.
+    editableAnnotations: annotations,
     attachments,
     canSubmit,
     canvas,

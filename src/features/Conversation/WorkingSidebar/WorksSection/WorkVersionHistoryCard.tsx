@@ -1,7 +1,5 @@
 import type { TaskStatus, WorkListItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 
@@ -59,7 +57,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const [expanded, setExpanded] = useState(false);
-  const [openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+  const [openCanvas, openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+    s.openCanvas,
     s.openDocument,
     s.openFilePreview,
     s.openTaskDetail,
@@ -94,13 +93,16 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
           ? () => window.open(openTarget.url, '_blank', 'noopener,noreferrer')
           : undefined;
       }
+      case 'canvas': {
+        return () => openCanvas(openTarget.canvasId, openTarget.version);
+      }
       case 'filePreview': {
         return () => openFilePreview({ fileId: openTarget.fileId });
       }
       case 'task': {
         return resourceDeleted
           ? () => promptResourceDeleted(work)
-          : () => openTaskDetail(openTarget.identifier);
+          : () => openTaskDetail(openTarget.taskId);
       }
     }
   })();

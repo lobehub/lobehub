@@ -478,7 +478,9 @@ export class AcceptanceFlowModel {
               definition: {
                 ...item.definition,
                 preconditions: [
+                  /* v8 ignore start -- unreachable: child plan items come from graph(), which always builds definition.preconditions as an array, and materialize() keeps item.definition as-is, so `?? []` never applies */
                   ...(item.definition?.preconditions ?? []),
+                  /* v8 ignore stop */
                   ...(branch
                     ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
                     : []),
@@ -954,12 +956,19 @@ export class AcceptanceFlowModel {
       .flatMap((f) => f.versions.flatMap((v) => v.runs.flatMap((r) => r.attempts)))
       .find((r) => r.id === resultId);
     if (!result) throw new Error('Result not found');
+    // A screenshot region is a place; a video region is a place at a moment, so
+    // it must say which frame (or span) it was drawn on.
     if (
       feedback?.annotations?.some(
-        (a) => !result.evidence.some((e) => e.id === a.evidenceId && e.type === 'screenshot'),
+        (a) =>
+          !result.evidence.some(
+            (e) =>
+              e.id === a.evidenceId &&
+              (e.type === 'video' ? a.time !== undefined : e.type === 'screenshot' && !a.time),
+          ),
       )
     )
-      throw new Error('Annotation must reference this result screenshot');
+      throw new Error('Annotation must reference this result screenshot, or a video frame');
     const [updated] = await this.db
       .update(verifyCheckResults)
       .set({

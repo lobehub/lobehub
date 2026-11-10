@@ -120,6 +120,14 @@ export interface WorkspaceUserPreference {
    *   ignored; nothing reads or writes this map.
    */
   sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
+  /**
+   * Topic sidebars list only the topics this member created.
+   *
+   * @deprecated The filter is a device-local, per-agent choice now
+   *   (`systemStatus.topicOnlyMineByAgent`). Existing values are ignored;
+   *   nothing reads or writes this key.
+   */
+  topicOnlyMine?: boolean;
 }
 
 export interface LobeUser {
@@ -134,6 +142,11 @@ export interface LobeUser {
 }
 
 export const UserGuideSchema = z.object({
+  /**
+   * Pages and Resources were merged into Docs; set once the notice is acknowledged
+   */
+  docsMerged: z.boolean().optional(),
+
   /**
    * Move the settings button to the avatar dropdown
    */
@@ -153,6 +166,10 @@ export const UserGuideSchema = z.object({
 export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
+  /**
+   * enable agent identity: give an agent its own mail address
+   */
+  enableAgentIdentity: z.boolean().optional(),
   /**
    * enable graph runtime configuration for agents
    */
@@ -186,7 +203,9 @@ export const UserLabSchema = z.object({
    */
   enableImessage: z.boolean().optional(),
   /**
-   * enable markdown rendering in chat input editor
+   * @deprecated The chat input always uses the rich editor; paste conversion moved to
+   * `settings.general.enablePasteAutoConvert`. Kept so a write from an older released
+   * client is not stripped by the schema, and to seed that setting for users who had it off.
    */
   enableInputMarkdown: z.boolean().optional(),
   /**
@@ -194,8 +213,8 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
-   * show the Integrations settings page (GitHub App and the coming-soon
-   * directory); hidden until the closed loop leaves alpha
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
    */
   enableIntegrations: z.boolean().optional(),
   /**
@@ -207,7 +226,9 @@ export const UserLabSchema = z.object({
    */
   enableProjects: z.boolean().optional(),
   /**
-   * show the per-agent self-learning (expertise) page and its sidebar entry
+   * self-evolving: inject what was learned (the user's rules and each agent's own lessons) into
+   * runs, and show it under memory and on each agent's self-learning page. The former separate
+   * "my rules" switch (`enableMemoryRules`) is folded into this one.
    */
   enableSelfLearning: z.boolean().optional(),
   /**
@@ -217,18 +238,18 @@ export const UserLabSchema = z.object({
   /** Capture a conversation turn as an eval test case (developer-facing). */
   enableEvalCapture: z.boolean().optional(),
   /**
-   * route every agent run in this tab over one shared gateway WebSocket
-   * (protocol v2 mux) instead of one socket per run
-   *
-   * @deprecated The Labs toggle is gone; the transport is gated by the
-   * `agent_gateway_mux` feature flag. Still read on the server to pick
-   * message-patch delivery and read-path projection until those decisions move
-   * to the client's declared protocol, which removes this field.
+   * show "Report a problem" in the topic menu, which sends where the topic is
+   * (its ids and the client environment) to the support team
    */
-  enableGatewayMux: z.boolean().optional(),
+  enableTopicBugReport: z.boolean().optional(),
   /**
-   * enable the per-topic acceptance tray above the composer (author a topic's
-   * delivery checklist inline)
+   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
+   */
+  enableGoals: z.boolean().optional(),
+  /**
+   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
+   * while older clients that only know this key are still around: their writes
+   * touch only this key, so it carries the latest choice.
    */
   enableTopicAcceptance: z.boolean().optional(),
   /**
@@ -301,6 +322,12 @@ export interface UserPreference {
    * context. Stored as id (not slug) so workspace renames don't invalidate it.
    */
   lastWorkspaceId?: string | null;
+  /**
+   * How a project's topic sidebar groups its topics. Kept apart from
+   * `topicGroupMode` because a project spans agents and devices: it defaults to
+   * grouping by agent, and its choice must not leak into single-agent lists.
+   */
+  projectTopicGroupMode?: TopicGroupMode;
   /**
    * Personal-mode counterpart of
    * {@link WorkspaceUserPreference.sidebarHiddenAgentIds}: agents/chat-groups
@@ -388,11 +415,16 @@ export const UserPreferenceSchema = z
     integration: UserIntegrationPreferenceSchema.optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    projectTopicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
     sidebarHiddenAgentIds: z.array(z.string()).optional(),
     sidebarHiddenGroupIds: z.array(z.string()).optional(),
     terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
-    topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
+    topicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
     topicIncludeCompleted: z.boolean().optional(),
     topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),

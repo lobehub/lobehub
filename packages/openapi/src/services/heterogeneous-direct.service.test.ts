@@ -289,6 +289,38 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(runtimePayload).not.toHaveProperty('reasoning');
   });
 
+  it.each([
+    ['kimi-k3', 'chatCompletion'],
+    ['claude-sonnet-4-6', 'chatCompletion'],
+    ['gpt-6-sol', 'responses'],
+  ])('routes Codex model %s by its native API (%s), not an allowlist', async (model, apiMode) => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model,
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'codex',
+      model,
+      payload: {
+        apiMode: 'responses',
+        messages: [],
+        model: 'lobehub-default',
+        reasoning: { effort: 'high' },
+        stream: true,
+      },
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({ apiMode, model });
+  });
+
   it('fails closed before runtime initialization for an unsupported direct protocol route', async () => {
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockRejectedValue(
       new Error('unsupported agent/runtime pair'),

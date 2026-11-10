@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "افزودن به کتابخانه",
   "addToKnowledgeBase.totalFiles": "{{count}} فایل انتخاب شده",
   "createNew.confirm": "ایجاد جدید",
+  "createNew.cover.label": "کاور",
   "createNew.description.label": "توضیحات کتابخانه (اختیاری)",
   "createNew.description.placeholder": "توضیحات به مدل زبانی کمک می‌کند کتابخانه شما را بهتر درک کند",
   "createNew.edit.confirm": "ذخیره تغییرات",

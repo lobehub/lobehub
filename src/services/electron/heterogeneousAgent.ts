@@ -1,10 +1,15 @@
 import type {
+  ClaudeCodeAccountResolution,
+  ClaudeCodeLocalAccount,
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
   KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
-import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousAgentType,
+  HeterogeneousProviderBindingReference,
+} from '@lobechat/heterogeneous-agents';
 import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
@@ -22,7 +27,7 @@ class HeterogeneousAgentService {
   }
 
   async startSession(params: {
-    agentType?: string;
+    agentType?: HeterogeneousAgentType;
     args?: string[];
     command: string;
     cwd?: string;
@@ -158,6 +163,30 @@ class HeterogeneousAgentService {
     env?: Record<string, string>;
   }): Promise<ClaudeCodeQuotaSnapshot['identity']> {
     return this.ipc.heterogeneousAgent.getClaudeCodeIdentity(params);
+  }
+
+  /** Every Claude Code account signed in on this machine (default login first). */
+  async listClaudeCodeAccounts(): Promise<ClaudeCodeLocalAccount[]> {
+    return this.ipc.heterogeneousAgent.listClaudeCodeAccounts();
+  }
+
+  /** The local login a run for this provider account must spawn with. */
+  async resolveClaudeCodeAccount(externalAccountId: string): Promise<ClaudeCodeAccountResolution> {
+    return this.ipc.heterogeneousAgent.resolveClaudeCodeAccount({ externalAccountId });
+  }
+
+  /** External-provider routing flags a session spawn inherits from the desktop's env. */
+  async getClaudeCodeInheritedRoutingEnv(): Promise<Record<string, string>> {
+    return this.ipc.heterogeneousAgent.getClaudeCodeInheritedRoutingEnv();
+  }
+
+  /** Sign an account in to its own profile; resolves once the browser login completes. */
+  async loginClaudeCodeAccount(params?: { email?: string }): Promise<ClaudeCodeLocalAccount> {
+    return this.ipc.heterogeneousAgent.loginClaudeCodeAccount(params);
+  }
+
+  async cancelClaudeCodeAccountLogin(): Promise<boolean> {
+    return this.ipc.heterogeneousAgent.cancelClaudeCodeAccountLogin();
   }
 
   /**

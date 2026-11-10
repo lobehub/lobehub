@@ -1,4 +1,3 @@
-import { Tooltip } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -6,9 +5,10 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  cx,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -50,7 +50,7 @@ const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
       <AccordionHeader>
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('library.title')}
+            {t('docs.recentLibraries')}
           </Text>
         </AccordionTrigger>
         <div

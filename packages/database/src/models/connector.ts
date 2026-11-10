@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
 import { ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
@@ -79,6 +79,14 @@ export class ConnectorModel {
    * and collide on identifier.
    */
   private baseScope = () => and(this.ownership(), isNull(userConnectors.agentId));
+
+  /**
+   * Deterministic connector order for runtime resolution: by identifier, then id
+   * so rows sharing an identifier have a stable tie-break. Resolved connectors
+   * drive the order of the model's tool schema array, so they must not follow
+   * the physical row order, which changes whenever a row is updated.
+   */
+  private resolutionOrder = () => [asc(userConnectors.identifier), asc(userConnectors.id)];
 
   private publicSelection = {
     agentId: userConnectors.agentId,
@@ -304,7 +312,8 @@ export class ConnectorModel {
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)))
+      .orderBy(...this.resolutionOrder());
 
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
   };
@@ -330,7 +339,8 @@ export class ConnectorModel {
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(and(this.scopePredicate(agentId), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.scopePredicate(agentId), inArray(userConnectors.identifier, identifiers)))
+      .orderBy(...this.resolutionOrder());
 
     return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
   };
@@ -345,7 +355,11 @@ export class ConnectorModel {
     agentId?: string,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<DecryptedConnector[]> => {
-    const rows = await this.db.select().from(userConnectors).where(this.scopePredicate(agentId));
+    const rows = await this.db
+      .select()
+      .from(userConnectors)
+      .where(this.scopePredicate(agentId))
+      .orderBy(...this.resolutionOrder());
 
     return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
   };

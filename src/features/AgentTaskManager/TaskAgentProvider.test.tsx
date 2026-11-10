@@ -61,6 +61,11 @@ vi.mock('@/hooks/useOperationState', () => ({
   useOperationState: () => mocks.operationState,
 }));
 
+vi.mock('@/store/task', () => ({
+  useTaskStore: (selector: (state: unknown) => unknown) =>
+    selector({ taskRefIndex: { 'T-1': 'task_1', 'task_1': 'task_1' } }),
+}));
+
 vi.mock('@/store/agent', () => ({
   useAgentStore: Object.assign(
     (selector: (state: typeof mocks.agentState) => unknown) => {
@@ -142,7 +147,7 @@ describe('TaskAgentProvider', () => {
       </TaskAgentProvider>,
     );
 
-    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
+    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'task_1', type: 'detail' });
   });
 
   it('uses the route agent as the default in an agent-scoped task detail', async () => {
@@ -293,7 +298,7 @@ describe('TaskAgentProvider', () => {
     await waitFor(() => {
       expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
     });
-    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
+    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'task_1', type: 'detail' });
     expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
   });
 

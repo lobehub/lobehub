@@ -1,9 +1,11 @@
 export const AcceptanceEvidenceApiName = {
+  disputeCriterion: 'disputeCriterion',
   listCriteria: 'listCriteria',
   submitEvidence: 'submitEvidence',
 } as const;
 
-export type AcceptanceEvidenceType = 'markdown' | 'screenshot' | 'text' | 'video';
+export type AcceptanceEvidenceType =
+  'dom_snapshot' | 'gif' | 'markdown' | 'screenshot' | 'text' | 'transcript' | 'video';
 
 export interface SubmitAcceptanceEvidenceParams {
   checkItemId: string;
@@ -26,4 +28,12 @@ export interface AcceptanceCriterionSummary {
   /** Evidence already recorded for this criterion in the current run. */
   submittedEvidence: number;
   title: string;
+}
+
+export interface DisputeAcceptanceCriterionParams {
+  checkItemId: string;
+  /** Evidence ids on this criterion that prove it, for a `missed_evidence` dispute. */
+  evidenceIds?: string[];
+  kind: 'invalid_criterion' | 'missed_evidence';
+  reason: string;
 }

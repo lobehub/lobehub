@@ -15,6 +15,7 @@ import {
   createCoreManifest,
   PLACEHOLDER_FULL,
   PLACEHOLDER_OBJECTS_BASE_URL,
+  readCoreTree,
 } from '../buildCoreManifest.mjs';
 
 const shellLoader = createRequire(import.meta.url)('../../shell/core-loader.js');
@@ -92,6 +93,21 @@ describe('buildCoreManifest', () => {
     expect(manifest.full).toEqual(PLACEHOLDER_FULL);
     expect(coreManifestSchema.safeParse(manifest).success).toBe(true);
     expect(JSON.parse(await readFile(path.join(root, 'manifest.json'), 'utf8'))).toEqual(manifest);
+  });
+
+  it('can index object paths without retaining the core contents', async () => {
+    await setup();
+    await writeFile(path.join(root, 'copy.js'), 'main');
+    await writeFile(path.join(root, '.DS_Store'), 'finder');
+    const buffered = readCoreTree(root);
+    const indexed = readCoreTree(root, { retainContents: false });
+
+    expect(indexed.tree).toEqual(buffered.tree);
+    expect(indexed.objects.size).toBe(buffered.objects.size);
+    for (const [hash, file] of indexed.objects) {
+      expect(typeof file).toBe('string');
+      expect(await readFile(file)).toEqual(buffered.objects.get(hash));
+    }
   });
 
   it('signs so the shell loader verifies, and rejects a tampered byte', async () => {

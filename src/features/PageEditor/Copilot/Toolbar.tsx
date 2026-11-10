@@ -1,5 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Flexbox, Popover, Text } from '@lobehub/ui';
 import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,11 +14,13 @@ import { usePageAgentPanelControl, usePageAgentPanelOverride } from '../RightPan
 import TopicItem from './TopicSelector/TopicItem';
 
 interface CopilotToolbarProps {
+  /** Collapse the hosting panel; when set, the close button calls this instead of the page-agent panel. */
+  onCollapse?: () => void;
   onTopicChange?: (topicId: string | null) => void;
   topicId?: string | null;
 }
 
-const CopilotToolbar = memo<CopilotToolbarProps>(({ onTopicChange, topicId }) => {
+const CopilotToolbar = memo<CopilotToolbarProps>(({ onCollapse, onTopicChange, topicId }) => {
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
@@ -113,11 +114,11 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ onTopicChange, topicId }) =>
               />
             </Popover>
           )}
-          {!hasOverride && (
+          {(onCollapse || !hasOverride) && (
             <ActionIcon
               icon={PanelRightCloseIcon}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              onClick={() => togglePageAgentPanel()}
+              onClick={() => (onCollapse ? onCollapse() : togglePageAgentPanel())}
             />
           )}
         </>

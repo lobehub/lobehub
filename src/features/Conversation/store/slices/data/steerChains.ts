@@ -16,15 +16,12 @@ export interface SteerChainIndex {
   hostOf: Map<string, string>;
 }
 
-// A plain `assistant` reply (a turn that finished without tool calls) cannot host a
-// chain: its row component has no continuation rendering, so a steer after it stays
-// a separate row. Fixing that means promoting the reply to `assistantGroup` when it is
-// interrupted, not widening this predicate.
+// A plain `assistant` host has no continuation rendering of its own; the row
+// renderer promotes it to the assistantGroup component once it hosts a chain.
 const isTurnHost = (message?: UIChatMessage) =>
-  message?.role === 'assistantGroup' || message?.role === 'supervisor';
-
-const isTurnTail = (message?: UIChatMessage) =>
-  isTurnHost(message) || message?.role === 'assistant';
+  message?.role === 'assistantGroup' ||
+  message?.role === 'supervisor' ||
+  message?.role === 'assistant';
 
 const isSteerUser = (message?: UIChatMessage) =>
   message?.role === 'user' && !!message.metadata?.steer;
@@ -38,7 +35,7 @@ const buildSteerChainIndex = (messages: UIChatMessage[]): SteerChainIndex => {
     const message = messages[index]!;
     const next = messages[index + 1];
 
-    if (chain && isSteerUser(message) && isTurnTail(next)) {
+    if (chain && isSteerUser(message) && isTurnHost(next)) {
       chain.continuations.push({ groupId: next!.id, steerUserId: message.id });
       chain.memberIds.push(message.id, next!.id);
       hostOf.set(message.id, chain.hostId);

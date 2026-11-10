@@ -77,6 +77,25 @@ describe('assembleSkillPool', () => {
     ).toEqual([AgentBrowserIdentifier, 'artifacts']);
   });
 
+  it('keeps a turn skill selectable in manual mode without pinning it', () => {
+    const pool = assembleSkillPool(
+      { builtin: [skill('lobehub'), skill('artifacts')], db: [skill('picked')] },
+      { enabledPluginIds: ['picked'], skillActivateMode: 'manual', turnSkillIds: ['lobehub'] },
+    );
+
+    expect(pool.skills.map((s) => s.identifier)).toEqual(['picked', 'lobehub']);
+    expect(pool.enabledPluginIds).toEqual(['picked']);
+  });
+
+  it('still lets a share configuration withhold a turn skill', () => {
+    const pool = assembleSkillPool(
+      { builtin: [skill('lobehub')] },
+      { shareAllowedIds: [], skillActivateMode: 'manual', turnSkillIds: ['lobehub'] },
+    );
+
+    expect(pool.skills).toEqual([]);
+  });
+
   it('exposes only the selected skills in manual mode, keeping the discovered project ones', () => {
     const sources = {
       agentSkills: [skill('agent-skills:notes', 'agent-skills:notes')],

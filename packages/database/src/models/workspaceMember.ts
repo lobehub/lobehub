@@ -1,13 +1,28 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import { and, asc, count, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { nanoid as secureNanoid } from 'nanoid';
 import { nanoid } from 'nanoid/non-secure';
 
 import { devices } from '../schemas/device';
 import { messengerAccountLinks } from '../schemas/messengerAccountLink';
+import { projectMembers } from '../schemas/projectReview';
 import { tasks } from '../schemas/task';
 import { users } from '../schemas/user';
-import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
+import { workspaceInvitations, workspaceMembers, workspaceTeamMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { ilikeContains as containsIgnoreCase } from '../utils/like';
 import { ResourcePermissionModel } from './resourcePermission';
@@ -60,6 +75,29 @@ export class WorkspaceMemberModel {
         isNull(workspaceMembers.deletedAt),
       ),
     });
+  };
+
+  /**
+   * The caller's active roles across many workspaces in ONE read — for list
+   * surfaces whose rows span workspaces, where a `getMember` per workspace
+   * would turn a page into a chain of sequential queries.
+   */
+  getRolesInWorkspaces = async (
+    workspaceIds: string[],
+    userId: string,
+  ): Promise<Map<string, string>> => {
+    if (workspaceIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ role: workspaceMembers.role, workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          inArray(workspaceMembers.workspaceId, workspaceIds),
+          eq(workspaceMembers.userId, userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      );
+    return new Map(rows.map((row) => [row.workspaceId, row.role]));
   };
 
   /** Lock an active membership row. Call only from an enclosing transaction. */
@@ -171,11 +209,12 @@ export class WorkspaceMemberModel {
       )
       .returning({ deviceId: devices.deviceId });
 
-    // Same reasoning one level up: a per-member resource grant only means
-    // anything while they belong to the workspace, and the soft delete is
-    // reactivated by `addMember`, so a grant left behind would silently restore
-    // their old access on re-invite. Workspace-wide rows carry no subject and
-    // stay.
+    // Same reasoning one level up: a per-member resource grant (or team
+    // membership) only means anything while they belong to the workspace, and
+    // the soft delete is reactivated by `addMember`, so a row left behind would
+    // silently restore their old access or teams on re-invite. Workspace-wide
+    // rows carry no subject and stay. The job title and responsibilities are
+    // cleared for the same reason: a re-invited member starts without them.
     //
     // Soft-delete first, then revoke, both in one transaction: the update takes
     // the membership row lock that a concurrent grant waits on, so a grant can
@@ -184,7 +223,7 @@ export class WorkspaceMemberModel {
     await this.db.transaction(async (tx) => {
       await tx
         .update(workspaceMembers)
-        .set({ deletedAt: new Date() })
+        .set({ deletedAt: new Date(), title: null, responsibilities: null })
         .where(
           and(
             eq(workspaceMembers.workspaceId, workspaceId),
@@ -194,6 +233,19 @@ export class WorkspaceMemberModel {
         );
 
       await new ResourcePermissionModel(tx, workspaceId).removeMemberGrants(userId);
+
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.workspaceId, workspaceId), eq(projectMembers.userId, userId)));
+
+      await tx
+        .delete(workspaceTeamMembers)
+        .where(
+          and(
+            eq(workspaceTeamMembers.workspaceId, workspaceId),
+            eq(workspaceTeamMembers.userId, userId),
+          ),
+        );
 
       await tx
         .update(tasks)
@@ -233,6 +285,30 @@ export class WorkspaceMemberModel {
     });
   };
 
+  /**
+   * Set an active member's workspace-scoped job title and responsibilities.
+   * `null` clears a field; an omitted field stays as it is. Returns the updated
+   * row, or `undefined` when the user is not an active member.
+   */
+  updateMemberProfile = async (
+    workspaceId: string,
+    userId: string,
+    profile: { title?: string | null; responsibilities?: string | null },
+  ) => {
+    const [result] = await this.db
+      .update(workspaceMembers)
+      .set({ title: profile.title, responsibilities: profile.responsibilities })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .returning();
+    return result;
+  };
+
   // ===== Invitations ===== //
 
   createInvitation = async (params: { email?: string; role?: MemberRole; workspaceId: string }) => {
@@ -259,13 +335,94 @@ export class WorkspaceMemberModel {
     });
   };
 
+  /** Pending single-use invitations; reusable links are managed separately. */
   listPendingInvitations = async (workspaceId: string) => {
     return this.db.query.workspaceInvitations.findMany({
       where: and(
         eq(workspaceInvitations.workspaceId, workspaceId),
         eq(workspaceInvitations.status, 'pending'),
+        eq(workspaceInvitations.reusable, false),
       ),
     });
+  };
+
+  // ===== Reusable link invitations (share links) ===== //
+
+  /**
+   * The workspace's live share links, newest first: reusable, not revoked and
+   * not past `expiresAt`. A workspace may hold several at once.
+   */
+  listLinkInvitations = async (workspaceId: string, now = new Date()) => {
+    return this.db.query.workspaceInvitations.findMany({
+      orderBy: [desc(workspaceInvitations.createdAt)],
+      where: and(
+        eq(workspaceInvitations.workspaceId, workspaceId),
+        eq(workspaceInvitations.reusable, true),
+        eq(workspaceInvitations.status, 'pending'),
+        or(isNull(workspaceInvitations.expiresAt), gt(workspaceInvitations.expiresAt, now)),
+      ),
+    });
+  };
+
+  /** Number of live share links, for the per-workspace cap. */
+  countLinkInvitations = async (workspaceId: string, now = new Date()) => {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(workspaceInvitations)
+      .where(
+        and(
+          eq(workspaceInvitations.workspaceId, workspaceId),
+          eq(workspaceInvitations.reusable, true),
+          eq(workspaceInvitations.status, 'pending'),
+          or(isNull(workspaceInvitations.expiresAt), gt(workspaceInvitations.expiresAt, now)),
+        ),
+      );
+    return row?.value ?? 0;
+  };
+
+  /**
+   * Create a share link: a reusable invitation any signed-in user can accept
+   * until it expires or is revoked. `expiresAt: null` never expires.
+   */
+  createLinkInvitation = async (params: {
+    expiresAt: Date | null;
+    role?: MemberRole;
+    workspaceId: string;
+  }) => {
+    const [invitation] = await this.db
+      .insert(workspaceInvitations)
+      .values({
+        expiresAt: params.expiresAt,
+        inviterId: this.userId,
+        reusable: true,
+        role: params.role ?? 'member',
+        // Long-lived and shared publicly, so draw the token from a CSPRNG.
+        token: secureNanoid(32),
+        workspaceId: params.workspaceId,
+      })
+      .returning();
+    return invitation;
+  };
+
+  /**
+   * Revoke one share link of the workspace. Returns whether a live link was
+   * revoked (false for an unknown id, another workspace's link, a single-use
+   * invitation, or a link that was already revoked).
+   */
+  revokeLinkInvitation = async (workspaceId: string, id: string) => {
+    const rows = await this.db
+      .update(workspaceInvitations)
+      .set({ status: 'revoked', updatedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceInvitations.id, id),
+          eq(workspaceInvitations.workspaceId, workspaceId),
+          eq(workspaceInvitations.reusable, true),
+          eq(workspaceInvitations.status, 'pending'),
+        ),
+      )
+      .returning({ id: workspaceInvitations.id });
+    return rows.length > 0;
   };
 
   revokeInvitation = async (id: string) => {

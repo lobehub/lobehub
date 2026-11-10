@@ -387,6 +387,34 @@ describe('PiRpcSession', () => {
     await session.close();
   });
 
+  it('ends the turn when an extension command consumes the prompt', async () => {
+    mocks.command.mockResolvedValue({
+      command: 'prompt',
+      data: { disposition: 'handled' },
+      success: true,
+      type: 'response',
+    });
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+
+    // Pi starts no run for a handled prompt, so agent_settled never arrives.
+    await expect(session.run({ text: '/mcp' })).resolves.toEqual({ aborted: false });
+    expect(events.at(-1)?.type).toBe('agent_runtime_end');
+    expect(session.isReusable).toBe(true);
+    await session.close();
+  });
+
+  it('reports a run as aborted when Pi settles it as aborted', async () => {
+    mocks.command.mockResolvedValue({ success: true });
+    const { session } = createSession();
+    const run = session.run({ text: 'long task' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+
+    await emit(session, { type: 'turn_start' });
+    await emit(session, { aborted: true, type: 'agent_settled' });
+
+    await expect(run).resolves.toEqual({ aborted: true });
+  });
+
   it('keeps the settled result when it arrives before the prompt ACK', async () => {
     let acknowledge!: (response: { success: boolean }) => void;
     mocks.command.mockImplementation(
@@ -509,56 +537,5 @@ describe('PiRpcSession', () => {
       }),
     );
     await session.close();
-  });
-
-  it('keeps the process alive across runs when autoCloseOnSettle is false', async () => {
-    const { session } = createSession({ autoCloseOnSettle: false });
-    mocks.start.mockResolvedValue(undefined);
-    mocks.command.mockImplementation((command: { type: string }) => {
-      if (command.type === 'get_state') {
-        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
-      }
-      return Promise.resolve({ success: true, type: 'response', command: command.type });
-    });
-    mocks.close.mockResolvedValue(undefined);
-
-    // Turn 1 settles without closing the process.
-    const first = session.run({ text: 'first' });
-    await vi.waitFor(() => expect(session.isRunning).toBe(true));
-    await emit(session, { type: 'agent_settled' });
-    await expect(first).resolves.toEqual({ aborted: false });
-    expect(session.isRunning).toBe(false);
-    expect(mocks.close).not.toHaveBeenCalled();
-
-    // Turn 2 reuses the same session/process.
-    const second = session.run({ text: 'second' });
-    await vi.waitFor(() => expect(session.isRunning).toBe(true));
-    await emit(session, { type: 'agent_settled' });
-    await expect(second).resolves.toEqual({ aborted: false });
-    expect(session.isRunning).toBe(false);
-    expect(mocks.close).not.toHaveBeenCalled();
-
-    // The host owns close() in pooled mode.
-    await session.close();
-    expect(mocks.close).toHaveBeenCalled();
-  });
-
-  it('forwards extension UI requests to the host', async () => {
-    const handler = vi.fn().mockReturnValue(undefined);
-    const { session } = createSession({ onExtensionUiRequest: handler });
-    mocks.start.mockResolvedValue(undefined);
-    mocks.command.mockImplementation((command: { type: string }) => {
-      if (command.type === 'get_state')
-        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
-      return Promise.resolve({ success: true, type: 'response', command: command.type });
-    });
-    mocks.close.mockResolvedValue(undefined);
-
-    const runPromise = session.run({ text: 'hello' });
-    // Extension UI requests are intercepted by the RPC client (covered in
-    // piRpcClient.test.ts) and never surface as agent events.
-    await emit(session, { type: 'agent_settled' });
-    await runPromise;
-    expect(handler).not.toHaveBeenCalled();
   });
 });

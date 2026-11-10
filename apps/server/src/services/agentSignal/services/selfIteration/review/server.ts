@@ -36,7 +36,6 @@ import type { EvidenceRef } from '../types';
 import { buildNightlyReviewSourceId, Risk, Scope } from '../types';
 import type { createServerSelfReviewBriefWriter } from './brief';
 import { createBriefSelfReviewService } from './brief';
-import type { SelfReviewBriefTextTranslator } from './briefText';
 import type {
   FeedbackActivityDigest,
   NightlyReviewManagedSkillSummary,
@@ -60,6 +59,7 @@ import {
   listNightlyReceiptLocalDates,
   resolveReviewedLocalDate,
 } from './receiptActivity';
+import { claimNightlyReviewTopics } from './topicQuota';
 
 interface ProposalBriefReader {
   listUnresolvedByAgentAndTrigger: (options: {
@@ -187,6 +187,55 @@ const getProposalActionSnapshotInput = (action: Record<string, unknown>) => {
       pickTrimmedString(target.skillDocumentId),
     title: pickTrimmedString(operationInput.title) ?? pickTrimmedString(target.skillName),
   };
+};
+
+/** Action types a `createSelfReviewProposal` action may carry. */
+export const SELF_REVIEW_PROPOSAL_ACTION_TYPES = [
+  'create_skill',
+  'refine_skill',
+  'consolidate_skill',
+  'refine_prompt',
+  'write_memory',
+  'proposal_only',
+] as const;
+
+const SELF_REVIEW_PROPOSAL_ACTION_TYPE_ALIASES: Record<string, string> = {
+  record_idea: 'proposal_only',
+};
+
+/**
+ * Normalizes model-authored proposal actions before projection.
+ *
+ * Models routinely send the action kind as `type` (and the legacy prompt named
+ * ideas `record_idea`); the projection only reads `actionType`, so those
+ * proposals silently projected to nothing and every nightly review ended
+ * without a brief. Unknown action types fail loudly so the model can retry.
+ */
+export const normalizeSelfReviewProposalInput = (
+  input: CreateSelfReviewProposalInput,
+): CreateSelfReviewProposalInput => {
+  if (!Array.isArray(input.actions)) return input;
+
+  const actions = input.actions.map((rawAction, index) => {
+    const action = toRecordOrEmpty(rawAction);
+    const rawType = pickTrimmedString(action.actionType) ?? pickTrimmedString(action.type);
+    const actionType = rawType
+      ? (SELF_REVIEW_PROPOSAL_ACTION_TYPE_ALIASES[rawType] ?? rawType)
+      : undefined;
+
+    if (
+      !actionType ||
+      !(SELF_REVIEW_PROPOSAL_ACTION_TYPES as readonly string[]).includes(actionType)
+    ) {
+      throw new Error(
+        `actions[${index}] has ${rawType ? `unsupported actionType "${rawType}"` : 'no actionType'}; expected one of: ${SELF_REVIEW_PROPOSAL_ACTION_TYPES.join(', ')}.`,
+      );
+    }
+
+    return { ...action, actionType };
+  });
+
+  return { ...input, actions } as CreateSelfReviewProposalInput;
 };
 
 const withCompleteProposalSnapshots = async ({
@@ -420,7 +469,6 @@ const updateSelfReviewProposalBrief = async ({
 export interface ReviewRuntimePrimitiveDeps {
   agentId: string;
   briefModel: BriefModel;
-  briefTextTranslator?: SelfReviewBriefTextTranslator;
   db: LobeChatDatabase;
   localDate: string;
   proposalBriefWriter: ReturnType<typeof createServerSelfReviewBriefWriter>;
@@ -449,7 +497,6 @@ export const createReviewRuntimePrimitives = (
   const {
     agentId,
     briefModel,
-    briefTextTranslator,
     db,
     localDate,
     proposalBriefWriter,
@@ -514,7 +561,9 @@ export const createReviewRuntimePrimitives = (
       });
     },
     createSelfReviewProposal: async (rawInput) => {
-      const input = rawInput as unknown as CreateSelfReviewProposalInput;
+      const input = normalizeSelfReviewProposalInput(
+        rawInput as unknown as CreateSelfReviewProposalInput,
+      );
       const projectionInput = await withCompleteProposalSnapshots({
         agentId,
         input,
@@ -537,12 +586,15 @@ export const createReviewRuntimePrimitives = (
         result: projection.execution,
         reviewWindowEnd,
         reviewWindowStart,
-        t: briefTextTranslator,
         timezone: 'UTC',
         userId,
       });
 
-      if (!brief) throw new Error('Self-review proposal projection produced no brief');
+      if (!brief) {
+        throw new Error(
+          `Self-review proposal has no applicable action. Each action needs actionType set to one of: ${SELF_REVIEW_PROPOSAL_ACTION_TYPES.join(', ')}.`,
+        );
+      }
 
       const result = await proposalBriefWriter.writeDailyBrief(brief);
 
@@ -791,6 +843,9 @@ export const createServerSelfReviewPolicyOptions = ({
   const briefModel = new BriefModel(db, userId, workspaceId);
   const skillDocumentService = new SkillManagementDocumentService(db, userId, workspaceId);
   const collector = createSelfReviewContextService({
+    // One Redis set per user and local review date bounds the topics every agent's review
+    // (and the nightly expertise pass) may process that night.
+    claimTopics: claimNightlyReviewTopics,
     listDocumentActivity: async ({ agentId: targetAgentId, reviewWindowEnd, reviewWindowStart }) =>
       tracer.startActiveSpan(
         'agent_signal.nightly_review.collector.list_document_activity',

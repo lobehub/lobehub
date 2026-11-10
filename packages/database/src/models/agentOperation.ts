@@ -5,7 +5,7 @@ import {
   type ServerDefaultHeterogeneousRelayInvocation,
   type VerifyRunStatus,
 } from '@lobechat/types';
-import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
@@ -19,6 +19,7 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { findLiveTopicOperations, findScopedOperation } from './agentOperationQueries';
 
 /**
  * Verify rollup states. Aliases the single `VerifyRunStatus` source of truth in
@@ -26,6 +27,30 @@ import { buildWorkspaceWhere } from '../utils/workspace';
  * `verify_runs.status`) so the three never drift.
  */
 export type VerifyStatus = VerifyRunStatus;
+
+/**
+ * Provenance of an abandonment claim, persisted under `metadata.abandonment`.
+ *
+ * Three phases rather than a boolean because the windows that matter are the
+ * ones *between* them: `claimed` means a watchdog retired the row and still
+ * owes the conversation its side effects, so a retry must finish the job;
+ * `handoff_pending` means those side effects landed but the caller still has to
+ * hand the sub-agent's parent over to a resume, so a retry replays only that
+ * step; `finalized` means everything landed and a retry must leave the row
+ * alone.
+ */
+export interface AgentAbandonmentMark {
+  /** ISO timestamp of the claim; absent on the `finalized` rewrite. */
+  at?: string;
+  /**
+   * Linkage for the parent-resume hand-off this abandonment still owes. Kept
+   * durable so a retry can replay the hand-off after the finalising host dies,
+   * instead of stranding the parent in `waiting_for_async_tool`.
+   */
+  handoff?: Record<string, unknown>;
+  phase: 'claimed' | 'finalized' | 'handoff_pending';
+  reason?: string;
+}
 
 export interface RecordOperationStartParams {
   agentId?: string | null;
@@ -43,6 +68,8 @@ export interface RecordOperationStartParams {
   operationId: string;
   parentOperationId?: string | null;
   provider?: string;
+  /** Trusted trigger dispatch: atomically consume an existing matching idle reservation. */
+  requireReservation?: boolean;
   startedAt?: Date;
   taskId?: string | null;
   threadId?: string | null;
@@ -146,8 +173,7 @@ export class AgentOperationModel {
 
   /**
    * Insert the initial row when an operation is created. Idempotent via
-   * `onConflictDoNothing` on the primary key so resumed operations don't
-   * blow up on the second createOperation call.
+   * the primary key; only an idle reservation with the same identity may be initialized.
    */
   async recordStart(params: RecordOperationStartParams): Promise<void> {
     const values: NewAgentOperation = {
@@ -171,7 +197,40 @@ export class AgentOperationModel {
       workspaceId: this.workspaceId ?? null,
     };
 
-    await this.db.insert(agentOperations).values(values).onConflictDoNothing();
+    const reservationIdentity = and(
+      eq(agentOperations.id, params.operationId),
+      eq(agentOperations.status, 'idle'),
+      eq(agentOperations.userId, this.userId),
+      sql`${agentOperations.workspaceId} IS NOT DISTINCT FROM ${this.workspaceId ?? null}`,
+      sql`${agentOperations.topicId} IS NOT DISTINCT FROM ${params.topicId ?? null}`,
+      sql`${agentOperations.agentId} IS NOT DISTINCT FROM ${params.agentId ?? null}`,
+    );
+    if (params.requireReservation) {
+      const [started] = await this.db
+        .update(agentOperations)
+        .set(values)
+        .where(reservationIdentity)
+        .returning({ id: agentOperations.id });
+      if (!started) throw new Error('Operation reservation is no longer available');
+      return;
+    }
+
+    // A trigger may reserve an idle operation before dispatch. Only the same execution
+    // identity may initialize it; duplicate starts never overwrite a running or terminal row.
+    await this.db
+      .insert(agentOperations)
+      .values(values)
+      .onConflictDoUpdate({
+        target: agentOperations.id,
+        set: values,
+        setWhere: and(
+          eq(agentOperations.status, 'idle'),
+          eq(agentOperations.userId, this.userId),
+          sql`${agentOperations.workspaceId} IS NOT DISTINCT FROM ${this.workspaceId ?? null}`,
+          sql`${agentOperations.topicId} IS NOT DISTINCT FROM ${params.topicId ?? null}`,
+          sql`${agentOperations.agentId} IS NOT DISTINCT FROM ${params.agentId ?? null}`,
+        ),
+      });
   }
 
   /**
@@ -245,6 +304,7 @@ export class AgentOperationModel {
               'running',
               'waiting_for_human',
               'waiting_for_async_tool',
+              'waiting_for_client',
             ]),
             eq(agentOperations.status, params.status),
           ),
@@ -351,6 +411,117 @@ export class AgentOperationModel {
     operationId: string,
     status: 'done' | 'error' | 'interrupted',
   ): Promise<boolean> {
+    return this.settleFrom(operationId, status, ['running']);
+  }
+
+  /**
+   * Like {@link settleRunning}, but also retires a row parked in
+   * `waiting_for_human` / `waiting_for_async_tool`. For callers that already
+   * know the run is dead: a parked row whose runtime was abandoned has nothing
+   * left that could ever resume it.
+   */
+  async settleLive(
+    operationId: string,
+    status: 'done' | 'error' | 'interrupted',
+  ): Promise<boolean> {
+    return this.settleFrom(operationId, status, [
+      'running',
+      'waiting_for_human',
+      'waiting_for_async_tool',
+      'waiting_for_client',
+    ]);
+  }
+
+  /**
+   * Claim a live row for an abandonment, atomically recording that the claim
+   * exists.
+   *
+   * `settleLive` alone cannot say *who* retired the row, so a finalisation that
+   * dies after the claim but before its side effects leaves a row that looks
+   * exactly like a run which failed on its own — and the second invocation then
+   * reads it as "already settled" and gives up. Stamping `metadata.abandonment`
+   * in the same UPDATE keeps the claim and its provenance inseparable: a retry
+   * can tell a half-finished abandonment (`phase: 'claimed'`) from a foreign or
+   * completed terminal row, and pick the finalisation back up.
+   */
+  async claimForAbandonment(operationId: string, reason: string): Promise<boolean> {
+    const mark: AgentAbandonmentMark = {
+      at: new Date().toISOString(),
+      phase: 'claimed',
+      reason,
+    };
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'error',
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ abandonment: mark })}::jsonb`,
+        status: 'error',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          inArray(agentOperations.status, [
+            'running',
+            'waiting_for_human',
+            'waiting_for_async_tool',
+            'waiting_for_client',
+          ]),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Retire the `claimed` mark once every abandonment side effect has landed, so
+   * a later invocation cannot re-run hooks (or re-resume a parent) for a run
+   * that was already finalised.
+   */
+  async markAbandonmentFinalized(operationId: string): Promise<void> {
+    const mark: AgentAbandonmentMark = { phase: 'finalized' };
+    await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ abandonment: mark })}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+  }
+
+  /**
+   * Keep the claim resumable while the parent-resume hand-off is still owed.
+   *
+   * The conversation side effects have landed by this point, but a sub-agent's
+   * parent is only resumed by the *caller*, after `finalizeAbandoned` returns.
+   * Retiring the mark here would make a crash in that window permanent: the
+   * child reads as finalised, so no later invocation returns the linkage the
+   * parent needs, and the parent stays parked in `waiting_for_async_tool`.
+   * Persisting the linkage in the same UPDATE makes the hand-off itself
+   * durable, so a retry replays exactly that step — and nothing else.
+   */
+  async markAbandonmentHandoffPending(
+    operationId: string,
+    handoff: Record<string, unknown>,
+  ): Promise<void> {
+    const mark: AgentAbandonmentMark = {
+      at: new Date().toISOString(),
+      handoff,
+      phase: 'handoff_pending',
+    };
+    await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ abandonment: mark })}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+  }
+
+  private async settleFrom(
+    operationId: string,
+    status: 'done' | 'error' | 'interrupted',
+    fromStatuses: AgentOperationStatus[],
+  ): Promise<boolean> {
     const [row] = await this.db
       .update(agentOperations)
       .set({
@@ -361,7 +532,7 @@ export class AgentOperationModel {
       .where(
         and(
           eq(agentOperations.id, operationId),
-          eq(agentOperations.status, 'running'),
+          inArray(agentOperations.status, fromStatuses),
           this.ownership(),
         ),
       )
@@ -392,6 +563,22 @@ export class AgentOperationModel {
           sql`NOT (coalesce(${agentOperations.metadata}, '{}'::jsonb) ? 'heteroIngestRejection')`,
         ),
       )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Shallow-merge top-level keys into the run's durable `metadata`, leaving
+   * every other key intact. Not gated on status: diagnostic records may land on
+   * a run that has already settled.
+   */
+  async mergeMetadata(operationId: string, patch: Record<string, unknown>): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .returning({ id: agentOperations.id });
     return Boolean(row);
   }
@@ -437,6 +624,29 @@ export class AgentOperationModel {
         ),
       )
       .limit(1);
+
+    return Boolean(row);
+  }
+
+  /**
+   * Fail a run whose dispatch was never confirmed: nothing has touched the row
+   * since `dispatchedAt`. The first `heteroIngest` refreshes `updatedAt`, so a run
+   * that did start wins the race and this returns false. Settles to `error` so the
+   * caller's completion lifecycle persists onto the same status.
+   */
+  async settleUnconfirmedRunning(operationId: string, dispatchedAt: Date): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({ completedAt: new Date(), completionReason: 'error', status: 'error' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} <= ${dispatchedAt}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
 
     return Boolean(row);
   }
@@ -617,17 +827,16 @@ export class AgentOperationModel {
    * Raw ownership-scoped lookup. Agent-share visitor runs execute under the
    * CREATOR's identity, so this DOES return their operations — required by the
    * agent runtime (execution, intervention, completion, verify, abandon), which
-   * has to resolve the operation it is currently driving no matter who started
-   * it. Creator-facing read entry points must use
+   * resolves its current operation regardless of who started it. Creator-facing reads use
    * {@link AgentOperationModel.findOwnOperationById} instead.
    */
   async findById(operationId: string) {
-    const [row] = await this.db
-      .select()
-      .from(agentOperations)
-      .where(and(eq(agentOperations.id, operationId), this.ownership()))
-      .limit(1);
-    return row ?? null;
+    return findScopedOperation(this.db, this.ownership(), operationId);
+  }
+
+  /** All resumable operations in a proven topic, independent of its UI marker. */
+  async findLiveByTopic(topicId: string) {
+    return findLiveTopicOperations(this.db, this.ownership(), topicId);
   }
 
   /** Batch lookup for callers that would otherwise issue one query per id. */
@@ -838,6 +1047,84 @@ export class AgentOperationModel {
       )
       .returning({ id: agentOperations.id });
     return rows.length === 1;
+  }
+
+  /**
+   * Atomically flip an op parked in `waiting_for_client` back to `running`.
+   * True only for the single winner, so a manual "continue" racing an
+   * automatic one resumes the run once.
+   */
+  async tryResumeFromClientWait(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          eq(agentOperations.status, 'waiting_for_client'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
+  }
+
+  /**
+   * Undo a won `tryResumeFromClientWait` whose resume step never got enqueued,
+   * so the run stays parked (resumable, expirable, stoppable) instead of
+   * sitting in `running` with nothing scheduled.
+   */
+  async revertClientWaitResume(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'waiting_for_client' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          eq(agentOperations.status, 'running'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
+  }
+
+  /**
+   * Retire an op still parked in `waiting_for_client` (its wait ran out or it
+   * was stopped while waiting). Only matches the parked row, so a run a client
+   * already resumed is never settled under it.
+   */
+  async settleClientWait(
+    operationId: string,
+    status: 'error' | 'interrupted' = 'error',
+  ): Promise<boolean> {
+    return this.settleFrom(operationId, status, ['waiting_for_client']);
+  }
+
+  /**
+   * Operations of this user parked in `waiting_for_client`, newest first.
+   * `providers` narrows to the ones the asking client can run before the
+   * limit applies, so waits for another device's providers cannot crowd out
+   * the ones it could take.
+   */
+  async listWaitingForClient(options: { limit?: number; providers?: string[] } = {}) {
+    const { limit = 20, providers } = options;
+    return this.db
+      .select({
+        id: agentOperations.id,
+        provider: agentOperations.provider,
+        topicId: agentOperations.topicId,
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.status, 'waiting_for_client'),
+          this.ownership(),
+          providers ? inArray(agentOperations.provider, providers) : undefined,
+        ),
+      )
+      .orderBy(desc(agentOperations.createdAt))
+      .limit(limit);
   }
 
   // ============================================

@@ -1,5 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Icon } from '@lobehub/ui';
 import { CornerDownRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
@@ -8,10 +7,10 @@ import { useChatStore } from '@/store/chat';
 
 import { useThreadNavigation } from '../../../hooks/useThreadNavigation';
 import Actions from './Actions';
-import Editing from './Editing';
 import { useThreadItemDropdownMenu } from './useDropdownMenu';
 
 export interface ThreadItemProps {
+  deletable?: boolean;
   id: string;
   index: number;
   isSubagent?: boolean;
@@ -20,29 +19,19 @@ export interface ThreadItemProps {
 
 const SUBAGENT_PADDING_INLINE_START = 32;
 
-const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
-  const [editing, activeThreadId] = useChatStore((s) => [
-    s.threadRenamingId === id,
-    s.activeThreadId,
-  ]);
+const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, deletable }) => {
+  const activeThreadId = useChatStore((s) => s.activeThreadId);
 
   const { navigateToThread, isInAgentSubRoute } = useThreadNavigation();
 
-  const toggleEditing = useCallback(
-    (visible?: boolean) => {
-      useChatStore.setState({ threadRenamingId: visible ? id : '' });
-    },
-    [id],
-  );
-
   const handleClick = useCallback(() => {
-    if (editing) return;
     navigateToThread(id);
-  }, [editing, id, navigateToThread]);
+  }, [id, navigateToThread]);
 
   const dropdownMenu = useThreadItemDropdownMenu({
+    deletable,
     id,
-    toggleEditing,
+    title,
   });
 
   const active = id === activeThreadId;
@@ -54,7 +43,6 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
         active={active && !isInAgentSubRoute}
         contextMenuItems={dropdownMenu}
         data-thread-id={id}
-        disabled={editing}
         icon={<Icon color={cssVar.colorTextDescription} icon={CornerDownRight} size={'small'} />}
         // The capped ThreadList is a flex column, so rows shrink to fit its
         // max-height instead of overflowing — the scroll never engages. Pin the
@@ -66,7 +54,6 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent }) => {
         }}
         onClick={handleClick}
       />
-      <Editing id={id} title={title} toggleEditing={toggleEditing} />
     </>
   );
 });

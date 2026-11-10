@@ -2,10 +2,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '@/server/services/aiAgent';
+import { getInvocationDeadline } from '@/server/utils/invocationDeadline';
 import type * as ScheduleAfterResponseModule from '@/server/utils/scheduleAfterResponse';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { runStep, runStepHealth } from '../runStep';
+
+const runningStepResult = (continuation: unknown) => ({
+  continuation,
+  nextStepScheduled: false,
+  state: { status: 'running', stepCount: 3 },
+  success: true,
+});
+
+const finishedStepResult = (state: unknown) => ({
+  nextStepScheduled: false,
+  state,
+  success: true,
+});
+
+const initialDoneResult = () => ({
+  nextStepScheduled: false,
+  state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+  success: true,
+});
 
 const mockGetOperationMetadata = vi.fn();
 const mockLoadInlineResume = vi.fn();
@@ -14,6 +34,10 @@ const mockExecuteStep = vi.fn();
 const mockScheduleContinuation = vi.fn();
 const mockReleaseOperationLock = vi.fn();
 const mockGetServerDB = vi.hoisted(() => vi.fn());
+const mockFinalizeAbandoned = vi.hoisted(() => vi.fn());
+const mockSettleStaleRunning = vi.hoisted(() => vi.fn());
+const mockResumeAbandonedParent = vi.hoisted(() => vi.fn());
+const mockScheduleOpportunisticStaleSweep = vi.hoisted(() => vi.fn());
 // Lets a test force the step-boundary flush to report a timeout; undefined
 // means use the real implementation.
 const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
@@ -50,8 +74,25 @@ vi.mock('@/server/services/aiAgent', () => ({
   }),
 }));
 
+vi.mock('@/server/services/agentRuntime', () => ({
+  AbandonOperationService: vi.fn().mockImplementation(function () {
+    return { finalizeAbandoned: mockFinalizeAbandoned };
+  }),
+  scheduleOpportunisticStaleSweep: mockScheduleOpportunisticStaleSweep,
+}));
+
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
+}));
+
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return { settleStaleRunning: mockSettleStaleRunning };
+  }),
+}));
+
+vi.mock('../resumeAbandonedParent', () => ({
+  resumeAbandonedParent: mockResumeAbandonedParent,
 }));
 
 function buildOperationDiagnosticDB(row?: any) {
@@ -113,6 +154,11 @@ describe('runStep handler', () => {
     mockScheduleContinuation.mockReset();
     mockReleaseOperationLock.mockReset();
     mockGetServerDB.mockResolvedValue({} as any);
+    mockFinalizeAbandoned.mockReset();
+    mockFinalizeAbandoned.mockResolvedValue({ abandoned: true, found: false });
+    mockSettleStaleRunning.mockReset();
+    mockSettleStaleRunning.mockResolvedValue(true);
+    mockResumeAbandonedParent.mockReset();
   });
 
   afterEach(() => {
@@ -170,6 +216,87 @@ describe('runStep handler', () => {
     warnSpy.mockRestore();
   });
 
+  describe('orphaned operation settle', () => {
+    const orphanRow = (overrides: Record<string, unknown> = {}) =>
+      buildOperationDiagnosticDB({
+        completedAt: null,
+        startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        status: 'running',
+        stepCount: null,
+        traceS3Key: null,
+        updatedAt: new Date(Date.now() - 20 * 60 * 1000),
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        ...overrides,
+      });
+
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      mockGetOperationMetadata.mockResolvedValue(null);
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
+    });
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it('claims the expired lease, then abandons onto the claimed row', async () => {
+      mockGetServerDB.mockResolvedValue(orphanRow());
+      const { ctx } = buildContext({ body: validBody });
+
+      const res = await runStep(ctx);
+
+      expect(res.status).toBe(401);
+      const staleBefore = mockSettleStaleRunning.mock.calls[0][1] as Date;
+      expect(mockSettleStaleRunning).toHaveBeenCalledWith('op-1', expect.any(Date));
+      expect(Date.now() - staleBefore.getTime()).toBeGreaterThanOrEqual(10 * 60 * 1000 - 1000);
+      expect(mockFinalizeAbandoned).toHaveBeenCalledWith('op-1', 'operation_metadata_missing', {
+        settledAsAbandoned: true,
+      });
+      expect(mockResumeAbandonedParent).not.toHaveBeenCalled();
+    });
+
+    it('leaves the run alone when a heartbeat wins the lease claim', async () => {
+      mockGetServerDB.mockResolvedValue(orphanRow({ updatedAt: new Date() }));
+      mockSettleStaleRunning.mockResolvedValue(false);
+      const { ctx } = buildContext({ body: validBody });
+
+      await runStep(ctx);
+
+      expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an operation that already reached a terminal status', async () => {
+      mockGetServerDB.mockResolvedValue(orphanRow({ status: 'error' }));
+      const { ctx } = buildContext({ body: validBody });
+
+      await runStep(ctx);
+
+      expect(mockSettleStaleRunning).not.toHaveBeenCalled();
+      expect(mockFinalizeAbandoned).not.toHaveBeenCalled();
+    });
+
+    it('resumes the parent when the abandoned run was a sub-agent', async () => {
+      // Regression: state and metadata are separate Redis keys, so a sub-agent
+      // child can reach the with-state abandon branch here. Dropping its
+      // `subAgentResume` left the parent parked in `waiting_for_async_tool`.
+      const db = orphanRow();
+      mockGetServerDB.mockResolvedValue(db);
+      const subAgentResume = {
+        errorMessage: 'abandoned',
+        parentOperationId: 'op-parent',
+        threadId: 'thd-1',
+        toolMessageId: 'msg-tool',
+        userId: 'user-1',
+      };
+      mockFinalizeAbandoned.mockResolvedValue({ found: true, subAgentResume });
+      const { ctx } = buildContext({ body: validBody });
+
+      await runStep(ctx);
+
+      expect(mockResumeAbandonedParent).toHaveBeenCalledWith(db, 'op-1', subAgentResume);
+    });
+  });
+
   it('includes QStash retry and message IDs in missing metadata diagnostics', async () => {
     mockGetOperationMetadata.mockResolvedValue({});
     mockGetServerDB.mockResolvedValue(buildOperationDiagnosticDB());
@@ -208,11 +335,7 @@ describe('runStep handler', () => {
     //    in-process `execSubAgent` fork callback. A bare runtime here makes
     //    `lobe-agent.callSubAgent` fail with SUB_AGENT_UNAVAILABLE.
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(initialDoneResult());
 
     const { ctx } = buildContext({ body: validBody });
     await runStep(ctx);
@@ -227,6 +350,34 @@ describe('runStep handler', () => {
     );
   });
 
+  it('runs its steps knowing when the invocation is killed', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    let deadlineSeen: number | undefined;
+    mockExecuteStep.mockImplementation(async () => {
+      deadlineSeen = getInvocationDeadline();
+      return initialDoneResult();
+    });
+    const startedAt = Date.now();
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    // The route's 600s maxDuration, counted from the request.
+    expect(deadlineSeen).toBeGreaterThanOrEqual(startedAt + 600_000);
+    expect(deadlineSeen).toBeLessThanOrEqual(Date.now() + 600_000);
+  });
+
+  it('kicks the opportunistic stale-operation sweep on a valid delivery', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue(initialDoneResult());
+
+    const { ctx } = buildContext({ body: validBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(200);
+    expect(mockScheduleOpportunisticStaleSweep).toHaveBeenCalledTimes(1);
+  });
+
   it('opts the AiAgentService into visitor rows when metadata carries streamOwnerUserId', async () => {
     // A shared-agent visitor run: the op executes as the creator `userId`
     // (`user-owner`) but the visitor (`visitor-1`) owns the stream. The step
@@ -238,11 +389,7 @@ describe('runStep handler', () => {
       userId: 'user-owner',
       workspaceId: 'ws-1',
     });
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(initialDoneResult());
 
     const { ctx } = buildContext({ body: validBody });
     await runStep(ctx);
@@ -361,6 +508,7 @@ describe('runStep handler', () => {
         pendingHumanSelect: undefined,
         pendingToolsCalling: ['t1'],
         status: 'waiting_for_human',
+        llmCalls: 5,
         stepCount: 5,
       },
       success: true,
@@ -451,23 +599,14 @@ describe('runStep inline step loop', () => {
   it('runs consecutive steps in one invocation instead of re-queueing each one', async () => {
     // The whole point of the loop: three steps, zero queue round-trips.
     mockExecuteStep
-      .mockResolvedValueOnce({
-        continuation: continuationFor(3),
-        nextStepScheduled: false,
-        state: { status: 'running', stepCount: 3 },
-        success: true,
-      })
+      .mockResolvedValueOnce(runningStepResult(continuationFor(3)))
       .mockResolvedValueOnce({
         continuation: continuationFor(4),
         nextStepScheduled: false,
         state: { status: 'running', stepCount: 4 },
         success: true,
       })
-      .mockResolvedValueOnce({
-        nextStepScheduled: false,
-        state: doneState,
-        success: true,
-      });
+      .mockResolvedValueOnce(finishedStepResult(doneState));
 
     const { ctx, getCaptures } = buildContext({ body: validBody });
     const res = await runStep(ctx);
@@ -488,12 +627,7 @@ describe('runStep inline step loop', () => {
     // Human input / approvals / retry counters describe THIS delivery. Replaying
     // them on an inlined step would re-apply an approval that already ran.
     mockExecuteStep
-      .mockResolvedValueOnce({
-        continuation: continuationFor(3),
-        nextStepScheduled: false,
-        state: { status: 'running', stepCount: 3 },
-        success: true,
-      })
+      .mockResolvedValueOnce(runningStepResult(continuationFor(3)))
       .mockResolvedValueOnce({ nextStepScheduled: false, state: doneState, success: true });
 
     const { ctx } = buildContext({
@@ -517,12 +651,7 @@ describe('runStep inline step loop', () => {
 
   it('holds one lock owner across every inlined step and releases it once', async () => {
     mockExecuteStep
-      .mockResolvedValueOnce({
-        continuation: continuationFor(3),
-        nextStepScheduled: false,
-        state: { status: 'running', stepCount: 3 },
-        success: true,
-      })
+      .mockResolvedValueOnce(runningStepResult(continuationFor(3)))
       .mockResolvedValueOnce({ nextStepScheduled: false, state: doneState, success: true });
 
     const { ctx } = buildContext({ body: validBody });
@@ -543,12 +672,7 @@ describe('runStep inline step loop', () => {
     mockExecuteStep.mockImplementation(async () => {
       // Burn the whole inline budget inside the first step.
       clock += 600_000;
-      return {
-        continuation: pending,
-        nextStepScheduled: false,
-        state: { status: 'running', stepCount: 3 },
-        success: true,
-      };
+      return runningStepResult(pending);
     });
 
     const { ctx, getCaptures } = buildContext({ body: validBody });
@@ -582,11 +706,7 @@ describe('runStep inline step loop', () => {
     // nothing queued behind it — the inline loop never published a message.
     const parked = continuationFor(7);
     mockLoadInlineResume.mockResolvedValue(parked);
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: doneState,
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(finishedStepResult(doneState));
 
     const { ctx, getCaptures } = buildContext({ body: validBody });
     await runStep(ctx);
@@ -603,11 +723,7 @@ describe('runStep inline step loop', () => {
     // lets the stale-delivery guard ACK the step, and the approval never
     // becomes available.
     mockLoadInlineResume.mockResolvedValue(continuationFor(7));
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: doneState,
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(finishedStepResult(doneState));
 
     const { ctx } = buildContext({ body: validBody, retried: '2' });
     await runStep(ctx);
@@ -650,11 +766,7 @@ describe('runStep inline step loop', () => {
       { verifyAsyncToolBarrier: true },
     ];
     mockLoadInlineResume.mockResolvedValue(continuationFor(7));
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: doneState,
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(finishedStepResult(doneState));
 
     for (const payload of purposeful) {
       mockExecuteStep.mockClear();
@@ -675,11 +787,7 @@ describe('runStep inline step loop', () => {
     // parks k+1, then be told its step is stale. Clearing unconditionally there
     // would delete the live worker's newer recovery pointer.
     mockLoadInlineResume.mockResolvedValue(continuationFor(7));
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: doneState,
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(finishedStepResult(doneState));
 
     const { ctx } = buildContext({ body: validBody });
     await runStep(ctx);
@@ -693,12 +801,7 @@ describe('runStep inline step loop', () => {
     // bring back the false "over budget" rejection.
     flushOverride.settled = false;
     const pending = continuationFor(3);
-    mockExecuteStep.mockResolvedValueOnce({
-      continuation: pending,
-      nextStepScheduled: false,
-      state: { status: 'running', stepCount: 3 },
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValueOnce(runningStepResult(pending));
 
     try {
       const { ctx, getCaptures } = buildContext({ body: validBody });
@@ -731,12 +834,7 @@ describe('runStep inline step loop', () => {
           events.push('step 2 settled');
         });
         events.push('step 2 done');
-        return {
-          continuation: continuationFor(3),
-          nextStepScheduled: false,
-          state: { status: 'running', stepCount: 3 },
-          success: true,
-        };
+        return runningStepResult(continuationFor(3));
       })
       .mockImplementationOnce(async () => {
         events.push('step 3 started');
@@ -753,11 +851,7 @@ describe('runStep inline step loop', () => {
     // After a deadline hand-off the queued message carries the same index the
     // envelope named. That delivery is authoritative, payload and all.
     mockLoadInlineResume.mockResolvedValue(continuationFor(2));
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: false,
-      state: doneState,
-      success: true,
-    });
+    mockExecuteStep.mockResolvedValue(finishedStepResult(doneState));
 
     const { ctx } = buildContext({ body: { ...validBody, humanInput: 'yes' } });
     await runStep(ctx);
@@ -775,12 +869,7 @@ describe('runStep inline step loop', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock);
     mockExecuteStep.mockImplementation(async () => {
       clock += 600_000;
-      return {
-        continuation: continuationFor(3),
-        nextStepScheduled: false,
-        state: { status: 'running', stepCount: 3 },
-        success: true,
-      };
+      return runningStepResult(continuationFor(3));
     });
 
     const { ctx } = buildContext({ body: validBody });
@@ -806,12 +895,7 @@ describe('runStep inline step loop', () => {
 
   it('stops the loop and reports success when another worker takes the lock mid-run', async () => {
     mockExecuteStep
-      .mockResolvedValueOnce({
-        continuation: continuationFor(3),
-        nextStepScheduled: false,
-        state: { status: 'running', stepCount: 3 },
-        success: true,
-      })
+      .mockResolvedValueOnce(runningStepResult(continuationFor(3)))
       .mockResolvedValueOnce({ locked: true, nextStepScheduled: false, state: {}, success: false });
 
     const { ctx, getCaptures } = buildContext({ body: validBody });

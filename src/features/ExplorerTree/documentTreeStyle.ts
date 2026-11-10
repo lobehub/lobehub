@@ -61,6 +61,13 @@ const maskGlyph = (glyph: string) => `
     mask-size: ${iconSize}px ${iconSize}px;
 `;
 
+/**
+ * Label glyph for a document that has records nested under it: it sits in the
+ * tree as a container (chevron, children) but must still read as a document.
+ * Passed as ExplorerTree's `fileAppearanceCSS`.
+ */
+export const DOCUMENT_TREE_PARENT_DOCUMENT_GLYPH_CSS = maskGlyph(FILE_TEXT_ICON_SVG);
+
 export const DOCUMENT_TREE_ICON_CSS = `
   [data-item-type='folder'] [data-item-section='content'] {
     display: flex;
@@ -147,6 +154,28 @@ const DOCUMENT_TREE_TRAILING_ELLIPSIS_CSS = `
 export const DOCUMENT_TREE_ROW_CSS = `
   [data-item-type='folder'] > [data-item-section='content'] {
     font-weight: 500;
+  }
+
+  /* The row's fill shares the panel tabs' edge (the pane's 4px gutter); this
+     leading padding keeps the first glyph off that edge. Alignment is by glyph,
+     not by box: the file glyph's ~2.7px inset lands it on the section title's
+     first character. The trailing padding (the action lane) stays. */
+  [data-type='item'] {
+    padding-inline-start: 8px;
+  }
+
+  /* The chevron glyph sits ~5.7px inside its 16px slot, so it would read as
+     indented past the title and the file glyphs. Pull only the glyph back onto
+     their column; the slot keeps its width so the folder glyph and the label
+     stay where the nested file rows expect them. \`translate\` composes with
+     pierre's own nudge / expand-rotation \`transform\` instead of replacing it.
+     \`translate\` is physical, so RTL mirrors it toward the inline start too. */
+  [data-item-type='folder'] > [data-item-section='icon'] > [data-icon-name='file-tree-icon-chevron'] {
+    translate: -4px 0;
+
+    &:dir(rtl) {
+      translate: 4px 0;
+    }
   }
 
 ${DOCUMENT_TREE_NO_FOCUS_BORDER_CSS}

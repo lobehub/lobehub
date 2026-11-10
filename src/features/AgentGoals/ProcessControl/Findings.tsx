@@ -1,12 +1,11 @@
 'use client';
 
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import type { GoalGraphView, GoalNodeView } from './goalGraphViewModel';
@@ -44,6 +43,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     cursor: pointer;
+
+    /* The hover wash keeps its inset; the row's content lines up with the section title. */
+    margin-inline: -8px;
     padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};
@@ -58,6 +60,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
   ({ onSelect, view }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
+    const markdownProps = useEntityMarkdown();
     const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.createdAt);
     const answered = view.answers[0];
 
@@ -114,7 +117,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
             {/* The description is the producing run's handoff — actual Markdown
                 (tables, code blocks), not plain text. Render it as such. */}
             {view.node.description && (
-              <Markdown fontSize={13} variant={'chat'}>
+              <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
                 {view.node.description}
               </Markdown>
             )}

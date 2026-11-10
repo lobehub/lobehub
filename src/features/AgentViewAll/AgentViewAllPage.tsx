@@ -2,9 +2,23 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
-import { Center, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, DropdownMenu, Segmented, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Segmented,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
@@ -14,12 +28,16 @@ import { useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import {
+  AgentViewAllRowsSkeleton,
+  AgentViewAllSidebarSectionSkeleton,
+} from '@/components/Skeleton/AgentViewAll';
 import { useKeepSidebarGroupsListed } from '@/features/HomeSidebar/Body/Agent/List/useAgentList';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import NavHeader from '@/features/NavHeader';
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -30,7 +48,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 
-import AgentCard, { cardStyles } from './AgentCard';
+import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
 import { flattenAgentBuckets } from './flattenBuckets';
 import ListConfig from './ListConfig';
@@ -433,19 +451,22 @@ const AgentViewAllPage = memo(() => {
     },
     [isSidebarItemVisible, setSidebarItemVisible, t],
   );
+  // The `im_layout` rail has no agent sidebar, so its "in sidebar" curation
+  // (the section and every per-item toggle) does not apply there.
+  const imLayout = useImLayout();
+  const toggleSidebar = imLayout ? undefined : handleToggleSidebar;
 
   const renderCard = useCallback(
     (item: SidebarAgentItem) => (
       <AgentCard
-        author={item.userId ? authorByUserId.get(item.userId) : undefined}
         item={item}
         key={item.id}
-        showAuthor={showAuthor}
+        owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isSidebarItemVisible(item)}
-        onToggleSidebar={handleToggleSidebar}
+        onToggleSidebar={toggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, toggleSidebar, isSidebarItemVisible],
   );
 
   const renderRow = useCallback(
@@ -456,10 +477,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         showAuthor={showAuthor}
         sidebarHidden={!isSidebarItemVisible(item)}
-        onToggleSidebar={handleToggleSidebar}
+        onToggleSidebar={toggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, toggleSidebar, isSidebarItemVisible],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -468,7 +489,6 @@ const AgentViewAllPage = memo(() => {
     createConnectAgentMenuItem,
     createGroupChatMenuItem,
     createMarketAgentMenuItem,
-    isMutatingAgent,
   } = useCreateMenuItems();
 
   // Creating from the Private tab lands the item in the private bucket, so
@@ -518,8 +538,15 @@ const AgentViewAllPage = memo(() => {
           />
         }
       />
-      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
-        {isInit && !keyword.trim() && sidebarItems.length > 0 && (
+      <WideScreenContainer
+        fullWidth
+        gap={16}
+        paddingBlock={16}
+        paddingInline={16}
+        wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+      >
+        {!imLayout && !isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
+        {!imLayout && isInit && !keyword.trim() && sidebarItems.length > 0 && (
           <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
         )}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
@@ -571,7 +598,7 @@ const AgentViewAllPage = memo(() => {
             )}
             {canCreate ? (
               <DropdownMenu items={createMenuItems}>
-                <Button icon={PlusIcon} loading={isMutatingAgent}>
+                <Button icon={PlusIcon}>
                   <Icon icon={ChevronDownIcon} size={14} />
                 </Button>
               </DropdownMenu>
@@ -585,7 +612,7 @@ const AgentViewAllPage = memo(() => {
           </Flexbox>
         </Flexbox>
         {!isInit ? (
-          <SkeletonList rows={8} />
+          <AgentViewAllRowsSkeleton />
         ) : filteredItems.length === 0 ? (
           <Center flex={1} padding={40}>
             <Empty
@@ -610,15 +637,13 @@ const AgentViewAllPage = memo(() => {
                       label={group.label}
                       onToggle={() => toggleGroupCollapsed(group.key)}
                     />
-                    {!collapsed && (
-                      <div className={cardStyles.grid}>{group.items.map(renderCard)}</div>
-                    )}
+                    {!collapsed && <AgentCardGrid>{group.items.map(renderCard)}</AgentCardGrid>}
                   </Flexbox>
                 );
               })}
             </Flexbox>
           ) : (
-            <div className={cardStyles.grid}>{filteredItems.map(renderCard)}</div>
+            <AgentCardGrid>{filteredItems.map(renderCard)}</AgentCardGrid>
           )
         ) : (
           // Grouped list shares the card branch's wrapper rhythm (outer gap 8,

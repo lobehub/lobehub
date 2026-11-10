@@ -8,6 +8,7 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 
 const {
   mockCreateVideo,
+  mockFillVideoPricingDefaults,
   mockFindPreviousGeneration,
   mockFindUserById,
   mockGenerationTopicFindById,
@@ -26,6 +27,9 @@ const {
       generationBatches: {
         findFirst: vi.fn(),
       },
+      generations: {
+        findMany: vi.fn(),
+      },
     },
     transaction: mockTransaction,
   };
@@ -33,6 +37,7 @@ const {
   const mockAfter = vi.fn(function (cb: () => void) {
     return cb();
   });
+  const mockFillVideoPricingDefaults = vi.fn(async ({ params }: { params: unknown }) => params);
   const mockAppEnv = {
     APP_URL: 'https://app.example.com',
     VIDEO_GENERATION_PREFER_WEBHOOK: false,
@@ -47,6 +52,7 @@ const {
   const mockResolveBusinessModelMapping = vi.fn();
   return {
     mockCreateVideo,
+    mockFillVideoPricingDefaults,
     mockFindPreviousGeneration,
     mockFindUserById,
     mockGenerationTopicFindById,
@@ -111,6 +117,9 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
       { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
     ]
   ) => mockIsLobeHubModelAvailable(...args),
+}));
+vi.mock('@/server/services/generation/videoPricingDefaults', () => ({
+  fillVideoPricingDefaults: mockFillVideoPricingDefaults,
 }));
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
@@ -658,6 +667,36 @@ describe('videoRouter', () => {
       expect(chargeBeforeGenerate).toHaveBeenCalledWith(expect.objectContaining({ spendOrigin }));
     });
 
+    it('prices and generates with the model defaults the request omitted', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      mockFillVideoPricingDefaults.mockImplementationOnce(async ({ params }) => ({
+        ...(params as object),
+        duration: 5,
+        resolution: '768P',
+      }));
+
+      const caller = videoRouter.createCaller(mockCtx);
+      await caller.createVideo(defaultInput);
+
+      expect(mockFillVideoPricingDefaults).toHaveBeenCalledWith(
+        expect.objectContaining({ params: defaultInput.params }),
+      );
+      expect(chargeBeforeGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ duration: 5, resolution: '768P' }),
+          providerParams: expect.objectContaining({ duration: 5, resolution: '768P' }),
+        }),
+      );
+      expect(mockCreateVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({ duration: 5, resolution: '768P' }),
+        }),
+        expect.anything(),
+      );
+    });
+
     it('should return error batch when pre-charge fails', async () => {
       setupMocks();
       const { chargeBeforeGenerate } =
@@ -672,6 +711,31 @@ describe('videoRouter', () => {
 
       expect(result).toEqual({ error: 'insufficient_balance' });
       // Should not proceed to createVideo
+      expect(mockCreateVideo).not.toHaveBeenCalled();
+    });
+    it('should link error batch generations to their errored async task', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      // The billing layer links the generation to its errored async task after
+      // inserting it, so the row it returns carries no asyncTaskId.
+      vi.mocked(chargeBeforeGenerate).mockResolvedValueOnce({
+        errorBatch: {
+          data: {
+            batch: { id: 'batch-err' } as any,
+            generations: [{ asyncTaskId: null, id: 'gen-err' } as any],
+          },
+          success: true,
+        },
+      });
+      mockServerDB.query.generations.findMany.mockResolvedValueOnce([
+        { asyncTaskId: 'async-err', id: 'gen-err' },
+      ]);
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.createVideo(defaultInput);
+
+      expect(result.data?.generations?.[0]).toEqual({ asyncTaskId: 'async-err', id: 'gen-err' });
       expect(mockCreateVideo).not.toHaveBeenCalled();
     });
   });

@@ -1,8 +1,5 @@
 import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Divider, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { Fragment, isValidElement, memo } from 'react';
 

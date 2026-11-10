@@ -193,6 +193,15 @@ describe('canApproveInterventionBatch', () => {
     expect(canApproveInterventionBatch(members as any)).toBe(false);
   });
 
+  it('never bulk-approves the secure credential form, which must save before approving', () => {
+    expect(
+      canApproveInterventionBatch([
+        pending('lobe-creds', 'requestCredsInput', 1),
+        pending('filesystem', 'writeFile', 2),
+      ]),
+    ).toBe(false);
+  });
+
   it('does not render a bulk action for a single binary card', () => {
     expect(canApproveInterventionBatch([pending('filesystem', 'writeFile', 1)])).toBe(false);
   });

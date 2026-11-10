@@ -1,12 +1,18 @@
-import { DatePicker } from '@lobehub/ui';
-import { type DatePickerProps } from 'antd';
-import { Flex } from 'antd';
-import { type Dayjs } from 'dayjs';
+import {
+  DayjsDatePicker as DatePicker,
+  type DayjsDatePickerProps as DatePickerProps,
+  Flexbox,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-interface ApiKeyDatePickerProps extends Omit<DatePickerProps, 'onChange'> {
+interface ApiKeyDatePickerProps extends Omit<
+  DatePickerProps,
+  'defaultValue' | 'onChange' | 'renderExtraFooter' | 'value'
+> {
+  defaultValue?: Dayjs | null;
   onChange?: (date: Dayjs | null) => void;
   /**
    * The "never expires" footer clears the date. Hide it where "never" is
@@ -14,38 +20,37 @@ interface ApiKeyDatePickerProps extends Omit<DatePickerProps, 'onChange'> {
    * only ever answers "which date".
    */
   showNeverExpiresFooter?: boolean;
+  value?: Dayjs | null;
 }
 
 const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({
   value,
+  defaultValue,
   onChange,
   showNeverExpiresFooter = true,
   ...props
 }) => {
   const { t } = useTranslation('auth');
 
-  const handleOnChange = (date: Dayjs[] | Dayjs | null) => {
-    // Handle both single date and array (for compatibility)
-    const actualDate = Array.isArray(date) ? date[0] : date;
+  const handleOnChange = (date: Dayjs | null) => {
     // If a date is selected, set it to 23:59:59 of that day
-    const submitData = actualDate
-      ? actualDate.hour(23).minute(59).second(59).millisecond(999)
-      : null;
+    const submitData = date ? date.hour(23).minute(59).second(59).millisecond(999) : null;
 
     onChange?.(submitData);
   };
 
   return (
     <DatePicker
-      key={(value?.valueOf() as any) || 'EMPTY'}
-      value={value as any}
+      defaultValue={defaultValue ?? null}
+      format="YYYY-MM-DD"
+      key={value?.valueOf() || 'EMPTY'}
+      value={value}
       {...props}
       minDate={dayjs()}
       placeholder={t('apikey.form.fields.expiresAt.placeholder')}
-      showNow={false}
       renderExtraFooter={() =>
         showNeverExpiresFooter && (
-          <Flex justify="center">
+          <Flexbox horizontal justify={'center'}>
             <a
               role="button"
               style={{ cursor: 'pointer' }}
@@ -60,7 +65,7 @@ const ApiKeyDatePicker: FC<ApiKeyDatePickerProps> = ({
             >
               {t('apikey.display.neverExpires')}
             </a>
-          </Flex>
+          </Flexbox>
         )
       }
       onChange={handleOnChange}

@@ -1,15 +1,18 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
 import { AppUpdateAction, AppUpdateHint, useDeviceAppUpdate } from './AppUpdate';
 import { getChannelKind, getChannelVersion } from './channelKind';
-import FieldLabel from './FieldLabel';
+import { CliUpdate } from './CliUpdate';
+import { getIdleConnectionStatus } from './connectionCount';
 import PresenceDot from './PresenceDot';
 
 interface ConnectionCardProps {
@@ -27,11 +30,11 @@ interface ConnectionCardProps {
 
 /**
  * One client connection: state dot, client, version, connection status and
- * action on one baseline-aligned line; anything more goes on a second line.
+ * action on one vertically centered line; anything more goes on a second line.
  */
 const ConnectionCard = ({ channel, detail, extra, live, status, version }: ConnectionCardProps) => (
   <Block gap={4} paddingBlock={8} paddingInline={12} variant={'outlined'}>
-    <Flexbox horizontal align={'baseline'} gap={8}>
+    <Flexbox horizontal align={'center'} gap={8}>
       <Text style={{ flex: 'none' }}>
         <PresenceDot live={live} />
       </Text>
@@ -53,14 +56,19 @@ interface ConnectionsProps {
 
 /**
  * The device's live connections, one card per client with the version it runs.
+ * Unlabelled — the host card carries the heading.
  * The desktop app's card also carries its remote update — confirmed only once
  * the device reconnects on the new version.
  */
 const Connections = ({ canEdit, device }: ConnectionsProps) => {
   const { t } = useTranslation('setting');
+  const workspaceId = useActiveWorkspaceId();
 
   const channels = device.channels ?? [];
   const kinds = channels.map((c) => getChannelKind(c.channel));
+  const scope = `${workspaceId}:${device.deviceId}`;
+  const seenCli = useRef<string | undefined>(undefined);
+  if (kinds.includes('cli') || device.metadata?.cliVersion) seenCli.current = scope;
   const desktopIndex = kinds.indexOf('desktop');
   const hasDesktopChannel = desktopIndex !== -1;
 
@@ -73,7 +81,17 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
   // A restart drops the desktop app offline; keep following it in place of
   // its card until it reconnects.
   const restartInFlight =
-    !hasDesktopChannel && update.view.kind !== 'loading' && update.view.kind !== 'unavailable';
+    !device.onlineUnknown &&
+    !hasDesktopChannel &&
+    update.view.kind !== 'loading' &&
+    update.view.kind !== 'unavailable';
+
+  // A persisted row has no channels until the server answers: that is "checking",
+  // not "offline".
+  const idleStatus =
+    getIdleConnectionStatus(device) === 'checking'
+      ? t('devices.status.checking')
+      : t('devices.status.offline');
 
   const plainStatus = (text: string) => (
     <Text ellipsis fontSize={12} type={'secondary'}>
@@ -95,7 +113,6 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
 
   return (
     <Flexbox gap={8}>
-      <FieldLabel>{t('devices.detail.connections')}</FieldLabel>
       {channels.map((channel, index) => {
         const key = `${channel.connectedAt}-${index}`;
         const label = channel.channel ?? t('devices.channel.unknown');
@@ -103,6 +120,7 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
           time: dayjs(channel.connectedAt).fromNow(),
         });
         if (index === desktopIndex) return desktopCard(label, connectedText, true, key);
+        if (kinds[index] === 'cli') return null;
 
         return (
           <ConnectionCard
@@ -114,13 +132,40 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
           />
         );
       })}
+      {seenCli.current === scope && (
+        <CliUpdate
+          canEdit={canEdit}
+          deviceId={device.deviceId}
+          key={`${workspaceId}:${device.deviceId}`}
+          live={kinds.includes('cli')}
+        >
+          {({ actions, detail }) => (
+            <ConnectionCard
+              channel={'cli'}
+              detail={detail}
+              extra={actions}
+              live={kinds.includes('cli')}
+              version={getChannelVersion('cli', device.metadata)}
+              status={plainStatus(
+                kinds.includes('cli')
+                  ? t('devices.channel.connected', {
+                      time: dayjs(channels[kinds.indexOf('cli')].connectedAt).fromNow(),
+                    })
+                  : idleStatus,
+              )}
+            />
+          )}
+        </CliUpdate>
+      )}
       {restartInFlight && desktopCard('desktop', t('devices.status.offline'), false)}
       {channels.length === 0 &&
         !restartInFlight &&
         plainStatus(
-          `${t('devices.status.offline')} · ${t('devices.lastSeen', {
-            time: dayjs(device.lastSeen).fromNow(),
-          })}`,
+          device.onlineUnknown
+            ? idleStatus
+            : `${idleStatus} · ${t('devices.lastSeen', {
+                time: dayjs(device.lastSeen).fromNow(),
+              })}`,
         )}
     </Flexbox>
   );

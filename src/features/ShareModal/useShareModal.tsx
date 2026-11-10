@@ -1,7 +1,7 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { openShareModal as createShareModal } from './loader';

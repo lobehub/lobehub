@@ -1,0 +1,25 @@
+name = "host-capability-placement"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the browser-reachable layer of `packages/heterogeneous-agents/src`, the package that drives external coding-agent CLIs (Claude Code, Codex, Kimi Code, …) for LobeHub. The web app imports the entries listed in `browser-entries.json` (the package root `index.ts`, `client/`, `errors/`, `quota/`); Node callers (desktop main process, `lh` CLI, device, quota sampler) import the other subpath entries (`./spawn`, `./quota-sampler`, `./resolveCliCommand`, `./workingDirectory`, …).
+
+Which layer a module belongs to is decided by who it serves, not by whether its code happens to run in a browser. A module that exists only for one Node host belongs behind a Node-only entry even when it is pure, and it may then use Node freely. Making such a module browser-portable is not a fix; moving it is.
+
+The web app legitimately shares a lot of CLI-flavoured logic, because the desktop renderer drives the CLI over IPC and renders what comes back. Resolving the configured command to send over IPC, detecting "auth required" or "rate limited" in stderr the renderer received, normalizing error messages, CLI descriptor tables (install commands, docs URLs, auth patterns), adapters mapping stream events, quota window math, labels and error specs are all shared. Do not report them.
+
+Report only these violations, and only with evidence in this file:
+1. Host-only module. The file's doc comments or names bind it to exactly one Node host: it parses the CLI's local account state (`~/.claude.json`, `~/.codex/auth.json`, credential blobs, OAuth or `id_token` claims); it builds the spawn environment or argv of the CLI process in the desktop main process; it parses the raw response of a provider usage API that only the quota sampler calls; or its doc says it runs for `lh hetero exec`, the CLI command, or the desktop main process. The computation happening on that host is what counts: a host-only result that is later persisted and rendered by the web app is still host-only, and so is a module that "mirrors" a desktop main-process classifier. Anchor on the first line of the exported function or constant. Quote the doc phrase or name that is the evidence.
+2. Browser-portable rewrite of host code. Inside code that parses host data as in 1, a Node API is swapped for a browser one (`atob` / `btoa` / `TextDecoder` / `Uint8Array.from(...charCodeAt)` in place of `Buffer`, a hand-written join in place of `node:path`, …), often with a comment about staying browser-safe. Anchor on the replacement line.
+
+In the message, name the host and the evidence. In the suggestion, name the Node-only place: `./quota-sampler` for account and quota sampling, `./spawn` or a single-file subpath entry (like `./resolveCliCommand`, `./workingDirectory`) for process and exec concerns. Never suggest a browser-portable rewrite.
+
+Do not report:
+- barrel files (`index.ts`) — whether a re-export is used by the browser cannot be seen from the barrel; report the implementing file instead;
+- anything in the shared list above, or anything whose only evidence is that it mentions stderr, a CLI, a command or an error without naming the host it runs on;
+- plain constants (error message strings, codes) that the web app can show, even when they sit in a host-only file;
+- types and `import type` / `export type`;
+- Node built-in imports or Node globals as such — another rule covers those;
+- tests and fixtures.
+
+When there is no violation, return an empty list. Never emit a finding whose suggestion is "no change needed".
+"""

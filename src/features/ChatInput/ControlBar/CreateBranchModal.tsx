@@ -1,15 +1,15 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  cssVar,
+  Flexbox,
+  Input,
   type ModalInstance,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,7 +29,7 @@ const CreateBranchContent = memo<CreateBranchContentProps>(({ onSubmit }) => {
   const [value, setValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     queueMicrotask(() => inputRef.current?.focus());

@@ -2,6 +2,7 @@ import {
   ChartColumnBigIcon,
   FileUserIcon,
   GraduationCapIcon,
+  MailIcon,
   MessageSquare,
   MessagesSquareIcon,
   RadioTowerIcon,
@@ -10,7 +11,13 @@ import {
 } from 'lucide-react';
 import { lazy } from 'react';
 
+import {
+  AgentChannelDetailSkeleton,
+  AgentChannelSkeleton,
+} from '@/components/Skeleton/AgentChannel';
 import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
+import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
+import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
@@ -61,6 +68,12 @@ export const agentRouteMeta = routeMeta({
   titleKey: 'navigation.chat',
 });
 
+// Desktop mounts the working sidebar beside the conversation; mobile does not.
+export const agentChatDesktopRouteMeta = routeMeta({
+  ...agentRouteMeta,
+  Skeleton: AgentConversationLayoutSkeleton,
+});
+
 export const topicsRouteMeta = routeMeta({
   DynamicMeta: TopicsDynamicMeta,
   icon: MessagesSquareIcon,
@@ -75,17 +88,29 @@ export const agentProfileRouteMeta = routeMeta({
   titleKey: 'navigation.profile',
 });
 
+export const agentMailRouteMeta = routeMeta({
+  icon: MailIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.mail',
+});
+
 export const agentChannelRouteMeta = routeMeta({
   DynamicMeta: ChannelDynamicMeta,
   icon: RadioTowerIcon,
-  Skeleton: createSurfaceSkeleton('grid'),
+  Skeleton: AgentChannelSkeleton,
   titleKey: 'navigation.channels',
+});
+
+// A platform detail is a credential form without the tab switcher, not the card grid.
+export const agentChannelDetailRouteMeta = routeMeta({
+  ...agentChannelRouteMeta,
+  Skeleton: AgentChannelDetailSkeleton,
 });
 
 export const agentStatisticsRouteMeta = routeMeta({
   DynamicMeta: StatisticsDynamicMeta,
   icon: ChartColumnBigIcon,
-  Skeleton: createSurfaceSkeleton('grid'),
+  Skeleton: AgentStatisticsSkeleton,
   titleKey: 'navigation.stats',
 });
 

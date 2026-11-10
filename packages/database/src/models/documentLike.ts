@@ -5,6 +5,8 @@ import { documentLikes } from '../schemas/documentLike';
 import { documents } from '../schemas/file';
 import { users } from '../schemas/user';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
+import { countOf } from './utils/rows';
 
 export const DOCUMENT_LIKE_WORKSPACE_REQUIRED =
   'Document likes are workspace-scoped; a workspaceId is required';
@@ -68,7 +70,7 @@ export class DocumentLikeModel {
     const [document] = await tx
       .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
       .from(documents)
-      .where(eq(documents.id, documentId))
+      .where(and(eq(documents.id, documentId), notTrashed(documents.isDeleted)))
       .limit(1)
       .for(mode);
 
@@ -88,9 +90,9 @@ export class DocumentLikeModel {
     documentId: string,
     knownLiked?: boolean,
   ): Promise<DocumentLikeSummary> => {
-    const [[totals], likers] = await Promise.all([
+    const [totals, likers] = await Promise.all([
       tx
-        .select({ total: count() })
+        .select({ count: count() })
         .from(documentLikes)
         .where(eq(documentLikes.documentId, documentId)),
       tx
@@ -120,7 +122,7 @@ export class DocumentLikeModel {
             .limit(1)
         ).length > 0);
 
-    return { liked, likers, total: totals?.total ?? 0 };
+    return { liked, likers, total: countOf(totals, 'the document like count') };
   };
 
   async like(documentId: string): Promise<LikeDocumentResult> {

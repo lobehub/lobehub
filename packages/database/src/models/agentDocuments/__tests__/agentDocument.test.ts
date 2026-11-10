@@ -719,6 +719,48 @@ describe('AgentDocumentModel', () => {
       expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('new.md')}`);
     });
 
+    it('should count live children per parent, for documents as well as folders', async () => {
+      const folder = await agentDocumentModel.create(agentId, 'count-folder', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'count-folder',
+      });
+      const sop = await agentDocumentModel.create(agentId, 'sop', 'steps');
+      await agentDocumentModel.create(agentId, 'in-folder', 'a', { parentId: folder.documentId });
+      await agentDocumentModel.create(agentId, 'run-1', 'b', { parentId: sop.documentId });
+      const run2 = await agentDocumentModel.create(agentId, 'run-2', 'c', {
+        parentId: sop.documentId,
+      });
+      await agentDocumentModel.delete(run2.id);
+
+      const all = await agentDocumentModel.countChildrenByParentIds(agentId);
+      const scoped = await agentDocumentModel.countChildrenByParentIds(agentId, [sop.documentId]);
+
+      expect(all.get(folder.documentId)).toBe(1);
+      expect(all.get(sop.documentId)).toBe(1);
+      expect([...scoped.entries()]).toEqual([[sop.documentId, 1]]);
+      expect((await agentDocumentModel.countChildrenByParentIds(agentId, [])).size).toBe(0);
+    });
+
+    it('should keep the title when a move passes it explicitly', async () => {
+      const folder = await agentDocumentModel.create(agentId, 'keep-title-folder', '', {
+        fileType: DOCUMENT_FOLDER_TYPE,
+        title: 'keep-title-folder',
+      });
+      const created = await agentDocumentModel.create(agentId, 'daily-report', 'body', {
+        title: 'Daily Report — 2026/10/10',
+      });
+
+      const moved = await agentDocumentModel.movePath(created.id, {
+        filename: created.filename,
+        parentId: folder.documentId,
+        title: created.title,
+      });
+
+      expect(moved?.parentId).toBe(folder.documentId);
+      expect(moved?.filename).toBe('daily-report');
+      expect(moved?.title).toBe('Daily Report — 2026/10/10');
+    });
+
     it('should allow moving a document over an existing live sibling filename', async () => {
       const folder = await agentDocumentModel.create(agentId, 'move-folder', '', {
         fileType: DOCUMENT_FOLDER_TYPE,
@@ -746,25 +788,6 @@ describe('AgentDocumentModel', () => {
       ]);
     });
 
-    it('should copy into a new record and keep policy/template metadata', async () => {
-      const created = await agentDocumentModel.create(agentId, 'copy-source.md', 'copy me', {
-        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
-        loadRules: { maxTokens: 200, priority: 3 },
-        metadata: { description: 'source desc', domain: 'A' },
-        templateId: 'claw',
-      });
-
-      const copied = await agentDocumentModel.copy(created.id, 'Copied Title');
-
-      expect(copied).toBeDefined();
-      expect(copied?.id).not.toBe(created.id);
-      expect(copied?.documentId).not.toBe(created.documentId);
-      expect(copied?.filename).toBe('Copied Title');
-      expect(copied?.templateId).toBe('claw');
-      expect(copied?.policy?.context?.maxTokens).toBe(200);
-      expect(copied?.metadata).toMatchObject({ description: 'source desc', domain: 'A' });
-    });
-
     it('should preserve policyLoad when copying a document', async () => {
       const created = await agentDocumentModel.create(agentId, 'always-doc.md', 'content', {
         policyLoad: PolicyLoad.ALWAYS,
@@ -774,6 +797,10 @@ describe('AgentDocumentModel', () => {
 
       expect(copied?.policyLoad).toBe(PolicyLoad.ALWAYS);
     });
+
+    // Copy scenarios (incl. the T-775 empty-parse-shell regression) moved to
+    // the focused `agentDocument.copy.test.ts` per the source-layout 800-line
+    // rule (Codex P2 on #20914).
   });
 
   describe('convertAgentDocumentToSkillIndex and updateDocumentIdentity', () => {

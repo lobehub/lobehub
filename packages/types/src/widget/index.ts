@@ -1,0 +1,330 @@
+// ============================================
+// Widget — scripted, scheduled data cards
+// (`widgets` / `widget_versions` / `widget_runs` tables)
+// ============================================
+//
+// A widget's data logic is a script executed in a sandbox. Its stdout must be
+// one JSON document matching `WidgetOutput`; the platform owns execution,
+// scheduling, versioning and rendering. Widgets are a standalone entity so any
+// host surface (a board, a goal, an agent page …) can mount the same widget.
+
+import type { WidgetLayoutNode, WidgetLayoutValue } from './layout';
+
+export * from './layout';
+export * from './preset';
+
+export const WIDGET_VISIBILITIES = ['private', 'public'] as const;
+export type WidgetVisibility = (typeof WIDGET_VISIBILITIES)[number];
+
+/**
+ * Direct ownership level of a widget, derived from which scope columns are
+ * set:
+ *
+ * - `personal` — no workspace, project or agent
+ * - `workspace` — workspace only
+ * - `project` — a project (and no agent)
+ * - `agent` — an agent, optionally inside a project
+ */
+export type WidgetLevel = 'personal' | 'workspace' | 'project' | 'agent';
+
+/**
+ * Selects one direct level for list queries. The workspace comes from the
+ * caller context; omit both ids for the personal / workspace level.
+ */
+export interface WidgetLevelFilter {
+  agentId?: string | null;
+  projectId?: string | null;
+}
+
+// ── Script contract ─────────────────────────────────────
+
+export const WIDGET_RUNTIMES = ['node', 'python', 'bash'] as const;
+export type WidgetRuntime = (typeof WIDGET_RUNTIMES)[number];
+
+export const WIDGET_OUTPUT_TYPES = ['stat', 'list', 'series', 'table', 'data'] as const;
+export type WidgetOutputType = (typeof WIDGET_OUTPUT_TYPES)[number];
+
+export type WidgetTrend = 'up' | 'down' | 'flat';
+
+/**
+ * Optional envelope a script may attach to any output. `complete: false`
+ * marks a partial result (e.g. one of several upstream APIs failed): the run
+ * finishes as `partial` — the card still renders the output, but the value is
+ * not recorded into the widget's metric trend.
+ */
+export interface WidgetOutputMeta {
+  complete?: boolean;
+  /** Short human-readable note shown beside a partial result. */
+  message?: string;
+}
+
+/** A single headline number (or short string) with optional comparison. */
+export interface WidgetStatOutput {
+  /** Change against the previous period, already formatted or numeric. */
+  delta?: number | string;
+  description?: string;
+  label?: string;
+  meta?: WidgetOutputMeta;
+  trend?: WidgetTrend;
+  type: 'stat';
+  unit?: string;
+  value: number | string;
+}
+
+export interface WidgetListItem {
+  description?: string;
+  /** Free-form status tag, e.g. 'open', 'failed', 'merged'. */
+  status?: string;
+  /** ISO timestamp the item refers to. */
+  time?: string;
+  title: string;
+  url?: string;
+  value?: number | string;
+}
+
+export interface WidgetListOutput {
+  items: WidgetListItem[];
+  meta?: WidgetOutputMeta;
+  type: 'list';
+}
+
+export interface WidgetSeriesPoint {
+  /** ISO timestamp or category label. */
+  t: string;
+  v: number;
+}
+
+export interface WidgetSeries {
+  name: string;
+  points: WidgetSeriesPoint[];
+}
+
+export interface WidgetSeriesOutput {
+  meta?: WidgetOutputMeta;
+  series: WidgetSeries[];
+  type: 'series';
+  unit?: string;
+}
+
+export interface WidgetTableColumn {
+  key: string;
+  title?: string;
+  type?: 'string' | 'number' | 'date' | 'link';
+}
+
+export type WidgetTableCell = string | number | boolean | null;
+
+export interface WidgetTableOutput {
+  columns: WidgetTableColumn[];
+  meta?: WidgetOutputMeta;
+  rows: Record<string, WidgetTableCell>[];
+  type: 'table';
+}
+
+/**
+ * Free-form data for a card drawn by `WidgetView.layout`, e.g. a forecast
+ * with the current reading, today's range and the next hours. The layout
+ * binds to it as `data.*`.
+ */
+export interface WidgetDataOutput {
+  data: Record<string, unknown>;
+  meta?: WidgetOutputMeta;
+  type: 'data';
+}
+
+/** The JSON document a widget script prints to stdout. */
+export type WidgetOutput =
+  WidgetStatOutput | WidgetListOutput | WidgetSeriesOutput | WidgetTableOutput | WidgetDataOutput;
+
+/** One secret or variable the script expects in its environment. */
+export interface WidgetEnvRequirement {
+  /**
+   * Connector providing the credential, resolved through the user connector
+   * chain (agent > workspace > personal), e.g. 'github'.
+   */
+  connector?: string;
+  description?: string;
+  /**
+   * Header of a header-credential connector to read, matched
+   * case-insensitively, e.g. 'X-Api-Key'. Required when the connector holds
+   * more than one header; other credential types hold a single secret and
+   * ignore it.
+   */
+  field?: string;
+  /**
+   * Where the platform sends a LobeHub Market connector's token, overriding
+   * the provider default (e.g. GitHub → `Authorization: Bearer …` on
+   * api.github.com). Market connectors never put the real token in the
+   * environment: the variable holds a placeholder and the sandbox's egress
+   * proxy sets `header` on requests to `host`. Every host must be listed in
+   * `manifest.network.allow`. Ignored for connectors holding a local secret.
+   */
+  inject?: WidgetEnvInject;
+  /** Environment variable name the script reads, e.g. 'GITHUB_TOKEN'. */
+  name: string;
+  required?: boolean;
+}
+
+export interface WidgetEnvInject {
+  /** Request header to set; defaults to 'Authorization'. */
+  header?: string;
+  /** API host(s), exact or `*.domain`, e.g. 'api.github.com'. */
+  host: string | string[];
+  /**
+   * Literal prepended to the token; defaults to 'Bearer ' for the
+   * Authorization header and to nothing otherwise.
+   */
+  prefix?: string;
+}
+
+/**
+ * The user's standing approval to dry-run widget scripts with some access:
+ * a draft whose connectors and hosts all fall inside one grant of its own
+ * level runs without asking again. Stored in the user's tool settings.
+ */
+export interface WidgetDryRunGrant {
+  /** Connectors the approved scripts may read, e.g. ['github']. */
+  connectors: string[];
+  /** ISO time the user gave it. */
+  grantedAt: string;
+  /** Hosts the approved scripts may call, exactly as declared in `network.allow`. */
+  hosts: string[];
+  /** Workspace the grant holds in; `null` for the personal space. */
+  workspaceId: string | null;
+}
+
+/**
+ * Declarative contract stored beside the script: what it needs to run and how
+ * the platform should treat its output.
+ */
+export interface WidgetManifest {
+  description?: string;
+  env?: WidgetEnvRequirement[];
+  /**
+   * Record numeric output into `metrics` / `metric_points` so the widget gets
+   * a long-term trend. `valuePath` picks the number from the output, e.g.
+   * 'value' for a stat.
+   */
+  metric?: {
+    key: string;
+    kind?: 'gauge' | 'counter';
+    unit?: string;
+    valuePath?: string;
+  };
+  /** Hostnames the sandbox may reach; empty or omitted means no network. */
+  network?: { allow: string[] };
+  /**
+   * Settings a person fills in (a city, a target date, a repository) that
+   * the script reads from its environment. Never secrets: values are stored
+   * in plain text and shown in reviews — credentials go in `env`.
+   */
+  params?: WidgetParam[];
+  /** Suggested refresh schedule applied when the version is published. */
+  schedule?: { pattern: string; timezone?: string };
+  timeoutMs?: number;
+  title?: string;
+}
+
+export const WIDGET_PARAM_TYPES = ['string', 'number', 'boolean', 'date', 'select'] as const;
+export type WidgetParamType = (typeof WIDGET_PARAM_TYPES)[number];
+export type WidgetParamValue = string | number | boolean;
+
+/**
+ * One setting of a widget. The script reads it as the environment variable
+ * `name`: numbers and booleans as their text, a date as `YYYY-MM-DD`. The
+ * effective value is `value` (this widget's choice), else `default`.
+ */
+export interface WidgetParam {
+  default?: WidgetParamValue;
+  description?: string;
+  label?: string;
+  name: string;
+  /** Choices of a `select` param. */
+  options?: { label?: string; value: string }[];
+  required?: boolean;
+  type: WidgetParamType;
+  value?: WidgetParamValue;
+}
+
+/** Largest `view.html` document, in characters. */
+export const WIDGET_HTML_MAX_LENGTH = 200 * 1024;
+
+/** Rendering hints for the widget card, independent of the data. */
+export interface WidgetView {
+  chart?: 'line' | 'bar' | 'area';
+  /** Column keys to show, in order, for table output. */
+  columns?: string[];
+  /**
+   * A self-contained HTML document that draws the card in a sandboxed frame:
+   * no network, no access to the app. It receives the output and theme by
+   * `postMessage` as `window.widgetData`. Takes precedence over `layout`.
+   */
+  html?: string;
+  /**
+   * Declarative card template. When set it replaces the built-in rendering of
+   * the output type; required to show a `data` output.
+   */
+  layout?: WidgetLayoutNode;
+  /** Maximum list / table rows before truncation. */
+  limit?: number;
+  size?: 'sm' | 'md' | 'lg';
+  /** Card background, a `WidgetLayoutSurface` — may be bound to the data. */
+  surface?: WidgetLayoutValue;
+}
+
+// ── Versions ────────────────────────────────────────────
+
+/**
+ * - `draft` — authored, not live; at most one is the widget's current draft
+ * - `published` — the version scheduled runs execute; one per widget
+ * - `archived` — a formerly published version kept for history / rollback
+ */
+export const WIDGET_VERSION_STATUSES = ['draft', 'published', 'archived'] as const;
+export type WidgetVersionStatus = (typeof WIDGET_VERSION_STATUSES)[number];
+
+/** Who authored a version. */
+export const WIDGET_VERSION_SOURCES = ['agent', 'user'] as const;
+export type WidgetVersionSource = (typeof WIDGET_VERSION_SOURCES)[number];
+
+// ── Runs ────────────────────────────────────────────────
+
+/**
+ * - `preview` — a draft run while authoring; never touches the widget snapshot
+ * - `manual` — user pressed refresh
+ * - `schedule` — fired by the scheduler from `next_run_at`
+ */
+export const WIDGET_RUN_TRIGGERS = ['preview', 'manual', 'schedule'] as const;
+export type WidgetRunTrigger = (typeof WIDGET_RUN_TRIGGERS)[number];
+
+/**
+ * - `running` — opened, the sandbox has not reported back yet
+ * - `succeeded` — exit 0 and stdout matched the output contract
+ * - `partial` — like `succeeded`, but the output reports
+ *   `meta.complete === false`: the card shows it (it becomes the widget's
+ *   latest output and resets the failure streak), yet it is not written into
+ *   the metric trend
+ * - `failed` — non-zero exit, sandbox error or output outside the contract
+ * - `timeout` — killed after the manifest's `timeoutMs`
+ */
+export const WIDGET_RUN_STATUSES = [
+  'running',
+  'succeeded',
+  'partial',
+  'failed',
+  'timeout',
+] as const;
+export type WidgetRunStatus = (typeof WIDGET_RUN_STATUSES)[number];
+
+export type WidgetRunFinalStatus = Exclude<WidgetRunStatus, 'running'>;
+
+/** Final statuses whose output is usable: the card renders it. */
+export const WIDGET_RUN_OUTPUT_STATUSES = [
+  'succeeded',
+  'partial',
+] as const satisfies readonly WidgetRunFinalStatus[];
+
+export interface WidgetRunError {
+  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'SANDBOX_BUSY', 'NON_ZERO_EXIT'. */
+  code: string;
+  message: string;
+}

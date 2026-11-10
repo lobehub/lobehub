@@ -108,10 +108,15 @@ export interface AgentSignalReceipt {
     memoryId?: string;
     /** User memory layer used to route memory receipts to their detail page. */
     memoryLayer?: LayersEnum;
+    /** Memory write kind; only `create` memory receipts can be undone. */
+    operation?: 'create' | 'remove' | 'update';
     /** Short summary captured at write time. */
     summary?: string;
-    /** Human-readable resource title captured at write time. */
-    title: string;
+    /**
+     * Human-readable resource title captured at write time. Absent when the write had no
+     * attributable title; clients then render a localized fallback by receipt kind.
+     */
+    title?: string;
     /** User-facing resource domain. */
     type: 'memory' | 'skill';
   };

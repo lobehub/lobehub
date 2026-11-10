@@ -16,14 +16,17 @@ export {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  type CodexAgentHandleOptions,
   CodexAppServerClient,
   type CodexAppServerClientOptions,
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
   CodexThreadSession,
   type CodexThreadSessionOptions,
+  createCodexAgentHandle,
   getCodexAppServerUnsupportedArgs,
   isCodexAppServerCompatibilityError,
+  pickCodexRunProvenance,
 } from '../codex';
 export type { UsageData } from '../types';
 export {
@@ -75,6 +78,30 @@ export {
   resolveCodexInitialModel,
 } from './codexModel';
 export {
+  buildCodexLobeHubContextArgs,
+  buildCodexShellEnvSetArgs,
+  CODEX_LOBEHUB_CONTEXT_ENV_KEYS,
+  type CodexJwtFile,
+  createCodexJwtFile,
+  LOBEHUB_JWT_FILE_ENV,
+  refreshCodexJwtFiles,
+  toTomlBasicString,
+} from './codexShellEnv';
+export {
+  buildCopilotAcpArgs,
+  buildCopilotAcpPrompt,
+  type CopilotAcpImagePromptBlock,
+  type CopilotAcpModelCatalog,
+  type CopilotAcpPromptBlock,
+  CopilotAcpSession,
+  type CopilotAcpSessionOptions,
+  type CopilotAcpTextPromptBlock,
+  isCopilotAcpSessionNotFoundError,
+  listCopilotAcpModels,
+  type ListCopilotAcpModelsOptions,
+  parseCopilotAcpModelCatalog,
+} from './copilotAcpSession';
+export {
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
   CursorAcpSession,
@@ -108,6 +135,18 @@ export {
   parseDroidAcpModelCatalog,
 } from './droidAcpSession';
 export {
+  detectDshCommand,
+  DSH_ACP_PROFILE_ARGS,
+  DSH_COMMAND,
+  DSH_MIN_VERSION,
+  DSH_VERSION_PATTERN,
+  DshAcpSession,
+  type DshAcpSessionHandle,
+  type DshAcpSessionOptions,
+  spawnDshAcpSession,
+  type SpawnDshAcpSessionOptions,
+} from './dshAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,
@@ -136,6 +175,17 @@ export {
   type NormalizeImageOptions,
 } from './input';
 export { JsonlStreamProcessor } from './jsonlProcessor';
+export {
+  buildLobeHubCliPluginFiles,
+  CLAUDE_CODE_PLUGIN_SKILLS_MIN_VERSION,
+  claudeCodeLoadsPluginSkills,
+  type ClaudeCodeLobeHubCliDelivery,
+  LOBEHUB_CLI_PLUGIN_NAME,
+  LOBEHUB_CLI_SKILL_NAME,
+  omitLobeHubCliGuide,
+  prepareClaudeCodeLobeHubCli,
+  resolveLobeHubCliPluginDir,
+} from './lobeHubCliPlugin';
 // NOTE: `resolveCliCommand` is intentionally NOT re-exported here. It runs
 // `promisify(execFile)` at module load, which throws under a partial
 // `node:child_process` mock — and this barrel is widely imported (e.g. for
@@ -143,11 +193,22 @@ export { JsonlStreamProcessor } from './jsonlProcessor';
 // import time. Import it from the dedicated `@lobechat/heterogeneous-agents/
 // resolveCliCommand` subpath instead.
 export {
+  buildClaudeCodeDirectEnv,
+  type BuildClaudeCodeDirectEnvInput,
+  type BuildClaudeCodeDirectEnvResult,
+  normalizeAnthropicSdkBaseURL,
+  sanitizeClaudeCodeDirectArgs,
+  sanitizeClaudeCodeDirectEnv,
+} from './claudeCodeDirectEnv';
+export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
+export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,
   type EnsureResumeTranscriptResult,
+  findClaudeCodeTranscriptPath,
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
+export { getHeterogeneousAgentPresetEnv } from './presetEnv';
 export {
   AMP_BASE_ARGS,
   buildQoderArgs,

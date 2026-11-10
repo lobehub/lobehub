@@ -1,11 +1,11 @@
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
-import { getGoalTaskProgress, type GoalStep } from './goalTaskProgress';
+import { getGoalTaskProgress } from './goalTaskProgress';
 
 /**
- * Live Goal status for one `goals` row: the graph snapshot → phase, the Tasks
- * as ordered steps, and how much of them is closed. The card only holds the
- * goal id, so everything else is fetched here.
+ * Live Goal status for one `goals` row: the graph snapshot → phase and how much
+ * of its Tasks is closed. The card only holds the goal id, so everything else is
+ * fetched here.
  */
 export const useGoalTaskStatus = ({
   criteriaCount = 0,
@@ -19,10 +19,6 @@ export const useGoalTaskStatus = ({
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
   const taskNodes = snapshot?.nodes.filter((node) => node.kind === 'task') ?? [];
-  // The graph numbers Tasks in creation order; the step track must read the same.
-  const steps: GoalStep[] = [...taskNodes]
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    .map((node) => ({ status: node.status, title: node.title }));
 
   return {
     agentId: snapshot?.goal.agentId ?? undefined,
@@ -36,8 +32,8 @@ export const useGoalTaskStatus = ({
       ).length,
       taskTotal: taskNodes.length,
     }),
+    snapshot,
     startedAt: snapshot?.goal.startedAt ?? undefined,
-    steps,
     title: snapshot?.goal.title,
   };
 };

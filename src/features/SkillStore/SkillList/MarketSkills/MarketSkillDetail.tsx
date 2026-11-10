@@ -2,9 +2,7 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Avatar, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { unzip } from 'fflate';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -16,6 +14,7 @@ import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { marketApiService } from '@/services/marketApi';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { type DiscoverSkillDetail as DiscoverSkillDetailType } from '@/types/discover';
@@ -140,7 +139,8 @@ const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
 
   // Market data (always fetched for header info + icon)
   const useFetchSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-  const { data, isLoading } = useFetchSkillDetail({ identifier });
+  const { isLoading, queryKey } = useFetchSkillDetail({ identifier });
+  const data = useDiscoverStore(skillSelectors.skillDetail(queryKey));
 
   // Installed skill data (for full file content)
   const installedSkill = useToolStore(agentSkillsSelectors.getAgentSkillByIdentifier(identifier));

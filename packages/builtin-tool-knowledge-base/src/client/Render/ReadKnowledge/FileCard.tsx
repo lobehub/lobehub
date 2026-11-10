@@ -1,9 +1,8 @@
 'use client';
 
 import { Flexbox, MaterialFileTypeIcon } from '@lobehub/ui';
-import { Alert, Text } from '@lobehub/ui/base-ui';
-import { Descriptions } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Descriptions, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { FileContentDetail } from '../../../types';
@@ -112,7 +111,6 @@ const FileCard = memo<FileCardProps>(({ file }) => {
       <div className={styles.footer}>
         <Descriptions
           column={2}
-          size="small"
           classNames={{
             content: styles.footerText,
             label: styles.footerText,

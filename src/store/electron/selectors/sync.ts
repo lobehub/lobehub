@@ -1,4 +1,4 @@
-import { isOfficialCloudServer, OFFICIAL_URL } from '@lobechat/const';
+import { isOfficialCloudServer, OFFICIAL_CLOUD_URL } from '@lobechat/const';
 
 import { type ElectronState } from '../initialState';
 
@@ -8,11 +8,14 @@ const storageMode = (s: ElectronState) => s.dataSyncConfig.storageMode;
 
 /**
  * Returns the effective remote server URL based on storage mode:
- * - Cloud mode: returns OFFICIAL_URL
+ * - Cloud mode: returns OFFICIAL_CLOUD_URL, the gateway entrypoint the main process
+ *   also uses as `OFFICIAL_CLOUD_SERVER`
  * - SelfHost mode: returns the configured remoteServerUrl
  */
 const remoteServerUrl = (s: ElectronState) =>
-  s.dataSyncConfig.storageMode === 'cloud' ? OFFICIAL_URL : s.dataSyncConfig.remoteServerUrl || '';
+  s.dataSyncConfig.storageMode === 'cloud'
+    ? OFFICIAL_CLOUD_URL
+    : s.dataSyncConfig.remoteServerUrl || '';
 
 /**
  * Returns the raw remoteServerUrl from config without transformation.

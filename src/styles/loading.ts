@@ -1,5 +1,5 @@
 import { shinyTextStyles as sharedShinyTextStyles } from '@lobechat/shared-tool-ui/styles';
-import { createStaticStyles, css } from 'antd-style';
+import { createStaticStyles, css } from '@lobehub/ui';
 
 export const dotLoading = css`
   &::after {

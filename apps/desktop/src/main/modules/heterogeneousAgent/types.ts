@@ -3,6 +3,7 @@ import type {
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
+import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -26,6 +27,8 @@ export interface HeterogeneousAgentBuildPlanHelpers {
 
 export interface HeterogeneousAgentBuildPlanParams {
   args: string[];
+  /** CLI version spawn preflight detected, when known. */
+  cliVersion?: string;
   helpers: HeterogeneousAgentBuildPlanHelpers;
   /**
    * Optional path to an MCP config JSON written by the controller (e.g. for
@@ -57,6 +60,8 @@ export interface PrepareServerDefaultBindingContext {
   endpoint: string;
   env?: Record<string, string>;
   model: string;
+  /** The model's card as the deployment describes it; absent when it could not be read. */
+  modelDescriptor?: ServerDefaultHeterogeneousModelDescriptor;
   profileDir: string;
 }
 
@@ -67,6 +72,8 @@ export interface ProviderBindingPlan {
   /** Best-effort synchronous release for app shutdown. */
   cleanupSync?: () => void;
   env: Record<string, string>;
+  /** Native selector ID for transports that select models after the handshake. */
+  model?: string;
   /** Environment variable that receives the per-prompt server operation token. */
   operationTokenEnvKey?: string;
   profileFiles?: ProviderBindingFilePlan[];

@@ -1,7 +1,7 @@
 'use client';
 
 import { type SidebarAgentLabel } from '@lobechat/types';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -31,7 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-/** Pill-style label tags (color dot + name), shared by list rows and cards. */
+/** Pill-style label tags (color dot + name) shown on list rows. */
 const LabelTags = memo<{ labels?: SidebarAgentLabel[] }>(({ labels }) => {
   if (!labels?.length) return null;
 

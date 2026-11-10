@@ -12,6 +12,7 @@ import {
   deriveAgentInterventionQueueDeduplicationId,
   matchesAgentInterventionContinuationProvenance,
 } from '@/business/server/agent-run/agentInterventionIdentity';
+import { settleAgentRunFee } from '@/business/server/agent-run/runFee';
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { MessageModel } from '@/database/models/message';
 import { HumanApprovalAlreadyResolvedError } from '@/database/models/message';
@@ -46,6 +47,27 @@ export class InterventionController {
 
   constructor(deps: InterventionControllerDeps) {
     this.deps = deps;
+  }
+
+  /**
+   * Charges or gives back the fee of a device run the user stopped, by the same
+   * rule as any interrupted run: charged once it ran long enough, else returned.
+   * A billing failure must not fail the stop the user asked for.
+   */
+  private async settleInterruptedRunFee(operationId: string): Promise<void> {
+    try {
+      const operation = await this.deps.agentOperationModel.findById(operationId);
+      const startedAt = operation?.startedAt ?? operation?.createdAt;
+      const endedAt = operation?.completedAt ?? new Date();
+      await settleAgentRunFee({
+        durationMs: startedAt ? endedAt.getTime() - startedAt.getTime() : undefined,
+        operationId,
+        reason: 'interrupted',
+        userId: this.deps.userId,
+      });
+    } catch (error) {
+      console.error('[InterventionController] settleAgentRunFee failed', { error, operationId });
+    }
   }
 
   /**
@@ -225,7 +247,15 @@ export class InterventionController {
     // acknowledged process exit is authoritative; settle only the owned old
     // operation and its matching marker, preserving any newer run/outcome.
     if (deviceCancellationConfirmed === true) {
-      await this.deps.agentOperationModel.settleRunning(resolvedOperationId, 'interrupted');
+      const settled = await this.deps.agentOperationModel.settleRunning(
+        resolvedOperationId,
+        'interrupted',
+      );
+      // The device run never reaches CompletionLifecycle (heteroFinish skips a
+      // cancelled run), so the stop that ends it also settles its run fee.
+      // Only the stop that actually retired the row settles, so a retry or a
+      // racing terminal callback cannot settle the fee twice.
+      if (settled) await this.settleInterruptedRunFee(resolvedOperationId);
       if (resolvedTopicId) {
         await this.deps.topicModel.settleRunningOperation(
           resolvedTopicId,
@@ -368,20 +398,22 @@ export class InterventionController {
       throw new Error('stopPendingApproval: interrupted operation has unsettled batch members');
     }
 
-    if (alreadyClaimedCount === 0) {
-      await this.deps.messageModel.resolveHumanApproval(
-        targets.map((target) => ({
-          content: STOPPED_TOOL_CONTENT,
-          id: target.id,
-          intervention: {
-            ...(approvalResolutionRequestId && {
-              resolutionRequestId: approvalResolutionRequestId,
-            }),
-            status: 'aborted',
-          },
-        })),
-      );
-    }
+    await this.deps.messageModel.resolveHumanApproval(
+      targets.map((target) => ({
+        content: STOPPED_TOOL_CONTENT,
+        id: target.id,
+        intervention: {
+          ...(approvalResolutionRequestId && {
+            resolutionRequestId: approvalResolutionRequestId,
+          }),
+          status: 'aborted',
+        },
+      })),
+      { publishResult: true },
+    );
+
+    // Read before the interrupt retires the runtime snapshot.
+    const groupMember = await this.deps.agentRuntimeService.loadGroupMemberBridge(operationId);
 
     if (operation.status !== 'interrupted') {
       await this.deps.agentRuntimeService.interruptOperation(operationId);
@@ -389,6 +421,18 @@ export class InterventionController {
         completedAt: new Date(),
         completionReason: 'interrupted',
         status: 'interrupted',
+      });
+    }
+
+    // A group member stopped on its approval never reaches its own completion,
+    // so its bridge never fires and the supervisor stays parked on the member
+    // barrier. Report the stop through the bridge (idempotent: backfills and the
+    // supervisor resume are CAS-guarded, so a retried stop is safe).
+    if (groupMember) {
+      await this.deps.agentRuntimeService.completeGroupActionMember({
+        ...groupMember.bridge,
+        operationId,
+        reason: 'interrupted',
       });
     }
 

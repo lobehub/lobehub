@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
+import {
+  type ModelParamsSchema,
+  type TTSModelParamsSchema,
+  type TTSVoice,
+  type VideoModelParamsSchema,
+} from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -21,6 +26,7 @@ export const AiModelTypeSchema = z.enum([
   'video',
   'text2music',
   'realtime',
+  'decision',
 ] as const);
 
 export type AiModelType = z.infer<typeof AiModelTypeSchema>;
@@ -198,6 +204,14 @@ export interface FixedPricingUnit extends PricingUnitBase {
 }
 
 export interface TieredPricingUnit extends PricingUnitBase {
+  /**
+   * How tiers apply to a quantity:
+   * - `volume` (default): the whole quantity is billed at the rate of the tier it falls into
+   *   (e.g. Google's long-context pricing)
+   * - `graduated`: each tier bills only the part of the quantity inside it, so a zero-rate first
+   *   tier expresses a free allowance (e.g. fal's 4,096 free reference tokens per request)
+   */
+  mode?: 'graduated' | 'volume';
   strategy: 'tiered';
   tiers: Array<{
     /**
@@ -302,6 +316,12 @@ export interface AIBaseModelCard {
    */
   generation?: string;
   id: string;
+  /**
+   * Whether this card is listed by the vendor that makes the model, so its `pricing` is the
+   * official list price. Resellers that list another vendor's model (e.g. DeepSeek on Qwen)
+   * leave it unset. Unset also means "not checked yet", so treat it as unknown, not as false.
+   */
+  isOfficial?: boolean;
   /**
    * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
    * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
@@ -659,13 +679,31 @@ export interface AIVideoModelCard extends AIBaseModelCard {
 }
 
 export interface AITTSModelCard extends AIBaseModelCard {
+  /**
+   * Standard TTS parameters the model accepts and their allowed values.
+   */
+  parameters?: TTSModelParamsSchema;
   pricing?: Pricing;
   type: 'tts';
+  /**
+   * Voice catalog. `payload.voice` takes one of these ids.
+   */
+  voices?: TTSVoice[];
 }
 
 export interface AIASRModelCard extends AIBaseModelCard {
   pricing?: Pricing;
   type: 'asr';
+}
+
+/**
+ * Decision models answer caller-defined typed questions with calibrated probabilities
+ * instead of generating text, and are called through `decide` rather than `chat`.
+ * @see https://openrouter.ai/docs/guides/community/jev
+ */
+export interface AIDecisionModelCard extends AIBaseModelCard {
+  pricing?: Pricing;
+  type: 'decision';
 }
 
 export interface AIRealtimeModelCard extends AIBaseModelCard {
@@ -704,10 +742,12 @@ export interface AiFullModelCard extends AIBaseModelCard {
   displayName?: string;
   id: string;
   maxDimension?: number;
-  parameters?: ModelParamsSchema;
+  /** Image generation params, or standard TTS params for `tts` models. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema;
   pricing?: Pricing;
   settings?: AiModelSettings;
   type: AiModelType;
+  voices?: TTSVoice[];
 }
 
 export interface LobeDefaultAiModelListItem extends AiFullModelCard {
@@ -832,7 +872,8 @@ export interface EnabledAiModel {
   id: string;
   knowledgeCutoff?: string;
   maxOutput?: number;
-  parameters?: ModelParamsSchema;
+  /** Image generation params, or standard TTS params for `tts` models. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema;
   pricing?: Pricing;
   providerId: string;
   releasedAt?: string;

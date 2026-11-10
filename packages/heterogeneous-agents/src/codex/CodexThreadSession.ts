@@ -2,24 +2,37 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isRecord, pickString } from '@lobechat/utils/object';
 
 import { CodexAppServerAdapter } from '../adapters/codexAppServer';
+import type { AskUserBridge } from '../askUser';
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
 import type { CodexAppServerClient } from './CodexAppServerClient';
 import { CodexAppServerConnectionError } from './CodexAppServerClient';
+import type { CodexRunProvenance } from './environment';
+import { isSameCodexRunProvenance, withCodexThreadEnv } from './environment';
 import type {
   ThreadResumeParams,
   ThreadResumeResponse,
   ThreadStartParams,
   ThreadStartResponse,
+  ThreadUnsubscribeParams,
+  ThreadUnsubscribeResponse,
   TurnCompletedNotification,
   TurnInterruptParams,
   TurnStartParams,
   TurnStartResponse,
   UserInput,
 } from './protocol';
+import {
+  codexUserInputArguments,
+  codexUserInputResponse,
+  parseCodexUserInput,
+} from './requestUserInput';
 
 const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
+/** An interrupted turn settled within 250 ms in probes; this bounds slow tool teardown. */
+const RESUME_SETTLE_DELAY_MS = 200;
+const RESUME_SETTLE_TIMEOUT_MS = 10_000;
 
 const toThreadResumeParams = (threadId: string, params: ThreadStartParams): ThreadResumeParams => {
   const resumeParams = { ...params };
@@ -32,6 +45,7 @@ const toThreadResumeParams = (threadId: string, params: ThreadStartParams): Thre
 
 interface ActiveTurn {
   adapter: CodexAppServerAdapter;
+  askUserBridge?: AskUserBridge;
   completion: Promise<void>;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
@@ -50,9 +64,12 @@ interface ThreadNameSetParams {
 }
 
 export interface CodexThreadTurnOptions {
+  askUserBridge?: AskUserBridge;
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
   operationId: string;
+  /** IDs exposed to this run's shell tools; omitted keeps the caller's thread config. */
+  provenance?: CodexRunProvenance;
 }
 
 export interface CodexThreadSessionOptions {
@@ -74,6 +91,9 @@ export interface CodexThreadSessionOptions {
 export class CodexThreadSession {
   private activeTurn?: ActiveTurn;
   private attached = false;
+  private provenance?: CodexRunProvenance;
+  private releaseThread?: () => void;
+  private threadParams: ThreadStartParams;
   private canFallback: boolean;
   private closedByHost = false;
   private cumulativeUsage?: UsageData;
@@ -90,6 +110,7 @@ export class CodexThreadSession {
     this.cumulativeUsage = options.initialCumulativeUsage;
     this.model = options.initialModel;
     this.threadId = options.initialThreadId;
+    this.threadParams = options.threadParams;
     this.sessionUnsubscribers.push(
       options.client.acquireConsumer(),
       options.client.onDisconnect(() => this.handleDisconnect()),
@@ -111,6 +132,15 @@ export class CodexThreadSession {
     const traceUnsubscribers: Array<() => void> = [];
 
     try {
+      if (options.provenance) {
+        if (!this.provenance || !isSameCodexRunProvenance(this.provenance, options.provenance)) {
+          // Re-resume with the new IDs; this also drops reconnect params queued with the old ones.
+          this.unsubscribeAll(this.threadUnsubscribers);
+          this.attached = false;
+        }
+        this.provenance = options.provenance;
+        this.threadParams = withCodexThreadEnv(this.options.threadParams, options.provenance);
+      }
       await this.ensureThread();
       if (this.closedByHost) return;
       const threadId = this.threadId;
@@ -120,6 +150,8 @@ export class CodexThreadSession {
       const adapter = new CodexAppServerAdapter({
         initialCumulativeUsage: this.cumulativeUsage,
         initialModel: this.model,
+        // An ephemeral thread cannot be resumed, so it is never reported as the session.
+        sessionId: this.options.threadParams.ephemeral ? undefined : threadId,
       });
       let resolveTurn!: () => void;
       const completion = new Promise<void>((resolve) => {
@@ -127,6 +159,7 @@ export class CodexThreadSession {
       });
       const activeTurn: ActiveTurn = {
         adapter,
+        askUserBridge: options.askUserBridge,
         completion,
         interruptRequested: this.interruptRequested,
         notificationQueue: Promise.resolve(),
@@ -174,6 +207,7 @@ export class CodexThreadSession {
       this.emitStatus('error', options.operationId);
       throw error;
     } finally {
+      this.activeTurn?.askUserBridge?.cancelAll('session_ended');
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
       this.interruptRequested = false;
@@ -188,6 +222,7 @@ export class CodexThreadSession {
     if (!activeTurn) return;
 
     activeTurn.interruptRequested = true;
+    activeTurn.askUserBridge?.cancelAll('session_ended');
     if (!activeTurn.turnId) return;
     try {
       await this.requestInterrupt(activeTurn);
@@ -218,6 +253,8 @@ export class CodexThreadSession {
     }
     this.unsubscribeAll(this.threadUnsubscribers);
     this.unsubscribeAll(this.sessionUnsubscribers);
+    this.releaseThread?.();
+    this.releaseThread = undefined;
     if (this.lastOperationId) this.emitStatus('closed', this.lastOperationId);
   }
 
@@ -228,19 +265,22 @@ export class CodexThreadSession {
     if (this.threadId) {
       // Once initialize succeeds, an existing native thread must never be replayed via exec.
       this.canFallback = false;
-      const params = toThreadResumeParams(this.threadId, this.options.threadParams);
-      const response = await this.options.client.request<ThreadResumeResponse>(
-        'thread/resume',
-        params,
-      );
-      if (this.closedByHost) return;
+      // Claimed before unsubscribing, which would otherwise cut off another local owner.
+      this.releaseThread ??= this.options.client.acquireThread(this.threadId);
+      const response = this.provenance
+        ? await this.resumeWithShellEnv(this.threadId)
+        : await this.options.client.request<ThreadResumeResponse>(
+            'thread/resume',
+            toThreadResumeParams(this.threadId, this.threadParams),
+          );
+      if (!response || this.closedByHost) return;
       await this.attachThread(response.thread.id, response.model);
       return;
     }
 
     const response = await this.options.client.request<ThreadStartResponse>(
       'thread/start',
-      this.options.threadParams,
+      this.threadParams,
     );
     if (this.closedByHost) return;
     const threadId = response?.thread?.id;
@@ -258,6 +298,39 @@ export class CodexThreadSession {
     }
   }
 
+  /**
+   * Resumes a thread so the next turn's shell sees this run's provenance.
+   *
+   * NOTICE:
+   * Codex has no per-turn shell environment, and `thread/resume` ignores config overrides for a
+   * thread that still has subscribers or a running turn. Unsubscribing lets an idle thread reload
+   * with the new config; a turn interrupted by a closed session can stay `active` for a moment,
+   * so retry until it settles. Verified against `codex-cli 0.160.1`; source:
+   * `https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/app-server/src/request_processors/thread_processor.rs#L4336-L4386`.
+   * Remove when `turn/start` can set the shell environment.
+   */
+  private async resumeWithShellEnv(threadId: string): Promise<ThreadResumeResponse | undefined> {
+    const deadline = Date.now() + RESUME_SETTLE_TIMEOUT_MS;
+    while (true) {
+      await this.options.client.request<ThreadUnsubscribeResponse>('thread/unsubscribe', {
+        threadId,
+      } satisfies ThreadUnsubscribeParams);
+      if (this.closedByHost) return;
+      const response = await this.options.client.request<ThreadResumeResponse>(
+        'thread/resume',
+        toThreadResumeParams(threadId, this.threadParams),
+      );
+      if (this.closedByHost || response.thread.status?.type !== 'active') return response;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          'Codex is still finishing the previous turn in this conversation. Try again once it stops.',
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, RESUME_SETTLE_DELAY_MS));
+      if (this.closedByHost) return;
+    }
+  }
+
   private async setThreadName(threadId: string): Promise<void> {
     const name = this.options.threadName?.trim();
     if (!name) return;
@@ -271,6 +344,7 @@ export class CodexThreadSession {
   }
 
   private async attachThread(threadId: string, model?: string): Promise<void> {
+    this.releaseThread ??= this.options.client.acquireThread(threadId);
     this.threadId = threadId;
     this.attached = true;
     this.canFallback = false;
@@ -281,18 +355,19 @@ export class CodexThreadSession {
       this.options.client.subscribe(threadId, (method, params) =>
         this.enqueueNotification(method, params),
       ),
-      this.options.client.subscribeServerRequests(threadId, (method) => {
+      this.options.client.subscribeServerRequests(threadId, (method, params) => {
         if (
           method === 'item/commandExecution/requestApproval' ||
           method === 'item/fileChange/requestApproval'
         ) {
           return { decision: 'cancel' };
         }
+        if (method === 'item/tool/requestUserInput') return this.requestUserInput(params);
         throw new Error(`Unsupported Codex app-server request: ${method}`);
       }),
       this.options.client.registerThread(
         threadId,
-        toThreadResumeParams(threadId, this.options.threadParams),
+        toThreadResumeParams(threadId, this.threadParams),
         {
           onResume: (response) => this.handleReconnect(response),
           onResumeError: () => {
@@ -307,6 +382,51 @@ export class CodexThreadSession {
     if (this.closedByHost) return;
     this.attached = true;
     if (response.model) this.updateModel(response.model);
+  }
+
+  private async requestUserInput(params: unknown) {
+    const request = parseCodexUserInput(params);
+    const activeTurn = this.activeTurn;
+    const bridge = activeTurn?.askUserBridge;
+    if (
+      !activeTurn ||
+      !bridge ||
+      bridge.operationId !== activeTurn.operationId ||
+      request.threadId !== this.threadId ||
+      request.turnId !== activeTurn.turnId ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.interruptRequested
+    )
+      throw new Error('Codex user input has no matching active operation');
+
+    const args = codexUserInputArguments(request);
+    // Serialize visible tool events with native notifications, but never put
+    // the human wait on that queue: interrupts and nonblocking turns must flow.
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.emitEvents(
+        activeTurn.adapter.startUserInput(request.itemId, args),
+        activeTurn.operationId,
+      ),
+    );
+    await activeTurn.notificationQueue;
+    if (
+      activeTurn.interruptRequested ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.transportInterrupted
+    )
+      return { answers: {} };
+    const answer = await bridge.pending(
+      { arguments: args, toolCallId: request.itemId },
+      request.autoResolutionMs ? { timeoutMs: request.autoResolutionMs } : {},
+    );
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.emitEvents(
+        activeTurn.adapter.completeUserInput(request.itemId, answer),
+        activeTurn.operationId,
+      ),
+    );
+    await activeTurn.notificationQueue;
+    return codexUserInputResponse(request, answer);
   }
 
   private handleDisconnect(): void {
@@ -332,6 +452,7 @@ export class CodexThreadSession {
     const activeTurn = this.activeTurn;
     if (!activeTurn || activeTurn.transportInterrupted) return;
     activeTurn.transportInterrupted = true;
+    activeTurn.askUserBridge?.cancelAll('session_ended');
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(() =>
         this.emitEvents(activeTurn.adapter.interruptForTransportFailure(), activeTurn.operationId),
@@ -349,6 +470,7 @@ export class CodexThreadSession {
       const notification = params as TurnCompletedNotification;
       if (notification.turn.status !== 'inProgress') {
         activeTurn.terminalNotificationReceived = true;
+        activeTurn.askUserBridge?.cancelAll('session_ended');
       }
     }
 

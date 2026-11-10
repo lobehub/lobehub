@@ -270,7 +270,12 @@ export const canExecutionTargetReadLocalPaths = (
 interface TopicDeviceBindingSource {
   agentId?: string | null;
   groupId?: string | null;
-  metadata?: { boundDeviceId?: string } | null;
+  metadata?: {
+    boundDeviceId?: string;
+    workingDirectory?: string;
+    workingDirectoryConfig?: { path?: string };
+  } | null;
+  projectWorkingDirectoryId?: string | null;
 }
 
 /**
@@ -287,6 +292,25 @@ export const getTopicBoundDeviceId = (
   if (!topic || !deviceId || !agentId) return;
   if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return;
   return deviceId;
+};
+
+/**
+ * A conversation that holds a cwd but never recorded the machine it belongs
+ * to — a row written before device pinning existed. The cwd is a bare path, so
+ * the agent default must not be presented as its machine: the picker says the
+ * machine is unknown until the user names one. Project-directory topics take
+ * their machine from the directory, and a `fixed` target ignores the topic.
+ */
+export const isTopicDeviceUnknown = (
+  topic: TopicDeviceBindingSource | null | undefined,
+  agentId: string | undefined,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+): boolean => {
+  if (!topic || !agentId || topic.projectWorkingDirectoryId) return false;
+  if (topic.metadata?.boundDeviceId) return false;
+  if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return false;
+  if (agencyConfig?.executionTargetSelectionPolicy === 'fixed') return false;
+  return !!(topic.metadata?.workingDirectory || topic.metadata?.workingDirectoryConfig?.path);
 };
 
 export interface TopicDeviceBindingResult {
@@ -365,7 +389,8 @@ export const resolveRuntimeMode = (
 
 export type { ExecutionPlan, ExecutionPlanUnroutedReason } from '@lobechat/types';
 
-export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
+export type ExecutionManifestEnvironment =
+  Exclude<ExecutionPlan['kind'], 'device-wakeable'> | 'local';
 
 /**
  * Preserve the desktop-local capability signal after the server resolves that
@@ -377,10 +402,21 @@ export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
 export const executionPlanToManifestExecutionEnv = (
   plan: ExecutionPlan,
   localDeviceId?: string,
-): ExecutionManifestEnvironment =>
-  plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
-    ? 'local'
-    : plan.kind;
+): ExecutionManifestEnvironment => {
+  switch (plan.kind) {
+    case 'device': {
+      return plan.target === 'local' && plan.deviceId === localDeviceId ? 'local' : 'device';
+    }
+    // A waking managed device is where commands run once it is online; until
+    // then its tools answer `DEVICE_WAKING` instead of falling back elsewhere.
+    case 'device-wakeable': {
+      return 'device';
+    }
+    default: {
+      return plan.kind;
+    }
+  }
+};
 
 export interface ResolveExecutionPlanParams {
   agencyConfig: LobeAgentAgencyConfig | undefined;
@@ -438,6 +474,15 @@ export interface ResolveExecutionPlanParams {
    * `resolveExecutionPlan`.
    */
   trigger?: RequestTrigger;
+  /**
+   * Managed cloud devices this run could wake: devices that are not online
+   * now but that the managed device provider can start. A bound or requested
+   * device in this list resolves to `device-wakeable` instead of
+   * `bound-device-offline` (or, without online info, instead of a `device`
+   * dispatch that would fail at the gateway). Server callers compute it; it is
+   * empty when the deployment has no managed devices.
+   */
+  wakeableDeviceIds?: string[];
   /** See {@link ResolveExecutionTargetOptions.workspaceScoped}. */
   workspaceScoped?: boolean;
 }
@@ -459,6 +504,9 @@ export interface ResolveExecutionPlanParams {
  *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
  *    several → stay unrouted so the model picks one). `local` / `device` never
  *    silently grab a device — they stay unrouted until one is bound/requested.
+ * 5. A bound device that is not online but is listed in `wakeableDeviceIds`
+ *    (a managed cloud device) resolves to `device-wakeable`: the caller wakes
+ *    it and the run stays on it.
  * Bot triggers coerce a `local` target to `auto` upstream in
  * `resolveExecutionTarget` (not here) — by the time the plan resolves, a bot
  * run already carries `target: 'auto'` and follows the auto-activation rules
@@ -477,6 +525,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     sandboxExecutionAvailable,
     sandboxFallback,
     trigger,
+    wakeableDeviceIds,
     workspaceScoped,
   } = params;
 
@@ -538,6 +587,11 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // requestedDeviceId may force device routing over a non-device stored target;
   // keep `auto` / `local` distinct, everything else collapses to `device`.
   const effectiveTarget = target === 'local' ? 'local' : target === 'auto' ? 'auto' : 'device';
+
+  const isOnline = (deviceId: string) => !!onlineDeviceIds?.includes(deviceId);
+  if (boundDeviceId && !isOnline(boundDeviceId) && wakeableDeviceIds?.includes(boundDeviceId)) {
+    return { deviceId: boundDeviceId, kind: 'device-wakeable', target: effectiveTarget };
+  }
 
   // No online info: trust the binding (the gateway errors on dispatch if the
   // device is offline). No auto-activation without visibility.

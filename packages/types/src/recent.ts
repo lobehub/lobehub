@@ -16,6 +16,7 @@ export interface RecentItem {
   slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
+  taskIdentifier?: string | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;

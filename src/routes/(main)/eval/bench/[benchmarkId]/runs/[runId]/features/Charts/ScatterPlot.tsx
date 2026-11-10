@@ -1,10 +1,7 @@
 'use client';
 
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox } from '@lobehub/ui';
-import { Tag, Tooltip } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { createStaticStyles, cssVar, useTheme } from 'antd-style';
+import { createStaticStyles, cssVar, Divider, Flexbox, Tag, Tooltip, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

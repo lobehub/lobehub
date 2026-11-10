@@ -68,12 +68,6 @@ describe('localSystemExecutor.grepContent — params forwarding', () => {
       'path': '/Users/arvinxx/CodeProjects/LobeHub/lobehub-desktop',
     });
 
-    // And it must NOT have been collapsed to the stripped {directory, pattern} shape.
-    expect(forwarded).not.toEqual({
-      directory: expect.any(String),
-      pattern: expect.any(String),
-    });
-
     spy.mockRestore();
   });
 

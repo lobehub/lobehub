@@ -1,9 +1,8 @@
+import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
   CodexQuotaSnapshot,
   CodexRateLimitResetOutcome,
 } from '@lobechat/heterogeneous-agents/quota';
-
-import type { HeterogeneousCliAgentType } from './binary';
 
 export {
   AMP_CLI_INSTALL_COMMANDS,
@@ -14,6 +13,8 @@ export {
   CODEBUDDY_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
+  COPILOT_CLI_INSTALL_COMMANDS,
+  COPILOT_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
   DROID_CLI_INSTALL_COMMANDS,
@@ -62,6 +63,8 @@ export interface HeterogeneousAgentRateLimitInfo {
 // heterogeneous-agents quota entry; re-export them for existing IPC callers.
 export type {
   ClaudeCodeAccountIdentity,
+  ClaudeCodeAccountResolution,
+  ClaudeCodeLocalAccount,
   ClaudeCodeQuotaReading,
   ClaudeCodeQuotaSnapshot,
   ClaudeCodeQuotaUnavailableReason,
@@ -88,7 +91,7 @@ export interface CodexRateLimitResetResult {
 }
 
 export interface HeterogeneousAgentSessionError {
-  agentType?: HeterogeneousCliAgentType;
+  agentType?: HeterogeneousAgentType;
   code?: HeterogeneousAgentSessionErrorCode | string;
   command?: string;
   /** Diagnostic context from the CLI's terminal event (subtype, HTTP status, turn count, …). */
@@ -127,7 +130,9 @@ export interface HeterogeneousAgentRuntimeStatus {
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'
+    | 'copilot-acp'
     | 'cursor-acp'
     | 'droid-acp'
+    | 'dsh-jsonrpc'
     | 'trae-acp';
 }

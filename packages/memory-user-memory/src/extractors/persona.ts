@@ -8,7 +8,7 @@ import type {
   PersonaTemplateProps,
   UserPersonaExtractionResult,
 } from '../types';
-import { BaseMemoryExtractor } from './base';
+import { BaseMemoryExtractor, parseModelOutput } from './base';
 
 const resultSchema = z.object({
   diff: z.string().optional(),
@@ -132,10 +132,10 @@ export class UserPersonaExtractor extends BaseMemoryExtractor<
           ? JSON.parse(firstCall.arguments || '{}')
           : firstCall?.arguments;
 
-      return resultSchema.parse(args || {});
+      return parseModelOutput(resultSchema, args || {}, this.agent, this.model);
     }
 
-    return resultSchema.parse(result);
+    return parseModelOutput(resultSchema, result, this.agent, this.model);
   }
 
   async structuredCall(options?: PersonaExtractorOptions): Promise<UserPersonaExtractionResult> {

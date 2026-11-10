@@ -1,3 +1,5 @@
+import type { LocalFilePreviewFailure } from './localFilePreviewFailure';
+
 // Define types for local file operations
 export interface LocalFileItem {
   contentType?: string;
@@ -204,8 +206,7 @@ export interface LocalFilePreviewUrlParams {
   workingDirectory: string;
 }
 
-export interface LocalFilePreviewUrlResult {
-  error?: string;
+export interface LocalFilePreviewUrlResult extends LocalFilePreviewFailure {
   success: boolean;
   url?: string;
 }
@@ -244,8 +245,7 @@ export type LocalFilePreview =
   | LocalFilePreviewText
   | LocalFilePreviewUnsupported;
 
-export interface LocalFilePreviewResult {
-  error?: string;
+export interface LocalFilePreviewResult extends LocalFilePreviewFailure {
   preview?: LocalFilePreview;
   success: boolean;
 }
@@ -358,7 +358,13 @@ export interface ProjectFileIndexResult {
   entries: ProjectFileIndexEntry[];
   indexedAt: string;
   root: string;
-  source: 'git' | 'glob';
+  source: 'git' | 'glob' | 'sandbox';
+  /**
+   * The host stopped short of the whole tree. Set only by hosts that cap a
+   * listing; a tree that is missing entries and does not say so is worse than
+   * one that refuses, because it reads as complete.
+   */
+  truncated?: boolean;
 }
 
 export interface ProjectDirectoryListParams {

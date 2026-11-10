@@ -2,12 +2,13 @@
 
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Flexbox, type MenuProps } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import {
+  type ChatInputActionsProps,
+  type ChatInputProps as EditorChatInputProps,
+} from '@lobehub/editor/react';
+import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import {
   getBusinessChatInputSendAreaPrefix,
@@ -19,17 +20,18 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { checkProjectExecution } from '@/features/Projects/WorkingDirectories/checkExecution';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
-import { useUnexpiredInterventions } from '../hooks/useDeadlineClock';
+import { usePendingInterventions } from '../hooks/usePendingInterventions';
 import InterventionBar from '../InterventionBar';
 import {
   dataSelectors,
@@ -37,23 +39,21 @@ import {
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
-import { isSamePendingInterventionList } from '../store/slices/data/pendingInterventions';
 import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
+import SendErrorAlert from './SendErrorAlert';
 import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
+import { useConversationChatInputUiState } from './useConversationChatInputUiState';
+import { useRestoreServerQueue } from './useRestoreServerQueue';
 import {
   getContextWindowMessages,
-  getConversationChatInputUiState,
   getConversationSendButtonProps,
   toChatInputMessages,
 } from './utils';
-import GoalArmedChip from './VerifyTray/GoalArmedChip';
-import { useGoalArmStore } from './VerifyTray/goalArmStore';
-import GoalTray from './VerifyTray/GoalTray';
 import {
   canSendVoiceMessage,
   isVoiceMessageTranscribed,
@@ -114,6 +114,10 @@ export interface ChatInputProps {
    */
   feature?: ChatInputFeature;
   /**
+   * Props forwarded to the editor's input container (e.g. a smaller default height)
+   */
+  inputContainerProps?: EditorChatInputProps;
+  /**
    * Swap the action bar and send area for skeleton placeholders while
    * the underlying agent/session config is still hydrating. The editor
    * itself stays usable.
@@ -159,7 +163,7 @@ export interface ChatInputProps {
   /**
    * Send menu configuration (for send options like Enter/Cmd+Enter, Add AI/User message)
    */
-  sendMenu?: MenuProps;
+  sendMenu?: { items: DropdownItem[] };
   /**
    * Whether to show the control bar (Local/Cloud/Auto Approve)
    */
@@ -185,6 +189,7 @@ const ChatInput = memo<ChatInputProps>(
     disableQueue,
     disableSend,
     feature,
+    inputContainerProps,
     leftActions = [],
     leftContent,
     rightActions = [],
@@ -201,13 +206,12 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
-    const { t } = useTranslation('chat');
-
     // ConversationStore state
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+    useRestoreServerQueue(context, !disableQueue);
     const canRecordVoiceMessage = useCanSendVoiceMessage(context);
     // The composer's controls must resolve their topic from THIS conversation,
     // not the global `activeTopicId`: a page copilot embedded next to another
@@ -262,21 +266,11 @@ const ChatInput = memo<ChatInputProps>(
     }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
-    const isInputLoading = useConversationStore(messageStateSelectors.isInputVisiblyLoading);
     const isInputQueueBlocked = useChatStore((s) =>
       operationSelectors.isInputLoadingByContext(context)(s),
     );
 
-    // Pending interventions — use custom equality to prevent infinite re-render loop.
-    // The selector creates new array/object refs each call; without equality check,
-    // any store update → new ref → re-render → Intervention's store writes → loop.
-    const selectedInterventions = useConversationStore(
-      dataSelectors.pendingInterventions,
-      isSamePendingInterventionList,
-    );
-    // The selector only re-runs on store changes; drop a card the moment its
-    // producer stops waiting even when nothing in the store moves.
-    const pendingInterventions = useUnexpiredInterventions(selectedInterventions);
+    const pendingInterventions = usePendingInterventions();
     const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore
@@ -284,9 +278,9 @@ const ChatInput = memo<ChatInputProps>(
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
     // File store - for UI state only (disabled button, etc.)
-    const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
+    const fileList = useFileStore(fileChatSelectors.chatUploadFileList(contextKey));
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
-    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
+    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles(contextKey));
 
     // Queue state
     const hasQueuedMessages = useChatStore(
@@ -298,28 +292,16 @@ const ChatInput = memo<ChatInputProps>(
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
     // Detect whether OpStatusTray will render (mirrors its own `!startTime`
-    // gate) so GoalTray — which sits flush below it — can square its top corners
+    // gate) so LinkedGoalTray — which sits flush below it — can square its top corners
     // and merge with the status strip instead of showing a seam.
     const hasOpStatus = useChatStore(
       (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
     );
 
-    // Pre-topic "armed goal" state (topic Goal lab). `armedAt` is only ever set
-    // by the lab-gated "+" → Goal entry, so its presence already implies the
-    // lab is on. While armed the goal chip rides the action bar and the composer
-    // placeholder prompts for the goal (the next message becomes it).
-    const goalArmedAt = useGoalArmStore((s) => (agentId ? s.armedAt[agentId] : undefined));
-    const goalArmed = !!agentId && !context.topicId && goalArmedAt !== undefined;
-
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendMenu, showSendWhileGenerating, showStopButton } =
-      getConversationChatInputUiState({
-        disableFollowUpVariant,
-        disableQueue,
-        isInputEmpty,
-        isInputLoading,
-      });
+      useConversationChatInputUiState({ disableFollowUpVariant, disableQueue, isInputEmpty });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
@@ -335,11 +317,12 @@ const ChatInput = memo<ChatInputProps>(
     const resolveSendBlocked = useCallback(() => {
       if (disableSend) return true;
 
+      const { context: liveContext, editor } = storeApi.getState();
+      const liveContextKey = messageMapKey(liveContext);
       const fileStore = useFileStore.getState();
-      if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+      if (fileChatSelectors.isUploadingFiles(liveContextKey)(fileStore)) return true;
       if (customDisabled !== undefined) return customDisabled;
 
-      const { context: liveContext, editor } = storeApi.getState();
       if (
         disableQueue &&
         operationSelectors.isInputLoadingByContext(liveContext)(useChatStore.getState())
@@ -347,9 +330,9 @@ const ChatInput = memo<ChatInputProps>(
         return true;
 
       const hasText = String(editor?.getMarkdownContent?.() || '').trim().length > 0;
-      const hasFiles = fileChatSelectors.chatUploadFileList(fileStore).length > 0;
+      const hasFiles = fileChatSelectors.chatUploadFileList(liveContextKey)(fileStore).length > 0;
       const hasContextSelections =
-        fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
+        fileChatSelectors.chatContextSelections(liveContextKey)(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
     }, [customDisabled, disableQueue, disableSend, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
@@ -365,8 +348,8 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
-        const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
-        const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
+        const currentFileList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
+        const currentIsUploading = fileChatSelectors.isUploadingFiles(contextKey)(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
@@ -380,12 +363,27 @@ const ChatInput = memo<ChatInputProps>(
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
 
+        // A rejected preflight has no persisted message to recover from. Keep
+        // the composer and attachments intact until the target is usable.
+        const chatState = useChatStore.getState();
+        const sendContext = storeApi.getState().context;
+        const topic = sendContext.topicId
+          ? topicSelectors.getTopicById(sendContext.topicId)(chatState)
+          : undefined;
+        try {
+          await checkProjectExecution(topic, chatState.isGatewayModeEnabled(sendContext.agentId));
+        } catch (error) {
+          console.error('Project execution preflight failed', error);
+          toast.error(error instanceof Error ? error.message : String(error));
+          return;
+        }
+
         // Capture editor JSON state before clearing for rich text rendering
         const editorData = getEditorData();
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList();
+          fileStore.clearChatUploadFileList(contextKey);
           fileStore.clearChatContextSelections(contextKey);
         };
 
@@ -416,7 +414,13 @@ const ChatInput = memo<ChatInputProps>(
           files: currentFileList,
           message,
           onPreflightFailure: () => {
-            useFileStore.getState().restoreChatContextSelections(contextKey, currentContextList);
+            const store = useFileStore.getState();
+            // The composer was cleared up front; a send rejected before any
+            // message owned the content must hand every part of it back —
+            // uploads and context selections, not just the editor text the
+            // lifecycle restores on its own.
+            store.restoreChatUploadFileList(contextKey, currentFileList);
+            store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
         });
@@ -473,14 +477,7 @@ const ChatInput = memo<ChatInputProps>(
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
           {sendMessageErrorMsg && (
-            <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-              <Alert
-                closable
-                title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
-                type={'secondary'}
-                onClose={clearSendMessageError}
-              />
-            </Flexbox>
+            <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
           {businessAlerts}
           <Flexbox
@@ -502,34 +499,24 @@ const ChatInput = memo<ChatInputProps>(
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
-            <GoalTray
-              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
-            />
             {/* Goals this conversation planned; sits last so it rides flush on the input. */}
             <LinkedGoalTray
               topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
             />
           </Flexbox>
-          {/* Append the armed-goal chip to every composer's action bar. While armed,
-              the next message becomes the goal and the placeholder explains that state. */}
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
             compact={compact}
             controlBarSlot={controlBarSlot}
+            extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
+            inputContainerProps={inputContainerProps}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
             sendAreaPrefix={businessSendAreaPrefix}
             showControlBar={showControlBar}
-            extraActionItems={[
-              ...(extraActionItems ?? []),
-              { children: <GoalArmedChip />, key: 'goal-armed-chip' },
-            ]}
-            placeholder={
-              goalArmed ? t('acceptance.tray.goalArmedPlaceholder', { ns: 'verify' }) : undefined
-            }
           />
         </div>
       </WideScreenContainer>

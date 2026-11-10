@@ -1,14 +1,11 @@
 'use client';
 
-import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
 import { I18nextProvider } from 'react-i18next';
-import { isRtlLang } from 'rtl-detect';
 
 import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
 import { loadDayjsLocaleModule, normalizeDayjsLocale } from '@/utils/dayjsLocale';
-import { getAntdLocale } from '@/utils/locale';
 
 import { createWorkbenchI18n } from './createWorkbenchI18n';
 
@@ -48,8 +45,6 @@ interface WorkbenchLocaleProps extends PropsWithChildren {
 
 const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, resources }) => {
   const [i18n] = useState(() => createWorkbenchI18n(defaultLang, resources));
-  const [lang, setLang] = useState(defaultLang ?? 'en-US');
-  const [antdLocale, setAntdLocale] = useState<any>();
 
   if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
 
@@ -61,15 +56,10 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
     let localeRequest = 0;
     const applyLocale = async (nextLang: string) => {
       const request = ++localeRequest;
-      const [nextAntdLocale, nextDayjsLocale] = await Promise.all([
-        getAntdLocale(nextLang),
-        loadDayjsLocale(nextLang),
-      ]);
+      const nextDayjsLocale = await loadDayjsLocale(nextLang);
       if (request !== localeRequest) return;
 
       dayjs.locale(nextDayjsLocale);
-      setLang(nextLang);
-      setAntdLocale(nextAntdLocale);
     };
 
     void applyLocale(i18n.instance.language || defaultLang || 'en-US');
@@ -81,13 +71,7 @@ const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, res
     };
   }, [defaultLang, i18n]);
 
-  return (
-    <I18nextProvider i18n={i18n.instance}>
-      <ConfigProvider direction={isRtlLang(lang) ? 'rtl' : 'ltr'} locale={antdLocale}>
-        {children}
-      </ConfigProvider>
-    </I18nextProvider>
-  );
+  return <I18nextProvider i18n={i18n.instance}>{children}</I18nextProvider>;
 });
 
 WorkbenchLocale.displayName = 'WorkbenchLocale';

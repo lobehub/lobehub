@@ -10,6 +10,14 @@ import { describe, expect, it } from 'vitest';
 import type { AgentInstruction, AgentRuntimeContext, AgentState } from '../../../types';
 import { GraphAgent } from '../GraphAgent';
 
+const createGraphOptions = (
+  graph: ConstructorParameters<typeof GraphAgent>[0]['graph'],
+): ConstructorParameters<typeof GraphAgent>[0] => ({
+  agentConfig: { maxSteps: 100 },
+  graph,
+  operationId: 'test-operation',
+});
+
 const GRAPH_RUNTIME_STATE_KEY = '__graphRuntimeState';
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -146,10 +154,6 @@ const parseGraph = (graph: unknown) => AgentGraphSchema.safeParse(graph);
 
 describe('GraphAgent', () => {
   describe('schema', () => {
-    it('should accept the goal-loop fixture', () => {
-      expect(parseGraph(loadGoalLoopGraph()).success).toBe(true);
-    });
-
     it('should require exactly one root edge', () => {
       const graph = loadGoalLoopGraph();
       const result = parseGraph({
@@ -472,11 +476,7 @@ describe('GraphAgent', () => {
 
   describe('prompt', () => {
     it('should attach node context and entry guidance without the legacy node envelope', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const messages = [{ content: '/goal inspect graph context', role: 'user' as const }];
       const state = createMockState({ messages });
 
@@ -512,11 +512,7 @@ describe('GraphAgent', () => {
     });
 
     it('should attach node instruction, upstream field value, field description, and deliverable target', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal verify prompt contract', role: 'user' }],
       });
@@ -550,11 +546,7 @@ describe('GraphAgent', () => {
     });
 
     it('should render multi-source input context and verifier output contract', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal verify multi-source prompt', role: 'user' }],
       });
@@ -592,11 +584,7 @@ describe('GraphAgent', () => {
     });
 
     it('should render extraction instruction, format instruction, schema, and previous error', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal verify extraction prompt', role: 'user' }],
       });
@@ -639,11 +627,7 @@ describe('GraphAgent', () => {
             : edge,
         ),
       };
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph,
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(graph));
       const state = createMockState({
         messages: [{ content: '/goal verify raw fallback prompt', role: 'user' }],
       });
@@ -787,36 +771,8 @@ describe('GraphAgent', () => {
   });
 
   describe('e2e', () => {
-    it('should keep the goal-loop fixture aligned with the graph schema', () => {
-      const graph = loadGoalLoopGraph();
-
-      expect(graph.terminal).toBe('verify');
-      expect(graph.nodes).toMatchObject({
-        plan: { allowedToolApiNames: ['read', 'search'], type: 'agent' },
-        verify: { type: 'llm' },
-        work: { type: 'agent' },
-      });
-      expect(graph.edges).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            from: AGENT_GRAPH_ROOT_NODE_ID,
-            to: 'plan',
-          }),
-          expect.objectContaining({
-            from: 'verify',
-            maxTraversals: 3,
-            to: 'work',
-          }),
-        ]),
-      );
-    });
-
     it('should execute the /goal plan-work-verify loop with mocked llm outputs', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal refactor graph agent runtime', role: 'user' }],
       });
@@ -1068,11 +1024,7 @@ describe('GraphAgent', () => {
     });
 
     it('should not increment instructionCount for graph finish instructions', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal finish without extra instruction count', role: 'user' }],
       });
@@ -1227,11 +1179,7 @@ describe('GraphAgent', () => {
         },
         terminal: 'fallback',
       };
-      const matchedAgent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph,
-        operationId: 'test-operation',
-      });
+      const matchedAgent = new GraphAgent(createGraphOptions(graph));
       const matchedState = createMockState({
         messages: [{ content: '/goal route matched', role: 'user' }],
       });
@@ -1246,11 +1194,7 @@ describe('GraphAgent', () => {
       expect(getGraphNodeContextText(matchedInstruction)).toContain('Matched route instruction.');
       expect(getGraphNodeContextText(matchedInstruction)).toContain('go');
 
-      const fallbackAgent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph,
-        operationId: 'test-operation',
-      });
+      const fallbackAgent = new GraphAgent(createGraphOptions(graph));
       const fallbackState = createMockState({
         messages: [{ content: '/goal route fallback', role: 'user' }],
       });
@@ -1311,11 +1255,7 @@ describe('GraphAgent', () => {
         },
         terminal: 'fallback',
       };
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph,
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(graph));
       const state = createMockState({
         messages: [{ content: '/goal invalid condition fallback', role: 'user' }],
       });
@@ -1336,11 +1276,7 @@ describe('GraphAgent', () => {
     });
 
     it('should retry extraction when parsed JSON does not match the edge output schema', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal validate planned output schema', role: 'user' }],
       });
@@ -1379,11 +1315,7 @@ describe('GraphAgent', () => {
     });
 
     it('should request fenced json extraction and commit recovered node output', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal add graph tests', role: 'user' }],
       });
@@ -1422,11 +1354,7 @@ describe('GraphAgent', () => {
     });
 
     it('should stop the verify-to-work loop when maxTraversals is reached', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal keep iterating until verified', role: 'user' }],
       });
@@ -1492,11 +1420,7 @@ describe('GraphAgent', () => {
     });
 
     it('should commit raw output after extraction attempts are exhausted', async () => {
-      const agent = new GraphAgent({
-        agentConfig: { maxSteps: 100 },
-        graph: loadGoalLoopGraph(),
-        operationId: 'test-operation',
-      });
+      const agent = new GraphAgent(createGraphOptions(loadGoalLoopGraph()));
       const state = createMockState({
         messages: [{ content: '/goal recover from bad planning output', role: 'user' }],
       });

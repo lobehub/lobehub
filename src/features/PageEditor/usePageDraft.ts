@@ -1,6 +1,6 @@
 'use client';
 
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
 import { useEffect, useMemo, useRef } from 'react';
@@ -153,7 +153,7 @@ export const usePageDraft = (): void => {
       onOk: () => {
         try {
           if (draft.editorData && typeof draft.editorData === 'object') {
-            editor.setDocument('json', JSON.stringify(draft.editorData));
+            editor.setDocument('json', JSON.stringify(draft.editorData), { keepId: true });
           }
         } catch (error) {
           log('failed to restore draft for %s: %O', documentId, error);

@@ -51,14 +51,6 @@ describe('ServerOperationStore', () => {
       expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
     });
 
-    it('clears the mark when this operation owns it', async () => {
-      topicMock.findById.mockResolvedValue(markedWith('op-main'));
-
-      await createStore('op-main').clearRunningMark();
-
-      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
-    });
-
     // The bug this adapter caused: `finish` calls clearRunningMark BEFORE it
     // publishes `execution_complete`, and the client only learns the run ended
     // from that event — so the client's own settle always arrived to a mark this

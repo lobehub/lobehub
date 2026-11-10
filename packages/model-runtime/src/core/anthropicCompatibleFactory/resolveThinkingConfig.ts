@@ -32,10 +32,16 @@ export interface ResolvedClaudeThinkingConfig {
 export const resolveClaudeThinkingConfig = ({
   maxTokens,
   model,
+  requestModel,
   thinking,
 }: {
   maxTokens: number;
   model: string;
+  /**
+   * Provider model id actually sent upstream after channel `modelIdMapping`. A channel that
+   * redirects e.g. Sonnet 5 to Sonnet 5.5 sends an always-thinking model that rejects `disabled`.
+   */
+  requestModel?: string;
   thinking?: ChatStreamPayload['thinking'];
 }): ResolvedClaudeThinkingConfig | undefined => {
   // An explicit `display` from the caller always wins; the model default only fills the gap.
@@ -59,10 +65,13 @@ export const resolveClaudeThinkingConfig = ({
     }
 
     case 'disabled': {
-      // Fable 5 / Mythos 5 / Opus 5.5 reject `disabled` with a 400. Omitting the config is the
-      // documented fallback: they think regardless, and their `omitted` display default already
-      // keeps the reasoning text out of the response, which is what turning the switch off asks for.
-      if (isAlwaysThinkingClaudeModel(model)) return undefined;
+      // Fable 5 / Mythos 5 / Opus 5.5 / Sonnet 5.5 reject `disabled` with a 400. Omitting the
+      // config is the documented fallback: they think regardless, and their `omitted` display
+      // default already keeps the reasoning text out of the response, which is what turning the
+      // switch off asks for.
+      if ([model, requestModel].some((id) => !!id && isAlwaysThinkingClaudeModel(id))) {
+        return undefined;
+      }
 
       // `display` is invalid alongside `disabled` — there is nothing to display — so any caller
       // value is dropped here rather than forwarded.

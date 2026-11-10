@@ -54,6 +54,7 @@ export class ProjectWorkingDirectoryModel {
           eq(projects.id, id),
           buildWorkspaceWhere(this.scope(), projects),
           isNull(projects.deletedAt),
+          /* v8 ignore next -- unreachable: `project()` is private and its only caller (`list`) never passes `write` */
           write ? eq(projects.userId, this.userId) : undefined,
         ),
       );
@@ -116,6 +117,9 @@ export class ProjectWorkingDirectoryModel {
         platform: devices.platform,
         path: sql<string>`coalesce(${environmentInstances.workingDirectory}, ${projectWorkingDirectories.path})`,
         permission: projectWorkingDirectories.permission,
+        // Whether a run can start here: the same linked, enabled and writable
+        // binding `resolve` requires, so a UI start affordance can match it.
+        runnable: sql<boolean>`coalesce(${environments.id} is not null and ${environmentInstances.enabled} and ${environments.enabled} and ${projectEnvironments.enabled} and ${projectWorkingDirectories.permission} = 'readWrite', false)`,
       })
       .from(projectWorkingDirectories)
       .innerJoin(projects, eq(projects.id, projectWorkingDirectories.projectId))
@@ -212,14 +216,10 @@ export class ProjectWorkingDirectoryModel {
       .select()
       .from(topics)
       .where(and(eq(topics.id, topicId), buildWorkspaceWhere(this.scope(), topics)));
-    if (!topic?.projectWorkingDirectoryId) {
-      // The binding row is gone (directory deletion sets the FK null) but the
-      // topic still carries its project pin. Plain device-bound topics have no
-      // projectId and simply follow the normal device-resolution path.
-      if (topic?.projectId && topic?.metadata?.boundDeviceId)
-        throw new Error('Project directory binding no longer exists');
-      return;
-    }
+    // A project conversation without a directory (started outside one, or
+    // associated to the project alone) is device-bound like any other and
+    // follows the normal device-resolution path.
+    if (!topic?.projectWorkingDirectoryId) return;
     if (!topic.projectId) throw new Error('Project directory has no owning project');
     const directory = await this.resolve(topic.projectWorkingDirectoryId, topic.projectId);
     const source = getWorkingDirSourcePath(

@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo, type MouseEvent, type ReactNode } from 'react';
 
 import { useStableNavigate } from '@/hooks/useStableNavigate';

@@ -143,6 +143,13 @@ state hands control back and restores certainty. Retry re-runs the _same_ fetch 
 `mutate` / query refetch), shows loading again while it re-runs, and stays available if it
 fails again; keep any already-loaded context rather than blowing the surface away.
 
+When an upstream lifecycle event can settle an interaction, consume that event and
+close the obsolete form automatically. Reconcile missed events internally on reconnect
+or a bounded acknowledgement wait; do not require a “check runtime status” action.
+A submit/cancel racing completion should report that the operation ended and preserve
+its terminal state, rather than restore the obsolete form or invent a successful answer.
+Verify both completion before the click and completion while delivery is in flight.
+
 **But not every failure should offer Retry — gate it on whether a retry could plausibly
 succeed.** A `401` (auth expired / invalid) or `403` (no permission) wall will just fail
 again the same way, so a **Reload** button there is a false promise: it invites the user to
@@ -371,6 +378,13 @@ Stay reactive — the reminder clears the moment the user switches to a capable 
 unsupported state. Scope to the mode that needs it — one reminder per root cause — and
 state both the problem and the remedy.
 
+When several guardrails collapse behind one summary control, keep that control subordinate
+to the action surface. Semantic warning color may identify the icon or label, but it must not
+turn a toolbar affordance into a raised warning card through a strong outline, tinted depth,
+or decorative stacking shadow. The expanded rows still carry the complete warning treatment.
+For wrapped messages, align the status icon to the first line of copy rather than centering it
+against the whole text block; the icon identifies the message, not its bounding box.
+
 **Soft-inline is right only when the user can fix it _in context_.** The "never a hard block"
 rule above assumes a **model / config** capability — the user switches the model dropdown and
 the feature works, so blocking them would be gratuitous. A different class of gap is
@@ -397,6 +411,8 @@ with a path out. Both still owe the remedy.
 - [ ] No warning while config is still loading; only on resolved-unsupported. _(Certainty)_
 - [ ] Scoped to the dependent mode; one reminder per root cause. _(Natural・Certainty)_
 - [ ] Copy states the problem and the remedy. _(Meaningful)_
+- [ ] A collapsed guardrail summary stays visually subordinate to its action surface — semantic color can identify it, but no strong warning outline or decorative colored elevation turns it into a competing card. _(Natural・Certainty)_
+- [ ] In a wrapped guardrail row, the status icon aligns with the first line of copy, not the vertical center of the complete text block. _(Natural)_
 
 ## 4.4 Autosave needs a persistent save-state, and one convention per surface・Certainty・Meaningful
 
@@ -475,7 +491,7 @@ message) and never passes an i18n file. Three smells mark a message that escaped
 - **Internal ids in the headline** — a raw `tpc_…` / `msg_…` / uuid, a `#N` sequence, an
   operation id. The id is for a **log or an inspect link**, never the sentence the user reads;
   it belongs on a **structured field** (`topicId`, `taskId`) that powers a "View run" affordance,
-  not baked into the title. A human reading "topic #1 (tpc\_5UBuAjUU4z6B)" learns nothing and
+  not baked into the title. A human reading "topic #1 (tpc_5UBuAjUU4z6B)" learns nothing and
   distrusts the whole card.
 - **Log / stack framing** — `Execution failed: …`, `Error: …`, `[TaskLifecycle]`, a
   prefixed severity. Framing that reads like a console line signals "this wasn't meant for
@@ -495,7 +511,7 @@ of the smells above, and localize the _cause_ too where it maps to a known error
 > `topicId` field that lights up "View run" (`InboxBriefCard.tsx`,
 > `taskLifecycle/index.ts` error brief). ❌ Its prior form baked the lot into the stored
 > string — title `` `${taskIdentifier} topic #${seq} (${topicId}) error` `` → **"T-1 topic #1
-> (tpc\_5UBuAjUU4z6B) error"**, summary `` `Execution failed: ${raw}` `` — internal id in the
+> (tpc_5UBuAjUU4z6B) error"**, summary `` `Execution failed: ${raw}` `` — internal id in the
 > headline, log framing, task ref duplicated from the meta row, and English-only for every
 > locale.
 

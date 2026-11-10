@@ -17,6 +17,7 @@ const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);
 const dbMessages = (s: State) => s.dbMessages;
 const messagesInit = (s: State) => s.messagesInit;
 const skipFetch = (s: State) => s.skipFetch;
+const hasLaterMessages = (s: State) => s.hasLaterMessages;
 
 const getDisplayMessageById = (id: string) => (s: State) => {
   // First, try to find in top-level displayMessages
@@ -76,7 +77,7 @@ const findLastBlockId = (block: AssistantContentBlock | undefined): string | und
  * Recursively finds the last message ID in a message tree
  * Priority: children > tools > self
  */
-const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
+export const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
   if (!node) return undefined;
 
   // Priority 1: Dive into children recursively
@@ -163,6 +164,8 @@ const pendingInterventions = (s: State) => getPendingInterventions(s.displayMess
 const workSummariesByRootOperationId = (rootOperationId?: string | null) => (s: State) =>
   getWorkSummariesByRootOperationId(s.dbMessages, rootOperationId);
 
+const isRefreshingAt = (id: string) => (s: State) => s.refreshingRowId === id;
+
 const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
 
 const rowMemberIds = (id: string) => (s: State) =>
@@ -170,6 +173,23 @@ const rowMemberIds = (id: string) => (s: State) =>
 
 const hostRowOf = (id: string) => (s: State) =>
   collectSteerChains(s.displayMessages).hostOf.get(id) ?? id;
+
+/**
+ * The last message of the row that contains `id`.
+ *
+ * A row's id is its host — the *first* turn of the row. Steered continuations
+ * (see `collectSteerChains`) render inside that same row, so the row's id and
+ * the message the user is actually looking at are two different things. Any
+ * action that must act on what the user sees has to resolve to the row tail;
+ * otherwise it silently acts on the chain head. A plain (non-chained) row
+ * resolves to itself, so this is a no-op there.
+ */
+const rowTailId = (id: string) => (s: State) => {
+  const { byHost, hostOf } = collectSteerChains(s.displayMessages);
+  const hostId = hostOf.get(id) ?? id;
+
+  return byHost.get(hostId)?.continuations.at(-1)?.groupId ?? hostId;
+};
 
 const collectDeletableMessageIds = (message: UIChatMessage | undefined): string[] => {
   if (!message) return [];
@@ -211,6 +231,16 @@ const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock 
   usage: message.usage,
 });
 
+const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
+  const tailId = rowMemberIds(id)(s).at(-1) ?? id;
+  const tail = getDisplayMessageById(tailId)(s);
+
+  if (tail?.role !== 'assistant') return getGroupLatestMessageWithoutTools(tailId)(s);
+  if (tail.tools?.length || !tail.content) return;
+
+  return toAssistantContentBlock(tail);
+};
+
 /**
  * Walk displayMessages (including compressed groups and agentCouncil members)
  * to find an assistant content block by its id. Used to let tool subtrees
@@ -227,16 +257,6 @@ const findBlockById = (
     }
     if (message.children) {
       const block = message.children.find((child) => child.id === blockId);
-      if (block) return block;
-    }
-    // Post-task summary blocks live in a separate field on virtual
-    // assistantGroup messages so they render AFTER `<SignalCallbacks>`
-    // (). Same lookup contract as `children` — the renderer
-    // identifies blocks by id regardless of which slot they came from.
-    if ((message as { taskCompletions?: AssistantContentBlock[] }).taskCompletions) {
-      const block = (
-        message as { taskCompletions?: AssistantContentBlock[] }
-      ).taskCompletions!.find((child) => child.id === blockId);
       if (block) return block;
     }
     if (message.compressedMessages) {
@@ -269,6 +289,15 @@ const getBlockContent =
   (blockId: string) =>
   (s: State): string | undefined =>
     findBlockById(blockId, s.displayMessages)?.content;
+
+/**
+ * Block metadata from the same recursive lookup as {@link getBlockContent}, so blocks nested in
+ * compressed groups or council members resolve too (`getDbMessageById` only sees top-level rows).
+ */
+const getBlockMetadata =
+  (blockId: string) =>
+  (s: State): AssistantContentBlock['metadata'] =>
+    findBlockById(blockId, s.displayMessages)?.metadata;
 
 const getBlockHasTools =
   (blockId: string) =>
@@ -305,6 +334,8 @@ const getVerifyOrdinal = (id: string) => (s: State) => {
 };
 
 export const dataSelectors = {
+  hasLaterMessages,
+  isRefreshingAt,
   currentTopicSummary,
   dbMessages,
   deletableRowMessageIds,
@@ -315,9 +346,11 @@ export const dataSelectors = {
   getDbMessageById,
   getDbMessageByToolCallId,
   getBlockContent,
+  getBlockMetadata,
   getBlockHasTools,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  getRowLatestMessageWithoutTools,
   getToolInBlock,
   getToolMessageCreatedAt,
   getToolsInBlock,
@@ -327,6 +360,7 @@ export const dataSelectors = {
   messagesInit,
   pendingInterventions,
   rowMemberIds,
+  rowTailId,
   skipFetch,
   taskCallbackTaskIds,
   workSummariesByRootOperationId,

@@ -1,17 +1,13 @@
-import { Discord, Slack, Telegram, WeChat } from '@lobehub/ui/icons';
+import { Discord, IMessage, Slack, Telegram, WeChat } from '@lobehub/ui/icons';
 import type { ReactNode } from 'react';
 
-export type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat';
+import type { MessengerPlatform } from './platforms';
 
-export const SUPPORTED_MESSENGER_PLATFORMS = [
-  { id: 'telegram', name: 'Telegram' },
-  { id: 'slack', name: 'Slack' },
-  { id: 'discord', name: 'Discord' },
-  { id: 'wechat', name: 'WeChat' },
-] as const satisfies readonly { id: MessengerPlatform; name: string }[];
+export { type MessengerPlatform, SUPPORTED_MESSENGER_PLATFORMS } from './platforms';
 
 export const PLATFORM_TAB_ICONS: Record<MessengerPlatform, ReactNode> = {
   discord: <Discord.Color size={16} />,
+  linq: <IMessage.Color size={16} />,
   slack: <Slack.Color size={16} />,
   telegram: <Telegram.Color size={16} />,
   wechat: <WeChat.Color size={16} />,
@@ -27,6 +23,7 @@ export const PlatformAvatar = ({
   if (platform === 'telegram') return <Telegram.Avatar size={size} />;
   if (platform === 'discord') return <Discord.Avatar size={size} />;
   if (platform === 'wechat') return <WeChat.Avatar size={size} />;
+  if (platform === 'linq') return <IMessage.Avatar size={size} />;
   return <Slack.Avatar size={size} />;
 };
 
@@ -40,6 +37,7 @@ export const PlatformBrandIcon = ({
   if (platform === 'telegram') return <Telegram.Color size={size} />;
   if (platform === 'discord') return <Discord.Color size={size} />;
   if (platform === 'wechat') return <WeChat.Color size={size} />;
+  if (platform === 'linq') return <IMessage.Color size={size} />;
   return <Slack.Color size={size} />;
 };
 

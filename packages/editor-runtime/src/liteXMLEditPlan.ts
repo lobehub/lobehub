@@ -33,12 +33,15 @@ export interface LiteXMLDocumentIndex {
   ids: Set<string>;
   /** Ids of list containers, list items and every node nested inside them. */
   listIds: Set<string>;
+  /** Tag name of every node with an id. */
+  tags: Map<string, string>;
 }
 
 export const indexLiteXMLDocument = (litexml: string): LiteXMLDocumentIndex => {
   const ancestorIds = new Map<string, string[]>();
   const ids = new Set<string>();
   const listIds = new Set<string>();
+  const tags = new Map<string, string>();
   const stack: { id?: string; inList: boolean }[] = [];
 
   for (const [, closing, tag, attributes = ''] of litexml.matchAll(LITEXML_TAG_PATTERN)) {
@@ -51,6 +54,7 @@ export const indexLiteXMLDocument = (litexml: string): LiteXMLDocumentIndex => {
     const id = attributes.match(LITEXML_ID_ATTRIBUTE)?.[1];
     if (id) {
       ids.add(id);
+      tags.set(id, tag.toLowerCase());
       if (inList) listIds.add(id);
       const ancestors: string[] = [];
       for (let depth = stack.length - 1; depth >= 0; depth -= 1) {
@@ -62,8 +66,56 @@ export const indexLiteXMLDocument = (litexml: string): LiteXMLDocumentIndex => {
     if (!attributes.endsWith('/')) stack.push({ id, inList });
   }
 
-  return { ancestorIds, ids, listIds };
+  return { ancestorIds, ids, listIds, tags };
 };
+
+/** Tag name and id of each top-level node of a fragment. */
+const getTopLevelLiteXMLNodes = (litexml: string): { id?: string; tag: string }[] => {
+  const nodes: { id?: string; tag: string }[] = [];
+  let depth = 0;
+
+  for (const [, closing, tag, attributes = ''] of normalizeLiteXMLFragment(litexml).matchAll(
+    LITEXML_TAG_PATTERN,
+  )) {
+    if (closing) {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 1 && tag !== 'root') {
+      nodes.push({ id: attributes.match(LITEXML_ID_ATTRIBUTE)?.[1], tag: tag.toLowerCase() });
+    }
+    if (!attributes.endsWith('/')) depth += 1;
+  }
+
+  return nodes;
+};
+
+/** The first closing tag that does not match the open element, if any. */
+const findUnbalancedTag = (litexml: string): string | undefined => {
+  const stack: string[] = [];
+
+  for (const [, closing, tag, attributes = ''] of normalizeLiteXMLFragment(litexml).matchAll(
+    LITEXML_TAG_PATTERN,
+  )) {
+    const name = tag.toLowerCase();
+    if (!closing) {
+      if (!attributes.endsWith('/')) stack.push(name);
+      continue;
+    }
+    const open = stack.pop();
+    if (open !== name) {
+      return open ? `<${open}> is closed by </${name}>` : `</${name}> has no matching opening tag`;
+    }
+  }
+
+  return stack.length > 0 ? `<${stack.at(-1)}> is never closed` : undefined;
+};
+
+/**
+ * Nodes the editor can only replace with a node of the same kind: an inline span
+ * cannot stand in for a list item or a table cell, and vice versa.
+ */
+const SAME_TAG_ONLY = new Set(['li', 'span', 'td', 'th', 'tr']);
 
 /** Ids carried by the top-level nodes of a `modify` payload — the nodes it replaces. */
 const getTopLevelLiteXMLIds = (litexml: string): (string | undefined)[] => {
@@ -124,6 +176,37 @@ export const touchesList = (operation: ModifyOperation, document: LiteXMLDocumen
   if (operation.action === 'remove') return false;
 
   return toFragments(operation.litexml).some((litexml) => LIST_MARKUP_PATTERN.test(litexml));
+};
+
+const TABLE_MARKUP_PATTERN = /<(?:table|tr|td|th)[\s/>]/i;
+
+/**
+ * Whether the server may apply `operation` as a pending review diff
+ * (`delay: true`) and still keep every node id it exposed addressable.
+ *
+ * @lobehub/editor only keeps ids stable for review diffs around whole top-level
+ * blocks. Anything nested breaks the ids the agent was given:
+ * - replacing or removing an inline node clones its enclosing block into the
+ *   diff, so the block and every sibling come back with fresh ids;
+ * - table edits wrap rows in `table-row-diff` nodes, and the editor rejects any
+ *   later edit inside them as a nested diff — the rows read fine but cannot be
+ *   modified or removed;
+ * - lists have the problems described on {@link touchesList}.
+ * Such edits are applied directly instead.
+ */
+export const canApplyAsReviewDiff = (
+  operation: ModifyOperation,
+  document: LiteXMLDocumentIndex,
+) => {
+  if (touchesList(operation, document)) return false;
+
+  const nested = getReferencedIds(operation).some(
+    (id) => id === undefined || (document.ancestorIds.get(id)?.length ?? 0) > 0,
+  );
+  if (nested) return false;
+  if (operation.action === 'remove') return true;
+
+  return !toFragments(operation.litexml).some((litexml) => TABLE_MARKUP_PATTERN.test(litexml));
 };
 
 export interface LiteXMLEditStep {
@@ -290,6 +373,17 @@ export const findLiteXMLEditStepProblem = (
   operation: ModifyOperation,
   document: LiteXMLDocumentIndex,
 ): string | undefined => {
+  if (!['insert', 'modify', 'remove'].includes(operation.action)) {
+    return '`action` must be "insert", "modify" or "remove"';
+  }
+
+  if (operation.action !== 'remove') {
+    for (const litexml of toFragments(operation.litexml)) {
+      const unbalanced = findUnbalancedTag(litexml);
+      if (unbalanced) return `the litexml is not well-formed (${unbalanced})`;
+    }
+  }
+
   const referencedIds = getReferencedIds(operation);
 
   if (referencedIds.includes(undefined)) {
@@ -299,6 +393,15 @@ export const findLiteXMLEditStepProblem = (
   const missingIds = (referencedIds as string[]).filter((id) => !document.ids.has(id));
   if (missingIds.length > 0) {
     return `node ${missingIds.map((id) => `"${id}"`).join(', ')} not found in the document`;
+  }
+
+  if (operation.action === 'modify') {
+    for (const { id, tag } of toFragments(operation.litexml).flatMap(getTopLevelLiteXMLNodes)) {
+      const target = id && document.tags.get(id);
+      if (target && target !== tag && (SAME_TAG_ONLY.has(target) || SAME_TAG_ONLY.has(tag))) {
+        return `node "${id}" is a <${target}>, but the modify payload replaces it with a <${tag}>; send a <${target} id="${id}"> fragment`;
+      }
+    }
   }
 
   const overlap = findOverlappingModifyTargets(operation, document);

@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { topics, works, workspaces } from '../../../schemas';
+import { documents, files, topics, works, workspaces } from '../../../schemas';
 import { AgentDocumentModel } from '../../agentDocuments';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -281,7 +281,7 @@ describe('WorkModel · listByWorkspace', () => {
     expect(publicOnly.items.map((item) => item.id)).toEqual([publicWork!.id]);
   });
 
-  it('flags an orphaned task work whose task was deleted without the tool', async () => {
+  it('hides an orphaned task work whose task was deleted without the tool', async () => {
     const taskModel = new TaskModel(serverDB, userId);
     const workModel = new WorkModel(serverDB, userId);
     const task = await taskModel.create({ instruction: 'Orphan', name: 'Orphan task' });
@@ -296,14 +296,121 @@ describe('WorkModel · listByWorkspace', () => {
       topicId,
     });
 
-    // UI/CLI delete (no tool dispatch) leaves the Work orphaned; the LEFT JOIN
-    // miss must render as `resourceDeleted` from the version snapshot, not drop it.
+    // UI/CLI delete (no tool dispatch) leaves the Work row orphaned; the
+    // gallery drops it instead of rendering a dead card.
     await taskModel.delete(task.id);
 
     const { items } = await workModel.listByWorkspace({});
+    expect(items).toHaveLength(0);
+    expect(await serverDB.select().from(works)).toHaveLength(1);
+  });
+});
+
+describe('WorkModel · listByWorkspace orphan filtering', () => {
+  const registerDocumentWork = async (workModel: WorkModel) => {
+    const doc = await new AgentDocumentModel(serverDB, userId).create(
+      agentId,
+      'orphan.md',
+      'Orphan body',
+      { title: 'Orphan doc' },
+    );
+    await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      changeType: 'created',
+      documentId: doc.documentId,
+      rootOperationId: 'op-orphan-doc',
+      toolCallId: 'tool-call-orphan-doc',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+      topicId,
+    });
+    return doc.documentId;
+  };
+
+  const registerFileWork = (workModel: WorkModel, fileId?: string) =>
+    workModel.registerFile({
+      agentId,
+      filePath: '/mnt/data/deck.pptx',
+      metadata: { filePath: '/mnt/data/deck.pptx', ...(fileId ? { fileId } : {}) },
+      rootOperationId: 'op-orphan-file',
+      title: 'deck.pptx',
+      toolCallId: 'op:op-orphan-file',
+      toolIdentifier: 'lobe-cloud-sandbox',
+      toolName: 'writeFile',
+      topicId,
+      userId,
+    });
+
+  const insertFile = (id: string) =>
+    serverDB.insert(files).values({
+      fileType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      id,
+      name: 'deck.pptx',
+      size: 2048,
+      url: `files/${id}.pptx`,
+      userId,
+    });
+
+  it('hides a document work whose document was hard-deleted', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const documentId = await registerDocumentWork(workModel);
+    expect((await workModel.listByWorkspace({})).items).toHaveLength(1);
+
+    await serverDB.delete(documents).where(eq(documents.id, documentId));
+
+    expect((await workModel.listByWorkspace({})).items).toHaveLength(0);
+    // Hidden, not deleted: the Work row and its history survive.
+    expect(await serverDB.select().from(works)).toHaveLength(1);
+  });
+
+  it('hides a document work while its document is in the recycle bin and restores it after', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const documentId = await registerDocumentWork(workModel);
+
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(documents.id, documentId));
+    expect((await workModel.listByWorkspace({})).items).toHaveLength(0);
+
+    await serverDB
+      .update(documents)
+      .set({ deletedAt: null, isDeleted: null })
+      .where(eq(documents.id, documentId));
+    expect((await workModel.listByWorkspace({})).items).toHaveLength(1);
+  });
+
+  it('keeps a file work whose persisted file is live', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    await insertFile('work-test-live-file');
+    await registerFileWork(workModel, 'work-test-live-file');
+
+    const { items } = await workModel.listByWorkspace({ includeFileWorks: true });
     expect(items).toHaveLength(1);
-    const summary = expectTaskSummaryItem(items[0]);
-    expect(summary.task.name).toBe('Orphan task');
-    expect(summary.resourceDeleted).toBe(true);
+    expect(items[0]).toMatchObject({ title: 'deck.pptx', type: 'file' });
+  });
+
+  it('hides a file work whose persisted file was deleted or trashed', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    await insertFile('work-test-gone-file');
+    await registerFileWork(workModel, 'work-test-gone-file');
+
+    await serverDB
+      .update(files)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(files.id, 'work-test-gone-file'));
+    expect((await workModel.listByWorkspace({ includeFileWorks: true })).items).toHaveLength(0);
+
+    await serverDB.delete(files).where(eq(files.id, 'work-test-gone-file'));
+    expect((await workModel.listByWorkspace({ includeFileWorks: true })).items).toHaveLength(0);
+    expect(await serverDB.select().from(works)).toHaveLength(1);
+  });
+
+  it('keeps a file work that was never uploaded (no fileId to check)', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    await registerFileWork(workModel);
+
+    expect((await workModel.listByWorkspace({ includeFileWorks: true })).items).toHaveLength(1);
   });
 });

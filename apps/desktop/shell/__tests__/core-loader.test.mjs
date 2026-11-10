@@ -14,6 +14,9 @@ const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs8' });
 
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
+const unsignedOf = (manifest) =>
+  Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== 'signature'));
+
 const signManifest = (manifest) => ({
   ...manifest,
   signature: sign(null, Buffer.from(canonicalJson(manifest)), privateKeyPem).toString('base64'),
@@ -31,7 +34,7 @@ const writeJson = (file, value) => {
   fs.writeFileSync(file, JSON.stringify(value));
 };
 
-const writeCore = (dir, version, { shellAbi = ABI, seq, channel, mutate } = {}) => {
+const writeCore = (dir, version, { shellAbi = ABI, seq, channel, schemaVersion, mutate } = {}) => {
   const files = {
     'cli/lobe-cli.js': 'cli',
     'dist/main/index.js': `module.exports = ${JSON.stringify(version)};`,
@@ -50,6 +53,7 @@ const writeCore = (dir, version, { shellAbi = ABI, seq, channel, mutate } = {}) 
     tree,
     version,
     ...(seq === undefined ? {} : { seq }),
+    ...(schemaVersion === undefined ? {} : { schemaVersion }),
     ...(channel === undefined ? {} : { channel }),
   });
   mutate?.(dir, manifest);
@@ -61,7 +65,8 @@ const writePointer = (pointer) => writeJson(pointerFile(), { abi: ABI, ...pointe
 const writeExternal = (version, opts) =>
   writeCore(path.join(otaRoot(), 'cores', version), version, opts);
 
-const resolve = () => resolveCore({ abi: ABI, builtinDir, publicKey: publicKeyPem, userData });
+const resolve = () =>
+  resolveCore({ abi: ABI, builtinDir, platform: 'linux', publicKey: publicKeyPem, userData });
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'core-loader-'));
@@ -76,6 +81,46 @@ afterEach(() => {
 });
 
 describe('resolveCore', () => {
+  it('drops an older shell namespace after a full update even when its OTA seq is higher', () => {
+    writeCore(builtinDir, '1.0.2-canary.1', { channel: 'canary', seq: 0, schemaVersion: 4 });
+    writeExternal('1.0.1-canary.1-core.101', { channel: 'canary', seq: 101, schemaVersion: 4 });
+    writePointer({ channel: 'canary', current: '1.0.1-canary.1-core.101' });
+    const core = resolve();
+    expect(core.source).toBe('builtin');
+    expect(core.log.join(' ')).toContain('does not belong to 1.0.2-canary.1');
+  });
+
+  it('ignores staged and current OTA cores on macOS Stable even with a Canary pointer', () => {
+    writeCore(builtinDir, '1.0.0', { channel: 'stable', seq: 0 });
+    writeExternal('1.0.1-core.1', { channel: 'canary', seq: 1 });
+    writePointer({ channel: 'canary', current: '1.0.1-core.1', staged: '1.0.1-core.1' });
+    writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: 'stable' });
+    const core = resolveCore({
+      abi: ABI,
+      builtinDir,
+      platform: 'darwin',
+      publicKey: publicKeyPem,
+      userData,
+    });
+    expect(core.source).toBe('builtin');
+    expect(readPointer()).toMatchObject({ channel: 'stable', current: null, staged: null });
+  });
+
+  it('loads OTA when a macOS Stable build has opted into Canary', () => {
+    writeCore(builtinDir, '1.0.0', { channel: 'stable', seq: 0 });
+    writeExternal('1.0.1-core.1', { channel: 'canary', seq: 1 });
+    writePointer({ channel: 'canary', current: '1.0.1-core.1' });
+    writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: 'canary' });
+    const core = resolveCore({
+      abi: ABI,
+      builtinDir,
+      platform: 'darwin',
+      publicKey: publicKeyPem,
+      userData,
+    });
+    expect(core.source).toBe('external');
+  });
+
   it('falls back to builtin when there is no pointer', () => {
     const core = resolve();
     expect(core.source).toBe('builtin');
@@ -117,38 +162,99 @@ describe('resolveCore', () => {
     expect(core.log.join('\n')).toMatch(/signature/);
   });
 
-  it('rejects a core whose main file hash mismatches', () => {
+  it('rejects a core whose main file size mismatches', () => {
     writeExternal('1.1.0', {
       mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/main/index.js'), 'tampered'),
     });
     writePointer({ current: '1.1.0' });
     const core = resolve();
     expect(core.source).toBe('builtin');
-    expect(core.log.join('\n')).toMatch(/dist\/main\/index\.js/);
-  });
-
-  it('rejects a core whose renderer file hash mismatches', () => {
-    writeExternal('1.1.0', {
-      mutate: (dir) => fs.writeFileSync(path.join(dir, 'dist/renderer/index.html'), 'changed'),
-    });
-    writePointer({ current: '1.1.0' });
-    const core = resolve();
-    expect(core.source).toBe('builtin');
-    expect(core.log.join('\n')).toContain('hash mismatch dist/renderer/index.html');
+    expect(core.log.join('\n')).toContain('size mismatch dist/main/index.js');
   });
 
   it.each(['node_modules/electron-log/main.js', 'cli/lobe-cli.js', 'package.json'])(
-    'rejects a core whose %s hash mismatches',
+    'rejects a core whose %s size mismatches',
     (file) => {
       writeExternal('1.1.0', {
-        mutate: (dir) => fs.writeFileSync(path.join(dir, file), 'tampered'),
+        mutate: (dir) => fs.writeFileSync(path.join(dir, file), 'tampered content'),
       });
       writePointer({ current: '1.1.0' });
       const core = resolve();
       expect(core.source).toBe('builtin');
-      expect(core.log.join('\n')).toContain(`hash mismatch ${file}`);
+      expect(core.log.join('\n')).toContain(`size mismatch ${file}`);
     },
   );
+
+  it('rejects a core with a missing tree file', () => {
+    writeExternal('1.1.0', {
+      mutate: (dir) => fs.rmSync(path.join(dir, 'cli/lobe-cli.js')),
+    });
+    writePointer({ current: '1.1.0' });
+    const core = resolve();
+    expect(core.source).toBe('builtin');
+    expect(core.log.join('\n')).toContain('missing cli/lobe-cli.js');
+  });
+
+  it('accepts same-size local edits because content is hashed only while staging', () => {
+    writeExternal('1.1.0', {
+      mutate: (dir) => fs.writeFileSync(path.join(dir, 'package.json'), '{"type":"commonjz"}'),
+    });
+    writePointer({ current: '1.1.0' });
+    const core = resolve();
+    expect(core.source).toBe('external');
+    expect(core.manifest.version).toBe('1.1.0');
+  });
+
+  describe('renderer overlay', () => {
+    const storeObject = (content) => {
+      const file = path.join(otaRoot(), 'store', sha256(content));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+      return file;
+    };
+    const overlayExternal = (renderer) =>
+      writeExternal('1.1.0', {
+        mutate: (dir, manifest) => {
+          fs.rmSync(path.join(dir, 'dist/renderer'), { force: true, recursive: true });
+          if (renderer === undefined) return;
+          const entry = manifest.tree.find((file) => file.path === 'dist/renderer/index.html');
+          Object.assign(entry, { sha256: sha256(renderer), size: renderer.length });
+          Object.assign(manifest, signManifest(unsignedOf(manifest)));
+        },
+      });
+
+    it('accepts renderer content served from the builtin core', () => {
+      overlayExternal();
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('external');
+      expect(core.manifest.version).toBe('1.1.0');
+    });
+
+    it('accepts changed renderer content served from the object store', () => {
+      overlayExternal('<html>new</html>');
+      storeObject('<html>new</html>');
+      writePointer({ current: '1.1.0' });
+      expect(resolve().source).toBe('external');
+    });
+
+    it('rejects changed renderer content missing from the object store', () => {
+      overlayExternal('<html>new</html>');
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('builtin');
+      expect(core.log.join('\n')).toContain('missing dist/renderer/index.html');
+    });
+
+    it('rejects a truncated object in the store', () => {
+      overlayExternal('<html>new</html>');
+      fs.truncateSync(storeObject('<html>new</html>'), 3);
+      writePointer({ current: '1.1.0' });
+      const core = resolve();
+      expect(core.source).toBe('builtin');
+      expect(core.log.join('\n')).toContain('size mismatch dist/renderer/index.html');
+    });
+  });
 
   it.each(['../x', 'dist/main/../x', './x', '/x', 'dist\\main\\x'])(
     'rejects a signed manifest whose tree contains %s',
@@ -419,4 +525,28 @@ describe('resolveCore', () => {
     expect(core.source).toBe('builtin');
     expect(core.log.join('\n')).toMatch(/9\.9\.9/);
   });
+});
+
+it('does not count time spent in the first-launch update gate as failed Core boots', () => {
+  for (let i = 0; i < 5; i++) {
+    const core = resolveCore({
+      abi: ABI,
+      builtinDir,
+      publicKey: publicKeyPem,
+      userData,
+      deferBoot: true,
+    });
+    expect(core.source).toBe('builtin');
+  }
+  const core = resolveCore({
+    abi: ABI,
+    builtinDir,
+    publicKey: publicKeyPem,
+    userData,
+    deferBoot: true,
+  });
+  core.startBoot();
+  expect(readBoot().failures).toBe(1);
+  core.markHealthy();
+  expect(readBoot()).toMatchObject({ healthy: true, failures: 0 });
 });

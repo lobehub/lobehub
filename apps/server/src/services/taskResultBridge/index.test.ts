@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
@@ -209,6 +210,9 @@ describe('TaskResultBridgeService.deliver', () => {
       appContext: { topicId: 'topic-origin' },
       parentMessageId: 'task-cb-task-1-topic-done',
       suppressUserMessage: true,
+      // Its own trigger, not Agent Signal: the wakeup is billed and listed as task follow-up,
+      // and the Labs → Self-evolving switch that gates Agent Signal does not control it.
+      trigger: RequestTrigger.TaskCallback,
     });
     expect(releaseReservation).toHaveBeenCalledWith('topic-origin', 'task-result-wakeup-receipt-1');
   });

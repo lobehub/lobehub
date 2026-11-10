@@ -231,6 +231,7 @@ describe('shareRouter', () => {
       userViewCount: 42,
       visibility: 'link',
       workspaceId: null,
+      workspaceSlug: null,
     };
 
     beforeEach(() => {
@@ -329,6 +330,7 @@ describe('shareRouter', () => {
         demoCases: [],
         featuredWorks: [],
         isOwner: false,
+        ownerWorkspaceSlug: null,
         shareId: 'agent-share-1',
         slug: 'shared-agent',
         stats: { ...emptyDeliveryStats, conversations: 12, views: 42, visitors: 7 },
@@ -472,6 +474,28 @@ describe('shareRouter', () => {
 
         await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
       });
+    });
+
+    it('returns the Workspace slug to the owner only', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        workspaceId: 'workspace-1',
+        workspaceSlug: 'acme',
+      } as any);
+
+      const ownerCaller = shareRouter.createCaller(
+        await createContextInner({ userId: 'owner-user' }),
+      );
+      const visitorCaller = shareRouter.createCaller(
+        await createContextInner({ userId: 'visitor-user' }),
+      );
+
+      await expect(ownerCaller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject(
+        { ownerWorkspaceSlug: 'acme' },
+      );
+      await expect(
+        visitorCaller.getSharedAgent({ slugOrId: 'shared-agent' }),
+      ).resolves.toMatchObject({ ownerWorkspaceSlug: null });
     });
 
     it('does not count owner views', async () => {

@@ -33,16 +33,12 @@ const workflowSegment = (id: string): AssistantGroupWorkflowSegment => ({
   kind: 'workflow',
 });
 
-const group = (
-  children: AssistantContentBlock[],
-  taskCompletions?: AssistantContentBlock[],
-): UIChatMessage => ({
+const group = (children: AssistantContentBlock[]): UIChatMessage => ({
   children,
   content: '',
   createdAt: 0,
   id: 'assistant-group',
   role: 'assistantGroup',
-  taskCompletions,
   updatedAt: 0,
 });
 
@@ -341,15 +337,6 @@ describe('resolveAssistantGroupFinalContent', () => {
     ]);
 
     expect(resolveAssistantGroupFinalContent(message)).toBe(detailedAnswer);
-  });
-
-  it('prefers the last post-task summary over the main assistant chain', () => {
-    const message = group(
-      [block('main-answer', 'Initial answer')],
-      [block('summary-1', 'First task summary'), block('summary-2', 'Final task summary')],
-    );
-
-    expect(resolveAssistantGroupFinalContent(message)).toBe('Final task summary');
   });
 
   it('falls back to the latest authored status for a status-only group', () => {

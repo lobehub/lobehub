@@ -20,6 +20,7 @@ const createMessageTransport = (): MessageTransport => ({
   deleteMessage: vi.fn(),
   findById: vi.fn(),
   findToolMessageIdByToolCallId: vi.fn(),
+  getToolMessage: vi.fn(),
   query: vi.fn(),
   update: vi.fn().mockResolvedValue(undefined),
   updatePluginState: vi.fn(),
@@ -582,6 +583,45 @@ describe('callLlmFinalizer', () => {
     });
   });
 
+  it('records a client-executed attempt and its estimated usage on the message', async () => {
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'llama3',
+      output: createOutput({
+        executionSite: 'client',
+        usage: { totalInputTokens: 9, totalOutputTokens: 3, totalTokens: 12 },
+        usageEstimated: true,
+      }),
+      provider: 'ollama',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({ executionSite: 'client', usageEstimated: true }),
+      }),
+    );
+
+    await persistInterruptedCallLlmResult({
+      assistantMessageId: 'assistant-2',
+      host: createHost(messages),
+      output: createOutput({ content: 'Partial', executionSite: 'client' }),
+    });
+
+    expect(messages.update).toHaveBeenLastCalledWith(
+      'assistant-2',
+      expect.objectContaining({
+        metadata: { executionSite: 'client', interruptedMidStream: true },
+      }),
+    );
+  });
+
   it('persists partial interrupted output and skips empty interruptions', async () => {
     const messages = createMessageTransport();
     const host = createHost(messages);
@@ -636,6 +676,22 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.messages.at(-1)).toMatchObject({ id: 'assistant-1' });
     expect(consoleError).toHaveBeenCalledWith('[call_llm] Failed to update message:', error);
     consoleError.mockRestore();
+  });
+
+  it('counts provider attempts even when a successful response omits usage', async () => {
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      attempts: 2,
+      events: [],
+      host: createHost(),
+      model: 'gpt-4',
+      output: createOutput({ usage: undefined }),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.usage.llm.apiCalls).toBe(2);
   });
 
   it('does not publish early visible output end when the host disables it', async () => {

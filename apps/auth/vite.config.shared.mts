@@ -1,7 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { lobeStaticCssPlugin } from '@lobehub/ui/static-css/vite';
 import { reactRouter } from '@react-router/dev/vite';
 import { defineConfig, type Plugin, type PluginOption } from 'vite';
 
@@ -13,11 +12,8 @@ import {
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
+import { stylexPlugin, stylexTokenModules } from '../../plugins/vite/stylex';
 import { DEFAULT_PRERENDER_LOCALE } from './app/lib/prerender';
-
-interface StaticCssOptions {
-  hrefTemplate: (hash: string) => string;
-}
 
 export interface AuthRrConfigOptions {
   /** Directory holding `app/` — the submodule copy when a host repo overlays this app. */
@@ -30,15 +26,9 @@ export interface AuthRrConfigOptions {
    * hosts pass their own resolver plugin here instead.
    */
   resolvePlugins?: PluginOption[];
-  staticCss: { antd: StaticCssOptions; themeVars: StaticCssOptions };
 }
 
-export const createAuthRrConfig = ({
-  appRoot,
-  repoRoot,
-  resolvePlugins,
-  staticCss,
-}: AuthRrConfigOptions) => {
+export const createAuthRrConfig = ({ appRoot, repoRoot, resolvePlugins }: AuthRrConfigOptions) => {
   const prerenderLocale = JSON.stringify(
     process.env.AUTH_PRERENDER_LOCALE || DEFAULT_PRERENDER_LOCALE,
   );
@@ -147,41 +137,6 @@ export const createAuthRrConfig = ({
     },
   });
 
-  const staticCssDevServe = (): Plugin => {
-    const cache = new Map<string, string>();
-    const serve = async (kind: 'antd' | 'themeVars') => {
-      if (!cache.has(kind)) {
-        const { buildAntdStaticCss, buildThemeVarsCss } = await import('@lobehub/ui/static-css');
-        cache.set(
-          kind,
-          kind === 'antd'
-            ? buildAntdStaticCss(staticCss.antd).css
-            : buildThemeVarsCss(staticCss.themeVars).css,
-        );
-      }
-      return cache.get(kind)!;
-    };
-
-    return {
-      apply: 'serve',
-      configureServer(server) {
-        server.middlewares.use(async (req, res, next) => {
-          const url = req.url ?? '';
-          const kind = /^\/assets\/antd-[a-f0-9]+\.css/.test(url)
-            ? ('antd' as const)
-            : /^\/assets\/theme-vars-[a-f0-9]+\.css/.test(url)
-              ? ('themeVars' as const)
-              : undefined;
-          if (!kind) return next();
-          res.setHeader('Content-Type', 'text/css; charset=utf-8');
-          res.setHeader('Cache-Control', 'no-cache');
-          res.end(await serve(kind));
-        });
-      },
-      name: 'auth-static-css-dev-serve',
-    };
-  };
-
   const proxyTarget = process.env.AUTH_API_PROXY || 'https://app.lobehub.com';
   const backendProxy = Object.fromEntries(
     ['/api', '/oidc', '/trpc', '/webapi'].map((prefix) => [
@@ -200,8 +155,10 @@ export const createAuthRrConfig = ({
         // which rejects the extensionless directory imports some published `es/`
         // bundles still ship — bundle every dependency instead of externalizing.
         resolve: { noExternal: command === 'build' ? true : [] },
+        optimizeDeps: { exclude: [...stylexTokenModules] },
       },
     },
+    optimizeDeps: { exclude: [...stylexTokenModules] },
     plugins: [
       process.env.AUTH_TRACE_MODULE ? moduleTrace(process.env.AUTH_TRACE_MODULE) : undefined,
       authClientStubs(),
@@ -210,8 +167,8 @@ export const createAuthRrConfig = ({
       viteMarkdownImport(),
       viteNodeModuleStub(),
       vitePlatformResolve('web'),
-      lobeStaticCssPlugin({ antd: staticCss.antd, themeVars: staticCss.themeVars }),
-      staticCssDevServe(),
+      // Both environments render StyleX components; the client build emits the CSS.
+      stylexPlugin(),
       reactRouter(),
       ...lobeIconImports(),
       ...(resolvePlugins ?? []),

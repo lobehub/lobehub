@@ -1,4 +1,4 @@
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import type { ReactNode, RefObject } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 

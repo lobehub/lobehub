@@ -1,9 +1,9 @@
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { cx, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { ModelTag } from '@/components/LobeIcons';
 import PluginTag from '@/features/PluginTag';
@@ -40,6 +40,7 @@ const Preview = memo<PreviewProps>(
     widthMode,
   }) => {
     const [
+      activeAgentId,
       currentModel,
       currentPlugins,
       systemRole,
@@ -56,6 +57,7 @@ const Preview = memo<PreviewProps>(
         headerAgentId && s.agentMap[headerAgentId] ? headerAgentId : undefined;
 
       return [
+        s.activeAgentId,
         agentSelectors.currentAgentModel(s),
         agentSelectors.displayableAgentPlugins(s),
         agentSelectors.currentAgentSystemRole(s),
@@ -80,8 +82,9 @@ const Preview = memo<PreviewProps>(
 
     const displayTitle =
       (isHeaderInbox ?? isInbox)
-        ? 'Lobe AI'
+        ? DEFAULT_INBOX_TITLE
         : agentDisplayName(headerMeta) || title || currentTitle;
+    const resolvedAgentId = (headerMeta && headerAgentId) || activeAgentId;
     const displayAvatar = headerMeta?.avatar || currentAvatar;
     const displayBackgroundColor = headerMeta?.backgroundColor || currentBackgroundColor;
     const displayModel = headerModel || currentModel;
@@ -103,10 +106,11 @@ const Preview = memo<PreviewProps>(
           >
             <div className={styles.header}>
               <Flexbox horizontal align={'center'} gap={12}>
-                <Avatar
+                <AgentAvatar
+                  agentId={resolvedAgentId}
                   avatar={displayAvatar}
                   background={displayBackgroundColor}
-                  shape={'square'}
+                  name={displayTitle}
                   size={28}
                   title={displayTitle ?? undefined}
                 />

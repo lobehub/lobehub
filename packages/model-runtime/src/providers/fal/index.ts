@@ -1,4 +1,5 @@
-import { fal } from '@fal-ai/client';
+import { createFalClient, fal, type FalClient } from '@fal-ai/client';
+import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import { pick } from 'es-toolkit/compat';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
@@ -7,30 +8,34 @@ import type { ClientOptions } from 'openai';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateVideoPayload,
+  CreateVideoResult,
+  PollVideoStatusResult,
+  VideoGenerationCapabilities,
+} from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
+import { getFalInputSchema, listFalGenerationModels } from './catalog';
+import { createFalVideo, getFalTaskRoutedVideoEndpoints, pollFalVideoStatus } from './createVideo';
+import {
+  isFalResolutionTierEndpoint,
+  resolveFalEndpointId,
+  resolveFalImageEndpoint,
+} from './endpoint';
+import { coerceFalInput } from './schema';
 
 // Create debug logger
 const log = debug('lobe-image:fal');
 
-type FluxDevOutput = Awaited<ReturnType<typeof fal.subscribe<'fal-ai/flux/dev'>>>['data'];
+interface FalImageOutput {
+  image?: { height?: number; url: string; width?: number };
+  images?: { height?: number; url: string; width?: number }[];
+}
 
-/**
- * fal hosts models under several namespaces (e.g. `alibaba/qwen-image-3`); only bare
- * model ids without a known namespace get the default `fal-ai/` prefix.
- */
-const FAL_NAMESPACES = ['fal-ai/', 'alibaba/'];
-
-/**
- * Model families exposed as one card but served by separate fal endpoints: requests
- * with reference images go to `/edit`, others to `/text-to-image`.
- */
-const EDIT_OR_TEXT_TO_IMAGE_ENDPOINT_PREFIXES = [
-  'fal-ai/bytedance/seedream/v',
-  'fal-ai/hunyuan-image/v',
-  'alibaba/qwen-image-3',
-];
+/** fal endpoints that run faster with `acceleration: 'high'` at no quality cost */
+const ACCELERATED_BY_DEFAULT_ENDPOINTS = new Set(['fal-ai/flux/krea']);
 
 /**
  * Long edge of a square image for each `resolution` preset. fal bills some models
@@ -69,8 +74,58 @@ export const resolveFalImageSize = (
   return { height: roundDown(ratioHeight * scale), width: roundDown(ratioWidth * scale) };
 };
 
+/**
+ * fal endpoints served by the built-in cards: each card's id plus the task endpoints its one-card
+ * family routes to (e.g. `fal-ai/bytedance/seedream/v4/edit`). The catalog copies of these are
+ * duplicates without the curated parameters and pricing.
+ */
+const loadBuiltinFalEndpoints = async () => {
+  const { default: builtinModels } = await import('model-bank/fal');
+
+  return new Set(
+    builtinModels.flatMap(({ id }) => [
+      id,
+      resolveFalImageEndpoint(id, false),
+      resolveFalImageEndpoint(id, true),
+      ...getFalTaskRoutedVideoEndpoints(id),
+    ]),
+  );
+};
+
+// https://docs.fal.ai/model-apis/errors/
+const toFalRuntimeError = (error: unknown) => {
+  if (error instanceof Error && 'status' in error && error.status === 401) {
+    return AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey, { error });
+  }
+
+  // 422 ValidationError with content_policy_violation — show a clean message
+  if (error instanceof Error && 'status' in error && error.status === 422) {
+    const body = 'body' in error ? (error as any).body : undefined;
+    const hasContentPolicyViolation =
+      Array.isArray(body?.detail) &&
+      body.detail.some((d: any) => d.type === 'content_policy_violation');
+
+    if (hasContentPolicyViolation) {
+      return AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+        error,
+        message:
+          'The request content violates content policy. Please modify your prompt and try again.',
+      });
+    }
+  }
+
+  return AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, { error });
+};
+
 export class LobeFalAI implements LobeRuntimeAI {
   private readonly modelIdMappingOptions: ModelIdMappingOptions;
+  /**
+   * Video requests use a client scoped to this instance: the global `fal.config` is shared by
+   * every instance, so concurrent router channels with different keys would overwrite it between
+   * submitting a request and polling it.
+   */
+  private readonly client: FalClient;
+  private readonly apiKey: string;
 
   // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only uses the string form.
   constructor({
@@ -82,8 +137,32 @@ export class LobeFalAI implements LobeRuntimeAI {
     fal.config({
       credentials: apiKey,
     });
+    this.apiKey = apiKey;
+    this.client = createFalClient({ credentials: apiKey });
     this.modelIdMappingOptions = { modelIdMapping };
     log('FalAI initialized with apiKey: %s', apiKey ? '*****' : 'Not set');
+  }
+
+  getVideoGenerationCapabilities(): VideoGenerationCapabilities {
+    return { completionModes: ['polling'] };
+  }
+
+  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResult> {
+    const requestModel = resolveFalEndpointId(
+      resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+    );
+
+    try {
+      return await createFalVideo(this.client, requestModel, payload.params, (endpoint) =>
+        getFalInputSchema(this.apiKey, endpoint),
+      );
+    } catch (error) {
+      throw toFalRuntimeError(error);
+    }
+  }
+
+  async handlePollVideoStatus(inferenceId: string): Promise<PollVideoStatusResult> {
+    return pollFalVideoStatus(this.client, inferenceId);
   }
 
   async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
@@ -97,6 +176,7 @@ export class LobeFalAI implements LobeRuntimeAI {
       ['imageUrl', 'image_url'],
       ['imageUrls', 'image_urls'],
       ['size', 'image_size'],
+      ['aspectRatio', 'aspect_ratio'],
     ]);
 
     const defaultInput: Record<string, unknown> = {
@@ -113,13 +193,20 @@ export class LobeFalAI implements LobeRuntimeAI {
         .map(([key, value]) => [paramsMap.get(key) ?? key, value]),
     );
 
-    if (typeof userInput.resolution === 'string' && RESOLUTION_BASE_EDGE[userInput.resolution]) {
+    const hasImageUrls = (params.imageUrls?.length ?? 0) > 0;
+    const endpoint = resolveFalImageEndpoint(requestModel, hasImageUrls);
+
+    if (
+      isFalResolutionTierEndpoint(endpoint) &&
+      typeof userInput.resolution === 'string' &&
+      RESOLUTION_BASE_EDGE[userInput.resolution]
+    ) {
       const imageSize = resolveFalImageSize(
-        userInput.aspectRatio as string | undefined,
+        userInput.aspect_ratio as string | undefined,
         userInput.resolution,
       );
       if (imageSize) userInput.image_size = imageSize;
-      delete userInput.aspectRatio;
+      delete userInput.aspect_ratio;
       delete userInput.resolution;
     }
 
@@ -136,62 +223,56 @@ export class LobeFalAI implements LobeRuntimeAI {
       }
     }
 
-    const modelsAcceleratedByDefault = new Set<string>(['flux/krea']);
-    if (modelsAcceleratedByDefault.has(requestModel)) {
+    if (ACCELERATED_BY_DEFAULT_ENDPOINTS.has(endpoint)) {
       defaultInput['acceleration'] = 'high';
     }
 
-    let endpoint = FAL_NAMESPACES.some((namespace) => requestModel.startsWith(namespace))
-      ? requestModel
-      : `fal-ai/${requestModel}`;
-    const hasImageUrls = (params.imageUrls?.length ?? 0) > 0;
-    if (EDIT_OR_TEXT_TO_IMAGE_ENDPOINT_PREFIXES.some((m) => endpoint.startsWith(m))) {
-      endpoint += hasImageUrls ? '/edit' : '/text-to-image';
-    } else if (endpoint === 'fal-ai/nano-banana' && hasImageUrls) {
-      endpoint += '/edit';
-    }
-
-    const finalInput = {
-      ...defaultInput,
-      ...userInput,
-    };
+    const builtinEndpoints = await loadBuiltinFalEndpoints();
+    const input = { ...defaultInput, ...userInput };
+    // Fetched endpoints only accept the fields their schema declares; built-in cards send the
+    // curated input as is
+    const finalInput = builtinEndpoints.has(endpoint)
+      ? input
+      : coerceFalInput(input, await getFalInputSchema(this.apiKey, endpoint));
 
     log('Calling fal.subscribe with endpoint: %s and input: %O', endpoint, finalInput);
     try {
       const { data } = await fal.subscribe(endpoint, {
         input: finalInput,
       });
-      const image = (data as FluxDevOutput).images[0];
+      const output = data as FalImageOutput;
+      const image = output.images?.[0] ?? output.image;
+      if (!image?.url) throw new Error(`fal returned no image for ${endpoint}`);
 
       return {
         imageUrl: image.url,
         ...pick(image, ['width', 'height']),
       };
     } catch (error) {
-      // https://docs.fal.ai/model-apis/errors/
-      if (error instanceof Error && 'status' in error && error.status === 401) {
-        throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey, {
-          error,
-        });
-      }
+      throw toFalRuntimeError(error);
+    }
+  }
 
-      // 422 ValidationError with content_policy_violation — show a clean message
-      if (error instanceof Error && 'status' in error && error.status === 422) {
-        const body = 'body' in error ? (error as any).body : undefined;
-        const hasContentPolicyViolation =
-          Array.isArray(body?.detail) &&
-          body.detail.some((d: any) => d.type === 'content_policy_violation');
+  /**
+   * List fal's image and video endpoints with parameters derived from their input schemas, so any
+   * endpoint (any owner, not only `fal-ai/`) can be enabled on the generation pages. Endpoints of
+   * built-in cards are skipped: they are already listed with curated parameters and pricing.
+   */
+  async models(): Promise<ChatModelCard[]> {
+    const builtinEndpoints = await loadBuiltinFalEndpoints();
 
-        if (hasContentPolicyViolation) {
-          throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
-            error,
-            message:
-              'The request content violates content policy. Please modify your prompt and try again.',
-          });
-        }
-      }
+    try {
+      const models = await listFalGenerationModels(this.apiKey);
 
-      throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, { error });
+      return models
+        .filter((model) => !builtinEndpoints.has(model.id))
+        .map(({ parameters, ...model }) => ({
+          ...model,
+          enabled: false,
+          parameters: parameters as ChatModelCard['parameters'],
+        }));
+    } catch (error) {
+      throw toFalRuntimeError(error);
     }
   }
 }

@@ -1,4 +1,6 @@
-import type { GenericItemType } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
+
+import { isTabClosable } from './tabClose';
 
 type TabContextMenuLabelKey =
   | 'tab.closeCurrentTab'
@@ -47,12 +49,12 @@ export const buildTabContextMenuItems = ({
   splitViewEnabled,
   t,
   totalCount,
-}: TabContextMenuParams): GenericItemType[] => {
+}: TabContextMenuParams): DropdownItem[] => {
   const closableLeft = Math.max(0, index - pinnedCount);
   const closableRight = Math.max(0, totalCount - Math.max(index + 1, pinnedCount));
   const closableOthers = totalCount - pinnedCount - (pinned ? 0 : 1);
 
-  return [
+  const tabEntries: DropdownItem[] = [
     {
       key: 'togglePin',
       label: pinned ? t('tab.unpin') : t('tab.pin'),
@@ -65,9 +67,16 @@ export const buildTabContextMenuItems = ({
           onClick: () => (inSplitView ? onCloseSplitView() : onOpenInSplitView(id)),
         }
       : null,
+  ];
+
+  // A lone tab has nothing to close (see tabClose), so the whole close group is left out
+  // rather than shown disabled.
+  if (!isTabClosable(totalCount)) return tabEntries;
+
+  return [
+    ...tabEntries,
     { type: 'divider' },
     {
-      disabled: totalCount === 1,
       key: 'closeCurrentTab',
       label: t('tab.closeCurrentTab'),
       onClick: () => onClose(id),

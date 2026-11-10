@@ -1,5 +1,12 @@
+import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ApiClientModule from '../../api/client';
+import { cliVersion } from '../../pkg';
+import type * as ServiceStatusModule from '../../service/status';
+import type { ConnectServiceStatus } from '../../service/status';
+import type * as SettingsModule from '../../settings';
+import type * as ProbesModule from '../probes';
 import { makeContext, runCheck } from '../testUtils';
 import { deviceChecks } from './device';
 
@@ -8,6 +15,7 @@ const state = vi.hoisted(() => ({
   daemonStatus: null as any,
   devices: [] as any[],
   localDeviceId: undefined as string | undefined,
+  services: [] as ConnectServiceStatus[],
 }));
 
 const removePid = vi.hoisted(() => vi.fn());
@@ -20,17 +28,20 @@ vi.mock('../../daemon/manager', () => ({
   removeStatus,
 }));
 
-vi.mock('../../service/connect', () => ({
-  readConnectServiceStatus: () => {
-    throw new Error('not systemd');
-  },
+vi.mock('../../service/status', async (importOriginal) => ({
+  ...(await importOriginal<typeof ServiceStatusModule>()),
+  readConnectServices: async () => ({ services: state.services, unavailableScopes: [] }),
 }));
 
 vi.mock('../../utils/device', () => ({ resolveLocalDeviceId: () => state.localDeviceId }));
 
-vi.mock('../probes', () => ({
+const credentialServer = vi.hoisted(() => ({ value: 'https://app.lobehub.com' }));
+
+vi.mock('../probes', async (importOriginal) => ({
+  // `probeDeviceGateway` stays real: the check must resolve like `lh connect`.
+  ...(await importOriginal<typeof ProbesModule>()),
   probeCredential: async () => ({
-    serverUrl: 'https://app.lobehub.com',
+    serverUrl: credentialServer.value,
     token: 't',
     tokenType: 'jwt',
     userId: 'u',
@@ -38,10 +49,114 @@ vi.mock('../probes', () => ({
   probeDevices: async () => state.devices,
 }));
 
+const getGlobalConfig = vi.hoisted(() => vi.fn());
+const createPublicLambdaClient = vi.hoisted(() =>
+  vi.fn(() => ({ config: { getGlobalConfig: { query: getGlobalConfig } } })),
+);
+vi.mock('../../api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiClientModule>()),
+  createPublicLambdaClient,
+}));
+
+const savedGateway = vi.hoisted(() => ({ value: undefined as string | undefined }));
+vi.mock('../../settings', async (importOriginal) => ({
+  ...(await importOriginal<typeof SettingsModule>()),
+  loadDeviceGatewayUrl: () => savedGateway.value,
+}));
+
+const gatewayClients = vi.hoisted(() => [] as any[]);
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeviceGatewayClientModule>()),
+  GatewayClient: vi.fn().mockImplementation(function (options: any) {
+    const listeners: Record<string, (...args: any[]) => void> = {};
+    const client = {
+      connect: vi.fn(async () => listeners.connected?.()),
+      disconnect: vi.fn(),
+      on: (event: string, listener: (...args: any[]) => void) => {
+        listeners[event] = listener;
+      },
+      options,
+    };
+    gatewayClients.push(client);
+    return client;
+  }),
+}));
+
+describe('device.gateway', () => {
+  const SELF_HOSTED = 'https://lobe.internal';
+
+  beforeEach(() => {
+    gatewayClients.length = 0;
+    credentialServer.value = SELF_HOSTED;
+    savedGateway.value = undefined;
+    getGlobalConfig.mockReset();
+    createPublicLambdaClient.mockClear();
+  });
+
+  it("handshakes with the gateway the credential's server advertises", async () => {
+    getGlobalConfig.mockResolvedValue({
+      serverConfig: { deviceGatewayUrl: 'https://gw.lobe.internal/edge/' },
+    });
+
+    const outcome = await runCheck(deviceChecks, 'device.gateway', makeContext());
+
+    expect(createPublicLambdaClient).toHaveBeenCalledWith(SELF_HOSTED);
+    expect(gatewayClients.map((client) => client.options.gatewayUrl)).toEqual([
+      'https://gw.lobe.internal/edge',
+    ]);
+    expect(outcome).toMatchObject({
+      detail: 'Authenticated to https://gw.lobe.internal/edge (advertised by the server).',
+      evidence: { gatewaySource: 'server', serverUrl: SELF_HOSTED },
+      status: 'ok',
+    });
+  });
+
+  it('handshakes with the address saved for that server ahead of its advertisement', async () => {
+    savedGateway.value = 'http://127.0.0.1:8788';
+    getGlobalConfig.mockResolvedValue({
+      serverConfig: { deviceGatewayUrl: 'https://gw.lobe.internal/edge/' },
+    });
+
+    const outcome = await runCheck(deviceChecks, 'device.gateway', makeContext());
+
+    expect(getGlobalConfig).not.toHaveBeenCalled();
+    expect(gatewayClients.map((client) => client.options.gatewayUrl)).toEqual([
+      'http://127.0.0.1:8788',
+    ]);
+    expect(outcome).toMatchObject({
+      detail: 'Authenticated to http://127.0.0.1:8788 (saved for this server).',
+      evidence: { gatewaySource: 'manual', serverUrl: SELF_HOSTED },
+      status: 'ok',
+    });
+  });
+
+  it('says how to configure a self-hosted server that advertises no gateway', async () => {
+    getGlobalConfig.mockResolvedValue({ serverConfig: {} });
+
+    const outcome = await runCheck(deviceChecks, 'device.gateway', makeContext());
+
+    expect(outcome.status).toBe('fail');
+    expect(outcome.detail).toContain('does not advertise a device gateway');
+    expect(outcome.fix).toContain('--gateway <url>');
+    expect(gatewayClients).toHaveLength(0);
+  });
+
+  it('fails a broken lookup instead of probing a default', async () => {
+    getGlobalConfig.mockRejectedValue(new Error('INTERNAL_SERVER_ERROR'));
+
+    const outcome = await runCheck(deviceChecks, 'device.gateway', makeContext());
+
+    expect(outcome.status).toBe('fail');
+    expect(outcome.detail).toContain('Could not read the device gateway address');
+    expect(gatewayClients).toHaveLength(0);
+  });
+});
+
 describe('device.daemon', () => {
   beforeEach(() => {
     state.daemonPid = null;
     state.daemonStatus = null;
+    state.services = [];
   });
 
   it('survives a platform without the connect service', async () => {
@@ -49,6 +164,34 @@ describe('device.daemon', () => {
 
     expect(outcome.status).toBe('warn');
     expect(outcome.detail).toContain('No connect daemon');
+  });
+
+  it('recognizes a connected system service without suggesting another daemon', async () => {
+    state.services = [
+      {
+        active: true,
+        enabled: true,
+        fragmentPath: '/etc/systemd/system/lobehub-connect.service',
+        mainPid: 42,
+        scope: 'system',
+        serviceName: 'lobehub-connect.service',
+        subState: 'running',
+        user: 'ubuntu',
+      },
+    ];
+    state.daemonStatus = {
+      cliVersion,
+      connectionStatus: 'connected',
+      deviceId: 'dev_1',
+      gatewayUrl: 'wss://gw',
+      pid: 42,
+      startedAt: '',
+    };
+    const outcome = await runCheck(deviceChecks, 'device.daemon');
+    expect(outcome.status).toBe('ok');
+    expect(outcome.detail).toContain('system');
+    expect(outcome.detail).toContain('dev_1');
+    expect(outcome.fix).toBeUndefined();
   });
 
   it('flags a status file with no daemon behind it', async () => {
@@ -66,6 +209,27 @@ describe('device.daemon', () => {
     expect(outcome.detail).toContain('left over');
   });
 
+  it('repairs only the stale process observed by the check', async () => {
+    state.daemonStatus = {
+      pid: 4,
+      connectionStatus: 'connected',
+      gatewayUrl: 'wss://gw',
+      startedAt: '',
+    };
+    const outcome = await runCheck(deviceChecks, 'device.daemon');
+    state.daemonStatus = { ...state.daemonStatus, pid: 42 };
+    const check = deviceChecks.find((item) => item.id === 'device.daemon')!;
+    await check.repair!(makeContext(), {
+      ...outcome,
+      durationMs: 0,
+      group: 'device',
+      id: check.id,
+      title: check.title,
+    });
+    expect(removePid).toHaveBeenCalledWith(4);
+    expect(removeStatus).toHaveBeenCalledWith(4);
+  });
+
   it('does not call a live daemon connected without its own report', async () => {
     state.daemonPid = 42;
     state.daemonStatus = null;
@@ -79,6 +243,7 @@ describe('device.daemon', () => {
   it('reports a healthy daemon', async () => {
     state.daemonPid = 42;
     state.daemonStatus = {
+      cliVersion,
       connectionStatus: 'connected',
       deviceId: 'dev_1',
       gatewayUrl: 'wss://gw',
@@ -91,6 +256,31 @@ describe('device.daemon', () => {
     expect(outcome.status).toBe('ok');
     expect(outcome.detail).toContain('dev_1');
   });
+
+  it.each([
+    ['0.0.1', 'running CLI 0.0.1'],
+    [undefined, 'did not report its CLI version'],
+  ])(
+    'flags a connected daemon still running code from before an update (%s)',
+    async (running, detail) => {
+      state.daemonPid = 42;
+      state.daemonStatus = {
+        cliVersion: running,
+        connectionStatus: 'connected',
+        deviceId: 'dev_1',
+        gatewayUrl: 'wss://gw',
+        pid: 42,
+        startedAt: '',
+      };
+
+      const outcome = await runCheck(deviceChecks, 'device.daemon');
+
+      expect(outcome.status).toBe('warn');
+      expect(outcome.detail).toContain(detail);
+      expect(outcome.detail).toContain(`installed CLI is ${cliVersion}`);
+      expect(outcome.fix).toContain('lh connect restart');
+    },
+  );
 
   it('flags a daemon whose last known state was not connected', async () => {
     state.daemonPid = 42;

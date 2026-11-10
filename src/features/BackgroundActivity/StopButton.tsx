@@ -1,4 +1,4 @@
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, toast } from '@lobehub/ui';
 import { CircleStopIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

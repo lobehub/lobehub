@@ -323,6 +323,22 @@ describe('DeviceModel', () => {
       expect(ids).toEqual(['w1', 'w2']);
     });
 
+    it('findPersonalByDeviceId never resolves to a workspace enrollment', async () => {
+      await serverDB.insert(devices).values([
+        { deviceId: 'both', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'both', identitySource: 'machine-id', userId },
+        { deviceId: 'ws-only', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'theirs', identitySource: 'machine-id', userId: otherUserId },
+      ]);
+
+      expect(await deviceModel.findPersonalByDeviceId('both')).toMatchObject({
+        deviceId: 'both',
+        workspaceId: null,
+      });
+      expect(await deviceModel.findPersonalByDeviceId('ws-only')).toBeUndefined();
+      expect(await deviceModel.findPersonalByDeviceId('theirs')).toBeUndefined();
+    });
+
     it('queryWorkspaceDevices returns [] without workspace context', async () => {
       await serverDB
         .insert(devices)
@@ -675,10 +691,105 @@ describe('DeviceModel', () => {
     it('should remove the row', async () => {
       await deviceModel.register({ deviceId: 'dev-1', identitySource: 'machine-id' });
 
-      await deviceModel.delete('dev-1');
+      const removed = await deviceModel.delete('dev-1');
 
+      expect(removed).toHaveLength(1);
+      expect(removed[0]).toMatchObject({ deviceId: 'dev-1', identitySource: 'machine-id', userId });
       const row = await deviceModel.findByDeviceId('dev-1');
       expect(row).toBeUndefined();
+    });
+
+    it('should return nothing when no row matches', async () => {
+      await expect(deviceModel.delete('missing-device')).resolves.toEqual([]);
+    });
+
+    it('should keep a workspace device the user enrolled under the same deviceId', async () => {
+      const deleteWsId = 'device-model-ws-delete';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: deleteWsId, name: 'WS', primaryOwnerId: userId, slug: deleteWsId });
+      await deviceModel.register({ deviceId: 'both', identitySource: 'machine-id' });
+      await serverDB.insert(devices).values({
+        deviceId: 'both',
+        identitySource: 'machine-id',
+        userId,
+        workspaceId: deleteWsId,
+      });
+
+      const removed = await deviceModel.delete('both');
+
+      expect(removed).toHaveLength(1);
+      expect(removed[0].workspaceId).toBeNull();
+      const workspaceRows = await serverDB
+        .select()
+        .from(devices)
+        .where(eq(devices.workspaceId, deleteWsId));
+      expect(workspaceRows.map((row) => row.deviceId)).toEqual(['both']);
+    });
+  });
+
+  describe('mutateWorkspaceDeviceWorkingDirs', () => {
+    const dirsWsId = 'device-model-ws-working-dirs';
+
+    const enroll = async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: dirsWsId, name: 'WS', primaryOwnerId: userId, slug: dirsWsId });
+      const enroller = new DeviceModel(serverDB, otherUserId, dirsWsId);
+      await enroller.registerWorkspaceDevice({
+        deviceId: 'ws-dirs-dev',
+        identitySource: 'machine-id',
+        workspaceId: dirsWsId,
+      });
+      await enroller.updateWorkspaceDevice('ws-dirs-dev', { workingDirs: [{ path: '/a' }] });
+    };
+
+    const storedDirs = async () =>
+      (
+        await serverDB.query.devices.findFirst({
+          where: and(eq(devices.workspaceId, dirsWsId), eq(devices.deviceId, 'ws-dirs-dev')),
+        })
+      )?.workingDirs;
+
+    afterEach(async () => {
+      await serverDB.delete(devices).where(eq(devices.workspaceId, dirsWsId));
+      await serverDB.delete(workspaces).where(eq(workspaces.id, dirsWsId));
+    });
+
+    it("edits another member's workspace device row in place", async () => {
+      await enroll();
+      const member = new DeviceModel(serverDB, userId, dirsWsId);
+
+      const next = await member.mutateWorkspaceDeviceWorkingDirs('ws-dirs-dev', (dirs) => [
+        { path: '/b' },
+        ...dirs,
+      ]);
+
+      expect(next).toEqual([{ path: '/b' }, { path: '/a' }]);
+      expect(await storedDirs()).toEqual([{ path: '/b' }, { path: '/a' }]);
+    });
+
+    it('keeps both entries when two members add concurrently', async () => {
+      await enroll();
+      const add = (path: string) =>
+        new DeviceModel(serverDB, userId, dirsWsId).mutateWorkspaceDeviceWorkingDirs(
+          'ws-dirs-dev',
+          (dirs) => [{ path }, ...dirs],
+        );
+
+      await Promise.all([add('/x'), add('/y')]);
+
+      expect((await storedDirs())?.map((d) => d.path).sort()).toEqual(['/a', '/x', '/y']);
+    });
+
+    it('returns undefined for a device outside the current workspace', async () => {
+      await enroll();
+      const outsider = new DeviceModel(serverDB, userId, 'device-model-other-ws');
+
+      expect(
+        await outsider.mutateWorkspaceDeviceWorkingDirs('ws-dirs-dev', () => []),
+      ).toBeUndefined();
+      expect(await storedDirs()).toEqual([{ path: '/a' }]);
     });
   });
 });

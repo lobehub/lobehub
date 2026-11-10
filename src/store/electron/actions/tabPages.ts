@@ -7,6 +7,7 @@ import {
   PERSONAL_TAB_SCOPE,
   resolveTabScope,
   type TabScope,
+  tabScopeHomeUrl,
   tabScopeKey,
 } from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
@@ -233,17 +234,28 @@ export class TabPagesActionImpl {
   };
 
   removeTab = (id: string): string | null => {
-    const { tabs, activeTabId } = this.#get();
+    const { activeTabScope, tabs, activeTabId } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0) return null;
 
     const newTabs = tabs.filter((t) => t.id !== id);
 
+    // With no tab left TabHost has nothing to render, so the last close lands on a fresh
+    // home tab instead — a new id, because a live router is never re-pointed at a new url.
+    if (newTabs.length === 0) {
+      const home: TabItem = {
+        id: generateTabId(),
+        lastVisited: Date.now(),
+        url: tabScopeHomeUrl(activeTabScope),
+      };
+      this.#set({ activeTabId: home.id, splitView: null, tabs: [home] }, false, 'removeTab');
+      this.#persist();
+      return home.id;
+    }
+
     let newActiveId = activeTabId;
     if (activeTabId === id) {
-      if (newTabs.length === 0) {
-        newActiveId = null;
-      } else if (index >= newTabs.length) {
+      if (index >= newTabs.length) {
         newActiveId = newTabs.at(-1)!.id;
       } else {
         newActiveId = newTabs[index].id;
@@ -290,19 +302,26 @@ export class TabPagesActionImpl {
     this.#closeExcept((_, i) => i <= index, id, 'closeRightTabs');
   };
 
-  reorderTabs = (fromIndex: number, toIndex: number): void => {
+  moveTab = (id: string, toIndex: number, pinned: boolean): void => {
     const { tabs } = this.#get();
-    if (fromIndex < 0 || fromIndex >= tabs.length) return;
-    if (toIndex < 0 || toIndex >= tabs.length) return;
-    // Pinned tabs form a run at the head of the list; a drag across that boundary would
-    // interleave the two groups and desync array order from render order.
-    if (!!tabs[fromIndex].pinned !== !!tabs[toIndex].pinned) return;
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index < 0) return;
 
-    const newTabs = [...tabs];
-    const [moved] = newTabs.splice(fromIndex, 1);
-    newTabs.splice(toIndex, 0, moved);
+    const rest = tabs.filter((_, i) => i !== index);
+    const pinnedCount = rest.filter((t) => t.pinned).length;
+    // Pinned tabs form a run at the head of the list; clamping into the dragged tab's own
+    // run keeps array order equal to render order.
+    const position = pinned
+      ? Math.min(Math.max(toIndex, 0), pinnedCount)
+      : Math.min(Math.max(toIndex, pinnedCount), rest.length);
+    if (position === index && !!tabs[index].pinned === pinned) return;
 
-    this.#set({ tabs: newTabs }, false, 'reorderTabs');
+    const moved: TabItem = { ...tabs[index], pinned };
+    this.#set(
+      { tabs: [...rest.slice(0, position), moved, ...rest.slice(position)] },
+      false,
+      'moveTab',
+    );
     this.#persist();
   };
 

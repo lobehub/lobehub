@@ -6,6 +6,7 @@ import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 
 import {
   createCoreManifest,
+  EmptyReleaseError,
   parseArgs,
   readCoreTree,
   readPrivateKey,
@@ -18,11 +19,7 @@ const PATCH_SCOPE = /^(?:dist\/renderer|cli)\//;
 const RELOAD_SCOPE = 'dist/renderer/';
 const ZSTD_LEVEL = { params: { [constants.ZSTD_c_compressionLevel]: 19 } };
 
-export class EmptyReleaseError extends Error {
-  constructor() {
-    super('empty release');
-  }
-}
+export { EmptyReleaseError } from './buildCoreManifest.mjs';
 
 const sha256Of = (content) => createHash('sha256').update(content).digest('hex');
 
@@ -175,7 +172,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
   const started = Date.now();
   try {
-    const { manifest, stats } = await buildCore({
+    const build =
+      args.protocol === '4' ? (await import('./buildCoreV4.mjs')).buildCoreV4 : buildCore;
+    const { manifest, stats } = await build({
+      previousBaseUrl: args['previous-base-url'],
       channel: args.channel,
       coreDir: path.resolve(args.core ?? 'core-dist'),
       objectsBaseUrl: args['objects-base-url'],
@@ -192,8 +192,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     });
     console.log(
       `core ${manifest.channel}/${manifest.platform} ${manifest.version} seq ${manifest.seq}: ` +
-        `${manifest.tree.length} files, ${stats.objects} objects (${stats.objectsWritten} new, ${(stats.objectBytes / 1048576).toFixed(2)} MB zst), ` +
-        `${stats.patches} patches, full ${(manifest.full.size / 1048576).toFixed(2)} MB, ` +
+        `${manifest.tree.length} files, ${stats.objects ?? manifest.tree.length} objects (${stats.objectsWritten} new, ${(stats.objectBytes / 1048576).toFixed(2)} MB zst), ` +
+        `${stats.patches} patches, full ${((manifest.full?.size ?? manifest.packs[0].size) / 1048576).toFixed(2)} MB, ` +
         `applyMode ${manifest.applyMode}, previous ${manifest.previous}, ${((Date.now() - started) / 1000).toFixed(1)}s`,
     );
   } catch (error) {

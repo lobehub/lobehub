@@ -41,6 +41,12 @@ export enum RequestTrigger {
   /** Rolling history summary stored on a topic. */
   HistorySummary = 'history_summary',
   Image = 'image',
+  /**
+   * A message arrived on one of the agent's own accounts (e.g. mail) and
+   * woke it. Mirrors {@link RequestTrigger.Scm}: an external event delivered to
+   * an identity the agent owns, rather than a user turn.
+   */
+  Inbox = 'inbox',
   /** Chat input inline completion suggestions while the user is typing. */
   InputCompletion = 'input_completion',
   Memory = 'memory',
@@ -60,6 +66,12 @@ export enum RequestTrigger {
   SignupEmailLLMReview = 'signup_email_llm_review',
   /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
   Task = 'task',
+  /**
+   * The creator agent woken in its own conversation to pick up finished task
+   * results (`taskResultBridge`). Server-started, but it continues the user's
+   * conversation on the main spine, unlike {@link RequestTrigger.Task} runs.
+   */
+  TaskCallback = 'task_callback',
   /** Thread (sub-topic) title summaries. */
   ThreadTitle = 'thread_title',
   /**
@@ -68,12 +80,16 @@ export enum RequestTrigger {
    * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
    */
   Topic = 'topic',
+  /** Server-side topic classification that runs after the auto summary. */
+  TopicAnalysis = 'topic_analysis',
   /** Server-side topic auto summary (description + rolling summary). */
   TopicSummary = 'topic_summary',
   /** Chat topic title summaries, both client and server generated. */
   TopicTitle = 'topic_title',
   /** Translation of a chat message or a generation prompt, including language detection. */
   Translate = 'translate',
+  /** Text-to-speech synthesis, e.g. `lh generate tts`. */
+  Tts = 'tts',
   /** Acceptance verification: plan generation, judging, review prediction and reports. */
   Verify = 'verify',
   Video = 'video',
@@ -133,8 +149,7 @@ export interface AgentShareVisitorContext {
   skillGrants?: string[];
   /**
    * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
-   * target outside `toolManifestMap` (e.g. `activateSkill`,
-   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * target outside `toolManifestMap` (e.g. `activateSkill`) can apply the same allowlist the assembled tool set
    * already enforces.
    */
   toolGrants?: AgentShareToolGrant[];
@@ -283,12 +298,36 @@ export const AgentRuntimeErrorType = {
   OperationInactivityTimeout: 'OperationInactivityTimeout',
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
+  /**
+   * The model can only be reached from the user's own device, and no open
+   * LobeHub client picked up the request (no client declared it can run this
+   * provider, or none claimed the call in time). Retrying once a client is
+   * open recovers the run.
+   */
+  ClientLlmExecutorUnavailable: 'ClientLlmExecutorUnavailable',
+  /**
+   * The device running a relayed model request stopped sending output
+   * (closed, refreshed or lost its connection) before the request finished.
+   */
+  ClientLlmExecutorLost: 'ClientLlmExecutorLost',
+  /**
+   * A relayed model request on the user's device did not produce its first
+   * output, or did not finish, within the allowed time.
+   */
+  ClientLlmTimeout: 'ClientLlmTimeout',
   OllamaBizError: 'OllamaBizError',
   OllamaServiceUnavailable: 'OllamaServiceUnavailable',
 
   InvalidBedrockCredentials: 'InvalidBedrockCredentials',
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
+  /**
+   * The provider closed the stream without a terminal event (no stop / usage /
+   * error), e.g. its connection dropped or its server gave up mid-response.
+   * Upstream-owned and transient, unlike `StreamChunkError`, which is a chunk
+   * the harness could not parse or process.
+   */
+  ProviderStreamInterrupted: 'ProviderStreamInterrupted',
   /**
    * The model returned an empty completion — no text content, no tool calls,
    * and ~0 output tokens — typically after a stalled tool loop where it

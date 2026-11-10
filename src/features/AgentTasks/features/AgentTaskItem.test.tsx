@@ -45,11 +45,19 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 }));
 
 vi.mock('./AssigneeAgentSelector', () => ({
-  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+  default: ({ children, disabled }: { children: ReactNode; disabled?: boolean }) => (
+    <span data-disabled={String(Boolean(disabled))} data-testid="agent-selector">
+      {children}
+    </span>
+  ),
 }));
 
 vi.mock('./AssigneeMemberSelector', () => ({
-  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+  default: ({ children, ...props }: { children: ReactNode; disabled?: boolean }) => (
+    <span data-disabled={String(Boolean(props.disabled))} data-testid="member-selector">
+      {children}
+    </span>
+  ),
 }));
 
 vi.mock('../shared/useAgentDisplayMeta', () => ({
@@ -103,6 +111,7 @@ const createTask = (assigneeAgentId?: string | null) =>
   ({
     assigneeAgentId,
     createdAt: new Date('2026-05-18T00:00:00.000Z'),
+    id: 'task_22',
     identifier: 'T-22',
     name: 'Hourly trend update',
     priority: 2,
@@ -154,6 +163,19 @@ describe('AgentTaskItem', () => {
     );
 
     expect(container.querySelector('[data-tooltip="Ryan"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).toBeInTheDocument();
+  });
+
+  it('locks only the agent assignee while the task is running', () => {
+    const { container } = render(
+      <AgentTaskItem
+        task={{ ...createTask('agt_owner'), assigneeUserId: 'user-1', status: 'running' }}
+      />,
+    );
+
+    // The executor cannot change mid-run, but the member who owns the outcome can.
+    expect(screen.getByTestId('agent-selector')).toHaveAttribute('data-disabled', 'true');
+    expect(screen.getByTestId('member-selector')).toHaveAttribute('data-disabled', 'false');
     expect(container.querySelector('[data-tooltip="Shadow Arvin"]')).toBeInTheDocument();
   });
 
@@ -217,12 +239,12 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByTestId('subtask-progress'));
 
-    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('T-22'));
+    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('task_22'));
   });
 
   it('revalidates subtask navigation when an earlier detail is cached', async () => {
     mocks.taskDetailMap = {
-      'T-22': { subtasks: [{ identifier: 'T-stale', status: 'completed' }] },
+      task_22: { subtasks: [{ identifier: 'T-stale', status: 'completed' }] },
     };
     mocks.fetchTaskDetail.mockResolvedValue({
       subtasks: [{ identifier: 'T-current', status: 'backlog' }],
@@ -239,6 +261,6 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByTestId('subtask-progress'));
 
-    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('T-22'));
+    await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('task_22'));
   });
 });
