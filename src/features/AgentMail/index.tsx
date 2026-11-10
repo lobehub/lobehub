@@ -67,7 +67,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const query = searchParams.get('q')?.trim() ?? '';
   const folder = query ? undefined : mailFolderOf(view);
   const composeId = searchParams.get('compose') ?? undefined;
-  const mailbox = useMailbox(agentId, messageId, folder);
+  const mailbox = useMailbox(agentId, messageId, folder, disabled);
   const openable = useOpenableChannel();
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
@@ -169,6 +169,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   const detailProps: Omit<InboxMessageDetailProps, 'id'> = {
     accountId: mailbox.current?.id,
+    listRowId: neighbors.rowId,
     accounts: mailbox.accounts,
     deferRead: Boolean((location.state as { deferRead?: boolean } | null)?.deferRead),
     disabled,

@@ -27,6 +27,8 @@ import { useRestoreTrashed } from './useRestoreTrashed';
 export interface UseConversationOptions {
   /** The address on screen, whose counts a write moves. */
   accountId?: string;
+  /** The list row standing for this conversation, which may carry another mail's id. */
+  listRowId?: string;
   /** Every mail left this view; the page picks what to show next. */
   onEmptied: () => void;
   /** Undo failed; the trash is where the mail can still be restored from. */
@@ -76,6 +78,7 @@ export const useConversation = (
   const perform = async <R,>({
     call,
     failure,
+    listIds = [],
     listPatch,
     patch,
     retry,
@@ -84,6 +87,8 @@ export const useConversation = (
   }: {
     call: (target: AgentMailTarget) => Promise<R>;
     failure: string;
+    /** Rows to patch beyond the mails written, such as the row standing for them. */
+    listIds?: string[];
     listPatch: MailPatch;
     patch: (row: AgentMailRow) => AgentMailRow;
     retry: () => unknown;
@@ -96,7 +101,7 @@ export const useConversation = (
     const writeId = mailWriteActions.begin({
       accountId: optionsRef.current.accountId,
       draftDelta: 0,
-      ids,
+      ids: [...new Set([...ids, ...listIds])],
       patch: listPatch,
       unreadDelta,
     });
@@ -143,6 +148,12 @@ export const useConversation = (
     const targets = rows.filter((row) => row.isUnread !== unread);
     if (targets.length === 0) return Promise.resolve(undefined);
     const inbound = targets.filter((row) => row.direction === 'inbound').length;
+    // The row shows the conversation as unread while any mail is, so it flips
+    // with this write only when no other unread mail is left behind.
+    const flipsRow =
+      unread ||
+      (data ?? []).every((row) => !row.isUnread || targets.some(({ id }) => id === row.id));
+    const { listRowId } = optionsRef.current;
 
     return perform({
       call: (target) =>
@@ -152,6 +163,7 @@ export const useConversation = (
       failure: unread
         ? t('identity.mailbox.failed.markUnread')
         : t('identity.mailbox.failed.markRead'),
+      listIds: flipsRow && listRowId ? [listRowId] : [],
       listPatch: { isUnread: unread },
       patch: (row) => ({ ...row, isUnread: unread }),
       retry: () => setUnread(targets, unread),

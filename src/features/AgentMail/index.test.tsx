@@ -82,6 +82,7 @@ const toastApi = vi.hoisted(() => ({
 const { default: AgentMail } = await import('./index');
 const { default: AddMailboxForm } = await import('./AddMailboxForm');
 const { IDENTITY_CHANNELS } = await import('./const');
+const { useMailWritesStore } = await import('./mailWrites');
 
 const account = (id: string, identifier: string) => ({
   agentId: 'agt_1',
@@ -149,6 +150,7 @@ const page = (path = '/agent/agt_1/mail', disabled = false) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useMailWritesStore.setState({ writes: [] });
   surface.mobile = false;
   server.providers = ['agent-mail'];
   server.loaded = true;
@@ -194,6 +196,34 @@ describe('AgentMail', () => {
     // The reading pane marks exactly the mails it opened, once; the row click does not.
     await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] }));
     expect(service.markMailRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves mail unread for a read-only viewer who follows a link to it', async () => {
+    page('/agent/agt_1/mail/msg_a', true);
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    await screen.findByText('preview of For A');
+    expect(service.markMailRead).not.toHaveBeenCalled();
+  });
+
+  it('clears the row dot at once when the unread mail is not the one the row carries', async () => {
+    service.listMail.mockResolvedValue([row('msg_head', 'Thread', { mailCount: 2 })]);
+    service.getMailConversation.mockResolvedValue([
+      mail('msg_older', { isUnread: true }),
+      mail('msg_head', { isUnread: false }),
+    ]);
+    service.markMailRead.mockReturnValue(new Promise(() => {}));
+    page();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Thread/ }));
+
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_older'] }));
+    // Still pending, yet the row already reads as read.
+    await waitFor(() =>
+      expect(useMailWritesStore.getState().writes).toEqual([
+        expect.objectContaining({ ids: ['msg_older', 'msg_head'], patch: { isUnread: false } }),
+      ]),
+    );
   });
 
   it('leaves mail unread for a read-only viewer who opens it', async () => {

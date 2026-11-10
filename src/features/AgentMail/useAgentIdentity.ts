@@ -31,9 +31,10 @@ export const useAgentAccounts = (agentId: string) =>
  * opening it shows as unread before the list and count load, so neither shows
  * it as unread. Answers the conversation as it now stands.
  */
-const openMessageFromUrl = async (id: string, folder?: AgentMailFolder) => {
+const openMessageFromUrl = async (id: string, folder?: AgentMailFolder, readOnly?: boolean) => {
   const conversation = await agentAccountService.getMailConversation({ folder, id });
-  const unread = new Set(idsToMarkReadOnOpen(conversation));
+  // A read-only viewer reads without leaving a trace.
+  const unread = new Set(readOnly ? [] : idsToMarkReadOnOpen(conversation));
 
   try {
     await Promise.all(
@@ -55,7 +56,12 @@ const openMessageFromUrl = async (id: string, folder?: AgentMailFolder) => {
  * lands on the next one without any bookkeeping. Until the reader picks one, a
  * message opened from its URL decides, so both panes show the same mailbox.
  */
-export const useMailbox = (agentId: string, messageId?: string, folder?: AgentMailFolder) => {
+export const useMailbox = (
+  agentId: string,
+  messageId?: string,
+  folder?: AgentMailFolder,
+  readOnly?: boolean,
+) => {
   const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
   const [selectedId, select] = useState<string>();
   // Immutable: one open is one read, so a focus refetch must not stamp it again.
@@ -63,7 +69,7 @@ export const useMailbox = (agentId: string, messageId?: string, folder?: AgentMa
   const openMessage = useSWRImmutable(
     !selectedId && messageId ? ['agent-mail-open-message', messageId, folder] : null,
     async ([, id, view]) => {
-      const conversation = await openMessageFromUrl(id, view);
+      const conversation = await openMessageFromUrl(id, view, readOnly);
       // Seeded so the reading pane starts from the read it just made, rather
       // than reading again and marking the same mails a second time.
       await mutateCache(mailConversationKey(id, view), conversation, { revalidate: false });
