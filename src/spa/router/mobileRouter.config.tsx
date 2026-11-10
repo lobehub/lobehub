@@ -45,7 +45,13 @@ const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(Setti
   .flatMap((tab) => {
     const meta = createSettingsTitleRouteMeta(tab);
     return [
-      { element: settingsTabElement, handle: { meta, settingsTab: tab }, path: tab },
+      {
+        element: settingsTabElement,
+        handle: { meta, settingsTab: tab },
+        // `/settings/stats` matches this static segment, not `:tab`.
+        loader: tab === SettingsTabs.Stats ? statsPageLoader : undefined,
+        path: tab,
+      },
       { element: settingsTabSubElement, handle: { meta, settingsTab: tab }, path: `${tab}/:sub` },
     ];
   });
@@ -371,12 +377,7 @@ export const mobileRoutes: RouteObject[] = [
           // score, and the workspace tree would read `settings` as a slug.
           ...personalSettingsTabRoutes,
           // Other settings tabs (common, agent, memory, tts, about, etc.)
-          {
-            element: settingsTabElement,
-            handle: { meta: settingsParamTabMeta },
-            loader: statsPageLoader,
-            path: ':tab',
-          },
+          { element: settingsTabElement, handle: { meta: settingsParamTabMeta }, path: ':tab' },
           {
             element: settingsTabSubElement,
             handle: { meta: settingsParamTabMeta },
