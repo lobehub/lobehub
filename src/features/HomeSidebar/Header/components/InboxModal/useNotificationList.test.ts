@@ -117,4 +117,15 @@ describe('useNotificationList', () => {
     // Rows were restored, so this is not a first-load failure with nothing to show.
     expect(result.current.headError).toBeUndefined();
   });
+
+  it('keeps the restored rows and surfaces a failed refresh for the inline retry', async () => {
+    await seedUnreadView([row('n1', false, 'Cached notification')]);
+    vi.spyOn(notificationService, 'list').mockRejectedValue(new Error('offline'));
+
+    const { result } = renderHook(() => useNotificationList({ isRead: false }), { wrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(result.current.notifications?.map((item) => item.id)).toEqual(['n1']);
+    expect(result.current.headError).toBeUndefined();
+  });
 });

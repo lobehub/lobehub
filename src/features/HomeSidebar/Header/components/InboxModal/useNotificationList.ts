@@ -44,8 +44,12 @@ export const useNotificationList = ({ category, isRead }: UseNotificationListOpt
   }, [feed, loadMore, loadMoreError, revalidate]);
 
   return {
-    /** First-load failure (no rows to show) or a failed "load more". */
-    error: feed ? loadMoreError : headError,
+    /**
+     * Any failure to surface: with rows on screen it renders as the inline
+     * Retry row below them (a failed "load more" or a failed refresh), with
+     * none it is the first-load failure.
+     */
+    error: feed ? (loadMoreError ?? headError) : headError,
     hasMore: !!feed?.hasMore,
     /** A failed first load with nothing persisted to fall back on. */
     headError: feed ? undefined : headError,
