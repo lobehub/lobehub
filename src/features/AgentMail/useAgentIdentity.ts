@@ -33,7 +33,7 @@ const openMessageFromUrl = async (id: string, folder?: AgentMailFolder) => {
   if (!message || message.readAt) return message;
 
   try {
-    await agentAccountService.markMailRead({ ids: [id] });
+    await agentAccountService.markMailRead({ ids: [message.id] });
   } catch (error) {
     // The message still opens; a failed read-mark only affects the dot.
     console.error('[AgentIdentity] mark read failed', error);

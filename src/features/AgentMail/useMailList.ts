@@ -271,13 +271,17 @@ const toMessage = (row: AgentMailRow): AgentInboxMessage => ({
   to: row.to.map((to) => formatAddress(to.name, to.address)).join(', '),
 });
 
-/** One mail by id, or `null` when it is gone. Trash is its own view, so it needs the folder. */
+/**
+ * One mail by id, or `null` when it is gone. Trash is its own view, so it needs
+ * the folder. Links saved before the mail list carry the inbox item's id, which
+ * the conversation read also resolves; the mail comes back under its own id.
+ */
 export const readMailMessage = async (
   id: string,
   folder?: AgentMailFolder,
 ): Promise<AgentInboxMessage | null> => {
   const rows = await agentAccountService.getMailConversation({ folder, id });
-  const row = rows.find((mail) => mail.id === id);
+  const row = rows.find((mail) => mail.id === id || mail.inboxMessageId === id);
   return row ? toMessage(row) : null;
 };
 

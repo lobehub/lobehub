@@ -231,6 +231,17 @@ describe('AgentMail', () => {
     );
   });
 
+  it('opens a link saved with the inbox item id and marks the mail itself read', async () => {
+    service.getMailConversation.mockResolvedValue([mail('msg_a', { inboxMessageId: 'inbox_a' })]);
+    page('/agent/agt_1/mail/inbox_a');
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    expect(service.getMailConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'inbox_a' }),
+    );
+    expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] });
+  });
+
   it('does not re-stamp a read message opened from its URL', async () => {
     service.getMailConversation.mockResolvedValue([mail('msg_a', { isUnread: false })]);
     page('/agent/agt_1/mail/msg_a');
