@@ -16,12 +16,12 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { TransferRequestItem } from '@/features/ResourceTransferRequest';
 import type { PendingTransferRequest } from '@/services/resourceTransferRequest';
 import { useHomeStore } from '@/store/home';
-import { homeNotificationSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import NotificationItem from './NotificationItem';
 import { useNotificationList } from './useNotificationList';
+import { usePendingTransfers } from './usePendingTransfers';
 
 const styles = stylex.create({
   item: {
@@ -79,13 +79,13 @@ const Content = memo<ContentProps>(
     // because row suppression below must hold on all of them (a linked row
     // must never show alongside, or instead of, its live item).
     const showTransfers = isRead !== true && (!category || category === 'pending');
-    const { error: transfersError } = useHomeStore((s) => s.useFetchPendingTransferRequests)(
-      !!workspaceId,
-    );
-    const transferRequests = useHomeStore(homeNotificationSelectors.pendingTransferRequests);
-    const isTransfersConfirmed = useHomeStore(
-      homeNotificationSelectors.isPendingTransferRequestsConfirmed,
-    );
+    const {
+      error: transfersError,
+      isConfirmed: isTransfersConfirmed,
+      isValidating: isTransfersValidating,
+      requests: transferRequests,
+      retry: retryTransfers,
+    } = usePendingTransfers(!!workspaceId);
 
     // Each filter is its own replica entry; only the scroll position resets.
     useEffect(() => {
@@ -232,6 +232,15 @@ const Content = memo<ContentProps>(
     return (
       <Flexbox height="100%">
         <VList ref={virtuaRef} style={{ flex: 1 }} onScroll={handleScroll}>
+          {transferItems.length > 0 && transfersError ? (
+            // The cards above stay; their actions wait for a confirmed list.
+            <AsyncError
+              error={transfersError}
+              retrying={isTransfersValidating}
+              variant="inline"
+              onRetry={() => void retryTransfers()}
+            />
+          ) : null}
           {transferItems}
           {visibleNotifications.map((item) => (
             <Flexbox className={stylex.props(styles.item).className} key={item.id}>
