@@ -25,6 +25,8 @@ import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 import { redisService } from '@/server/services/redis';
+import { applyCodeModeToToolSet } from '@/server/services/toolExecution/codeMode/collapse';
+import { isMcpCodeModeEnabled } from '@/server/services/toolExecution/codeMode/featureGate';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { applyEvalGateToToolSet } from '../evalGate';
@@ -670,6 +672,27 @@ export const prepareOperation = async (
       },
       input.evalAllowedTools,
     );
+  }
+
+  // MCP Code Mode — last, so it folds only what the share and eval gates kept.
+  // Shared and eval runs keep their tool surface as configured: a share's
+  // grants and an eval's allowlist are written against individual tools.
+  if (!shareGate && !input.evalAllowedTools && tools && (await isMcpCodeModeEnabled(deps.userId))) {
+    const codeMode = applyCodeModeToToolSet({
+      activatableToolIds,
+      enabledToolIds: toolsResult.enabledToolIds,
+      executorMap: discovery.toolExecutorMap,
+      manifestMap: discovery.toolManifestMap,
+      sourceMap: discovery.toolSourceMap,
+      tools,
+    });
+    if (codeMode) {
+      log(
+        'execAgent: code mode folded %d connector tools from %o',
+        codeMode.toolCount,
+        codeMode.collapsedToolIds,
+      );
+    }
   }
 
   log('execAgent: prepared evalContext for executor');

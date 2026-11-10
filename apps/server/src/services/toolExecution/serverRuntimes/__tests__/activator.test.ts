@@ -381,4 +381,48 @@ describe('activatorRuntime', () => {
       expect(result.content).not.toContain('Successfully activated');
     }, 20_000);
   });
+
+  describe('activateTools — connectors folded into Code Mode', () => {
+    const githubManifest = {
+      api: [{ name: 'list_issues', parameters: {} }],
+      identifier: 'github',
+      meta: { title: 'GitHub' },
+      type: 'mcp',
+    } as never;
+    const codeModeManifest = {
+      api: [{ name: 'execute', parameters: {} }],
+      codeMode: { toolIds: ['github'] },
+      identifier: 'lobe-code-mode',
+      meta: { title: 'Code Mode' },
+      type: 'builtin',
+    } as never;
+
+    it('refuses to activate a folded connector and points the model at Code Mode', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'github': githubManifest, 'lobe-code-mode': codeModeManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['github'] });
+
+      expect(result.content).not.toContain('Successfully activated');
+      expect(result.content).toContain('folded into Code Mode');
+      expect(result.content).toContain('lobe-code-mode');
+    }, 20_000);
+
+    it('does not resolve a folded connector by its wire name either', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'github': githubManifest, 'lobe-code-mode': codeModeManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['github____list_issues____mcp'] });
+
+      expect(result.content).not.toContain('Successfully activated');
+    }, 20_000);
+  });
 });

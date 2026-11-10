@@ -26,6 +26,8 @@ import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
+import { CODE_MODE_IDENTIFIER } from './codeMode/constants';
+import { executeCodeModeTool } from './codeMode/executor';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
@@ -166,7 +168,15 @@ export class ToolExecutionService {
     // needs_approval is handled via humanIntervention in the manifest; we only
     // hard-block 'disabled' here (and needs_approval in headless/qstash context
     // since the manifest's humanIntervention auto-rejects them there already).
-    if (context.serverDB && context.userId && identifier && apiName) {
+    // Code Mode is no connector itself; every call its scripts make re-enters
+    // this method and meets the gate there.
+    if (
+      context.serverDB &&
+      context.userId &&
+      identifier &&
+      apiName &&
+      identifier !== CODE_MODE_IDENTIFIER
+    ) {
       const permission = await getConnectorToolPermission(
         context.serverDB,
         context.userId,
@@ -187,7 +197,12 @@ export class ToolExecutionService {
     try {
       const typeStr = type as string;
       let data: ToolExecutionResult;
-      switch (typeStr) {
+      switch (identifier === CODE_MODE_IDENTIFIER ? CODE_MODE_IDENTIFIER : typeStr) {
+        case CODE_MODE_IDENTIFIER: {
+          data = await this.executeCodeModeTool(payload, context);
+          break;
+        }
+
         case 'mcp': {
           data = await this.executeMCPTool(payload, context);
           break;
@@ -258,6 +273,31 @@ export class ToolExecutionService {
         success: false,
       };
     }
+  }
+
+  /**
+   * Code Mode: a script's tool calls run through {@link executeTool} — the
+   * same permission gate, MCP routing, content processing and error
+   * classification as a direct call — after a fresh permission read.
+   */
+  private executeCodeModeTool(
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+  ): Promise<ToolExecutionResult> {
+    return executeCodeModeTool(payload, context, {
+      getPermission: async (toolIdentifier, toolApiName) =>
+        context.serverDB && context.userId
+          ? getConnectorToolPermission(
+              context.serverDB,
+              context.userId,
+              toolIdentifier,
+              toolApiName,
+              context.workspaceId,
+              context.agentId,
+            )
+          : null,
+      invokeTool: (nestedPayload, nestedContext) => this.executeTool(nestedPayload, nestedContext),
+    });
   }
 
   private async executeMCPTool(

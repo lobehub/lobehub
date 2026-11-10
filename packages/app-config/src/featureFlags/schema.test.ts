@@ -350,6 +350,19 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
   });
 
+  it('should keep MCP Code Mode off by default and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mcp_code_mode).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMcpCodeMode).toBe(
+      false,
+    );
+
+    expect(mapFeatureFlagsEnvToState({ mcp_code_mode: true }).enableMcpCodeMode).toBe(true);
+
+    const config = { mcp_code_mode: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpCodeMode).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpCodeMode).toBe(false);
+  });
+
   it('should keep agent knowledge spaces off by default and enable them per user', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
     expect(

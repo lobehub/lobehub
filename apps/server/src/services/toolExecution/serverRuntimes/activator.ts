@@ -18,6 +18,8 @@ import {
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
+import { CODE_MODE_IDENTIFIER } from '../codeMode/constants';
+import { getCodeModeToolIds } from '../codeMode/manifest';
 import { REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { type ServerRuntimeRegistration } from './types';
 
@@ -28,6 +30,10 @@ import { type ServerRuntimeRegistration } from './types';
 export const activatorRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
     const activatedIds: string[] = [];
+    // Connectors folded into Code Mode keep their manifests in the map so their
+    // calls can run, but activating one would put its functions back in front
+    // of the model next to `execute`.
+    const codeModeToolIds = new Set(getCodeModeToolIds(context.toolManifestMap ?? {}));
     const emitActivationOutcome = async (input: {
       errorReason?: string;
       identifiers: string[];
@@ -152,10 +158,13 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         : undefined,
       // A device-locked run walls the picker off, so activating it can only fail;
       // say why, so the model sends the user to the device selector instead.
-      explainNotFound: (identifier) =>
-        identifier === REMOTE_DEVICE_TOOL_IDENTIFIER && context.executionPlan
+      explainNotFound: (identifier) => {
+        if (codeModeToolIds.has(identifier))
+          return `"${identifier}" is folded into Code Mode for this run and cannot be activated. Call its tools from \`${CODE_MODE_IDENTIFIER}\` (\`docs\`, then \`execute\`) instead.`;
+        return identifier === REMOTE_DEVICE_TOOL_IDENTIFIER && context.executionPlan
           ? describeLockedDevicePicker(context.executionPlan)
-          : undefined,
+          : undefined;
+      },
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
         // Note: context.toolManifestMap should only contain discoverable tools.
@@ -163,7 +172,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         const results: ToolManifestInfo[] = [];
 
         for (const id of identifiers) {
-          const manifest = context.toolManifestMap[id];
+          const manifest = codeModeToolIds.has(id) ? undefined : context.toolManifestMap[id];
           if (!manifest) continue;
 
           results.push({
@@ -189,13 +198,18 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // identifier locally and matches the generated wire-name variants. Same
       // scoping as `getToolManifests` — the map only holds discoverable tools.
       listToolManifests: async (): Promise<ToolManifestInfo[]> =>
-        Object.values(context.toolManifestMap ?? {}).map((manifest) => ({
-          apiDescriptions: manifest.api.map((a) => ({ description: a.description, name: a.name })),
-          identifier: manifest.identifier,
-          name: manifest.meta?.title ?? manifest.identifier,
-          systemRole: manifest.systemRole,
-          type: manifest.type,
-        })),
+        Object.values(context.toolManifestMap ?? {})
+          .filter((manifest) => !codeModeToolIds.has(manifest.identifier))
+          .map((manifest) => ({
+            apiDescriptions: manifest.api.map((a) => ({
+              description: a.description,
+              name: a.name,
+            })),
+            identifier: manifest.identifier,
+            name: manifest.meta?.title ?? manifest.identifier,
+            systemRole: manifest.systemRole,
+            type: manifest.type,
+          })),
       markActivated: (identifiers: string[]) => {
         for (const id of identifiers) {
           if (!activatedIds.includes(id)) {
