@@ -26,6 +26,12 @@ export interface InjectCredsResultInput {
 
 export interface InjectCredsResultSummary {
   content: string;
+  /**
+   * `credentials` with every env value replaced by `******`. Market's masked
+   * values keep the first and last two characters, which are still part of
+   * the value, so they are not passed on in the tool state either.
+   */
+  credentials: NonNullable<InjectCredsResultInput['credentials']>;
   /** Environment variable names per injected key (names only, never values). */
   envVarsByKey: Record<string, string[]>;
   injected: string[];
@@ -36,6 +42,17 @@ export interface InjectCredsResultSummary {
 }
 
 const unique = (names: string[]) => [...new Set(names)];
+
+export const REDACTED_VALUE = '******';
+
+const redactCredentials = (
+  credentials: InjectCredsResultInput['credentials'] = {},
+): NonNullable<InjectCredsResultInput['credentials']> => ({
+  ...credentials,
+  ...(credentials.env && {
+    env: Object.fromEntries(Object.keys(credentials.env).map((name) => [name, REDACTED_VALUE])),
+  }),
+});
 
 export const resolveEnvVarsByKey = (
   injected: string[],
@@ -110,6 +127,7 @@ export const buildInjectCredsResult = (
 
   return {
     content: content.trim(),
+    credentials: redactCredentials(input.credentials),
     envVarsByKey,
     injected,
     notFound,

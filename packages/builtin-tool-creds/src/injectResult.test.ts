@@ -73,4 +73,15 @@ describe('buildInjectCredsResult', () => {
     );
     expect(result.notFound).toEqual(['missing']);
   });
+
+  it('passes the credentials on with every env value redacted', () => {
+    const files = [{ filename: 'key.json', key: 'gcp', path: '~/.creds/files/key.json' }];
+    const result = buildInjectCredsResult(['deepseek', 'gcp'], {
+      credentials: { env: { DEEPSEEK_API_KEY: 'sk******ab' }, files },
+      envVarsByKey: { deepseek: ['DEEPSEEK_API_KEY'] },
+    });
+
+    expect(result.credentials).toEqual({ env: { DEEPSEEK_API_KEY: '******' }, files });
+    expect(JSON.stringify(result)).not.toContain('sk******ab');
+  });
 });

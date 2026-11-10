@@ -252,13 +252,12 @@ export class CredsExecutionRuntime {
         userId,
       });
 
-      const credentials = result.credentials || {};
       const summary = buildInjectCredsResult(args.keys, result);
 
       return {
         content: summary.content,
         state: {
-          credentials,
+          credentials: summary.credentials,
           envVarsByKey: summary.envVarsByKey,
           injected: summary.injected,
           notFound: summary.notFound,

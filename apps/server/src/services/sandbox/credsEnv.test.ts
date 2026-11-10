@@ -44,10 +44,10 @@ describe('CREDS_ENV_MERGE_COMMAND', () => {
     runMerge();
 
     expect(listing()).toEqual([
-      '# LOBEHUB_DATABASE_URL=po******db',
-      '# CLOUD_DATABASE_URL=po******db',
-      '# MARKET_DATABASE_URL=po******db',
-      '# DEEPSEEK_API_KEY=sk******ab',
+      '# LOBEHUB_DATABASE_URL=******',
+      '# CLOUD_DATABASE_URL=******',
+      '# MARKET_DATABASE_URL=******',
+      '# DEEPSEEK_API_KEY=******',
     ]);
   });
 
@@ -60,8 +60,21 @@ describe('CREDS_ENV_MERGE_COMMAND', () => {
 
     expect(listing()).toEqual([
       '# Injected credentials',
-      '# DEEPSEEK_API_KEY=sk******bb',
+      '# DEEPSEEK_API_KEY=******',
       'export FOO=1',
+    ]);
+  });
+
+  it('drops the value fragments Market leaves in masked lines', () => {
+    marketWrites(['# DEEPSEEK_API_KEY=sk******ab', '#OPENAI_API_KEY=8f******vZ', 'export FOO=bar']);
+    runMerge();
+
+    const content = readFileSync(credsEnv(), 'utf8');
+    expect(content).not.toMatch(/sk\*|\*ab|8f\*|\*vZ/);
+    expect(listing()).toEqual([
+      '# DEEPSEEK_API_KEY=******',
+      '# OPENAI_API_KEY=******',
+      'export FOO=bar',
     ]);
   });
 

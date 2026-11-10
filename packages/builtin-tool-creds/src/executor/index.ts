@@ -351,7 +351,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       return {
         content: summary.content,
         state: {
-          credentials,
+          credentials: summary.credentials,
           envVarsByKey: summary.envVarsByKey,
           injected: summary.injected,
           notFound: summary.notFound,

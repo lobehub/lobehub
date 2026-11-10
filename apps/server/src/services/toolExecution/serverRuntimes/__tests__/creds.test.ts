@@ -302,7 +302,9 @@ describe('ServerCredsService.injectCreds', () => {
     expect(callTool).toHaveBeenCalledWith('runCommand', {
       command: expect.stringContaining('~/.creds/.env.ledger'),
     });
-    expect(JSON.stringify(callTool.mock.calls)).not.toContain('******');
+    for (const value of ['sk******ab', 'po******db']) {
+      expect(JSON.stringify(callTool.mock.calls)).not.toContain(value);
+    }
   });
 
   it('still returns the injection when merging ~/.creds/env fails', async () => {

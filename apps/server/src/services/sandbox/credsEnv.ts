@@ -14,8 +14,14 @@ const log = debug('lobe-server:sandbox:creds-env');
  *
  * Lines are keyed by variable name, whether written as `NAME=…`,
  * `export NAME=…` or the masked `# NAME=…` comment form, and the latest
- * line for a name wins. Other lines are kept once, in first-seen order. The
- * command carries no credential names or values, and it prints nothing.
+ * line for a name wins. Other lines are kept once, in first-seen order.
+ *
+ * Market masks the listing's comment lines but keeps the first and last two
+ * characters (`# NAME=po******db`). Those fragments are still part of the
+ * value, so comment lines are rewritten to `# NAME=******`. Assignment lines
+ * (`NAME=…`, `export NAME=…`) are left as written because a shell may source
+ * them. The command carries no credential names or values, and it prints
+ * nothing.
  */
 export const CREDS_ENV_MERGE_COMMAND = [
   'umask 077',
@@ -37,7 +43,7 @@ function varname(line,  n) {
     next
   }
   if (!(("V" k) in seen)) { seen["V" k] = 1; order[++count] = "V" k }
-  latest[k] = $0
+  latest[k] = ($0 ~ /^#/) ? "# " k "=******" : $0
 }
 END {
   for (i = 1; i <= count; i++) {
