@@ -37,7 +37,12 @@ export interface OperationCompletionInput {
   agentId?: string;
   /** Final assistant message row id — anchors the verify card / error bubble. */
   assistantMessageId?: string;
-  cost?: { total?: number | null } | null;
+  /**
+   * Lands in `agent_operations.cost`; `total` also feeds `total_cost`.
+   * `reportedSessionTotal` keeps a Claude Code client's raw session-cumulative
+   * value when heteroFinish booked only this run's share of it.
+   */
+  cost?: { reportedSessionTotal?: number; total?: number | null } | null;
   /** Final assistant deliverable text — the verify gate's input + bot rendering. */
   deliverable?: string;
   /** Terminal error payload (error path only). */

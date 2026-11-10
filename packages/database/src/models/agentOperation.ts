@@ -19,7 +19,14 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
-import { findLiveTopicOperations, findScopedOperation } from './agentOperationQueries';
+import {
+  findLiveTopicOperations,
+  findPreviousCostedTopicOperation,
+  findScopedOperation,
+  type PreviousCostedOperation,
+} from './agentOperationQueries';
+
+export type { PreviousCostedOperation } from './agentOperationQueries';
 
 /**
  * Verify rollup states. Aliases the single `VerifyRunStatus` source of truth in
@@ -598,6 +605,19 @@ export class AgentOperationModel {
       .returning({ id: agentOperations.id });
 
     return Boolean(row);
+  }
+
+  /**
+   * The latest earlier op on the topic that ran on `provider` and booked a
+   * positive cost, excluding `operationId` itself. Lets the heterogeneous finish
+   * path tell a session-cumulative Claude Code cost from a per-run one.
+   */
+  async findPreviousCostedOnTopic(params: {
+    operationId: string;
+    provider: string;
+    topicId: string;
+  }): Promise<PreviousCostedOperation | null> {
+    return findPreviousCostedTopicOperation(this.db, this.ownership(), params);
   }
 
   /**

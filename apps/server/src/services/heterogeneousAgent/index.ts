@@ -32,6 +32,11 @@ import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
 import {
+  CLAUDE_CODE_PROVIDER,
+  type PreviousClaudeCodeCost,
+  resolveClaudeCodeRunCost,
+} from './claudeCodeSessionCost';
+import {
   HeterogeneousPersistenceHandler,
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
@@ -662,15 +667,40 @@ export class HeterogeneousAgentService {
     // and hooks still fire, persistCompletion just records null aggregates.
     // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
     const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
+    // Older Claude Code clients report the session-cumulative cost (CC restores
+    // its cost state on `--resume`); compare against the topic's previous CC op
+    // so this run books only its own share, in the snapshot and the op row alike.
+    const previousClaudeCodeCost =
+      agentType === CLAUDE_CODE_PROVIDER
+        ? await this.findPreviousClaudeCodeCost(operationId, topicId)
+        : undefined;
     let totals: Awaited<ReturnType<HeteroTraceRecorder['finalize']>> | undefined;
     try {
       totals = await this.traceRecorder.finalize(operationId, {
         agentId,
         completionReason,
         error,
+        resolveCost: previousClaudeCodeCost
+          ? (reported) =>
+              resolveClaudeCodeRunCost({
+                inputTokens: reported.totalInputTokens,
+                outputTokens: reported.totalOutputTokens,
+                previous: previousClaudeCodeCost,
+                provider: agentType,
+                reportedCost: reported.totalCost,
+              })
+          : undefined,
         topicId,
         userId: this.userId,
       });
+      if (totals?.reportedSessionTotal !== undefined) {
+        log(
+          'heteroFinish: de-cumulated claude-code cost op=%s reported=%d booked=%d',
+          operationId,
+          totals.reportedSessionTotal,
+          totals.totalCost,
+        );
+      }
     } catch (err) {
       log('heteroFinish: trace finalize failed (non-fatal): %O', err);
     }
@@ -727,7 +757,12 @@ export class HeterogeneousAgentService {
       {
         agentId,
         assistantMessageId,
-        cost: { total: totals?.totalCost ?? null },
+        cost: {
+          ...(totals?.reportedSessionTotal === undefined
+            ? {}
+            : { reportedSessionTotal: totals.reportedSessionTotal }),
+          total: totals?.totalCost ?? null,
+        },
         deliverable: lastAssistantContent ?? '',
         error: error ?? undefined,
         goal: goalContent,
@@ -767,6 +802,31 @@ export class HeterogeneousAgentService {
       });
     }
     if (result === 'success' && steerScope) await this.startQueuedFollowUp(operationId, steerScope);
+  }
+
+  /**
+   * The previous costed Claude Code op on the topic, in the shape the cost guard
+   * compares against. Never throws: without it the reported cost stands.
+   */
+  private async findPreviousClaudeCodeCost(
+    operationId: string,
+    topicId: string,
+  ): Promise<PreviousClaudeCodeCost | undefined> {
+    try {
+      const previous = await this.agentOperationModel.findPreviousCostedOnTopic({
+        operationId,
+        provider: CLAUDE_CODE_PROVIDER,
+        topicId,
+      });
+      if (!previous) return undefined;
+      return {
+        reportedCost: previous.reportedSessionTotal ?? previous.totalCost,
+        reportedCumulative: previous.reportedSessionTotal !== null,
+      };
+    } catch (err) {
+      log('heteroFinish: previous claude-code cost lookup failed (non-fatal): %O', err);
+      return undefined;
+    }
   }
 
   /**
