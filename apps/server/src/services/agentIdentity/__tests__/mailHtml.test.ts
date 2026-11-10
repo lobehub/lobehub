@@ -75,6 +75,20 @@ describe('sanitizeMailHtml', () => {
     expect(html).toContain('<p>ok</p>');
   });
 
+  it('applies the src, href and style rules whatever the attribute casing', () => {
+    const result = sanitizeMailHtml(
+      `<img SRC="https://track.test/p.gif"><a HREF="javascript:alert(1)">x</a><p STYLE="background:url(https://evil.test/a.png)">y</p><IMG Src="https://track.test/q.gif" src="${PNG}">`,
+    )!;
+
+    expect(result.html).toBe(
+      `<img ${REMOTE_IMAGE_ATTRIBUTE}="https://track.test/p.gif">` +
+        `<a rel="noopener noreferrer" target="_blank">x</a>` +
+        `<p style="background: none">y</p>` +
+        `<img ${REMOTE_IMAGE_ATTRIBUTE}="https://track.test/q.gif">`,
+    );
+    expect(result.hasRemoteContent).toBe(true);
+  });
+
   it('removes comments, conditional comments included', () => {
     const { html } = sanitizeMailHtml(
       `<p>a</p><!--[if mso]><v:image src="https://evil.test/x.png"/><![endif]--><!-- secret -->`,

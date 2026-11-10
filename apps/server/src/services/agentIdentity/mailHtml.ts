@@ -202,15 +202,25 @@ const sanitizeElement = (element: any, state: { remote: boolean }): void => {
       continue;
     }
 
+    // The parser keeps an attribute's casing and looks names up case-sensitively,
+    // so every attribute is rebuilt under its lower-case name before any check:
+    // `SRC` or `HREF` must not slip past the `src` / `href` rules below. The
+    // first of a repeated name wins, as it does in a browser.
+    const attributes = new Map<string, string>();
     for (const { name, value } of [...child.attributes]) {
       const attribute = name.toLowerCase();
-      if (!ALLOWED_ATTRIBUTES.has(attribute)) {
-        child.removeAttribute(name);
-      } else if (attribute === 'style') {
-        const css = sanitizeMailCss(value).trim();
-        if (css) child.setAttribute(name, css);
-        else child.removeAttribute(name);
+      if (ALLOWED_ATTRIBUTES.has(attribute) && !attributes.has(attribute)) {
+        attributes.set(attribute, value);
       }
+      child.removeAttribute(name);
+    }
+    for (const [name, value] of attributes) {
+      if (name !== 'style') {
+        child.setAttribute(name, value);
+        continue;
+      }
+      const css = sanitizeMailCss(value).trim();
+      if (css) child.setAttribute(name, css);
     }
 
     if (tag === 'a') {
