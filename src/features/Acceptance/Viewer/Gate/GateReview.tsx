@@ -38,7 +38,7 @@ import { useAcceptanceComments } from '../Comments/hooks';
 import { acceptanceOverviewPath } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canReviewAcceptance, isReadOnlyAcceptanceDecider } from '../visibility';
-import { latestRound, unitArtifacts } from './dossier';
+import { latestRound } from './dossier';
 import SkillDirectory from './SkillDirectory';
 import UnitArtifacts from './UnitArtifacts';
 import { usePlanFiles } from './usePlanFiles';
@@ -331,9 +331,6 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
           ) : (
             <span className={styles.meta}>{t('acceptance.gate.unitWaitingHint')}</span>
           )}
-          {selection.kind === 'result' && (
-            <UnitArtifacts artifacts={unitArtifacts(selection.unit)} />
-          )}
           {brief && (
             <Flexbox gap={6}>
               <span className={styles.meta}>{t('acceptance.gate.unitBrief')}</span>
@@ -342,6 +339,7 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
               </Markdown>
             </Flexbox>
           )}
+          {selection.kind === 'result' && <UnitArtifacts unit={selection.unit} />}
         </Flexbox>
       </DraggablePanel>
     );

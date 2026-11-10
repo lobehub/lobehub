@@ -1,8 +1,15 @@
 import type { GoalGraphSnapshot } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { planUnitBrief } from './batchPlanSkill';
-import { buildReleaseGateDossier } from './releaseGate';
+import { buildReleaseGateDossier, withUnitWorks } from './releaseGate';
+
+const { listSummariesByIds } = vi.hoisted(() => ({ listSummariesByIds: vi.fn() }));
+vi.mock('@/database/models/work', () => ({
+  WorkModel: class {
+    listSummariesByIds = listSummariesByIds;
+  },
+}));
 
 const plan = {
   outline: '# Recipe\n\nMove each read to the replica.',
@@ -90,7 +97,34 @@ describe('buildReleaseGateDossier', () => {
         title: 'Move inbox reads to replica',
         type: 'external',
         url: 'https://github.com/lobehub/lobehub/pull/22737',
+        workId: 'work_1',
       },
     ]);
+  });
+});
+
+describe('withUnitWorks', () => {
+  const dossier = {
+    units: [
+      { artifacts: [{ title: 'PR', type: 'external', workId: 'work_1' }], nodeId: 'n1' },
+      { artifacts: [], nodeId: 'n2' },
+    ],
+  } as any;
+
+  /**
+   * Regression: the review drew its own output rows instead of the Work cards
+   * the conversation shows, because the dossier carried no Work summaries.
+   */
+  it("freezes each unit's outputs as Work summary cards", async () => {
+    listSummariesByIds.mockResolvedValueOnce([{ id: 'work_1', title: 'PR' }]);
+    const frozen = await withUnitWorks({} as any, { userId: 'u' }, dossier);
+    expect(listSummariesByIds).toHaveBeenCalledWith(['work_1']);
+    expect(frozen.units[0].works).toEqual([{ id: 'work_1', title: 'PR' }]);
+    expect(frozen.units[1].works).toBeUndefined();
+  });
+
+  it('keeps the plain artifact list when the read fails', async () => {
+    listSummariesByIds.mockRejectedValueOnce(new Error('db down'));
+    expect(await withUnitWorks({} as any, { userId: 'u' }, dossier)).toBe(dossier);
   });
 });

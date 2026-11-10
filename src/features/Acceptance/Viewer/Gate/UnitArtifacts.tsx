@@ -11,6 +11,10 @@ import {
   WORK_TYPE_DESCRIPTORS,
   type WorkIcon,
 } from '@/features/Work/descriptors';
+import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
+import { useOpenWork } from '@/features/WorkGallery/useOpenWork';
+
+import { unitArtifacts } from './dossier';
 
 type Artifact = GoalReleaseGateUnit['artifacts'][number];
 type ExternalItem = Parameters<(typeof WORK_TYPE_DESCRIPTORS)['external']['getIcon']>[0];
@@ -65,15 +69,23 @@ const ArtifactRow = memo<{ artifact: Artifact }>(({ artifact }) => {
 
 ArtifactRow.displayName = 'GateUnitArtifactRow';
 
-/** What a unit's run delivered — its PRs, documents, files — each opened where it lives. */
-const UnitArtifacts = memo<{ artifacts: Artifact[] }>(({ artifacts }) => {
+/**
+ * What a unit's run delivered — its PRs, documents, files — as the same Work
+ * cards the conversation lists under a reply, each opened where it lives. A
+ * dossier frozen before the cards were carried falls back to plain rows.
+ */
+const UnitArtifacts = memo<{ unit: GoalReleaseGateUnit }>(({ unit }) => {
   const { t } = useTranslation('verify');
+  const openWork = useOpenWork();
+  const artifacts = unitArtifacts(unit);
   return (
-    <Flexbox gap={6}>
+    <Flexbox gap={8}>
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.gate.unitArtifacts')}
       </Text>
-      {artifacts.length > 0 ? (
+      {unit.works?.length ? (
+        unit.works.map((work) => <WorkSummaryCard item={work} key={work.id} onOpen={openWork} />)
+      ) : artifacts.length > 0 ? (
         artifacts.map((artifact, index) => (
           <ArtifactRow artifact={artifact} key={artifact.url ?? `${artifact.title}-${index}`} />
         ))

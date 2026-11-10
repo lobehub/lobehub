@@ -1,5 +1,6 @@
 import type { GoalNodeStatus } from './goal';
 import type { GoalRolloutRetro, GoalRolloutVerifier } from './goalRetro';
+import type { WorkSummaryItem } from './work';
 
 /**
  * Batch rollout trigger. `off`/absent keeps the ordinary decomposition: a goal
@@ -212,6 +213,7 @@ export interface GoalReleaseGateUnit {
     title: string;
     type: string;
     url?: string;
+    workId?: string;
   }[];
   /** The unit's own brief: what it was asked to do. */
   brief?: string;
@@ -222,6 +224,11 @@ export interface GoalReleaseGateUnit {
   taskId?: string;
   title: string;
   tokens: number;
+  /**
+   * The same outputs as the conversation's Work cards show them, frozen when
+   * the gate opened. Absent from dossiers frozen by an older server.
+   */
+  works?: WorkSummaryItem[];
 }
 
 /**

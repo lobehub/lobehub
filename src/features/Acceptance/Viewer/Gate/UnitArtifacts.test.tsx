@@ -7,11 +7,45 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+const openWork = vi.fn();
+vi.mock('@/features/WorkGallery/useOpenWork', () => ({ useOpenWork: () => openWork }));
+vi.mock('@/features/Work/WorkSummaryCard', () => ({
+  default: ({ item, onOpen }: { item: { title: string }; onOpen: (item: unknown) => void }) => (
+    <button type="button" onClick={() => onOpen(item)}>
+      work-card:{item.title}
+    </button>
+  ),
+}));
+
+const unit = (patch: Record<string, unknown>) =>
+  ({ nodeId: 'n1', runs: 1, status: 'resolved', title: 'Unit', tokens: 0, ...patch }) as any;
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('UnitArtifacts', () => {
+  /**
+   * Regression: the review drew its own output rows instead of the Work cards
+   * the conversation lists under a reply, so the same PR looked different in
+   * the two places.
+   */
+  it("lists a unit's outputs with the conversation's Work cards and opens them", () => {
+    const work = { id: 'work_1', title: 'Move inbox reads to replica' };
+    render(
+      <UnitArtifacts
+        unit={unit({
+          artifacts: [
+            { title: work.title, type: 'external', url: 'https://example.com', workId: 'work_1' },
+          ],
+          works: [work],
+        })}
+      />,
+    );
+    fireEvent.click(screen.getByText('work-card:Move inbox reads to replica'));
+    expect(openWork).toHaveBeenCalledWith(work);
+  });
+
   /**
    * Regression: the gate's unit panel showed a unit's outputs as small gray
    * title links, without a pull request's number or state, so the owner could
@@ -21,16 +55,18 @@ describe('UnitArtifacts', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(
       <UnitArtifacts
-        artifacts={[
-          {
-            identifier: '#22737',
-            resourceType: 'github_pull_request',
-            status: 'open',
-            title: 'Move inbox reads to replica',
-            type: 'external',
-            url: 'https://github.com/lobehub/lobehub/pull/22737',
-          },
-        ]}
+        unit={unit({
+          artifacts: [
+            {
+              identifier: '#22737',
+              resourceType: 'github_pull_request',
+              status: 'open',
+              title: 'Move inbox reads to replica',
+              type: 'external',
+              url: 'https://github.com/lobehub/lobehub/pull/22737',
+            },
+          ],
+        })}
       />,
     );
 
@@ -48,7 +84,9 @@ describe('UnitArtifacts', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(
       <UnitArtifacts
-        artifacts={[{ title: 'Notes', type: 'external', url: 'javascript:alert(1)' }]}
+        unit={unit({
+          artifacts: [{ title: 'Notes', type: 'external', url: 'javascript:alert(1)' }],
+        })}
       />,
     );
     fireEvent.click(screen.getByText('Notes'));
@@ -56,7 +94,7 @@ describe('UnitArtifacts', () => {
   });
 
   it('says so when the unit registered no outputs', () => {
-    render(<UnitArtifacts artifacts={[]} />);
+    render(<UnitArtifacts unit={unit({ artifacts: [] })} />);
     expect(screen.getByText('acceptance.gate.unitArtifactsEmpty')).toBeInTheDocument();
   });
 });
