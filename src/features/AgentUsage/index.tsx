@@ -49,7 +49,7 @@ const AgentUsage = memo(() => {
     if (nextGranularity === 'week' && range === '7d') setRange('30d');
   };
 
-  const { data, isLoading, error, mutate } = useAgentUsageStats(
+  const { data, isLoading, error, revalidate } = useAgentUsageStats(
     activeAgentId ?? '',
     range,
     granularity,
@@ -124,7 +124,7 @@ const AgentUsage = memo(() => {
                 </Flexbox>
               </Flexbox>
               {showError ? (
-                <AsyncError error={error} variant={'metric'} onRetry={() => mutate()} />
+                <AsyncError error={error} variant={'metric'} onRetry={() => revalidate()} />
               ) : (
                 <StatCards
                   isLoading={isLoading}

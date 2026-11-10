@@ -553,35 +553,6 @@ export const apiKeyKeys = {
   list: def('apiKey:list', () => ['apiKey:list']),
 };
 
-// ---- stats (settings/stats + user header counts) ------------------------
-export const statsKeys = {
-  agentUsageStat: def(
-    'stats:agentUsageStat',
-    (agentId: string, startAt: string, endAt: string, granularity: string) => [
-      'stats:agentUsageStat',
-      agentId,
-      startAt,
-      endAt,
-      granularity,
-    ],
-  ),
-  agents: def('stats:agents', () => ['stats:agents']),
-  countAgents: def('stats:countAgents', () => ['stats:countAgents']),
-  countMessages: def('stats:countMessages', () => ['stats:countMessages']),
-  countTopics: def('stats:countTopics', () => ['stats:countTopics']),
-  heatmaps: def('stats:heatmaps', (type: string) => ['stats:heatmaps', type]),
-  maxTaskDuration: def('stats:maxTaskDuration', () => ['stats:maxTaskDuration']),
-  messages: def('stats:messages', () => ['stats:messages']),
-  rankAgents: def('stats:rankAgents', () => ['stats:rankAgents']),
-  rankModels: def('stats:rankModels', () => ['stats:rankModels']),
-  rankTopics: def('stats:rankTopics', () => ['stats:rankTopics']),
-  sessions: def('stats:sessions', () => ['stats:sessions']),
-  topics: def('stats:topics', () => ['stats:topics']),
-  usageLogs: def('stats:usageLogs', () => ['stats:usageLogs']),
-  usageStat: def('stats:usageStat', () => ['stats:usageStat']),
-  welcome: def('stats:welcome', () => ['stats:welcome']),
-};
-
 // ---- messenger / platform integration -----------------------------------
 export const messengerKeys = {
   agentsForBinding: def('messenger:agentsForBinding', (workspaceId: string | null | undefined) => [
@@ -981,7 +952,6 @@ export const swrKeys = {
   resource: resourceKeys,
   serverConfig: serverConfigKeys,
   share: shareKeys,
-  stats: statsKeys,
   taskLabel: taskLabelKeys,
   thread: threadKeys,
   tool: toolKeys,

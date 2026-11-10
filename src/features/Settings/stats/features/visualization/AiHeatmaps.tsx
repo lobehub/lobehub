@@ -5,9 +5,7 @@ import { CoinsIcon, FlameIcon, MessageSquareIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatIntergerNumber, formatShortenNumber } from '@/utils/format';
 
 import { HeatmapType } from '../../types';
@@ -23,9 +21,11 @@ const AiHeatmaps = memo<
   );
   const isTokens = type === HeatmapType.Tokens;
 
-  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(type), async () =>
-    isTokens ? messageService.getTokenHeatmaps() : messageService.getHeatmaps(),
-  );
+  statsActions.useFetchHeatmap(type);
+  const data = useStatsStore(statsSelectors.heatmap(type));
+  // A restored empty year predates any activity since; wait for the server.
+  const isConfirmed = useStatsStore(statsSelectors.isHeatmapConfirmed(type));
+  const loading = !data || (data.length === 0 && !isConfirmed);
 
   const days = data?.filter((item) => item.level > 0).length || '--';
   const hotDays = data?.filter((item) => item.level >= 3).length || '--';
@@ -37,7 +37,7 @@ const AiHeatmaps = memo<
       blockSize={mobile ? 6 : 14}
       data={data || []}
       hideTotalCount={isTokens}
-      loading={isLoading || !data}
+      loading={loading}
       maxLevel={4}
       customTooltip={(activity) =>
         t(isTokens ? 'heatmaps.tooltipTokens' : 'heatmaps.tooltip', {

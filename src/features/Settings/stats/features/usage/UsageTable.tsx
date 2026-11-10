@@ -1,7 +1,7 @@
 import { Flexbox, type TableColumn, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
@@ -10,9 +10,7 @@ import SpendType, { type SpendTypeValue } from '@/components/SpendType';
 import TablePagination from '@/components/TablePagination';
 import TotalToken from '@/components/TotalToken';
 import { parseAsInteger, useQueryStates } from '@/hooks/useQueryParam';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { usageService } from '@/services/usage';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatNumber, formatSpendTime } from '@/utils/format';
 
 import { type UsageChartProps } from '../../types';
@@ -48,9 +46,11 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   // namespace, so the two tables stay worded alike.
   const { t: tSpend } = useTranslation('spend');
 
-  const { data, isLoading, mutate } = useClientDataSWR(statsKeys.usageLogs(), async () =>
-    usageService.findByMonth(dateStrings),
-  );
+  statsActions.useFetchUsageLogs(dateStrings);
+  const data = useStatsStore(statsSelectors.usageLogs(dateStrings));
+  // A restored empty month predates any usage since; wait for the server.
+  const isConfirmed = useStatsStore(statsSelectors.isUsageLogsConfirmed(dateStrings));
+  const isLoading = !data || (data.length === 0 && !isConfirmed);
 
   // Page and page size move together — the size picker keeps the first visible
   // row in view, so it recalculates the page as well. One update, one
@@ -63,12 +63,6 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
     { clearOnDefault: true },
   );
   const [sort, setSort] = useState<SortState | null>(null);
-
-  useEffect(() => {
-    if (dateStrings) {
-      mutate();
-    }
-  }, [dateStrings]);
 
   const sorted = useMemo(() => {
     const getValue = sort && SORT_VALUES[sort.field];

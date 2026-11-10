@@ -1,8 +1,6 @@
 import dayjs from 'dayjs';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { usageService } from '@/services/usage';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { type AgentUsageGranularity } from '@/types/usage/usageRecord';
 
 export type TimeRange = '7d' | '30d' | '90d';
@@ -16,7 +14,8 @@ export const RANGE_DAYS: Record<TimeRange, number> = {
 /**
  * Fetch rich usage + cost stats for a single agent over the selected time range
  * and granularity. The range resolves to an inclusive `[startAt, endAt]` of the
- * last N days (ending today).
+ * last N days (ending today). Each range paints its last local copy on revisit
+ * and revalidates in the background.
  */
 export const useAgentUsageStats = (
   agentId: string,
@@ -29,8 +28,9 @@ export const useAgentUsageStats = (
     .startOf('day')
     .format('YYYY-MM-DD');
 
-  return useClientDataSWR(
-    agentId ? statsKeys.agentUsageStat(agentId, startAt, endAt, granularity) : null,
-    async () => usageService.getAgentUsageStats({ agentId, endAt, granularity, startAt }),
-  );
+  const params = agentId ? { agentId, endAt, granularity, startAt } : null;
+  const { error, revalidate } = statsActions.useFetchAgentUsage(params);
+  const data = useStatsStore(statsSelectors.agentUsage(params));
+
+  return { data, error, isLoading: !!params && !data, revalidate };
 };
