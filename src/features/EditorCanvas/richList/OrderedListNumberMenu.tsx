@@ -114,6 +114,20 @@ const findMarkerItem = (root: HTMLElement, x: number, y: number) => {
   }
 };
 
+/**
+ * Applies a valid number typed in the menu. The Enter is cancelled whether or
+ * not it applies: closing the menu hands focus back to the editor while this
+ * keydown still runs, and an uncancelled Enter splits the item at the caret.
+ */
+export const submitNumberOnEnter = (
+  event: { preventDefault: () => void },
+  value: number | null,
+  onSetValue: (value: number) => void,
+) => {
+  event.preventDefault();
+  if (value !== null && Number.isInteger(value) && value >= 0) onSetValue(value);
+};
+
 interface NumberMenuContentProps {
   numbering: ListNumbering;
   onContinue: () => void;
@@ -125,10 +139,6 @@ const NumberMenuContent = memo<NumberMenuContentProps>(
   ({ numbering, onContinue, onRestart, onSetValue }) => {
     const { t } = useTranslation('editor');
     const [value, setValue] = useState<number | null>(numbering.value);
-
-    const apply = () => {
-      if (value !== null && Number.isInteger(value) && value >= 0) onSetValue(value);
-    };
 
     return (
       <Flexbox gap={2}>
@@ -157,7 +167,7 @@ const NumberMenuContent = memo<NumberMenuContentProps>(
             style={{ width: 72 }}
             value={value}
             onChange={setValue}
-            onPressEnter={apply}
+            onPressEnter={(event) => submitNumberOnEnter(event, value, onSetValue)}
           />
         </Flexbox>
         <Button
