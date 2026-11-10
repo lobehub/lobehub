@@ -86,15 +86,18 @@ tags:
           "s3:GetObject"
         ],
         "NotAction": [],
-        "Resource": [
-          "arn:aws:s3:::lobe/*"
+        "NotResource": [
+          "arn:aws:s3:::lobe/llm-generation-tracing/*"
         ],
-        "NotResource": [],
         "Condition": {}
       }
     ]
   }
   ```
+
+  <Callout type={'warning'}>
+    配置了 S3 的部署默认开启 LLM 生成追踪，系统提示词与生成的输入 / 输出会存储在 `llm-generation-tracing/` 前缀下。上面的 `NotResource` 将该前缀排除在匿名读取之外，服务端带凭证的读取不受影响，请勿改回 `Resource`。如需完全关闭采集，可设置 `DISABLE_LLM_GENERATION_TRACING_S3=1`。
+  </Callout>
 
   点击保存即可。
 

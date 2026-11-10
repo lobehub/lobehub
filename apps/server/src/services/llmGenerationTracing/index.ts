@@ -16,6 +16,7 @@ import {
 } from '@/database/models/llmGenerationTracing';
 import { llmGenerationTracing } from '@/database/schemas/llmGenerationTracing';
 import { getServerDB } from '@/database/server';
+import { fileEnv } from '@/envs/file';
 
 const log = debug('lobe-server:llm-generation-tracing:service');
 
@@ -258,27 +259,77 @@ export class LLMGenerationFeedbackError extends Error {
   }
 }
 
-const createDefaultStore = (): ITracingStore | null => {
-  if (process.env.ENABLE_LLM_GENERATION_TRACING_S3 === '1') {
-    try {
-      // Require at call time so test environments without S3 wiring don't break.
+export type TracingStoreMode = 's3' | 'file' | 'none';
 
-      const { S3TracingStore } = require('@/server/modules/LLMGenerationTracing');
-      return new S3TracingStore();
-    } catch {
-      // S3 wiring not available — fall through to file store / null.
+/**
+ * Decide which store the default `LLMGenerationTracingService` instance gets.
+ *
+ * Collection is on by default wherever it can persist: the S3 store when S3 is
+ * configured (the common production shape), a local file store in development.
+ * Set `DISABLE_LLM_GENERATION_TRACING_S3=1` to opt out explicitly.
+ *
+ * The previous opt-in gate (`ENABLE_LLM_GENERATION_TRACING_S3=1`) is gone —
+ * deployments that already set it keep working, since configured S3 now
+ * implies collection.
+ */
+export const resolveDefaultStoreMode = (
+  env: NodeJS.ProcessEnv = process.env,
+  s3: Pick<
+    typeof fileEnv,
+    'S3_ACCESS_KEY_ID' | 'S3_BUCKET' | 'S3_ENDPOINT' | 'S3_SECRET_ACCESS_KEY'
+  > = fileEnv,
+): TracingStoreMode => {
+  if (env.DISABLE_LLM_GENERATION_TRACING_S3 === '1') return 'none';
+
+  const s3Configured =
+    !!s3.S3_ACCESS_KEY_ID && !!s3.S3_SECRET_ACCESS_KEY && !!s3.S3_ENDPOINT && !!s3.S3_BUCKET;
+
+  if (s3Configured) return 's3';
+  if (env.NODE_ENV === 'development') return 'file';
+  return 'none';
+};
+
+type TracingStoreLoader = () => ITracingStore;
+
+const loadS3TracingStore: TracingStoreLoader = () => {
+  // Require at call time so test environments without S3 wiring don't break.
+  const { S3TracingStore } = require('@/server/modules/LLMGenerationTracing');
+  return new S3TracingStore();
+};
+
+/**
+ * Build the default store for a resolved mode. The S3 loader is injectable so
+ * the failure-degradation path is unit-testable.
+ *
+ * Failure policy: when the S3 store cannot be constructed in `'s3'` mode,
+ * tracing stays off (null) instead of silently degrading to the plaintext file
+ * store — in production that would write full prompt/input/output payloads to
+ * local disk, and on read-only/serverless hosts it would report tracing as
+ * enabled while every save fails.
+ */
+export const createDefaultStore = (
+  mode: TracingStoreMode = resolveDefaultStoreMode(),
+  loadS3Store: TracingStoreLoader = loadS3TracingStore,
+): ITracingStore | null => {
+  switch (mode) {
+    case 's3': {
+      try {
+        return loadS3Store();
+      } catch {
+        return null;
+      }
+    }
+    case 'file': {
+      try {
+        return new FileTracingStore();
+      } catch {
+        return null;
+      }
+    }
+    case 'none': {
+      return null;
     }
   }
-
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      return new FileTracingStore();
-    } catch {
-      // Filesystem unavailable — fall through to null.
-    }
-  }
-
-  return null;
 };
 
 const autoExtractHint = (input: unknown): string | null => {
