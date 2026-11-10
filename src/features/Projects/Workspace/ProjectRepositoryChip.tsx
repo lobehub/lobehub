@@ -16,6 +16,8 @@ import type { useProjectRepository } from './useProjectRepository';
 interface ProjectRepositoryChipProps {
   /** Whether this member may link a repository to the project. */
   canManage: boolean;
+  /** Icon only, the repository in the tooltip — for a narrow composer. */
+  compact?: boolean;
   disabled?: boolean;
   projectId: string;
   state: ReturnType<typeof useProjectRepository>;
@@ -28,6 +30,7 @@ interface ProjectRepositoryChipProps {
  */
 const ProjectRepositoryChip = ({
   canManage,
+  compact,
   disabled,
   projectId,
   state,
@@ -43,23 +46,28 @@ const ProjectRepositoryChip = ({
     if (!canManage) return null;
     return (
       <button
+        aria-label={t('overview.context.repository.add')}
         disabled={disabled}
+        title={compact ? t('overview.context.repository.add') : undefined}
         type={'button'}
         {...stylex.props(workingDirectoryChipStyles.chip, styles.button)}
         onClick={addRepository}
       >
         <Icon icon={PlusIcon} size={14} />
-        <span>{t('overview.context.repository.add')}</span>
+        {!compact && <span>{t('overview.context.repository.add')}</span>}
       </button>
     );
   }
 
+  const slug = repositorySlug(repository) ?? repository.name;
   const label = (
     <>
       <Github size={14} />
-      <span {...stylex.props(workingDirectoryChipStyles.label)}>
-        {(repositorySlug(repository) ?? repository.name).split('/').pop() || repository.name}
-      </span>
+      {!compact && (
+        <span {...stylex.props(workingDirectoryChipStyles.label)}>
+          {slug.split('/').pop() || repository.name}
+        </span>
+      )}
     </>
   );
 
@@ -86,6 +94,7 @@ const ProjectRepositoryChip = ({
 
   const chip = (
     <button
+      aria-label={slug}
       data-testid={'project-repository-chip'}
       disabled={disabled}
       type={'button'}
@@ -97,8 +106,14 @@ const ProjectRepositoryChip = ({
   );
 
   return (
-    <Tooltip title={t('overview.context.repository.tooltip')}>
-      <div {...stylex.props(styles.shrinkable)}>
+    <Tooltip
+      title={
+        compact
+          ? `${slug} · ${t('overview.context.repository.tooltip')}`
+          : t('overview.context.repository.tooltip')
+      }
+    >
+      <div>
         {disabled ? (
           chip
         ) : (
@@ -112,18 +127,10 @@ const ProjectRepositoryChip = ({
 };
 
 const styles = stylex.create({
-  // The repository's name is what gives way in a narrow tray; the icon stays.
-  shrinkable: {
-    minWidth: 0,
-  },
   // Body size and color: the tray says where the work happens, not a footnote.
   button: {
     borderWidth: 0,
     fontFamily: 'inherit',
-    flexGrow: '0',
-    flexShrink: '1',
-    flexBasis: 'auto',
-    minWidth: 0,
     fontSize: '13px',
     color: cssVar.colorText,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },

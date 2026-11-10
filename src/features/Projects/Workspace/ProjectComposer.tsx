@@ -3,6 +3,7 @@
 import { ActionIcon, cssVar as lobeCssVar, Flexbox, Segmented, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { useSize } from 'ahooks';
 import { PlusIcon, SettingsIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +55,12 @@ const inputContainerProps = {
 
 /** How far the composer reaches up over the context tray behind it. */
 const TRAY_OVERLAP = CONTAINER_RADIUS;
+/**
+ * Below this width the tray drops its labels and keeps the icons, with the
+ * names in tooltips. Shrinking labels one by one could not keep every control
+ * whole in a narrow window; this always fits.
+ */
+const COMPACT_TRAY_WIDTH = 500;
 
 const styles = stylex.create({
   // The composer sits in front of the tray. The tray is inset by more than the
@@ -69,16 +76,14 @@ const styles = stylex.create({
   trayFrame: {
     paddingInline: '24px',
   },
-  // In a narrow window both names give way — the agent's and the repository's —
-  // but no control shrinks below its icon, so nothing spills into its neighbour.
+  // The left side gives way in a narrow window (the agent's name truncates);
+  // where the work happens, on the right, always stays whole.
   trayLeading: {
-    flexGrow: '1',
-    flexShrink: '1',
-    flexBasis: 'auto',
+    flex: '1',
+    minWidth: 0,
   },
   trayTrailing: {
-    flexShrink: 1,
-    minWidth: 0,
+    flexShrink: 0,
   },
   tray: {
     gap: '8px',
@@ -115,6 +120,9 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   const { t } = useTranslation('project');
   const { t: tHome } = useTranslation('home');
   const navigate = useWorkspaceAwareNavigate();
+  const trayRef = useRef<HTMLDivElement>(null);
+  const traySize = useSize(trayRef);
+  const compact = !!traySize && traySize.width < COMPACT_TRAY_WIDTH;
   const [mode, setMode] = useState<ProjectComposerMode>('chat');
 
   const [handledRequest, setHandledRequest] = useState(request);
@@ -179,7 +187,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
 
   return (
     <div ref={containerRef}>
-      <div {...stylex.props(styles.trayFrame)}>
+      <div ref={trayRef} {...stylex.props(styles.trayFrame)}>
         <Flexbox
           horizontal
           align={'center'}
@@ -203,6 +211,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             />
             <ProjectAgentSelect
               agents={agents}
+              compact={compact}
               disabled={sending}
               value={agentId}
               onChange={setPickedAgentId}
@@ -217,12 +226,13 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             {mode === 'chat' && (
               <ProjectRepositoryChip
                 canManage={canManageProject}
+                compact={compact}
                 disabled={sending}
                 projectId={project.id}
                 state={repositoryState}
               />
             )}
-            <ProjectRunTargetChip agentId={agentId} disabled={sending} />
+            <ProjectRunTargetChip agentId={agentId} compact={compact} disabled={sending} />
             <ActionIcon
               aria-label={t('overview.context.settings')}
               icon={SettingsIcon}

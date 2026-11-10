@@ -32,6 +32,8 @@ const TARGET_ICONS: Record<DeviceExecutionTarget, LucideIcon> = {
 
 interface ProjectRunTargetChipProps {
   agentId: string;
+  /** Icon only, the target in the tooltip — for a narrow composer. */
+  compact?: boolean;
   disabled?: boolean;
 }
 
@@ -41,7 +43,7 @@ interface ProjectRunTargetChipProps {
  * out, so an agent that runs anywhere else is offered the switch here; a device
  * pick stays with the conversation's own device picker.
  */
-const ProjectRunTargetChip = ({ agentId, disabled }: ProjectRunTargetChipProps) => {
+const ProjectRunTargetChip = ({ agentId, compact, disabled }: ProjectRunTargetChipProps) => {
   const { t } = useTranslation('project');
   const { t: tChat } = useTranslation('chat');
   const { agencyConfig, canDisplayExecutionTarget, canSelectExecutionTarget, workspaceScoped } =
@@ -65,8 +67,14 @@ const ProjectRunTargetChip = ({ agentId, disabled }: ProjectRunTargetChipProps) 
       toast.error(t('overview.context.target.switchFailed'));
   };
 
+  const label =
+    target === 'device'
+      ? t('overview.context.target.device')
+      : tChat(`heteroAgent.executionTarget.${target}`);
+
   const chip = (
     <button
+      aria-label={label}
       data-testid={'project-run-target-chip'}
       disabled={!switchable}
       type={'button'}
@@ -78,20 +86,17 @@ const ProjectRunTargetChip = ({ agentId, disabled }: ProjectRunTargetChipProps) 
       )}
     >
       <Icon icon={TARGET_ICONS[target]} size={14} />
-      <span {...stylex.props(workingDirectoryChipStyles.label)}>
-        {target === 'device'
-          ? t('overview.context.target.device')
-          : tChat(`heteroAgent.executionTarget.${target}`)}
-      </span>
+      {!compact && <span {...stylex.props(workingDirectoryChipStyles.label)}>{label}</span>}
       {switchable && <Icon icon={ChevronDownIcon} size={12} />}
     </button>
   );
 
-  const tooltip = onSandbox
+  const hint = onSandbox
     ? t('overview.context.target.sandboxTooltip')
     : target === 'none'
       ? t('overview.context.target.noneTooltip')
       : undefined;
+  const tooltip = compact ? [label, hint].filter(Boolean).join(' · ') : hint;
 
   if (!switchable)
     return (
