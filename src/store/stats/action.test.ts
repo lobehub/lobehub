@@ -206,6 +206,29 @@ describe('stats replicas', () => {
     await waitFor(() => expect(statsSelectors.isUsageLogsConfirmed('2026-01')(read())).toBe(true));
   });
 
+  it('seeds the stats page from storage before any card mounts', async () => {
+    await statsTotalResource.storage!.set(
+      { queryKey: statsTotalResource.storageKey('agents'), scope },
+      { data: { count: 14, prevCount: 1 }, updatedAt: 1 },
+    );
+    await statsHeatmapResource.storage!.set(
+      { queryKey: statsHeatmapResource.storageKey('tokens'), scope },
+      { data: cells(3), updatedAt: 1 },
+    );
+    await usageByDayResource.storage!.set(
+      { queryKey: usageByDayResource.storageKey('current'), scope },
+      { data: [{ day: 'stored' }] as never, updatedAt: 1 },
+    );
+
+    await statsActions.preHydrateStatsPage();
+
+    // No `useSync` has mounted: the route loader alone filled the store.
+    expect(statsSelectors.total('agents')(read())).toEqual({ count: 14, prevCount: 1 });
+    expect(statsSelectors.heatmap('tokens')(read())).toEqual(cells(3));
+    expect(statsSelectors.usageByDay()(read())).toEqual([{ day: 'stored' }]);
+    expect(statsSelectors.isHeatmapConfirmed('tokens')(read())).toBe(false);
+  });
+
   it("drops the previous identity's numbers on reset", async () => {
     vi.spyOn(topicService, 'countTopics').mockResolvedValue(3);
     renderHook(() => statsActions.useFetchTotal('topics'), { wrapper });

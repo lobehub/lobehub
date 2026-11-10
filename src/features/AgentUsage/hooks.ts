@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 
-import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
+import { type AgentUsageParams, statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { type AgentUsageGranularity } from '@/types/usage/usageRecord';
 
 export type TimeRange = '7d' | '30d' | '90d';
@@ -10,6 +10,25 @@ export const RANGE_DAYS: Record<TimeRange, number> = {
   '7d': 7,
   '90d': 90,
 };
+
+/** The usage read of one agent over the last `range` days, ending today. */
+export const agentUsageParams = (
+  agentId: string,
+  range: TimeRange,
+  granularity: AgentUsageGranularity,
+): AgentUsageParams => ({
+  agentId,
+  endAt: dayjs().endOf('day').format('YYYY-MM-DD'),
+  granularity,
+  startAt: dayjs()
+    .subtract(RANGE_DAYS[range] - 1, 'day')
+    .startOf('day')
+    .format('YYYY-MM-DD'),
+});
+
+/** The tab's initial range and granularity, also seeded by `agentUsageLoader`. */
+export const DEFAULT_RANGE: TimeRange = '30d';
+export const DEFAULT_GRANULARITY: AgentUsageGranularity = 'day';
 
 /**
  * Fetch rich usage + cost stats for a single agent over the selected time range
@@ -22,13 +41,7 @@ export const useAgentUsageStats = (
   range: TimeRange,
   granularity: AgentUsageGranularity,
 ) => {
-  const endAt = dayjs().endOf('day').format('YYYY-MM-DD');
-  const startAt = dayjs()
-    .subtract(RANGE_DAYS[range] - 1, 'day')
-    .startOf('day')
-    .format('YYYY-MM-DD');
-
-  const params = agentId ? { agentId, endAt, granularity, startAt } : null;
+  const params = agentId ? agentUsageParams(agentId, range, granularity) : null;
   const { error, revalidate } = statsActions.useFetchAgentUsage(params);
   const data = useStatsStore(statsSelectors.agentUsage(params));
 

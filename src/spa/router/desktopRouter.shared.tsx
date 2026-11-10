@@ -49,6 +49,7 @@ import { agentAccessLoader, agentGroupAccessLoader } from '@/spa/router/resource
 import { resourceRoute } from '@/spa/router/resourceRoutes';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
+import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { taskWorkspaceChildren } from '@/spa/router/taskWorkspaceRoutes';
 import { withSegmentFallback } from '@/spa/router/withSegmentFallback';
 import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
@@ -714,6 +715,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
           'Desktop > Settings > Tab',
         ),
         handle: { meta: settingsRouteMeta },
+        loader: statsPageLoader,
         path: ':tab',
       },
       // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse

@@ -1,4 +1,4 @@
-import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import { cacheScope, createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -50,6 +50,9 @@ type Setter = StoreSetter<StatsState>;
 const STATS_DEDUPE_MS = 10_000;
 
 const SYNC_OPTIONS = { dedupingInterval: STATS_DEDUPE_MS };
+
+const STATS_TOTAL_KINDS: StatsTotalKind[] = ['agents', 'topics', 'messages'];
+const STATS_RANK_KINDS: StatsRankKind[] = ['agents', 'models', 'topics'];
 
 const fetchTotal = async (kind: StatsTotalKind): Promise<StatsTotal> => {
   switch (kind) {
@@ -229,6 +232,46 @@ export class StatsActionImpl {
 
   useFetchAgentUsage = (params: AgentUsageParams | null): ReplicaSyncResult =>
     this.#agentUsage.useSync(params, SYNC_OPTIONS);
+
+  /**
+   * Seed the persisted Settings → Stats entries before the route commits (see
+   * `statsPageLoader`): `useSync` only hydrates after mount, which would leave
+   * the cards on their loading state for the IndexedDB read.
+   */
+  preHydrateStatsPage = (): Promise<unknown> => {
+    const scope = cacheScope.get();
+    // The slots may still hold the previous identity's rows; drop them before seeding.
+    for (const slice of [
+      this.#total,
+      this.#heatmap,
+      this.#rank,
+      this.#registration,
+      this.#maxTaskDuration,
+      this.#usageByDay,
+      this.#usageLogs,
+    ]) {
+      slice.ensureScope(scope);
+    }
+
+    return Promise.all([
+      ...STATS_TOTAL_KINDS.map((kind) => this.#total.hydrate(kind, scope)),
+      // The heatmap opens on its token tab.
+      this.#heatmap.hydrate('tokens', scope),
+      ...STATS_RANK_KINDS.map((kind) => this.#rank.hydrate(kind, scope)),
+      this.#registration.hydrate(SINGLE_KEY, scope),
+      this.#maxTaskDuration.hydrate(SINGLE_KEY, scope),
+      // The usage section opens on the current month.
+      this.#usageByDay.hydrate(usageMonthKey(), scope),
+      this.#usageLogs.hydrate(usageMonthKey(), scope),
+    ]);
+  };
+
+  /** Same as `preHydrateStatsPage`, for an agent's usage tab (`agentUsageLoader`). */
+  preHydrateAgentUsage = (params: AgentUsageParams): Promise<boolean> => {
+    const scope = cacheScope.get();
+    this.#agentUsage.ensureScope(scope);
+    return this.#agentUsage.hydrate(params, scope);
+  };
 
   reset = (): void => {
     // `clear()` drops in-flight reads of the previous data context and this

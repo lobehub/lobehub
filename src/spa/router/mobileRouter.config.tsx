@@ -23,6 +23,7 @@ import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mob
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
+import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -370,7 +371,12 @@ export const mobileRoutes: RouteObject[] = [
           // score, and the workspace tree would read `settings` as a slug.
           ...personalSettingsTabRoutes,
           // Other settings tabs (common, agent, memory, tts, about, etc.)
-          { element: settingsTabElement, handle: { meta: settingsParamTabMeta }, path: ':tab' },
+          {
+            element: settingsTabElement,
+            handle: { meta: settingsParamTabMeta },
+            loader: statsPageLoader,
+            path: ':tab',
+          },
           {
             element: settingsTabSubElement,
             handle: { meta: settingsParamTabMeta },
