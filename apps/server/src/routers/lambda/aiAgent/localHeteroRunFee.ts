@@ -55,14 +55,22 @@ export const localHeteroRunFeeRouter = router({
   finishLocalHeteroRunFee: aiAgentBaseProcedure
     .input(
       z.object({
+        /**
+         * How long the run lasted when it ended, as Desktop saw it. Cleanup after a
+         * stop (persisting, closing the CLI) can take seconds, so the time of this
+         * call overstates a stopped run. It can only shorten the duration the
+         * server measures.
+         */
+        durationMs: z.number().int().nonnegative().optional(),
         feeId: z.string().regex(LOCAL_HETERO_RUN_FEE_ID),
         reason: z.enum(['done', 'error', 'interrupted']),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const startedAt = Number(LOCAL_HETERO_RUN_FEE_ID.exec(input.feeId)![1]);
+      const elapsedMs = Math.max(0, Date.now() - startedAt);
       await settleAgentRunFee({
-        durationMs: Math.max(0, Date.now() - startedAt),
+        durationMs: Math.min(elapsedMs, input.durationMs ?? elapsedMs),
         operationId: input.feeId,
         reason: input.reason,
         userId: ctx.userId,

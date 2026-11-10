@@ -99,6 +99,26 @@ describe('local heterogeneous run fee', () => {
     });
   });
 
+  it('takes a shorter duration Desktop reports, never a longer one', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-10T00:00:00Z'));
+    const { feeId } = await caller().beginLocalHeteroRunFee({ topicId });
+    vi.setSystemTime(new Date('2026-11-10T00:00:35Z'));
+
+    await caller().finishLocalHeteroRunFee({
+      durationMs: 28_000,
+      feeId: feeId!,
+      reason: 'interrupted',
+    });
+    await caller().finishLocalHeteroRunFee({
+      durationMs: 90_000,
+      feeId: feeId!,
+      reason: 'interrupted',
+    });
+
+    expect(settleAgentRunFee.mock.calls.map(([args]) => args.durationMs)).toEqual([28_000, 35_000]);
+  });
+
   it('will not settle a fee id it did not mint', async () => {
     await expect(
       caller().finishLocalHeteroRunFee({ feeId: 'op_server_run', reason: 'error' }),

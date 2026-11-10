@@ -1849,9 +1849,12 @@ export const executeHeterogeneousAgent = async (
   }
 
   // A run this desktop spawns never reaches `execAgent`: it reports its fee here,
-  // and a refused fee ends the run before the CLI starts.
-  const refusedFee = params.runFee ? undefined : await claimLocalRunFee(runFee, params);
+  // and a refused fee, or a Stop while the hold was pending, ends it before the CLI starts.
+  const refusedFee = params.runFee
+    ? undefined
+    : await claimLocalRunFee(runFee, { ...params, workspaceId }, abortSignal);
   if (refusedFee) return void (await persistTerminalError(refusedFee));
+  if (isAborted()) return void (await settleLocalRunFee(runFee, { aborted: true, failed: false }));
 
   try {
     // Account routing: realize the pinned/balanced account choice as spawn env

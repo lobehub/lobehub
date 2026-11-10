@@ -101,13 +101,57 @@ describe('heterogeneousAgentExecutor run fee', () => {
 
     expect(mockBeginFee).toHaveBeenCalledWith(
       { topicId: 'topic-1' },
-      { signal: expect.any(AbortSignal) },
+      { signal: expect.any(AbortSignal), workspaceId: null },
     );
     expect(mockBeginFee.mock.invocationCallOrder[0]).toBeLessThan(
       mockStartSession.mock.invocationCallOrder[0],
     );
     expect(mockFinishFee).toHaveBeenCalledTimes(1);
-    expect(mockFinishFee).toHaveBeenCalledWith({ feeId: 'local_hetero_1_fee', reason: 'done' });
+    expect(mockFinishFee).toHaveBeenCalledWith(
+      { durationMs: expect.any(Number), feeId: 'local_hetero_1_fee', reason: 'done' },
+      { signal: expect.any(AbortSignal), workspaceId: null },
+    );
+  });
+
+  it('holds and settles in the scope the run started in', async () => {
+    await executeHeterogeneousAgent(() => createMockStore(), {
+      ...defaultParams,
+      workspaceId: null,
+    });
+
+    expect(mockBeginFee.mock.calls[0][1]).toMatchObject({ workspaceId: null });
+    expect(mockFinishFee.mock.calls[0][1]).toMatchObject({ workspaceId: null });
+  });
+
+  /**
+   * @example The user clicks Stop right after sending, while the fee hold is still pending.
+   */
+  it('does not start the CLI when the user stops during the fee hold', async () => {
+    // Before: the executor spawned the CLI once the hold returned, though the
+    // run had been stopped; the native cancel was registered only after spawn.
+    const abortController = new AbortController();
+    const store = createMockStore({
+      onOperationCancel: vi.fn(),
+      operations: {
+        'op-1': {
+          abortController,
+          context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+          metadata: { startTime: 0 },
+        },
+      },
+    });
+    mockBeginFee.mockImplementation(async () => {
+      abortController.abort();
+      return { feeId: 'local_hetero_1_fee' };
+    });
+
+    await executeHeterogeneousAgent(() => store, defaultParams);
+
+    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(mockFinishFee).toHaveBeenCalledWith(
+      expect.objectContaining({ feeId: 'local_hetero_1_fee', reason: 'interrupted' }),
+      expect.anything(),
+    );
   });
 
   /**
@@ -147,7 +191,10 @@ describe('heterogeneousAgentExecutor run fee', () => {
 
     await executeHeterogeneousAgent(() => createMockStore(), defaultParams);
 
-    expect(mockFinishFee).toHaveBeenCalledWith({ feeId: 'local_hetero_1_fee', reason: 'error' });
+    expect(mockFinishFee).toHaveBeenCalledWith(
+      expect.objectContaining({ feeId: 'local_hetero_1_fee', reason: 'error' }),
+      expect.anything(),
+    );
   });
 
   it('settles a stopped run as interrupted', async () => {
@@ -170,10 +217,46 @@ describe('heterogeneousAgentExecutor run fee', () => {
 
     await executeHeterogeneousAgent(() => store, defaultParams);
 
-    expect(mockFinishFee).toHaveBeenCalledWith({
-      feeId: 'local_hetero_1_fee',
-      reason: 'interrupted',
+    expect(mockFinishFee).toHaveBeenCalledWith(
+      expect.objectContaining({ feeId: 'local_hetero_1_fee', reason: 'interrupted' }),
+      expect.anything(),
+    );
+  });
+
+  /**
+   * @example The user stops a run and the cancel cleanup takes several more seconds.
+   */
+  it('reports the duration up to the Stop, not up to the end of cleanup', async () => {
+    // Before: the server measured until `finish` arrived, after cleanup, so the
+    // cleanup counted toward the stopped run's duration.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(0);
+    const abortController = new AbortController();
+    const store = createMockStore({
+      onOperationCancel: vi.fn(),
+      operations: {
+        'op-1': {
+          abortController,
+          context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+          metadata: { startTime: 0 },
+        },
+      },
     });
+    mockSendPrompt.mockImplementation(async (params: any) => {
+      ipc.emitRawLine(params.sessionId, ccInit());
+      vi.setSystemTime(28_000);
+      abortController.abort();
+      vi.setSystemTime(40_000);
+      ipc.emitComplete(params.sessionId);
+    });
+
+    try {
+      await executeHeterogeneousAgent(() => store, defaultParams);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(mockFinishFee.mock.calls[0][0]).toMatchObject({ durationMs: 28_000 });
   });
 
   it('holds one fee across a resume fallback retry', async () => {
@@ -191,7 +274,10 @@ describe('heterogeneousAgentExecutor run fee', () => {
     expect(mockStartSession).toHaveBeenCalledTimes(2);
     expect(mockBeginFee).toHaveBeenCalledTimes(1);
     expect(mockFinishFee).toHaveBeenCalledTimes(1);
-    expect(mockFinishFee).toHaveBeenCalledWith({ feeId: 'local_hetero_1_fee', reason: 'done' });
+    expect(mockFinishFee).toHaveBeenCalledWith(
+      expect.objectContaining({ feeId: 'local_hetero_1_fee', reason: 'done' }),
+      expect.anything(),
+    );
   });
 
   it.each([
