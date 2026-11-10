@@ -45,13 +45,18 @@ const styles = stylex.create({
     borderWidth: 1,
     color: cssVar.colorTextSecondary,
     cursor: 'pointer',
-    display: 'flex',
-    flexDirection: { 'default': 'column', '@media (max-width: 1100px)': 'row' },
+    // Below the board's breakpoint the list wraps under the timeline, so
+    // folding saves no width there: the full card shows instead.
+    display: { 'default': 'flex', '@media (max-width: 1100px)': 'none' },
+    flexDirection: 'column',
     gap: 12,
     paddingBlock: 12,
-    paddingInline: { 'default': 0, '@media (max-width: 1100px)': 12 },
+    paddingInline: 0,
     width: '100%',
   },
+  // Same breakpoint as the board's grid in `index.tsx`.
+  narrowOnly: { display: { 'default': 'none', '@media (max-width: 1100px)': 'block' } },
+  wideOnly: { display: { 'default': 'inline-flex', '@media (max-width: 1100px)': 'none' } },
   railCount: {
     alignItems: 'center',
     display: 'flex',
@@ -176,13 +181,50 @@ const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; no
   const waiting = items.filter((item) => item.kind === 'needs_human');
   const failed = items.filter((item) => item.kind === 'failed');
 
-  if (collapsed) {
-    const counts = [
-      { count: waiting.length, status: 'needs_human' as const },
-      { count: failed.length, status: 'failed' as const },
-    ].filter(({ count }) => count > 0);
+  const sections = [
+    { items: waiting.filter((item) => item.isMine), title: t('team.attention.needsYou') },
+    { items: waiting.filter((item) => !item.isMine), title: t('team.attention.blocked') },
+    { items: failed, title: t('team.attention.failed') },
+  ].filter((section) => section.items.length > 0);
 
-    return (
+  const card = (
+    <Flexbox gap={16} {...stylex.props(styles.card)} data-testid={'team-board-attention'}>
+      {sections.map((section, index) => (
+        <Section
+          items={section.items}
+          key={section.title}
+          now={now}
+          title={section.title}
+          action={
+            // The fold control rides on the first heading instead of adding a header row.
+            index === 0 && (
+              <span {...stylex.props(styles.wideOnly)}>
+                <ActionIcon
+                  data-testid={'team-board-attention-collapse'}
+                  icon={PanelRightCloseIcon}
+                  size={'small'}
+                  title={t('team.attention.collapse')}
+                  onClick={() => setCollapsed(true)}
+                />
+              </span>
+            )
+          }
+        />
+      ))}
+    </Flexbox>
+  );
+
+  if (!collapsed) return card;
+
+  const counts = [
+    { count: waiting.length, status: 'needs_human' as const },
+    { count: failed.length, status: 'failed' as const },
+  ].filter(({ count }) => count > 0);
+
+  // Both render; CSS picks one by width, so a fold made on a wide screen
+  // never hides the list on a narrow one.
+  return (
+    <>
       <Tooltip placement={'left'} title={t('team.attention.expand')}>
         <button
           aria-label={t('team.attention.expand')}
@@ -204,38 +246,8 @@ const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; no
           ))}
         </button>
       </Tooltip>
-    );
-  }
-
-  const sections = [
-    { items: waiting.filter((item) => item.isMine), title: t('team.attention.needsYou') },
-    { items: waiting.filter((item) => !item.isMine), title: t('team.attention.blocked') },
-    { items: failed, title: t('team.attention.failed') },
-  ].filter((section) => section.items.length > 0);
-
-  return (
-    <Flexbox gap={16} {...stylex.props(styles.card)} data-testid={'team-board-attention'}>
-      {sections.map((section, index) => (
-        <Section
-          items={section.items}
-          key={section.title}
-          now={now}
-          title={section.title}
-          action={
-            // The fold control rides on the first heading instead of adding a header row.
-            index === 0 && (
-              <ActionIcon
-                data-testid={'team-board-attention-collapse'}
-                icon={PanelRightCloseIcon}
-                size={'small'}
-                title={t('team.attention.collapse')}
-                onClick={() => setCollapsed(true)}
-              />
-            )
-          }
-        />
-      ))}
-    </Flexbox>
+      <div {...stylex.props(styles.narrowOnly)}>{card}</div>
+    </>
   );
 };
 
