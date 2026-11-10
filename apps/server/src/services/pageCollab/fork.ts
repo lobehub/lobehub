@@ -137,6 +137,13 @@ const countRoomBlocks = (doc: Y.Doc) =>
     .toDelta()
     .filter((op: { insert: unknown }) => typeof op.insert !== 'string').length;
 
+// Deletions only exist in a room that held content someone removed; a room that
+// was never bootstrapped, or was seeded blank, has none.
+const roomHasDeletions = (state: Uint8Array) => {
+  if (state.length === 0) return false;
+  return Y.decodeUpdate(state).ds.clients.size > 0;
+};
+
 export const projectPageState = async (state: Uint8Array) => {
   const fork = await openPageFork(state);
   try {
@@ -147,6 +154,8 @@ export const projectPageState = async (state: Uint8Array) => {
       ...exported,
       /** The room holds blocks the binding did not export: projecting would erase them. */
       lostBlocks: exportedBlocks === 0 && countRoomBlocks(fork.doc) > 0,
+      /** Someone removed content in the room, so an empty room may be a page cleared on purpose. */
+      roomRemovedContent: roomHasDeletions(state),
       title: readPageTitle(fork.doc),
     };
   } finally {

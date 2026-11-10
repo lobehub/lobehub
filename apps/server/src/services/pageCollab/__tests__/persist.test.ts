@@ -160,6 +160,21 @@ describe('persistPageState', () => {
       expect(store.updates[1].content).toBe('');
     });
 
+    it('accepts clearing a page after its remembered projection expired', async () => {
+      store.row = { content: 'body\n', editorData: await storedBody(), title: 'Report' };
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, await roomOf('body\n'));
+      const root = doc.get('root', Y.XmlText);
+      root.delete(0, root.length);
+      const cleared = Y.encodeStateAsUpdate(doc);
+      doc.destroy();
+
+      await persist(cleared);
+
+      expect(store.updates).toHaveLength(1);
+      expect(store.updates[0].content).toBe('');
+    });
+
     it('writes a room with content over a new, empty page', async () => {
       store.row = { content: '', editorData: null, title: 'Page' };
 

@@ -68,9 +68,8 @@ export const persistPageState = async (
   const meta = await getResourceMeta(db, 'document', documentId);
   if (!meta) return false;
 
-  const { editorData, lostBlocks, markdown, title } = await withHeadlessEditorLock(() =>
-    projectPageState(state),
-  );
+  const { editorData, lostBlocks, markdown, roomRemovedContent, title } =
+    await withHeadlessEditorLock(() => projectPageState(state));
   // A binding that fails to read the room exports an empty page; writing it
   // would erase the stored body and the version history's latest state.
   if (lostBlocks) throw new PageProjectionRejectedError(documentId);
@@ -88,9 +87,15 @@ export const persistPageState = async (
   // An empty room over a stored body is a room that never received that body:
   // never bootstrapped, or seeded by a client that had not loaded the page (a
   // page's first room opens when it moves into a workspace). Clearing the page
-  // in the room is only accepted once the room is known to have held the stored
-  // body, i.e. its last projection wrote exactly that body.
-  if (!markdown.trim() && hasStoredBody(row) && lastProjected !== storedDigest) {
+  // is accepted once the room is known to have held a body: its last projection
+  // wrote exactly the stored one, or the room records content being removed
+  // (the digest expires after a day and is absent without Redis).
+  if (
+    !markdown.trim() &&
+    hasStoredBody(row) &&
+    lastProjected !== storedDigest &&
+    !roomRemovedContent
+  ) {
     log('page %s: refusing an empty room projection over a stored body', documentId);
     throw new PageProjectionRejectedError(documentId, 'empty-room');
   }
