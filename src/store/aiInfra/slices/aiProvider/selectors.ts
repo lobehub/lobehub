@@ -1,4 +1,7 @@
-import { isProviderFetchOnClient as isSharedProviderFetchOnClient } from 'model-bank/modelProviders';
+import {
+  isProviderDeviceOnly as isSharedProviderDeviceOnly,
+  isProviderFetchOnClient as isSharedProviderFetchOnClient,
+} from 'model-bank/modelProviders';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { type AiProviderRuntimeConfig } from '@/types/aiProvider';
@@ -72,14 +75,19 @@ const providerConfigById =
 const isProviderConfigUpdating = (id: string) => (s: AIProviderStoreState) =>
   s.aiProviderConfigUpdatingIds.includes(id);
 
-/**
- * Whether requests to this provider leave from this device. The rule is shared
- * with the server (`isProviderFetchOnClient` in model-bank), which relays a
- * call back to this tab exactly when it applies.
- */
+/** Whether this browser calls the provider itself rather than through the server. */
 const isProviderFetchOnClient =
   (provider: GlobalLLMProviderKey | string) => (s: AIProviderStoreState) =>
     isSharedProviderFetchOnClient(provider, providerConfigById(provider)(s));
+
+/**
+ * Whether only this device can reach the provider. The rule is shared with the
+ * server (`isProviderDeviceOnly` in model-bank), which relays a server-run call
+ * back to this tab exactly when it applies.
+ */
+const isProviderDeviceOnly =
+  (provider: GlobalLLMProviderKey | string) => (s: AIProviderStoreState) =>
+    isSharedProviderDeviceOnly(provider, providerConfigById(provider)(s));
 
 const providerKeyVaults = (provider: string | undefined) => (s: AIProviderStoreState) => {
   if (!provider) return undefined;
@@ -126,6 +134,7 @@ export const aiProviderSelectors = {
   isAiProviderConfigLoading,
   isInitAiProviderRuntimeState,
   isProviderConfigUpdating,
+  isProviderDeviceOnly,
   isProviderEnableResponseApi,
   isProviderEnabled,
   isProviderFetchOnClient,

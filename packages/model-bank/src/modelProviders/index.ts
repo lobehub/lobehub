@@ -266,9 +266,9 @@ export interface ProviderFetchOnClientConfig {
 }
 
 /**
- * Whether requests to `provider` must leave from the user's device rather than
- * the server — the single rule the client and the server both apply, so the
- * server never relays a call the client did not prepare for (or the reverse).
+ * Whether requests to `provider` leave from the user's device rather than the
+ * server when the browser makes them. Whether a server-run call is relayed to
+ * the device is the narrower {@link isProviderDeviceOnly}.
  *
  * 1. A provider that disables browser requests always runs on the server.
  * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
@@ -290,6 +290,54 @@ export const isProviderFetchOnClient = (
   if (hasEndpoint && !hasApiKey) return true;
 
   return config?.fetchOnClient ?? false;
+};
+
+/** Loopback, `localhost` and RFC 1918 hosts: addresses a cloud server cannot reach. */
+const isPrivateNetworkUrl = (url: string) => {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  if (hostname === '[::1]' || hostname === '0.0.0.0') return true;
+
+  const ipv4 = hostname.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
+  if (!ipv4) return false;
+  const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+};
+
+/**
+ * Whether only the user's device can reach `provider`, so a server-run call
+ * has to be relayed to it (`agent_llm_relay`) — the rule the client and the
+ * server both apply to decide that.
+ *
+ * Narrower than {@link isProviderFetchOnClient}: a provider with an API key on
+ * a public endpoint is one the server can call itself even when the user chose
+ * to call it from the browser (`fetchOnClient`), so background runs (tasks,
+ * bots, schedules) that have no device attached keep working on it.
+ *
+ * 1. A provider that disables browser requests always runs on the server.
+ * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
+ * 3. Only a base URL: an endpoint the server may not reach, so the device.
+ * 4. A key and a loopback / private-network base URL: `fetchOnClient`, default the device.
+ * 5. Otherwise the server.
+ */
+export const isProviderDeviceOnly = (
+  provider: string,
+  config: ProviderFetchOnClientConfig | undefined,
+): boolean => {
+  if (isProviderDisableBrowserRequest(provider)) return false;
+
+  if (LOCAL_FETCH_ON_CLIENT_PROVIDERS.has(provider)) return config?.fetchOnClient ?? true;
+
+  const baseURL = config?.keyVaults?.baseURL;
+  if (!baseURL) return false;
+  if (!config?.keyVaults?.apiKey) return true;
+
+  return isPrivateNetworkUrl(baseURL) && (config.fetchOnClient ?? true);
 };
 
 /**

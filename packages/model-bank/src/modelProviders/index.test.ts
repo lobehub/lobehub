@@ -4,6 +4,7 @@ import { type ModelProviderCard } from '../types';
 import {
   DEFAULT_MODEL_PROVIDER_LIST,
   getProviderDisplayName,
+  isProviderDeviceOnly,
   isProviderDisableBrowserRequest,
   isProviderFetchOnClient,
   isProviderOAuthDeviceFlow,
@@ -86,5 +87,55 @@ describe('isProviderFetchOnClient', () => {
     const keyVaults = { apiKey: 'sk', baseURL: 'http://localhost:8000/v1' };
     expect(isProviderFetchOnClient('openai', { fetchOnClient: true, keyVaults })).toBe(true);
     expect(isProviderFetchOnClient('openai', { keyVaults })).toBe(false);
+  });
+});
+
+describe('isProviderDeviceOnly', () => {
+  it('relays a local provider unless fetchOnClient says otherwise', () => {
+    expect(isProviderDeviceOnly('ollama', undefined)).toBe(true);
+    expect(isProviderDeviceOnly('lmstudio', { keyVaults: {} })).toBe(true);
+    expect(isProviderDeviceOnly('ollama', { fetchOnClient: false })).toBe(false);
+  });
+
+  it('relays a provider with only a base URL', () => {
+    expect(
+      isProviderDeviceOnly('openai', { keyVaults: { baseURL: 'http://192.168.1.2:8000/v1' } }),
+    ).toBe(true);
+  });
+
+  it('relays a keyed provider on a private network unless fetchOnClient is off', () => {
+    for (const baseURL of [
+      'http://127.0.0.1:1234/v1',
+      'http://localhost:8000/v1',
+      'http://10.0.0.5/v1',
+      'http://172.20.1.1/v1',
+      'http://192.168.1.2:8000/v1',
+      'http://[::1]:8000/v1',
+    ]) {
+      expect(isProviderDeviceOnly('my-llm', { keyVaults: { apiKey: 'k', baseURL } })).toBe(true);
+    }
+    expect(
+      isProviderDeviceOnly('my-llm', {
+        fetchOnClient: false,
+        keyVaults: { apiKey: 'k', baseURL: 'http://127.0.0.1:1234/v1' },
+      }),
+    ).toBe(false);
+    expect(
+      isProviderDeviceOnly('my-llm', {
+        keyVaults: { apiKey: 'k', baseURL: 'http://172.32.0.1/v1' },
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps a provider with an API key on the server even with fetchOnClient', () => {
+    const keyVaults = { apiKey: 'sk-test', baseURL: 'https://api.example.com/v1' };
+    expect(isProviderDeviceOnly('openai', { fetchOnClient: true, keyVaults })).toBe(false);
+    expect(
+      isProviderDeviceOnly('openai', { fetchOnClient: true, keyVaults: { apiKey: 'k' } }),
+    ).toBe(false);
+  });
+
+  it('keeps a provider with neither on the server', () => {
+    expect(isProviderDeviceOnly('openai', { fetchOnClient: true, keyVaults: {} })).toBe(false);
   });
 });
