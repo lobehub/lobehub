@@ -1,11 +1,16 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveTurnProjectId } from './topicProject';
+import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
 
 const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
+  resolveProjectTopicSandbox: vi.fn(),
   resolveTask: vi.fn(),
+}));
+
+vi.mock('@/server/services/sandbox/projectPlacement', () => ({
+  resolveProjectTopicSandbox: mocks.resolveProjectTopicSandbox,
 }));
 
 vi.mock('@/database/models/project', () => ({
@@ -87,6 +92,63 @@ describe('resolveTurnProjectId', () => {
         requestedProjectId: 'proj-1',
         shareGate: {} as never,
       }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('withProjectSandbox', () => {
+  const sandbox = {
+    sandboxEnvironmentId: 'env-repo',
+    sandboxWorkingDirectory: 'projects/atlas/repo',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findById.mockImplementation(async (id: string) => ({ id, slug: 'atlas' }));
+    mocks.resolveProjectTopicSandbox.mockResolvedValue(sandbox);
+  });
+
+  // The sidebar's new topic is created by the run, not by the project home, so
+  // the repository has to be applied here too.
+  it("puts a new project conversation in the project's checkout", async () => {
+    await expect(
+      withProjectSandbox(deps, {
+        hasDirectory: false,
+        metadata: { reasoningConfig: { effort: 'high' } } as never,
+        projectId: 'proj-1',
+      }),
+    ).resolves.toEqual({ reasoningConfig: { effort: 'high' }, ...sandbox });
+    expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ project: { id: 'proj-1', slug: 'atlas' }, userId: 'user-1' }),
+    );
+  });
+
+  it('keeps a pick the composer already made', async () => {
+    const metadata = { sandboxWorkingDirectory: 'notes' };
+
+    await expect(
+      withProjectSandbox(deps, { hasDirectory: false, metadata, projectId: 'proj-1' }),
+    ).resolves.toBe(metadata);
+    expect(mocks.resolveProjectTopicSandbox).not.toHaveBeenCalled();
+  });
+
+  it('leaves a device directory conversation alone', async () => {
+    await expect(
+      withProjectSandbox(deps, { hasDirectory: true, metadata: undefined, projectId: 'proj-1' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('leaves a conversation outside any project alone', async () => {
+    await expect(
+      withProjectSandbox(deps, { hasDirectory: false, metadata: undefined, projectId: undefined }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('keeps the metadata unchanged when the project has no repository', async () => {
+    mocks.resolveProjectTopicSandbox.mockResolvedValue({});
+
+    await expect(
+      withProjectSandbox(deps, { hasDirectory: false, metadata: undefined, projectId: 'proj-1' }),
     ).resolves.toBeUndefined();
   });
 });

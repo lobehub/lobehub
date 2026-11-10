@@ -304,6 +304,19 @@ export default {
   'rename.title': 'Rename project',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
+  'overview.context.repository.add': 'Add a repository',
+  'overview.context.repository.addTitle': 'Add a repository to this project',
+  'overview.context.repository.attachFailed':
+    "The repository was created but couldn't be added to this project",
+  'overview.context.repository.tooltip':
+    "New conversations work in this repository. It's cloned before the first command runs.",
+  'overview.context.target.device': 'A connected device',
+  'overview.context.target.noneTooltip':
+    'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',
+  'overview.context.target.sandboxTooltip':
+    'Runs in the cloud sandbox, so none of your devices need to be online.',
+  'overview.context.target.switchFailed': "Couldn't change where this agent runs",
+  'overview.context.target.useSandbox': 'Use the cloud sandbox',
   'overview.sendHint': '⌘ ↵ to send',
   'overview.startConversation': 'Start moving',
   'overview.tasksEmpty': 'No tasks belong to this project yet.',

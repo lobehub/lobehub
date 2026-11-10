@@ -1,6 +1,8 @@
 'use client';
 
-import { cssVar, Flexbox, Segmented, toast } from '@lobehub/ui';
+import { cssVar as lobeCssVar, Flexbox, Segmented, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,14 +20,18 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import type { ProjectDetail } from '@/store/project';
 
+import { useCanManageProject } from '../useCanManageProject';
 import ProjectAgentSelect from './ProjectAgentSelect';
 import { projectComposerAgents } from './projectComposerAgents';
+import ProjectRepositoryChip from './ProjectRepositoryChip';
+import ProjectRunTargetChip from './ProjectRunTargetChip';
 import {
   AttachmentsNotReadyError,
   getProjectComposerContextKey,
   type ProjectComposerMode,
   useProjectComposer,
 } from './useProjectComposer';
+import { useProjectRepository } from './useProjectRepository';
 
 const leftActions: ActionKeys[] = [];
 const rightActions: ActionKeys[] = [];
@@ -39,9 +45,23 @@ const inputContainerProps = {
   resize: false,
   style: {
     borderRadius: CONTAINER_RADIUS,
-    boxShadow: cssVar.boxShadowSecondary,
+    boxShadow: lobeCssVar.boxShadowSecondary,
   },
 };
+
+const styles = stylex.create({
+  contextBar: {
+    gap: '8px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderStartStartRadius: `${CONTAINER_RADIUS}px`,
+    borderStartEndRadius: `${CONTAINER_RADIUS}px`,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+});
 const actionBarStyle = { paddingBlockEnd: ACTION_BAR_INSET, paddingInline: ACTION_BAR_INSET };
 
 export interface ProjectComposerRequest {
@@ -84,7 +104,11 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   // A pick that left the project (disabled or removed) falls back to the main agent.
   const agentId =
     agents.find((agent) => agent.id === pickedAgentId)?.id ?? project.coordinatorAgentId;
-  const { send, sending } = useProjectComposer(project, mode, agentId);
+  const repositoryState = useProjectRepository(project.id);
+  const canManageProject = useCanManageProject();
+  // A task is not started in a conversation, so it has no repository to pick.
+  const environmentId = mode === 'chat' ? repositoryState.repository?.id : undefined;
+  const { send, sending } = useProjectComposer(project, mode, agentId, environmentId);
 
   useInitAgentConfig(agentId);
   const isAgentConfigLoading = useAgentStore((s) =>
@@ -141,25 +165,43 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             actionBarStyle={actionBarStyle}
             dropdownPlacement="bottomLeft"
             inputContainerProps={inputContainerProps}
+            leftContent={<FileUpload includeKnowledge={false} />}
             showControlBar={false}
-            leftContent={
-              <Flexbox horizontal align={'center'} gap={4}>
-                <Segmented
-                  size={'small'}
-                  value={mode}
-                  options={[
-                    { label: t('overview.mode.chat'), value: 'chat' },
-                    { label: t('overview.mode.task'), value: 'task' },
-                  ]}
-                  onChange={(value) => setMode(value as ProjectComposerMode)}
-                />
-                <ProjectAgentSelect
-                  agents={agents}
-                  disabled={sending}
-                  value={agentId}
-                  onChange={setPickedAgentId}
-                />
-                <FileUpload includeKnowledge={false} />
+            extentHeaderContent={
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.contextBar).className}
+                justify={'space-between'}
+              >
+                <Flexbox horizontal align={'center'} gap={4}>
+                  <Segmented
+                    size={'small'}
+                    value={mode}
+                    options={[
+                      { label: t('overview.mode.chat'), value: 'chat' },
+                      { label: t('overview.mode.task'), value: 'task' },
+                    ]}
+                    onChange={(value) => setMode(value as ProjectComposerMode)}
+                  />
+                  <ProjectAgentSelect
+                    agents={agents}
+                    disabled={sending}
+                    value={agentId}
+                    onChange={setPickedAgentId}
+                  />
+                </Flexbox>
+                <Flexbox horizontal align={'center'} gap={2}>
+                  {mode === 'chat' && (
+                    <ProjectRepositoryChip
+                      canManage={canManageProject}
+                      disabled={sending}
+                      projectId={project.id}
+                      state={repositoryState}
+                    />
+                  )}
+                  <ProjectRunTargetChip agentId={agentId} disabled={sending} />
+                </Flexbox>
               </Flexbox>
             }
             placeholder={t(

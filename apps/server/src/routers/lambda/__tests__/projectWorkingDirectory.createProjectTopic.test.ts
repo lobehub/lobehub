@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   createTopic: vi.fn(),
   findById: vi.fn(),
   findManageableById: vi.fn(),
+  resolveProjectTopicSandbox: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -36,6 +37,10 @@ vi.mock('@/server/services/aiAgent/pipeline/precreatedTopic', () => ({
   resolvePrecreatedTopicSnapshot: vi.fn(async () => ({ snapshot: { model: 'gpt' } })),
 }));
 
+vi.mock('@/server/services/sandbox/projectPlacement', () => ({
+  resolveProjectTopicSandbox: mocks.resolveProjectTopicSandbox,
+}));
+
 vi.mock('../_helpers/conversationResourceGuard', () => ({
   assertCanUseConversationTargets: vi.fn(),
   assertCanUseTopicTargets: vi.fn(),
@@ -52,6 +57,7 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createTopic.mockImplementation(async (value) => ({ id: 'topic-1', ...value }));
+    mocks.resolveProjectTopicSandbox.mockResolvedValue({});
   });
 
   it('lets a workspace member who can read the project start a conversation in it', async () => {
@@ -72,5 +78,31 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
       'Project not found or access denied',
     );
     expect(mocks.createTopic).not.toHaveBeenCalled();
+  });
+
+  // The topic is written before any run, so a repository the project has must
+  // be on it from the start — otherwise the first message runs in an empty sandbox.
+  it("starts the conversation in the project's repository", async () => {
+    const project = { id: 'project-1', slug: 'atlas', userId: 'creator' };
+    mocks.findById.mockResolvedValue(project);
+    mocks.resolveProjectTopicSandbox.mockResolvedValue({
+      sandboxEnvironmentId: 'env-repo',
+      sandboxWorkingDirectory: 'projects/atlas/repo',
+    });
+
+    await caller().createProjectTopic({ ...input, environmentId: 'env-repo' });
+
+    expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'env-repo', project, workspaceId: 'ws-1' }),
+    );
+    expect(mocks.createTopic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: {
+          sandboxEnvironmentId: 'env-repo',
+          sandboxWorkingDirectory: 'projects/atlas/repo',
+        },
+        model: 'gpt',
+      }),
+    );
   });
 });

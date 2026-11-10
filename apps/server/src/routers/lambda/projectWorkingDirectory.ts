@@ -19,6 +19,7 @@ import {
   resolvePrecreatedTopicSnapshot,
 } from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveProjectTopicSandbox } from '@/server/services/sandbox/projectPlacement';
 
 import {
   assertCanUseConversationTargets,
@@ -133,6 +134,8 @@ export const projectWorkingDirectoryRouter = router({
       z.object({
         projectId: z.string(),
         agentId: z.string(),
+        /** The project repository the conversation works in; the first one when left out. */
+        environmentId: z.string().optional(),
         title: z.string().trim().min(1).max(255),
       }),
     )
@@ -143,16 +146,25 @@ export const projectWorkingDirectoryRouter = router({
       );
       // Everyone who can read a project collaborates in it, so starting a
       // project conversation needs read access, not ownership.
-      if (!(await ctx.projectModel.findById(input.projectId)))
-        throw new Error('Project not found or access denied');
-      const { snapshot } = await resolvePrecreatedTopicSnapshot(
-        ctx.precreatedTopicDeps,
-        input.agentId,
-      );
+      const project = await ctx.projectModel.findById(input.projectId);
+      if (!project) throw new Error('Project not found or access denied');
+      const [{ snapshot }, sandbox] = await Promise.all([
+        resolvePrecreatedTopicSnapshot(ctx.precreatedTopicDeps, input.agentId),
+        // A project with a repository works in it from the first message: the
+        // topic is written before any run, so no later pick would reach it.
+        resolveProjectTopicSandbox({
+          db: ctx.serverDB,
+          environmentId: input.environmentId,
+          project,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      ]);
       return {
         data: await ctx.topicModel.create({
           ...snapshot,
           agentId: input.agentId,
+          metadata: { ...snapshot.metadata, ...sandbox },
           projectId: input.projectId,
           title: input.title,
         }),
