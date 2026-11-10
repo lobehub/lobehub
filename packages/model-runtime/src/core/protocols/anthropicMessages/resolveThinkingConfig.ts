@@ -2,8 +2,8 @@ import {
   isAdaptiveThinkingDefaultOnModel,
   isAlwaysThinkingClaudeModel,
   isThinkingDisplayOmittedByDefaultModel,
-} from '../../providers/anthropic/modelId';
-import type { ChatStreamPayload } from '../../types';
+} from '../../../providers/anthropic/modelId';
+import type { ChatStreamPayload } from '../../../types';
 
 export interface ResolvedClaudeThinkingConfig {
   budget_tokens?: number;

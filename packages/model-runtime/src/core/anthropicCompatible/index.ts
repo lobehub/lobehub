@@ -32,29 +32,32 @@ import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
-import {
-  buildAnthropicMessages,
-  buildAnthropicTools,
-  buildSearchTool,
-} from '../contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../parameterResolver';
-import { AnthropicStream, type AnthropicStreamOptions } from '../streams';
-import { readableFromAsyncIterable } from '../streams/protocol';
-import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
-import {
-  type AnthropicGenerateObjectConfig,
-  createAnthropicGenerateObject,
-} from './generateObject';
-import { handleAnthropicError } from './handleAnthropicError';
 import {
   initializeAnthropicDiagnostics,
   observeAnthropicStream,
   recordAnthropicNonStreamingResponse,
   recordAnthropicResponseMetadata,
-} from './providerDiagnostics';
-import { resolveCacheTTL } from './resolveCacheTTL';
-import { resolveMaxTokens } from './resolveMaxTokens';
-import { resolveClaudeThinkingConfig } from './resolveThinkingConfig';
+} from '../protocols/anthropicMessages/diagnostics';
+import { handleAnthropicError } from '../protocols/anthropicMessages/errors';
+import {
+  type AnthropicGenerateObjectConfig,
+  createAnthropicGenerateObject,
+} from '../protocols/anthropicMessages/generateObject';
+import {
+  buildAnthropicMessages,
+  buildAnthropicTools,
+  buildSearchTool,
+} from '../protocols/anthropicMessages/messages';
+import { resolveCacheTTL } from '../protocols/anthropicMessages/resolveCacheTTL';
+import { resolveMaxTokens } from '../protocols/anthropicMessages/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../protocols/anthropicMessages/resolveThinkingConfig';
+import {
+  AnthropicStream,
+  type AnthropicStreamOptions,
+} from '../protocols/anthropicMessages/stream';
+import { readableFromAsyncIterable } from '../streams/protocol';
+import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 
 type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions &
   ModelIdMappingOptions &

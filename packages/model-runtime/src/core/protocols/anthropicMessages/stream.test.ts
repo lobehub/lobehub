@@ -1,8 +1,8 @@
 import type { Stream } from '@anthropic-ai/sdk/streaming';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AnthropicStream } from './anthropic';
-import { createReadableStream } from './utils';
+import { createReadableStream } from '../../streams/utils';
+import { AnthropicStream } from './stream';
 
 const createMessageStart = <T>(id: string, model: string, usage: T) => ({
   type: 'message_start',

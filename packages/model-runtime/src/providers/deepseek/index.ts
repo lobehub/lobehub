@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import {
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
-} from '../../core/anthropicCompatibleFactory';
+} from '../../core/anthropicCompatible';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';

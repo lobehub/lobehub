@@ -1,15 +1,15 @@
 import type { OpenAI } from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { OpenAIChatMessage, UserMessageContentPart } from '../../types/chat';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
-import { parseDataUri } from '../../utils/uriParser';
+import type { OpenAIChatMessage, UserMessageContentPart } from '../../../types/chat';
+import { imageUrlToBase64 } from '../../../utils/imageToBase64';
+import { parseDataUri } from '../../../utils/uriParser';
 import {
   buildAnthropicBlock,
   buildAnthropicMessage,
   buildAnthropicMessages,
   buildAnthropicTools,
-} from './anthropic';
+} from './messages';
 
 const createAssistantToolMessage = (): OpenAIChatMessage => ({
   content: '正在搜索...',
@@ -63,8 +63,8 @@ const createSearchTools = (): OpenAI.ChatCompletionTool[] => [
 ];
 
 // Mock the parseDataUri function since it's an implementation detail
-vi.mock('../../utils/uriParser');
-vi.mock('../../utils/imageToBase64', async (importOriginal) => ({
+vi.mock('../../../utils/uriParser');
+vi.mock('../../../utils/imageToBase64', async (importOriginal) => ({
   ...((await importOriginal()) as object),
   imageUrlToBase64: vi.fn(),
 }));
