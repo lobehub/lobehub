@@ -285,23 +285,6 @@ export const workKeys = {
   ),
 };
 
-// ---- brief --------------------------------------------------------------
-// The unresolved brief feed no longer has an SWR key: it moved onto
-// `local-replica` (`briefList`, partitioned by identity scope). Only the
-// day-scoped news digest still reads through SWR.
-export const briefKeys = {
-  /**
-   * Day-scoped news digest (`insight` + `result`, resolved included), keyed by
-   * the viewer's local day (`YYYY-MM-DD`) on top of the identity scope.
-   */
-  news: def('brief:news', (isLogin: boolean, scope: string, day: string) => [
-    'brief:news',
-    isLogin,
-    scope,
-    day,
-  ]),
-};
-
 // ---- agent config / available / search ----------------------------------
 export const agentConfigKeys = {
   search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
@@ -865,7 +848,6 @@ export const swrKeys = {
   agentHome: agentHomeKeys,
   agentSignal: agentSignalKeys,
   auth: authKeys,
-  brief: briefKeys,
   canvas: canvasKeys,
   changelog: changelogKeys,
   cron: cronKeys,

@@ -27,6 +27,7 @@ import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
+import { briefListResource } from '@/store/brief/slices/list/projection';
 import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
@@ -328,7 +329,9 @@ export class GoalActionImpl {
       this.refreshGoalGraph(goalId),
       mutate(goalKeys.pendingForIsland()),
       revalidateReplica(homeGoalListResource),
-      mutate((key) => Array.isArray(key) && key[0] === 'brief:list'),
+      // The inbox brief carrying the same gate is a replica: an SWR key prefix
+      // (the old `brief:list`) no longer reaches it.
+      revalidateReplica(briefListResource),
     ]);
   };
 
