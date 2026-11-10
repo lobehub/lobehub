@@ -54,7 +54,7 @@ const unfundedRunFeeError = (): ChatMessageError => ({
  *
  * Any other failure (a server without this endpoint, a network blip, a hold
  * slower than {@link LOCAL_RUN_FEE_HOLD_TIMEOUT_MS}) lets the run go ahead without a fee, as the server's own hold does on failures that
- * are not a refusal: a $0.01 fee is not worth failing a run the user started.
+ * are not a refusal: a run fee is not worth failing a run the user started.
  */
 export const claimLocalRunFee = async (
   claim: LocalRunFeeClaim,
@@ -105,7 +105,7 @@ export const settleLocalRunFee = async (
 
 /**
  * The end reason the server's fee rules read, from how the executor saw the run
- * end. A stop counts as `interrupted` (charged only after 30s); a failure
+ * end. A stop counts as `interrupted`, which the deployment's rules settle; a failure
  * gives the fee back; any other ending, including a run that exits cleanly
  * without an explicit reason, is a finished run.
  */
