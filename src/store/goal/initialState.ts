@@ -4,7 +4,7 @@ import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type { GoalListItem } from '@/services/goal';
 import type { MetricSeriesWithPoints } from '@/services/metric';
 
-import type { GoalListValue } from './projection';
+import type { GoalListValue, GoalShareValue } from './projection';
 
 export type { GoalListItem };
 /**
@@ -50,6 +50,14 @@ export interface GoalState {
   goalMetricSeriesById: Record<string, MetricSeriesWithPoints[]>;
   /** Local-first bookkeeping for `goalMetricSeriesById`. */
   goalMetricSeriesReplica: ReplicaState<MetricSeriesWithPoints[]>;
+  /**
+   * The owner's share record per goal id: `{ share: null }` is a settled
+   * "not shared", a missing key is "not read yet". Read it through
+   * `goalSelectors.goalShare`.
+   */
+  goalShareById: Record<string, GoalShareValue>;
+  /** Local-first bookkeeping for `goalShareById`. */
+  goalShareReplica: ReplicaState<GoalShareValue>;
   /** Goals whose title is being generated right now, for the header's loading state. */
   goalTitleRenamingIds: string[];
   goalViewMode: GoalViewMode;
@@ -77,6 +85,8 @@ export const initialState: GoalState = {
   goalListVisibleLimit: 10,
   goalMetricSeriesById: {},
   goalMetricSeriesReplica: createReplicaState(),
+  goalShareById: {},
+  goalShareReplica: createReplicaState(),
   goalTitleRenamingIds: [],
   goalViewMode: 'list',
   homeGoalsByScope: {},

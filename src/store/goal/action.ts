@@ -14,6 +14,7 @@ import {
   type GoalMetricCriterion,
   type GoalTickResult,
   RequestTrigger,
+  type ShareVisibility,
 } from '@lobechat/types';
 
 import {
@@ -26,6 +27,7 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
+import { goalShareService } from '@/services/goalShare';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
 import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 import type { StoreSetter } from '@/store/types';
@@ -47,6 +49,8 @@ import {
   goalListScopeParams,
   type GoalListValue,
   goalMetricSeriesResource,
+  goalShareResource,
+  type GoalShareValue,
   homeGoalListResource,
   topicGoalListResource,
 } from './projection';
@@ -199,6 +203,7 @@ export class GoalActionImpl {
   /** The list rows wherever they are held: the scope's tabs and the home rail. */
   readonly #goalListRows;
   readonly #goalMetricSeries;
+  readonly #goalShare;
   readonly #homeGoalList;
   readonly #set: Setter;
   readonly #topicGoalList;
@@ -283,6 +288,15 @@ export class GoalActionImpl {
       set,
       stateKey: 'goalMetricSeriesReplica',
       view: recordLens<GoalStore, MetricSeriesWithPoints[]>('goalMetricSeriesById'),
+    });
+
+    this.#goalShare = createReplicaSlice(goalShareResource, {
+      actionPrefix: 'goalShare',
+      fetcher: async (goalId) => ({ share: await goalShareService.getInfo(goalId) }),
+      get,
+      set,
+      stateKey: 'goalShareReplica',
+      view: recordLens<GoalStore, GoalShareValue>('goalShareById'),
     });
   }
 
@@ -650,6 +664,46 @@ export class GoalActionImpl {
       },
       refreshInterval: shouldPoll ? GOAL_GRAPH_POLL_INTERVAL : 0,
       revalidateOnFocus: true,
+    });
+    return { ...sync, isLoading: sync.isValidating, mutate: sync.revalidate };
+  };
+
+  /**
+   * Make the goal reachable by link (or owner-only). The record carries an id
+   * only the server can mint, so there is nothing to show optimistically: the
+   * write is followed by a fresh read of the share.
+   */
+  enableGoalShare = async (goalId: string, visibility: ShareVisibility): Promise<void> => {
+    await goalShareService.enable(goalId, visibility);
+    await this.#goalShare.fetch(goalId, { fresh: true });
+  };
+
+  /** The toggle flips at once and snaps back if the server refuses. */
+  setGoalShareVisibility = async (goalId: string, visibility: ShareVisibility): Promise<void> => {
+    await this.#goalShare.optimistic(
+      goalId,
+      (value) => (value.share ? { share: { ...value.share, visibility } } : value),
+      () => goalShareService.setVisibility(goalId, visibility),
+    );
+  };
+
+  /** Stop sharing: the link stops resolving, and a later share starts a fresh one. */
+  disableGoalShare = async (goalId: string): Promise<void> => {
+    await this.#goalShare.optimistic(
+      goalId,
+      () => ({ share: null }),
+      () => goalShareService.disable(goalId),
+    );
+  };
+
+  /**
+   * The owner's share record of a goal, read through `goalSelectors.goalShare`.
+   * `enabled` keeps the read off for a viewer who may not manage the share
+   * (the server answers 403) and for a goal that has nothing to share yet.
+   */
+  useFetchGoalShare = (goalId?: string | null, enabled = true) => {
+    const sync = this.#goalShare.useSync(enabled && goalId ? goalId : null, {
+      revalidateOnFocus: false,
     });
     return { ...sync, isLoading: sync.isValidating, mutate: sync.revalidate };
   };
