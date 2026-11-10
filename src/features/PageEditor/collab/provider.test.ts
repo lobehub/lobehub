@@ -141,6 +141,36 @@ describe('PageCollabProvider', () => {
     expect(onPendingChange).toHaveBeenLastCalledWith(0);
   });
 
+  it('reports a local edit once synced, but not what the editor writes while syncing or bootstrapping', async () => {
+    const { deliver, mux, ready } = createMux();
+    const doc = new Y.Doc();
+    const onLocalEdit = vi.fn();
+    const onBootstrap = vi.fn(() => doc.getText('t').insert(0, 'from db'));
+    const provider = new PageCollabProvider('doc_1', doc, mux as any, { onBootstrap, onLocalEdit });
+    provider.on('sync', () => doc.getText('t').insert(0, 'root paragraph'));
+
+    provider.connect();
+    ready();
+    deliver(
+      synced({
+        bootstrap: true,
+        bootstrapped: false,
+        update: b64(Y.encodeStateAsUpdate(new Y.Doc())),
+      }),
+    );
+    await Promise.resolve();
+    deliver({ documentId: 'doc_1', seq: 1, type: 'doc_ack' });
+    deliver({
+      documentId: 'doc_1',
+      type: 'doc_update',
+      update: b64(Y.encodeStateAsUpdate(roomWith('remote'))),
+    });
+    expect(onLocalEdit).not.toHaveBeenCalled();
+
+    doc.getText('t').insert(0, 'typed');
+    expect(onLocalEdit).toHaveBeenCalledOnce();
+  });
+
   it('does not echo remote updates back to the room', () => {
     const { deliver, mux, ready, sent } = createMux();
     const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any);

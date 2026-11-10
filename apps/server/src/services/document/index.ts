@@ -189,6 +189,17 @@ export class DocumentService {
     return Boolean(this.workspaceId && doc?.workspaceId && doc.visibility !== 'private');
   }
 
+  async assertCanWriteBody(id: string, lockOwnerId?: string) {
+    const document = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(document)) return;
+    if (await this.editLockService.canWrite('document', id, lockOwnerId)) return;
+    throw new TRPCError({
+      cause: { data: { code: 'DocumentLocked' } },
+      code: 'CONFLICT',
+      message: 'Document is being edited by another user',
+    });
+  }
+
   private async deleteFileRecordAndStorage(fileId: string) {
     const file = await this.fileModel.delete(fileId);
     if (!file?.url || file.url.startsWith('internal://')) return;

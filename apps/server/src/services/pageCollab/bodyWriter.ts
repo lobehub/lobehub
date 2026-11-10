@@ -148,6 +148,15 @@ export const updateDocumentThroughRoom = async (
     return service.updateDocument(documentId, params);
   }
 
+  // An editor outside the room carries its lock session. The room's members share
+  // the page lock, so this save must not merge over their edits while they hold it.
+  if (params.lockOwnerId) {
+    await new DocumentService(db, writer.userId, writer.workspaceId).assertCanWriteBody(
+      documentId,
+      params.lockOwnerId,
+    );
+  }
+
   const routed = await writePageBodyThroughRoom(
     db,
     documentId,

@@ -10,6 +10,7 @@ const room = vi.hoisted(() => ({ bootstrapped: true, doc: null as any, pushes: [
 const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true, ENABLE_WORKSPACE_PAGE_COLLAB: false }));
 const stored = vi.hoisted(() => ({ workspaceId: undefined as string | undefined }));
 const persisted = vi.hoisted(() => [] as any[]);
+const lock = vi.hoisted(() => ({ heldByOther: false }));
 
 vi.mock('@/envs/app', () => ({ appEnv: env }));
 
@@ -42,6 +43,9 @@ vi.mock('@/server/services/pageCollab/persist', () => ({
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
     getDocumentById = async () => ({ title: 'Page', workspaceId: stored.workspaceId });
+    assertCanWriteBody = async () => {
+      if (lock.heldByOther) throw new Error('Document is being edited by another user');
+    };
   },
 }));
 
@@ -190,9 +194,43 @@ describe('writePageBodyThroughRoom titles', () => {
 describe('updateDocumentThroughRoom', () => {
   beforeEach(async () => {
     env.ENABLE_PAGE_COLLAB = true;
+    lock.heldByOther = false;
     room.bootstrapped = true;
     room.pushes = [];
     await seedRoom('para one\n');
+  });
+
+  it('refuses a save from outside the room while someone else holds the page lock', async () => {
+    lock.heldByOther = true;
+    const documents = service();
+
+    await expect(
+      updateDocumentThroughRoom(
+        {} as any,
+        documents,
+        'doc_1',
+        { content: 'para ONE\n', lockOwnerId: 'page:doc_1:b' },
+        { userId: 'u1' },
+      ),
+    ).rejects.toThrow('being edited by another user');
+
+    expect(room.pushes).toEqual([]);
+    expect(documents.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it('lets a writer without a lock session, like the CLI, merge into the room', async () => {
+    lock.heldByOther = true;
+    const documents = service();
+
+    await updateDocumentThroughRoom(
+      {} as any,
+      documents,
+      'doc_1',
+      { content: 'para ONE\n' },
+      { userId: 'u1' },
+    );
+
+    expect(await markdownOfRoom()).toBe('para ONE\n');
   });
 
   const service = () => ({ updateDocument: vi.fn(async (id: string) => ({ id }) as any) });

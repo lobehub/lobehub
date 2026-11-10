@@ -101,6 +101,9 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
       onCharLimitExceeded: (refusal) =>
         useDocumentStore.getState().setCharLimitRefusal(documentId!, refusal),
       onCharLimitCleared: () => useDocumentStore.getState().clearCharLimitRefusal(documentId!),
+      onLocalEdit: () => {
+        if (!storeApi.getState().collab?.edited) setCollab({ edited: true });
+      },
       onPendingChange: (pending) => setCollab({ pending }),
       onReset: (reason) => {
         const editor = storeApi.getState().editor;

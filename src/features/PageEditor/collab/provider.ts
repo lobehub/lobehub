@@ -65,6 +65,8 @@ export interface PageCollabProviderEvents {
    */
   onCharLimitExceeded?: (refusal: PageCollabCharLimitRefusal) => void;
   onFailure?: (failure: PageCollabFailure) => void;
+  /** This member changed the page, as opposed to the editor syncing or bootstrapping it. */
+  onLocalEdit?: () => void;
   onPendingChange?: (pending: number) => void;
   onReset?: (reason: PageCollabResetReason) => void;
   onStatus?: (status: PageCollabStatus) => void;
@@ -176,6 +178,7 @@ export class PageCollabProvider extends Emitter {
   private bootstrapping = false;
   private conflicted = false;
   private synced = false;
+  private acceptsEdits = false;
   // The hub refuses anything for the document until its subscribe settles, and a
   // refusal before the first sync fails the join.
   private subscribed = false;
@@ -284,6 +287,7 @@ export class PageCollabProvider extends Emitter {
 
   private handleLocalUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === this) return;
+    if (this.acceptsEdits && !this.bootstrapping) this.events.onLocalEdit?.();
     const seq = ++this.seq;
     this.pending.add(seq);
     this.events.onPendingChange?.(this.pending.size);
@@ -304,6 +308,7 @@ export class PageCollabProvider extends Emitter {
     this.waitingForBootstrap = false;
     this.emit('status', { status: 'connected' });
     this.emit('sync', true);
+    this.acceptsEdits = true;
     this.events.onStatus?.('synced');
   }
 

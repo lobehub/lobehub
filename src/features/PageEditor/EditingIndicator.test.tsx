@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import EditingIndicator from './EditingIndicator';
 
 const mockPage: { current: Record<string, unknown> } = { current: {} };
+const lock = vi.hoisted(() => ({ lockedByOther: false }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -25,11 +26,12 @@ vi.mock('@/store/document/slices/editor', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({ useAuthorInfo: () => undefined }));
-vi.mock('./usePageLockedByOther', () => ({ usePageLockedByOther: () => false }));
+vi.mock('./usePageLockedByOther', () => ({ usePageLockedByOther: () => lock.lockedByOther }));
 vi.mock('./usePageLockedBySelf', () => ({ usePageLockedBySelf: () => false }));
 
 describe('EditingIndicator while the agent edits', () => {
   beforeEach(() => {
+    lock.lockedByOther = false;
     mockPage.current = { documentId: 'doc-1', isWorkspacePage: true };
   });
 
@@ -45,5 +47,18 @@ describe('EditingIndicator while the agent edits', () => {
     render(<EditingIndicator />);
 
     expect(screen.queryByText('pageEditor.agentEditing')).not.toBeInTheDocument();
+  });
+
+  it('says who is editing when someone outside the room holds the lock', () => {
+    lock.lockedByOther = true;
+    mockPage.current = {
+      ...mockPage.current,
+      collab: { status: 'synced' },
+      lockHolderId: 'user-2',
+    };
+
+    render(<EditingIndicator />);
+
+    expect(screen.getByText('pageEditor.editMode.lockedBySomeone')).toBeInTheDocument();
   });
 });
