@@ -5,6 +5,7 @@ import {
 import type { Context } from 'hono';
 import { z } from 'zod';
 
+import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import { appEnv } from '@/envs/app';
 import { acceptanceRouter } from '@/server/routers/lambda/acceptance';
 import { acceptanceCommentRouter } from '@/server/routers/lambda/acceptanceComment';
@@ -13,6 +14,7 @@ import type { ReviewEnv } from './auth';
 import { commentBelongsTo, findProfile, latestRound, uploadScreenshot } from './data';
 import { reviewError } from './errors';
 import { toReviewComment, toReviewThreads } from './mapping';
+import { parseBody } from './parseBody';
 
 type ReviewContext = Context<ReviewEnv>;
 
@@ -21,23 +23,6 @@ const commentCaller = (c: ReviewContext) => acceptanceCommentRouter.createCaller
 const acceptanceCaller = (c: ReviewContext) => acceptanceRouter.createCaller(callerContext(c));
 
 const viewer = (c: ReviewContext) => ({ userId: c.get('userId') });
-
-interface BodySchema<T> {
-  safeParse: (
-    value: unknown,
-  ) => { data: T; success: true } | { error: { issues: { message: string }[] }; success: false };
-}
-
-const parseBody = async <T>(
-  c: ReviewContext,
-  schema: BodySchema<T>,
-): Promise<{ data: T; error?: undefined } | { data?: undefined; error: Response }> => {
-  const parsed = schema.safeParse(await c.req.json().catch(() => undefined));
-  if (parsed.success) return { data: parsed.data };
-  return {
-    error: reviewError(c, 400, 'INVALID_INPUT', parsed.error.issues[0]?.message ?? 'Invalid input'),
-  };
-};
 
 export const getSession = async (c: ReviewContext) => {
   const { acceptance, can } = c.get('access');
@@ -59,6 +44,13 @@ export const getSession = async (c: ReviewContext) => {
     },
     can,
     expiresAt: new Date(c.get('expiresAt') * 1000).toISOString(),
+    features:
+      acceptance.subjectType === 'site' || acceptance.metadata?.reviewSource
+        ? ['review-rounds']
+        : [],
+    review: acceptance.metadata?.reviewSource
+      ? { id: acceptance.metadata.reviewSource.reviewId }
+      : undefined,
     project: c.get('project'),
     role: c.get('role') ?? undefined,
     site: c.get('site'),
@@ -71,8 +63,13 @@ export const getSession = async (c: ReviewContext) => {
 };
 
 export const listComments = async (c: ReviewContext) => {
-  const { items } = await commentCaller(c).list({ acceptanceId: c.get('access').acceptance.id });
-  return c.json({ items: toReviewThreads(items, viewer(c)) });
+  const acceptanceId = c.get('access').acceptance.id;
+  const [{ items }, markReplies] = await Promise.all([
+    commentCaller(c).list({ acceptanceId }),
+    new AcceptanceReviewModel(c.get('db')).listReplyIds(acceptanceId),
+  ]);
+  const visible = items.filter((item) => !markReplies.has(item.id));
+  return c.json({ items: toReviewThreads(visible, viewer(c)) });
 };
 
 export const createComment = async (c: ReviewContext) => {
