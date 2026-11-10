@@ -172,6 +172,7 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 
 const sanitizeElement = (element: any, state: { remote: boolean }): void => {
+  // Both loops copy the live list first: they remove and replace what they walk.
   for (const child of [...element.childNodes]) {
     // Comments, conditional comments and processing instructions carry nothing a reader needs.
     if (child.nodeType !== ELEMENT_NODE) {
