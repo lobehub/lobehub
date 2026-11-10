@@ -257,16 +257,16 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(screen.getByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
     expect(screen.getByText('92%')).toBeTruthy();
     const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
-    expect(trigger.textContent).toContain(
-      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:87',
+    // One badge: the tightest window (Fable weekly, 76% left), named.
+    expect(trigger.textContent).toBe(
+      'heteroAgent.claudeQuota.scopedWeekly:Fable heteroAgent.quota.compactLeft:76',
     );
-    expect(trigger.textContent).toContain('Fable heteroAgent.quota.compactLeft:76');
     expect(mockService.getClaudeCodeQuota).toHaveBeenCalledWith({
       env: { CLAUDE_CONFIG_DIR: '/custom' },
     });
   });
 
-  it('shows the tightest global window and Fable as separate compact values', async () => {
+  it('collapses to the single tightest window instead of listing several', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({
         scopedWeekly: {
@@ -282,16 +282,10 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     expect(await screen.findByText('heteroAgent.quota.exhausted')).toBeTruthy();
     const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
-    expect(trigger.textContent).toContain(
-      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:47',
+    expect(trigger.textContent).toBe(
+      'heteroAgent.claudeQuota.scopedWeekly:Fable heteroAgent.quota.compactLeft:0',
     );
-    expect(trigger.textContent).toContain('Fable heteroAgent.quota.compactLeft:0');
-    expect(trigger.textContent).not.toContain('heteroAgent.quota.exhausted');
-    expect(
-      [...trigger.querySelectorAll('[data-quota-level]')].map((item) =>
-        item.getAttribute('data-quota-level'),
-      ),
-    ).toEqual(['normal', 'low']);
+    expect(trigger.getAttribute('data-quota-level')).toBe('low');
   });
 
   it('warns below 15 percent and keeps compact zero quota numeric', async () => {
