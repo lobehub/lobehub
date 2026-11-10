@@ -52,7 +52,7 @@ describe('resolveProjectTopicSandbox', () => {
   it("works in the project's repository, checked out in the project's folder", async () => {
     await expect(resolve()).resolves.toEqual({
       sandboxEnvironmentId: 'env-repo',
-      sandboxWorkingDirectory: 'projects/proj_1/agent-mail-env-repo',
+      sandboxWorkingDirectory: 'projects/proj_1/env-repo',
     });
   });
 
@@ -88,7 +88,7 @@ describe('resolveProjectTopicSandbox', () => {
 
     await expect(resolve({ environmentId: 'env-other' })).resolves.toEqual({
       sandboxEnvironmentId: 'env-other',
-      sandboxWorkingDirectory: 'projects/proj_1/lobe-tts-env-othe',
+      sandboxWorkingDirectory: 'projects/proj_1/env-other',
     });
   });
 

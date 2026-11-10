@@ -79,7 +79,7 @@ export const resolveProjectTopicSandbox = async ({
     return {
       ...(workspaceId && { sandboxDrive: drive }),
       sandboxEnvironmentId: environment.id,
-      sandboxWorkingDirectory: projectCheckoutDirectory(projectId, environment),
+      sandboxWorkingDirectory: projectCheckoutDirectory(projectId, environment.id),
     };
   } catch (error) {
     log('Failed to resolve the sandbox for a topic in project %s: %O', projectId, error);

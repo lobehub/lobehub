@@ -88,7 +88,7 @@ describe('repositorySelection', () => {
       repositorySelection(repo, { projectId: 'proj_1', published: false, workspace: false }),
     ).toEqual({
       environmentId: 'env-repo',
-      workingDirectory: 'projects/proj_1/agent-mail-env-repo',
+      workingDirectory: 'projects/proj_1/env-repo',
     });
   });
 
