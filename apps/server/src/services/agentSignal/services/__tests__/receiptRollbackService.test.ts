@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
         | undefined
       >
     >(),
+    assertCanWriteBody: vi.fn<(id: string, lockOwnerId?: string) => Promise<void>>(),
     runWithDocumentLock: vi.fn(function <T>(_id: string, fn: (lockOwnerId?: string) => Promise<T>) {
       return fn('server:lock-owner');
     }),

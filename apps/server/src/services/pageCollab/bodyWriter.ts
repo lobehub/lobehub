@@ -137,7 +137,7 @@ export const writePageBodyThroughRoom = async (
  */
 export const updateDocumentThroughRoom = async (
   db: LobeChatDatabase,
-  service: Pick<DocumentService, 'updateDocument'>,
+  service: Pick<DocumentService, 'assertCanWriteBody' | 'updateDocument'>,
   documentId: string,
   params: UpdateDocumentParams,
   writer: Omit<PageWriter, 'saveSource' | 'writeSource'>,
@@ -150,12 +150,7 @@ export const updateDocumentThroughRoom = async (
 
   // An editor outside the room carries its lock session. The room's members share
   // the page lock, so this save must not merge over their edits while they hold it.
-  if (params.lockOwnerId) {
-    await new DocumentService(db, writer.userId, writer.workspaceId).assertCanWriteBody(
-      documentId,
-      params.lockOwnerId,
-    );
-  }
+  if (params.lockOwnerId) await service.assertCanWriteBody(documentId, params.lockOwnerId);
 
   const routed = await writePageBodyThroughRoom(
     db,

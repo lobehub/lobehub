@@ -43,9 +43,6 @@ vi.mock('@/server/services/pageCollab/persist', () => ({
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
     getDocumentById = async () => ({ title: 'Page', workspaceId: stored.workspaceId });
-    assertCanWriteBody = async () => {
-      if (lock.heldByOther) throw new Error('Document is being edited by another user');
-    };
   },
 }));
 
@@ -233,7 +230,12 @@ describe('updateDocumentThroughRoom', () => {
     expect(await markdownOfRoom()).toBe('para ONE\n');
   });
 
-  const service = () => ({ updateDocument: vi.fn(async (id: string) => ({ id }) as any) });
+  const service = () => ({
+    assertCanWriteBody: vi.fn(async () => {
+      if (lock.heldByOther) throw new Error('Document is being edited by another user');
+    }),
+    updateDocument: vi.fn(async (id: string) => ({ id }) as any),
+  });
 
   it('keeps the body off the row when the room took it', async () => {
     const documents = service();
