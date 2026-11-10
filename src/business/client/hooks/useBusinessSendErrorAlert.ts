@@ -11,6 +11,10 @@ export interface BusinessSendErrorAlert {
 
 /**
  * Lets a deployment enrich the composer notice for a refused send, keyed by the
- * error type the server returned as the message.
+ * error type the server returned as the message. `onClose` dismisses the notice,
+ * for an action that already resolved the refusal.
  */
-export const useBusinessSendErrorAlert = (_errorMessage?: string): BusinessSendErrorAlert => ({});
+export const useBusinessSendErrorAlert = (
+  _errorMessage?: string,
+  _onClose?: () => void,
+): BusinessSendErrorAlert => ({});

@@ -1650,7 +1650,6 @@
   "input.agentModeUnsupportedModel": "当前模型不支持 Agentic 工具调用，建议切换为具备 Agent 能力的模型以获得最佳体验。",
   "input.agentRunFeeUnfunded.desc": "每次助理运行都会收取运行费，使用自己的 API Key 也不例外。充值或升级套餐后再发送。",
   "input.agentRunFeeUnfunded.descOverflow": "每次助理运行都会收取运行费，使用自己的 API Key 也不例外。你的余额足够支付，使用余额后再发送。",
-  "input.agentRunFeeUnfunded.descOverflowOn": "每次助理运行都会收取运行费，使用自己的 API Key 也不例外。已开启限额用完后使用余额，重新发送即可。",
   "input.agentRunFeeUnfunded.descSubscribe": "每次助理运行都会收取运行费，使用自己的 API Key 也不例外。订阅套餐后再发送。",
   "input.agentRunFeeUnfunded.descTopUp": "每次助理运行都会收取运行费，使用自己的 API Key 也不例外。充值后再发送。",
   "input.agentRunFeeUnfunded.title": "额度不足以支付助理运行费",

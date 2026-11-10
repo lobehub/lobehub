@@ -20,7 +20,7 @@ interface SendErrorAlertProps {
  */
 const SendErrorAlert = memo<SendErrorAlertProps>(({ errorMessage, onClose }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const business = useBusinessSendErrorAlert(errorMessage);
+  const business = useBusinessSendErrorAlert(errorMessage, onClose);
 
   const isConcurrencyLimit = errorMessage === ChatErrorType.AgentConcurrencyLimitExceeded;
   const isRunFeeUnfunded = errorMessage === ChatErrorType.InsufficientBudgetForAgentRunFee;
