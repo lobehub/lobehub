@@ -1,9 +1,9 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { NewSignal, SignalItem } from '../schemas';
 import { signals } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { buildWorkspacePayload } from '../utils/workspace';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export type RecordSignalInput = Omit<NewSignal, 'id' | 'userId' | 'workspaceId'>;
 
@@ -85,6 +85,31 @@ export class SignalModel {
       .limit(1);
 
     return row;
+  };
+
+  /**
+   * Blank the raw payload of these signals now, the way the retention sweep
+   * does once they age out: the payload is the source's own copy of what it
+   * delivered (a mail's subject, snippet, recipients and codes), so a person
+   * permanently deleting that content must not leave it here. Scoped like the
+   * mail it came with: the caller's personal data, or the whole workspace.
+   */
+  purgePayloads = async (ids: string[]): Promise<number> => {
+    if (ids.length === 0) return 0;
+
+    const rows = await this.db
+      .update(signals)
+      .set({ payload: {}, payloadPurgedAt: new Date() })
+      .where(
+        and(
+          inArray(signals.id, ids),
+          isNull(signals.payloadPurgedAt),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, signals),
+        ),
+      )
+      .returning({ id: signals.id });
+
+    return rows.length;
   };
 
   // ── inbound edge (unscoped) ──

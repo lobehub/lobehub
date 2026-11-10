@@ -10,6 +10,7 @@ import type { AgentAccountView } from '@/database/models/agentAccount';
 import type { AgentMailPurgeTarget } from '@/database/models/agentMail';
 import { AgentMailModel } from '@/database/models/agentMail';
 import { AgentMailDraftModel } from '@/database/models/agentMailDraft';
+import { SignalModel } from '@/database/models/signal';
 import type { AgentMailItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -139,6 +140,7 @@ export class AgentMailboxService {
 
   private readonly accounts: AgentAccountService;
   private readonly inbox: AgentInboxService;
+  private readonly signals: SignalModel;
 
   constructor(
     db: LobeChatDatabase,
@@ -149,6 +151,7 @@ export class AgentMailboxService {
     this.drafts = new AgentMailDraftModel(db, userId, options.workspaceId);
     this.mail = new AgentMailModel(db, userId, options.workspaceId);
     this.inbox = new AgentInboxService(db, userId, options.workspaceId);
+    this.signals = new SignalModel(db, userId, options.workspaceId);
   }
 
   /** Changing what a mailbox holds is a *use* of its agent, the same bar as sending. */
@@ -454,6 +457,12 @@ export class AgentMailboxService {
 
     await this.mail.releasePurge(failedIds);
 
-    return { count: await this.mail.purge(removed), failed };
+    const purged = await this.mail.purge(removed);
+    // The signal a mail arrived as keeps the webhook's own copy of its content.
+    await this.signals.purgePayloads(
+      purged.flatMap((mail) => (mail.signalId ? [mail.signalId] : [])),
+    );
+
+    return { count: purged.length, failed };
   };
 }

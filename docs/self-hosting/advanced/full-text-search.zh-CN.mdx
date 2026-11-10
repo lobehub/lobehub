@@ -195,6 +195,25 @@ Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.m
 Cloud，请不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch` profile，在 `.env` 中设置 `ES_URL` 和 `ES_API_KEY`，
 且不要设置 `ES_ALLOW_INSECURE_HTTP`；第 2 到第 4 步完全相同。
 
+### 升级到新增可搜索实体的版本
+
+新增可搜索实体的版本（例如第 15 个索引 Agent 邮件）会同时新增它的 PostgreSQL 变更捕获触发器。捕获定义因此改变，已完成的回填 checkpoint 会拒绝在新定义下续跑；新实体的别名建好之前，持续同步也会拒绝运行。已经在用 Elasticsearch 的部署按以下顺序升级：
+
+1. 停掉持续同步 worker 和正在运行的回填。搜索继续使用现有别名，不受影响。
+2. 升级应用。它的数据库迁移会补齐新表的列和索引。
+3. 在 checkpoint 卷（`ES_REINDEX_STATE_DIR`）里，把当前 schema 版本已完成的 checkpoint（`…-v1.json`）移走备份。它对应的别名已经上线，保持不动。
+4. 只回填新实体，并确认完成：
+
+   ```bash
+   docker compose run --rm fts-search-reindex --apply --entity=agentMails --fresh-run --yes
+   docker compose run --rm fts-search-reindex --status
+   ```
+
+   `--apply` 会先升级捕获触发器，只会短暂锁住新实体所在的表。
+5. 重新启动持续同步 worker。
+
+使用 Docker 启动时自动回填的部署，只需完成第 3 步：启动时会先回填缺失的实体再对外服务。仅使用 PostgreSQL 的部署（`pg_search`、`pg_like`）不安装变更捕获，无需任何操作。
+
 ### 重建当前 Elasticsearch schema generation
 
 如果投影或 capture 行为的改动要求重新生成全部历史文档，先升级所有应用和持续同步 worker，再从 PostgreSQL 创建一个 mapping 版本不变的新物理 generation：

@@ -241,6 +241,33 @@ PostgreSQL, not on the bundled node. To run them against Elastic Cloud instead, 
 `elasticsearch` profile out of `COMPOSE_PROFILES`, set `ES_URL` and `ES_API_KEY` in `.env`, and do
 not set `ES_ALLOW_INSECURE_HTTP`; steps 2 to 4 are otherwise identical.
 
+### Upgrade to a release that adds a searchable entity
+
+A release that adds a searchable entity (for example agent mail, the 15th index) also adds its
+PostgreSQL capture trigger. That changes the capture definition, and a completed backfill
+checkpoint refuses to resume under a changed definition. Continuous sync also refuses to run until
+the new entity's alias exists. On a deployment that already serves Elasticsearch:
+
+1. Stop the continuous-sync worker and any running backfill. Search keeps working on the existing
+   aliases.
+2. Upgrade the application. Its migrations add the new table columns and indexes.
+3. In the checkpoint volume (`ES_REINDEX_STATE_DIR`), move the completed checkpoint of the current
+   schema version (`…-v1.json`) aside as a backup. Its aliases are already live and stay untouched.
+4. Backfill only the new entity, then confirm it completed:
+
+   ```bash
+   docker compose run --rm fts-search-reindex --apply --entity=agentMails --fresh-run --yes
+   docker compose run --rm fts-search-reindex --status
+   ```
+
+   `--apply` upgrades the capture triggers first; that takes a brief lock on the new entity's table
+   only.
+5. Restart the continuous-sync worker.
+
+With Docker startup reindexing, removing the old checkpoint in step 3 is enough: the startup run
+backfills the missing entity before serving. PostgreSQL-only deployments (`pg_search`, `pg_like`)
+install no capture and need none of this.
+
 ### Rebuild the current Elasticsearch schema generation
 
 When a projection or capture behavior change requires every historical document to be regenerated,

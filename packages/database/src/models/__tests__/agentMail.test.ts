@@ -177,7 +177,7 @@ describe('AgentMailModel', () => {
     ]);
 
     await model.moveToTrash([stored.id]);
-    expect(await model.purge([stored.id])).toBe(1);
+    expect(await model.purge([stored.id])).toHaveLength(1);
 
     const [purged] = await serverDB
       .select({ codes: agentMails.codes, purgedAt: agentMails.purgedAt, text: agentMails.text })

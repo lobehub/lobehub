@@ -309,6 +309,32 @@ describe('search', () => {
     });
   });
 
+  it('keeps every provider to the same best matches', async () => {
+    const mails = [await seed({ text: 'pooled' }), await seed({ text: 'pooled' })];
+    const overfetched = new AgentMailModel(serverDB, userId, undefined, {
+      ftsSearchCandidateEnabled: true,
+      // Providers over-fetch: more candidates than the pool, ranked best first.
+      ftsSearchCandidates: async () => ({
+        candidates: [
+          ...Array.from({ length: AGENT_MAIL_SEARCH_POOL }, (_, index) => ({
+            id:
+              index === 0
+                ? mails[0].id
+                : `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+            score: 2,
+          })),
+          { id: mails[1].id, score: 1 },
+        ],
+        total: AGENT_MAIL_SEARCH_POOL + 1,
+      }),
+    });
+
+    expect(await overfetched.searchConversations({ agentId, query: 'pooled' })).toMatchObject({
+      items: [{ id: mails[0].id }],
+      truncated: true,
+    });
+  });
+
   describe.skipIf(process.env.TEST_SERVER_DB !== '1')('with pg_search', () => {
     // pg_search keeps candidate mode off and answers from agent_mails_bm25_idx.
     const pgSearch = () =>
@@ -330,6 +356,17 @@ describe('search', () => {
       expect(await find('acme')).toEqual([bySender.id]);
       expect(await find('zebra')).toEqual([byBody.id]);
       expect(await find('carol')).toEqual([byRecipient.id]);
+    });
+
+    it('answers words the parser drops with nothing, not an error', async () => {
+      await seedFindable();
+
+      for (const query of ['-', 'not', 'OR and']) {
+        expect(await pgSearch().searchConversations({ agentId, query })).toEqual({
+          items: [],
+          truncated: false,
+        });
+      }
     });
   });
 });
@@ -524,7 +561,7 @@ describe('purge', () => {
     const mail = await seed();
 
     expect(await model.listPurgeTargets([mail.id])).toEqual([]);
-    expect(await model.purge([mail.id])).toBe(0);
+    expect(await model.purge([mail.id])).toEqual([]);
     expect((await model.findById(mail.id))?.purgedAt).toBeNull();
   });
 
@@ -551,7 +588,7 @@ describe('purge', () => {
     });
     await model.moveToTrash([mail.id]);
 
-    expect(await model.purge([mail.id])).toBe(1);
+    expect(await model.purge([mail.id])).toEqual([{ id: mail.id, signalId: signal.id }]);
 
     const [row] = await serverDB.select().from(agentMails).where(eq(agentMails.id, mail.id));
     expect(row).toMatchObject({
@@ -573,7 +610,10 @@ describe('purge', () => {
       .where(eq(agentInboxMessages.sourceId, mail.id));
     expect(item).toMatchObject({ preview: null, sender: 'alice@example.com', title: null });
 
-    // The webhook payload is a second copy of the subject and codes.
+    // The webhook payload is a second copy of the subject and codes; the caller
+    // blanks it through the signal's own model, scoped like the mail.
+    expect(await new SignalModel(serverDB, otherUserId).purgePayloads([signal.id])).toBe(0);
+    expect(await new SignalModel(serverDB, userId).purgePayloads([signal.id])).toBe(1);
     const [stored] = await serverDB.select().from(signals).where(eq(signals.id, signal.id));
     expect(stored.payload).toEqual({});
     expect(stored.payloadPurgedAt).not.toBeNull();

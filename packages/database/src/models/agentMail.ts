@@ -4,6 +4,7 @@ import type {
   AgentMailDirection,
   AgentMailFolder,
 } from '@lobechat/types';
+import type { SQLWrapper } from 'drizzle-orm';
 import {
   and,
   asc,
@@ -24,7 +25,7 @@ import { alias } from 'drizzle-orm/pg-core';
 
 import type { FtsSearchCandidateSource } from '../repositories/ftsSearch/types';
 import type { AgentMailItem, NewAgentMail } from '../schemas';
-import { agentInboxMessages, agentMails, signals } from '../schemas';
+import { agentInboxMessages, agentMails } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { agentUsableBy } from '../utils/agent-access';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../utils/bm25';
@@ -109,6 +110,15 @@ export interface SearchAgentMailConversationsResult {
 /** How many matching mails one search reads, best first; its pages are built from them. */
 export const AGENT_MAIL_SEARCH_POOL = 200;
 
+/** The BM25 match text for `query`, or nothing when every word is one the parser drops. */
+const normalizeBm25Terms = (query: string): string | undefined => {
+  try {
+    return normalizeBm25MatchQuery(query, SAFE_BM25_QUERY_OPTIONS);
+  } catch {
+    return undefined;
+  }
+};
+
 /** BM25 fields of `agent_mails_bm25_idx`; recipients are its JSON fields. */
 const BM25_MAIL_FIELDS = [
   'subject',
@@ -120,6 +130,12 @@ const BM25_MAIL_FIELDS = [
   'cc.address',
   'cc.name',
 ];
+
+/** A mail a purge wiped, with the signal it arrived as (none for sent mail). */
+export interface AgentMailPurged {
+  id: string;
+  signalId: string | null;
+}
 
 /** One address's announced numbers, for the address list. */
 export interface AgentMailAccountCounts {
@@ -631,16 +647,18 @@ export class AgentMailModel {
         query: { text },
       });
 
-      // Providers over-fetch past the pool, so only a total above what came
-      // back means matches were dropped.
+      // Providers over-fetch past the pool; keep the same best matches every
+      // provider would, and say so when anything ranked below them was left.
       return {
-        ids: result.candidates.map((candidate) => candidate.id),
-        truncated: result.total > result.candidates.length,
+        ids: result.candidates.slice(0, AGENT_MAIL_SEARCH_POOL).map((candidate) => candidate.id),
+        truncated: result.total > AGENT_MAIL_SEARCH_POOL,
       };
     }
 
-    // pg_search answers candidates inline, from `agent_mails_bm25_idx`.
-    const query = normalizeBm25MatchQuery(text, SAFE_BM25_QUERY_OPTIONS);
+    // pg_search answers candidates inline, from `agent_mails_bm25_idx`. Words
+    // the BM25 parser drops (`-`, `and`, `or`, `not`) leave nothing to match.
+    const query = normalizeBm25Terms(text);
+    if (!query) return { ids: [], truncated: false };
     const rows = await this.db
       .select({ id: agentMails.id })
       .from(agentMails)
@@ -728,26 +746,33 @@ export class AgentMailModel {
     return row;
   };
 
-  /** The mail an id opens: the mail's own id, or its inbox item's. */
+  /**
+   * The mail an id opens: the mail's own id, or its inbox item's. Two point
+   * lookups on primary keys, so opening costs the same in any mailbox size.
+   */
   private findSeed = async (id: string) => {
-    const [row] = await this.db
-      .select({
-        accountId: agentMails.accountId,
-        id: agentMails.id,
-        threadKey: agentMails.threadKey,
-      })
-      .from(agentMails)
-      .leftJoin(agentInboxMessages, inboxItemOfMail)
-      .where(
-        and(
-          or(eq(agentMails.id, id), eq(agentInboxMessages.id, id)),
-          isNull(agentMails.purgedAt),
-          this.ownership(),
-        ),
-      )
-      .limit(1);
+    const seedOf = async (mailId: SQLWrapper | string) => {
+      const [row] = await this.db
+        .select({
+          accountId: agentMails.accountId,
+          id: agentMails.id,
+          threadKey: agentMails.threadKey,
+        })
+        .from(agentMails)
+        .where(and(eq(agentMails.id, mailId), isNull(agentMails.purgedAt), this.ownership()))
+        .limit(1);
+      return row;
+    };
 
-    return row;
+    return (
+      (await seedOf(id)) ??
+      (await seedOf(
+        this.db
+          .select({ id: agentInboxMessages.sourceId })
+          .from(agentInboxMessages)
+          .where(and(eq(agentInboxMessages.id, id), eq(agentInboxMessages.sourceType, 'mail'))),
+      ))
+    );
   };
 
   /**
@@ -1017,13 +1042,12 @@ export class AgentMailModel {
    * purged sent mail no longer counts as the agent having written to its
    * recipients in that thread ({@link hasSentInThreadTo}).
    *
-   * The inbox item's title and preview go too, and so does the raw webhook
-   * payload of the signal the mail arrived as, which carries its own copy of
-   * the subject, snippet, recipients and codes — blanked the way the payload
-   * retention sweep does it.
+   * The inbox item's title and preview go too. Returns the purged mails with
+   * the signal each arrived as, whose raw payload is a second copy of the
+   * content the caller must blank as well ({@link SignalModel.purgePayloads}).
    */
-  purge = async (ids: string[]): Promise<number> => {
-    if (ids.length === 0) return 0;
+  purge = async (ids: string[]): Promise<AgentMailPurged[]> => {
+    if (ids.length === 0) return [];
 
     return this.db.transaction(async (tx) => {
       const rows = await tx
@@ -1050,15 +1074,7 @@ export class AgentMailModel {
           ),
         )
         .returning({ id: agentMails.id, signalId: agentMails.signalId });
-      if (rows.length === 0) return 0;
-
-      const signalIds = rows.flatMap((row) => (row.signalId ? [row.signalId] : []));
-      if (signalIds.length > 0) {
-        await tx
-          .update(signals)
-          .set({ payload: {}, payloadPurgedAt: new Date() })
-          .where(and(inArray(signals.id, signalIds), isNull(signals.payloadPurgedAt)));
-      }
+      if (rows.length === 0) return [];
 
       await tx
         .update(agentInboxMessages)
@@ -1073,7 +1089,7 @@ export class AgentMailModel {
           ),
         );
 
-      return rows.length;
+      return rows;
     });
   };
 }
