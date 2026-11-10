@@ -87,6 +87,7 @@ export * from './userSkill';
 export * from './verify';
 export * from './widget';
 export * from './work';
+export * from './workspaceMember';
 // FIXME: I think we need a refactor for the "openai" types
 // it more likes the UI message payload
 export * from './acceptanceComment';
