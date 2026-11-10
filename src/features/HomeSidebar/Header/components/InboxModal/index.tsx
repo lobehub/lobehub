@@ -46,6 +46,8 @@ import { useHomeStore } from '@/store/home';
 import { homeNotificationSelectors } from '@/store/home/selectors';
 import type { InboxNavigationCount } from '@/store/home/slices/notification/projection';
 
+import { useNavigationCounts } from './useNavigationCounts';
+
 const Content = dynamic(() => import('./Content'), {
   loading: () => (
     <Flexbox gap={1} paddingBlock={1} paddingInline={4}>
@@ -130,20 +132,14 @@ const InboxModalContent = memo(() => {
   // `undefined` = the combined "all" view (no read-state filter).
   const isRead = readStatus === 'all' ? undefined : readStatus === 'read';
 
-  // Replica-backed: a reopened modal (even after a reload) paints the last
-  // counts at once while the server confirms them.
   const {
-    error: rawNavigationCountsError,
+    counts: navigationCounts,
+    error: navigationCountsError,
+    isConfirmed: isNavigationCountsConfirmed,
+    isLoading: isNavigationCountsLoading,
     isValidating: isNavigationCountsValidating,
-    revalidate: refreshNavigationCounts,
-  } = useHomeStore((s) => s.useFetchInboxNavigationCounts)();
-  const navigationCounts = useHomeStore(homeNotificationSelectors.navigationCounts);
-  const isNavigationCountsConfirmed = useHomeStore(
-    homeNotificationSelectors.isNavigationCountsConfirmed,
-  );
-  const isNavigationCountsLoading = !navigationCounts && !rawNavigationCountsError;
-  // A failed background refresh keeps the last counts on screen.
-  const navigationCountsError = navigationCounts ? undefined : rawNavigationCountsError;
+    retry: refreshNavigationCounts,
+  } = useNavigationCounts();
 
   // The same replica Content reads (one request serves both). The server
   // folds one totalCount unit per live card into `pending`, and archive-all
@@ -382,7 +378,7 @@ const InboxModalContent = memo(() => {
                       key={item.category}
                       title={categoryLabel(item.category)}
                       extra={
-                        !navigationCountsError && count > 0 ? (
+                        count > 0 ? (
                           <Text style={{ marginInlineEnd: 6 }} type="secondary">
                             {count}
                           </Text>
