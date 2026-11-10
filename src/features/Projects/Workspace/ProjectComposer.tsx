@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, cssVar as lobeCssVar, Flexbox, Segmented, toast } from '@lobehub/ui';
+import { ActionIcon, cssVar as lobeCssVar, Flexbox, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
@@ -17,6 +17,7 @@ import {
 } from '@/features/ChatInput';
 import FileUpload from '@/features/ChatInput/ActionBar/Upload';
 import InputDragUpload from '@/features/Home/InputArea/InputDragUpload';
+import ModeSelect from '@/features/Home/InputArea/ModeSelect';
 import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
@@ -200,15 +201,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             className={stylex.props(styles.trayLeading).className}
             gap={4}
           >
-            <Segmented
-              size={'small'}
-              value={mode}
-              options={[
-                { label: t('overview.mode.chat'), value: 'chat' },
-                { label: t('overview.mode.task'), value: 'task' },
-              ]}
-              onChange={(value) => setMode(value as ProjectComposerMode)}
-            />
+            <ModeSelect value={mode} onChange={setMode} />
             <ProjectAgentSelect
               agents={agents}
               compact={compact}
