@@ -69,6 +69,15 @@ const styles = stylex.create({
   trayFrame: {
     paddingInline: '24px',
   },
+  // The left side gives way in a narrow window (the agent's name truncates);
+  // where the work happens, on the right, always stays whole.
+  trayLeading: {
+    flex: '1',
+    minWidth: 0,
+  },
+  trayTrailing: {
+    flexShrink: 0,
+  },
   tray: {
     gap: '8px',
     paddingBlockStart: '8px',
@@ -175,7 +184,12 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
           className={stylex.props(styles.tray).className}
           justify={'space-between'}
         >
-          <Flexbox horizontal align={'center'} gap={4}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.trayLeading).className}
+            gap={4}
+          >
             <Segmented
               size={'small'}
               value={mode}
@@ -192,7 +206,12 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
               onChange={setPickedAgentId}
             />
           </Flexbox>
-          <Flexbox horizontal align={'center'} gap={2}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.trayTrailing).className}
+            gap={2}
+          >
             {mode === 'chat' && (
               <ProjectRepositoryChip
                 canManage={canManageProject}

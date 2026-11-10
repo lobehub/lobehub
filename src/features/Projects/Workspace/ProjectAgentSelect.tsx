@@ -38,7 +38,10 @@ const styles = stylex.create({
     flex: '1',
     minWidth: 0,
   },
+  // Shrinks before anything beside it does: in a narrow composer the agent's
+  // name is the one label that can lose characters and stay recognizable.
   trigger: {
+    minWidth: 0,
     maxWidth: '200px',
     paddingInlineStart: '6px',
     paddingInlineEnd: '8px',
