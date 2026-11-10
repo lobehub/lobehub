@@ -382,6 +382,42 @@ describe('brief news replica', () => {
     await waitFor(() => expect(newsDay()).toBeUndefined());
   });
 
+  it('seeds the persisted feed and digest before Home mounts', async () => {
+    await briefListResource.storage!.set(
+      { ...STORAGE_KEY, scope },
+      { data: [createBrief('cached-feed')], updatedAt: 1 },
+    );
+    await briefNewsResource.storage!.set(
+      { ...NEWS_STORAGE_KEY, scope },
+      { data: newsDayOf([createBrief('cached-news')]), updatedAt: 1 },
+    );
+    const listUnresolved = vi.spyOn(briefService, 'listUnresolved');
+    const listNewsByDay = vi.spyOn(briefService, 'listNewsByDay');
+
+    // No hook is mounted: this is the route loader before the first frame.
+    await useBriefStore.getState().preHydrateInbox(DAY);
+
+    expect(feed().map((brief) => brief.id)).toEqual(['cached-feed']);
+    expect(newsDay()?.news.map((brief) => brief.id)).toEqual(['cached-news']);
+    expect(listUnresolved).not.toHaveBeenCalled();
+    expect(listNewsByDay).not.toHaveBeenCalled();
+  });
+
+  it('does not seed another scope’s rows', async () => {
+    await briefNewsResource.storage!.set(
+      { ...NEWS_STORAGE_KEY, scope },
+      { data: newsDayOf([createBrief('mine')]), updatedAt: 1 },
+    );
+    await useBriefStore.getState().preHydrateInbox(DAY);
+    expect(newsDay()).toBeDefined();
+
+    useScope(`brief-user-${randomUUID()}:personal`);
+    await useBriefStore.getState().preHydrateInbox(DAY);
+
+    expect(newsDay()).toBeUndefined();
+    expect(briefListSelectors.isBriefsInit(useBriefStore.getState())).toBe(false);
+  });
+
   it('does not fetch while disabled', () => {
     const listNewsByDay = vi.spyOn(briefService, 'listNewsByDay');
     renderHook(() => useBriefStore((s) => s.useFetchNewsByDay)(false, DAY), { wrapper });

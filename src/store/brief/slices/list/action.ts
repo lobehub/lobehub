@@ -202,6 +202,23 @@ export class BriefListActionImpl {
     this.#briefNews.useSync({ day }, { dedupingInterval: NEWS_DEDUPING_INTERVAL, enabled });
 
   /**
+   * Seed the persisted unresolved feed and `day`'s digest before Home commits,
+   * so the inbox paints the last confirmed briefs on the first frame instead of
+   * a skeleton until the mount-time hydrate lands. Call from a route loader,
+   * bounded by a timeout.
+   */
+  preHydrateInbox = async (day: string): Promise<boolean[]> => {
+    const scope = briefListResource.scope.get();
+    // The slots may still hold the previous identity's rows; drop them first.
+    this.#briefList.ensureScope(scope);
+    this.#briefNews.ensureScope(scope);
+    return Promise.all([
+      this.#briefList.hydrate(LIST_PARAMS, scope),
+      this.#briefNews.hydrate({ day }, scope),
+    ]);
+  };
+
+  /**
    * The unresolved feed of the active scope. Read the rows with
    * `briefListSelectors.briefs`; the replica hydrates the persisted copy on the
    * first frame and converges on the server's head page in the background.
