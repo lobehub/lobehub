@@ -57,7 +57,11 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
         span.setStatus({ code: SpanStatusCode.OK });
         // Outside the try/finally below, so this path ends its own span.
         span.end();
-        return { message: 'User is banned, skipping memory extraction.', skipped: true };
+        // NOTICE: Cancel, never return. Upstash authenticates a delivery by running the handler
+        // until it reaches a step or `cancel()`; a plain return before any step fails that check
+        // ("Failed to authenticate Workflow request"), answers 400 and the delivery is retried.
+        // `cancel()` passes the check and ends the run on this delivery without queueing a step.
+        await context.cancel();
       }
 
       await ensureWorkflowStarted(context, WORKFLOW_PATH);
