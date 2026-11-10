@@ -3,8 +3,9 @@ import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
-import { openPageFork } from '../fork';
-import { persistPageState } from '../persist';
+import { openPageFork, PAGE_META_KEY } from '../fork';
+import { PageProjectionRejectedError, persistPageState } from '../persist';
+import { emptyEditorData } from '../seed';
 
 const { redisStore, store } = vi.hoisted(() => ({
   redisStore: new Map<string, string>(),
@@ -56,6 +57,22 @@ const roomOf = async (markdown: string) => {
   const state = Y.encodeStateAsUpdate(fork.doc);
   fork.destroy();
   return state;
+};
+
+const emptyRoom = async (titles: string[] = []) => {
+  const fork = await openPageFork(undefined, emptyEditorData());
+  for (const title of titles) fork.doc.getMap(PAGE_META_KEY).set('title', title);
+  const state = Y.encodeStateAsUpdate(fork.doc);
+  fork.destroy();
+  return state;
+};
+
+const clearedRoom = async (markdown: string) => {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, await roomOf(markdown));
+  const root = doc.get('root', Y.XmlText);
+  root.delete(0, root.length);
+  return Y.encodeStateAsUpdate(doc);
 };
 
 const persist = (state: Uint8Array) =>
@@ -137,5 +154,45 @@ describe('persistPageState', () => {
     await persist(await roomOf('# Plan\n\nfirst\n\nsecond\n'));
 
     expect(store.calls).toEqual(['update']);
+  });
+
+  describe('a room that never held the stored body', () => {
+    beforeEach(() => {
+      store.row = { content: '# Report\n\nfindings\n', editorData: null, title: 'Page' };
+    });
+
+    it('refuses an empty room over a stored body', async () => {
+      await expect(persist(await emptyRoom())).rejects.toBeInstanceOf(PageProjectionRejectedError);
+      expect(store.calls).toEqual([]);
+    });
+
+    it('refuses a room that was never bootstrapped', async () => {
+      await expect(persist(Y.encodeStateAsUpdate(new Y.Doc()))).rejects.toBeInstanceOf(
+        PageProjectionRejectedError,
+      );
+      expect(store.calls).toEqual([]);
+    });
+
+    it('refuses an empty room whose only edits renamed the page', async () => {
+      await expect(persist(await emptyRoom(['Draft', 'Report']))).rejects.toBeInstanceOf(
+        PageProjectionRejectedError,
+      );
+      expect(store.calls).toEqual([]);
+    });
+
+    it('writes a page someone cleared in the room', async () => {
+      await persist(await clearedRoom('# Report\n\nfindings\n'));
+
+      expect(store.updates).toHaveLength(1);
+      expect(store.updates[0].content.trim()).toBe('');
+    });
+
+    it('writes an empty room over an empty stored page', async () => {
+      store.row = { ...store.row, content: '' };
+
+      await persist(await emptyRoom());
+
+      expect(store.updates).toHaveLength(1);
+    });
   });
 });

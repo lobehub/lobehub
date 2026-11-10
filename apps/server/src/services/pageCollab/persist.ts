@@ -35,8 +35,8 @@ const bodyDigest = (editorData: unknown) =>
     .digest('hex');
 
 export class PageProjectionRejectedError extends Error {
-  constructor(documentId: string) {
-    super(`Refusing to persist page ${documentId}: the room holds blocks the projection lost`);
+  constructor(documentId: string, reason = 'the room holds blocks the projection lost') {
+    super(`Refusing to persist page ${documentId}: ${reason}`);
     this.name = 'PageProjectionRejectedError';
   }
 }
@@ -64,7 +64,7 @@ export const persistPageState = async (
   const meta = await getResourceMeta(db, 'document', documentId);
   if (!meta) return false;
 
-  const { editorData, lostBlocks, markdown, title } = await withHeadlessEditorLock(() =>
+  const { editorData, erasedBody, lostBlocks, markdown, title } = await withHeadlessEditorLock(() =>
     projectPageState(state),
   );
   // A binding that fails to read the room exports an empty page; writing it
@@ -74,6 +74,12 @@ export const persistPageState = async (
   const service = new DocumentService(db, meta.userId, meta.workspaceId ?? undefined);
   const row = await service.getDocumentById(documentId);
   if (!row) return false;
+
+  // An empty room that never erased anything never received the stored body,
+  // e.g. a seed whose body push was lost. Projecting it would blank the page.
+  if (!markdown.trim() && !erasedBody && row.content?.trim()) {
+    throw new PageProjectionRejectedError(documentId, 'the room never received the stored body');
+  }
 
   // Every known writer of a room page's body goes through its room. A body that
   // changed since the last projection was written around it anyway; keep that
