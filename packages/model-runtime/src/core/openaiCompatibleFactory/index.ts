@@ -268,6 +268,58 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
     }
 
+    /**
+     * `handlePayload` receives `this._options` and may retarget `baseURL` for a
+     * specific model — Spark moves `spark-x2-flash` / `spark-x2` / `spark-x1.5`
+     * to `/agent/v1`, `/x2` and `/v2`. Re-point the cached client at that URL
+     * before the request, otherwise those models keep hitting the
+     * constructor's `/v1`.
+     */
+    private syncClientWithPayloadBaseURL() {
+      const computedBaseURL =
+        typeof this._options.baseURL === 'string' && this._options.baseURL
+          ? this._options.baseURL.trim()
+          : typeof DEFAULT_BASE_URL === 'string'
+            ? DEFAULT_BASE_URL
+            : undefined;
+      const targetBaseURL = computedBaseURL || this.baseURL;
+
+      if (targetBaseURL === this.baseURL) return;
+
+      const restOptions = {
+        ...(this._options as ConstructorOptions<T> & Record<string, any>),
+      } as Record<string, any>;
+      const optionApiKey = restOptions.apiKey;
+      delete restOptions.apiKey;
+      delete restOptions.baseURL;
+      delete restOptions.modelIdMapping;
+
+      const sanitizedApiKey = optionApiKey?.toString().trim() || DEFAULT_API_KEY;
+
+      const nextOptions = {
+        ...restOptions,
+        apiKey: sanitizedApiKey,
+        baseURL: targetBaseURL,
+      } as ConstructorOptions<T>;
+
+      const initOptions = {
+        apiKey: sanitizedApiKey,
+        baseURL: targetBaseURL,
+        ...constructorOptions,
+        ...restOptions,
+      } as ConstructorOptions<T> & Record<string, any>;
+
+      this._options = nextOptions;
+
+      if (customClient?.createClient) {
+        this.client = customClient.createClient(initOptions);
+      } else {
+        this.client = new OpenAICompatibleClient(initOptions);
+      }
+
+      this.baseURL = targetBaseURL;
+    }
+
     async chat({ responseMode, ...payload }: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
         const log = debug(`${this.logPrefix}:chat`);
@@ -332,6 +384,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             payload.model,
           );
         }
+
+        // `handlePayload` may have retargeted the base URL for this model.
+        this.syncClientWithPayloadBaseURL();
 
         return await chatViaChatCompletions(this.context, factory, {
           handledPayload,
