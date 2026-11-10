@@ -505,7 +505,9 @@ export class GeneralChatAgent implements Agent {
    * context to grow to a higher watermark before compressing it again.
    */
   private getCompressionThresholdRatio(messages: any[]): number | undefined {
-    const initialRatio = this.config.compressionConfig?.thresholdRatio;
+    const initialRatio =
+      this.config.compressionConfig?.thresholdRatio ??
+      this.config.compressionConfig?.modelThresholdRatio;
     if (!this.findExistingSummary(messages)) return initialRatio;
 
     const configuredRecompressionRatio = this.config.compressionConfig?.recompressionThresholdRatio;
@@ -527,6 +529,7 @@ export class GeneralChatAgent implements Agent {
     // we'd burn an extra summarization pass on tool tokens that won't be sent.
     return shouldCompress(messages, {
       maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      modelThresholdRatio: this.config.compressionConfig?.modelThresholdRatio,
       thresholdRatio: this.getCompressionThresholdRatio(messages),
       tools: state.forceFinish ? undefined : tools,
     });

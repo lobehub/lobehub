@@ -650,16 +650,22 @@ export class StreamingExecutorActionImpl {
     // ===========================================
     log('[executeClientAgent] Creating agent runtime with config', modelRuntimeConfig);
 
+    const aiInfraState = getAiInfraStoreState();
     const contextWindowTokens = aiModelSelectors.modelContextWindowTokens(
       model,
       provider!,
-    )(getAiInfraStoreState());
+    )(aiInfraState);
+    const modelThresholdRatio = aiModelSelectors.modelCompressionThresholdRatio(
+      model,
+      provider!,
+    )(aiInfraState);
 
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
       compressionConfig: {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
         maxWindowToken: contextWindowTokens ?? undefined,
+        modelThresholdRatio,
       },
       dynamicInterventionAudits: clientInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,

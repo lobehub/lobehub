@@ -40,6 +40,15 @@ export const AgentCompatibilitySchema = z
 export type AgentCompatibility = z.infer<typeof AgentCompatibilitySchema>;
 
 /**
+ * Share of the context window the conversation may fill before automatic
+ * context compression runs. A ratio rather than a token count, so a window the
+ * user widened on their own model row moves the threshold with it.
+ */
+export const CompressionThresholdRatioSchema = z.number().gt(0).lte(1);
+
+export type CompressionThresholdRatio = z.infer<typeof CompressionThresholdRatioSchema>;
+
+/**
  * The speech-to-text model type was renamed from the legacy `stt` to the
  * standard `asr`. Instead of a bulk DB data migration, persisted rows and
  * external API inputs are normalized at the read/write boundary — only data
@@ -294,6 +303,12 @@ export interface ModelRating {
 }
 
 export interface AIBaseModelCard {
+  /**
+   * Share of the context window that triggers automatic context compression,
+   * in (0, 1]. Unset uses the runtime default (0.5). Deployment-owned catalog
+   * metadata: user model mutations do not accept it.
+   */
+  compressionThresholdRatio?: CompressionThresholdRatio;
   /**
    * the context window (or input + output tokens limit)
    */
@@ -863,6 +878,7 @@ export interface AiModelForSelect {
 
 export interface EnabledAiModel {
   abilities: ModelAbilities;
+  compressionThresholdRatio?: CompressionThresholdRatio;
   config?: AiModelConfig;
   contextWindowTokens?: number;
   displayName?: string;

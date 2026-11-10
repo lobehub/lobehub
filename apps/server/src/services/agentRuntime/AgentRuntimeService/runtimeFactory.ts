@@ -6,7 +6,6 @@ import {
 } from '@lobechat/builtin-tool-agent-account';
 import { DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
-import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -21,6 +20,7 @@ import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
 import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
 import { hookDispatcher } from '../hooks';
+import { resolveCompressionModelFacts } from './compressionModelFacts';
 import { createEvalConnectorHook } from './evalConnectorHook';
 import { createEvalToolGateHook } from './evalToolGateHook';
 import { DurableStatusUnavailableError } from './executionErrors';
@@ -199,14 +199,14 @@ export async function createAgentRuntime(
 ) {
   const state = agentState as AgentState | undefined;
   const modelRuntimeConfig = state?.modelRuntimeConfig;
-  const contextWindowTokens =
+  const compressionModelFacts =
     modelRuntimeConfig?.model && modelRuntimeConfig?.provider
-      ? await getModelPropertyWithFallback<number | undefined>(
+      ? await resolveCompressionModelFacts(
+          deps,
           modelRuntimeConfig.model,
-          'contextWindowTokens',
           modelRuntimeConfig.provider,
         )
-      : undefined;
+      : {};
 
   const world = state?.world;
   const origin = state?.origin;
@@ -218,7 +218,8 @@ export async function createAgentRuntime(
     agentConfig: world?.agent,
     compressionConfig: {
       enabled: world?.agent?.chatConfig?.enableContextCompression ?? true,
-      maxWindowToken: contextWindowTokens ?? undefined,
+      maxWindowToken: compressionModelFacts.maxWindowToken ?? undefined,
+      modelThresholdRatio: compressionModelFacts.modelThresholdRatio ?? undefined,
     },
     dynamicInterventionAudits: {
       ...dynamicInterventionAudits,

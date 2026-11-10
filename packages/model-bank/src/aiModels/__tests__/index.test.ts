@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ModelProvider } from '../../const/modelProvider';
+import { CompressionThresholdRatioSchema } from '../../types/aiModel';
 import { loadModels, LOBE_DEFAULT_MODEL_LIST } from '../index';
 
 describe('loadModels', () => {
@@ -505,5 +506,17 @@ describe('Google context-caching pricing', () => {
 
   it('lists the audio cache read for Gemini 3 Flash Preview', () => {
     expect(units('gemini-3-flash-preview')).toContainEqual(fixed('audioInput_cacheRead', 0.1));
+  });
+});
+
+describe('compressionThresholdRatio', () => {
+  it('keeps every builtin card ratio within (0, 1]', () => {
+    const invalid = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) =>
+        model.compressionThresholdRatio !== undefined &&
+        !CompressionThresholdRatioSchema.safeParse(model.compressionThresholdRatio).success,
+    ).map((model) => `${model.providerId}/${model.id}`);
+
+    expect(invalid).toEqual([]);
   });
 });
