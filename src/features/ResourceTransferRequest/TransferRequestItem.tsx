@@ -17,7 +17,7 @@ import { useHomeStore } from '@/store/home';
 import { homeNotificationSelectors } from '@/store/home/selectors';
 import { TransferErrorCode } from '@/types/transferError';
 
-import { isTransferManifestActionable } from './manifestState';
+import { isTransferManifestAcceptable } from './manifestState';
 import { refreshCachesAfterOwnershipChange } from './refreshAfterOwnershipChange';
 import TransferManifestList from './TransferManifestList';
 
@@ -132,14 +132,19 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
     const isManifestConfirmed = useHomeStore(
       homeNotificationSelectors.isTransferManifestConfirmed(request.id),
     );
-    const manifestError = isManifestConfirmed ? undefined : rawManifestError;
+    // The latest fetch error always shows (with Retry) and blocks Accept, even
+    // when an earlier session answer is still on screen.
+    const manifestError = rawManifestError;
     // A restored request may have been resolved elsewhere since: its actions
     // wait for this session's read of the live list.
     const isRequestConfirmed = useHomeStore(
       homeNotificationSelectors.isPendingTransferRequestsConfirmed,
     );
-    const manifestReady =
-      isManifestConfirmed && isTransferManifestActionable(manifest, manifestError);
+    const manifestReady = isTransferManifestAcceptable({
+      confirmed: isManifestConfirmed,
+      error: manifestError,
+      manifest,
+    });
 
     const fallback = t('transferRequest.someone');
     const counterpartLabel = partyLabel(
