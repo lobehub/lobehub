@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -68,10 +68,43 @@ export class AgentProviderAccountModel {
     return this.gateKeeperPromise;
   }
 
-  private mine = () =>
+  /**
+   * The rows this member may see and use. In a workspace a `private` account is
+   * visible to its creator and to every member whose device holds a login for
+   * it — the same real account signed in by two members is one row both of
+   * them use. Personal scope ignores visibility.
+   */
+  private mine = () => {
+    const scope = this.scope();
+    if (!this.workspaceId) return scope;
+
+    // Uncorrelated on purpose: the relational query API aliases the outer table,
+    // so a subquery pointing back at it would not resolve.
+    const holdsLogin = inArray(
+      agentProviderAccounts.id,
+      this.db
+        .select({ id: agentProviderAccountLogins.accountId })
+        .from(agentProviderAccountLogins)
+        .where(eq(agentProviderAccountLogins.userId, this.userId)),
+    );
+    return and(
+      scope,
+      or(
+        eq(agentProviderAccounts.visibility, 'public'),
+        eq(agentProviderAccounts.userId, this.userId),
+        holdsLogin,
+      ),
+    )!;
+  };
+
+  /** Every row of the scope regardless of visibility: one real account is one row per workspace. */
+  private scope = () =>
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
-      agentProviderAccounts,
+      {
+        userId: agentProviderAccounts.userId,
+        workspaceId: agentProviderAccounts.workspaceId,
+      },
     );
 
   create = async (
@@ -104,6 +137,12 @@ export class AgentProviderAccountModel {
    * Insert-or-update by real identity. The provider account UUID is the natural
    * dedupe key, so the same login observed on multiple devices collapses to one
    * row (that is exactly what lets multi-device usage merge).
+   *
+   * Dedupe looks past visibility: a teammate's private row for the same
+   * identity is still that account, and inserting a second one would collide
+   * with the workspace identity index. The caller records the login that makes
+   * it visible to this member. A new workspace row starts `private` — a login
+   * reported from a member's machine is theirs until they publish it.
    */
   upsertByIdentity = async (
     provider: string,
@@ -113,7 +152,7 @@ export class AgentProviderAccountModel {
     if (identity.externalAccountId) {
       const existing = await this.db.query.agentProviderAccounts.findFirst({
         where: and(
-          this.mine(),
+          this.scope(),
           eq(agentProviderAccounts.provider, provider),
           eq(agentProviderAccounts.externalAccountId, identity.externalAccountId),
         ),
@@ -129,6 +168,7 @@ export class AgentProviderAccountModel {
     }
 
     return this.create({
+      ...(this.workspaceId && { visibility: 'private' as const }),
       ...defaults,
       ...identity,
       credentialMode: defaults.credentialMode ?? QuotaCredentialMode.referenced,
@@ -198,11 +238,36 @@ export class AgentProviderAccountModel {
       .where(and(eq(agentProviderAccounts.id, id), this.mine()));
   };
 
-  update = async (id: string, patch: Partial<Omit<NewAgentProviderAccount, 'credentials'>>) =>
+  update = async (
+    id: string,
+    patch: Partial<Omit<NewAgentProviderAccount, 'credentials' | 'visibility'>>,
+  ) =>
     this.db
       .update(agentProviderAccounts)
       .set({ ...patch, updatedAt: new Date() })
       .where(and(eq(agentProviderAccounts.id, id), this.mine()));
+
+  /**
+   * Publish or hide a workspace account. Only its creator decides: another
+   * login holder hiding it would take it away from the rest of the team, and
+   * publishing it would expose someone else's subscription. Returns whether a
+   * row changed.
+   */
+  setVisibility = async (id: string, visibility: 'private' | 'public'): Promise<boolean> => {
+    if (!this.workspaceId) return false;
+    const rows = await this.db
+      .update(agentProviderAccounts)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(agentProviderAccounts.id, id),
+          this.scope(),
+          eq(agentProviderAccounts.userId, this.userId),
+        ),
+      )
+      .returning({ id: agentProviderAccounts.id });
+    return rows.length > 0;
+  };
 
   delete = async (id: string) =>
     this.db.delete(agentProviderAccounts).where(and(eq(agentProviderAccounts.id, id), this.mine()));

@@ -166,6 +166,10 @@ export class AgentQuotaService {
       params.identity as AccountIdentityInput,
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
     );
+    // A sample read on a device proves the account is signed in there. Recorded
+    // first: the login is what makes a teammate's private row of the same
+    // account visible to this member, and the writes below are visibility-scoped.
+    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     // The wallet is not a limit reading, so it can't ride the snapshots table —
     // keep the latest sample on the account row or the persisted view loses the
     // Extra Usage section between live samples.
@@ -174,8 +178,6 @@ export class AgentQuotaService {
         metadata: { ...account.metadata, extraUsage: params.extraUsage },
       });
     }
-    // A sample read on a device proves the account is signed in there.
-    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     await this.ingestReadings(account.id, params.readings, params.deviceId);
     // Ingestion is the only moment new evidence arrives, so it is also the only
     // sensible calibration trigger. Cheap and self-guarding: without enough clean

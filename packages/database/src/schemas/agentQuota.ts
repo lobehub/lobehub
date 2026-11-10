@@ -52,13 +52,12 @@ export const agentProviderAccounts = pgTable(
     // Visibility WITHIN a workspace (same contract as devices / agents):
     //   - 'public'  → every member sees the subscription (without its identity
     //     fields) and agents can draw on it: a team account on a shared machine.
-    //   - 'private' → only members holding a login for it
+    //   - 'private' → only its creator and members holding a login for it
     //     (`agent_provider_account_logins`) see and use it.
     //   Ignored for personal rows (`workspace_id IS NULL`).
-    // The default stays 'public' (today's behaviour) until ingestion dedupes by
-    // identity regardless of visibility and reads go through logins; flipping
-    // it earlier would make a second member's login of a private account
-    // collide with the workspace identity unique index.
+    // Ingestion creates workspace rows as 'private' (`upsertByIdentity`, which
+    // dedupes by identity across visibility); the column default only covers
+    // rows added by hand and the ones that pre-date that change.
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
       .notNull(),

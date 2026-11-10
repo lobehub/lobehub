@@ -261,10 +261,20 @@ export const agentQuotaRouter = router({
         value: z.object({
           enabled: z.boolean().optional(),
           label: z.string().optional(),
+          visibility: z.enum(['private', 'public']).optional(),
         }),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.accountModel.update(input.id, input.value)),
+    .mutation(async ({ ctx, input }) => {
+      const { visibility, ...patch } = input.value;
+      if (visibility && !(await ctx.accountModel.setVisibility(input.id, visibility)))
+        // Personal accounts carry no visibility, and only the creator may change it.
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the member who added this account can change its visibility',
+        });
+      if (Object.keys(patch).length > 0) await ctx.accountModel.update(input.id, patch);
+    }),
 
   // ── bindings (agent ↔ account, incl. UI switch) ──────────────────────────
   bindAccount: quotaProcedure
