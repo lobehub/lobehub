@@ -14,6 +14,10 @@ export const chunk = <T>(items: T[], size: number): T[][] => {
   return chunks;
 };
 
+/** Unread mail that counts towards an address's badge: only what was received. */
+export const countUnreadInbound = (rows: { direction?: string | null; isUnread: boolean }[]) =>
+  rows.filter((row) => row.isUnread && row.direction === 'inbound').length;
+
 export interface MailPatch {
   isStarred?: boolean;
   isUnread?: boolean;

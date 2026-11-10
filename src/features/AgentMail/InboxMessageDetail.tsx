@@ -84,8 +84,9 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     }, [Boolean(expanded)]);
 
     // One open is one read, so marking unread here does not bounce straight back.
+    // The only place opening marks mail read; a read-only viewer leaves it as it is.
     useEffect(() => {
-      if (!mails || mails.length === 0 || openedRef.current || !readArmed) return;
+      if (!mails || mails.length === 0 || openedRef.current || !readArmed || disabled) return;
       openedRef.current = true;
       const unread = new Set(idsToMarkReadOnOpen(mails));
       if (unread.size > 0) {
@@ -94,7 +95,7 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
           false,
         );
       }
-    }, [mails, readArmed, setUnread]);
+    }, [disabled, mails, readArmed, setUnread]);
 
     if (error && !mails) {
       return (
@@ -146,16 +147,11 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
         else next.add(mail.id);
         return next;
       });
-      if (opening && mail.isUnread) void setUnread([mail], false);
+      if (opening && mail.isUnread && !disabled) void setUnread([mail], false);
     };
 
     return (
-      <Flexbox
-        gap={12}
-        padding={4}
-        onKeyDownCapture={() => setReadArmed(true)}
-        onPointerDownCapture={() => setReadArmed(true)}
-      >
+      <Flexbox gap={12} padding={4}>
         <MailDetailToolbar
           hasNext={hasNext}
           hasPrevious={hasPrevious}
@@ -191,7 +187,13 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
             </Text>
           )}
         </Flexbox>
-        <Flexbox data-testid={'mail-conversation'} gap={8}>
+        {/* Touching the mail itself is reading it; stepping past it with the toolbar is not. */}
+        <Flexbox
+          data-testid={'mail-conversation'}
+          gap={8}
+          onKeyDownCapture={() => setReadArmed(true)}
+          onPointerDownCapture={() => setReadArmed(true)}
+        >
           {rows.map((row) => {
             if (row.kind === 'fold') {
               return (

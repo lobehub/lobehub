@@ -191,10 +191,18 @@ describe('AgentMail', () => {
       'aria-current',
       'true',
     );
-    expect(service.markMailRead).toHaveBeenCalledWith({
-      conversationIn: 'inbox',
-      ids: ['msg_a'],
-    });
+    // The reading pane marks exactly the mails it opened, once; the row click does not.
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] }));
+    expect(service.markMailRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves mail unread for a read-only viewer who opens it', async () => {
+    page('/agent/agt_1/mail', true);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'msg_a@x.com — For A' }));
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    expect(service.markMailRead).not.toHaveBeenCalled();
   });
 
   it('switches the list, the count and the open message to the chosen mailbox', async () => {
@@ -677,6 +685,40 @@ describe('AgentMail reading pane', () => {
     expect(service.trashMail).toHaveBeenCalledWith({ ids: ['msg_2'] });
     // Landing is automatic, so the mail landed on waits for the reader.
     expect(service.markMailRead).not.toHaveBeenCalled();
+  });
+
+  it('does not read the landed-on conversation when the reader steps past it', async () => {
+    threeRows();
+    service.trashMail.mockResolvedValue({ count: 1, ids: ['msg_2'] });
+    page('/agent/agt_1/mail/msg_2');
+    expect(await screen.findByText('Full body of msg_2')).toBeInTheDocument();
+    // The server no longer lists the trashed conversation.
+    service.listMail.mockResolvedValue([
+      row('msg_1', 'First', { isUnread: false }),
+      row('msg_3', 'Third'),
+    ]);
+    fireEvent.click(await screen.findByTestId('mail-action-trash'));
+    expect(await screen.findByText('Full body of msg_3')).toBeInTheDocument();
+    service.markMailRead.mockClear();
+
+    fireEvent.pointerDown(screen.getByTestId('mail-nav-previous'));
+    fireEvent.click(screen.getByTestId('mail-nav-previous'));
+
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+    expect(service.markMailRead).not.toHaveBeenCalledWith({ ids: ['msg_3'] });
+  });
+
+  it('offers no step for a conversation outside the loaded list', async () => {
+    service.listMail.mockResolvedValue(
+      Array.from({ length: 50 }, (_, index) => row(`msg_${index}`, `Row ${index}`)),
+    );
+    page('/agent/agt_1/mail/msg_far');
+    expect(await screen.findByText('Full body of msg_far')).toBeInTheDocument();
+    await screen.findByText('preview of Row 0');
+
+    // A full page means more mail, but there is no row here to step from.
+    expect(screen.getByTestId('mail-nav-next')).toBeDisabled();
+    expect(screen.getByTestId('mail-nav-previous')).toBeDisabled();
   });
 
   it('highlights the row of the open conversation when the URL names another of its mails', async () => {

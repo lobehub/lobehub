@@ -26,11 +26,13 @@ vi.mock('@/services/agentAccount', () => ({
 }));
 
 const ui = vi.hoisted(() => ({
+  confirmModal: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn((_options: unknown) => ({ close: vi.fn() })),
 }));
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  confirmModal: ui.confirmModal,
   toast: { error: ui.toastError, success: ui.toastSuccess },
 }));
 
@@ -158,6 +160,32 @@ describe('InboxMessageDetail', () => {
 
     expect(await screen.findByText('identity.inbox.detail.htmlExpired')).toBeInTheDocument();
     expect(screen.getByText('body of m')).toBeInTheDocument();
+  });
+
+  it('says the formatting could not load when the HTML request itself fails', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('m')]);
+    service.getMailHtml.mockRejectedValue(new Error('network down'));
+
+    fresh(<InboxMessageDetail {...detailProps} id={'m'} />);
+
+    expect(await screen.findByText('identity.inbox.detail.htmlFailed')).toBeInTheDocument();
+    expect(screen.getByText('body of m')).toBeInTheDocument();
+  });
+
+  it('marks nothing read for a read-only viewer, on open or on expand', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mailRow('older', { isUnread: true }),
+      mailRow('viewer', { isUnread: true }),
+    ]);
+
+    fresh(<InboxMessageDetail {...detailProps} disabled id={'viewer'} />);
+
+    const [older] = await screen.findAllByTestId('mail-summary');
+    fireEvent.click(older);
+    fireEvent.click(older);
+
+    expect(service.markMailRead).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('mail-action-unread')).toBeNull();
   });
 
   it('stars through the shared mail target and shows it in the list at once', async () => {
@@ -378,6 +406,29 @@ describe('InboxMessageDetail attachments', () => {
     expect(await screen.findByText('identity.inbox.detail.attachmentExpired')).toBeInTheDocument();
     expect(service.downloadMailAttachment).toHaveBeenCalledWith('msg_photo', 0);
     expect(first.querySelector('button')).toBeDisabled();
+  });
+
+  it('warns before downloading a program, and downloads only once confirmed', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mailRow('msg_exe', {
+        attachments: [{ contentType: 'application/octet-stream', filename: 'setup.EXE', index: 0 }],
+      }),
+    ]);
+    service.downloadMailAttachment.mockResolvedValue(new Blob(['x']));
+
+    fresh(<InboxMessageDetail {...detailProps} id={'msg_exe'} />);
+
+    const [row] = await screen.findAllByTestId('mail-attachment');
+    fireEvent.click(row.querySelector('button')!);
+
+    expect(ui.confirmModal).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'identity.inbox.detail.executable.title' }),
+    );
+    expect(service.downloadMailAttachment).not.toHaveBeenCalled();
+
+    (ui.confirmModal.mock.calls[0][0] as { onOk: () => void }).onOk();
+
+    await waitFor(() => expect(service.downloadMailAttachment).toHaveBeenCalledWith('msg_exe', 0));
   });
 
   it('keeps an outage retryable', async () => {

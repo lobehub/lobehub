@@ -35,7 +35,7 @@ interface MailHtmlBodyProps {
  */
 const MailHtmlBody = memo<MailHtmlBodyProps>(({ id, text }) => {
   const { t } = useTranslation('setting');
-  const { data } = useSWRImmutable(['agent-mail-html', id], ([, mailId]) =>
+  const { data, error } = useSWRImmutable(['agent-mail-html', id], ([, mailId]) =>
     agentAccountService.getMailHtml(mailId),
   );
   const [allowRemote, setAllowRemote] = useState(false);
@@ -51,17 +51,19 @@ const MailHtmlBody = memo<MailHtmlBodyProps>(({ id, text }) => {
   const metrics = useMemo(() => (html === undefined ? undefined : measureMailHtml(html)), [html]);
 
   if (!data || data.status === 'none' || srcDoc === undefined || metrics === undefined) {
-    const degraded = data?.status === 'expired' || data?.status === 'failed';
+    // A failed request reads the same as a failed render: the text, and a note saying so.
+    const note =
+      data?.status === 'expired'
+        ? t('identity.inbox.detail.htmlExpired')
+        : data?.status === 'failed' || (error && !data)
+          ? t('identity.inbox.detail.htmlFailed')
+          : undefined;
     return (
       <Flexbox gap={6}>
         <PlainText text={text} />
-        {degraded && (
+        {note && (
           <Text fontSize={12} type={'secondary'}>
-            {t(
-              data.status === 'expired'
-                ? 'identity.inbox.detail.htmlExpired'
-                : 'identity.inbox.detail.htmlFailed',
-            )}
+            {note}
           </Text>
         )}
       </Flexbox>

@@ -4,6 +4,7 @@ import type { AgentMailFolder } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { useLatest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
+import { useSWRConfig } from 'swr';
 
 import {
   agentAccountService,
@@ -13,13 +14,15 @@ import {
 
 import {
   chunk,
+  countUnreadInbound,
   type MailPatch,
   mailWriteActions,
   MAX_IDS_PER_WRITE,
   queueRowWrite,
   UNDO_WINDOW_MS,
 } from './mailWrites';
-import { useMailConversation } from './useMailList';
+import { mailConversationKey, useMailConversation } from './useMailList';
+import { useRestoreTrashed } from './useRestoreTrashed';
 
 export interface UseConversationOptions {
   /** The address on screen, whose counts a write moves. */
@@ -35,9 +38,6 @@ export interface UseConversationOptions {
   /** Revalidate the list and the counts. */
   refresh: () => Promise<unknown>;
 }
-
-const unreadInbound = (rows: AgentMailRow[]) =>
-  rows.filter((row) => row.isUnread && row.direction === 'inbound').length;
 
 /** Sends a write in server-sized batches, after any earlier write to the same mails. */
 const send = <R,>(ids: string[], call: (target: AgentMailTarget) => Promise<R>) =>
@@ -62,6 +62,7 @@ export const useConversation = (
   const { t } = useTranslation('setting');
   const swr = useMailConversation(id, folder);
   const { data, mutate } = swr;
+  const { mutate: mutateCache } = useSWRConfig();
   const optionsRef = useLatest(options);
 
   const failureToast = (title: string, retry: () => unknown) =>
@@ -190,14 +191,24 @@ export const useConversation = (
     });
 
     await mutate(remaining, { revalidate: false });
+    const reseatId =
+      !emptied && rows.some((row) => row.id === id || row.inboxMessageId === id)
+        ? remaining.at(-1)!.id
+        : undefined;
     if (emptied) optionsRef.current.onEmptied();
-    else if (rows.some((row) => row.id === id || row.inboxMessageId === id)) {
-      optionsRef.current.onReseated(remaining.at(-1)!.id);
+    else if (reseatId) {
+      // The pane remounts under the new id; seeded so it never shows a read
+      // that raced the write and still holds the mail just taken out.
+      await mutateCache(mailConversationKey(reseatId, folder), remaining, { revalidate: false });
+      optionsRef.current.onReseated(reseatId);
     }
 
     try {
       const values = await send([...ids], call);
-      await optionsRef.current.refresh().catch(() => undefined);
+      await Promise.all([
+        optionsRef.current.refresh().catch(() => undefined),
+        reseatId && mutateCache(mailConversationKey(reseatId, folder)),
+      ]);
       mailWriteActions.end(writeId);
       return values;
     } catch (error) {
@@ -212,25 +223,14 @@ export const useConversation = (
     }
   };
 
-  /** Undo is a restore of exactly what the trash reported moving, and reopens the mail. */
+  const restoreTrashed = useRestoreTrashed(() => optionsRef.current.onGoToTrash());
+
+  /** Undo restores exactly what the trash reported moving, and reopens the mail. */
   const undoTrash = async (moved: string[]) => {
-    try {
-      await send(moved, (target) => agentAccountService.restoreMail(target));
-      await Promise.all([mutate(), optionsRef.current.refresh().catch(() => undefined)]);
-      optionsRef.current.onRestored(id);
-      toast.success({ title: t('identity.mailbox.undone') });
-    } catch (error) {
-      console.error('[AgentMail] undo failed', error);
-      toast.error({
-        actions: [
-          {
-            label: t('identity.mailbox.goToTrash'),
-            onClick: () => optionsRef.current.onGoToTrash(),
-          },
-        ],
-        title: t('identity.mailbox.failed.undo'),
-      });
-    }
+    const restored = await restoreTrashed(moved, () =>
+      Promise.all([mutate(), optionsRef.current.refresh()]),
+    );
+    if (restored) optionsRef.current.onRestored(id);
   };
 
   const trash = async (rows: AgentMailRow[]): Promise<void> => {
@@ -239,7 +239,7 @@ export const useConversation = (
       failure: t('identity.mailbox.failed.delete'),
       retry: () => trash(rows),
       rows,
-      unreadDelta: -unreadInbound(rows),
+      unreadDelta: -countUnreadInbound(rows),
     });
     const moved = values?.flatMap((value) => value.ids) ?? [];
     // Nothing moved, nothing to undo: another tab may have trashed it first.
@@ -267,7 +267,7 @@ export const useConversation = (
       failure: t('identity.mailbox.failed.restore'),
       retry: () => restore(rows),
       rows,
-      unreadDelta: unreadInbound(rows),
+      unreadDelta: countUnreadInbound(rows),
     });
     if (values) toast.success({ title: t('identity.mailbox.toast.restored') });
   };

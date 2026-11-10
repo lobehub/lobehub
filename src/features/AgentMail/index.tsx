@@ -173,7 +173,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     deferRead: Boolean((location.state as { deferRead?: boolean } | null)?.deferRead),
     disabled,
     folder,
-    hasNext: Boolean(neighbors.nextId) || list.hasMore,
+    // Paging only helps once the open conversation is a loaded row to step from.
+    hasNext: Boolean(neighbors.nextId) || (Boolean(neighbors.rowId) && list.hasMore),
     hasPrevious: Boolean(neighbors.previousId),
     onBack: closeMessage,
     onEmptied: () => {

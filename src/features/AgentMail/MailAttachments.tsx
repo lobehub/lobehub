@@ -1,7 +1,7 @@
 'use client';
 
 import type { AgentMailAttachment } from '@lobechat/types';
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
 import { Download } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,9 +34,44 @@ const saveBlob = (blob: Blob, filename: string) => {
 
 type RowState = AttachmentFailure | 'idle' | 'loading';
 
+/** Files that run when opened; the bytes come from whoever sent the mail. */
+const EXECUTABLE_EXTENSIONS = new Set([
+  'apk',
+  'app',
+  'bat',
+  'cmd',
+  'com',
+  'cpl',
+  'deb',
+  'dmg',
+  'exe',
+  'hta',
+  'iso',
+  'jar',
+  'js',
+  'jse',
+  'lnk',
+  'msi',
+  'msp',
+  'pkg',
+  'ps1',
+  'reg',
+  'rpm',
+  'scr',
+  'sh',
+  'vb',
+  'vbe',
+  'vbs',
+  'wsf',
+  'wsh',
+]);
+
+const isExecutable = (filename?: string) =>
+  EXECUTABLE_EXTENSIONS.has(filename?.split('.').pop()?.toLowerCase() ?? '');
+
 const AttachmentRow = memo<{ attachment: AgentMailAttachment; mailId: string }>(
   ({ attachment, mailId }) => {
-    const { t } = useTranslation('setting');
+    const { t } = useTranslation(['setting', 'common']);
     const [state, setState] = useState<RowState>('idle');
     const name = attachment.filename || attachment.contentType || `#${attachment.index}`;
 
@@ -49,6 +84,18 @@ const AttachmentRow = memo<{ attachment: AgentMailAttachment; mailId: string }>(
         console.error('[AgentMail] attachment download failed', error);
         setState(error instanceof AttachmentDownloadError ? error.reason : 'unavailable');
       }
+    };
+
+    // A file that runs when opened is only fetched once the reader has been warned.
+    const requestDownload = () => {
+      if (!isExecutable(attachment.filename)) return void download();
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('identity.inbox.detail.executable.content', { name }),
+        okText: t('identity.inbox.detail.download'),
+        onOk: () => void download(),
+        title: t('identity.inbox.detail.executable.title'),
+      });
     };
 
     // Expired and too large are final; only an outage is worth another try.
@@ -88,7 +135,7 @@ const AttachmentRow = memo<{ attachment: AgentMailAttachment; mailId: string }>(
           loading={state === 'loading'}
           size={'small'}
           type={'text'}
-          onClick={() => void download()}
+          onClick={requestDownload}
         >
           {state === 'unavailable'
             ? t('identity.inbox.detail.retry')

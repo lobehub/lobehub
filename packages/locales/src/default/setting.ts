@@ -347,6 +347,9 @@ export default {
   'identity.inbox.detail.backToList': 'Back to the list',
   'identity.inbox.detail.count': '{{count}} messages',
   'identity.inbox.detail.download': 'Download',
+  'identity.inbox.detail.executable.content':
+    '"{{name}}" is a program that runs when opened. It came from the sender of this mail, so only open it if you trust them.',
+  'identity.inbox.detail.executable.title': 'Download a program?',
   'identity.inbox.detail.from': 'From',
   'identity.inbox.detail.gone': 'This email no longer exists.',
   'identity.inbox.detail.htmlExpired':

@@ -1054,6 +1054,8 @@
   "identity.inbox.detail.backToList": "回到列表",
   "identity.inbox.detail.count": "{{count}} 封",
   "identity.inbox.detail.download": "下载",
+  "identity.inbox.detail.executable.content": "「{{name}}」是打开后会运行的程序，来自这封邮件的发件人。只在信任对方时打开。",
+  "identity.inbox.detail.executable.title": "要下载这个程序吗？",
   "identity.inbox.detail.from": "发件人",
   "identity.inbox.detail.gone": "这封邮件已不存在。",
   "identity.inbox.detail.htmlExpired": "原始排版已过期，这里显示纯文本。",
