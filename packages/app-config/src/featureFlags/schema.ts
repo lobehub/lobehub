@@ -331,6 +331,8 @@ export const mapFeatureFlagsEnvToState = (
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId, 'dev_dock'),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId, 'auth_captcha'),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId, 'onboarding_v2'),
+    // Deprecated constant for released desktop clients; see IFeatureFlagsState.
+    enableNewTierPlans: true,
     enableMobileNewTierSales: evaluateFeatureFlag(
       config.mobile_new_tier_sales,
       userId,

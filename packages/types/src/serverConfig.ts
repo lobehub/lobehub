@@ -45,6 +45,13 @@ export type IFeatureFlagsState = {
    */
   enableImLayout: boolean | undefined;
   /**
+   * @deprecated The new subscription tiers are always on. Kept as a constant
+   * `true` because released desktop clients still read it and fall back to the
+   * retired plans when it is missing. Remove once those clients are no longer
+   * supported.
+   */
+  enableNewTierPlans: true;
+  /**
    * Rollout gate for buying the new tiers in the mobile app
    * (`mobile_new_tier_sales`).
    */

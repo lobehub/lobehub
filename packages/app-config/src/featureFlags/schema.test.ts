@@ -270,6 +270,11 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableMobileNewTierSales).toBe(false);
   });
 
+  it('should always report the new tiers as on for released clients that still read the flag', () => {
+    expect(mapFeatureFlagsEnvToState({}, 'user-1').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS).enableNewTierPlans).toBe(true);
+  });
+
   it('should keep the mobile sandbox grant off by default and out of the client state', () => {
     expect(DEFAULT_FEATURE_FLAGS.mobile_sandbox_grant).toBe(false);
     expect(FeatureFlagsSchema.parse({ mobile_sandbox_grant: ['tester-123'] })).toEqual({
