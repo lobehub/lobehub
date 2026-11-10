@@ -31,6 +31,7 @@ import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
+import Transcription from '../transcription';
 import Trash from '../trash';
 
 export const componentMap = {
@@ -47,6 +48,7 @@ export const componentMap = {
   [SettingsTabs.Hotkey]: Hotkey,
   [SettingsTabs.Proxy]: Proxy,
   [SettingsTabs.SystemTools]: SystemTools,
+  [SettingsTabs.Transcription]: Transcription,
   [SettingsTabs.Storage]: Storage,
   [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,

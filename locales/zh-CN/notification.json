@@ -33,6 +33,7 @@
   "category.agent": "Agent",
   "category.billing": "账单",
   "category.generation": "生成",
+  "category.meeting": "会议",
   "category.mention": "提及",
   "category.pending": "待处理",
   "category.schedule": "定时任务",

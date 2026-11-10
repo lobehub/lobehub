@@ -43,6 +43,7 @@ export default {
   'category.agent': 'Agent',
   'category.billing': 'Billing',
   'category.generation': 'Generation',
+  'category.meeting': 'Meetings',
   'category.mention': 'Mentions',
   'category.pending': 'Pending',
   'category.schedule': 'Scheduled tasks',

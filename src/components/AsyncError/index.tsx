@@ -41,6 +41,8 @@ export interface AsyncErrorProps {
   details?: ReactNode;
   /** The thrown error; normalized for status-specific copy + retryable gating. */
   error?: unknown;
+  /** `inline` only: center the line (list slots) or start-align it (rows, cards). */
+  justify?: 'center' | 'start';
   /** Retry the same request (SWR `mutate` / query refetch). Hidden if absent. */
   onRetry?: () => void;
   /** Whether an explicit Retry action is currently in flight. */
@@ -89,6 +91,7 @@ const AsyncError = memo<AsyncErrorProps>(
     title,
     description,
     details,
+    justify = 'center',
     action,
   }) => {
     const { t } = useTranslation('error');
@@ -135,7 +138,7 @@ const AsyncError = memo<AsyncErrorProps>(
     if (variant === 'inline') {
       return (
         <Flexbox className={stylex.props(styles.inline).className} gap={4}>
-          <Flexbox horizontal align={'center'} gap={8} justify={'center'} wrap={'wrap'}>
+          <Flexbox horizontal align={'center'} gap={8} justify={justify} wrap={'wrap'}>
             {/* Icon and copy stay together; only the copy wraps in a narrow slot. */}
             <Flexbox
               horizontal

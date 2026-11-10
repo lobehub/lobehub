@@ -31,6 +31,7 @@ import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import WorkspaceMentionNotifier from '@/features/Electron/WorkspaceMentionNotifier';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
+import MeetingRecorderHost from '@/features/Meeting/Recorder/Host';
 import NavPanelShell from '@/features/NavPanel/Shell';
 import NavRail from '@/features/NavRail';
 import { useImLayout, useSyncImLayoutHint } from '@/features/NavRail/useImLayout';
@@ -129,6 +130,7 @@ const Layout: FC = () => {
           <GlobalApprovalNotification />
           <WorkspaceMentionNotifier />
         </Suspense>
+        <MeetingRecorderHost />
       </WorkspaceContextSlot>
     </HotkeysProvider>
   );
