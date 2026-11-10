@@ -86,8 +86,6 @@ const LEGACY_SWR_KEYS = [
   'groupKeys.queryAgentsForCreate',
   'imageKeys.generationStatus',
   'imessageKeys.bridgeStatus',
-  'inboxKeys.navigationCounts',
-  'inboxKeys.notifications',
   'inboxKeys.unreadCount',
   'inboxKeys.unreadMentions',
   'localFileKeys.claudeCodeMemory',

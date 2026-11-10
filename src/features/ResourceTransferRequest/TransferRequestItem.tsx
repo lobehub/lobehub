@@ -2,18 +2,19 @@
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { Avatar, Block, Button, Flexbox, Tag, Text, toast } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatNotificationRelativeTime } from '@/features/HomeSidebar/Header/components/InboxModal/formatNotificationRelativeTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
 import type {
   PendingTransferRequest,
   TransferRequestParty,
   TransferRequestResourceType,
 } from '@/services/resourceTransferRequest';
 import { resourceTransferRequestService } from '@/services/resourceTransferRequest';
+import { useHomeStore } from '@/store/home';
+import { homeNotificationSelectors } from '@/store/home/selectors';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isTransferManifestActionable } from './manifestState';
@@ -111,22 +112,34 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
 
     // Accept is gated until the manifest loads successfully without a blocker:
     // a failed/unknown impact summary must never turn into permission to act.
-    const {
-      data: manifest,
-      error: manifestError,
-      isValidating: isManifestValidating,
-      mutate: mutateManifest,
-    } = useClientDataSWR(
-      isRecipient ? `transfer-manifest-${request.id}` : null,
-      () =>
-        resourceTransferRequestService.getManifest({
-          recipientId: request.recipientId,
-          resourceId: request.resourceId,
-          resourceType: request.resourceType as TransferRequestResourceType,
-        }),
-      { revalidateOnFocus: false },
+    // A restored manifest paints the summary at once, but only this session's
+    // server answer may unlock Accept — the resource may have changed since.
+    const manifestParams = useMemo(
+      () => ({
+        recipientId: request.recipientId,
+        requestId: request.id,
+        resourceId: request.resourceId,
+        resourceType: request.resourceType as TransferRequestResourceType,
+      }),
+      [request.id, request.recipientId, request.resourceId, request.resourceType],
     );
-    const manifestReady = isTransferManifestActionable(manifest, manifestError);
+    const {
+      error: rawManifestError,
+      isValidating: isManifestValidating,
+      revalidate: revalidateManifest,
+    } = useHomeStore((s) => s.useFetchTransferManifest)(manifestParams, isRecipient);
+    const manifest = useHomeStore(homeNotificationSelectors.transferManifest(request.id));
+    const isManifestConfirmed = useHomeStore(
+      homeNotificationSelectors.isTransferManifestConfirmed(request.id),
+    );
+    const manifestError = isManifestConfirmed ? undefined : rawManifestError;
+    // A restored request may have been resolved elsewhere since: its actions
+    // wait for this session's read of the live list.
+    const isRequestConfirmed = useHomeStore(
+      homeNotificationSelectors.isPendingTransferRequestsConfirmed,
+    );
+    const manifestReady =
+      isManifestConfirmed && isTransferManifestActionable(manifest, manifestError);
 
     const fallback = t('transferRequest.someone');
     const counterpartLabel = partyLabel(
@@ -243,7 +256,7 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
             retrying={isManifestValidating}
             style={{ marginInlineStart: 44 }}
             onRetry={() =>
-              void mutateManifest().catch((error) =>
+              void revalidateManifest().catch((error) =>
                 console.error('[TransferRequestItem] manifest retry failed', error),
               )
             }
@@ -257,7 +270,7 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
             {isRecipient ? (
               <>
                 <Button
-                  disabled={acting}
+                  disabled={acting || !isRequestConfirmed}
                   size="small"
                   onClick={() =>
                     run(() => resourceTransferRequestService.decline(request.id), {
@@ -269,7 +282,7 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
                   {t('transferRequest.decline')}
                 </Button>
                 <Button
-                  disabled={acting || !manifestReady}
+                  disabled={acting || !isRequestConfirmed || !manifestReady}
                   loading={acting}
                   size="small"
                   type="primary"
@@ -291,7 +304,7 @@ const TransferRequestItem = memo<TransferRequestItemProps>(
               </>
             ) : (
               <Button
-                disabled={acting}
+                disabled={acting || !isRequestConfirmed}
                 loading={acting}
                 size="small"
                 onClick={() =>
