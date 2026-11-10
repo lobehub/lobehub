@@ -1,7 +1,7 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import { Icon, toast, Tooltip, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { FileUp, FolderUp, ImageUp, Paperclip } from 'lucide-react';
+import { FileUp, FolderUp, ImageUp, type LucideIcon, Paperclip } from 'lucide-react';
 import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,10 +33,12 @@ const styles = stylex.create({
 });
 
 interface FileUploadProps {
+  /** The trigger's icon; a paperclip unless the host's composer reads better with another. */
+  icon?: LucideIcon;
   includeKnowledge?: boolean;
 }
 
-const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
+const FileUpload = memo<FileUploadProps>(({ icon = Paperclip, includeKnowledge = true }) => {
   const { t } = useTranslation('chat');
 
   const enableKnowledgeBase = useServerConfigStore(
@@ -81,7 +83,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
       <Tooltip title={reason}>
         <ChatInputAction
           disabled
-          icon={Paperclip}
+          icon={icon}
           showTooltip={false}
           title={t('upload.action.tooltip')}
         />
@@ -198,7 +200,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
 
   const content = (
     <ChatInputAction
-      icon={Paperclip}
+      icon={icon}
       loading={updating}
       open={dropdownOpen}
       showTooltip={false}
@@ -216,7 +218,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
 
   return (
     <Suspense
-      fallback={<ChatInputAction disabled icon={Paperclip} title={t('upload.action.tooltip')} />}
+      fallback={<ChatInputAction disabled icon={icon} title={t('upload.action.tooltip')} />}
     >
       {includeKnowledge && showTip ? (
         <TipGuide

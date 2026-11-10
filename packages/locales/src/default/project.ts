@@ -310,6 +310,7 @@ export default {
   'overview.context.repository.attachFailed': "Couldn't add the repository to this project",
   'overview.context.repository.tooltip':
     'New conversations work in this repository, cloned before the first command.',
+  'overview.context.settings': 'Repositories and environments',
   'overview.context.target.device': 'A connected device',
   'overview.context.target.noneTooltip':
     'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',

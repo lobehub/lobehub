@@ -124,7 +124,7 @@ const styles = stylex.create({
   button: {
     borderWidth: 0,
     fontFamily: 'inherit',
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
   },
   /** Shown, not picked: no hover, since nothing opens. */
   static: {
