@@ -2,9 +2,11 @@ import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
 import { useLayoutEffect, useRef } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 
+import { PORTAL_THREAD_QUERY_KEY } from '@/features/Portal/Thread/sharePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
+import { portalThreadSelectors } from '@/store/chat/selectors';
 
 const getSearchSuffix = (searchParams: URLSearchParams) => {
   const search = searchParams.toString();
@@ -70,6 +72,10 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
         // `?message=` is a one-shot send for the conversation the link opened.
         // Carried onto the topic that send created, a reload would send it again.
         nextSearchParams.delete('message');
+        // The Portal's thread belongs to the topic it was opened on. Carried onto
+        // another (or a new) topic it reopens there as an empty pane.
+        if (!portalThreadSelectors.isPortalThreadKeptOnTopic(state)(useChatStore.getState()))
+          nextSearchParams.delete(PORTAL_THREAD_QUERY_KEY);
 
         const nextPath = state
           ? options.getTopicPath?.(routeAgentId, state) || AGENT_CHAT_TOPIC_URL(routeAgentId, state)
