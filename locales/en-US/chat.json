@@ -604,6 +604,7 @@
   "goalBatch.skill.forked": "Plan skill v{{revision}} · new class",
   "goalBatch.skill.title": "Plan skill v{{revision}}",
   "goalBatch.status.done": "All done",
+  "goalBatch.status.held": "Waiting for your release",
   "goalBatch.status.human": "{{count}} need you",
   "goalBatch.status.pending": "Not started",
   "goalBatch.status.running": "In progress",
