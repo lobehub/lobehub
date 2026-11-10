@@ -122,6 +122,10 @@ const modelContextWindowTokens = (id: string, provider: string) => (s: AIProvide
   return model?.contextWindowTokens;
 };
 
+const modelCompressionThresholdRatio =
+  (id: string, provider: string) => (s: AIProviderStoreState) =>
+    getEnabledModelById(id, provider)(s)?.compressionThresholdRatio;
+
 const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const model = getEnabledModelById(id, provider)(s);
 
@@ -250,6 +254,7 @@ export const aiModelSelectors = {
   isModelSupportVideo,
   isModelSupportVision,
   modelBuiltinSearchImpl,
+  modelCompressionThresholdRatio,
   modelContextWindowTokens,
   modelDisabledParams,
   modelExtendParams,

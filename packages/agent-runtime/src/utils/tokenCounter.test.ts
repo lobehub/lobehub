@@ -51,6 +51,43 @@ describe('tokenCounter', () => {
       });
       expect(threshold).toBe(33); // floor(100 * 0.33) = 33
     });
+
+    describe('threshold source priority', () => {
+      it('keeps a 200k-window model at 100k when its card sets no ratio', () => {
+        expect(getCompressionThreshold({ maxWindowToken: 200_000 })).toBe(100_000);
+      });
+
+      it('uses the model-bank ratio over the default ratio', () => {
+        expect(getCompressionThreshold({ maxWindowToken: 200_000, modelThresholdRatio: 0.8 })).toBe(
+          160_000,
+        );
+      });
+
+      it('lets an explicit caller ratio override the model ratio', () => {
+        expect(
+          getCompressionThreshold({
+            maxWindowToken: 200_000,
+            modelThresholdRatio: 0.8,
+            thresholdRatio: 0.65,
+          }),
+        ).toBe(130_000);
+      });
+
+      it('follows a custom model window from the database (400k → 200k, not 64k)', () => {
+        expect(getCompressionThreshold({ maxWindowToken: 400_000 })).toBe(200_000);
+      });
+
+      it('falls back to 128k × 0.5 when the window is unknown', () => {
+        expect(getCompressionThreshold({ maxWindowToken: undefined })).toBe(64_000);
+        expect(getCompressionThreshold({ maxWindowToken: 0 })).toBe(64_000);
+      });
+
+      it.each([0, -0.2, 1.5, Number.NaN])('ignores an out-of-range model ratio %s', (ratio) => {
+        expect(
+          getCompressionThreshold({ maxWindowToken: 200_000, modelThresholdRatio: ratio }),
+        ).toBe(100_000);
+      });
+    });
   });
 
   describe('shouldCompress', () => {

@@ -10,9 +10,14 @@ export interface TokenCountOptions {
    * Default {@link DEFAULT_DRIFT_MULTIPLIER} (1.25).
    */
   driftMultiplier?: number;
-  /** Model's max context window token count */
+  /**
+   * The model's real context window. Callers resolve it, including a window the
+   * user set on a custom or edited model; this module never reads the database.
+   */
   maxWindowToken?: number;
-  /** Threshold ratio for triggering compression, default 0.5 */
+  /** The model card's own compression ratio (model-bank `compressionThresholdRatio`). */
+  modelThresholdRatio?: number;
+  /** Caller override for the ratio; wins over {@link modelThresholdRatio}. */
   thresholdRatio?: number;
   /**
    * Optional top-level tool definitions for the upcoming LLM call. When
@@ -29,13 +34,25 @@ export const DEFAULT_MAX_CONTEXT = 128_000;
 /** Default threshold ratio (50% of max context) */
 export const DEFAULT_THRESHOLD_RATIO = 0.5;
 
+const isUsableRatio = (ratio: number | undefined): ratio is number =>
+  typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0 && ratio <= 1;
+
+const isUsableWindow = (window: number | undefined): window is number =>
+  typeof window === 'number' && Number.isFinite(window) && window > 0;
+
 /**
- * Calculate the compression threshold based on max context window
+ * Calculate the compression threshold.
+ *
+ * Window: the caller's real window, else {@link DEFAULT_MAX_CONTEXT}.
+ * Ratio: caller override, else the model's own ratio, else
+ * {@link DEFAULT_THRESHOLD_RATIO}. Out-of-range values fall through to the next.
  */
 export function getCompressionThreshold(options: TokenCountOptions = {}): number {
-  const maxContext = options.maxWindowToken ?? DEFAULT_MAX_CONTEXT;
-  const ratio = options.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO;
-  return Math.floor(maxContext * ratio);
+  const maxContext = isUsableWindow(options.maxWindowToken)
+    ? options.maxWindowToken
+    : DEFAULT_MAX_CONTEXT;
+  const ratio = [options.thresholdRatio, options.modelThresholdRatio].find(isUsableRatio);
+  return Math.floor(maxContext * (ratio ?? DEFAULT_THRESHOLD_RATIO));
 }
 
 /**
