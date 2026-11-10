@@ -56,7 +56,7 @@ const inputContainerProps = {
 const TRAY_OVERLAP = CONTAINER_RADIUS;
 
 const styles = stylex.create({
-  // The composer sits in front of the tray. The tray is narrower than the
+  // The composer sits in front of the tray. The tray is inset by more than the
   // composer's corner radius on each side, so it only ever meets the
   // composer's straight top edge and reads as one piece tucked behind it.
   card: {
@@ -64,17 +64,22 @@ const styles = stylex.create({
     zIndex: 1,
     marginBlockStart: `-${TRAY_OVERLAP}px`,
   },
+  // The inset is the frame's padding, not the tray's margin: the tray fills its
+  // parent's width, and a margin would push it past the composer's right edge.
+  trayFrame: {
+    paddingInline: '24px',
+  },
   tray: {
     gap: '8px',
-    marginInline: '24px',
-    paddingBlockStart: '6px',
-    paddingBlockEnd: `${TRAY_OVERLAP + 6}px`,
-    paddingInline: '8px',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: `${TRAY_OVERLAP + 8}px`,
+    paddingInline: '10px',
     borderStartStartRadius: '20px',
     borderStartEndRadius: '20px',
     backgroundColor: cssVar.colorFillTertiary,
   },
 });
+
 const actionBarStyle = { paddingBlockEnd: ACTION_BAR_INSET, paddingInline: ACTION_BAR_INSET };
 
 export interface ProjectComposerRequest {
@@ -163,49 +168,52 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
 
   return (
     <div ref={containerRef}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={stylex.props(styles.tray).className}
-        justify={'space-between'}
-      >
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Segmented
-            size={'small'}
-            value={mode}
-            options={[
-              { label: t('overview.mode.chat'), value: 'chat' },
-              { label: t('overview.mode.task'), value: 'task' },
-            ]}
-            onChange={(value) => setMode(value as ProjectComposerMode)}
-          />
-          <ProjectAgentSelect
-            agents={agents}
-            disabled={sending}
-            value={agentId}
-            onChange={setPickedAgentId}
-          />
-        </Flexbox>
-        <Flexbox horizontal align={'center'} gap={2}>
-          {mode === 'chat' && (
-            <ProjectRepositoryChip
-              canManage={canManageProject}
-              disabled={sending}
-              projectId={project.id}
-              state={repositoryState}
+      <div {...stylex.props(styles.trayFrame)}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.tray).className}
+          justify={'space-between'}
+        >
+          <Flexbox horizontal align={'center'} gap={4}>
+            <Segmented
+              size={'small'}
+              value={mode}
+              options={[
+                { label: t('overview.mode.chat'), value: 'chat' },
+                { label: t('overview.mode.task'), value: 'task' },
+              ]}
+              onChange={(value) => setMode(value as ProjectComposerMode)}
             />
-          )}
-          <ProjectRunTargetChip agentId={agentId} disabled={sending} />
-          <ActionIcon
-            icon={SettingsIcon}
-            size={'small'}
-            title={t('overview.context.settings')}
-            onClick={() =>
-              navigate(getProjectSettingsPath(project.slug ?? project.id, 'directories'))
-            }
-          />
+            <ProjectAgentSelect
+              agents={agents}
+              disabled={sending}
+              value={agentId}
+              onChange={setPickedAgentId}
+            />
+          </Flexbox>
+          <Flexbox horizontal align={'center'} gap={2}>
+            {mode === 'chat' && (
+              <ProjectRepositoryChip
+                canManage={canManageProject}
+                disabled={sending}
+                projectId={project.id}
+                state={repositoryState}
+              />
+            )}
+            <ProjectRunTargetChip agentId={agentId} disabled={sending} />
+            <ActionIcon
+              aria-label={t('overview.context.settings')}
+              icon={SettingsIcon}
+              size={'small'}
+              title={t('overview.context.settings')}
+              onClick={() =>
+                navigate(getProjectSettingsPath(project.slug ?? project.id, 'environments'))
+              }
+            />
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
+      </div>
       <div {...stylex.props(styles.card)}>
         <InputDragUpload radius={CONTAINER_RADIUS} onUploadFiles={handleUploadFiles}>
           <ChatInputProvider

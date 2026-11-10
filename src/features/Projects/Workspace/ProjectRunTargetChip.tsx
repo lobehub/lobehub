@@ -121,9 +121,12 @@ const ProjectRunTargetChip = ({ agentId, disabled }: ProjectRunTargetChipProps) 
 };
 
 const styles = stylex.create({
+  // Body size and color: the tray says where the work happens, not a footnote.
   button: {
     borderWidth: 0,
     fontFamily: 'inherit',
+    fontSize: '13px',
+    color: cssVar.colorText,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
   },
   /** Shown, not picked: no hover, since nothing opens. */
