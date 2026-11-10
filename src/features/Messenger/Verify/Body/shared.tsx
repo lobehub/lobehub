@@ -4,11 +4,10 @@ import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text, toast }
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
-import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -169,9 +168,8 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     // First-level scope selector — personal plus every workspace the user
     // belongs to. Picking a scope just filters the agent list below; the
     // backend derives the binding's workspace from the chosen agent on confirm.
-    const scopesSWR = useSWR(enableWorkspaceScopes ? messengerKeys.bindingScopes() : null, () =>
-      messengerService.listBindingScopes(),
-    );
+    messengerActions.useFetchBindingScopes(enableWorkspaceScopes);
+    const bindingScopes = useMessengerStore(messengerSelectors.bindingScopes);
     const [scope, setScope] = useState<string>(PERSONAL_SCOPE);
     const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
     const scopeWorkspaceId = scope === PERSONAL_SCOPE ? null : scope;
@@ -184,10 +182,13 @@ export const ConfirmCard = memo<ConfirmCardProps>(
       setSelectedAgentId(undefined);
     }, [enableWorkspaceScopes, scope]);
 
-    // Scope-aware agent list. The SWR key matches AgentSelect's so the fetch is
-    // shared (single request per scope) and stays in sync as the scope changes.
-    const agentsSWR = useSWR(messengerKeys.agentsForBinding(scopeWorkspaceId), () =>
-      messengerService.listAgentsForBinding(scopeWorkspaceId),
+    // Scope-aware agent list, the same replica entry AgentSelect reads, so the
+    // fetch is shared (single request per scope) and follows the scope.
+    messengerActions.useFetchBindingAgents(scopeWorkspaceId);
+    const agents = useMessengerStore(messengerSelectors.bindingAgents(scopeWorkspaceId));
+    // "No agents" only from the server: a restored empty copy may be stale.
+    const isAgentsConfirmed = useMessengerStore(
+      messengerSelectors.isBindingAgentsConfirmed(scopeWorkspaceId),
     );
 
     const [confirming, setConfirming] = useState(false);
@@ -196,9 +197,9 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     // list loads. Resetting selectedAgentId on scope change re-triggers this so
     // it re-defaults to the new scope's inbox.
     useEffect(() => {
-      if (selectedAgentId || !agentsSWR.data?.length) return;
-      setSelectedAgentId(agentsSWR.data[0].id);
-    }, [agentsSWR.data, selectedAgentId]);
+      if (selectedAgentId || !agents?.length) return;
+      setSelectedAgentId(agents[0].id);
+    }, [agents, selectedAgentId]);
 
     // Mirror the Messenger connection card's scope picker: avatar + name per row.
     // Personal uses the user's avatar; workspaces use their own.
@@ -212,13 +213,13 @@ export const ConfirmCard = memo<ConfirmCardProps>(
         personalAvatar: userAvatar,
         personalLabel,
         personalTagLabel: t('messenger.scopePersonalTag', { defaultValue: 'personal' }),
-        workspaces: scopesSWR.data,
+        workspaces: enableWorkspaceScopes ? bindingScopes : undefined,
       });
-    }, [scopesSWR.data, t, userAvatar, userDisplayName, userFullName]);
+    }, [bindingScopes, enableWorkspaceScopes, t, userAvatar, userDisplayName, userFullName]);
 
     // Personal-only deployments (OSS) return no workspaces — hide the scope
     // selector entirely so the experience is unchanged there.
-    const hasWorkspaces = enableWorkspaceScopes && (scopesSWR.data?.length ?? 0) > 0;
+    const hasWorkspaces = enableWorkspaceScopes && (bindingScopes?.length ?? 0) > 0;
 
     const isBlocked = !!blockingNotice;
 
@@ -290,7 +291,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
             )}
             <Flexbox gap={8}>
               <Text strong>{t('verify.confirm.defaultAgent')}</Text>
-              {agentsSWR.data?.length === 0 ? (
+              {isAgentsConfirmed && agents?.length === 0 ? (
                 <Text type="warning">{t('verify.confirm.noAgents')}</Text>
               ) : (
                 <AgentSelect

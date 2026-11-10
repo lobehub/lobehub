@@ -2,8 +2,6 @@ import { render, renderHook, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { messengerKeys } from '@/libs/swr/keys';
-
 import { useLinkActions, UserAgentConnection } from './shared';
 
 const userState = {
@@ -96,20 +94,22 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('swr', () => ({
-  default: (key: unknown) => ({
-    data:
-      Array.isArray(key) && key[0] === messengerKeys.bindingScopes.root
-        ? [{ avatar: 'workspace-avatar', id: 'workspace-1', name: 'love' }]
-        : undefined,
-    isLoading: false,
-  }),
-}));
+const messengerState = {
+  bindingScopes: [{ avatar: 'workspace-avatar', id: 'workspace-1', name: 'love' }],
+};
 
-vi.mock('@/services/messenger', () => ({
-  messengerService: {
-    listBindingScopes: vi.fn(),
+vi.mock('@/store/messenger', () => ({
+  messengerActions: {
+    setActiveAgent: vi.fn(),
+    uninstallInstallation: vi.fn(),
+    unlink: vi.fn(),
+    useFetchBindingScopes: vi.fn(),
   },
+  messengerSelectors: {
+    bindingScopes: (state: typeof messengerState) => state.bindingScopes,
+  },
+  useMessengerStore: (selector: (state: typeof messengerState) => unknown) =>
+    selector(messengerState),
 }));
 
 vi.mock('@/store/serverConfig', () => ({
@@ -196,8 +196,6 @@ describe('useLinkActions handleUnlink', () => {
   const renderActions = (platform: 'wechat' | 'telegram', name: string) =>
     renderHook(() =>
       useLinkActions({
-        installationsMutate: vi.fn(async () => undefined),
-        linksMutate: vi.fn(async () => undefined),
         name,
         platform,
       }),

@@ -584,39 +584,18 @@ export const statsKeys = {
 
 // ---- messenger / platform integration -----------------------------------
 export const messengerKeys = {
-  agentsForBinding: def('messenger:agentsForBinding', (workspaceId: string | null | undefined) => [
-    'messenger:agentsForBinding',
-    workspaceId ?? null,
-  ]),
-  availablePlatforms: def('messenger:availablePlatforms', () => ['messenger:availablePlatforms']),
-  bindingScopes: def('messenger:bindingScopes', () => ['messenger:bindingScopes']),
-  listMyInstallations: def('messenger:listMyInstallations', () => [
-    'messenger:listMyInstallations',
-  ]),
-  listMyLinks: def('messenger:listMyLinks', () => ['messenger:listMyLinks']),
   myLink: def('messenger:myLink', (platform: string, tokenScopeKey: string | undefined) => [
     'messenger:myLink',
     platform,
     tokenScopeKey,
   ]),
   peek: def('messenger:peek', (randomId: string) => ['messenger:peek', randomId]),
-  pushWindow: def('messenger:pushWindow', (platform: string, tenantId?: string) => [
-    'messenger:pushWindow',
-    platform,
-    tenantId ?? null,
-  ]),
 };
 
 // ---- scm (GitHub App integration) --------------------------------------
 export const scmKeys = {
   changeRequests: def('scm:changeRequests', (workspaceId: string | null | undefined) => [
     'scm:changeRequests',
-    workspaceId ?? null,
-  ]),
-  config: def('scm:config', () => ['scm:config']),
-  identity: def('scm:identity', (provider: string) => ['scm:identity', provider]),
-  installations: def('scm:installations', (workspaceId: string | null | undefined) => [
-    'scm:installations',
     workspaceId ?? null,
   ]),
   repositories: def('scm:repositories', (workspaceId: string | null | undefined) => [
