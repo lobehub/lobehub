@@ -58,7 +58,7 @@ const ProjectRepositoryChip = ({
     <>
       <Github size={14} />
       <span {...stylex.props(workingDirectoryChipStyles.label)}>
-        {repository.name.split('/').pop() || repository.name}
+        {(repositorySlug(repository) ?? repository.name).split('/').pop() || repository.name}
       </span>
     </>
   );
