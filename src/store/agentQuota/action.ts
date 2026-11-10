@@ -215,8 +215,19 @@ export class ActionImpl {
     return this.#deviceAccount.useSync(key, this.#syncOptions('deviceAccount', key));
   };
 
-  useFetchQuotaReadings = (accountId?: string | null): ReplicaSyncResult =>
-    this.#readings.useSync(accountId || null, this.#syncOptions('readings', accountId));
+  /**
+   * Sync one account's newest readings. A view that stays open while others
+   * spend the account (the team capacity calendar) passes a `refreshInterval`
+   * so it keeps up; SWR pauses the polling while the tab is hidden.
+   */
+  useFetchQuotaReadings = (
+    accountId?: string | null,
+    schedule?: { refreshInterval?: number },
+  ): ReplicaSyncResult =>
+    this.#readings.useSync(accountId || null, {
+      ...this.#syncOptions('readings', accountId),
+      ...schedule,
+    });
 
   useFetchQuotaHistory = (accountId?: string | null): ReplicaSyncResult =>
     this.#history.useSync(accountId || null, this.#syncOptions('history', accountId));

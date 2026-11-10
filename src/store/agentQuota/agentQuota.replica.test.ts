@@ -726,4 +726,43 @@ describe('agent quota replicas', () => {
       expect(agentQuotaSelectors.history('a1')(useAgentQuotaStore.getState())).toEqual(history);
     });
   });
+
+  describe('readings', () => {
+    const MINUTE = 60_000;
+
+    it('re-reads on the given interval, so an open view tracks teammates spending the account', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const getLatestReadings = vi
+        .spyOn(agentQuotaService, 'getLatestReadings')
+        .mockResolvedValue([]);
+
+      renderHook(
+        () =>
+          useAgentQuotaStore.getState().useFetchQuotaReadings('a1', { refreshInterval: MINUTE }),
+        { wrapper },
+      );
+      await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        vi.advanceTimersByTime(MINUTE + 1);
+      });
+      await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(2));
+    });
+
+    it('reads once without an interval', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const getLatestReadings = vi
+        .spyOn(agentQuotaService, 'getLatestReadings')
+        .mockResolvedValue([]);
+
+      renderHook(() => useAgentQuotaStore.getState().useFetchQuotaReadings('a1'), { wrapper });
+      await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        vi.advanceTimersByTime(MINUTE + 1);
+      });
+      await tick();
+      expect(getLatestReadings).toHaveBeenCalledTimes(1);
+    });
+  });
 });

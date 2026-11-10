@@ -38,6 +38,11 @@ type ProviderAccount = QuotaAccount & { provider: SubscriptionProvider };
 
 /** Windows move with the clock; a minute is finer than any change the grid shows. */
 const TICK_MS = 60_000;
+/**
+ * Teammates spend the accounts while the calendar sits open, and the Team tab
+ * has no refresh button: re-read every account's readings on the same beat.
+ */
+const READINGS_REFRESH_MS = 60_000;
 
 /** Every 5-hour window is one square of this size, plus the gap before the next. */
 // Cells are 26px squares (keep in sync with styles.cell).
@@ -299,7 +304,7 @@ const AccountWindowsRow = ({
 }: RowProps) => {
   const { t } = useTranslation('setting');
   const useFetchQuotaReadings = useAgentQuotaStore((s) => s.useFetchQuotaReadings);
-  useFetchQuotaReadings(account.id);
+  useFetchQuotaReadings(account.id, { refreshInterval: READINGS_REFRESH_MS });
   const name = accountDisplayName(account);
   const midnights = axisMidnights(axis);
 
