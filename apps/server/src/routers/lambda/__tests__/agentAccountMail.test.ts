@@ -69,6 +69,7 @@ const drafts = vi.hoisted(() => ({
 const mailbox = vi.hoisted(() => ({
   assertCanUseAll: vi.fn(async () => {}),
   purge: vi.fn(async () => ({ count: 1, failed: 0 })),
+  readHtml: vi.fn(async (): Promise<any> => ({ hasRemoteContent: false, html: '', status: 'ok' })),
   requireAccount: vi.fn(async () => ({ agentId: 'agt', id: 'acc' })),
   send: vi.fn(async (): Promise<any> => ({ mailId: 'm', providerMessageId: 'p' })),
   sendDraft: vi.fn(async (): Promise<any> => ({ mailId: 'm', providerMessageId: 'p' })),
@@ -179,6 +180,18 @@ describe('views', () => {
     await caller().conversation({ id });
 
     expect(mail.listConversation).toHaveBeenCalledWith({ id });
+  });
+
+  it("reads a mail's sanitized HTML", async () => {
+    mailbox.readHtml.mockResolvedValueOnce({ status: 'expired' });
+
+    await expect(caller().html({ id })).resolves.toEqual({ status: 'expired' });
+    expect(mailbox.readHtml).toHaveBeenCalledWith(id);
+  });
+
+  it('rejects an HTML read for a malformed id', async () => {
+    await expect(caller().html({ id: 'mail_1' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mailbox.readHtml).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   computeAgentMailSignature,
   LobeMailApiClient,
+  LobeMailApiError,
   parseAgentMailSignature,
   verifyAgentMailSignature,
 } from './api';
@@ -305,5 +306,61 @@ describe('loop protection', () => {
     expect(
       checkInboundEmail({ from: 'bot@lobe.id', inboxAddress: 'bot@lobe.id', subject: 'x' }).reason,
     ).toBe('self_addressed');
+  });
+});
+
+describe('LobeMailApiClient.fetchAttachment', () => {
+  const clientWith = (response: () => Response) =>
+    new LobeMailApiClient({ apiKey: 'am_test', fetchImpl: (async () => response()) as never });
+
+  /** A body that never declares its length, so only the stream can tell its size. */
+  const streamed = (chunks: string[]) =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+          controller.close();
+        },
+      }),
+    );
+
+  it('returns the bytes', async () => {
+    const file = await clientWith(() => new Response('bytes')).fetchAttachment('m', 0);
+    expect(file?.buffer.toString()).toBe('bytes');
+  });
+
+  it('reports a missing attachment as gone', async () => {
+    expect(
+      await clientWith(() => new Response('', { status: 404 })).fetchAttachment('m', 0),
+    ).toBeNull();
+  });
+
+  it('throws on a temporary failure, so it stays retryable', async () => {
+    await expect(
+      clientWith(() => new Response('', { status: 503 })).fetchAttachment('m', 0),
+    ).rejects.toBeInstanceOf(LobeMailApiError);
+  });
+
+  it('refuses a declared length over the cap before reading it', async () => {
+    const response = new Response('0123456789', { headers: { 'content-length': '10' } });
+    const error = await clientWith(() => response)
+      .fetchAttachment('m', 0, { maxBytes: 4 })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ status: 413 });
+    expect(response.bodyUsed).toBe(true);
+  });
+
+  it('stops reading an undeclared body once it passes the cap', async () => {
+    await expect(
+      clientWith(() => streamed(['012', '345', '678'])).fetchAttachment('m', 0, { maxBytes: 5 }),
+    ).rejects.toMatchObject({ status: 413 });
+  });
+
+  it('accepts a body at the cap', async () => {
+    const file = await clientWith(() => streamed(['01', '23'])).fetchAttachment('m', 0, {
+      maxBytes: 4,
+    });
+    expect(file?.buffer.toString()).toBe('0123');
   });
 });

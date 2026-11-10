@@ -155,6 +155,28 @@ export const createAgentMailProvider = (
   };
 
   /**
+   * The message as a person reading it may see it, or `undefined` when it is
+   * gone. A message outside the account's inbox reads as gone too: the mail
+   * row named it, so a mismatch means the row is stale, never that the reader
+   * may look into another agent's inbox.
+   */
+  const findInOwningInbox = async (
+    ref: AgentAccountRef,
+    providerMessageId: string,
+  ): Promise<EmailMessageDetail | undefined> => {
+    try {
+      return await assertInOwningInbox(ref, providerMessageId);
+    } catch (error) {
+      if (error instanceof LobeMailApiError && error.status === 404) return undefined;
+      if (error instanceof AgentAccountError && error.code === 'reply_target_not_owned') {
+        console.warn('[agentMail] message %s is outside its account inbox', providerMessageId);
+        return undefined;
+      }
+      throw error;
+    }
+  };
+
+  /**
    * The bytes of a forwarded message's attachments, plus the descriptors that
    * describe them once they are out. One the provider no longer holds is
    * skipped: its retention can be shorter than the mail's life here. Any other
@@ -353,6 +375,26 @@ export const createAgentMailProvider = (
         providerMessageId: messageIdOf(detail),
         references: detail.references ?? undefined,
       };
+    },
+
+    downloadAttachment: async (ref, providerMessageId, index, { maxBytes }) => {
+      if (!(await findInOwningInbox(ref, providerMessageId))) return null;
+      try {
+        return await client.fetchAttachment(providerMessageId, index, { maxBytes });
+      } catch (error) {
+        if (error instanceof LobeMailApiError && error.status === 413) {
+          throw new AgentAccountError(
+            'attachment_too_large',
+            `Attachment ${index} of ${providerMessageId} is larger than ${maxBytes} bytes.`,
+          );
+        }
+        throw error;
+      }
+    },
+
+    getMessageHtml: async (ref, providerMessageId) => {
+      const message = await findInOwningInbox(ref, providerMessageId);
+      return message ? (message.html ?? null) : undefined;
     },
 
     deleteMessage: async (ref: AgentAccountRef, providerMessageId: string): Promise<void> => {

@@ -106,6 +106,42 @@ export class LobeMailApiError extends Error {
   }
 }
 
+/**
+ * A response body, refused with a 413 {@link LobeMailApiError} once it passes
+ * `maxBytes`: up front when the length is declared, otherwise mid-stream, so
+ * an oversized body is never held in memory whole.
+ */
+const readCapped = async (
+  response: Response,
+  maxBytes: number | undefined,
+  path: string,
+): Promise<Buffer> => {
+  if (maxBytes === undefined || !response.body) return Buffer.from(await response.arrayBuffer());
+
+  const tooLarge = () =>
+    new LobeMailApiError(413, `Agent Mail GET ${path} exceeds ${maxBytes} bytes`);
+  const reader = response.body.getReader();
+  if (Number(response.headers.get('content-length')) > maxBytes) {
+    await reader.cancel().catch(() => {});
+    throw tooLarge();
+  }
+
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks);
+};
+
 export class LobeMailApiClient {
   readonly apiKey: string;
   readonly baseUrl: string;
@@ -274,6 +310,7 @@ export class LobeMailApiClient {
   fetchAttachment = async (
     messageId: string,
     index: number,
+    options: { maxBytes?: number } = {},
   ): Promise<null | { buffer: Buffer; contentType?: string }> => {
     const path = `/v1/messages/${encodeURIComponent(messageId)}/attachments/${index}`;
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
@@ -288,7 +325,7 @@ export class LobeMailApiClient {
     }
 
     return {
-      buffer: Buffer.from(await response.arrayBuffer()),
+      buffer: await readCapped(response, options.maxBytes, path),
       contentType: response.headers.get('content-type') ?? undefined,
     };
   };

@@ -17,9 +17,16 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AgentAccountError, isAgentAccountError } from './errors';
 import { AgentInboxService } from './inbox';
 import type { AgentAccountService } from './index';
+import { type SanitizedMailHtml, sanitizeMailHtml } from './mailHtml';
 
 /** How many provider deletes run at once while purging. */
 const PURGE_CONCURRENCY = 10;
+
+/**
+ * Largest attachment a person downloads through the server. Mail rarely
+ * carries more, and the bytes are held in memory while they pass through.
+ */
+export const MAX_ATTACHMENT_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 
 export interface SendAgentMailInput {
   accountId: string;
@@ -33,6 +40,21 @@ export interface SendAgentMailInput {
   subject?: string | null;
   text: string;
   to?: AgentMailAddress[];
+}
+
+/**
+ * A mail's HTML for a person reading it. `expired`: the mail or the provider's
+ * copy is gone (or out of the caller's scope); `none`: it has no HTML part;
+ * `failed`: the provider failed (retryable) or the HTML cannot be made safe.
+ */
+export type AgentMailHtmlResult =
+  ({ status: 'ok' } & SanitizedMailHtml) | { status: 'expired' | 'failed' | 'none' };
+
+export interface AgentMailAttachmentFile {
+  buffer: Buffer;
+  /** The type the mail declared; untrusted, so never served as the response type. */
+  contentType?: string;
+  filename?: string;
 }
 
 export interface PurgeAgentMailResult {
@@ -419,6 +441,66 @@ export class AgentMailboxService {
     });
 
     return result;
+  };
+
+  /**
+   * A mail's HTML, sanitized, for a person reading it. Fetched on demand and
+   * never stored or handed to the agent, which only ever reads the plain text.
+   * The mail is looked up in the caller's scope first, so a foreign id reads
+   * as `expired` before any provider is asked.
+   */
+  readHtml = async (id: string): Promise<AgentMailHtmlResult> => {
+    const mail = await this.mail.findById(id);
+    if (!mail) return { status: 'expired' };
+
+    let raw: null | string | undefined;
+    try {
+      raw = await this.accounts.getProviderMessageHtml(mail.accountId, mail.providerMessageId);
+    } catch (error) {
+      console.error('[agentMailbox] read html failed:', error);
+      return { status: 'failed' };
+    }
+
+    if (raw === undefined) return { status: 'expired' };
+    if (!raw) return { status: 'none' };
+
+    const sanitized = sanitizeMailHtml(raw);
+    return sanitized ? { status: 'ok', ...sanitized } : { status: 'failed' };
+  };
+
+  /**
+   * One attachment of a mail in the caller's scope, by the index its row
+   * lists; `null` when the mail, the attachment or the provider's bytes are
+   * gone. Throws `attachment_too_large` past
+   * {@link MAX_ATTACHMENT_DOWNLOAD_BYTES}, and on a provider failure worth
+   * retrying.
+   */
+  readAttachment = async (id: string, index: number): Promise<AgentMailAttachmentFile | null> => {
+    const mail = await this.mail.findById(id);
+    const attachment = mail?.attachments?.find((item) => item.index === index);
+    if (!mail || !attachment) return null;
+
+    // The declared size saves a download that could only be refused.
+    if ((attachment.size ?? 0) > MAX_ATTACHMENT_DOWNLOAD_BYTES) {
+      throw new AgentAccountError(
+        'attachment_too_large',
+        `This attachment is larger than ${MAX_ATTACHMENT_DOWNLOAD_BYTES / 1024 / 1024} MB.`,
+      );
+    }
+
+    const file = await this.accounts.downloadProviderAttachment(
+      mail.accountId,
+      mail.providerMessageId,
+      index,
+      { maxBytes: MAX_ATTACHMENT_DOWNLOAD_BYTES },
+    );
+    if (!file) return null;
+
+    return {
+      buffer: file.buffer,
+      contentType: attachment.contentType ?? file.contentType,
+      filename: attachment.filename,
+    };
   };
 
   /**
