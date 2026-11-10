@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { useEffect } from 'react';
 import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
@@ -9,15 +10,17 @@ import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/Ag
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { StyleSheet } from '@/utils/styles';
 
 import InboxMessageDetail from './InboxMessageDetail';
 import InboxSection from './InboxSection';
 import MailboxCard from './MailboxCard';
-import MailSplitView from './MailSplitView';
+import MailboxEmptyState from './MailboxEmptyState';
+import MailSplitView, { MailNavHeader } from './MailSplitView';
 import { identityStyles } from './styles';
-import { useMailbox } from './useAgentIdentity';
+import { useAgentInbox, useMailbox, useOpenableChannel } from './useAgentIdentity';
 
 const styles = StyleSheet.create({
   body: {
@@ -44,8 +47,25 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const { messageId } = useParams<{ messageId?: string }>();
   const navigate = useWorkspaceAwareNavigate();
   const mailbox = useMailbox(agentId, messageId);
+  const openable = useOpenableChannel();
+  const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
   const mailPath = urlJoin('/agent', agentId, 'mail');
+  const noAddress = !!mailbox.data && !mailbox.current;
+  // Releasing an address keeps the mail it received, so "no address" is not
+  // "no mail": only an empty, successfully read inbox counts as nothing to show.
+  // Same key as the inbox list below, so this adds no request of its own.
+  const retained = useAgentInbox(noAddress ? agentId : '');
+  const noMail = noAddress && !retained.error && retained.data?.length === 0;
+  const checkingMail = noAddress && !retained.error && !retained.data;
+  // Nothing to read and nothing this deployment could open, so there is no page.
+  // Until the server config has loaded, an empty provider list is only the
+  // default (a cold desktop start), not the deployment saying it has none.
+  const unavailable = configLoaded && noMail && !openable;
+
+  useEffect(() => {
+    if (unavailable) navigate(urlJoin('/agent', agentId, 'profile'), { replace: true });
+  }, [agentId, navigate, unavailable]);
 
   // Moving between messages replaces the entry, so back leaves the mail page.
   const openMessage = (id: string) => {
@@ -59,6 +79,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     if (messageId) navigate(mailPath, { replace: true });
   };
 
+  if (unavailable) return null;
+
   const mailboxCard = (
     <MailboxCard agentId={agentId} disabled={disabled} mailbox={mailbox} onSwitch={switchMailbox} />
   );
@@ -70,6 +92,24 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
       selectedId={mobile ? undefined : messageId}
       onOpen={openMessage}
     />
+  );
+
+  // With no address there is nothing to list or read, so the offer takes the
+  // whole page. Waits for a successful read: a failure must not look like "none".
+  const emptyState = checkingMail ? (
+    <Center flex={1} />
+  ) : (
+    noMail &&
+    openable && (
+      <Center flex={1} padding={24} style={{ minHeight: 0 }}>
+        <MailboxEmptyState
+          agentId={agentId}
+          channel={openable}
+          disabled={disabled}
+          onProvisioned={mailbox.mutate}
+        />
+      </Center>
+    )
   );
 
   return (
@@ -88,14 +128,21 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           >
             <AgentProfileTabs active={'mail'} agentId={agentId} />
           </NavHeader>
-          <Flexbox flex={1} style={styles.body} width={'100%'}>
-            <WideScreenContainer>
-              <Flexbox gap={24} paddingBlock={16}>
-                {mailboxCard}
-                {inbox}
-              </Flexbox>
-            </WideScreenContainer>
-          </Flexbox>
+          {emptyState || (
+            <Flexbox flex={1} style={styles.body} width={'100%'}>
+              <WideScreenContainer>
+                <Flexbox gap={24} paddingBlock={16}>
+                  {mailboxCard}
+                  {inbox}
+                </Flexbox>
+              </WideScreenContainer>
+            </Flexbox>
+          )}
+        </>
+      ) : emptyState ? (
+        <>
+          <MailNavHeader />
+          {emptyState}
         </>
       ) : (
         <MailSplitView inbox={inbox} mailbox={mailboxCard} messageId={messageId} />

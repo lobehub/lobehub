@@ -4,6 +4,7 @@ import {
   ActionIcon,
   createModal,
   DropdownMenu,
+  Empty,
   Flexbox,
   Icon,
   Skeleton,
@@ -16,28 +17,25 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentAccountView } from '@/services/agentAccount';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import AddMailboxForm from './AddMailboxForm';
 import { IDENTITY_CHANNELS, isChannelAccount, KIND_ICONS } from './const';
 import InlineError from './InlineError';
-import ProvisionCard from './ProvisionCard';
 import { identityStyles } from './styles';
-import type { Mailbox } from './useAgentIdentity';
+import { type Mailbox, useOpenableChannel } from './useAgentIdentity';
 import { useAccountActions } from './useIdentityActions';
 
 /**
- * Every lifecycle state gets a label, released included: the list filters
- * revoked accounts out today, but a tag that silently renders nothing would
- * turn a future filter change into a blank chip rather than a wrong-looking one.
+ * Only a state that differs from the working default is worth a label. Released
+ * is included: the list filters revoked accounts out today, but a tag that
+ * silently renders nothing would turn a future filter change into a blank chip
+ * rather than a wrong-looking one.
  */
 const STATUS_KEYS = {
-  active: 'identity.status.active',
   provisioning: 'identity.status.provisioning',
   revoked: 'identity.status.revoked',
   suspended: 'identity.status.suspended',
-} as const satisfies Record<AgentAccountView['status'], string>;
+} as const satisfies Record<Exclude<AgentAccountView['status'], 'active'>, string>;
 
 const channelOf = (account: AgentAccountView) =>
   IDENTITY_CHANNELS.find((channel) => isChannelAccount(account, channel));
@@ -53,14 +51,11 @@ interface MailboxCardProps {
 /**
  * The mailbox being read: one card that switches between the agent's addresses
  * and keeps what is done to an address behind its menu.
- *
- * An agent with no address gets the offer to open one instead, because opening
- * is an explicit act and the absence should be visible.
  */
 const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwitch }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { accounts, current, data, error, isLoading, mutate } = mailbox;
-  const providers = useServerConfigStore(serverConfigSelectors.agentIdentityProviders);
+  const openable = useOpenableChannel();
   const { release } = useAccountActions({
     agentId,
     onChanged: () => {
@@ -70,9 +65,6 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
       return mutate();
     },
   });
-
-  // An offer this deployment cannot fulfil would only fail on click.
-  const openable = IDENTITY_CHANNELS.find((channel) => providers.includes(channel.provider));
 
   // Only a read that never succeeded replaces the card. A later revalidation
   // that fails keeps the mailbox on screen, with the failure beside it.
@@ -85,22 +77,7 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
   ) : undefined;
 
   if (error && !data) return failure;
-  if (isLoading && !data) return <Skeleton height={56} width={'100%'} />;
-
-  if (!current) {
-    if (!openable) return failure ?? null;
-
-    return (
-      <ProvisionCard
-        agentId={agentId}
-        channel={openable}
-        disabled={disabled}
-        onProvisioned={mutate}
-      />
-    );
-  }
-
-  const channel = channelOf(current);
+  if (isLoading && !data) return <Skeleton height={44} width={'100%'} />;
 
   const openAdd = () => {
     if (!openable) return;
@@ -109,11 +86,11 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
         <AddMailboxForm
           agentId={agentId}
           channel={openable}
+          onChanged={mutate}
           onAdded={(account) => {
             onSwitch(account.id);
             modal.close();
           }}
-          onChanged={mutate}
         />
       ),
       footer: null,
@@ -122,6 +99,16 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
       width: 400,
     });
   };
+
+  // Mail kept from a released address is still listed below; offer a new
+  // address beside it instead of hiding that mail behind the full-page offer.
+  if (!current) {
+    if (failure || !openable || disabled) return failure ?? null;
+
+    return <Empty title={t('identity.empty.open')} variant={'dashed'} onClick={openAdd} />;
+  }
+
+  const channel = channelOf(current);
 
   const switchItems = [
     ...accounts.map((account) => ({
@@ -174,17 +161,12 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
               icon={channel?.icon ?? KIND_ICONS[current.kind]}
               size={18}
             />
-            <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-              <Text code ellipsis weight={500}>
-                {current.identifier}
-              </Text>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <Text ellipsis fontSize={12} style={{ minWidth: 0 }} type={'secondary'}>
-                  {current.displayName || (channel ? t(channel.titleKey) : current.provider)}
-                </Text>
-                <Tag style={{ flexShrink: 0 }}>{t(STATUS_KEYS[current.status])}</Tag>
-              </Flexbox>
-            </Flexbox>
+            <Text code ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
+              {current.identifier}
+            </Text>
+            {current.status !== 'active' && (
+              <Tag style={{ flexShrink: 0 }}>{t(STATUS_KEYS[current.status])}</Tag>
+            )}
             <Icon className={identityStyles.icon} icon={ChevronsUpDown} size={14} />
           </div>
         </DropdownMenu>

@@ -192,6 +192,8 @@
   "team.agent.untitled": "未命名助手",
   "team.attention.approvalNeeded": "需要批准后才能继续",
   "team.attention.blocked": "等待团队成员",
+  "team.attention.collapse": "收起",
+  "team.attention.expand": "展开待关注的运行",
   "team.attention.failed": "失败",
   "team.attention.failedAgo": "{{time}}前失败",
   "team.attention.handle": "去处理",

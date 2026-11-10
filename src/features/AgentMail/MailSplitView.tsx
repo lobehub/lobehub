@@ -17,6 +17,22 @@ interface MailSplitViewProps {
   messageId?: string;
 }
 
+/** The page title a wide screen shows above the mail, or above the offer to open a mailbox. */
+export const MailNavHeader = () => {
+  const { t } = useTranslation('setting');
+
+  return (
+    <NavHeader
+      styles={{ left: { minWidth: 0, paddingInlineStart: 8 } }}
+      left={
+        <Text fontSize={14} weight={500}>
+          {t('identity.mail.title')}
+        </Text>
+      }
+    />
+  );
+};
+
 /** The mail page on a wide screen: mailbox and list on the left, the open message on the right. */
 const MailSplitView = ({ inbox, mailbox, messageId }: MailSplitViewProps) => {
   const { t } = useTranslation('setting');
@@ -25,14 +41,7 @@ const MailSplitView = ({ inbox, mailbox, messageId }: MailSplitViewProps) => {
     <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
       {/* The header belongs to the list column, so the message runs to the top of the page. */}
       <div className={identityStyles.listPane}>
-        <NavHeader
-          left={
-            <Text fontSize={14} weight={500}>
-              {t('identity.mail.title')}
-            </Text>
-          }
-          styles={{ left: { minWidth: 0, paddingInlineStart: 8 } }}
-        />
+        <MailNavHeader />
         <Flexbox
           flex={1}
           gap={16}

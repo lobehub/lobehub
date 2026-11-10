@@ -90,6 +90,10 @@ const PROVIDER_META: Record<
   'kimi-code': { icon: (size) => <Kimi.Avatar size={size} />, name: 'Kimi Code' },
 };
 
+/** The provider's avatar, as the list row draws it. */
+export const providerAvatar = (provider: SubscriptionProvider, size: number) =>
+  PROVIDER_META[provider].icon(size);
+
 export const PROVIDER_NAME = Object.fromEntries(
   Object.entries(PROVIDER_META).map(([key, meta]) => [key, meta.name]),
 ) as Record<SubscriptionProvider, string>;

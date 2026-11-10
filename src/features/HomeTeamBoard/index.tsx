@@ -9,11 +9,14 @@ import AsyncError from '@/components/AsyncError';
 import { useClientPollingSWR } from '@/libs/swr';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { agentRunBoardService } from '@/services/agentRunBoard';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import ActivityPanel from './ActivityPanel';
 import AttentionList from './AttentionList';
 import BoardFilters from './BoardFilters';
 import DayCalendar from './DayCalendar';
+import QuotaCapacity from './QuotaCapacity';
 import Timeline from './Timeline';
 
 // Matches the other overview pages; the gateway only streams a user's own runs.
@@ -31,6 +34,12 @@ const styles = stylex.create({
       '@media (max-width: 1100px)': 'minmax(0, 1fr)',
     },
     alignItems: 'start',
+  },
+  columnsFolded: {
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr) 44px',
+      '@media (max-width: 1100px)': 'minmax(0, 1fr)',
+    },
   },
   columnsFull: { gridTemplateColumns: 'minmax(0, 1fr)' },
   empty: {
@@ -53,6 +62,7 @@ const HomeTeamBoard = () => {
   const [scope, setScope] = useState<AgentRunBoardScope>('all');
   const [agentId, setAgentId] = useState<string>();
   const [userId, setUserId] = useState<string>();
+  const attentionCollapsed = useGlobalStore(systemStatusSelectors.teamBoardAttentionCollapsed);
 
   // The options depend on the scope and window, so a pick may not exist in the next one.
   const clearPicks = () => {
@@ -123,7 +133,13 @@ const HomeTeamBoard = () => {
             onAgentChange={setAgentId}
             onUserChange={setUserId}
           />
-          <div {...stylex.props(styles.columns, !hasAttention && styles.columnsFull)}>
+          <div
+            {...stylex.props(
+              styles.columns,
+              attentionCollapsed && styles.columnsFolded,
+              !hasAttention && styles.columnsFull,
+            )}
+          >
             {!data.lanes?.length ? (
               <div {...stylex.props(styles.empty)}>
                 {t(scope === 'involved' ? 'team.emptyInvolved' : 'team.empty', {
@@ -139,6 +155,8 @@ const HomeTeamBoard = () => {
           </div>
         </Flexbox>
       )}
+      {/* Independent of the run board: it loads, polls and fails on its own. */}
+      <QuotaCapacity />
     </Flexbox>
   );
 };

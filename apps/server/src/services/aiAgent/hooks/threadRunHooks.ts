@@ -33,6 +33,7 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
  */
 export type ThreadCarryOver = Pick<
   ThreadMetadata,
+  | 'runUsageBaseline'
   | 'sourceToolCallId'
   | 'totalCost'
   | 'totalLlmCalls'
@@ -42,6 +43,12 @@ export type ThreadCarryOver = Pick<
 >;
 
 export const pickThreadCarryOver = (metadata?: ThreadMetadata | null): ThreadCarryOver => ({
+  runUsageBaseline: {
+    totalCost: metadata?.totalCost,
+    totalLlmCalls: metadata?.totalLlmCalls,
+    totalTokens: metadata?.totalTokens,
+    totalToolCalls: metadata?.totalToolCalls,
+  },
   sourceToolCallId: metadata?.sourceToolCallId,
   totalCost: metadata?.totalCost,
   totalMessages: metadata?.totalMessages,

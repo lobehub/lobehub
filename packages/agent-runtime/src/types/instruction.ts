@@ -304,6 +304,12 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
   payload: {
     /** Optional message to write into blocked tool result content */
     blockedContent?: string;
+    /**
+     * Per-call override of {@link blockedContent}, keyed by tool call id, for
+     * rejections whose message must name the specific call (tool + call id).
+     * A plain record so the instruction stays serializable.
+     */
+    blockedContentByCallId?: Record<string, string>;
     /** Optional machine-readable blocked reason */
     blockedReason?: string;
     /** Parent message ID (assistant message) */

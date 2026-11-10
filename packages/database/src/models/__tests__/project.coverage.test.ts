@@ -9,6 +9,7 @@ import { agents, projects, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 import { ProjectModel } from '../project';
+import { ProjectIdentifierTakenError } from '../projectIdentifier';
 import { TaskModel } from '../task';
 import { createProxyTestDB } from './_proxyTestDB';
 
@@ -209,6 +210,49 @@ describe('ProjectModel coverage', () => {
       ).resolves.toBe(true);
       // Without the exception the project still holds it.
       await expect(model.isDedicatedCoordinator(legacy.id)).resolves.toBe(false);
+    });
+  });
+
+  describe('identifier conflict translation', () => {
+    /** Minimal insert chain: `create` is the only caller under test here. */
+    const failingDB = (error: unknown) =>
+      ({
+        insert: () => ({
+          values: () => ({
+            returning: async () => {
+              throw error;
+            },
+          }),
+        }),
+      }) as unknown as LobeChatDatabase;
+
+    it('treats a blank identifier as free without querying', async () => {
+      await expect(model.isIdentifierTaken('   ')).resolves.toBe(false);
+    });
+
+    it('rethrows an identifier error raised inside the insert path', async () => {
+      const taken = new ProjectIdentifierTakenError('LOBE');
+
+      await expect(
+        new ProjectModel(failingDB(taken), userId).create({ identifier: 'LOBE', name: 'Taken' }),
+      ).rejects.toBe(taken);
+    });
+
+    it('translates a wrapped unique-index violation into the field error', async () => {
+      const driverError = Object.assign(new Error('insert into "projects" failed'), {
+        cause: {
+          code: '23505',
+          constraint: 'projects_identifier_key',
+          message: 'duplicate key value violates unique constraint',
+        },
+      });
+
+      await expect(
+        new ProjectModel(failingDB(driverError), userId).create({
+          identifier: ' lobe ',
+          name: 'Duplicate',
+        }),
+      ).rejects.toBeInstanceOf(ProjectIdentifierTakenError);
     });
   });
 });

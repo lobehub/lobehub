@@ -13,6 +13,7 @@ vi.mock('@/libs/trusted-client', () => ({
 
 // Mock ThreadModel
 const mockThreadModel = {
+  attachRunOperation: vi.fn(),
   claimForRun: vi.fn(),
   create: vi.fn(),
   findById: vi.fn(),
@@ -345,8 +346,9 @@ describe('AiAgentService.execSubAgent', () => {
       await service.execSubAgent(createSubAgentParams());
 
       // Second update call should be storing operationId and startedAt in metadata
-      expect(mockThreadModel.update).toHaveBeenCalledWith('thread-123', {
-        metadata: { operationId: 'op-123', startedAt: expect.any(String) },
+      expect(mockThreadModel.attachRunOperation).toHaveBeenCalledWith('thread-123', {
+        operationId: 'op-123',
+        startedAt: expect.any(String),
       });
     });
 
@@ -522,7 +524,7 @@ describe('AiAgentService.execSubAgent', () => {
       expect(mockThreadModel.claimForRun).toHaveBeenCalledWith(
         'thread-old',
         { operationId: 'op-old', status: ThreadStatus.Failed },
-        { startedAt: expect.any(String) },
+        { runUsageBaseline: {}, startedAt: expect.any(String) },
       );
       expect(execAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -655,9 +657,10 @@ describe('AiAgentService.execSubAgent', () => {
         expect.anything(),
         expect.objectContaining(carried),
       );
-      expect(mockThreadModel.update).toHaveBeenCalledWith('thread-old', {
-        metadata: expect.objectContaining({ ...carried, operationId: 'op-new' }),
-      });
+      expect(mockThreadModel.attachRunOperation).toHaveBeenCalledWith(
+        'thread-old',
+        expect.objectContaining({ ...carried, operationId: 'op-new' }),
+      );
 
       const completion = execAgentSpy.mock.calls[0][0].hooks?.find(
         (h) => h.id === 'thread-completion',
