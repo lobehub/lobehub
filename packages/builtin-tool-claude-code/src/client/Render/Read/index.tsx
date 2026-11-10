@@ -5,6 +5,8 @@ import { Flexbox, Highlighter, Image, PreviewGroup } from '@lobehub/ui';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
 
+import { type IntrinsicImageSize, reservedImageProps } from '../reservedImageProps';
+
 interface ReadArgs {
   file_path?: string;
   limit?: number;
@@ -17,7 +19,7 @@ interface ReadArgs {
  * pipeline uploads them, so by the time the render runs each entry carries a
  * `url` (base64 `data` has been stripped) — see `HeterogeneousToolResultImage`.
  */
-interface ReadResultImage {
+interface ReadResultImage extends IntrinsicImageSize {
   fileId?: string;
   mediaType?: string;
   url?: string;
@@ -33,6 +35,8 @@ interface ReadPluginState {
  * style output; we keep the line numbers conceptually via Highlighter's own
  * gutter when available, and otherwise just display the raw source.
  */
+const IMAGE_MAX_HEIGHT = 600;
+
 const stripLineNumbers = (text: string): string => {
   if (!text) return '';
   return text
@@ -64,9 +68,10 @@ const Read = memo<BuiltinRenderProps<ReadArgs, ReadPluginState>>(
               <Image
                 alt={filePath || image.mediaType || ''}
                 key={image.fileId || image.url || index}
-                maxHeight={600}
+                maxHeight={IMAGE_MAX_HEIGHT}
                 src={image.url}
                 style={{ borderRadius: 8 }}
+                {...reservedImageProps(image, IMAGE_MAX_HEIGHT)}
               />
             ))}
           </Flexbox>

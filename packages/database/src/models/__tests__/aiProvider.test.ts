@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -478,6 +478,20 @@ describe('AiProviderModel', () => {
       expect(updatedKeyVaults.bearerToken).toBeUndefined();
       expect(updatedKeyVaults.oauthAccessToken).toBeUndefined();
     });
+
+    it('seeds empty vaults when the provider has no stored row to merge from', async () => {
+      // Nothing to preserve and nothing to decrypt — the merge must not read a
+      // row that does not exist.
+      const providerId = 'provider-without-row';
+
+      await aiProviderModel.updateConfig(providerId, {});
+
+      const created = await serverDB.query.aiProviders.findFirst({
+        where: eq(aiProviders.id, providerId),
+      });
+
+      expect(created?.keyVaults).toBe(JSON.stringify({}));
+    });
   });
 
   describe('toggleProviderEnabled', () => {
@@ -579,6 +593,23 @@ describe('AiProviderModel', () => {
       expect(provider).toBeDefined();
       expect(provider?.keyVaults).toEqual({});
       expect(failingDecryptor).toHaveBeenCalledWith('invalid-encrypted-data');
+    });
+
+    it('defaults to JSON.parse and keeps a boolean fetchOnClient when no decryptor is given', async () => {
+      const providerId = 'aihubmix';
+      await serverDB.insert(aiProviders).values({
+        fetchOnClient: true,
+        id: providerId,
+        keyVaults: JSON.stringify({ apiKey: 'plain-text' }),
+        name: 'AiHubMix',
+        source: 'custom',
+        userId,
+      });
+
+      const provider = await aiProviderModel.getAiProviderById(providerId);
+
+      expect(provider?.keyVaults).toEqual({ apiKey: 'plain-text' });
+      expect(provider?.fetchOnClient).toBe(true);
     });
   });
 
@@ -719,6 +750,28 @@ describe('AiProviderModel', () => {
 
       expect(config['user1-provider']).toBeDefined();
       expect(config['user2-provider']).toBeUndefined();
+    });
+
+    it('defaults a NULL config and layers builtin settings for a known builtin id', async () => {
+      // A row written outside the model (raw SQL / import) can still carry a
+      // NULL config and no settings — the runtime read has to survive both.
+      await serverDB.execute(
+        sql`INSERT INTO ai_providers (id, name, source, user_id, config, settings)
+            VALUES (${ModelProvider.OpenAI}, 'OpenAI', 'builtin', ${userId}, NULL, NULL)`,
+      );
+      await serverDB.insert(aiProviders).values({
+        id: 'custom-secondary',
+        name: 'Secondary',
+        settings: { userOnly: true } as any,
+        source: 'custom',
+        userId,
+      });
+
+      const config = await aiProviderModel.getAiProviderRuntimeConfig();
+
+      expect(config[ModelProvider.OpenAI].config).toEqual({});
+      expect(config[ModelProvider.OpenAI].settings).toBeDefined();
+      expect(config['custom-secondary'].settings).toEqual({ userOnly: true });
     });
   });
 });

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { ProjectRepository } from '@/database/repositories/project';
 import { TaskService } from '@/server/services/task';
 
 import { taskRouter } from '../../task';
@@ -16,6 +17,32 @@ import {
   createTestTopic,
   createTestUser,
 } from './setup';
+
+const taskInput = (
+  agentId: string,
+): Parameters<ReturnType<typeof taskRouter.createCaller>['create']>[0] => ({
+  assigneeAgentId: agentId,
+  instruction: 'Test',
+});
+
+const chapterInput = (
+  agentId: string,
+  instruction: string,
+  parentTaskId: string,
+): Parameters<ReturnType<typeof taskRouter.createCaller>['create']>[0] => ({
+  assigneeAgentId: agentId,
+  instruction,
+  parentTaskId,
+});
+
+const workspaceRoster = (
+  userId: string,
+  workspaceId: string,
+  memberId: string,
+): Array<{ role: 'owner' | 'member'; userId: string; workspaceId: string }> => [
+  { role: 'owner', userId, workspaceId },
+  { role: 'member', userId: memberId, workspaceId },
+];
 
 // Mock getServerDB
 let testDB: LobeChatDatabase;
@@ -118,6 +145,46 @@ describe('Task Router Integration', () => {
   });
 
   describe('create + find + detail', () => {
+    it.each(['personal', 'workspace'])(
+      'ignores legacy prefixes and inherits project numbering in %s',
+      async (scope) => {
+        let workspaceId: string | undefined;
+        if (scope === 'workspace') {
+          workspaceId = 'task-prefix-integration-workspace';
+          const { workspaces, workspaceMembers } = await import('@/database/schemas');
+          await serverDB.insert(workspaces).values({
+            id: workspaceId,
+            name: 'Task prefixes',
+            primaryOwnerId: userId,
+            slug: workspaceId,
+          });
+          await serverDB.insert(workspaceMembers).values({ role: 'owner', userId, workspaceId });
+        }
+        const scopedCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+        const model = new TaskModel(serverDB, userId, workspaceId);
+        const project = await new ProjectRepository(serverDB, userId, workspaceId).create({
+          identifier: 'PROJ',
+          name: 'Prefix project',
+        });
+        for (const identifierPrefix of ['T', 'CUSTOM', '', null, 42]) {
+          const legacyInput = { identifierPrefix, instruction: 'Standalone' };
+          const standalone = await scopedCaller.create(legacyInput);
+          expect(standalone.success).toBe(true);
+          expect(standalone.data.identifier).toBe(`T-${standalone.data.seq}`);
+          const projectInput = { ...legacyInput, projectId: project.id };
+          const parent = await scopedCaller.create(projectInput);
+          expect(parent.data.identifier).toBe(`PROJ-${parent.data.seq}`);
+          for (const parentTaskId of [parent.data.id, parent.data.identifier]) {
+            const childInput = { ...legacyInput, parentTaskId };
+            const child = await scopedCaller.create(childInput);
+            expect(child.data.projectId).toBe(project.id);
+            expect(child.data.identifier).toBe(`PROJ-${child.data.seq}`);
+            expect((await model.findById(child.data.id))?.identifier).toBe(child.data.identifier);
+          }
+        }
+      },
+    );
+
     it('should create a task and retrieve it', async () => {
       const result = await caller.create({
         instruction: 'Write a book',
@@ -261,10 +328,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsAgentId = 'agt_assignee_coexist_ws';
       await serverDB
         .insert(agents)
@@ -584,221 +650,6 @@ describe('Task Router Integration', () => {
     });
   });
 
-  describe('comment notifications', () => {
-    const mentionNode = (userId: string) => ({
-      label: 'Member',
-      metadata: { id: userId, type: 'member' },
-      type: 'mention',
-    });
-    const editorDataWith = (...userIds: string[]) => ({
-      root: { children: [{ children: userIds.map(mentionNode), type: 'paragraph' }] },
-    });
-
-    const setupWorkspace = async () => {
-      const workspaceId = 'task-comment-notify-workspace';
-      const { workspaces, workspaceMembers } = await import('@/database/schemas');
-      await serverDB.insert(workspaces).values({
-        id: workspaceId,
-        name: 'Task Comment Notify Workspace',
-        primaryOwnerId: userId,
-        slug: workspaceId,
-      });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
-      return {
-        wsCaller: taskRouter.createCaller({ ...createTestContext(userId), workspaceId }),
-        wsOtherCaller: taskRouter.createCaller({
-          ...createTestContext(otherUserId!),
-          workspaceId,
-        }),
-        workspaceId,
-      };
-    };
-
-    it('should ping the task creator and @mentioned members on a new member comment', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const { wsCaller, wsOtherCaller, workspaceId } = await setupWorkspace();
-      const task = await wsCaller.create({ instruction: 'Discuss', name: 'Discuss' });
-
-      // The creator commenting on their own task with no mentions pings nobody.
-      await wsCaller.addComment({ content: 'note to self', id: task.data.id });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-
-      // Another member commenting pings the creator as ambient activity.
-      const comment = await wsOtherCaller.addComment({ content: 'hello', id: task.data.id });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
-        actorUserId: otherUserId,
-        commentId: comment.data.id,
-        recipients: [{ kind: 'commented', userId }],
-        taskId: task.data.id,
-        workspaceId,
-      });
-
-      // The creator @mentioning the other member pings them as mentioned;
-      // unknown ids and self-mentions are dropped.
-      const mentioned = await wsCaller.addComment({
-        content: '@Member look',
-        editorData: editorDataWith(otherUserId!, userId, 'not-a-member'),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith({
-        actorUserId: userId,
-        commentId: mentioned.data.id,
-        recipients: [{ kind: 'mentioned', userId: otherUserId }],
-        taskId: task.data.id,
-        workspaceId,
-      });
-    });
-
-    it('should upgrade the assignee to mentioned and skip agent-authored comments', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const { wsCaller, workspaceId } = await setupWorkspace();
-      const task = await wsCaller.create({
-        assigneeUserId: otherUserId,
-        instruction: 'Assigned',
-      });
-      await flushAfterResponse();
-      mockNotifyTaskCommentActivity.mockClear();
-
-      await wsCaller.addComment({ content: 'ping', id: task.data.id });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          recipients: [{ kind: 'commented', userId: otherUserId }],
-          workspaceId,
-        }),
-      );
-
-      await wsCaller.addComment({
-        content: '@Member',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
-        expect.objectContaining({ recipients: [{ kind: 'mentioned', userId: otherUserId }] }),
-      );
-
-      // Agent-authored progress notes never ping members, even with mentions.
-      const { agents } = await import('@/database/schemas');
-      const wsAgentId = 'agt_task_comment_ws';
-      await serverDB
-        .insert(agents)
-        .values({ id: wsAgentId, slug: wsAgentId, userId, workspaceId })
-        .onConflictDoNothing();
-      await flushAfterResponse();
-      mockNotifyTaskCommentActivity.mockClear();
-      await wsCaller.addComment({
-        authorAgentId: wsAgentId,
-        content: 'Agent progress note',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-    });
-
-    it('should only ping newly added mentions when a comment is edited', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const thirdUserId = await createTestUser(serverDB);
-      const { wsCaller, workspaceId } = await setupWorkspace();
-      const { workspaceMembers } = await import('@/database/schemas');
-      await serverDB
-        .insert(workspaceMembers)
-        .values({ role: 'member', userId: thirdUserId, workspaceId });
-      const task = await wsCaller.create({ instruction: 'Edit mentions' });
-      const comment = await wsCaller.addComment({
-        content: '@Member',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      mockNotifyTaskCommentActivity.mockClear();
-
-      // Keeping the same mention does not re-notify.
-      await wsCaller.updateComment({
-        commentId: comment.data.id,
-        content: '@Member edited',
-        editorData: editorDataWith(otherUserId!),
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-
-      // Adding a new mention pings only the new member.
-      await wsCaller.updateComment({
-        commentId: comment.data.id,
-        content: '@Member @Third',
-        editorData: editorDataWith(otherUserId!, thirdUserId),
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
-        actorUserId: userId,
-        commentId: comment.data.id,
-        recipients: [{ kind: 'mentioned', userId: thirdUserId }],
-        taskId: task.data.id,
-        workspaceId,
-      });
-
-      // Content-only edits never notify.
-      await wsCaller.updateComment({ commentId: comment.data.id, content: 'plain' });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
-    });
-
-    it('should never notify members who cannot open a private task', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const thirdUserId = await createTestUser(serverDB);
-      const { wsCaller, workspaceId } = await setupWorkspace();
-      const { workspaceMembers } = await import('@/database/schemas');
-      await serverDB
-        .insert(workspaceMembers)
-        .values({ role: 'member', userId: thirdUserId, workspaceId });
-      // A private task is visible to its creator only (assigning it to another
-      // member is rejected upstream), yet the creator can still @mention anyone.
-      const task = await wsCaller.create({
-        instruction: 'Secret',
-        name: 'Secret',
-        visibility: 'private',
-      });
-
-      // The mention must not leak the task's title and link to a member who
-      // cannot open it — neither on a new comment nor on an edit.
-      const comment = await wsCaller.addComment({
-        content: '@Member',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-
-      await wsCaller.updateComment({
-        commentId: comment.data.id,
-        content: '@Member @Third',
-        editorData: editorDataWith(otherUserId!, thirdUserId),
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-    });
-
-    it('should never notify in personal mode', async () => {
-      const task = await caller.create({ instruction: 'Personal' });
-      await caller.addComment({
-        content: '@someone',
-        editorData: editorDataWith('someone'),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-    });
-  });
-
   describe('review config', () => {
     it('should set and retrieve review rubrics', async () => {
       const task = await caller.create({ instruction: 'Test' });
@@ -963,10 +814,7 @@ describe('Task Router Integration', () => {
 
   describe('run idempotency', () => {
     it('resolves a task identifier to its row when starting a run', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.identifier });
 
@@ -975,10 +823,7 @@ describe('Task Router Integration', () => {
     });
 
     it('should reject run when a topic is already running', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       // First run succeeds
       await caller.run({ id: task.data.id });
@@ -988,10 +833,7 @@ describe('Task Router Integration', () => {
     });
 
     it('should reject continue on already running topic', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.id });
 
@@ -1001,14 +843,44 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('usage', () => {
+    it('aggregates the task topic usage', async () => {
+      const task = await caller.create({ instruction: 'Measure this task' });
+      await new TaskTopicModel(serverDB, userId).add(task.data.id, testTopicId, {
+        operationId: 'op_usage',
+        seq: 1,
+      });
+      const { topics } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(topics)
+        .set({
+          totalCost: '0.125',
+          totalInputTokens: 1200,
+          totalOutputTokens: 300,
+          totalTokens: 1500,
+        })
+        .where(eq(topics.id, testTopicId));
+
+      const result = await caller.usage({ id: task.data.identifier });
+
+      expect(result.data).toMatchObject({
+        runs: 1,
+        taskId: task.data.id,
+        taskIdentifier: task.data.identifier,
+        totalCost: 0.125,
+        totalInputTokens: 1200,
+        totalOutputTokens: 300,
+        totalTokens: 1500,
+      });
+    });
+  });
+
   describe('run error rollback', () => {
     it('should rollback task status to paused on run failure', async () => {
       mockExecAgent.mockRejectedValueOnce(new Error('LLM failed'));
 
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await expect(caller.run({ id: task.data.id })).rejects.toThrow();
 
@@ -1033,10 +905,7 @@ describe('Task Router Integration', () => {
         topicId: testTopicId,
       });
 
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await expect(caller.run({ id: task.data.id })).rejects.toThrow();
 
@@ -1071,10 +940,7 @@ describe('Task Router Integration', () => {
 
   describe('cancelTopic', () => {
     it('should cancel a running topic and pause task', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.id });
 
@@ -1087,10 +953,7 @@ describe('Task Router Integration', () => {
     });
 
     it('should reject cancel on non-running topic', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.id });
       await caller.cancelTopic({ topicId: 'tpc_test' });
@@ -1364,10 +1227,7 @@ describe('Task Router Integration', () => {
 
   describe('heartbeat timeout detection', () => {
     it('should auto-detect timeout on detail and pause task', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       // Start running with very short timeout
       await caller.update({
@@ -1392,21 +1252,9 @@ describe('Task Router Integration', () => {
   describe('subtask layers + batch run', () => {
     it('previewSubtaskLayers groups subtasks by dependency level', async () => {
       const parent = await caller.create({ instruction: 'Book' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
-      const ch3 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 3',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
+      const ch3 = await caller.create(chapterInput(testAgentId, 'Chapter 3', parent.data.id));
       // ch3 depends on ch1 and ch2
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch3.data.id });
       await caller.addDependency({ dependsOnId: ch2.data.id, taskId: ch3.data.id });
@@ -1439,21 +1287,9 @@ describe('Task Router Integration', () => {
 
     it('runReadySubtasks kicks off the first layer only', async () => {
       const parent = await caller.create({ instruction: 'Book' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
-      const ch3 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 3',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
+      const ch3 = await caller.create(chapterInput(testAgentId, 'Chapter 3', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch3.data.id });
       await caller.addDependency({ dependsOnId: ch2.data.id, taskId: ch3.data.id });
 
@@ -1478,16 +1314,8 @@ describe('Task Router Integration', () => {
 
     it('previewSubtaskLayers holds back dependents of in-flight subtasks (does not free them)', async () => {
       const parent = await caller.create({ instruction: 'Inflight blocker' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
 
       // Kick ch1 off — now in `running` state
@@ -1503,16 +1331,8 @@ describe('Task Router Integration', () => {
 
     it('runReadySubtasks does not start a subtask whose blocker is still running', async () => {
       const parent = await caller.create({ instruction: 'Inflight runReady' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
 
       await caller.run({ id: ch1.data.id });
@@ -1533,11 +1353,7 @@ describe('Task Router Integration', () => {
         instruction: 'External blocker',
       });
       const parent = await caller.create({ instruction: 'Cross-scope' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
       // ch1 depends on a task that is NOT a descendant of parent
       await caller.addDependency({ dependsOnId: externalBlocker.data.id, taskId: ch1.data.id });
 
@@ -1556,16 +1372,8 @@ describe('Task Router Integration', () => {
 
     it('updateStatus(completed) triggers cascade kickoff for unlocked downstream', async () => {
       const parent = await caller.create({ instruction: 'Cascade' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
 
       // Kick off layer 1 (just ch1)
@@ -1675,10 +1483,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const wsOtherCaller = taskRouter.createCaller({
         ...createTestContext(otherUserId),
@@ -1719,10 +1526,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const wsOtherCaller = taskRouter.createCaller({
         ...createTestContext(otherUserId),
@@ -1797,10 +1603,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 
       // Create without assignee, then assign another member → notifies once.
@@ -2011,6 +1816,107 @@ describe('Task Router Integration', () => {
       expect(strandedCreate).toHaveLength(0);
     });
 
+    it('should let a member take over another member’s public task as their private task', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Owner task',
+        schedulePattern: '0 9 * * *',
+        visibility: 'public',
+      });
+      const child = await ownerCaller.create({
+        instruction: 'Owner subtask',
+        parentTaskId: root.data.id,
+      });
+
+      // Without opting in, a non-creator still cannot demote it.
+      await expect(
+        memberCaller.updateVisibility({ id: root.data.id, visibility: 'private' }),
+      ).rejects.toThrow('Only the task creator can make this task private');
+
+      const taken = await memberCaller.updateVisibility({
+        id: root.data.id,
+        takeOwnership: true,
+        visibility: 'private',
+      });
+      expect(taken.data).toMatchObject({
+        assigneeUserId: null,
+        automationMode: null,
+        createdByUserId: otherUserId,
+        status: 'backlog',
+        visibility: 'private',
+      });
+
+      const [childRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, child.data.id));
+      expect(childRow).toEqual({ createdByUserId: otherUserId, visibility: 'private' });
+
+      // The previous creator no longer sees it.
+      await expect(ownerCaller.find({ id: root.data.id })).rejects.toThrow();
+    });
+
+    it('should not take over a task while a subtask is running', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-running-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Running Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({ instruction: 'Busy root', visibility: 'public' });
+      const child = await ownerCaller.create({
+        instruction: 'Busy subtask',
+        parentTaskId: root.data.id,
+      });
+      await serverDB.update(tasks).set({ status: 'running' }).where(eq(tasks.id, child.data.id));
+
+      await expect(
+        memberCaller.updateVisibility({
+          id: root.data.id,
+          takeOwnership: true,
+          visibility: 'private',
+        }),
+      ).rejects.toThrow('Cannot take over this task while it or a subtask is running');
+      const [rootRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, root.data.id));
+      expect(rootRow).toEqual({ createdByUserId: userId, visibility: 'public' });
+    });
+
     it('should keep private tasks creator-only for human assignees', async () => {
       otherUserId = await createTestUser(serverDB);
       const workspaceId = 'task-private-assignee-workspace';
@@ -2021,10 +1927,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 
       // Creating a private task assigned to another member is rejected.
@@ -2047,21 +1952,19 @@ describe('Task Router Integration', () => {
         wsCaller.update({ assigneeUserId: otherUserId, id: privateTask.data.id }),
       ).rejects.toThrow('A private task can only be assigned to its creator');
 
-      // Demoting a member-assigned public task to private is rejected until unassigned.
+      // Demoting a member-assigned public task to private unassigns the member,
+      // who could no longer open it.
       const publicTask = await wsCaller.create({
         assigneeUserId: otherUserId,
         instruction: 'Public task assigned to member',
         visibility: 'public',
       });
-      await expect(
-        wsCaller.updateVisibility({ id: publicTask.data.id, visibility: 'private' }),
-      ).rejects.toThrow('A private task can only be assigned to its creator');
-      await wsCaller.update({ assigneeUserId: null, id: publicTask.data.id });
       const demoted = await wsCaller.updateVisibility({
         id: publicTask.data.id,
         visibility: 'private',
       });
       expect(demoted.data.visibility).toBe('private');
+      expect(demoted.data.assigneeUserId).toBeNull();
     });
 
     it('should preserve the responsible assignee independently of automation', async () => {

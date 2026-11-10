@@ -1,9 +1,8 @@
 import { FileSource } from '@lobechat/types';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { nanoid } from 'nanoid';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { KeyedMutator } from 'swr';
 
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { useSingleton } from '@/hooks/useSingleton';
@@ -11,26 +10,20 @@ import { agentDocumentService } from '@/services/agentDocument';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 
-import type { AgentDocumentItem } from '../types';
+import type { AgentDocumentItem, AgentDocumentListMutator } from '../types';
 import { isPendingId, isProtectedManagedSkillItem } from '../types';
 import { makePendingDocument } from '../utils/pendingDocument';
 
 interface UseDocumentTreeOpsArgs {
   agentId: string;
   data: AgentDocumentItem[];
-  mutate: KeyedMutator<AgentDocumentItem[]>;
+  mutate: AgentDocumentListMutator;
   topicId?: string;
 }
 
-const ROOT_PATH = './';
-
-const joinPath = (parentPath: string, segment: string) =>
-  parentPath === ROOT_PATH ? `${ROOT_PATH}${segment}` : `${parentPath}/${segment}`;
-
-// Service mutations return AgentDocumentStats-shaped payloads where the
-// agentDocumentItems row id is exposed as `id` (and mirrored on
-// `agentDocumentId`). Extract defensively since tRPC narrows the type
-// per-route.
+// Service mutations return the agent-document row with its id exposed as `id`
+// (and mirrored on `agentDocumentId`). Extract defensively since tRPC narrows
+// the type per-route.
 const extractRowId = (result: unknown): string | null => {
   if (!result || typeof result !== 'object') return null;
   const obj = result as Record<string, unknown>;
@@ -81,44 +74,22 @@ export const useDocumentTreeOps = ({
     return map;
   }, [data]);
 
-  const byDocumentId = useMemo(() => {
-    const map = new Map<string, AgentDocumentItem>();
-    for (const doc of data) map.set(doc.documentId, doc);
-    return map;
-  }, [data]);
-
-  // Walk up via item.parentId (= parent's documentId) until we hit the root.
-  const buildItemPath = useCallback(
-    (item: AgentDocumentItem): string | null => {
-      const segments: string[] = [item.filename];
-      let parentDocId = item.parentId;
-      while (parentDocId) {
-        const parent = byDocumentId.get(parentDocId);
-        if (!parent) return null;
-        segments.unshift(parent.filename);
-        parentDocId = parent.parentId;
-      }
-      return `${ROOT_PATH}${segments.join('/')}`;
-    },
-    [byDocumentId],
-  );
-
-  // Resolves the parent's path given a tree-node parent id (= row id) or null.
-  const buildParentPathFromRowId = useCallback(
-    (parentRowId: string | null): string | null => {
-      if (parentRowId === null) return ROOT_PATH;
+  // Resolves a tree-node parent id (= row id, null for the root) to the parent's
+  // documentId. Folders and plain documents can both hold children; `undefined`
+  // means the parent is gone or cannot hold children (skills).
+  const resolveParentDocumentId = useCallback(
+    (parentRowId: string | null): string | null | undefined => {
+      if (parentRowId === null) return null;
       const parent = byRowId.get(parentRowId);
-      if (!parent) return null;
-      if (parent.category === 'skill') return null;
-      return buildItemPath(parent);
+      if (!parent || parent.category === 'skill') return undefined;
+      return parent.documentId;
     },
-    [byRowId, buildItemPath],
+    [byRowId],
   );
 
   // Picks a unique filename within the given parent. Used for client-side
-  // dedup of "Untitled" rows because the path-based VFS mkdir is idempotent
-  // (same name re-uses the existing folder), and writeByPath in always-new
-  // mode rejects collisions outright. When an extension is provided, the
+  // dedup of "Untitled" rows because createFolder is idempotent (same name
+  // re-uses the existing folder). When an extension is provided, the
   // numeric suffix is inserted before the extension so the file keeps its
   // type (e.g. `Untitled document 2.md`).
   const pickUniqueFilename = useCallback(
@@ -138,16 +109,14 @@ export const useDocumentTreeOps = ({
 
   const createFolder = useCallback(
     async (parentId: string | null, opts?: CreateOptions) => {
-      const parentPath = buildParentPathFromRowId(parentId);
-      if (parentPath === null) {
+      const parentDocumentId = resolveParentDocumentId(parentId);
+      if (parentDocumentId === undefined) {
         toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
 
-      const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
       const baseName = t('workingPanel.resources.tree.untitledFolder');
       const filename = pickUniqueFilename(parentDocumentId, baseName);
-      const targetPath = joinPath(parentPath, filename);
 
       const pending = makePendingDocument({
         agentId,
@@ -160,9 +129,13 @@ export const useDocumentTreeOps = ({
 
       const createPromise = (async (): Promise<string | null> => {
         try {
-          const result = await agentDocumentService.createFolder({ agentId, path: targetPath });
+          const result = await agentDocumentService.createFolderById({
+            agentId,
+            parentId: parentDocumentId,
+            title: filename,
+          });
           await mutate();
-          return extractRowId(result);
+          return extractRowId(result?.folder);
         } catch (error) {
           mutate((prev) => (prev ?? []).filter((doc) => doc.id !== pending.id), {
             revalidate: false,
@@ -181,19 +154,18 @@ export const useDocumentTreeOps = ({
       pendingCreates.set(pending.id, createPromise);
       await createPromise;
     },
-    [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
+    [agentId, mutate, pendingCreates, pickUniqueFilename, resolveParentDocumentId, t],
   );
 
   const createDocument = useCallback(
     async (parentId: string | null, opts?: CreateOptions) => {
-      const parentPath = buildParentPathFromRowId(parentId);
-      if (parentPath === null) {
+      const parentDocumentId = resolveParentDocumentId(parentId);
+      if (parentDocumentId === undefined) {
         toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
 
       const baseStem = t('workingPanel.resources.tree.untitledDocument');
-      const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
       const pendingFilename = pickUniqueFilename(parentDocumentId, baseStem);
 
       const pending = makePendingDocument({
@@ -207,19 +179,12 @@ export const useDocumentTreeOps = ({
 
       const createPromise = (async (): Promise<string | null> => {
         try {
-          const result =
-            parentPath === ROOT_PATH
-              ? await agentDocumentService.createDocument({
-                  agentId,
-                  content: '',
-                  title: pendingFilename,
-                })
-              : await agentDocumentService.writeByPath({
-                  agentId,
-                  content: '',
-                  createMode: 'always-new',
-                  path: joinPath(parentPath, pendingFilename),
-                });
+          const result = await agentDocumentService.createDocument({
+            agentId,
+            content: '',
+            ...(parentDocumentId && { parentId: parentDocumentId }),
+            title: pendingFilename,
+          });
           await mutate();
           return extractRowId(result);
         } catch (error) {
@@ -240,13 +205,13 @@ export const useDocumentTreeOps = ({
       pendingCreates.set(pending.id, createPromise);
       await createPromise;
     },
-    [agentId, buildParentPathFromRowId, byRowId, mutate, pendingCreates, pickUniqueFilename, t],
+    [agentId, mutate, pendingCreates, pickUniqueFilename, resolveParentDocumentId, t],
   );
 
   const uploadFiles = useCallback(
     async (parentId: string | null, files: File[]) => {
-      const parentPath = buildParentPathFromRowId(parentId);
-      if (parentPath === null) {
+      const parentDocumentId = resolveParentDocumentId(parentId);
+      if (parentDocumentId === undefined) {
         toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
@@ -254,7 +219,6 @@ export const useDocumentTreeOps = ({
       const accepted = files.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
       if (accepted.length === 0) return;
 
-      const parentDocumentId = parentId ? (byRowId.get(parentId)?.documentId ?? null) : null;
       const { dispatchDockFileList, uploadWithProgress } = useFileStore.getState();
 
       for (const file of accepted) {
@@ -303,7 +267,7 @@ export const useDocumentTreeOps = ({
         }
       }
     },
-    [agentId, buildParentPathFromRowId, byRowId, mutate, t],
+    [agentId, mutate, resolveParentDocumentId, t],
   );
 
   const renameDocument = useCallback(
@@ -368,33 +332,27 @@ export const useDocumentTreeOps = ({
     async ({ sourceIds, sourceNodes, targetId }) => {
       if (sourceIds.length === 0) return;
 
-      const targetParentPath = buildParentPathFromRowId(targetId);
-      if (targetParentPath === null) {
+      const targetItem = targetId ? byRowId.get(targetId) : null;
+      if (targetItem?.isSkillBundle) return;
+      const targetParentDocId = resolveParentDocumentId(targetId);
+      if (targetParentDocId === undefined) {
         toast.error(t('workingPanel.resources.tree.parentMissing'));
         return;
       }
 
-      const targetItem = targetId ? byRowId.get(targetId) : null;
-      if (targetItem?.isSkillBundle) return;
-
-      const targetParentDocId = targetItem ? targetItem.documentId : null;
-
-      const moves: Array<{ fromPath: string; id: string; toPath: string }> = [];
+      const ids: string[] = [];
       for (const id of sourceIds) {
         const node = sourceNodes.find((n) => n.data?.id === id)?.data;
         if (!node) continue;
         if (node.category === 'skill') return;
-        const fromPath = buildItemPath(node);
-        if (!fromPath) continue;
-        const toPath = joinPath(targetParentPath, node.filename);
-        if (fromPath === toPath) continue;
-        moves.push({ fromPath, id, toPath });
+        if ((node.parentId ?? null) === targetParentDocId) continue;
+        ids.push(id);
       }
 
-      if (moves.length === 0) return;
+      if (ids.length === 0) return;
 
       // Optimistic: reparent each source row to the new parent's documentId.
-      const movedIds = new Set(moves.map((m) => m.id));
+      const movedIds = new Set(ids);
       mutate(
         (prev) =>
           (prev ?? []).map((doc) =>
@@ -403,27 +361,27 @@ export const useDocumentTreeOps = ({
         { revalidate: false },
       );
 
-      const errors: Error[] = [];
-      for (const move of moves) {
-        try {
-          await agentDocumentService.moveDocument({
-            agentId,
-            fromPath: move.fromPath,
-            toPath: move.toPath,
-          });
-        } catch (error) {
-          errors.push(error instanceof Error ? error : new Error(String(error)));
-        }
+      let failures: string[];
+      try {
+        const results = await agentDocumentService.moveDocumentsById({
+          agentId,
+          ids,
+          parentId: targetParentDocId,
+        });
+        failures = (results ?? [])
+          .filter((result) => result.status === 'failed')
+          .map((result) => result.error ?? result.title ?? result.id);
+      } catch (error) {
+        failures = [error instanceof Error ? error.message : String(error)];
       }
 
       await mutate();
 
-      if (errors.length > 0) {
-        const detail = errors.map((e) => e.message).join('; ');
-        toast.error(`${t('workingPanel.resources.tree.moveError')}: ${detail}`);
+      if (failures.length > 0) {
+        toast.error(`${t('workingPanel.resources.tree.moveError')}: ${failures.join('; ')}`);
       }
     },
-    [agentId, buildItemPath, buildParentPathFromRowId, byRowId, mutate, t],
+    [agentId, byRowId, mutate, resolveParentDocumentId, t],
   );
 
   const deleteDocuments = useCallback(
@@ -436,12 +394,11 @@ export const useDocumentTreeOps = ({
 
       if (resolved.length === 0) return;
 
-      // When a selected folder is an ancestor of another selection, skip the
-      // descendant — the folder's recursive delete already covers it.
+      // When a selected entry is an ancestor of another selection, skip the
+      // descendant — the ancestor's subtree delete already covers it. Folders and
+      // documents with nested documents both delete their subtree.
       const docById = new Map(dataRef.current.map((doc) => [doc.documentId, doc]));
-      const folderDocIds = new Set(
-        resolved.filter((doc) => doc.isFolder && !doc.isSkillBundle).map((doc) => doc.documentId),
-      );
+      const folderDocIds = new Set(resolved.map((doc) => doc.documentId));
       const hasAncestorIn = (item: AgentDocumentItem, ancestors: Set<string>): boolean => {
         let cursor = item.parentId;
         while (cursor) {
@@ -461,35 +418,16 @@ export const useDocumentTreeOps = ({
         okText: t('delete', { ns: 'common' }),
         onOk: () => {
           const removedIds = new Set<string>();
-          const plans: Array<
-            | { kind: 'folder'; path: string; target: AgentDocumentItem }
-            | { kind: 'row'; target: AgentDocumentItem }
-          > = [];
 
           for (const target of targets) {
-            // Skill bundles are removed via the bundle row, not path-based
-            // recursive removal.
-            const isFolder = target.isFolder && !target.isSkillBundle;
-            if (isFolder) {
-              const folderPath = buildItemPath(target);
-              if (!folderPath) {
-                toast.error(t('workingPanel.resources.tree.parentMissing'));
-                return;
-              }
-              plans.push({ kind: 'folder', path: folderPath, target });
-            } else {
-              plans.push({ kind: 'row', target });
-            }
             removedIds.add(target.id);
-            if (isFolder) {
-              const queue: string[] = [target.documentId];
-              while (queue.length > 0) {
-                const parentDocId = queue.shift()!;
-                for (const doc of dataRef.current) {
-                  if (doc.parentId === parentDocId && !removedIds.has(doc.id)) {
-                    removedIds.add(doc.id);
-                    queue.push(doc.documentId);
-                  }
+            const queue: string[] = [target.documentId];
+            while (queue.length > 0) {
+              const parentDocId = queue.shift()!;
+              for (const doc of dataRef.current) {
+                if (doc.parentId === parentDocId && !removedIds.has(doc.id)) {
+                  removedIds.add(doc.id);
+                  queue.push(doc.documentId);
                 }
               }
             }
@@ -503,29 +441,23 @@ export const useDocumentTreeOps = ({
           void (async () => {
             const errors: Error[] = [];
             await Promise.all(
-              plans.map(async (plan) => {
+              targets.map(async (target) => {
                 try {
-                  if (plan.kind === 'folder') {
-                    await agentDocumentService.deleteByPath({
-                      agentId,
-                      path: plan.path,
-                      recursive: true,
-                    });
-                  } else {
-                    await agentDocumentService.removeDocument({
-                      agentId,
-                      documentId: plan.target.documentId,
-                      id: plan.target.id,
-                      topicId,
-                    });
-                  }
+                  // The user confirmed deleting the entry with everything under it.
+                  await agentDocumentService.removeDocument({
+                    agentId,
+                    documentId: target.documentId,
+                    id: target.id,
+                    topicId,
+                    withChildren: true,
+                  });
                 } catch (error) {
                   errors.push(error instanceof Error ? error : new Error(String(error)));
                 }
               }),
             );
 
-            if (errors.length === plans.length) {
+            if (errors.length === targets.length) {
               mutate(snapshot, { revalidate: false });
               const detail = errors.map((e) => e.message).join('; ');
               toast.error(`${t('workingPanel.resources.deleteError')}: ${detail}`);
@@ -545,7 +477,7 @@ export const useDocumentTreeOps = ({
             : t('workingPanel.resources.deleteTitle'),
       });
     },
-    [agentId, buildItemPath, mutate, t, topicId],
+    [agentId, mutate, t, topicId],
   );
 
   return useMemo(

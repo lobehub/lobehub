@@ -1,9 +1,7 @@
 'use client';
 
 import { agentSecondaryDisplayName } from '@lobechat/types';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Button, cssVar, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { PencilIcon, SparklesIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -34,6 +32,7 @@ const AgentHeader = memo(() => {
   const { autoName, naming } = useAutoName(agentId);
   const personalName = meta.name?.trim();
   const role = meta.title?.trim();
+  const description = meta.description?.trim();
   const suppressDuplicateRole =
     !!config?.agencyConfig?.heterogeneousProvider &&
     !!personalName &&
@@ -75,7 +74,7 @@ const AgentHeader = memo(() => {
           if (canEdit) void updateMetaById(agentId, { backgroundColor });
         }}
       />
-      {/* Identity Section — display only. Editing all three fields happens in a
+      {/* Identity Section — display only. Editing the identity fields happens in a
           form modal; inline inputs crowded the header and left no room for a
           per-field label or error. */}
       <Flexbox flex={1} gap={8} paddingInline={24} style={{ minWidth: 0 }}>
@@ -148,6 +147,13 @@ const AgentHeader = memo(() => {
             </Tooltip>
           ) : null}
         </Flexbox>
+        {/* Edited in the identity form; shown here so the owner sees what other
+            agents read about this one. */}
+        {description ? (
+          <Text ellipsis={{ rows: 2 }} style={{ color: cssVar.colorTextSecondary }}>
+            {description}
+          </Text>
+        ) : null}
       </Flexbox>
     </Flexbox>
   );

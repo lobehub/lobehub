@@ -38,6 +38,8 @@ export interface PiRpcStartupControl {
 export interface PiRpcAgentHandle {
   events: AsyncIterable<AgentStreamEvent>;
   exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+  /** Protocol-level cancel (RPC abort/close) — safe alongside an OS signal the process group already delivered. */
+  interrupt: (signal?: NodeJS.Signals) => void;
   kill: (signal?: NodeJS.Signals) => void;
   pid: number | undefined;
   readonly sessionId: string | undefined;
@@ -187,14 +189,17 @@ export const createPiRpcAgentHandle = async (
         : { code: 1, signal: null as NodeJS.Signals | null };
     });
 
+  const signalSession = (signal?: NodeJS.Signals) => {
+    void cancel(signal ?? 'SIGINT').catch(() => {
+      /* legacy synchronous handle contract is best-effort */
+    });
+  };
+
   return {
     events: queue,
     exit,
-    kill: (signal) => {
-      void cancel(signal ?? 'SIGINT').catch(() => {
-        /* legacy synchronous handle contract is best-effort */
-      });
-    },
+    interrupt: signalSession,
+    kill: signalSession,
     pid: session.pid,
     get sessionId() {
       return nativeSessionId;

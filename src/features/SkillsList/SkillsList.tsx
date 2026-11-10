@@ -1,9 +1,16 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { ContextMenuTrigger, Flexbox, type GenericItemType, Icon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import {
+  ContextMenuTrigger,
+  createStaticStyles,
+  cx,
+  type DropdownItem,
+  Flexbox,
+  Icon,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRightIcon, FileIcon, FolderIcon, type LucideIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -346,7 +353,7 @@ const SkillRow = memo<SkillRowProps>(
     );
 
     const contextMenuItems = useCallback(
-      (): (GenericItemType & { sfSymbol?: SFSymbol })[] =>
+      (): (DropdownItem & { sfSymbol?: SFSymbol })[] =>
         actions.map((action) => ({
           danger: action.danger,
           disabled: action.disabled,

@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
  *
  * These tests create a real agent, verify CRUD operations, then clean up.
  * Note: `agent run` and `agent status` are not tested here as they require
- * active SSE connections and running agents.
+ * active WebSocket connections and running agents.
  */
 
 const CLI = process.env.LH_CLI_PATH || 'lh';
@@ -20,7 +20,7 @@ const TIMEOUT = 30_000;
 
 function run(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    encoding: 'utf-8',
+    encoding: 'utf8',
     env: { ...process.env, PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH}` },
     timeout: TIMEOUT,
   }).trim();

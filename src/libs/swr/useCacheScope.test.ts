@@ -1,4 +1,7 @@
+import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { resetCacheScopeBroadcast, subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 
 import {
   buildCacheScope,
@@ -6,6 +9,7 @@ import {
   getCacheScope,
   isAnonymousScope,
   isScopeTrusted,
+  useCacheScope,
 } from './useCacheScope';
 
 let mockUserId: string | null | undefined = undefined;
@@ -19,12 +23,14 @@ vi.mock('@lobechat/const', () => ({
     return mockIsDesktop;
   },
 }));
+const mockUserState = () => ({
+  isLoaded: mockIsAuthLoaded,
+  isIdentityResolved: mockIsIdentityResolved,
+  user: { id: mockUserId },
+});
 vi.mock('@/store/user', () => ({
-  getUserStoreState: () => ({
-    isLoaded: mockIsAuthLoaded,
-    isIdentityResolved: mockIsIdentityResolved,
-    user: { id: mockUserId },
-  }),
+  getUserStoreState: () => mockUserState(),
+  useUserStore: (selector: (state: unknown) => unknown) => selector(mockUserState()),
 }));
 vi.mock('@/store/user/selectors', () => ({
   authSelectors: { isLoaded: (s: any) => s.isLoaded },
@@ -151,5 +157,45 @@ describe('isScopeTrusted', () => {
     mockIsAuthLoaded = true;
     mockIsIdentityResolved = true;
     expect(isScopeTrusted()).toBe(true);
+  });
+});
+
+describe('useCacheScope broadcast', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockUserId = 'user_a';
+    mockIsAuthLoaded = true;
+    mockIsIdentityResolved = false;
+    mockWorkspaceId = null;
+    mockIsDesktop = false;
+    resetCacheScopeBroadcast();
+  });
+
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  // Imperative replicas (the connector slice) live in zustand stores that
+  // nothing re-renders on a scope switch; this broadcast is how they learn the
+  // scope moved and drop the previous identity's views.
+  it('broadcasts the active scope, once per change', () => {
+    const seen: string[] = [];
+    const unsubscribe = subscribeCacheScope((scope) => seen.push(scope));
+
+    const { rerender } = renderHook(() => useCacheScope());
+    expect(seen).toEqual(['user_a:personal']);
+
+    // The URL→workspace sync resolves the slug.
+    mockWorkspaceId = 'ws-1';
+    rerender();
+    expect(seen).toEqual(['user_a:personal', 'user_a:ws-1']);
+
+    // A re-render — or a second mounted observer — reporting the same scope
+    // must not re-broadcast it.
+    rerender();
+    expect(seen).toEqual(['user_a:personal', 'user_a:ws-1']);
+
+    unsubscribe();
   });
 });

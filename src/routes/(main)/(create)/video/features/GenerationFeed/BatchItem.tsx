@@ -1,11 +1,19 @@
 'use client';
 
-import { ActionIconGroup, Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIconGroup,
+  Block,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, SquarePenIcon, Trash2, XIcon } from 'lucide-react';
-import { type RuntimeVideoGenParamsKeys, type RuntimeVideoGenParamsValue } from 'model-bank';
+import { type RuntimeVideoGenParams } from 'model-bank';
 import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,8 +65,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
     const useCheckGenerationStatus = useVideoStore((s) => s.useCheckGenerationStatus);
     const removeGeneration = useVideoStore((s) => s.removeGeneration);
     const removeGenerationBatch = useVideoStore((s) => s.removeGenerationBatch);
-    const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
-    const setParamOnInput = useVideoStore((s) => s.setParamOnInput);
+    const reuseVideoSettings = useVideoStore((s) => s.reuseVideoSettings);
     const startEditingVideo = useVideoStore((s) => s.startEditingVideo);
     const cancelEditingVideo = useVideoStore((s) => s.cancelEditingVideo);
     const editingGenerationId = useVideoStore(createVideoSelectors.editingGenerationId);
@@ -131,19 +138,8 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
     }, [batch.prompt, t]);
 
     const handleReuseSettings = useCallback(() => {
-      setModelAndProviderOnSelect(batch.model, batch.provider);
-
-      if (!batch.config) return;
-
-      for (const [paramName, value] of Object.entries(batch.config)) {
-        if (value === undefined) continue;
-
-        setParamOnInput(
-          paramName as RuntimeVideoGenParamsKeys,
-          value as RuntimeVideoGenParamsValue,
-        );
-      }
-    }, [batch.config, batch.model, batch.provider, setModelAndProviderOnSelect, setParamOnInput]);
+      reuseVideoSettings(batch.model, batch.provider, batch.config as RuntimeVideoGenParams);
+    }, [batch.config, batch.model, batch.provider, reuseVideoSettings]);
 
     const handleEdit = useCallback(() => {
       if (!generation?.asset || !('interactionId' in generation.asset)) return;

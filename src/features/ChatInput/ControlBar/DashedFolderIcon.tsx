@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 
 /**
  * lucide-react 1.47 has no FolderDashed, and a strokeDasharray on the stock

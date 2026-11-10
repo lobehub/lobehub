@@ -36,6 +36,12 @@ export interface UseAskUserFormParams {
   onInteractionAction?: BuiltinInterventionProps<AskUserQuestionArgs>['onInteractionAction'];
   /** Raw persisted draft blob read from the host's store (coerced internally). */
   persistedDraft: unknown;
+  /**
+   * Whether Submit waits for every question. Defaults to `true`; a host whose
+   * questions are all optional (task intent) passes `false` so answering one
+   * of three is still a submission.
+   */
+  requireAllAnswered?: boolean;
   /** Persist the full draft; host wires this to its own store. */
   writeDraft: (draft: AskUserDraft) => void;
 }
@@ -79,6 +85,7 @@ export interface AskUserFormApi {
   setEscapeMode: (next: boolean) => void;
   setQuestionMode: (key: string) => void;
   setSupplementMode: (next: boolean) => void;
+  submissionFailed: boolean;
   submitting: boolean;
   supplementActive: boolean;
   supplementText: string;
@@ -99,6 +106,7 @@ export const useAskUserForm = ({
   disabled = false,
   onInteractionAction,
   persistedDraft,
+  requireAllAnswered = true,
   writeDraft,
 }: UseAskUserFormParams): AskUserFormApi => {
   const questions = useMemo(() => normalizeAskUserQuestions(args), [args]);
@@ -116,6 +124,8 @@ export const useAskUserForm = ({
     () => initial.supplementActive && !initial.escapeActive,
   );
   const [submitting, setSubmitting] = useState(false);
+  const [submissionFailed, setSubmissionFailed] = useState(false);
+  const inFlight = useRef(false);
   const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     // Resume on the first unanswered question rather than always at Q1.
@@ -166,7 +176,10 @@ export const useAskUserForm = ({
   useEffect(() => () => clearTimeout(ackTimer.current), []);
   const awaitProducerAck = useCallback(() => {
     clearTimeout(ackTimer.current);
-    ackTimer.current = setTimeout(() => setSubmitting(false), SUBMIT_SETTLE_FALLBACK_MS);
+    ackTimer.current = setTimeout(() => {
+      inFlight.current = false;
+      setSubmitting(false);
+    }, SUBMIT_SETTLE_FALLBACK_MS);
   }, []);
 
   /**
@@ -176,13 +189,17 @@ export const useAskUserForm = ({
    */
   const submitWith = useCallback(
     async (payload: Record<string, string | string[]>) => {
-      if (!onInteractionAction || submitting || disabled) return;
+      if (!onInteractionAction || inFlight.current || disabled) return;
+      inFlight.current = true;
+      setSubmissionFailed(false);
       setSubmitting(true);
       try {
         await onInteractionAction({ payload, type: 'submit' });
         awaitProducerAck();
       } catch (err) {
         console.error('[AskUserQuestion] submit failed:', err);
+        inFlight.current = false;
+        setSubmissionFailed(true);
         setSubmitting(false);
       }
     },
@@ -413,20 +430,27 @@ export const useAskUserForm = ({
   ]);
 
   const handleSkip = useCallback(async () => {
-    if (!onInteractionAction || submitting || disabled) return;
+    if (!onInteractionAction || inFlight.current || disabled) return;
+    inFlight.current = true;
+    setSubmissionFailed(false);
     setSubmitting(true);
     try {
       await onInteractionAction({ type: 'skip' });
       awaitProducerAck();
     } catch (err) {
       console.error('[AskUserQuestion] skip failed:', err);
+      inFlight.current = false;
+      setSubmissionFailed(true);
       setSubmitting(false);
     }
   }, [awaitProducerAck, disabled, onInteractionAction, submitting]);
 
   const allAnswered = useMemo(
-    () => questions.every((q) => isQuestionAnswered(q, picks, custom)),
-    [picks, custom, questions],
+    () =>
+      requireAllAnswered
+        ? questions.every((q) => isQuestionAnswered(q, picks, custom))
+        : questions.some((q) => isQuestionAnswered(q, picks, custom)),
+    [picks, custom, questions, requireAllAnswered],
   );
 
   // Timeout fallback for legacy question forms: shortly BEFORE the deadline,
@@ -513,6 +537,7 @@ export const useAskUserForm = ({
     setQuestionMode,
     setSupplementMode,
     submitting: submitting || disabled,
+    submissionFailed,
     supplementActive: inSupplement,
     supplementText,
   };

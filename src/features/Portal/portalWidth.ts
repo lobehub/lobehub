@@ -33,9 +33,13 @@ const VIEW_MIN_WIDTH: PortalWidths = {
   [PortalViewType.AcceptanceCheck]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.AgentDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Artifact]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.DashboardWidget]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Goal]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalMetric]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalNode]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.GoalNorthStar]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.GoalReport]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.GoalReportChapter]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.TaskResult]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.Thread]: CHAT_PORTAL_TOOL_UI_WIDTH,
@@ -51,6 +55,8 @@ const VIEW_MIN_WIDTH: PortalWidths = {
 const VIEW_DEFAULT_WIDTH: PortalWidths = {
   [PortalViewType.Acceptance]: CHAT_PORTAL_WIDE_WIDTH,
   [PortalViewType.AcceptanceCheck]: CHAT_PORTAL_WIDE_WIDTH,
+  // Full-size chart, a data table and a side-by-side script diff.
+  [PortalViewType.DashboardWidget]: CHAT_PORTAL_TASK_WIDTH,
   // The goal overview carries the exploration map and the header metrics row,
   // both of which only read at the wide width.
   [PortalViewType.Goal]: CHAT_PORTAL_WIDE_WIDTH,
@@ -58,6 +64,10 @@ const VIEW_DEFAULT_WIDTH: PortalWidths = {
   // activity feed into one column — wider than the reading column, but the
   // full document width crowds the page it sits next to.
   [PortalViewType.GoalNode]: CHAT_PORTAL_TASK_WIDTH,
+  // A written report reads like a document; the chapter map needs room to lay
+  // out a path with its branches.
+  [PortalViewType.GoalReport]: CHAT_PORTAL_WIDE_WIDTH,
+  [PortalViewType.GoalReportChapter]: CHAT_PORTAL_WIDE_WIDTH,
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TASK_WIDTH,
   [PortalViewType.TaskResult]: CHAT_PORTAL_TASK_WIDTH,
 };

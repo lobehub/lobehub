@@ -1,11 +1,16 @@
 import type { DeviceDirectoryBrowseResult } from '@lobechat/types';
+import { useState } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
 
-/** Each device/path has its own page series, so late responses cannot replace a new location. */
+/**
+ * Each device/path has its own page series, so late responses cannot replace a new location.
+ * Listings stay cached per path for fast revisits, so folders created outside the picker
+ * only show up after `refresh`.
+ */
 export const useFetchDeviceDirectory = (deviceId: string, path?: string) => {
   const workspaceId = useActiveWorkspaceId();
   const { data, error, isLoading, isValidating, mutate, setSize, size } = useSWRInfinite(
@@ -45,6 +50,18 @@ export const useFetchDeviceDirectory = (deviceId: string, path?: string) => {
   const entries = data?.flatMap((page) => page?.entries ?? []) ?? [];
   const lastPage = data?.findLast(Boolean);
 
+  const [refreshingPath, setRefreshingPath] = useState<string>();
+  const refresh = async () => {
+    if (!directory) return;
+    const target = directory.path;
+    setRefreshingPath(target);
+    try {
+      await mutate();
+    } finally {
+      setRefreshingPath((current) => (current === target ? undefined : current));
+    }
+  };
+
   return {
     directory,
     entries,
@@ -52,7 +69,9 @@ export const useFetchDeviceDirectory = (deviceId: string, path?: string) => {
     hasMore: !!lastPage?.nextCursor,
     isLoading,
     isLoadingMore: !error && (isValidating || (!!directory && !data?.[size - 1])),
+    isRefreshing: !!directory && refreshingPath === directory.path,
     loadMore: () => setSize(size + 1),
+    refresh,
     retry: () => mutate(),
   };
 };

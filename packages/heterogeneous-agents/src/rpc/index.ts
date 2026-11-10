@@ -27,6 +27,8 @@ export {
   type PiRpcCommand,
   type PiRpcEvent,
   type PiRpcImage,
+  type PiRpcPromptDisposition,
+  type PiRpcPromptResponseData,
   type PiRpcResponse,
   type PiRpcStateData,
   type PiSessionEvent,
@@ -38,4 +40,5 @@ export {
   type PiRpcSessionCallbacks,
   type PiRpcSessionOptions,
 } from './piRpcSession';
+export { preparePiRpcInput } from './preparePiRpcInput';
 export { RpcStdioClient, RpcStdioConnectionError } from './rpcStdioClient';

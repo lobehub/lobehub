@@ -1,7 +1,16 @@
 'use client';
 
-import { Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  stopPropagation,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
@@ -108,7 +117,9 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
                     }
                     await unInstallPlugin(identifier);
                   },
-                  title: t('store.actions.confirmUninstall'),
+                  content: t('store.actions.confirmUninstall'),
+                  okText: t('store.actions.uninstall'),
+                  title: t('store.actions.uninstall'),
                 });
               },
             },

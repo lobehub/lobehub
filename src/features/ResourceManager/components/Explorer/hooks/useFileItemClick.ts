@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { libraryFolderPath, libraryItemPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
@@ -11,13 +12,14 @@ export interface UseFileItemClickOptions {
   libraryId?: string | null;
   onOpen?: (id: string) => void;
   /**
-   * Explorer rows (list / masonry) preview files and pages in the inline right
-   * detail panel. The library sidebar tree is navigation and also stays mounted
-   * where no explorer (and so no panel) exists, e.g. the Permissions page, so it
-   * keeps opening the fullscreen editor.
+   * Explorer rows (list / masonry) outside a knowledge base preview files and
+   * pages in the inline right detail panel. Inside a knowledge base the content
+   * itself is the point of the visit, so a click opens the detail directly. The
+   * library sidebar tree is navigation and also stays mounted where no explorer
+   * (and so no panel) exists, e.g. the Permissions page, so it keeps opening the
+   * fullscreen editor.
    */
   openInPanel?: boolean;
-  slug?: string | null;
 }
 
 /**
@@ -26,6 +28,26 @@ export interface UseFileItemClickOptions {
  * clicked card before a second click lands and swallow the double click.
  */
 export const DETAIL_PANEL_OPEN_DELAY_MS = 250;
+
+/**
+ * Open an item: inside a library by path (`/resource/library/<id>/{docs,file}/<itemId>`),
+ * elsewhere through the `?file=` query. View and sort preferences in the query are kept.
+ */
+const openItemUrl = (
+  id: string,
+  libraryId: string | null | undefined,
+  search: string,
+): { pathname?: string; search: string } => {
+  const params = new URLSearchParams(search);
+  if (!libraryId) {
+    params.set('file', id);
+    return { search: `?${params.toString()}` };
+  }
+
+  params.delete('file');
+  const query = params.toString();
+  return { pathname: libraryItemPath(libraryId, id), search: query ? `?${query}` : '' };
+};
 
 let pendingPanelOpen: ReturnType<typeof setTimeout> | undefined;
 
@@ -41,7 +63,6 @@ const cancelPendingPanelOpen = () => {
  */
 export const useFileItemClick = ({
   id,
-  slug,
   libraryId,
   isFolder,
   isPage,
@@ -52,32 +73,26 @@ export const useFileItemClick = ({
   // Read/write the URL through the active-tab facade rather than
   // `useSearchParams`: this hook also runs in the library sidebar, which Electron
   // portals into the shell's frozen root router.
-  const { pathname, search } = useActiveLocation();
+  const { search } = useActiveLocation();
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
   const openDetailPanel = useResourceManagerStore((s) => s.openDetailPanel);
+  const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
 
   const handleClick = useCallback(() => {
     const selectFile = () => {
-      const newParams = new URLSearchParams(search);
-      newParams.set('file', id);
+      const target = openItemUrl(id, libraryId, search);
 
-      // The library sidebar stays mounted on the standalone Permissions page.
-      // A search-only navigation there would keep the tab on `/permission`, so
-      // selecting a page/file appeared to do nothing. Return to the library
-      // surface first, then let its `file` query restore the selected content.
-      if (libraryId && pathname.endsWith(`/resource/library/${libraryId}/permission`)) {
-        navigate(`/resource/library/${libraryId}?${newParams.toString()}`);
+      // Inside a library the item has its own path (also leaves the Permissions page).
+      if (target.pathname) {
+        navigate(`${target.pathname}${target.search}`);
         return;
       }
 
-      navigate({ search: `?${newParams.toString()}` }, { replace: true });
+      navigate({ search: target.search }, { replace: true });
     };
 
     if (isFolder) {
-      // Navigate to folder using slug-based routing (Google Drive style)
-      const folderSlug = slug || id;
-
       if (libraryId) {
         // Preserve existing query parameters (view and sort preferences)
         const newParams = new URLSearchParams(search);
@@ -85,13 +100,13 @@ export const useFileItemClick = ({
         newParams.delete('file');
 
         const queryString = newParams.toString();
-        const basePath = `/resource/library/${libraryId}/${folderSlug}`;
+        const basePath = libraryFolderPath(libraryId, id);
         navigate(queryString ? `${basePath}?${queryString}` : basePath);
       }
       return;
     }
 
-    if (openInPanel) {
+    if (openInPanel && !libraryId) {
       // A plain click is a "look at this" gesture — the promise of the explorer
       // is to keep the working list visible. Fullscreen focus stays available as
       // the explicit double click (see `useFileItemDoubleClick`).
@@ -114,6 +129,10 @@ export const useFileItemClick = ({
       return;
     }
 
+    // The preview state is global: drop a panel left open elsewhere so leaving
+    // the editor doesn't reveal a stale preview.
+    cancelPendingPanelOpen();
+    closeDetailPanel();
     setCurrentViewItemId(id);
     setMode(isPage ? 'page' : 'editor');
     // Update URL query parameter for shareable links
@@ -121,17 +140,16 @@ export const useFileItemClick = ({
     onOpen?.(id);
   }, [
     isFolder,
-    slug,
     id,
     libraryId,
     isPage,
     navigate,
     openInPanel,
-    pathname,
     search,
     setMode,
     setCurrentViewItemId,
     openDetailPanel,
+    closeDetailPanel,
     onOpen,
   ]);
 
@@ -140,14 +158,22 @@ export const useFileItemClick = ({
 
 /**
  * Double click = the committed "open this item" gesture: leave the list into
- * the fullscreen page editor or file editor. Keeps the `?file=` deep-link write
- * so a restored tab still lands on this item.
+ * the fullscreen page editor or file editor. Writes the item's path (library) or
+ * `?file=` query so a restored tab still lands on this item.
  */
-export const useFileItemDoubleClick = ({ id, isPage }: { id: string; isPage: boolean }) => {
+export const useFileItemDoubleClick = ({
+  id,
+  isPage,
+  libraryId,
+}: {
+  id: string;
+  isPage: boolean;
+  libraryId?: string | null;
+}) => {
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
-  const { search } = useActiveLocation();
+  const { pathname, search } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
 
   return useCallback(() => {
@@ -157,8 +183,24 @@ export const useFileItemDoubleClick = ({ id, isPage }: { id: string; isPage: boo
     setCurrentViewItemId(id);
     setMode(isPage ? 'page' : 'editor');
 
-    const newParams = new URLSearchParams(search);
-    newParams.set('file', id);
-    navigate({ search: `?${newParams.toString()}` }, { replace: true });
-  }, [closeDetailPanel, id, isPage, setCurrentViewItemId, setMode, navigate, search]);
+    const target = openItemUrl(id, libraryId, search);
+    if (target.pathname) {
+      // The single click already opened the item; don't stack a second entry.
+      if (pathname.endsWith(target.pathname)) return;
+      navigate(`${target.pathname}${target.search}`);
+      return;
+    }
+
+    navigate({ search: target.search }, { replace: true });
+  }, [
+    closeDetailPanel,
+    id,
+    isPage,
+    libraryId,
+    setCurrentViewItemId,
+    setMode,
+    navigate,
+    pathname,
+    search,
+  ]);
 };

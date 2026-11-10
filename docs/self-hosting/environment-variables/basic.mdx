@@ -92,17 +92,16 @@ Configuration details:
 
 Available system agents and their functions:
 
-| System Agent            | Key Name          | Function Description                                                                   |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------------------- |
-| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content                |
-| Translation             | `translation`     | Handles text translation between multiple languages                                    |
-| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants                          |
-| History Compression     | `historyCompress` | Compresses and organizes history for long conversations, optimizing context management |
-| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                                 |
-| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
-| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text)               |
-| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                                     |
-| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                                        |
+| System Agent            | Key Name          | Function Description                                                     |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------ |
+| Topic Generation        | `topic`           | Automatically generates topic names and summaries based on chat content  |
+| Translation             | `translation`     | Handles text translation between multiple languages                      |
+| Metadata Generation     | `agentMeta`       | Generates descriptive information and metadata for assistants            |
+| Branch Conversation     | `thread`          | Automatically generate titles for branch conversations                   |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                          |
+| Input Auto-completion   | `inputCompletion` | Input auto-completion suggestions (similar to GitHub Copilot ghost text) |
+| Prompt Rewrite          | `promptRewrite`   | Optimize prompts before generation                                       |
+| Image Generation Naming | `generationTopic` | AI image automatic topic naming                                          |
 
 ### `FEATURE_FLAGS`
 
@@ -149,6 +148,20 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Description: Agent Gateway authentication token, used for authentication between Gateway Mode and self-deployed Agent Gateway
 - Default: -
 - Example: `dev-secret`
+
+### `DEVICE_GATEWAY_URL`
+
+- Type: Optional
+- Description: Device Gateway address for server requests. This internal address is not sent to clients.
+- Default: -
+- Example: `http://gateway:8788`
+
+### `DEVICE_GATEWAY_PUBLIC_URL`
+
+- Type: Optional
+- Description: Device Gateway address that desktop and CLI clients can discover automatically. Leave unset to specify the address on each client. Use an HTTP or HTTPS base URL without the `/ws` suffix, credentials, query parameters or a `#` fragment.
+- Default: -
+- Example: `https://device-gateway.example.com` or `http://your_server_ip:8788`
 
 ### `PROXY_URL`
 

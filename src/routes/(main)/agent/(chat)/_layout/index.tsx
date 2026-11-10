@@ -1,75 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { useSize } from 'ahooks';
-import { createStaticStyles } from 'antd-style';
-import { memo, useRef } from 'react';
 import { Outlet } from 'react-router';
 
-import ChatTerminalPanel from '@/features/ChatTerminal';
-import AgentWorkingSidebar from '@/features/Conversation/WorkingSidebar';
-import OverviewSlot from '@/features/Conversation/WorkingSidebar/OverviewSlot';
+import ConversationWorkspace from '@/features/Conversation/Workspace';
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
-import Portal from '@/routes/(main)/agent/features/Portal';
 
-import HeaderSlot from './HeaderSlot';
-
-const styles = createStaticStyles(({ css }) => ({
-  // Named container queried by ChatHeader and the list top spacer: when this
-  // column is wide enough, the header floats above the full-bleed message
-  // stream instead of sitting in flow as a solid bar.
-  conversationColumn: css`
-    position: relative;
-    container-name: agent-chat-layout;
-    container-type: inline-size;
-  `,
-}));
-
-const ChatLayout = memo(() => {
-  // The working sidebar needs the row width to know whether it still fits next
-  // to an open portal — a wide portal otherwise squeezes the conversation out.
-  const rowRef = useRef<HTMLDivElement>(null);
-  const rowSize = useSize(rowRef);
-
-  return (
-    <HeaderSlot.Provider>
-      <OverviewSlot.Provider>
-        <Flexbox
-          flex={1}
-          height={'100%'}
-          style={{ minHeight: 0, overflow: 'hidden' }}
-          width={'100%'}
-        >
-          <Flexbox
-            horizontal
-            flex={1}
-            ref={rowRef}
-            style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
-            width={'100%'}
-          >
-            <Flexbox
-              className={styles.conversationColumn}
-              flex={1}
-              style={{ minHeight: 0, minWidth: 0 }}
-            >
-              <ChatHeader />
-              <Flexbox horizontal flex={1} style={{ minHeight: 0, minWidth: 0 }}>
-                <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
-                  <Outlet />
-                </Flexbox>
-                <OverviewSlot.Outlet />
-              </Flexbox>
-            </Flexbox>
-            <Portal />
-            <AgentWorkingSidebar availableWidth={rowSize?.width} />
-          </Flexbox>
-          <ChatTerminalPanel />
-        </Flexbox>
-      </OverviewSlot.Provider>
-    </HeaderSlot.Provider>
-  );
-});
-
-ChatLayout.displayName = 'ChatLayout';
+const ChatLayout = () => (
+  <ConversationWorkspace header={<ChatHeader />}>
+    <Outlet />
+  </ConversationWorkspace>
+);
 
 export default ChatLayout;

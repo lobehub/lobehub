@@ -9,8 +9,9 @@ type PortalDocumentTitleState = ReturnType<typeof usePortalDocumentTitle>;
 const PortalDocumentTitleContext = createContext<PortalDocumentTitleState | null>(null);
 
 /**
- * One title edit session per portal document, shared by the inline title and
- * the header's `…` menu — "Rename" in the menu opens the same inline editor.
+ * One title state per portal document, shared by the header title and the
+ * header's `…` menu — "Rename" in the menu opens a dialog that saves through
+ * the serialized title write.
  */
 export const PortalDocumentTitleProvider = ({ children }: PropsWithChildren) => {
   const value = usePortalDocumentTitle();

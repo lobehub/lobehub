@@ -6,6 +6,15 @@ import {
   createAnthropicGenerateObject,
 } from './generateObject';
 
+const createToolPayload = () => ({
+  messages: [{ content: 'Generate data', role: 'user' as const }],
+  model: 'claude-3-5-sonnet-20241022',
+  schema: {
+    name: 'test_tool',
+    schema: { type: 'object' },
+  },
+});
+
 describe('Anthropic generateObject', () => {
   it('should throw error when neither tools nor schema is provided', async () => {
     const mockClient = {
@@ -22,6 +31,56 @@ describe('Anthropic generateObject', () => {
     await expect(createAnthropicGenerateObject(mockClient as any, payload as any)).rejects.toThrow(
       'tools or schema is required',
     );
+  });
+
+  it('should use auto tool choice with a tool-use instruction when autoToolChoice is set', async () => {
+    const schemaRequest = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [
+          { content: 'Be concise.', role: 'system' as const },
+          { content: 'Generate data', role: 'user' as const },
+        ],
+        model: 'kimi-k2.7-code',
+        schema: {
+          name: 'result',
+          schema: { properties: { ok: { type: 'boolean' } }, type: 'object' as const },
+          strict: true,
+        },
+      },
+      { autoToolChoice: true, schemaToolChoice: 'any' },
+    );
+
+    expect(schemaRequest.requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect(schemaRequest.requestParams.system).toEqual([
+      {
+        text: 'Be concise.\n\nYou must respond by calling the `result` tool. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
+    // `strict` is only added for Claude models that reject forced tool use
+    expect((schemaRequest.requestParams.tools![0] as any).strict).toBeUndefined();
+
+    const toolsRequest = await buildAnthropicGenerateObjectRequest(
+      {
+        messages: [{ content: 'Generate data', role: 'user' as const }],
+        model: 'kimi-k2.7-code',
+        tools: [
+          {
+            function: { name: 'get_data', parameters: { properties: {}, type: 'object' } },
+            type: 'function',
+          },
+        ],
+      },
+      { autoToolChoice: true },
+    );
+
+    expect(toolsRequest.requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect(toolsRequest.requestParams.system).toEqual([
+      {
+        text: 'You must respond by calling one of the provided tools. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
   });
 
   it('should strip trailing assistant messages for models without prefill support', async () => {
@@ -496,14 +555,7 @@ describe('Anthropic generateObject', () => {
         },
       };
 
-      const payload = {
-        messages: [{ content: 'Generate data', role: 'user' as const }],
-        model: 'claude-3-5-sonnet-20241022',
-        schema: {
-          name: 'test_tool',
-          schema: { type: 'object' },
-        },
-      };
+      const payload = createToolPayload();
 
       const result = await createAnthropicGenerateObject(mockClient as any, payload as any);
 
@@ -780,14 +832,7 @@ describe('Anthropic generateObject', () => {
       },
     };
 
-    const payload = {
-      messages: [{ content: 'Generate data', role: 'user' as const }],
-      model: 'claude-3-5-sonnet-20241022',
-      schema: {
-        name: 'test_tool',
-        schema: { type: 'object' },
-      },
-    };
+    const payload = createToolPayload();
 
     await expect(createAnthropicGenerateObject(mockClient as any, payload as any)).rejects.toThrow(
       'API Error: Model not found',
@@ -804,14 +849,7 @@ describe('Anthropic generateObject', () => {
       },
     };
 
-    const payload = {
-      messages: [{ content: 'Generate data', role: 'user' as const }],
-      model: 'claude-3-5-sonnet-20241022',
-      schema: {
-        name: 'test_tool',
-        schema: { type: 'object' },
-      },
-    };
+    const payload = createToolPayload();
 
     const options = {
       signal: new AbortController().signal,

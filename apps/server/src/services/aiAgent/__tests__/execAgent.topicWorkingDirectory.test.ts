@@ -1,7 +1,21 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RedisLib from '@/server/modules/Redis';
+
 import { AiAgentService } from '../index';
+
+const staleWorkspaceEntry = (workspaceScannedAt: number) => ({
+  path: '/repo/default',
+  workspace: { instructions: [], skills: [] },
+  workspaceScannedAt,
+});
+
+const topicRunInput = () => ({
+  agentId: 'agent-1',
+  appContext: { topicId: 'topic-1' },
+  prompt: 'Hello',
+});
 
 /**
  * A device-bound run resolves its working directory server-side (for
@@ -170,6 +184,37 @@ vi.mock('@/server/modules/Mecha', () => {
   };
 });
 
+// The background rescan claims itself (SET NX) through the unified Redis lib
+// before scanning. A fake provider keeps the claims in a Set so the test can
+// prove that concurrent sends coalesce on one scan.
+const { claimedKeys, mockTryInitializeRedisWithPrefix } = vi.hoisted(() => {
+  const claimedKeys = new Set<string>();
+  const redis = {
+    get: vi.fn(async () => null),
+    set: vi.fn(async (key: string, _value: unknown, options?: { nx?: boolean }) => {
+      if (!options?.nx) return 'OK';
+      if (claimedKeys.has(key)) return null;
+      claimedKeys.add(key);
+      return 'OK';
+    }),
+  };
+  return { claimedKeys, mockTryInitializeRedisWithPrefix: vi.fn(async () => redis) };
+});
+vi.mock('@/server/modules/Redis', async (importOriginal) => ({
+  ...(await importOriginal<typeof RedisLib>()),
+  // The enabled config below would otherwise make every other Redis user (runtime config,
+  // latency cache, ...) open a real connection to `redis://test`, whose retry errors keep
+  // logging after the file finishes and fail the run with an EnvironmentTeardownError.
+  initializeRedis: vi.fn(async () => null),
+  tryInitializeRedisWithPrefix: mockTryInitializeRedisWithPrefix,
+}));
+// Without REDIS_URL the service never reaches the fake provider and claims fall
+// back to a process-local map that outlives `claimedKeys.clear()`, so one
+// test's claim would silently block every later stale-scan refresh.
+vi.mock('@/envs/redis', () => ({
+  getRedisConfig: () => ({ enabled: true, prefix: 'test', url: 'redis://test' }),
+}));
+
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     initWorkspace: mockInitWorkspace,
@@ -235,6 +280,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockUpdateDevice.mockResolvedValue(undefined);
     mockUpdateTopicMetadata.mockResolvedValue(undefined);
 
+    claimedKeys.clear();
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -288,6 +334,143 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     });
   });
 
+  it('serves a stale workspace scan and refreshes it after the response', async () => {
+    // Two hours old: past the TTL, but still a usable description of the
+    // project. The send must not wait on the device's directory walk.
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000)],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    // A scan that never completes: if the send awaited it, this test would hang.
+    mockInitWorkspace.mockReturnValue(new Promise(() => {}));
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      boundDeviceId: DEVICE_ID,
+      workingDirectory: '/repo/default',
+      workingDirectoryConfig: { path: '/repo/default' },
+    });
+  });
+
+  it('lets only one of several concurrent sends refresh the same stale scan', async () => {
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000)],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    mockInitWorkspace.mockReturnValue(new Promise(() => {}));
+
+    await Promise.all([
+      service.execAgent({ agentId: 'agent-1', prompt: 'Hello' }),
+      service.execAgent({ agentId: 'agent-1', prompt: 'Hello again' }),
+      service.execAgent({ agentId: 'agent-1', prompt: 'And again' }),
+    ]);
+    // The refresh is scheduled off the send path; let it reach the claim.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it('merges a directory the user added mid-scan instead of overwriting it', async () => {
+    const staleEntry = staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000);
+
+    // The scan takes up to 30s; land a concurrent directory edit while it is
+    // in flight so the write-back has a newer list to merge into.
+    let scanStarted = false;
+    mockInitWorkspace.mockImplementation(async () => {
+      scanStarted = true;
+      return { instructions: [], skills: [] };
+    });
+    mockFindByDeviceId.mockImplementation(async () => ({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: scanStarted
+        ? [staleEntry, { path: '/repo/new', workspaceScannedAt: 1 }]
+        : [staleEntry],
+    }));
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // The refreshed entry is persisted AND the concurrent add survives the
+    // write-back — rebuilding from the pre-scan snapshot would drop it.
+    expect(mockUpdateDevice).toHaveBeenCalledWith(
+      DEVICE_ID,
+      expect.objectContaining({
+        workingDirs: expect.arrayContaining([
+          expect.objectContaining({ path: '/repo/default' }),
+          expect.objectContaining({ path: '/repo/new' }),
+        ]),
+      }),
+    );
+  });
+
+  it('does not resurrect a directory the user removed mid-scan', async () => {
+    const staleEntry = staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000);
+
+    let scanStarted = false;
+    mockInitWorkspace.mockImplementation(async () => {
+      scanStarted = true;
+      return { instructions: [], skills: [] };
+    });
+    mockFindByDeviceId.mockImplementation(async () => ({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: scanStarted ? [{ path: '/repo/other', workspaceScannedAt: 1 }] : [staleEntry],
+    }));
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+    // `workingDirs` is the file-operation allowlist: the removal must stick.
+    expect(mockUpdateDevice).not.toHaveBeenCalledWith(
+      DEVICE_ID,
+      expect.objectContaining({ workingDirs: expect.anything() }),
+    );
+  });
+
+  it('still refreshes when the Redis claim command fails', async () => {
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000)],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    mockInitWorkspace.mockResolvedValue({ instructions: [], skills: [] });
+    // A memoized client whose commands fail: coordination is best-effort, so
+    // the refresh must still happen instead of being silently skipped.
+    mockTryInitializeRedisWithPrefix.mockResolvedValueOnce({
+      get: vi.fn(async () => null),
+      set: vi.fn(async () => {
+        throw new Error('redis down');
+      }),
+    } as any);
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockUpdateDevice).toHaveBeenCalled();
+  });
+
   it('never rewrites a topic that is already pinned to a directory', async () => {
     // The historical pin is the contract: an old conversation must not follow
     // the agent's current default when that default changes later.
@@ -306,11 +489,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).not.toHaveBeenCalledWith(
       'topic-1',
@@ -361,11 +540,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
       workingDirectory: '/repo/two',
@@ -385,11 +560,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });
@@ -400,11 +571,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });

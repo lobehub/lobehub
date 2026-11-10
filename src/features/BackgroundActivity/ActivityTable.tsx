@@ -1,6 +1,13 @@
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  Icon,
+  Skeleton,
+} from '@lobehub/ui';
 import {
   ChevronRightIcon,
   CpuIcon,
@@ -96,8 +103,6 @@ const tableStyles = createStaticStyles(({ css }) => ({
     font-size: 11px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
   `,
   headNum: css`
     text-align: end;

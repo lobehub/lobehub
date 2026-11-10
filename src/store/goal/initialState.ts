@@ -1,18 +1,46 @@
 import type { GoalGraphSnapshot } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type { GoalListItem } from '@/services/goal';
 import type { MetricSeriesWithPoints } from '@/services/metric';
 
+import type { GoalListValue } from './projection';
+
 export type { GoalListItem };
-export type GoalListFilter = 'active' | 'all';
+/**
+ * List tab. Each option names the lifecycle states it keeps: `all` is the
+ * default (nothing hidden), `review` the goals at the human acceptance gate,
+ * `running` the goal whose loop is executing right now, `achieved` the goals
+ * that reached their terminal outcome. The other terminal states (`failed`,
+ * `canceled`) stay reachable through `all` only — "completed" would misname
+ * them. `archived` lists the goals the user put away, which every other tab
+ * leaves out.
+ */
+export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved' | 'archived';
 export type GoalViewMode = 'card' | 'list';
 
 export interface GoalState {
-  /** Goal Graph snapshots keyed by `goals.id` — the process-control surface's read model. */
+  /**
+   * Goal Graph snapshots keyed by `goals.id` — the process-control surface's
+   * read model.
+   */
   goalGraphById: Record<string, GoalGraphSnapshot>;
-  goalListByAgentId: Record<string, GoalListItem[]>;
+  /** Local-first bookkeeping for `goalGraphById`. */
+  goalGraphReplica: ReplicaState<GoalGraphSnapshot>;
+  /**
+   * Goal lists keyed by the tab's entry key: the scope's own entry for `all`
+   * (what the project dashboard and the route meta read) and one sibling entry
+   * per narrow tab (`goalListKey`).
+   */
+  /**
+   * The agent the cross-agent goals page is narrowed to; unset lists every
+   * agent's goals. Kept in the store so returning from a goal keeps the filter.
+   */
+  goalListAgentFilter?: string;
+  goalListByAgentId: Record<string, GoalListValue>;
   goalListFilter: GoalListFilter;
-  goalListInitializedAgentIds: string[];
+  /** Local-first bookkeeping for `goalListByAgentId`. */
+  goalListReplica: ReplicaState<GoalListValue>;
   goalListVisibleLimit: number;
   /**
    * North-star series of a goal (subjectType 'goal'), points included. Keyed
@@ -20,6 +48,10 @@ export interface GoalState {
    * same row and refresh together.
    */
   goalMetricSeriesById: Record<string, MetricSeriesWithPoints[]>;
+  /** Local-first bookkeeping for `goalMetricSeriesById`. */
+  goalMetricSeriesReplica: ReplicaState<MetricSeriesWithPoints[]>;
+  /** Goals whose title is being generated right now, for the header's loading state. */
+  goalTitleRenamingIds: string[];
   goalViewMode: GoalViewMode;
   /**
    * Every agent's goals, for the home rail's cross-agent roll-up — keyed by
@@ -27,18 +59,28 @@ export interface GoalState {
    * slower response from the workspace you just left overwrite this one's, and
    * render titles and links that cannot resolve here.
    */
-  homeGoalsByScope: Record<string, GoalListItem[]>;
-  homeGoalsInitializedScopes: string[];
+  homeGoalsByScope: Record<string, GoalListValue>;
+  /** Local-first bookkeeping for `homeGoalsByScope`. */
+  homeGoalsReplica: ReplicaState<GoalListValue>;
+  /** Goals created from one conversation, keyed by topic id. */
+  topicGoalsByTopicId: Record<string, GoalListValue>;
+  /** Local-first bookkeeping for `topicGoalsByTopicId`. */
+  topicGoalsReplica: ReplicaState<GoalListValue>;
 }
 
 export const initialState: GoalState = {
-  goalMetricSeriesById: {},
   goalGraphById: {},
+  goalGraphReplica: createReplicaState(),
   goalListByAgentId: {},
-  goalListFilter: 'active',
-  goalListInitializedAgentIds: [],
+  goalListFilter: 'all',
+  goalListReplica: createReplicaState(),
   goalListVisibleLimit: 10,
+  goalMetricSeriesById: {},
+  goalMetricSeriesReplica: createReplicaState(),
+  goalTitleRenamingIds: [],
   goalViewMode: 'list',
   homeGoalsByScope: {},
-  homeGoalsInitializedScopes: [],
+  homeGoalsReplica: createReplicaState(),
+  topicGoalsByTopicId: {},
+  topicGoalsReplica: createReplicaState(),
 };

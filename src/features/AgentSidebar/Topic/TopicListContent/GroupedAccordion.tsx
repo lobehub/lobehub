@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { AccordionRoot } from '@lobehub/ui/base-ui';
+import { AccordionRoot, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
 import { type ComponentType, memo, useEffect, useMemo, useRef } from 'react';
@@ -9,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -21,6 +21,7 @@ import { type GroupedTopic } from '@/types/topic';
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import { useScrollActiveTopicIntoView } from '../hooks/useScrollActiveTopicIntoView';
 import { useNavigateToAgentTopics } from '../hooks/useTopicNavigation';
+import { useScopedSidebarTopics } from '../useScopedTopics';
 
 export interface GroupItemComponentProps {
   expanded: boolean;
@@ -39,13 +40,14 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
-  const [hasMore, isExpandingPageSize, activeAgentId, activeTopicId] = useChatStore((s) => [
+  const [hasMore, isExpandingPageSize, activeAgentId, agentActiveTopicId] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
     s.activeAgentId,
     s.activeTopicId,
   ]);
 
+  const localDeviceIds = useLocalMachineDeviceIds();
   const groupSelector = useMemo(
     () =>
       topicSelectors.groupedTopicsForSidebar(
@@ -53,11 +55,20 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
         topicSortBy,
         topicGroupMode,
         topicIncludeCompleted,
+        localDeviceIds,
       ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted, localDeviceIds],
   );
-  const groupTopics = useChatStore(groupSelector, isEqual);
+  const agentGroups = useChatStore(groupSelector, isEqual);
+  const scoped = useScopedSidebarTopics(
+    topicPageSize,
+    topicSortBy,
+    topicGroupMode,
+    topicIncludeCompleted,
+  );
+  const groupTopics = scoped.scope ? scoped.groups : agentGroups;
 
+  const activeTopicId = scoped.scope ? scoped.activeTopicId : agentActiveTopicId;
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
   const activeGroupId = useMemo(
@@ -100,8 +111,11 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
           <GroupItem expanded={expandedKeys.includes(group.id)} group={group} key={group.id} />
         ))}
       </AccordionRoot>
-      {isExpandingPageSize && <SkeletonList rows={3} />}
-      {hasMore && !isExpandingPageSize && activeAgentId && (
+      {scoped.scope && scoped.hasMore && (
+        <NavItem icon={MoreHorizontal} title={t('topic.viewAll')} onClick={scoped.loadMore} />
+      )}
+      {!scoped.scope && isExpandingPageSize && <SkeletonList rows={3} />}
+      {!scoped.scope && hasMore && !isExpandingPageSize && activeAgentId && (
         <NavItem
           icon={MoreHorizontal}
           title={t('topic.viewAll')}

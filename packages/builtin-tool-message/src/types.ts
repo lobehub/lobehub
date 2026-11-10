@@ -283,8 +283,17 @@ export interface ReadMessagesState {
   totalFetched?: number;
 }
 
+export interface MessageItemAttachment {
+  /** MIME type when the platform reports it (Discord `content_type`). */
+  contentType?: string;
+  name: string;
+  /** Bytes, when the platform reports it. */
+  size?: number;
+  url: string;
+}
+
 export interface MessageItem {
-  attachments?: { name: string; url: string }[];
+  attachments?: MessageItemAttachment[];
   author: { id: string; name: string };
   content: string;
   id: string;
@@ -815,6 +824,7 @@ export const MESSENGER_PUSH_CONTENT_MAX_LENGTH = 2000;
 
 export const MessengerPushPlatform = {
   discord: 'discord',
+  linq: 'linq',
   slack: 'slack',
   telegram: 'telegram',
   wechat: 'wechat',

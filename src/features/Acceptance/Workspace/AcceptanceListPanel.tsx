@@ -1,27 +1,29 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import type { DraggablePanelProps, DropdownItem } from '@lobehub/ui/base-ui';
+import type { DraggablePanelProps, DropdownItem } from '@lobehub/ui';
 import {
   Accordion,
   ActionIcon,
   Button,
+  Center,
   Checkbox,
+  createStaticStyles,
+  cssVar,
   DraggablePanel,
   DraggablePanelContainer,
   DropdownMenu,
+  Empty,
+  Flexbox,
+  Icon,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useDebounce } from 'ahooks';
-import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   ArrowLeft,
-  Check,
   CircleDashed,
   FolderClosed,
-  Group,
   ListChecks,
   ListFilter,
   MoreHorizontal,
@@ -32,29 +34,38 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceStatusOverride } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
-import { acceptanceHomePath } from '../Viewer/routes';
+import { acceptanceHomePath, useAcceptanceRouteBase } from '../Viewer/routes';
 import type { AcceptanceStatusAction } from '../Viewer/statusActions';
 import AcceptanceBatchBar from './AcceptanceBatchBar';
 import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import {
   acceptanceListEmptyVariant,
+  type AcceptanceListFacets,
   type AcceptanceListFilter,
+  acceptanceProjectScopeKey,
+  DEFAULT_ACCEPTANCE_LIST_FACETS,
   DEFAULT_ACCEPTANCE_LIST_FILTER,
+  effectiveAcceptanceListFacets,
+  isAcceptanceListFacetsNarrowed,
+  normalizeAcceptanceListFacets,
   normalizeAcceptanceListFilter,
+  resetAcceptanceListFacets,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
+import AcceptanceScopeSwitcher from './AcceptanceScopeSwitcher';
 import {
   acceptanceBatchTargets,
   acceptanceProjectTargets,
@@ -72,14 +83,16 @@ import {
   expandedAcceptanceGroupKeys,
   groupAcceptanceList,
   nextCollapsedGroupKeys,
-  normalizeAcceptanceGroupMode,
+  resolveAcceptanceGroupMode,
   shouldRenderAcceptanceGroups,
 } from './groupAcceptanceList';
+import { useAcceptanceListFilterMenu } from './useAcceptanceListFilterMenu';
 import type { ReportPanelExpand } from './useReportPanelExpand';
 
 const PANEL_MIN = 260;
 const PANEL_MAX = 420;
 const ACCEPTANCE_LIST_FILTER_STORAGE_KEY = 'lobehub-acceptance-list-filter';
+const ACCEPTANCE_LIST_FACETS_STORAGE_KEY = 'lobehub-acceptance-list-facets';
 const ACCEPTANCE_GROUP_MODE_STORAGE_KEY = 'lobehub-acceptance-group-mode';
 /** Pull the next page before the sentinel is actually on screen. */
 const LOAD_MORE_ROOT_MARGIN = '240px';
@@ -292,7 +305,8 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
   ({ expand, headerLeading, hosted, isNarrow, projectActionItems, projectId, setExpand }) => {
     const { t } = useTranslation('verify');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
+    const routeBase = useAcceptanceRouteBase();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
     const [query, setQuery] = useState('');
@@ -307,8 +321,25 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       ACCEPTANCE_GROUP_MODE_STORAGE_KEY,
       DEFAULT_ACCEPTANCE_GROUP_MODE,
     );
+    const [storedFacets, setStoredFacets] = useLocalStorageState<AcceptanceListFacets>(
+      ACCEPTANCE_LIST_FACETS_STORAGE_KEY,
+      DEFAULT_ACCEPTANCE_LIST_FACETS,
+    );
     const filter = normalizeAcceptanceListFilter(storedFilter);
-    const groupMode = normalizeAcceptanceGroupMode(storedGroupMode);
+    // A project choice is only meaningful in the workspace it was made in.
+    const workspaceId = useActiveWorkspaceId();
+    const facets = normalizeAcceptanceListFacets(
+      storedFacets,
+      acceptanceProjectScopeKey(workspaceId),
+    );
+    const facetsNarrowed = isAcceptanceListFacetsNarrowed(facets, projectId);
+    const {
+      projectId: listProjectId,
+      scope,
+      source,
+    } = effectiveAcceptanceListFacets(facets, projectId);
+    const listQuery = { projectId: listProjectId, scope, source };
+    const groupMode = resolveAcceptanceGroupMode(storedGroupMode, projectId);
     const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
     const trimmedQuery = query.trim();
     const searching = Boolean(debouncedQuery);
@@ -318,8 +349,8 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     // WHOLE owned set — a paged search would only ever match what had scrolled
     // in, and would report an exhausted list while the match sat on page four.
     const search = useAcceptanceList(searching, {
+      ...listQuery,
       filter,
-      projectId,
       q: debouncedQuery || undefined,
     });
     const {
@@ -329,7 +360,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       items: pagedItems,
       loadMore,
       ...pagedRest
-    } = useAcceptanceListInfinite(searching ? null : filter, projectId);
+    } = useAcceptanceListInfinite(searching ? null : filter, listQuery);
 
     const items = searching ? (search.data ?? []) : pagedItems;
     const error = searching ? search.error : pagedRest.error;
@@ -345,6 +376,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     });
     const emptyVariant = acceptanceListEmptyVariant({
       allListEmpty: allProbe.data ? allProbe.data.length === 0 : undefined,
+      facetsNarrowed,
       filter,
       searching: Boolean(trimmedQuery),
     });
@@ -379,8 +411,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     const [selected, setSelected] = useState<string[]>([]);
     const [anchorId, setAnchorId] = useState<string | null>(null);
     const [batchPending, setBatchPending] = useState(false);
-    const selectedVisible = visibleAcceptanceSelection(selected, items);
-    const selectAllState = acceptanceSelectAllState(items.length, selectedVisible.length);
+    // Someone else's acceptance (a participated row) cannot be swept: the
+    // batch writes would refuse it, so it never enters the selection at all.
+    const selectableItems = items.filter((item) => item.canManage);
+    const selectedVisible = visibleAcceptanceSelection(selected, selectableItems);
+    const selectAllState = acceptanceSelectAllState(selectableItems.length, selectedVisible.length);
 
     const leaveSelecting = () => {
       setSelecting(false);
@@ -404,7 +439,9 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       failedIds: string[],
     ) => {
       await mutate();
-      await Promise.all(changedIds.map((id) => globalMutate(verifyKeys.acceptanceBundle(id))));
+      await Promise.all(
+        changedIds.map((id) => useVerifyStore.getState().refreshAcceptanceBundle(id)),
+      );
 
       const attempted = new Set(attemptedIds);
       let remaining: string[] = [];
@@ -571,7 +608,12 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
-            const redirect = acceptanceRedirectAfterDelete(acceptanceId, targets, failedIds);
+            const redirect = acceptanceRedirectAfterDelete(
+              acceptanceId,
+              targets,
+              failedIds,
+              routeBase,
+            );
             if (redirect) navigate(redirect, { replace: true });
             await settleBatch(targets, [], failedIds);
             reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
@@ -584,11 +626,14 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     // Grouping by project already names it in the header; every other mode has
     // to carry it on the row or the affiliation is simply not on screen.
-    const showRowProject = groupMode !== 'project';
+    // Inside a project every row belongs to it, so naming the project again is noise.
+    const showRowProject = !projectId && groupMode !== 'project';
+    // "Created by me" makes every row the viewer's own, so the avatar adds nothing.
+    const showRowCreator = scope !== 'created';
 
-    const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items).map(
-      (item) => item.id,
-    );
+    const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items)
+      .filter((item) => item.canManage)
+      .map((item) => item.id);
 
     // Shift/⌘-click on a row while browsing enters selection on the spot: a
     // shift range starts from the open record, a ⌘ pick from nothing.
@@ -609,48 +654,24 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       setAnchorId(id);
     };
 
-    const rowSelectionProps = (id: string) => ({
-      selectable: selecting,
-      selected: selecting && selectedVisible.includes(id),
-      onToggleSelect: (shift: boolean) => pickRow(id, shift),
+    const rowSelectionProps = (item: { canManage: boolean; id: string }) => ({
+      selectable: selecting && item.canManage,
+      selected: selecting && selectedVisible.includes(item.id),
+      onToggleSelect: item.canManage ? (shift: boolean) => pickRow(item.id, shift) : undefined,
     });
 
     // Grouping shares the filter's popover rather than taking a fourth icon in a
     // 260px header: both answer "what does this list show me", and one of them
     // is a preference the user sets once.
-    const filterItems: DropdownItem[] = [
-      ...(
-        [
-          ['active', t('acceptance.workspace.filters.active')],
-          ['all', t('acceptance.workspace.filters.all')],
-          ['completed', t('acceptance.workspace.filters.completed')],
-        ] as const
-      ).map(([key, label]) => ({
-        icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
-        key,
-        label,
-        onClick: () => setStoredFilter(key),
-      })),
-      { type: 'divider' as const },
-      {
-        children: (
-          [
-            ['project', t('acceptance.workspace.groups.byProject')],
-            ['status', t('acceptance.workspace.groups.byStatus')],
-            ['time', t('acceptance.workspace.groups.byTime')],
-            ['none', t('acceptance.workspace.groups.byNone')],
-          ] as const
-        ).map(([key, label]) => ({
-          icon: <Icon icon={Check} style={{ opacity: groupMode === key ? 1 : 0 }} />,
-          key,
-          label,
-          onClick: () => setStoredGroupMode(key),
-        })),
-        icon: <Icon icon={Group} />,
-        key: 'group-mode',
-        label: t('acceptance.workspace.groups.mode'),
-      },
-    ];
+    const filterItems = useAcceptanceListFilterMenu({
+      facets,
+      filter,
+      groupMode,
+      hostProjectId: projectId,
+      setFacets: setStoredFacets,
+      setFilter: setStoredFilter,
+      setGroupMode: setStoredGroupMode,
+    });
 
     // One overflow menu for everything the header offers. Multi-select used to
     // sit outside as its own icon; a 260px header cannot carry a fourth control
@@ -705,6 +726,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <Text ellipsis strong style={{ fontSize: 15, minWidth: 0 }}>
                   {t('acceptance.workspace.title')}
                 </Text>
+                {!projectId && <AcceptanceScopeSwitcher />}
               </Flexbox>
               <button
                 aria-label={t('workspace.collapse')}
@@ -729,7 +751,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             </label>
             <DropdownMenu items={filterItems} placement={'bottomRight'}>
               <ActionIcon
-                active={filter !== 'all'}
+                active={filter !== 'all' || facetsNarrowed}
                 className={styles.filterButton}
                 icon={ListFilter}
                 size={'small'}
@@ -750,9 +772,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             <div className={styles.selectionRow}>
               <Checkbox
                 checked={selectAllState === 'all'}
-                disabled={items.length === 0}
+                disabled={selectableItems.length === 0}
                 indeterminate={selectAllState === 'partial'}
-                onChange={() => setSelected((previous) => nextAcceptanceSelectAll(previous, items))}
+                onChange={() =>
+                  setSelected((previous) => nextAcceptanceSelectAll(previous, selectableItems))
+                }
               >
                 {t('acceptance.workspace.batch.selectAll')}
               </Checkbox>
@@ -791,9 +815,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <span className={styles.searchEmptyMsg}>
                   {trimmedQuery
                     ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
-                    : filter === 'all'
-                      ? null
-                      : t(EMPTY_FILTER_KEYS[filter])}
+                    : facetsNarrowed
+                      ? t('acceptance.workspace.filters.empty.filtered')
+                      : filter === 'all'
+                        ? null
+                        : t(EMPTY_FILTER_KEYS[filter])}
                 </span>
                 <button
                   className={styles.retryBtn}
@@ -801,6 +827,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                   onClick={() => {
                     setQuery('');
                     setStoredFilter('all');
+                    setStoredFacets(resetAcceptanceListFacets(facets, projectId));
                   }}
                 >
                   {t('acceptance.workspace.filters.showAll')}
@@ -859,9 +886,10 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                             active={item.id === acceptanceId}
                             item={item}
                             key={item.id}
+                            showCreator={showRowCreator}
                             showProject={showRowProject}
                             onChanged={mutate}
-                            {...rowSelectionProps(item.id)}
+                            {...rowSelectionProps(item)}
                           />
                         ))}
                       </div>
@@ -879,9 +907,10 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                     active={item.id === acceptanceId}
                     item={item}
                     key={item.id}
+                    showCreator={showRowCreator}
                     showProject={showRowProject}
                     onChanged={mutate}
-                    {...rowSelectionProps(item.id)}
+                    {...rowSelectionProps(item)}
                   />
                 ))
               )}

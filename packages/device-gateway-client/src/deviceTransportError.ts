@@ -29,6 +29,11 @@ export const DeviceTransportErrorCode = {
   DeviceChannelUnavailable: 'DEVICE_CHANNEL_UNAVAILABLE',
   /** The gateway has no record of the addressed device. */
   DeviceNotFound: 'DEVICE_NOT_FOUND',
+  /**
+   * The device is online, but none of its connections belongs to a client that
+   * can serve the request (e.g. only `lh connect` while the desktop app is needed).
+   */
+  NoCapableClient: 'DEVICE_NO_CAPABLE_CLIENT',
   /** Delivered to the device, but no answer before the deadline. */
   DeviceResponseTimeout: 'DEVICE_RESPONSE_TIMEOUT',
   /** The gateway itself failed (5xx that is not a routing failure). */
@@ -127,6 +132,49 @@ const describeStatus = (
   }
 };
 
+const CLIENT_LABEL: Record<string, string> = {
+  cli: 'the `lh connect` CLI',
+  desktop: 'the LobeHub desktop app',
+};
+
+const describeClients = (kinds: unknown[]) =>
+  kinds.map((kind) => CLIENT_LABEL[String(kind)] ?? `\`${String(kind)}\``).join(' or ');
+
+/**
+ * A 503 `NO_CAPABLE_CONNECTION` is not a connection drop: the device is online,
+ * but no connected client can run this request. Retrying cannot help until the
+ * right client connects, so it must not get the generic "retry up to 8 times".
+ */
+const describeNoCapableClient = (
+  status: number,
+  detail: string | undefined,
+  operation: DeviceTransportOperation,
+): DeviceTransportFailure | undefined => {
+  if (status !== 503 || !detail) return undefined;
+  let body: { channels?: unknown; clientKinds?: unknown; error?: unknown };
+  try {
+    body = JSON.parse(detail);
+  } catch {
+    return undefined;
+  }
+  if (body?.error !== 'NO_CAPABLE_CONNECTION') return undefined;
+
+  const needed = Array.isArray(body.clientKinds) ? describeClients(body.clientKinds) : '';
+  const connected = Array.isArray(body.channels)
+    ? body.channels.filter((channel): channel is string => typeof channel === 'string')
+    : [];
+  return {
+    code: DeviceTransportErrorCode.NoCapableClient,
+    content:
+      `The device is online, but none of its connected clients can run this ${operation}` +
+      (needed ? ` — it needs ${needed}` : '') +
+      (connected.length > 0 ? ` and only ${connected.join(', ')} is connected` : '') +
+      `. Nothing ran on the device, and retrying will not help until that client connects: ` +
+      `tell the user to open ${needed || 'the required client'} on that machine, then retry.`,
+    error: detail,
+  };
+};
+
 /**
  * Describe a non-ok gateway HTTP response.
  *
@@ -150,8 +198,11 @@ export const describeGatewayResponseFailure = (
   operation: DeviceTransportOperation,
   target?: DeviceTransportTarget,
 ): DeviceTransportFailure => {
-  const { code, content } = describeStatus(status, operation);
   const detail = body?.trim();
+  const noCapableClient = describeNoCapableClient(status, detail, operation);
+  if (noCapableClient) return noCapableClient;
+
+  const { code, content } = describeStatus(status, operation);
   const data =
     code === DeviceTransportErrorCode.DeviceNotFound && target?.deviceId
       ? {
@@ -177,20 +228,23 @@ const isTimeoutError = (error: unknown): boolean => {
   return name === 'TimeoutError' || name === 'AbortError';
 };
 
-const NETWORK_ERROR_MARKERS = [
-  'fetch failed',
-  'socket hang up',
+// Only failures that happen before the request leaves the server prove the
+// gateway never saw it. A reset or peer close (`ECONNRESET`, undici's
+// `UND_ERR_SOCKET` "other side closed", "socket hang up") can land after the
+// gateway already relayed the call, and the device may have run it — those
+// fall through to the "unclear" branch so the model checks state before
+// repeating a write.
+const CONNECT_FAILURE_MARKERS = [
   'connection refused',
-  'connection reset',
   'econnrefused',
-  'econnreset',
   'enotfound',
   'eai_again',
-  'etimedout',
-  'network',
+  'und_err_connect_timeout',
+  // Bun's fetch reports a failed connect with this message and no code.
+  'unable to connect',
 ];
 
-const isNetworkError = (error: unknown, message: string): boolean => {
+const isConnectFailure = (error: unknown, message: string): boolean => {
   const code = (error as { cause?: { code?: unknown }; code?: unknown } | null)?.code;
   const causeCode = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
   const haystack = [message, code, causeCode]
@@ -198,12 +252,13 @@ const isNetworkError = (error: unknown, message: string): boolean => {
     .join(' ')
     .toLowerCase();
 
-  return NETWORK_ERROR_MARKERS.some((marker) => haystack.includes(marker));
+  return CONNECT_FAILURE_MARKERS.some((marker) => haystack.includes(marker));
 };
 
 /**
  * Describe a failure that happened before any HTTP status existed — the request
- * timed out client-side, or the gateway host could not be reached at all.
+ * timed out client-side, the gateway host could not be reached at all, or the
+ * connection dropped before the response arrived.
  *
  * A client-side timeout is the same situation as a 504 (the call may have been
  * delivered and may still be running), so it carries the same warning.
@@ -222,7 +277,7 @@ export const describeGatewayRequestFailure = (
     };
   }
 
-  if (isNetworkError(error, message)) {
+  if (isConnectFailure(error, message)) {
     return {
       code: DeviceTransportErrorCode.GatewayUnreachable,
       content: `Could not reach the device gateway to relay this ${operation}, so it never ran on the device. This is a network failure between the server and the gateway. Retry once; if it persists, report it to the user rather than retrying in a loop.`,

@@ -1,7 +1,6 @@
-import { type ModalProps, SortableList } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, Icon, SortableList } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -15,20 +14,20 @@ import type { SessionGroupItemBase } from '@/types/session';
 
 import GroupItem from './GroupItem';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    height: 36px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius}px;
-    transition: background 0.2s ease-in-out;
+const styles = stylex.create({
+  container: {
+    height: '36px',
+    paddingInline: '8px',
+    borderRadius: `${cssVar.borderRadius}px`,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
-
-interface ConfigGroupModalProps extends ModalProps {
+interface ConfigGroupModalProps {
+  onCancel?: () => void;
+  open?: boolean;
   scope?: 'private' | 'public';
 }
 
@@ -67,7 +66,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 
             <SortableList.Item
               horizontal
               align={'center'}
-              className={styles.container}
+              className={stylex.props(styles.container).className}
               gap={4}
               id={item.id}
               justify={'space-between'}

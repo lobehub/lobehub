@@ -217,7 +217,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       // Then call onEditorInit
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', '# Hello World');
@@ -245,7 +245,7 @@ name: youtube-comment-retrieval-workflow
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith(
@@ -293,11 +293,13 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledTimes(1);
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData), {
+        keepId: true,
+      });
     });
 
     it('should fall back to editable body when SKILL.md editorData cannot be loaded', () => {
@@ -332,13 +334,20 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(consoleWarn).toHaveBeenCalledWith(
         '[DocumentStore] Failed to load SKILL.md editorData, falling back to markdown',
       );
-      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(1, 'json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(
+        1,
+        'json',
+        JSON.stringify(editorData),
+        {
+          keepId: true,
+        },
+      );
       expect(mockEditor.setDocument).toHaveBeenNthCalledWith(2, 'markdown', '# Body');
 
       consoleWarn.mockRestore();
@@ -359,10 +368,12 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData), {
+        keepId: true,
+      });
     });
 
     it('should reset editor content when target document is empty', () => {
@@ -379,7 +390,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-previous');
       });
 
       act(() => {
@@ -391,7 +402,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenLastCalledWith(
@@ -426,7 +437,7 @@ name: skill-name
       });
 
       await act(async () => {
-        await result.current.onEditorInit(mockEditor);
+        await result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(consoleError).toHaveBeenCalledWith(

@@ -61,14 +61,30 @@ describe('collectSteerChains', () => {
       collectSteerChains([msg('s1', 'user', { steer: true }), msg('g1', 'assistantGroup')]).hostOf
         .size,
     ).toBe(0);
+  });
 
-    expect(
-      collectSteerChains([
-        msg('a1', 'assistant'),
-        msg('s1', 'user', { steer: true }),
-        msg('g1', 'assistantGroup'),
-      ]).hostOf.size,
-    ).toBe(0);
+  it('lets a plain assistant reply host the steer that followed it', () => {
+    const { byHost, hostOf } = collectSteerChains([
+      msg('u1', 'user'),
+      msg('a1', 'assistant'),
+      msg('s1', 'user', { steer: true }),
+      msg('g1', 'assistantGroup'),
+    ]);
+
+    expect(byHost.get('a1')?.continuations).toEqual([{ groupId: 'g1', steerUserId: 's1' }]);
+    expect(hostOf.get('s1')).toBe('a1');
+    expect(hostOf.get('g1')).toBe('a1');
+  });
+
+  it('does not index a plain assistant reply that nothing steered', () => {
+    const { byHost } = collectSteerChains([
+      msg('u1', 'user'),
+      msg('a1', 'assistant'),
+      msg('u2', 'user'),
+      msg('a2', 'assistant'),
+    ]);
+
+    expect(byHost.size).toBe(0);
   });
 
   it('breaks the chain at a regular user message', () => {

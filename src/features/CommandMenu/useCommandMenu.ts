@@ -4,6 +4,9 @@ import { useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
+import { useOpenCreateAgentModal } from '@/features/AgentIdentityModal/useOpenCreateAgentModal';
+import { createTaskModal } from '@/features/AgentTasks/CreateTaskModal';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -16,7 +19,6 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
-import { useHomeStore } from '@/store/home';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { useCommandMenuContext } from './CommandMenuContext';
@@ -46,8 +48,7 @@ export const useCommandMenu = () => {
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canCreate } = usePermission('create_content');
   const { setTheme } = useNextThemesTheme();
-  const createAgent = useAgentStore((s) => s.createAgent);
-  const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
+  const openCreateAgentModal = useOpenCreateAgentModal();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { openGroupWizard } = useGroupWizard();
   const { createGroupWithMembers, createGroupFromTemplate, createPage } = useCreateMenuItems();
@@ -158,19 +159,13 @@ export const useCommandMenu = () => {
     }
   }, [selectedAgent, search, navigate, setSelectedAgent, onClose]);
 
-  const handleCreateSession = useCallback(async () => {
+  // Hands off to the create-agent form; the menu closes so the form isn't stacked under it.
+  const handleCreateSession = useCallback(() => {
     if (!canCreate) return;
 
-    const result = await createAgent({});
-    await refreshAgentList();
-
-    // Navigate to the newly created agent
-    if (result.agentId) {
-      navigate(`/agent/${result.agentId}`);
-    }
-
     onClose();
-  }, [canCreate, createAgent, refreshAgentList, navigate, onClose]);
+    openCreateAgentModal();
+  }, [canCreate, onClose, openCreateAgentModal]);
 
   const openNewTopicOrSaveTopic = useChatStore((s) => s.openNewTopicOrSaveTopic);
 
@@ -203,6 +198,19 @@ export const useCommandMenu = () => {
     onClose();
   }, [canCreate, createPage, onClose]);
 
+  const handleCreateTask = useCallback(() => {
+    if (!canCreate) return;
+
+    onClose();
+    createTaskModal({
+      onCreated: (task) => {
+        navigate(taskDetailPath(task.identifier, undefined, task.name));
+      },
+      // The inline composer only mounts in task views; from the command menu it would drop the draft.
+      showInlineToggle: false,
+    });
+  }, [canCreate, onClose, navigate]);
+
   const handleCreateAgentTeam = useCallback(() => {
     if (!canCreate) return;
 
@@ -226,6 +234,7 @@ export const useCommandMenu = () => {
     handleCreateLibrary,
     handleCreatePage,
     handleCreateSession,
+    handleCreateTask,
     handleCreateTopic,
     handleExternalLink,
     handleNavigate,

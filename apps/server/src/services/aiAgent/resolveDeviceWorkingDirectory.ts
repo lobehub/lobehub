@@ -54,6 +54,9 @@ const topicPinFitsDevice = (
  * - `workingDirByDevice[deviceId]` — the agent's per-device pick from the picker
  *   when no topic existed yet.
  * - `deviceDefaultCwd` — the device's user-configured default.
+ *
+ * A source that holds a REPO IDENTIFIER is skipped rather than trusted: see
+ * `isRepoIdentifier` below — the selection's unit has to match the run's target.
  */
 export const resolveDeviceWorkingDirectoryConfig = (params: {
   deviceDefaultCwd?: string | null;
@@ -61,17 +64,33 @@ export const resolveDeviceWorkingDirectoryConfig = (params: {
   devicePlatform?: string | null;
   initialWorkingDirectory?: string;
   initialWorkingDirectoryConfig?: WorkingDirConfig;
+  /** Repos this run carries (`topic.metadata.repos`, seeded from a Task's own selection). */
+  repos?: string[];
   topicDeviceId?: string;
   topicWorkingDirectory?: string;
   topicWorkingDirectoryConfig?: WorkingDirConfig;
   workingDirByDevice?: Record<string, WorkingDirConfigValue> | null;
 }): WorkingDirConfig | undefined => {
+  // `owner/repo` is a repo, not a directory on this machine: taking one as the
+  // device cwd would override the machine's own choice with a path that does not
+  // exist here, and the spawned CLI would start in it. A real machine path is
+  // absolute, so it can never equal a repo entry; skipping these costs nothing
+  // when the run is genuinely cloud-bound (the sandbox reads `repos`, not the cwd).
+  const isRepoIdentifier = (path?: string): boolean =>
+    !!path && (params.repos ?? []).includes(path);
+
   const topicPin =
     params.topicWorkingDirectoryConfig ??
     (params.topicWorkingDirectory ? { path: params.topicWorkingDirectory } : undefined);
-  if (topicPin && topicPinFitsDevice(topicPin.path, params)) return topicPin;
-  if (params.initialWorkingDirectoryConfig) return params.initialWorkingDirectoryConfig;
-  if (params.initialWorkingDirectory) return { path: params.initialWorkingDirectory };
+  if (topicPin && topicPinFitsDevice(topicPin.path, params) && !isRepoIdentifier(topicPin.path)) {
+    return topicPin;
+  }
+
+  const initialConfig = params.initialWorkingDirectoryConfig;
+  if (initialConfig && !isRepoIdentifier(initialConfig.path)) return initialConfig;
+  if (params.initialWorkingDirectory && !isRepoIdentifier(params.initialWorkingDirectory)) {
+    return { path: params.initialWorkingDirectory };
+  }
 
   const agentChoice = toWorkingDirConfig(
     params.deviceId ? params.workingDirByDevice?.[params.deviceId] : undefined,

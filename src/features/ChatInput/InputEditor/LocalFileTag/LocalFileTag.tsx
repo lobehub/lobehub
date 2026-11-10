@@ -1,7 +1,15 @@
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import type { LexicalEditor } from 'lexical';
 import { $createNodeSelection, $setSelection, CLICK_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
 import { ExternalLink, EyeIcon, FolderOpen } from 'lucide-react';
@@ -10,6 +18,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { useTopicRemoteDeviceId } from '@/features/LocalFile/useTopicRemoteDeviceId';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { localFileService } from '@/services/electron/localFileService';
@@ -220,6 +229,9 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  // Off desktop the file lives on the topic's device and is read over the
+  // device RPC while it is online; desktop keeps local IPC.
+  const remoteDeviceId = useTopicRemoteDeviceId();
 
   const parsed = useMemo(
     () => parseLocalFileHref(file.path, { workingDirectory }),
@@ -227,7 +239,8 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   );
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
-  const canPreview = isDesktop && !file.isDirectory && !!parsed?.workingDirectory;
+  const canPreview =
+    (isDesktop || !!remoteDeviceId) && !file.isDirectory && !!parsed?.workingDirectory;
   const canRenderImagePreview = canPreview && isPreviewableImageFile(file);
 
   const { data: imagePreview } = useClientDataSWR<LocalFilePreview>(
@@ -235,6 +248,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
       ? localFileKeys.preview({
           accept: 'image',
           allowExternalFile: allowExternalFilePreview || undefined,
+          deviceId: remoteDeviceId,
           filePath: parsed.filePath,
           workingDirectory: parsed.workingDirectory,
         })
@@ -243,6 +257,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
       projectFileService.getLocalFilePreview({
         accept: 'image',
         allowExternalFile: allowExternalFilePreview || undefined,
+        deviceId: remoteDeviceId,
         path: parsed!.filePath,
         workingDirectory: parsed!.workingDirectory,
       }),
@@ -271,11 +286,12 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
 
       openLocalFile({
         allowExternalFilePreview,
+        deviceId: remoteDeviceId,
         filePath: parsed.filePath,
         workingDirectory: parsed.workingDirectory,
       });
     },
-    [allowExternalFilePreview, openLocalFile, parsed],
+    [allowExternalFilePreview, openLocalFile, parsed, remoteDeviceId],
   );
 
   const handleOpen = useCallback(
@@ -308,19 +324,24 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
         </div>
       )}
       <Text className={styles.path}>{file.path}</Text>
-      {isDesktop && (
+      {(isDesktop || canPreview) && (
         <Flexbox horizontal className={styles.actionBar} gap={6}>
           {canPreview && (
             <Button icon={<Icon icon={EyeIcon} />} size={'small'} onClick={handlePreview}>
               {t('workingPanel.documents.preview')}
             </Button>
           )}
-          <Button icon={<Icon icon={ExternalLink} />} size={'small'} onClick={handleOpen}>
-            {t('workingPanel.files.open')}
-          </Button>
-          <Button icon={<Icon icon={FolderOpen} />} size={'small'} onClick={handleReveal}>
-            {t('workingPanel.files.showInSystem')}
-          </Button>
+          {/* Open / Show in Folder are Electron IPC: nothing to call off desktop. */}
+          {isDesktop && (
+            <>
+              <Button icon={<Icon icon={ExternalLink} />} size={'small'} onClick={handleOpen}>
+                {t('workingPanel.files.open')}
+              </Button>
+              <Button icon={<Icon icon={FolderOpen} />} size={'small'} onClick={handleReveal}>
+                {t('workingPanel.files.showInSystem')}
+              </Button>
+            </>
+          )}
         </Flexbox>
       )}
     </Flexbox>

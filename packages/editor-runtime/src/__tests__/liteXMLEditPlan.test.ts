@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canApplyAsReviewDiff,
   describeLiteXMLEditStep,
   findLiteXMLEditStepProblem,
   indexLiteXMLDocument,
@@ -181,5 +182,87 @@ describe('liteXMLEditPlan', () => {
     expect(findLiteXMLEditStepProblem(steps[0].operation, quoted)).toContain(
       'node "q" encloses node "x"',
     );
+  });
+
+  describe('canApplyAsReviewDiff', () => {
+    const doc = indexLiteXMLDocument(
+      '<root><h2 id="h"><span id="hs">Title</span></h2><p id="p"><span id="ps">a</span></p><table id="t"><tr id="r"><td id="c"><span id="cs">1</span></td></tr></table><ul id="u"><li id="l"><span id="ls">x</span></li></ul></root>',
+    );
+
+    it('keeps the review diff for whole top-level blocks', () => {
+      expect(
+        canApplyAsReviewDiff({ action: 'modify', litexml: '<p id="p"><span>b</span></p>' }, doc),
+      ).toBe(true);
+      expect(
+        canApplyAsReviewDiff(
+          { action: 'insert', afterId: 'p', litexml: '<p><span>n</span></p>' },
+          doc,
+        ),
+      ).toBe(true);
+      expect(canApplyAsReviewDiff({ action: 'remove', id: 'h' }, doc)).toBe(true);
+    });
+
+    // A review diff around a nested node re-keys its block (inline) or nests a
+    // diff the editor later rejects (tables), so those apply directly.
+    it('applies nested, table and list edits directly', () => {
+      expect(
+        canApplyAsReviewDiff({ action: 'modify', litexml: '<span id="hs">T</span>' }, doc),
+      ).toBe(false);
+      expect(canApplyAsReviewDiff({ action: 'remove', id: 'ps' }, doc)).toBe(false);
+      expect(
+        canApplyAsReviewDiff(
+          { action: 'insert', afterId: 'r', litexml: '<tr><td><span>2</span></td></tr>' },
+          doc,
+        ),
+      ).toBe(false);
+      expect(
+        canApplyAsReviewDiff(
+          {
+            action: 'insert',
+            afterId: 'p',
+            litexml: '<table><tr><td><span>2</span></td></tr></table>',
+          },
+          doc,
+        ),
+      ).toBe(false);
+      expect(
+        canApplyAsReviewDiff({ action: 'modify', litexml: '<span id="ls">y</span>' }, doc),
+      ).toBe(false);
+    });
+  });
+
+  describe('findLiteXMLEditStepProblem payload checks', () => {
+    const doc = indexLiteXMLDocument(
+      '<root><p id="p"><span id="ps">a</span></p><ul id="u"><li id="l"><span id="ls">x</span></li></ul></root>',
+    );
+
+    it('names an operation without a valid action instead of throwing', () => {
+      expect(
+        findLiteXMLEditStepProblem({ beforeId: 'p', litexml: '<p><span>n</span></p>' } as any, doc),
+      ).toBe('`action` must be "insert", "modify" or "remove"');
+    });
+
+    it('rejects litexml whose tags do not balance', () => {
+      expect(
+        findLiteXMLEditStepProblem(
+          { action: 'insert', afterId: 'p', litexml: '<p><span>A.</span> text</span></p>' },
+          doc,
+        ),
+      ).toBe('the litexml is not well-formed (<p> is closed by </span>)');
+    });
+
+    it('rejects a modify that swaps a list item or span for another kind of node', () => {
+      expect(
+        findLiteXMLEditStepProblem({ action: 'modify', litexml: '<span id="l">y</span>' }, doc),
+      ).toBe(
+        'node "l" is a <li>, but the modify payload replaces it with a <span>; send a <li id="l"> fragment',
+      );
+      expect(
+        findLiteXMLEditStepProblem(
+          { action: 'modify', litexml: '<h2 id="p"><span>t</span></h2>' },
+          doc,
+        ),
+      ).toBeUndefined();
+    });
   });
 });

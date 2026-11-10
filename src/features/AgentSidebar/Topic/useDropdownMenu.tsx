@@ -1,9 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast, Upload } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { css, cx } from 'antd-style';
+import { confirmModal, css, cx, type DropdownItem, Icon, toast, Upload } from '@lobehub/ui';
 import { Archive, HardDriveDownload, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +15,9 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+
+import { useAddFolderMenuItem } from './useAddFolderMenuItem';
+import { getMergedPullRequestTopics } from './utils/mergedPullRequestTopics';
 
 const hotArea = css`
   &::before {
@@ -37,9 +36,8 @@ type TopicMaintenanceScope = 'own' | 'workspace';
 
 export const useTopicActionsDropdownMenu = (
   options: UseTopicActionsDropdownMenuOptions = {},
-): (() => MenuProps['items']) => {
+): (() => DropdownItem[]) => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal } = App.useApp();
   const { onUploadClose } = options;
   const activeWorkspaceId = useActiveWorkspaceId();
   const isWorkspaceOwner = useIsWorkspaceOwner();
@@ -66,25 +64,10 @@ export const useTopicActionsDropdownMenu = (
 
   const handleArchiveMergedPullRequests = useCallback(
     async (scope: TopicMaintenanceScope = 'own') => {
-      const mergedTopics = (topics ?? []).filter((topic) => {
-        if (
-          activeWorkspaceId &&
-          scope === 'own' &&
-          (!currentUserId || topic.userId !== currentUserId)
-        ) {
-          return false;
-        }
-
-        const pullRequest = topic.metadata?.workingDirectoryConfig?.git?.github?.pullRequest;
-        const isMerged = !!pullRequest?.mergedAt || pullRequest?.state?.toLowerCase() === 'merged';
-
-        return (
-          isMerged &&
-          topic.status !== 'completed' &&
-          topic.status !== 'archived' &&
-          topic.status !== 'unread'
-        );
-      });
+      const mergedTopics = getMergedPullRequestTopics(
+        topics ?? [],
+        activeWorkspaceId && scope === 'own' ? (currentUserId ?? null) : undefined,
+      );
 
       if (mergedTopics.length === 0) {
         toast.info(t('actions.archiveMergedPullRequestsNone'));
@@ -109,13 +92,13 @@ export const useTopicActionsDropdownMenu = (
         JSON.parse(text);
         await importTopic(text);
       } catch {
-        modal.error({
-          content: t('importInvalidFormat'),
+        toast.error({
+          description: t('importInvalidFormat'),
           title: t('importError'),
         });
       }
     },
-    [importTopic, modal, onUploadClose, t],
+    [importTopic, onUploadClose, t],
   );
 
   const [topicPageSize, updateSystemStatus] = useGlobalStore((s) => [
@@ -124,8 +107,9 @@ export const useTopicActionsDropdownMenu = (
   ]);
 
   const enableHeteroSessionImport = useUserStore(labPreferSelectors.enableHeteroSessionImport);
+  const addFolderItem = useAddFolderMenuItem();
 
-  return useCallback((): MenuProps['items'] => {
+  return useCallback((): DropdownItem[] => {
     const pageSizeOptions = [20, 40, 60, 100];
     const pageSizeItems = pageSizeOptions.map((size) => ({
       icon: topicPageSize === size ? <Icon icon={LucideCheck} /> : <div />,
@@ -137,6 +121,7 @@ export const useTopicActionsDropdownMenu = (
     }));
 
     return [
+      ...(addFolderItem ? [addFolderItem, { type: 'divider' as const }] : []),
       {
         children: pageSizeItems,
         extra: topicPageSize,
@@ -204,7 +189,8 @@ export const useTopicActionsDropdownMenu = (
                   cancelText: t('cancel', { ns: 'common' }),
                   okText: t('ok', { ns: 'common' }),
                   onOk: () => handleArchiveMergedPullRequests('workspace'),
-                  title: t('actions.confirmArchiveMergedPullRequestsWorkspace'),
+                  content: t('actions.confirmArchiveMergedPullRequestsWorkspace'),
+                  title: t('actions.archiveMergedPullRequestsWorkspace'),
                 });
               },
             },
@@ -213,15 +199,15 @@ export const useTopicActionsDropdownMenu = (
               disabled: !canEditTopic,
               icon: <Icon icon={Trash} />,
               key: 'deleteUnstarredWorkspace',
-              label: t('actions.removeUnstarredWorkspace'),
+              label: t('actions.removeUnpinnedWorkspace'),
               onClick: () => {
                 openWorkspaceDeleteAllModal({
-                  acknowledgeText: t('actions.confirmRemoveUnstarredWorkspaceAcknowledge'),
+                  acknowledgeText: t('actions.confirmRemoveUnpinnedWorkspaceAcknowledge'),
                   cancelText: t('cancel', { ns: 'common' }),
-                  confirmText: t('actions.removeUnstarredWorkspace'),
-                  description: t('actions.confirmRemoveUnstarredWorkspace'),
+                  confirmText: t('actions.removeUnpinnedWorkspace'),
+                  description: t('actions.confirmRemoveUnpinnedWorkspace'),
                   onConfirm: () => removeUnstarredTopic({ onlyOwn: false }),
-                  title: t('actions.removeUnstarredWorkspace'),
+                  title: t('actions.removeUnpinnedWorkspace'),
                 });
               },
             },
@@ -244,8 +230,9 @@ export const useTopicActionsDropdownMenu = (
             },
           ]
         : []),
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
+    addFolderItem,
     topicPageSize,
     updateSystemStatus,
     handleImport,

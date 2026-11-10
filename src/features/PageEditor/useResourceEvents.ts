@@ -3,10 +3,11 @@
 import { fetchEventSource } from '@lobechat/utils/client';
 import { useEffect } from 'react';
 
+import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { documentLikeKeys, isDocumentCommentKeyForEvent } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
+import { documentDetailResource } from '@/store/document/slices/document/projection';
 import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -88,7 +89,7 @@ export const useResourceEvents = () => {
             if (parsed.type === 'doc.updated') {
               // Re-fetch; DocumentIdMode re-hydrates the editor on the new
               // version when the local editor isn't dirty.
-              void mutate(documentSWRKeys.editor(documentId));
+              void revalidateReplica(documentDetailResource, documentId);
             } else if (parsed.type === 'document.commentsChanged' && workspaceId) {
               void mutate((key) =>
                 isDocumentCommentKeyForEvent(key, {

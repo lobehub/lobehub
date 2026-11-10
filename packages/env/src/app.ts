@@ -63,6 +63,7 @@ export const getAppConfig = () => {
       SSRF_ALLOW_IP_ADDRESS_LIST: z.string().optional(),
 
       MARKET_BASE_URL: z.string().optional(),
+      MARKET_SKILL_INSTALL_BASE_URL: z.string().url().optional(),
       /**
        * Trusted Client Secret for Market API authentication
        * 64-character hex string (32 bytes) shared with Market server
@@ -79,6 +80,12 @@ export const getAppConfig = () => {
 
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       ENABLE_AGENT_GATEWAY: z.boolean().optional(),
+      /**
+       * Realtime page collaboration through the gateway's document rooms
+       * (LobeHub Cloud only; the self-hosted gateway has no rooms). Off: pages
+       * save over HTTP and the page agent writes back to the stored row.
+       */
+      ENABLE_PAGE_COLLAB: z.boolean().optional(),
       /**
        * Server-to-server Agent Gateway endpoint, e.g. a Docker Compose service
        * name the browser cannot resolve. Falls back to AGENT_GATEWAY_URL.
@@ -138,12 +145,14 @@ export const getAppConfig = () => {
       SSRF_ALLOW_PRIVATE_IP_ADDRESS: process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1',
       SSRF_ALLOW_IP_ADDRESS_LIST: process.env.SSRF_ALLOW_IP_ADDRESS_LIST,
       MARKET_BASE_URL: process.env.MARKET_BASE_URL,
+      MARKET_SKILL_INSTALL_BASE_URL: process.env.MARKET_SKILL_INSTALL_BASE_URL || undefined,
 
       MARKET_TRUSTED_CLIENT_SECRET: process.env.MARKET_TRUSTED_CLIENT_SECRET,
       MARKET_TRUSTED_CLIENT_ID: process.env.MARKET_TRUSTED_CLIENT_ID,
 
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
+      ENABLE_PAGE_COLLAB: process.env.ENABLE_PAGE_COLLAB === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
       AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,

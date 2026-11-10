@@ -7,16 +7,16 @@ import {
   formatTextWindowNotice,
   type TextWindow,
 } from '@lobechat/prompts/textWindow';
+import {
+  ARCHIVE_BYPASS_IDENTIFIERS,
+  DEFAULT_TOOL_RESULT_MAX_LENGTH,
+  sliceToolResult,
+} from '@lobechat/prompts/toolResult';
 import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
-import {
-  ARCHIVE_BYPASS_IDENTIFIERS,
-  DEFAULT_TOOL_RESULT_MAX_LENGTH,
-  sliceToolResult,
-} from '@/server/utils/truncateToolResult';
 
 import { TOOL_RESULTS_DIR_NAME } from './constants';
 
@@ -172,7 +172,11 @@ export const archiveToolResultIfNeeded = async ({
         path: string,
         outcome: ArchiveHandle['outcome'],
       ): Promise<ArchiveHandle> => {
-        const stats = await vfsService.write(path, content, ctx, { contentFormat: 'raw' });
+        const stats = await vfsService.write(path, content, ctx, {
+          contentFormat: 'raw',
+          // Archiving a tool result is not a user or agent authored write.
+          source: 'system',
+        });
         const persisted = await vfsService.read(path, ctx);
 
         // Never tell the model that a full result exists unless the VFS can return it losslessly.

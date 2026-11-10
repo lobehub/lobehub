@@ -8,7 +8,7 @@ vi.mock('@/envs/redis', () => ({
   getRedisConfig: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock('@/libs/redis', () => ({
+vi.mock('@/server/modules/Redis', () => ({
   isRedisEnabled: vi.fn().mockReturnValue(false),
   initializeRedis: vi.fn(),
 }));
@@ -16,7 +16,7 @@ vi.mock('@/libs/redis', () => ({
 // Must import after vi.mock declarations
 const { getVideoAvgLatencies, getVideoLatencyKey } = await import('./latency');
 const { getServerDB } = await import('@/database/server');
-const { isRedisEnabled, initializeRedis } = await import('@/libs/redis');
+const { isRedisEnabled, initializeRedis } = await import('@/server/modules/Redis');
 
 interface LatencyRow {
   latency: number | null;

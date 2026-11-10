@@ -18,7 +18,10 @@ const {
   mockGetComposioManifests,
   mockGetLobehubSkillManifests,
   mockHasDocuments,
+  mockListUserSkillCatalog,
+  mockLoadUserSkills,
   mockMessageCreate,
+  mockMessageQuery,
   mockPluginQuery,
   mockSkillFindAll,
   mockSkillFindByIds,
@@ -35,7 +38,10 @@ const {
   mockGetComposioManifests: vi.fn().mockResolvedValue([]),
   mockGetLobehubSkillManifests: vi.fn().mockResolvedValue([]),
   mockHasDocuments: vi.fn().mockResolvedValue(false),
+  mockListUserSkillCatalog: vi.fn().mockResolvedValue([]),
+  mockLoadUserSkills: vi.fn().mockResolvedValue([]),
   mockMessageCreate: vi.fn(),
+  mockMessageQuery: vi.fn().mockResolvedValue([]),
   mockPluginQuery: vi.fn().mockResolvedValue([]),
   mockSkillFindAll: vi.fn().mockResolvedValue({ data: [], total: 0 }),
   mockSkillFindByIds: vi.fn().mockResolvedValue([]),
@@ -59,7 +65,7 @@ vi.mock('@/database/models/message', () => ({
       create: mockMessageCreate,
       getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
       getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-      query: vi.fn().mockResolvedValue([]),
+      query: mockMessageQuery,
       update: vi.fn().mockResolvedValue({}),
     };
   }),
@@ -99,6 +105,12 @@ vi.mock('@/server/services/agentDocuments', () => ({
   }),
 }));
 
+vi.mock('@/server/services/userSkill', () => ({
+  UserSkillService: vi.fn().mockImplementation(function () {
+    return { listCatalog: mockListUserSkillCatalog, loadRuntimeSkills: mockLoadUserSkills };
+  }),
+}));
+
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(function () {
     return { query: mockPluginQuery };
@@ -129,6 +141,8 @@ vi.mock('@/database/models/topic', () => ({
       releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
       tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
       create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      // A follow-up turn reuses its topic; only the selected-skill history case sends one.
+      findById: vi.fn().mockResolvedValue({ id: 'topic-1', metadata: {} }),
     };
   }),
 }));
@@ -227,6 +241,15 @@ const toolsEngineConfigArg = () =>
 const skillById = (identifier: string) =>
   operationSkillSetArg()?.skills.find((s) => s.identifier === identifier);
 
+const createAgentConfig = (plugins: string[]) => ({
+  chatConfig: {},
+  id: 'agent-1',
+  model: 'gpt-4',
+  plugins,
+  provider: 'openai',
+  systemRole: 'You are a helper',
+});
+
 describe('AiAgentService.execAgent - pinned skill content injection', () => {
   let service: AiAgentService;
 
@@ -255,19 +278,36 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     );
     mockGetAgentSkills.mockResolvedValue([]);
     mockHasDocuments.mockResolvedValue(false);
+    const planSkill = {
+      description: 'How each unit is done',
+      generated: true,
+      identifier: 'user-skills:goal-plan-x',
+      name: 'user-skills:goal-plan-x',
+      title: 'Plan',
+    };
+    const handMade = {
+      description: 'My review checklist',
+      generated: false,
+      identifier: 'user-skills:review',
+      name: 'user-skills:review',
+      title: 'Review',
+    };
+    // The catalog query honours `includeGenerated`, as the real one does.
+    mockListUserSkillCatalog.mockImplementation(async (options?: { includeGenerated?: boolean }) =>
+      options?.includeGenerated === false ? [handMade] : [planSkill, handMade],
+    );
+    // Only bodies the run asks for come back, as the real loader does.
+    mockLoadUserSkills.mockImplementation(async (ids: string[]) =>
+      ids.includes(planSkill.identifier)
+        ? [{ ...planSkill, body: 'PLAN BODY', content: 'PLAN BODY + FILES' }]
+        : [],
+    );
     service = new AiAgentService({} as any, 'test-user-id');
   });
 
   it('injects a pinned DB skill body into the operation skill set, leaving auto skills content-less', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      // db-skill-pinned is pinned; db-skill-auto is absent from plugins → auto.
-      plugins: ['db-skill-pinned'],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    // db-skill-pinned is pinned; db-skill-auto is absent from plugins → auto.
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-pinned']));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
@@ -278,14 +318,7 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
   });
 
   it('fetches bodies only for the pinned subset to keep the op-param payload bounded', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      plugins: ['db-skill-pinned'],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-pinned']));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
@@ -304,14 +337,7 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
         title: null,
       },
     ]);
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      plugins: ['agent-skills:foo'],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['agent-skills:foo']));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
@@ -321,14 +347,7 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
   });
 
   it('does not attach content when no skill is pinned', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
@@ -338,22 +357,15 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
   });
 
   it('enables the goal tool for a direct server /goal prompt', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
 
     await service.execAgent({ agentId: 'agent-1', prompt: '/goal ship it' } as any);
 
-    expect(operationSkillSetArg()?.enabledPluginIds).toContain('lobe-goal');
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('builtin-goal');
     expect(operationSkillSetArg()?.enabledPluginIds).not.toContain('lobe-task');
     expect(toolsEngineConfigArg()?.agentConfig).toEqual({
       chatConfig: { toolMode: 'custom' },
-      plugins: ['lobe-goal'],
+      plugins: ['builtin-goal'],
     });
   });
 
@@ -373,23 +385,16 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
       selectedToolIds: ['selected-tool'],
     } as any);
 
-    expect(operationSkillSetArg()?.enabledPluginIds).toEqual(['lobe-goal']);
+    expect(operationSkillSetArg()?.enabledPluginIds).toEqual(['builtin-goal']);
     expect(toolsEngineConfigArg()?.agentConfig).toEqual({
       chatConfig: { toolMode: 'custom' },
-      plugins: ['lobe-goal'],
+      plugins: ['builtin-goal'],
     });
   });
 
   it('does not eager-inject an auto skill whose identifier collides with a turn-scoped tool id', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      // Nothing pinned — db-skill-auto is in auto mode.
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    // Nothing pinned — db-skill-auto is in auto mode.
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
 
     // db-skill-auto lands in the expanded operation tool list (`agentPlugins`)
     // via a turn-scoped @-mention pick, but it is NOT pinned on the agent.
@@ -405,15 +410,37 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
   });
 
+  it('lists the user skill library to every run, content-less until a run names a skill', async () => {
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    // A hand-made skill is listed, without its body.
+    expect(skillById('user-skills:review')).toBeDefined();
+    expect(skillById('user-skills:review')?.content).toBeUndefined();
+    // A batch's generated plan skill is not listed to an unrelated run, and the
+    // catalog is asked to leave generated skills out.
+    expect(skillById('user-skills:goal-plan-x')).toBeUndefined();
+    expect(mockListUserSkillCatalog).toHaveBeenCalledWith({ includeGenerated: false });
+    // Listing the library reads no body: none was asked for.
+    expect(mockLoadUserSkills.mock.calls[0][0]).not.toContain('user-skills:goal-plan-x');
+  });
+
+  it('injects a user skill the run names in its plugins, as a goal batch unit does', async () => {
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
+
+    await service.execAgent({
+      additionalPluginIds: ['lobe-task', 'user-skills:goal-plan-x'],
+      agentId: 'agent-1',
+      prompt: 'Hello',
+    } as any);
+
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('user-skills:goal-plan-x');
+    expect(skillById('user-skills:goal-plan-x')?.content).toBe('PLAN BODY + FILES');
+  });
+
   it('appends the resource tree to a pinned skill body, mirroring activateSkill', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      plugins: ['db-skill-with-resources'],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-with-resources']));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
@@ -423,5 +450,104 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(injected).toContain('ZIP SKILL BODY');
     expect(injected).toContain('Available Resources');
     expect(injected).toContain('guide.md');
+  });
+});
+
+describe('AiAgentService.execAgent - selected skill content injection', () => {
+  let service: AiAgentService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockMessageQuery.mockResolvedValue([]);
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-1',
+      operationId: 'op-123',
+      success: true,
+    });
+    mockSkillFindAll.mockResolvedValue({
+      data: DB_SKILL_ROWS.map(({ id, identifier }) => ({
+        description: 'd',
+        id,
+        identifier,
+        name: identifier,
+      })),
+      total: DB_SKILL_ROWS.length,
+    });
+    mockSkillFindByIds.mockImplementation(async (ids: string[]) =>
+      DB_SKILL_ROWS.filter((r) => ids.includes(r.id)),
+    );
+    mockGetAgentSkills.mockResolvedValue([]);
+    mockListUserSkillCatalog.mockResolvedValue([]);
+    mockLoadUserSkills.mockResolvedValue([]);
+    // Nothing pinned — db-skill-auto is an auto-mode skill.
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
+    service = new AiAgentService({} as any, 'test-user-id');
+  });
+
+  // ROOT CAUSE:
+  //
+  // A skill picked in the chat composer reached a gateway-mode run only as the
+  // `<skill name="…" />` text in the prompt, because `execAgent` had no field
+  // for it. The client runtime injects the body; the server run left it to the
+  // model to call `activateSkill`.
+  //
+  // The fix injects the body of every selected skill like a pinned skill.
+  it('injects the body of a skill this turn selected and persists the selection', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Audit this page',
+      selectedSkillIds: ['db-skill-auto'],
+    } as any);
+
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('db-skill-auto');
+    expect(skillById('db-skill-auto')?.content).toBe('AUTO SKILL BODY');
+    expect(mockSkillFindByIds).toHaveBeenCalledWith(['sk-2']);
+    const userRow = mockMessageCreate.mock.calls.find(([row]) => row.role === 'user')?.[0];
+    expect(userRow?.metadata).toEqual(
+      expect.objectContaining({ selectedSkillIds: ['db-skill-auto'] }),
+    );
+  });
+
+  it('keeps injecting a skill an earlier turn of the topic selected', async () => {
+    mockMessageQuery.mockResolvedValue([
+      {
+        content: 'Audit this page',
+        id: 'msg-earlier',
+        metadata: { selectedSkillIds: ['db-skill-auto'] },
+        role: 'user',
+      },
+    ]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Now the settings page',
+    } as any);
+
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('db-skill-auto');
+    expect(skillById('db-skill-auto')?.content).toBe('AUTO SKILL BODY');
+  });
+
+  it('keeps a selected skill available when the agent only allows picked skills', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: { skillActivateMode: 'manual' },
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Audit this page',
+      selectedSkillIds: ['db-skill-auto'],
+    } as any);
+
+    expect(skillById('db-skill-auto')?.content).toBe('AUTO SKILL BODY');
+    // Manual mode still hides the skills nobody picked.
+    expect(skillById('db-skill-pinned')).toBeUndefined();
   });
 });

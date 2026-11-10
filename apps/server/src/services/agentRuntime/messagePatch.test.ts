@@ -1,7 +1,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildMessagePatch } from './messagePatch';
+import { buildMessagePatch, buildProjectedMessagePatch } from './messagePatch';
 
 const message = (id: string, content: string): UIChatMessage =>
   ({ content, createdAt: 1, id, role: 'assistant', updatedAt: 1 }) as UIChatMessage;
@@ -38,5 +38,45 @@ describe('buildMessagePatch', () => {
     expect(buildMessagePatch(before, after, 1).upserts).toEqual([
       { afterId: null, message: after[0] },
     ]);
+  });
+});
+
+describe('buildProjectedMessagePatch', () => {
+  const toolRow = (id: string, content: string): UIChatMessage =>
+    ({
+      content,
+      createdAt: 1,
+      id,
+      plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+      pluginState: { results: [] },
+      role: 'tool',
+      updatedAt: 1,
+    }) as UIChatMessage;
+
+  it('ships the view model, not the stored tool body', () => {
+    const { upserts } = buildProjectedMessagePatch(
+      [],
+      [toolRow('t1', 'THE WHOLE CRAWLED PAGE')],
+      1,
+    );
+
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0].message.content).not.toContain('THE WHOLE CRAWLED PAGE');
+    expect(upserts[0].message.payloadOmitted).toBeDefined();
+    // The row still reads as "returned something" for the status icon.
+    expect(upserts[0].message.contentLength).toBe('THE WHOLE CRAWLED PAGE'.length);
+  });
+
+  it('does not resend a row whose only change is projected away', () => {
+    // Both bodies collapse to the same view model, so the diff must compare the
+    // projected forms — otherwise every step reships a settled tool row.
+    const patch = buildProjectedMessagePatch(
+      [toolRow('t1', 'first body')],
+      [toolRow('t1', 'first body')],
+      2,
+    );
+
+    expect(patch.upserts).toEqual([]);
+    expect(patch.deletes).toEqual([]);
   });
 });

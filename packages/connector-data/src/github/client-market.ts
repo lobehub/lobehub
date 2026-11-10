@@ -1,5 +1,6 @@
 import { toRecord } from '@lobechat/utils/object';
 
+import { ConnectorDataError } from '../errors';
 import { createRecoverableMemo } from '../memo';
 import { createGitHubConnectorClient, type GitHubConnectorClient } from './client';
 import type { GitHubConnectorTransport } from './graphql/client';
@@ -53,6 +54,15 @@ const parseProxyResponse = (value: unknown): MarketProxyResponse => {
   const response = value as { data?: unknown; status?: unknown };
   if (typeof response.status !== 'number' || !Number.isFinite(response.status)) {
     throw new Error('GitHub Market proxy status is invalid');
+  }
+  if (response.status === 401) {
+    throw new ConnectorDataError({
+      cause: { status: response.status },
+      code: 'github_authorization_unavailable',
+      operation: 'proxyRequest',
+      provider: 'github',
+      retryable: false,
+    });
   }
   if (response.status < 200 || response.status >= 300) {
     throw Object.assign(new Error('GitHub Market proxy request failed'), {
@@ -112,6 +122,54 @@ export const createGitHubMarketTransport = ({
             typeof record?.contributions === 'number' ? record.contributions : undefined,
           login: typeof record?.login === 'string' ? record.login : null,
         };
+      });
+    },
+    listAccessibleRepositories: async ({ page, perPage }) => {
+      // `/user/repos` already spans the organizations the token belongs to, so
+      // one call answers the whole picker. Listing per organization would be
+      // one request per organization for the same set.
+      const data = await proxy({
+        endpoint: '/user/repos',
+        method: 'GET',
+        parameters: [
+          { in: 'query', name: 'page', value: page },
+          { in: 'query', name: 'per_page', value: perPage },
+          { in: 'query', name: 'sort', value: 'updated' },
+        ],
+      });
+      if (!Array.isArray(data)) {
+        throw new Error('GitHub Market repository response is invalid');
+      }
+
+      return data.map((item) => {
+        const record = toRecord(item);
+        const owner = toRecord(record?.owner);
+
+        return {
+          defaultBranch: typeof record?.default_branch === 'string' ? record.default_branch : null,
+          isPrivate: record?.private === true,
+          name: typeof record?.name === 'string' ? record.name : null,
+          owner: typeof owner?.login === 'string' ? owner.login : null,
+        };
+      });
+    },
+    listRepositoryBranches: async ({ owner, page, perPage, repository }) => {
+      const data = await proxy({
+        endpoint: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/branches`,
+        method: 'GET',
+        parameters: [
+          { in: 'query', name: 'per_page', value: perPage },
+          ...(page ? [{ in: 'query' as const, name: 'page', value: page }] : []),
+        ],
+      });
+      if (!Array.isArray(data)) {
+        throw new Error('GitHub Market branch response is invalid');
+      }
+
+      return data.map((item) => {
+        const record = toRecord(item);
+
+        return { name: typeof record?.name === 'string' ? record.name : null };
       });
     },
     listUserOrganizations: async ({ perPage }) => {

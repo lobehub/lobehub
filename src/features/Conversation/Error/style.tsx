@@ -1,7 +1,5 @@
 import { type CenterProps } from '@lobehub/ui';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Avatar, Center, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 

@@ -12,6 +12,7 @@ import Appearance from '../appearance';
 import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
+import Environments from '../environments';
 import Hotkey from '../hotkey';
 import Integrations from '../integrations';
 import Labels from '../labels';
@@ -30,6 +31,7 @@ import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
+import Trash from '../trash';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
@@ -46,7 +48,9 @@ export const componentMap = {
   [SettingsTabs.Proxy]: Proxy,
   [SettingsTabs.SystemTools]: SystemTools,
   [SettingsTabs.Storage]: Storage,
+  [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
+  [SettingsTabs.Environments]: Environments,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,

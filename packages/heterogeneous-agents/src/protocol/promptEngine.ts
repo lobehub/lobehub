@@ -1,4 +1,4 @@
-import { lobeHubCliGuide } from './lobeHubCliGuide';
+import { LOBEHUB_CLI_GUIDE_CONTEXT, lobeHubCliGuide } from './lobeHubCliGuide';
 import type { AgentContentBlock, AgentImageBlock } from './types';
 
 export interface HeterogeneousPromptEngineInput {
@@ -11,7 +11,10 @@ export interface HeterogeneousPromptEngineInput {
    * Session-scoped context (the `lh` guide) is attached only when true: these
    * blocks are prepended to a USER message, so on a resumed session every
    * earlier turn's copy is still in the CLI's transcript. Re-sending it each
-   * turn would stack duplicates for the whole life of the conversation.
+   * turn would stack duplicates for the whole life of the conversation. An
+   * executor that loads the guide as a native skill instead (Claude Code, see
+   * `spawn/lobeHubCliPlugin`) drops this copy and delivers it every turn, so
+   * the gaps below do not apply there.
    *
    * Rollout consequence, accepted deliberately: a conversation that already had
    * a CLI session before this shipped resumes into a transcript that never saw
@@ -33,6 +36,8 @@ export interface HeterogeneousPromptImage {
 }
 
 export interface HeterogeneousPromptContextProvider {
+  /** Stamped onto the provider's block as `AgentTextBlock.context`. */
+  context?: string;
   getContext: (input: HeterogeneousPromptEngineInput) => string | undefined;
   name: string;
 }
@@ -54,6 +59,7 @@ const topicReferenceGuidanceProvider: HeterogeneousPromptContextProvider = {
  * Session-scoped: see `isNewSession`.
  */
 const lobeHubCliProvider: HeterogeneousPromptContextProvider = {
+  context: LOBEHUB_CLI_GUIDE_CONTEXT,
   getContext: ({ isNewSession }) => (isNewSession ? lobeHubCliGuide : undefined),
   name: 'LobeHubCliProvider',
 };
@@ -78,8 +84,9 @@ export class HeterogeneousPromptEngine {
     if (systemContext?.trim()) blocks.push({ text: systemContext.trim(), type: 'text' });
 
     for (const provider of this.contextProviders) {
-      const context = provider.getContext(this.input)?.trim();
-      if (context) blocks.push({ text: context, type: 'text' });
+      const text = provider.getContext(this.input)?.trim();
+      if (!text) continue;
+      blocks.push({ ...(provider.context && { context: provider.context }), text, type: 'text' });
     }
 
     if (prompt) blocks.push({ text: prompt, type: 'text' });

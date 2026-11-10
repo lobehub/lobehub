@@ -4,14 +4,15 @@ import path from 'pathe';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useChatStore } from '@/store/chat';
+import { useToolStore } from '@/store/tool';
+import { projectSkillsSelectors } from '@/store/tool/selectors';
 
 import type { SkillListItem, SkillRowAction } from './SkillsList';
 
 export interface UseProjectSkillsResult {
   deviceItems: SkillListItem[];
-  /** The thrown error from the SWR scan, if it failed. */
+  /** The thrown error from the latest scan, if it failed. */
   error: unknown;
   /**
    * Per-row actions for filesystem skills: "view" opens the SKILL.md (locally
@@ -19,9 +20,10 @@ export interface UseProjectSkillsResult {
    * rename / delete are stubbed (disabled) until filesystem-mutation IPC lands.
    */
   getRowActions: (item: SkillListItem) => SkillRowAction[];
+  /** No scan (persisted or fresh) for this device + directory yet. */
   isLoading: boolean;
   items: SkillListItem[];
-  /** Retry the failed scan (SWR `mutate`). */
+  /** Retry the failed scan. */
   mutate: () => void;
   onOpenFile: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill: (item: SkillListItem) => void;
@@ -30,7 +32,7 @@ export interface UseProjectSkillsResult {
 }
 
 /**
- * Shared SWR + handlers for filesystem-backed skills. Project skills live
+ * Shared scan + handlers for filesystem-backed skills. Project skills live
  * under `.agents/skills` / `.claude/skills` in `workingDirectory`; device
  * skills live under those directories in the execution device's home.
  *
@@ -50,10 +52,17 @@ export const useProjectSkills = (
   const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
 
-  const { data, error, isLoading, mutate } = useFetchProjectSkills(workingDirectory, deviceId);
+  const { error, revalidate } = useToolStore((s) => s.useFetchProjectSkills)(
+    workingDirectory,
+    deviceId,
+  );
+  // The persisted scan paints on boot; the IPC / RPC scan replaces it once it
+  // returns. `undefined` only until either one lands for this device + directory.
+  const data = useToolStore(projectSkillsSelectors.getProjectSkills(workingDirectory, deviceId));
+  const isLoading = !!workingDirectory && !data && !error;
 
   // listProjectSkills approves per-skill preview roots. Fall back to the
-  // requested workingDirectory while the SWR fetch is in flight or when reading
+  // requested workingDirectory while the scan is in flight or when reading
   // legacy cached payloads without previewRoot.
   const previewRoot = data?.root || workingDirectory || '';
 
@@ -158,8 +167,8 @@ export const useProjectSkills = (
   );
 
   const retry = useCallback(() => {
-    void mutate();
-  }, [mutate]);
+    void revalidate();
+  }, [revalidate]);
 
   return {
     deviceItems,

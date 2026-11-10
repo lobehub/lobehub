@@ -1,8 +1,14 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox, type GenericItemType, Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Avatar,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cx,
+  type DropdownItem,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import type { CSSProperties, MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +46,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface TopicItemProps {
-  contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
+  contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
   isActive?: boolean;
   isLoading?: boolean;
   isUpdating?: boolean;

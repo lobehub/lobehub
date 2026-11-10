@@ -124,11 +124,13 @@ describe('isGPTResponsesModel', () => {
     expect(isResponsesAPIModel('openai/gpt-5.6-terra')).toBe(false);
   });
 
-  it('should match the GPT-6 family, which has no minor version and is Responses-only', () => {
+  it('should match GPT-6 models including minor versions on the Responses endpoint', () => {
     expect(isGPTResponsesModel('gpt-6')).toBe(true);
     expect(isGPTResponsesModel('gpt-6-astra')).toBe(true);
     expect(isResponsesAPIModel('gpt-6-astra')).toBe(true);
     expect(isGPTResponsesModel('codex/gpt-6-astra')).toBe(true);
+    expect(isResponsesAPIModel('gpt-6.1-sol')).toBe(true);
+    expect(isResponsesAPIModel('codex/gpt-6.1-sol')).toBe(true);
   });
 
   it('should keep GPT-6 chat variants and OpenRouter slugs off the Responses endpoint', () => {
@@ -171,6 +173,7 @@ describe('supportsGPTResponsesReasoningEffortNone', () => {
 
   it('should not support none reasoning effort on GPT-6, which removed it', () => {
     expect(supportsGPTResponsesReasoningEffortNone('gpt-6-astra')).toBe(false);
+    expect(supportsGPTResponsesReasoningEffortNone('gpt-6.1-sol')).toBe(false);
   });
 
   it('should preserve unsupported cases', () => {

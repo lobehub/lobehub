@@ -1,5 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Icon } from '@lobehub/ui';
 import { AlertTriangle, RotateCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

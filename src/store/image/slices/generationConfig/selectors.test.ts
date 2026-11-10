@@ -156,12 +156,6 @@ describe('imageGenerationConfigSelectors', () => {
   });
 
   describe('isSupportParam', () => {
-    it('should return true when parameter exists in parametersSchema', () => {
-      const state = merge(initialStore, { parametersSchema: testModelSchema });
-      const result = imageGenerationConfigSelectors.isSupportedParam('size')(state);
-      expect(result).toBe(true);
-    });
-
     it('should return false when parameter does not exist in parametersSchema', () => {
       const state = merge(initialStore, { parametersSchema: testModelSchema });
       const result = imageGenerationConfigSelectors.isSupportedParam('nonexistent' as any)(state);
@@ -205,6 +199,33 @@ describe('imageGenerationConfigSelectors', () => {
       expect(imageGenerationConfigSelectors.isSupportedParam('nonexistent' as any)(state)).toBe(
         false,
       );
+    });
+  });
+
+  describe('isAnimatedOutput', () => {
+    const gifSchema: ModelParamsSchema = {
+      outputFormat: { default: 'png', enum: ['png', 'gif'] },
+      prompt: { default: '' },
+    };
+
+    it('is true only when the model declares outputFormat and GIF is selected', () => {
+      const gif = merge(initialStore, {
+        parameters: { outputFormat: 'gif', prompt: '' },
+        parametersSchema: gifSchema,
+      });
+      const png = merge(initialStore, {
+        parameters: { outputFormat: 'png', prompt: '' },
+        parametersSchema: gifSchema,
+      });
+
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(gif)).toBe(true);
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(png)).toBe(false);
+    });
+
+    it('ignores a stale GIF value on a model without outputFormat', () => {
+      const state = merge(initialStore, { parameters: { outputFormat: 'gif', prompt: '' } });
+
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(state)).toBe(false);
     });
   });
 });

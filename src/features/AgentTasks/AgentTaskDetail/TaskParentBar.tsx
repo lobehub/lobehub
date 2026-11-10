@@ -1,6 +1,5 @@
 import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,7 +46,7 @@ const TaskParentBar = memo(() => {
     if (!parent?.identifier) return;
 
     taskService
-      .getDetail(parent.identifier)
+      .getDetail(parent.id!)
       .then((res) => {
         if (!isActive) return;
         const detail = res.data as TaskDetailData;
@@ -63,7 +62,7 @@ const TaskParentBar = memo(() => {
     return () => {
       isActive = false;
     };
-  }, [parent?.identifier]);
+  }, [parent?.id, parent?.identifier]);
 
   if (!parent) return null;
 

@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Icon, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
@@ -12,6 +11,7 @@ import { useQuery } from '@/hooks/useQuery';
 import { useSkillCategory } from '@/hooks/useSkillCategory';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 import { SkillCategory, SkillSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
@@ -22,7 +22,8 @@ const Category = memo(() => {
     category?: SkillCategory;
     q?: string;
   };
-  const { data: items = [] } = useSkillCategories({ q });
+  const { queryKey } = useSkillCategories({ q });
+  const items = useDiscoverStore(skillSelectors.skillCategories(queryKey));
   const navigate = useWorkspaceAwareNavigate();
   const cates = useSkillCategory();
 

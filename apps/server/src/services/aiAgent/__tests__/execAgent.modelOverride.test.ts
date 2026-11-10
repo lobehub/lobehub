@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
+const sonnetModelOverrides = () => ({
+  'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+});
+
 const {
   mockIsResourceAuthorOrAdmin,
   mockCreateOperation,
@@ -343,6 +347,53 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
   });
 
+  // #19542: `callAgent` runs the callee in an isolation thread on the caller's
+  // topic, so the caller's topic pin must not replace the callee's own model.
+  it("runs a callAgent callee on its own model instead of the caller's topic pin", async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'caller-agent',
+      metadata: { heteroEffort: 'high' },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { isolationThread: true, threadId: 'thread-1', topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
+  it("falls back to the topic pin when the run belongs to the topic's own agent", async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
   it('keeps an explicit model override over the topic model', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
     mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'openai' });
@@ -402,9 +453,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       visibility: 'public',
     });
     mockGetPreference.mockResolvedValue({
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
       agentModeOverrides: { 'agent-1': false },
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
@@ -438,9 +487,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       agentDeviceOverrides: {
         'agent-1': { boundDeviceId: 'member-device', executionTarget: 'local' },
       },
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
       agentModeOverrides: { 'agent-1': false },
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
@@ -468,9 +515,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       workspaceId: 'workspace-1',
     });
     mockGetPreference.mockResolvedValue({
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
       agentModeOverrides: { 'agent-1': false },
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
@@ -502,9 +547,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       workspaceId: 'workspace-1',
     });
     mockGetPreference.mockResolvedValue({
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
       agentModeOverrides: { 'agent-1': false },
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
@@ -524,9 +567,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       visibility: 'private',
     });
     mockGetPreference.mockResolvedValue({
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
 
@@ -566,9 +607,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
   it('uses a retained caller preference when a legacy workspace model policy is missing', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig, visibility: 'public' });
     mockGetPreference.mockResolvedValue({
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
 
@@ -586,9 +625,7 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       visibility: 'public',
     });
     mockGetPreference.mockResolvedValue({
-      agentModelOverrides: {
-        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
-      },
+      agentModelOverrides: sonnetModelOverrides(),
     });
     service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
 

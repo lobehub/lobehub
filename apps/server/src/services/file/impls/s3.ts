@@ -5,7 +5,7 @@ import urlJoin from 'url-join';
 import { FileModel } from '@/database/models/file';
 import { fileEnv } from '@/envs/file';
 import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis, isRedisEnabled } from '@/libs/redis';
+import { initializeRedis, isRedisEnabled } from '@/server/modules/Redis';
 import { FileS3 } from '@/server/modules/S3';
 
 import type { FileServiceImpl, PreSignedUpload } from './type';
@@ -52,6 +52,10 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return this.s3.deleteFiles(keys);
   }
 
+  async listFileKeys(prefix: string, limit?: number): Promise<string[]> {
+    return this.s3.listFileKeys(prefix, limit);
+  }
+
   async getFileContent(key: string, byteLength?: number): Promise<string> {
     return byteLength === undefined
       ? this.s3.getFileContent(key)
@@ -66,8 +70,13 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return this.s3.createPreSignedUrl(key);
   }
 
-  async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
-    return this.s3.createPreSignedUpload(key);
+  async createPreSignedUpload(
+    key: string,
+    options?: { private?: boolean },
+  ): Promise<PreSignedUpload> {
+    return options
+      ? this.s3.createPreSignedUpload(key, undefined, options)
+      : this.s3.createPreSignedUpload(key);
   }
 
   async getFileMetadata(key: string): Promise<{ contentLength: number; contentType?: string }> {

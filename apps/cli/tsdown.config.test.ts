@@ -22,6 +22,16 @@ describe('CLI build configuration', () => {
     );
   });
 
+  it('keeps the native PTY module external instead of bundling its binary', () => {
+    expect(config).toEqual(
+      expect.objectContaining({
+        deps: expect.objectContaining({
+          neverBundle: expect.arrayContaining(['@lydell/node-pty']),
+        }),
+      }),
+    );
+  });
+
   it('fails the build instead of externalizing an unresolved import', async () => {
     const { onLog } = await resolveInputOptions();
 

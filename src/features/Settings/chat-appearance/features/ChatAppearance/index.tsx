@@ -1,17 +1,17 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, highlighterThemes, mermaidThemes } from '@lobehub/ui';
-import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, highlighterThemes, mermaidThemes, Select, Switch, Tabs } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { ChatAppearanceSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Appearance';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
@@ -21,11 +21,13 @@ import MermaidPreview from './MermaidPreview';
 const ChatAppearance = memo(() => {
   const { t } = useTranslation('setting');
   const { general } = useUserStore(settingsSelectors.currentSettings, isEqual);
+  const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const [savingKey, setSavingKey] = useState<string>();
+  const form = useForm();
 
-  if (!isUserStateInit) return <SettingsSectionSkeleton />;
+  if (!isUserStateInit) return <ChatAppearanceSectionSkeleton />;
 
   const handleChange = (key: string, value: any) => {
     setSavingKey(key);
@@ -40,9 +42,8 @@ const ChatAppearance = memo(() => {
 
   return (
     <>
-      <FormGroup
+      <Form.Group
         collapsible={false}
-        gap={16}
         title={t('settingChatAppearance.transitionMode.title')}
         variant={'filled'}
         extra={
@@ -70,10 +71,11 @@ const ChatAppearance = memo(() => {
         }
       >
         <ChatTransitionPreview key={general.transitionMode} mode={general.transitionMode} />
-      </FormGroup>
+      </Form.Group>
 
       <Form
         collapsible={false}
+        form={form}
         itemsType={'group'}
         variant={'filled'}
         items={[
@@ -119,6 +121,20 @@ const ChatAppearance = memo(() => {
                 label: t('settingChatAppearance.linkIcon.title'),
                 minWidth: undefined,
               },
+              {
+                children: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    {renderSaveHint('enablePasteAutoConvert')}
+                    <Switch
+                      checked={enablePasteAutoConvert}
+                      onChange={(checked) => handleChange('enablePasteAutoConvert', checked)}
+                    />
+                  </Flexbox>
+                ),
+                desc: t('settingChatAppearance.pasteAutoConvert.desc'),
+                label: t('settingChatAppearance.pasteAutoConvert.title'),
+                minWidth: undefined,
+              },
             ],
             title: t('settingChatAppearance.chatBehavior.title'),
           },
@@ -126,9 +142,8 @@ const ChatAppearance = memo(() => {
         {...FORM_STYLE}
       />
 
-      <FormGroup
+      <Form.Group
         collapsible={false}
-        gap={16}
         title={t('settingChatAppearance.highlighterTheme.title')}
         variant={'filled'}
         extra={
@@ -149,10 +164,9 @@ const ChatAppearance = memo(() => {
         }
       >
         <HighlighterPreview key={general.highlighterTheme} theme={general.highlighterTheme} />
-      </FormGroup>
+      </Form.Group>
 
-      <FormGroup
-        gap={16}
+      <Form.Group
         title={t('settingChatAppearance.mermaidTheme.title')}
         variant={'filled'}
         extra={
@@ -173,7 +187,7 @@ const ChatAppearance = memo(() => {
         }
       >
         <MermaidPreview key={general.mermaidTheme} theme={general.mermaidTheme} />
-      </FormGroup>
+      </Form.Group>
     </>
   );
 });

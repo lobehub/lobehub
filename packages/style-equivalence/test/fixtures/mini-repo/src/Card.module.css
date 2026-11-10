@@ -1,0 +1,13 @@
+.card {
+  padding: 8px;
+}
+
+.active {
+  border-color: var(--ink-alias);
+  color: rgb(0 0 255);
+}
+
+.title {
+  font-weight: 600;
+  color: var(--ink);
+}

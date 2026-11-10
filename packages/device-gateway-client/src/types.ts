@@ -40,6 +40,10 @@ export interface DeviceSystemInfo {
   homePath: string;
   musicPath?: string;
   picturesPath?: string;
+  /** Native agent protocol versions supported by this live connection; absent on older clients.
+   * `codex-app-server-v1` runs `lh hetero exec --codex-app-server` with native turn provenance.
+   */
+  supportedAgentRuntimes?: string[];
   /** Opt-in tool identifiers supported by this client; absent on older clients. */
   supportedTools?: string[];
   userDataPath: string;
@@ -255,6 +259,17 @@ export interface AgentRunRequestMessage {
   args?: string[];
   /** Seed assistant message that receives terminal state from the CLI run. */
   assistantMessageId?: string;
+  /**
+   * Claude Code subscription account the agent is routed to (its pin, or its
+   * auto-balanced pool best-first). The device maps it to a local login and
+   * spawns with that login's `CLAUDE_CONFIG_DIR`; a pinned account it holds no
+   * login for rejects the run. Optional — omitted for unbound agents, other
+   * agent types and older servers; an older device ignores it.
+   */
+  claudeAccountRouting?: {
+    candidates: Array<{ externalAccountId: string; name?: string }>;
+    mode: 'balanced' | 'pinned';
+  };
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch
@@ -515,6 +530,11 @@ export interface GatewayClientEvents {
   heartbeat_ack: () => void;
   message_api_request: (request: MessageApiRequestMessage) => void;
   reconnecting: (delay: number) => void;
+  /**
+   * The gateway closed this connection because another client with the same
+   * `connectionId` connected. The client does not reconnect after this.
+   */
+  replaced: () => void;
   rpc_request: (request: RpcRequestMessage) => void;
   status_changed: (status: ConnectionStatus) => void;
   system_info_request: (request: SystemInfoRequestMessage) => void;

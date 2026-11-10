@@ -4,6 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { useLocation, useSearchParams } from 'react-router';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
 import ListViewSkeleton from '@/features/ResourceManager/components/Explorer/ListView/Skeleton';
 import MasonryViewSkeleton from '@/features/ResourceManager/components/Explorer/MasonryView/Skeleton';
 import { useMasonryColumnCount } from '@/features/ResourceManager/components/Explorer/useMasonryColumnCount';
@@ -19,6 +23,12 @@ const ResourceCategorySkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
   const view = resolveResourceSkeletonView(pathname, searchParams.get('view'));
 
   if (view === 'works') return <WorkGallerySkeleton />;
+  if (view === 'libraries')
+    return (
+      <Flexbox aria-busy flex={1} padding={32}>
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.libraries} />
+      </Flexbox>
+    );
 
   return (
     <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>

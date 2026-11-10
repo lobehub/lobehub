@@ -237,6 +237,11 @@ export class DevinAcpSession extends AcpAgentSession<
     await this.emitEvents(await this.pipeline.flush());
   }
 
+  protected async onRunCancelled(): Promise<void> {
+    this.options.askUserBridge?.cancelAll('session_ended');
+    await this.pushToPipeline({ stopReason: 'cancelled', type: 'devin_prompt_completed' });
+  }
+
   protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
     if (!this.acceptUpdates || message.method !== 'session/update') return;
     const params = isRecord(message.params) ? message.params : undefined;

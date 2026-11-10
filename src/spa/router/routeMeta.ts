@@ -8,8 +8,24 @@ export interface StaticRouteMeta {
   titleKey?: string;
 }
 
+export type RouteAvatarKind = 'workspace';
+
 export interface DynamicRouteMeta {
-  avatar?: string;
+  /**
+   * `null` means the entity loaded and has no avatar, which clears a cached
+   * one; `undefined` means it is not known yet, which keeps the cache.
+   */
+  avatar?: string | null;
+  /**
+   * The entity whose avatar this is, when its fallback differs from the
+   * initials one. A workspace draws the bauhaus mark seeded from its title.
+   */
+  avatarKind?: RouteAvatarKind;
+  /**
+   * Name a generated avatar is seeded from, for an entity that draws one when it
+   * has no image of its own (a project). Unset keeps the initials fallback.
+   */
+  avatarSeed?: string;
   backgroundColor?: string;
   title?: string;
 }
@@ -38,6 +54,8 @@ export interface RouteHandle {
 
 export interface ResolvedRouteMeta {
   avatar?: string;
+  avatarKind?: RouteAvatarKind;
+  avatarSeed?: string;
   backgroundColor?: string;
   icon?: LucideIcon;
   title: string;

@@ -7,6 +7,7 @@ describe('resolveMessageListFeedback', () => {
     {
       expected: {
         showBackgroundError: false,
+        showRefreshing: false,
         showFirstLoadError: false,
         showSkeleton: true,
       },
@@ -21,6 +22,7 @@ describe('resolveMessageListFeedback', () => {
     {
       expected: {
         showBackgroundError: false,
+        showRefreshing: false,
         showFirstLoadError: true,
         showSkeleton: false,
       },
@@ -35,6 +37,7 @@ describe('resolveMessageListFeedback', () => {
     {
       expected: {
         showBackgroundError: false,
+        showRefreshing: false,
         showFirstLoadError: false,
         showSkeleton: false,
       },
@@ -43,7 +46,40 @@ describe('resolveMessageListFeedback', () => {
     },
     {
       expected: {
+        showBackgroundError: false,
+        showRefreshing: true,
+        showFirstLoadError: false,
+        showSkeleton: false,
+      },
+      name: 'cached list waiting on its first server fetch',
+      state: {
+        error: undefined,
+        isInitialRevalidation: true,
+        isNewConversation: false,
+        isStreaming: false,
+        messagesInit: true,
+      },
+    },
+    {
+      expected: {
+        showBackgroundError: false,
+        showRefreshing: false,
+        showFirstLoadError: false,
+        showSkeleton: true,
+      },
+      name: 'first load keeps the skeleton instead of the refreshing hint',
+      state: {
+        error: undefined,
+        isInitialRevalidation: true,
+        isNewConversation: false,
+        isStreaming: false,
+        messagesInit: false,
+      },
+    },
+    {
+      expected: {
         showBackgroundError: true,
+        showRefreshing: false,
         showFirstLoadError: false,
         showSkeleton: false,
       },
@@ -58,6 +94,7 @@ describe('resolveMessageListFeedback', () => {
     {
       expected: {
         showBackgroundError: false,
+        showRefreshing: false,
         showFirstLoadError: false,
         showSkeleton: false,
       },
@@ -72,6 +109,7 @@ describe('resolveMessageListFeedback', () => {
     {
       expected: {
         showBackgroundError: false,
+        showRefreshing: false,
         showFirstLoadError: false,
         showSkeleton: false,
       },

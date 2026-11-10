@@ -1,4 +1,4 @@
-const { createHash, verify } = require('node:crypto');
+const { verify } = require('node:crypto');
 const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
@@ -7,8 +7,7 @@ const MAX_BOOT_FAILURES = 3;
 const VERSION_NAME = /^[\w.+-]{1,64}$/;
 const UNSAFE_SEGMENT = /^\.\.?$/;
 const MAIN_ENTRY = 'dist/main/index.js';
-
-const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
+const RENDERER_PREFIX = 'dist/renderer/';
 
 const canonicalJson = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -48,7 +47,7 @@ const writeJson = (file, value) => {
   fs.renameSync(`${file}.tmp`, file);
 };
 
-const verifyCandidate = (dir, { abi, publicKey }) => {
+const verifyCandidate = (dir, { abi, builtinHashes, publicKey, storeDir }) => {
   const manifest = readJson(path.join(dir, 'manifest.json'));
   if (!manifest) throw new Error('manifest missing or unreadable');
   if (!verifyManifestSignature(manifest, publicKey)) throw new Error('bad signature');
@@ -64,14 +63,29 @@ const verifyCandidate = (dir, { abi, publicKey }) => {
   }
   if (!manifest.tree.some((entry) => entry.path === MAIN_ENTRY))
     throw new Error(`${MAIN_ENTRY} not in tree`);
+  // Content hashes are verified once while staging; hashing ~110 MB here cost ~600 ms on a
+  // cold Windows boot. Sizes still catch truncated, deleted or quarantined files.
   for (const file of manifest.tree) {
-    if (sha256(fs.readFileSync(path.join(dir, file.path))) !== file.sha256)
-      throw new Error(`hash mismatch ${file.path}`);
+    const overlaid = file.path.startsWith(RENDERER_PREFIX);
+    // Renderer content is never materialized: the core serves it by hash from the builtin
+    // archive or the OTA object store.
+    if (overlaid && builtinHashes.has(file.sha256)) continue;
+    const source = overlaid ? path.join(storeDir, file.sha256) : path.join(dir, file.path);
+    const stat = fs.statSync(source, { throwIfNoEntry: false });
+    if (!stat) throw new Error(`missing ${file.path}`);
+    if (stat.size !== file.size) throw new Error(`size mismatch ${file.path}`);
   }
   return manifest;
 };
 
-function resolveCore({ userData, builtinDir, abi, publicKey }) {
+function resolveCore({
+  userData,
+  builtinDir,
+  abi,
+  publicKey,
+  deferBoot = false,
+  platform = process.platform,
+}) {
   const otaRoot = path.join(userData, 'core-ota');
   const bootFile = path.join(otaRoot, 'boot.json');
   const pointerFile = path.join(otaRoot, 'pointer.json');
@@ -99,13 +113,33 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   };
 
   const builtinManifest = readJson(path.join(builtinDir, 'manifest.json')) ?? null;
+  const updateChannel =
+    readJson(path.join(userData, 'lobehub-settings.json'))?.updateChannel ??
+    builtinManifest?.channel;
+  if (platform === 'darwin' && updateChannel !== 'canary' && updateChannel !== 'beta') {
+    log.push('macOS Stable uses full updates only; ignoring external core');
+    savePointer({ channel: 'stable', current: null, previous: null, staged: null });
+  }
   const builtinSeq = typeof builtinManifest?.seq === 'number' ? builtinManifest.seq : null;
+  const builtinHashes = new Set(
+    Array.isArray(builtinManifest?.tree) ? builtinManifest.tree.map((file) => file.sha256) : [],
+  );
+  const storeDir = path.join(otaRoot, 'store');
   const channel = typeof pointer.channel === 'string' ? pointer.channel : builtinManifest?.channel;
   // seq counters are per channel: a full release ships a builtin core with a seq above every
   // published core of its own channel, so older external cores of that channel must not outlive it.
   const rejectReason = (manifest) => {
     if (channel && manifest.channel && manifest.channel !== channel)
       return `channel ${manifest.channel} != ${channel}`;
+    // v4 seq counters restart for each shell version. A full update must not keep
+    // an older shell's core just because that namespace had a higher seq.
+    if (
+      manifest.schemaVersion === 4 &&
+      builtinManifest?.version &&
+      manifest.version !== builtinManifest.version &&
+      !manifest.version.startsWith(`${builtinManifest.version}-core.`)
+    )
+      return `app version ${manifest.version} does not belong to ${builtinManifest.version}`;
     if (
       builtinSeq !== null &&
       manifest.channel === builtinManifest.channel &&
@@ -136,7 +170,8 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
       throw new Error(`invalid core version name ${JSON.stringify(version)}`);
     if (blacklist.includes(version)) throw new Error('blacklisted');
     const dir = path.join(otaRoot, 'cores', version);
-    if (!verified.has(version)) verified.set(version, verifyCandidate(dir, { abi, publicKey }));
+    if (!verified.has(version))
+      verified.set(version, verifyCandidate(dir, { abi, builtinHashes, publicKey, storeDir }));
     return { dir, manifest: verified.get(version) };
   };
   const verifies = (version) => {
@@ -182,8 +217,9 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
         break;
       }
       const healthy = boot.version === version && boot.healthy === true;
-      writeJson(bootFile, { failures: failures + 1, healthy, version });
-      return { dir, log, manifest, ...bootMarkers(version), source: 'external' };
+      const startBoot = () => writeJson(bootFile, { failures: failures + 1, healthy, version });
+      if (!deferBoot) startBoot();
+      return { dir, log, manifest, ...bootMarkers(version), source: 'external', startBoot };
     } catch (error) {
       log.push(`core ${version} rejected: ${error.message}`);
     }
@@ -196,22 +232,26 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
     log.push(`${builtinKey} failed ${builtinFailures} boots`);
     return { dir: builtinDir, log, manifest: builtinManifest, source: 'rescue' };
   }
-  try {
-    fs.mkdirSync(otaRoot, { recursive: true });
-    writeJson(bootFile, {
-      failures: builtinFailures + 1,
-      healthy: boot.version === builtinKey && boot.healthy === true,
-      version: builtinKey,
-    });
-  } catch (error) {
-    log.push(`builtin boot count failed: ${error.message}`);
-  }
+  const startBoot = () => {
+    try {
+      fs.mkdirSync(otaRoot, { recursive: true });
+      writeJson(bootFile, {
+        failures: builtinFailures + 1,
+        healthy: boot.version === builtinKey && boot.healthy === true,
+        version: builtinKey,
+      });
+    } catch (error) {
+      log.push(`builtin boot count failed: ${error.message}`);
+    }
+  };
+  if (!deferBoot) startBoot();
   return {
     dir: builtinDir,
     log,
     manifest: builtinManifest,
     ...bootMarkers(builtinKey),
     source: 'builtin',
+    startBoot,
   };
 }
 

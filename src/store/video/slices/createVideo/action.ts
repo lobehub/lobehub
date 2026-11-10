@@ -1,9 +1,9 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 import { type RuntimeVideoGenParams, type RuntimeVideoGenParamsKeys } from 'model-bank';
 
-import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
+import { isGenerationPromptModerationError } from '@/business/client/isGenerationPromptModerationError';
 import { videoService } from '@/services/video';
 import { type StoreSetter } from '@/store/types';
 import { preserveSupportedParams } from '@/store/utils/preserveSupportedParams';
@@ -34,6 +34,7 @@ const EDIT_INPUT_PARAMETER_KEYS = new Set([
 ]);
 
 const cloneEditingDraft = (store: VideoStore): VideoEditingDraftSnapshot => ({
+  imageInputMode: store.imageInputMode,
   model: store.model,
   parameters: {
     ...store.parameters,
@@ -41,6 +42,7 @@ const cloneEditingDraft = (store: VideoStore): VideoEditingDraftSnapshot => ({
   },
   parametersSchema: store.parametersSchema,
   provider: store.provider,
+  stashedImageInputs: store.stashedImageInputs,
   uploadingImagePreviews: [...store.uploadingImagePreviews],
 });
 
@@ -54,10 +56,12 @@ const restoreEditingDraft = (state: VideoStore) => {
   return {
     editingDraftSnapshot: undefined,
     editingGenerationId: undefined,
+    imageInputMode: snapshot.imageInputMode,
     model: snapshot.model,
     parameters: snapshot.parameters,
     parametersSchema: snapshot.parametersSchema,
     provider: snapshot.provider,
+    stashedImageInputs: snapshot.stashedImageInputs,
     uploadingImagePreviews: snapshot.uploadingImagePreviews,
   };
 };
@@ -76,7 +80,11 @@ export class CreateVideoActionImpl {
   }
 
   createVideo = async (): Promise<void> => {
-    this.#set({ isCreating: true }, false, 'createVideo/startCreateVideo');
+    this.#set(
+      { blockedPrompt: undefined, isCreating: true },
+      false,
+      'createVideo/startCreateVideo',
+    );
 
     const store = this.#get();
     const parameters = videoGenerationConfigSelectors.parameters(store);
@@ -165,7 +173,10 @@ export class CreateVideoActionImpl {
         'createVideo/clearPrompt',
       );
     } catch (error) {
-      handleGenerationPromptModerationError(error);
+      // A rejected prompt is shown on the prompt input, where the user fixes it.
+      if (isGenerationPromptModerationError(error)) {
+        this.#set({ blockedPrompt: parameters.prompt }, false, 'createVideo/promptBlocked');
+      }
       handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {
@@ -180,6 +191,10 @@ export class CreateVideoActionImpl {
         this.#set({ isCreating: false }, false, 'createVideo/endCreateVideo');
       }
     }
+  };
+
+  dismissBlockedPrompt = (): void => {
+    this.#set({ blockedPrompt: undefined }, false, 'dismissBlockedPrompt');
   };
 
   cancelEditingVideo = (): void => {
@@ -210,7 +225,11 @@ export class CreateVideoActionImpl {
 
       await store.refreshGenerationBatches();
     } catch (error) {
-      handleGenerationPromptModerationError(error);
+      // Regenerating reuses the batch's prompt, not the input's, so there is no
+      // input to annotate; fall back to a toast.
+      if (isGenerationPromptModerationError(error)) {
+        toast.error(t('generation.promptModeration.blocked', { ns: 'common' }));
+      }
       handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {

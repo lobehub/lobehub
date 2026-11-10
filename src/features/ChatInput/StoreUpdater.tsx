@@ -37,6 +37,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     getMessages,
     resolveSendBlocked,
     topicId,
+    uploadContextKey,
   }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
@@ -46,6 +47,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('topicId', topicId);
     useStoreUpdater('canRecordVoiceMessage', canRecordVoiceMessage);
     useStoreUpdater('contextSelectionKey', contextSelectionKey);
+    useStoreUpdater('uploadContextKey', uploadContextKey);
     useStoreUpdater('contextWindowMessages', contextWindowMessages);
 
     // Sync draftKey before paint: the draft-transition subscriber

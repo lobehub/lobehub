@@ -1,6 +1,7 @@
 'use client';
 
 import './Github/definition';
+import './Linear/definition';
 
 import { memo, useEffect } from 'react';
 import { useParams } from 'react-router';
@@ -9,6 +10,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 
 import GithubIntegration from './Github';
 import IntegrationsLayout from './Layout';
+import LinearIntegration from './Linear';
 import Overview from './Overview';
 import { type IntegrationId, isIntegrationId } from './registry';
 
@@ -33,7 +35,13 @@ const IntegrationsSettings = memo(() => {
 
   return (
     <IntegrationsLayout>
-      {selected === 'github' ? <GithubIntegration onBack={back} /> : <Overview onOpen={open} />}
+      {selected === 'github' ? (
+        <GithubIntegration onBack={back} />
+      ) : selected === 'linear' ? (
+        <LinearIntegration onBack={back} />
+      ) : (
+        <Overview onOpen={open} />
+      )}
     </IntegrationsLayout>
   );
 });

@@ -1,19 +1,25 @@
 'use client';
 
-import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import type { TaskIntentAnalysis } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskIntentAnalysis, TaskLabelRef } from '@lobechat/types';
+import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronUp, Paperclip, TagIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
-import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import GeneratingBorder from '@/components/GeneratingBorder';
 import { createGoalModal } from '@/features/AgentGoals/CreateGoalModal';
 import { EditorCanvas } from '@/features/EditorCanvas';
@@ -21,11 +27,15 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { taskService } from '@/services/task';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { shinyTextStyles } from '@/styles';
@@ -34,14 +44,22 @@ import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useDefaultMemberAssignee } from '../shared/useDefaultMemberAssignee';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import {
+  clearTaskCreateDraft,
+  persistTaskCreateDraft,
+  readTaskCreateDraft,
+} from './taskCreateDraft';
 import {
   answeredClarifications,
   buildConfirmedDraft,
@@ -67,7 +85,7 @@ interface CreateTaskInlineEntryProps {
    */
   lockAssignee?: boolean;
   onCollapse?: () => void;
-  onCreated?: (task: { agentId?: string; identifier: string }) => void;
+  onCreated?: (task: { id: string; agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
   projectId?: string;
@@ -100,23 +118,27 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const activeWorkspaceId = useActiveWorkspaceId();
-  const { isLoading: isMembersLoading } = useFetchWorkspaceMembers();
-  const workspaceMembers = useWorkspaceMembers();
-  const assignableMemberIds = useMemo(
-    () =>
-      new Set(
-        workspaceMembers
-          .filter((member) => canWorkspaceRoleBeTaskAssignee(member.role))
-          .map((member) => member.userId),
-      ),
-    [workspaceMembers],
-  );
+  const { assignableMemberIds, defaultMemberAssignee, isDefaultMemberPending, isMembersLoading } =
+    useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
+  const [labels, setLabels] = useState<TaskLabelRef[]>([]);
+  const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+  const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+  // Label ids read from a draft before the registry loaded; resolved (and
+  // stale ones dropped) once it has.
+  const pendingDraftLabelIdsRef = useRef<string[] | undefined>(undefined);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
-  const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+  // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
+  const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
+  const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
+  const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
+  // Where this task will run, if not simply wherever the assignee agent runs.
+  // Undefined = inherit; it is only sent when the user actually pinned
+  // something, so an untouched composer creates exactly what it used to.
+  const [execution, setExecution] = useState<TaskExecutionConfig | undefined>();
   // Default to workspace-visible (or the parent's visibility for subtasks).
   // In personal mode the chip is hidden and the value is never sent.
   const [visibility, setVisibility] = useState<'private' | 'public'>(defaultVisibility);
@@ -124,7 +146,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // Reading the draft is what submit does now. It only stops for confirmation
   // when it found something the user alone can settle, so the escape hatch is
   // the dropdown's "create directly" rather than a setting nobody would find.
-  const canCreateGoal = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const canCreateGoal = useUserStore(labPreferSelectors.enableGoals);
   const [analysis, setAnalysis] = useState<TaskIntentAnalysis | null>(null);
   const [intentTitle, setIntentTitle] = useState('');
   const [intentAnswers, setIntentAnswers] = useState<ClarificationAnswers>({});
@@ -150,7 +172,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // A private agent is the stronger constraint, so drop an incompatible member.
   useEffect(() => {
     if (isPrivateAgent) {
-      if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+      if (isOtherMemberAssignee) setMemberChoice(undefined);
       if (visibility === 'public') setVisibility('private');
       return;
     }
@@ -174,15 +196,30 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // State (instead of a ref) keeps the persistence effect from writing the old
   // scope's member into the new key during the same effect flush as the reset.
   const [draftHydratedKey, setDraftHydratedKey] = useState<string | null>(null);
+  // Whether the composer has held text since that hydration; see persistTaskCreateDraft.
+  const draftHasTextRef = useRef(false);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   const memberMeta = useUserDisplayMeta(assigneeUserId);
 
   const handleAgentChange = useCallback((nextAgentId: string | null) => {
     setAssigneeAgentId(nextAgentId ?? undefined);
+    // The repo list is the assignee's own (its provider env), so a selection
+    // made for the previous agent must not silently carry over to another one.
+    // A pinned device is the user's machine and stays valid across agents.
+    setExecution((current) =>
+      current?.repos
+        ? {
+            ...current,
+            repos: undefined,
+            workingDirectory: undefined,
+            workingDirectoryConfig: undefined,
+          }
+        : current,
+    );
   }, []);
   const handleMemberChange = useCallback((nextUserId: string | null) => {
-    setAssigneeUserId(nextUserId ?? undefined);
+    setMemberChoice(nextUserId);
   }, []);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
@@ -192,7 +229,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   useEffect(() => {
     if (lockAssignee) {
       setAssigneeAgentId(agentId);
-      setAssigneeUserId(undefined);
+      setMemberChoice(undefined);
       return;
     }
 
@@ -216,39 +253,54 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (activeWorkspaceId && isMembersLoading) return;
     if (draftHydratedKey === draftStorageKey) return;
     setDraftHydratedKey(draftStorageKey);
+    draftHasTextRef.current = false;
 
-    // Reset to baseline for the new scope before hydrating.
+    // Reset to baseline for the new scope before hydrating. The run location is
+    // part of that baseline: a device or directory picked for the previous
+    // scope's agents may not even be reachable in the new one, and this
+    // component stays mounted across the switch (the `return` below skips
+    // hydration only — it must not keep the previous scope's selection).
     editor.cleanDocument?.();
     setPriority(0);
+    // Labels belong to a workspace: one picked in the previous scope would be a
+    // foreign id here and fail the create.
+    setLabels([]);
+    pendingDraftLabelIdsRef.current = undefined;
     setVisibility(defaultVisibility);
+    setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
-    setAssigneeUserId(undefined);
+    setMemberChoice(undefined);
 
-    let raw: string | null;
+    const draft = readTaskCreateDraft(draftStorageKey);
+    if (!draft) return;
     try {
-      raw = localStorage.getItem(draftStorageKey);
-    } catch {
-      raw = null;
-    }
-    if (!raw) return;
-    try {
-      const draft = JSON.parse(raw) as {
-        assigneeAgentId?: string;
-        assigneeUserId?: string;
-        markdown?: string;
-        priority?: number;
-        visibility?: 'private' | 'public';
-      };
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
-      if (
+      // Re-validated rather than trusted: the draft is a browser string that a
+      // previous release (or another tab) may have written in another shape, and
+      // a malformed run location must degrade to "inherit", never reach a create.
+      setExecution(readTaskExecutionConfig({ execution: draft.execution }));
+      // `null` restores an explicit "unassigned"; a missing key keeps the default.
+      if (draft.assigneeUserId === null) {
+        setMemberChoice(null);
+      } else if (
         draft.assigneeUserId &&
         (!activeWorkspaceId || assignableMemberIds.has(draft.assigneeUserId))
       ) {
-        setAssigneeUserId(draft.assigneeUserId);
+        setMemberChoice(draft.assigneeUserId);
       }
       if (draft.visibility) setVisibility(draft.visibility);
+      const labelIds = Array.isArray(draft.labelIds)
+        ? draft.labelIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      if (labelIds.length > 0) {
+        if (getTaskStoreState().taskLabelsInit) {
+          setLabels(resolveTaskLabelRefs(getTaskStoreState().taskLabels, labelIds));
+        } else {
+          pendingDraftLabelIdsRef.current = labelIds;
+        }
+      }
     } catch {
       /* ignore a malformed draft */
     }
@@ -264,38 +316,53 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     lockAssignee,
   ]);
 
+  useEffect(() => {
+    const pending = pendingDraftLabelIdsRef.current;
+    if (!isLabelsInit || !pending?.length) return;
+    pendingDraftLabelIdsRef.current = undefined;
+    setLabels((current) =>
+      current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+    );
+  }, [isLabelsInit, labelRegistry]);
+
   // Back the draft to storage on every change. Gated behind the restore pass so
-  // the initial render can't clobber a just-read draft. Write-only on non-empty:
-  // the key is cleared only on a successful submit (below), never here — so a
+  // the initial render can't clobber a just-read draft. Emptying the editor
+  // discards the draft, but only after it has held text since hydration — so a
   // `setDocument`-timing gap right after restore can't wipe a valid draft.
   useEffect(() => {
     if (!draftStorageKey || draftHydratedKey !== draftStorageKey || !editor) return;
     const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
-    if (!markdown) return;
-    try {
-      localStorage.setItem(
-        draftStorageKey,
-        JSON.stringify({
-          assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
-          // `lockAssignee` locks only the scoped Agent. The responsible
-          // member remains an independent draft field and must survive reloads.
-          assigneeUserId,
-          markdown,
-          priority,
-          visibility,
-        }),
-      );
-    } catch {
-      /* storage unavailable / quota — persistence is best-effort */
-    }
+    draftHasTextRef.current = persistTaskCreateDraft(
+      draftStorageKey,
+      {
+        assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
+        // `lockAssignee` locks only the scoped Agent. The responsible
+        // member remains an independent draft field and must survive reloads.
+        // The raw choice is stored so an untouched draft keeps following the default.
+        assigneeUserId: memberChoice,
+        // `undefined` (the whole selection is `undefined`) drops the key, so
+        // an untouched composer writes the same draft shape as before.
+        execution,
+        // While a restore waits for the registry, keep writing the ids it holds
+        // so a reload in that window does not drop them.
+        labelIds:
+          labels.length > 0 ? labels.map((label) => label.id) : pendingDraftLabelIdsRef.current,
+        markdown,
+        priority,
+        visibility,
+      },
+      draftHasTextRef.current,
+    );
   }, [
     assigneeAgentId,
-    assigneeUserId,
     draftHydratedKey,
     draftStorageKey,
     editor,
+    execution,
     instruction,
+    labels,
     lockAssignee,
+    memberChoice,
     priority,
     visibility,
   ]);
@@ -324,20 +391,18 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const resetComposer = useCallback(() => {
     setPriority(0);
+    setLabels([]);
+    // A restore still waiting for the registry belongs to the draft just sent.
+    pendingDraftLabelIdsRef.current = undefined;
     setAssigneeAgentId(agentId);
-    setAssigneeUserId(undefined);
+    setMemberChoice(undefined);
     setInstruction('');
+    setExecution(undefined);
     setVisibility(defaultVisibility);
     setAnalysis(null);
     setIntentAnswers({});
     editor?.cleanDocument?.();
-    if (draftStorageKey) {
-      try {
-        localStorage.removeItem(draftStorageKey);
-      } catch {
-        /* ignore */
-      }
-    }
+    if (draftStorageKey) clearTaskCreateDraft(draftStorageKey);
   }, [agentId, defaultVisibility, draftStorageKey, editor]);
 
   /** What the composer currently holds, or null when there is nothing to create. */
@@ -391,8 +456,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         const result = await createTask({
           assigneeAgentId,
           assigneeUserId,
+          // Only present when the user pinned a run location / directory. Left
+          // out otherwise so the task inherits the assignee agent entirely,
+          // which is what tasks did before they could carry a selection.
+          ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: draft.editorJson,
           instruction: draft.instruction,
+          ...pickedLabelIds(labels, pendingDraftLabelIdsRef.current),
           name: draft.name,
           parentTaskId,
           priority: priority || undefined,
@@ -439,6 +509,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             title: t('taskIntent.created'),
           });
           onCreated?.({
+            id: result.id,
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
           });
@@ -463,6 +534,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       assigneeAgentId,
       assigneeUserId,
       createTask,
+      execution,
+      labels,
       navigate,
       onCreated,
       parentTaskId,
@@ -474,7 +547,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (!canCreateTask) return;
+    if (!canCreateTask || isMemberPending) return;
     const draft = readDraft();
     if (!draft) return;
 
@@ -502,7 +575,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [assigneeMeta?.title, canCreateTask, readDraft, submitDraft]);
+  }, [assigneeMeta?.title, canCreateTask, isMemberPending, readDraft, submitDraft]);
 
   /**
    * The escape hatch, one click away in the submit dropdown: create the task
@@ -511,15 +584,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * user who finds the reading slow or wrong is never stuck behind it.
    */
   const handleCreateDirectly = useCallback(async () => {
-    if (!canCreateTask) return;
+    if (!canCreateTask || isMemberPending) return;
     const draft = readDraft();
     if (!draft) return;
     await submitDraft(draft);
-  }, [canCreateTask, readDraft, submitDraft]);
-
-  const handleAnswerChange = useCallback((index: number, value: string) => {
-    setIntentAnswers((current) => ({ ...current, [index]: value }));
-  }, []);
+  }, [canCreateTask, isMemberPending, readDraft, submitDraft]);
 
   /**
    * The review editor is the source of truth for what gets created, not the
@@ -542,51 +611,62 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * falls back to the draft with the answers appended, which is what the flow
    * did before this step existed.
    */
-  const handleConfirmIntent = useCallback(async () => {
-    const draft = readDraft();
-    if (!analysis || !draft) return;
+  const confirmIntentWith = useCallback(
+    async (answers: ClarificationAnswers) => {
+      const draft = readDraft();
+      if (!analysis || !draft) return;
 
-    const pairs = answeredClarifications(analysis, intentAnswers);
+      const pairs = answeredClarifications(analysis, answers);
 
-    if (pairs.length > 0) {
-      setIsSynthesizing(true);
-      try {
-        const written = await taskService.synthesizeInstruction({
-          answers: pairs,
-          context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
-          instruction: draft.instruction,
-        });
+      if (pairs.length > 0) {
+        setIsSynthesizing(true);
+        try {
+          const written = await taskService.synthesizeInstruction({
+            answers: pairs,
+            context: assigneeMeta?.title ? `Assigned agent: ${assigneeMeta.title}` : undefined,
+            instruction: draft.instruction,
+          });
 
-        await submitDraft({
-          // Freshly written prose has no mirror to inherit. Sending the
-          // pre-answer draft's document instead would win over this markdown
-          // when the task renders, showing a brief the agent never received.
-          editorJson: undefined,
-          instruction: written.instruction,
-          name: written.title.trim() || intentTitle.trim() || analysis.title,
-        });
-        return;
-      } catch {
-        // Fall through to the append path below.
-      } finally {
-        setIsSynthesizing(false);
+          await submitDraft({
+            // Freshly written prose has no mirror to inherit. Sending the
+            // pre-answer draft's document instead would win over this markdown
+            // when the task renders, showing a brief the agent never received.
+            editorJson: undefined,
+            instruction: written.instruction,
+            name: written.title.trim() || intentTitle.trim() || analysis.title,
+          });
+          return;
+        } catch {
+          // Fall through to the append path below.
+        } finally {
+          setIsSynthesizing(false);
+        }
       }
-    }
 
-    const confirmed = buildConfirmedDraft({
-      analysis,
-      answers: intentAnswers,
-      editorJson: draft.editorJson,
-      heading: t('taskIntent.answersHeading'),
-      instruction: draft.instruction,
-    });
+      const confirmed = buildConfirmedDraft({
+        analysis,
+        answers,
+        editorJson: draft.editorJson,
+        heading: t('taskIntent.answersHeading'),
+        instruction: draft.instruction,
+      });
 
-    await submitDraft({
-      editorJson: confirmed.editorData,
-      instruction: confirmed.instruction,
-      name: intentTitle.trim() || analysis.title,
-    });
-  }, [analysis, assigneeMeta?.title, intentAnswers, intentTitle, readDraft, submitDraft, t]);
+      await submitDraft({
+        editorJson: confirmed.editorData,
+        instruction: confirmed.instruction,
+        name: intentTitle.trim() || analysis.title,
+      });
+    },
+    [analysis, assigneeMeta?.title, intentTitle, readDraft, submitDraft, t],
+  );
+
+  const handleConfirmIntent = useCallback(
+    (answers?: ClarificationAnswers) => confirmIntentWith(answers ?? intentAnswers),
+    [confirmIntentWith, intentAnswers],
+  );
+  // Skipping creates from the draft as typed; the answers state may still hold
+  // what was picked before the user chose to skip.
+  const handleSkipIntent = useCallback(() => confirmIntentWith({}), [confirmIntentWith]);
 
   // Hands the draft (and any answers already given) to the goal modal, then
   // drops back to composing: the goal flow owns the outcome from here, and the
@@ -660,12 +740,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         {isReviewing && analysis && (
           <TaskIntentReview
             analysis={analysis}
-            answers={intentAnswers}
             isCreating={isCreating || isSynthesizing}
             title={intentTitle}
-            onAnswerChange={handleAnswerChange}
+            onAnswersChange={setIntentAnswers}
             onBack={() => setAnalysis(null)}
             onConfirm={handleConfirmIntent}
+            onSkip={handleSkipIntent}
             onSwitchToGoal={canCreateGoal ? handleSwitchToGoal : undefined}
             onTitleChange={setIntentTitle}
           />
@@ -729,6 +809,28 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector
@@ -809,6 +911,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               </AssigneeAgentSelector>
             )}
 
+            <TaskExecutionControls
+              assigneeAgentId={assigneeAgentId}
+              disabled={!canCreateTask}
+              value={execution}
+              onChange={setExecution}
+            />
+
             <ActionIcon
               icon={Paperclip}
               size={'small'}
@@ -854,6 +963,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   !canCreateTask ||
                   isCreating ||
                   isAnalyzing ||
+                  isMemberPending ||
                   (!instruction.trim() && !hasAttachments)
                 }
                 onClick={handleSubmit}
@@ -888,6 +998,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                     !canCreateTask ||
                     isCreating ||
                     isAnalyzing ||
+                    isMemberPending ||
                     (!instruction.trim() && !hasAttachments)
                   }
                 />

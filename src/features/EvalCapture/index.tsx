@@ -6,7 +6,7 @@ import {
   type ImperativeModalProps,
   ModalFooter,
   type ModalInstance,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type CaptureDraft } from './buildCaptureDraft';

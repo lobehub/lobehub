@@ -41,6 +41,13 @@ export interface FileMenuEnv {
   /** The in-app terminal is available (desktop, local workspace). */
   canUseTerminal: boolean;
   isRemote: boolean;
+  /**
+   * The tree can be read but not changed. True for a persistent sandbox
+   * instance: its files live in the execution plane, and the mutation helpers
+   * here only speak to the local or device filesystem — offering New or Trash
+   * would act on the wrong machine, or fail outright on web.
+   */
+  readOnly?: boolean;
   /** Platform name of the trash, already localized ("Trash" / "Recycle Bin"). */
   trashName: string;
 }
@@ -127,6 +134,7 @@ export const buildFileContextMenu = (
     } as Item;
   };
   const local = !env.isRemote;
+  const writable = !env.readOnly;
 
   const copyPathItem = item(
     'copy-absolute-path',
@@ -136,15 +144,18 @@ export const buildFileContextMenu = (
   const pasteItem = item('paste', 'paste', t('workingPanel.files.actions.paste'), {
     disabled: !env.canPaste,
   } as Partial<Item>);
-  const newItems = [
-    item('new-file', 'newFile', t('workingPanel.files.actions.newFile')),
-    item('new-folder', 'newFolder', t('workingPanel.files.actions.newFolder')),
-  ];
+  const pasteItems = writable ? [pasteItem] : [];
+  const newItems = writable
+    ? [
+        item('new-file', 'newFile', t('workingPanel.files.actions.newFile')),
+        item('new-folder', 'newFolder', t('workingPanel.files.actions.newFolder')),
+      ]
+    : [];
 
   if (target.kind === 'root') {
     return joinGroups([
       newItems,
-      [pasteItem],
+      pasteItems,
       [
         item('refresh', 'refresh', t('workingPanel.files.actions.refresh')),
         item('collapse-all', 'collapseAll', t('workingPanel.files.collapseAll')),
@@ -203,23 +214,27 @@ export const buildFileContextMenu = (
   return joinGroups([
     openGroup,
     systemGroup,
-    [
-      item('cut', 'cut', t('workingPanel.files.actions.cut')),
-      item('copy', 'copy', t('workingPanel.files.actions.copy')),
-      pasteItem,
-      item('duplicate', 'duplicate', t('workingPanel.files.actions.duplicate')),
-    ],
+    writable
+      ? [
+          item('cut', 'cut', t('workingPanel.files.actions.cut')),
+          item('copy', 'copy', t('workingPanel.files.actions.copy')),
+          pasteItem,
+          item('duplicate', 'duplicate', t('workingPanel.files.actions.duplicate')),
+        ]
+      : [],
     pathItems,
-    [
-      item('rename', 'rename', t('workingPanel.files.actions.rename')),
-      item(
-        'trash',
-        'trash',
-        t('workingPanel.files.actions.moveToTrash', { trash: env.trashName }),
-        {
-          danger: true,
-        } as Partial<Item>,
-      ),
-    ],
+    writable
+      ? [
+          item('rename', 'rename', t('workingPanel.files.actions.rename')),
+          item(
+            'trash',
+            'trash',
+            t('workingPanel.files.actions.moveToTrash', { trash: env.trashName }),
+            {
+              danger: true,
+            } as Partial<Item>,
+          ),
+        ]
+      : [],
   ]);
 };

@@ -1,17 +1,15 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-import { type UserAvatarProps } from './UserAvatar';
 import UserAvatar from './UserAvatar';
+import { type UserAvatarProps } from './UserAvatar';
 
 export interface UserInfoProps extends FlexboxProps {
   avatarProps?: Partial<UserAvatarProps>;

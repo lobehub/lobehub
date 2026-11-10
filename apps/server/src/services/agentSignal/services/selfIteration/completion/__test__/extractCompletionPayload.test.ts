@@ -122,9 +122,164 @@ describe('extractSelfIterationCompletionPayload', () => {
       id: 'pref_1',
       memoryId: 'mem_1',
       memoryLayer: LayersEnum.Preference,
+      operation: 'create',
       summary: 'Prefer direct implementation with focused tests.',
       title: 'Prefers direct implementation',
       type: 'memory',
+    });
+  });
+
+  it('emits one writeMemory mutation per confirmed memory write in the run', () => {
+    const persistedTool = (id: string, apiName: string, title: string) => ({
+      apiName,
+      arguments: JSON.stringify({ summary: `${title} summary`, title }),
+      id,
+      identifier: MemoryIdentifier,
+      type: 'builtin',
+    });
+    const result = extractSelfIterationCompletionPayload(
+      buildState(
+        {
+          agentId: 'agent_user_1',
+          signal: { kind: 'memory', sourceId: 'mem-src_2' },
+          userId: 'user_1',
+        },
+        {
+          messages: [
+            {
+              id: 'msg_a',
+              role: 'assistant',
+              tools: [
+                persistedTool(
+                  'call_ctx',
+                  MemoryApiName.addContextMemory,
+                  'Training for a half marathon',
+                ),
+              ],
+            },
+            {
+              content: 'Context memory saved with memoryId: "mem_ctx" and contextId: "ctx_1"',
+              role: 'tool',
+              tool_call_id: 'call_ctx',
+            },
+            {
+              id: 'msg_b',
+              role: 'assistant',
+              tools: [
+                persistedTool(
+                  'call_pref',
+                  MemoryApiName.addPreferenceMemory,
+                  'Three sessions per week',
+                ),
+              ],
+            },
+            {
+              content:
+                'Preference memory saved with memoryId: "mem_pref" and preferenceId: "pref_2"',
+              role: 'tool',
+              tool_call_id: 'call_pref',
+            },
+          ],
+          status: 'finished',
+          usage: {
+            tools: {
+              byTool: [
+                {
+                  calls: 1,
+                  errors: 0,
+                  name: `${MemoryIdentifier}/${MemoryApiName.addContextMemory}`,
+                },
+                {
+                  calls: 1,
+                  errors: 0,
+                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
+                },
+              ],
+            },
+          },
+        },
+      ),
+    );
+
+    const targets = result?.mutations.map(
+      (mutation) => (mutation.data as { target?: Record<string, unknown> }).target,
+    );
+    expect(targets).toEqual([
+      expect.objectContaining({
+        id: 'ctx_1',
+        memoryId: 'mem_ctx',
+        title: 'Training for a half marathon',
+      }),
+      expect.objectContaining({
+        id: 'pref_2',
+        memoryId: 'mem_pref',
+        title: 'Three sessions per week',
+      }),
+    ]);
+  });
+
+  it('reads the memory written in a flattened assistantGroup state', () => {
+    const result = extractSelfIterationCompletionPayload(
+      buildState(
+        {
+          agentId: 'agent_user_1',
+          signal: { kind: 'memory', sourceId: 'mem-src_3' },
+          userId: 'user_1',
+        },
+        {
+          messages: [
+            { content: 'User feedback to analyze', id: 'msg_seed', role: 'user' },
+            {
+              children: [
+                {
+                  content: '',
+                  id: 'blk_1',
+                  tools: [
+                    {
+                      apiName: MemoryApiName.addPreferenceMemory,
+                      arguments: JSON.stringify({
+                        summary: 'Use one pot',
+                        title: 'One-pot recipes',
+                      }),
+                      id: 'call_flat',
+                      identifier: MemoryIdentifier,
+                      result: {
+                        content:
+                          'Preference memory saved with memoryId: "mem_flat" and preferenceId: "pref_flat"',
+                        id: 'tool_msg_1',
+                      },
+                      type: 'builtin',
+                    },
+                  ],
+                },
+              ],
+              content: '',
+              id: 'grp_1',
+              role: 'assistantGroup',
+            },
+          ],
+          status: 'finished',
+          usage: {
+            tools: {
+              byTool: [
+                {
+                  calls: 1,
+                  errors: 0,
+                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
+                },
+              ],
+            },
+          },
+        },
+      ),
+    );
+
+    expect(
+      (result?.mutations[0].data as { target?: Record<string, unknown> }).target,
+    ).toMatchObject({
+      id: 'pref_flat',
+      memoryId: 'mem_flat',
+      title: 'One-pot recipes',
     });
   });
 
@@ -156,7 +311,7 @@ describe('extractSelfIterationCompletionPayload', () => {
     expect(result?.mutations).toHaveLength(1);
     expect((result?.mutations[0].data as { target?: Record<string, unknown> }).target).toEqual({
       memoryLayer: LayersEnum.Preference,
-      title: 'Memory saved',
+      operation: 'create',
       type: 'memory',
     });
   });

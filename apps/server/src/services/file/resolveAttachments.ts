@@ -136,7 +136,12 @@ export const resolveAttachmentsByFileIds = async ({
     const { file, fileType, resolvedUrl } = entry;
     result.orderedFileIds.push(file.id);
     if (fileType.startsWith('image')) {
-      result.imageList.push({ alt: file.name || 'image', id: file.id, url: resolvedUrl });
+      result.imageList.push({
+        alt: file.name || 'image',
+        id: file.id,
+        mimeType: fileType,
+        url: resolvedUrl,
+      });
       continue;
     }
     if (fileType.startsWith('video')) {

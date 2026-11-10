@@ -1,4 +1,5 @@
-import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
+import SiApple from '@icons-pack/react-simple-icons/icons/SiApple';
+import SiLinux from '@icons-pack/react-simple-icons/icons/SiLinux';
 import { Microsoft } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { MonitorIcon } from 'lucide-react';
@@ -19,4 +20,19 @@ export const getDeviceIcon = (platform: string | null | undefined, size = 18): R
       return <Icon icon={MonitorIcon} size={size} />;
     }
   }
+};
+
+const PLATFORM_LABEL: Record<string, string> = {
+  darwin: 'macOS',
+  linux: 'Linux',
+  win32: 'Windows',
+};
+
+/** "macOS · arm64"-style OS line for a device; undefined when neither part is known. */
+export const getPlatformLabel = (
+  platform: string | null | undefined,
+  architecture?: string | null,
+): string | undefined => {
+  const os = platform ? (PLATFORM_LABEL[platform] ?? platform) : undefined;
+  return [os, architecture].filter(Boolean).join(' · ') || undefined;
 };

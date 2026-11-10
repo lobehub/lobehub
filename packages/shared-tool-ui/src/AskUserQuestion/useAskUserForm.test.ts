@@ -535,3 +535,61 @@ describe('useAskUserForm producer deadline', () => {
     vi.useRealTimers();
   });
 });
+
+describe('useAskUserForm requireAllAnswered', () => {
+  it('waits for every question by default', () => {
+    const { hook } = setup(twoQuestionArgs);
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+  });
+
+  it('submits a partial answer when every question is optional', async () => {
+    const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: twoQuestionArgs,
+        onInteractionAction,
+        persistedDraft: undefined,
+        requireAllAnswered: false,
+        writeDraft: vi.fn(),
+      }),
+    );
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    expect(hook.result.current.isSubmitDisabled).toBe(false);
+
+    await act(async () => hook.result.current.handleSubmit());
+    expect(onInteractionAction).toHaveBeenCalledWith({
+      payload: { 'How broad?': 'Narrow' },
+      type: 'submit',
+    });
+  });
+});
+
+describe('question submission recovery', () => {
+  it('keeps the answer and exposes failure so an explicit retry can succeed', async () => {
+    const { hook, onInteractionAction } = setup(singleQuestionArgs);
+    onInteractionAction.mockRejectedValueOnce(new Error('offline'));
+    act(() => hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Narrow'));
+    await act(async () => hook.result.current.handleSubmit());
+    expect(hook.result.current.submissionFailed).toBe(true);
+    expect(hook.result.current.submitting).toBe(false);
+    expect(hook.result.current.picks['How broad?']).toBe('Narrow');
+    await act(async () => hook.result.current.handleSubmit());
+    expect(hook.result.current.submissionFailed).toBe(false);
+    expect(onInteractionAction).toHaveBeenCalledTimes(2);
+    hook.unmount();
+  });
+
+  it('does not send both submit and skip before React renders the busy state', async () => {
+    const { hook, onInteractionAction } = setup(singleQuestionArgs);
+    act(() => hook.result.current.handleToggle(singleQuestionArgs.questions[0], 'Narrow'));
+    await act(async () => {
+      hook.result.current.handleSubmit();
+      hook.result.current.handleSkip();
+    });
+    expect(onInteractionAction).toHaveBeenCalledTimes(1);
+    hook.unmount();
+  });
+});

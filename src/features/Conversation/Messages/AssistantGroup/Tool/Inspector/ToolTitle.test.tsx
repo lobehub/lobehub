@@ -13,6 +13,72 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('ToolTitle', () => {
+  describe('lh goal steps from a CLI agent', () => {
+    const createArgs = {
+      command: 'lh goal create "Fog report" --conversation --criterion "Four lines" --json',
+      description: 'Create LobeHub goal bound to conversation',
+    };
+
+    it('reads a running goal create as the goal being created, with its title', () => {
+      render(<ToolTitle isLoading apiName={'Bash'} args={createArgs} identifier={'claude-code'} />);
+
+      expect(screen.getByText('loading')).toBeInTheDocument();
+      expect(screen.getByText('Fog report')).toBeInTheDocument();
+      // Neither the generic action label nor the model's English description.
+      expect(screen.queryByText('Bash')).toBeNull();
+      expect(screen.queryByText(createArgs.description)).toBeNull();
+    });
+
+    it('flips to the settled label once the step finishes', () => {
+      render(<ToolTitle apiName={'Bash'} args={createArgs} identifier={'claude-code'} />);
+
+      expect(screen.getByText('completed')).toBeInTheDocument();
+      expect(screen.getByText('Fog report')).toBeInTheDocument();
+    });
+
+    it('says the step failed when the goal command errored', () => {
+      // The collapsed row used to read "completed" beside a failed status icon.
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={createArgs}
+          identifier={'claude-code'}
+          result={{ state: { exitCode: 1, success: false } }}
+        />,
+      );
+
+      expect(screen.getByText('failed')).toBeInTheDocument();
+      expect(screen.queryByText('completed')).toBeNull();
+    });
+
+    it('also treats a result error as failed', () => {
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={createArgs}
+          identifier={'claude-code'}
+          result={{ error: { message: 'unknown option' } }}
+        />,
+      );
+
+      expect(screen.getByText('failed')).toBeInTheDocument();
+    });
+
+    it('reads a plan submission without a raw goal id', () => {
+      render(
+        <ToolTitle
+          isLoading
+          apiName={'command_execution'}
+          args={{ command: 'lh goal plan goal_1 --token t --file plan.json --json' }}
+          identifier={'codex'}
+        />,
+      );
+
+      expect(screen.getByText('loading')).toBeInTheDocument();
+      expect(screen.queryByText(/goal_1/)).toBeNull();
+    });
+  });
+
   it.each([
     { title: '沙盒交付链路问题' },
     { description: '修复沙盒权限问题', title: '沙盒交付链路问题' },

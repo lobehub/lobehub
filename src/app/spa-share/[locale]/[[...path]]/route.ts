@@ -8,6 +8,7 @@ import { appEnv } from '@/envs/app';
 import { fileEnv } from '@/envs/file';
 import { pythonEnv } from '@/envs/python';
 import { translation } from '@/libs/i18n/serverTranslation';
+import { withShareNoIndexHeader } from '@/libs/next/shareRoutes';
 import { buildAnalyticsConfig, renderSpaHtml } from '@/libs/spaHtml';
 import { type Locales, normalizeLocale } from '@/locales/resources';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -31,6 +32,7 @@ async function getTemplate(): Promise<string> {
 function buildClientEnv(): SPAClientEnv {
   return {
     marketBaseUrl: appEnv.MARKET_BASE_URL,
+    marketSkillInstallBaseUrl: appEnv.MARKET_SKILL_INSTALL_BASE_URL,
     pyodideIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_INDEX_URL,
     pyodidePipIndexUrl: pythonEnv.NEXT_PUBLIC_PYODIDE_PIP_INDEX_URL,
     s3FilePath: fileEnv.NEXT_PUBLIC_S3_FILE_PATH,
@@ -81,5 +83,7 @@ export async function GET(
 
   const template = await getTemplate();
 
-  return renderSpaHtml(template, { seoMeta: await buildSeoMeta(locale), serverConfig: spaConfig });
+  return withShareNoIndexHeader(
+    renderSpaHtml(template, { seoMeta: await buildSeoMeta(locale), serverConfig: spaConfig }),
+  );
 }

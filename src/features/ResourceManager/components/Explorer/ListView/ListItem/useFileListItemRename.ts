@@ -1,7 +1,8 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useTreeStore } from '@/store/tree';
 
@@ -59,7 +60,12 @@ export const useFileListItemRename = ({
     }
 
     try {
-      await updateResource(id, { name: renamingValue.trim() });
+      const nextName = renamingValue.trim();
+      await updateResource(id, { name: nextName });
+      // The search overlays render their own persisted replica, not the file
+      // store: carry the new name into every cached query (and let the mounted
+      // one refetch, since a rename can change which queries the hit matches).
+      useResourceManagerStore.getState().patchSearchHit(id, { name: nextName });
       // Revalidate tree for the parent folder — the explorer subscription will reconcile
       const { queryParams } = await import('@/store/file').then((m) => m.useFileStore.getState());
       const parentId = queryParams?.parentId ?? '';

@@ -15,7 +15,13 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
+import { useTopicId } from '../hooks/useTopicId';
 import GitStatus from './GitStatus';
+import StagedBranchStatus from './StagedBranchStatus';
+import {
+  useActiveProjectDirectoryTopicId,
+  useStagedProjectDirectoryId,
+} from './useProjectTopicDirectory';
 import { useRepoType } from './useRepoType';
 import WorkingDirectoryPicker from './WorkingDirectoryPicker';
 
@@ -38,14 +44,15 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // Effective config (shared row + this member's device override)
   // so GitStatus probes the same device `useEffectiveWorkingDirectory` resolved
   // the cwd from — raw shared config could point them at different machines.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const topicId = useTopicId();
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,
   });
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
 
-  const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId);
+  const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
   const effectiveWorkingDirectory = getWorkingDirectoryPathString(rawEffectiveWorkingDirectory);
 
   // Live probes (fs / cached device dirs) can't resolve repoType for a worktree
@@ -56,9 +63,12 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // also feeds GitStatus's `fallbackGit`, which covers the harder case: the
   // recorded worktree directory was DELETED, so the live branch probe reads
   // nothing and the chips would vanish even with repoType resolved.
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  const topicWorkingDirectoryConfig = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig : undefined,
   );
+  // The project owns this conversation's directory and the device switcher
+  // already names it, so there is nothing to pick or show here.
+  const projectTopicId = useActiveProjectDirectoryTopicId();
   // Only trust the persisted config when it actually describes the directory we
   // resolved — the topic override wins in `useEffectiveWorkingDirectory`, so this
   // holds whenever the config is what produced `effectiveWorkingDirectory`.
@@ -94,7 +104,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
 
   return (
     <>
-      <WorkingDirectoryPicker agentId={agentId} />
+      {!projectTopicId && <WorkingDirectoryPicker agentId={agentId} />}
       {effectiveWorkingDirectory && repoType && (
         <GitStatus
           agentId={agentId}
@@ -103,6 +113,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
           isGithub={repoType === 'github'}
           path={effectiveWorkingDirectory}
           sourcePath={sourceWorkingDirectory}
+          topicId={topicId}
         />
       )}
     </>
@@ -111,11 +122,22 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
 
 WorkingDirectorySectionInner.displayName = 'WorkingDirectorySectionInner';
 
-const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => (
-  <SafeBoundary minHeight={22} resetKeys={[agentId]}>
-    <WorkingDirectorySectionInner agentId={agentId} />
-  </SafeBoundary>
-));
+const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => {
+  // A blank conversation staged in a project directory runs there, not in the
+  // agent default this section resolves; the device switcher names it, so only
+  // its branch shows here.
+  const stagedDirectoryId = useStagedProjectDirectoryId(agentId);
+
+  return (
+    <SafeBoundary minHeight={22} resetKeys={[agentId, stagedDirectoryId]}>
+      {stagedDirectoryId ? (
+        <StagedBranchStatus agentId={agentId} />
+      ) : (
+        <WorkingDirectorySectionInner agentId={agentId} />
+      )}
+    </SafeBoundary>
+  );
+});
 
 WorkingDirectorySection.displayName = 'WorkingDirectorySection';
 

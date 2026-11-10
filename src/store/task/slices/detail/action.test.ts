@@ -1,12 +1,33 @@
-import { toast } from '@lobehub/ui/base-ui';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  applyTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+} from '@lobechat/types';
+import { toast } from '@lobehub/ui';
+import { cleanup, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope, createReplicaState } from '@/libs/replica';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
+import { goalGraphResource } from '@/store/goal/projection';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
+import { taskDetailResource } from './projection';
+import { taskDetailRefreshes } from './testUtils';
+
+/** A goal graph's replica sync key, as the refresh matcher has to recognise it. */
+const goalGraphSyncKey = (goalId: string) => [
+  'replica:sync',
+  goalGraphResource.name,
+  goalGraphResource.version,
+  goalGraphResource.scope.get(),
+  goalId,
+  {},
+];
 
 vi.mock('@/services/task', () => ({
   taskService: {
@@ -14,12 +35,14 @@ vi.mock('@/services/task', () => ({
     addDependency: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
+    find: vi.fn(),
     getDetail: vi.fn(),
     pinDocument: vi.fn(),
     removeDependency: vi.fn(),
     reorderSubtasks: vi.fn(),
     unpinDocument: vi.fn(),
     update: vi.fn(),
+    updateVisibility: vi.fn(),
   },
 }));
 
@@ -30,28 +53,184 @@ vi.mock('@/services/work', () => ({
 }));
 
 vi.mock('@/libs/swr', () => ({
-  mutate: vi.fn(),
+  mutate: vi.fn().mockResolvedValue(undefined),
   useClientDataSWR: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
+afterEach(cleanup);
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(mutate).mockResolvedValue(undefined);
+  vi.spyOn(cacheScope, 'use').mockReturnValue(cacheScope.get());
+  vi.mocked(taskService.find).mockImplementation(
+    async (id) => ({ data: { id, identifier: id }, success: true }) as any,
+  );
   useTaskStore.setState({
     activeTaskId: undefined,
+    activeTopicDrawerAgentId: undefined,
+    activeTopicDrawerFocusRequest: undefined,
+    activeTopicDrawerTitle: undefined,
+    activeTopicDrawerTopicId: undefined,
     isCreatingTask: false,
     isDeletingTask: false,
     taskDetailMap: {},
+    activeTaskRef: undefined,
+    taskRefIndex: Object.fromEntries(
+      ['T-1', 'T-2', 'T-3', 'T-4', 'T-5', 'T-parent', 'T-child', 'task_1'].map((id) => [id, id]),
+    ),
+    taskDetailReplica: createReplicaState(),
     taskInstructionRevisionMap: {},
     taskSaveStatusMap: {},
   });
 });
 
 describe('TaskDetailSliceAction', () => {
+  describe('task detail replica', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const syncCall = () =>
+      vi
+        .mocked(useClientDataSWR)
+        .mock.calls.find(([key]) => Array.isArray(key) && key[0] === 'replica:sync');
+
+    it('polls while the task is in flight and stops once it settles', () => {
+      vi.mocked(useClientDataSWR).mockReturnValue({ isValidating: false, mutate: vi.fn() } as any);
+      useTaskStore.setState({
+        taskDetailMap: { 'T-1': { id: 'T-1', identifier: 'T-1', status: 'running' } as any },
+      });
+
+      const { rerender } = renderHook(() => useTaskStore.getState().useFetchTaskDetail('T-1'));
+      expect(syncCall()?.[2]).toMatchObject({ refreshInterval: 10_000 });
+
+      vi.mocked(useClientDataSWR).mockClear();
+      useTaskStore.setState({
+        taskDetailMap: { 'T-1': { id: 'T-1', identifier: 'T-1', status: 'completed' } as any },
+      });
+      rerender();
+      expect(syncCall()?.[2]).toMatchObject({ refreshInterval: 0 });
+    });
+
+    it('drops a cached detail once the server confirms the task is gone', () => {
+      vi.mocked(useClientDataSWR).mockReturnValue({ isValidating: false, mutate: vi.fn() } as any);
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', status: 'backlog' } as any,
+          'T-2': { id: 'T-2', identifier: 'T-2', status: 'backlog' } as any,
+        },
+      });
+      renderHook(() => {
+        useTaskStore.getState().useFetchTaskDetail('T-1');
+        useTaskStore.getState().useFetchTaskDetail('T-2');
+      });
+      const onErrorFor = (id: string) =>
+        (
+          vi
+            .mocked(useClientDataSWR)
+            .mock.calls.find(
+              ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[4] === id,
+            )?.[2] as {
+            onError: (error: unknown) => void;
+          }
+        ).onError;
+
+      onErrorFor('T-1')(
+        Object.assign(new Error('Task not found: T-1'), { code: 'TASK_NOT_FOUND' }),
+      );
+      onErrorFor('T-2')(new Error('Failed to fetch'));
+
+      // Deleted elsewhere → the cached copy goes; a transient failure keeps it.
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toBeUndefined();
+      expect(useTaskStore.getState().taskDetailMap['T-2']).toBeDefined();
+    });
+
+    it('stores a lookup only under its canonical id and indexes aliases', async () => {
+      vi.mocked(taskService.getDetail).mockResolvedValue({
+        data: { id: 'T-7', identifier: 'T-7', instruction: 'x' },
+      } as any);
+
+      vi.mocked(taskService.find).mockResolvedValue({
+        data: { id: 'T-7', identifier: 'T-7' },
+        success: true,
+      } as any);
+      await useTaskStore.getState().fetchTaskDetail('old-7');
+
+      const { taskDetailMap } = useTaskStore.getState();
+      expect(taskDetailMap['old-7']).toBeUndefined();
+      expect(useTaskStore.getState().taskRefIndex['old-7']).toBe('T-7');
+      expect(taskDetailMap['T-7']).toMatchObject({ id: 'T-7', identifier: 'T-7' });
+    });
+
+    it('restores the persisted row when a delete fails', async () => {
+      const scope = `task-delete-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const detail = { id: 'T-9', identifier: 'T-9', name: 'Keep me' } as any;
+      useTaskStore.getState().internal_dispatchTaskDetail({
+        id: 'T-9',
+        type: 'setTaskDetail',
+        value: detail,
+      });
+      await taskDetailResource.storage!.set(
+        { queryKey: 'T-9', scope },
+        { data: detail, updatedAt: 1 },
+      );
+      vi.mocked(taskService.delete).mockRejectedValue(new Error('offline'));
+
+      await expect(useTaskStore.getState().deleteTask('T-9')).rejects.toThrow('offline');
+
+      expect(useTaskStore.getState().taskDetailMap['T-9']).toMatchObject({ name: 'Keep me' });
+      // Storage writes are queued; wait for the restored row to land.
+      await vi.waitFor(async () =>
+        expect(
+          (await taskDetailResource.storage!.get({ queryKey: 'T-9', scope }))?.data,
+        ).toMatchObject({ name: 'Keep me' }),
+      );
+    });
+
+    it('persists a detail edit once the server saved it', async () => {
+      const scope = `task-update-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      useTaskStore.getState().internal_dispatchTaskDetail({
+        id: 'T-3',
+        type: 'setTaskDetail',
+        value: { id: 'T-3', identifier: 'T-3', name: 'Before' } as any,
+      });
+      vi.mocked(taskService.update).mockResolvedValue({} as any);
+
+      await useTaskStore.getState().updateTask('T-3', { name: 'After' });
+
+      await vi.waitFor(async () =>
+        expect(
+          (await taskDetailResource.storage!.get({ queryKey: 'T-3', scope }))?.data,
+        ).toMatchObject({ name: 'After' }),
+      );
+    });
+
+    it('keeps optimistic detail edits out of the persisted row', async () => {
+      const scope = `task-detail-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+
+      useTaskStore.getState().internal_dispatchTaskDetail({
+        id: 'T-1',
+        type: 'setTaskDetail',
+        value: { id: 'T-1', identifier: 'T-1', name: 'Draft' } as any,
+      });
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toMatchObject({ name: 'Draft' });
+      expect(await taskDetailResource.storage!.get({ queryKey: 'T-1', scope })).toBeUndefined();
+    });
+  });
+
   describe('setActiveTaskId', () => {
     it('should set activeTaskId', () => {
       useTaskStore.getState().setActiveTaskId('T-1');
@@ -59,7 +238,7 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should not update if same id', () => {
-      useTaskStore.setState({ activeTaskId: 'T-1' });
+      useTaskStore.setState({ activeTaskId: 'T-1', activeTaskRef: 'T-1' });
       const spy = vi.fn();
       useTaskStore.subscribe(spy);
 
@@ -69,10 +248,49 @@ describe('TaskDetailSliceAction', () => {
     });
   });
 
+  describe('topic drawer focus request', () => {
+    it('should start a focus request when the drawer opens with conversational intent', () => {
+      useTaskStore.getState().openTopicDrawer('tpc-1', { agentId: 'agt-1', autoFocus: true });
+
+      expect(taskDetailSelectors.topicDrawerFocusRequest(useTaskStore.getState())).toBe(1);
+    });
+
+    it('should not start a focus request for a plain opening', () => {
+      useTaskStore.getState().openTopicDrawer('tpc-1', { agentId: 'agt-1' });
+
+      expect(useTaskStore.getState().activeTopicDrawerFocusRequest).toBeUndefined();
+    });
+
+    it('should bump the request on every repeated autoFocus opening of the same topic', () => {
+      useTaskStore.getState().openTopicDrawer('tpc-1', { agentId: 'agt-1' });
+      useTaskStore.getState().openTopicDrawer('tpc-1', { agentId: 'agt-1', autoFocus: true });
+      useTaskStore.getState().openTopicDrawer('tpc-1', { agentId: 'agt-1', autoFocus: true });
+
+      expect(useTaskStore.getState().activeTopicDrawerFocusRequest).toBe(2);
+    });
+
+    it('should not carry a focus request over to a plainly opened different topic', () => {
+      useTaskStore.getState().openTopicDrawer('tpc-1', { autoFocus: true });
+      useTaskStore.getState().openTopicDrawer('tpc-2');
+
+      expect(useTaskStore.getState().activeTopicDrawerFocusRequest).toBeUndefined();
+    });
+
+    it('should clear the focus request on close and when switching tasks', () => {
+      useTaskStore.getState().openTopicDrawer('tpc-1', { autoFocus: true });
+      useTaskStore.getState().closeTopicDrawer();
+      expect(useTaskStore.getState().activeTopicDrawerFocusRequest).toBeUndefined();
+
+      useTaskStore.getState().openTopicDrawer('tpc-1', { autoFocus: true });
+      useTaskStore.getState().setActiveTaskId('T-2');
+      expect(useTaskStore.getState().activeTopicDrawerFocusRequest).toBeUndefined();
+    });
+  });
+
   describe('createTask', () => {
     it('should call service and return identifier', async () => {
       vi.mocked(taskService.create).mockResolvedValue({
-        data: { identifier: 'T-1' },
+        data: { id: 'T-1', identifier: 'T-1' },
         message: 'ok',
         success: true,
       } as any);
@@ -92,7 +310,7 @@ describe('TaskDetailSliceAction', () => {
     it('should set isCreatingTask during creation', async () => {
       vi.mocked(taskService.create).mockImplementation(async () => {
         expect(useTaskStore.getState().isCreatingTask).toBe(true);
-        return { data: { identifier: 'T-1' }, success: true } as any;
+        return { data: { id: 'T-1', identifier: 'T-1' }, success: true } as any;
       });
 
       await useTaskStore.getState().createTask({ instruction: 'Test' });
@@ -121,7 +339,13 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { activities: [], identifier: 'T-1', instruction: 'x', status: 'backlog' },
+          'T-1': {
+            activities: [],
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'x',
+            status: 'backlog',
+          },
         },
       });
     };
@@ -189,7 +413,13 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Old', name: 'Old Name', status: 'backlog' },
+          'T-1': {
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'Old',
+            name: 'Old Name',
+            status: 'backlog',
+          },
         },
       });
 
@@ -213,6 +443,7 @@ describe('TaskDetailSliceAction', () => {
           'T-1': {
             activities: [],
             agentId: null,
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'x',
             status: 'backlog',
@@ -247,9 +478,106 @@ describe('TaskDetailSliceAction', () => {
       await pending;
     });
 
+    it('drops the previous agent’s repo selection when the task is reassigned', async () => {
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            agentId: 'agt_a',
+            config: {
+              execution: toTaskExecutionConfigPatch(
+                applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+              ),
+              model: 'claude-code',
+            },
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'x',
+            status: 'backlog',
+          },
+        },
+      });
+      // Hold the PUT open so only the optimistic render is observed — the chip
+      // must not keep showing the old agent's repo while the write is in flight.
+      let release!: () => void;
+      vi.mocked(taskService.update).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve({ success: true } as any);
+        }),
+      );
+
+      const pending = useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agt_b' });
+
+      const config = useTaskStore.getState().taskDetailMap['T-1'].config as Record<string, unknown>;
+      expect(readTaskExecutionConfig(config)).toBeUndefined();
+      // Only the repo axis follows the assignee; the other config pockets stay.
+      expect(config.model).toBe('claude-code');
+
+      release();
+      await pending;
+    });
+
+    it('keeps a device pin and a machine directory when the task is reassigned', async () => {
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            agentId: 'agt_a',
+            config: {
+              execution: toTaskExecutionConfigPatch({
+                boundDeviceId: 'device-a',
+                workingDirectory: '/srv/app',
+              }),
+            },
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'x',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agt_b' });
+
+      expect(
+        readTaskExecutionConfig(
+          useTaskStore.getState().taskDetailMap['T-1'].config as Record<string, unknown>,
+        ),
+      ).toEqual({ boundDeviceId: 'device-a', workingDirectory: '/srv/app' });
+    });
+
+    it('keeps the repo selection when the assignee does not change', async () => {
+      useTaskStore.setState({
+        taskDetailMap: {
+          'T-1': {
+            agentId: 'agt_a',
+            config: {
+              execution: toTaskExecutionConfigPatch(
+                applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+              ),
+            },
+            id: 'T-1',
+            identifier: 'T-1',
+            instruction: 'x',
+            status: 'backlog',
+          },
+        },
+      });
+      vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
+
+      await useTaskStore.getState().updateTask('T-1', { name: 'Renamed' });
+
+      expect(
+        readTaskExecutionConfig(
+          useTaskStore.getState().taskDetailMap['T-1'].config as Record<string, unknown>,
+        )?.repos,
+      ).toEqual(['lobehub/lobehub']);
+    });
+
     it('revalidates goal graphs when the assignee changes, so a goal page shows the new executor', async () => {
       useTaskStore.setState({
-        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
       });
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
       const { mutate } = await import('@/libs/swr');
@@ -262,14 +590,18 @@ describe('TaskDetailSliceAction', () => {
         .mock.calls.map(([key]) => key)
         .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
       const matchesGoalGraph = (key: unknown) => matchers.some((match) => match(key));
-      expect(matchesGoalGraph(['goal:graph', 'goal-1'])).toBe(true);
-      expect(matchesGoalGraph(['goal:graph', 'goal-1', 'ws-1'])).toBe(true);
+      // The goal graph is a replica: its sync keys live outside the SWR `goal:`
+      // cache, so the refresh matches through the resource.
+      expect(matchesGoalGraph(goalGraphSyncKey('goal-1'))).toBe(true);
+      expect(matchesGoalGraph(['goal:graph', 'goal-1'])).toBe(false);
       expect(matchesGoalGraph(['task:detail', 'T-1'])).toBe(false);
     });
 
     it('leaves goal graphs alone when the assignee does not change', async () => {
       useTaskStore.setState({
-        taskDetailMap: { 'T-1': { identifier: 'T-1', instruction: 'x', status: 'backlog' } },
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
       });
       vi.mocked(taskService.update).mockResolvedValue({ success: true } as any);
       const { mutate } = await import('@/libs/swr');
@@ -280,7 +612,7 @@ describe('TaskDetailSliceAction', () => {
         .mocked(mutate)
         .mock.calls.map(([key]) => key)
         .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
-      expect(matchers.some((match) => match(['goal:graph', 'goal-1']))).toBe(false);
+      expect(matchers.some((match) => match(goalGraphSyncKey('goal-1')))).toBe(false);
     });
 
     it('should clear stale editorData for instruction-only optimistic updates', async () => {
@@ -289,6 +621,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Old instruction',
             status: 'backlog',
@@ -325,6 +658,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData,
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Old instruction',
             status: 'backlog',
@@ -342,6 +676,7 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: {
           editorData: { root: { children: [{ text: 'Old instruction' }] } },
+          id: 'T-1',
           identifier: 'T-1',
           instruction: 'Old instruction',
           status: 'backlog',
@@ -360,6 +695,7 @@ describe('TaskDetailSliceAction', () => {
         taskDetailMap: {
           'T-1': {
             editorData: { root: { children: [{ text: 'Old instruction' }] } },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Old instruction',
             status: 'running',
@@ -369,6 +705,7 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: {
           editorData: null,
+          id: 'T-1',
           identifier: 'T-1',
           instruction: 'Tool instruction',
           status: 'running',
@@ -392,11 +729,10 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
-      const { mutate } = await import('@/libs/swr');
-      const { toast } = await import('@lobehub/ui/base-ui');
+      const { toast } = await import('@lobehub/ui');
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
@@ -409,18 +745,19 @@ describe('TaskDetailSliceAction', () => {
       // The failure must surface as `failed` (never `idle`) so the save hint
       // shows an error + Retry instead of masquerading as a clean state.
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('failed');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
       expect(toast.error).toHaveBeenCalled();
     });
 
     it('should reload retry content after an editor autosave failure rolls back', async () => {
       const { mutate } = await import('@/libs/swr');
-      const { toast } = await import('@lobehub/ui/base-ui');
+      const { toast } = await import('@lobehub/ui');
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
           'T-1': {
             editorData: { root: { children: [{ text: 'Persisted' }] } },
+            id: 'T-1',
             identifier: 'T-1',
             instruction: 'Persisted',
             status: 'backlog',
@@ -430,14 +767,15 @@ describe('TaskDetailSliceAction', () => {
       vi.mocked(taskService.getDetail).mockResolvedValue({
         data: {
           editorData: { root: { children: [{ text: 'Persisted' }] } },
+          id: 'T-1',
           identifier: 'T-1',
           instruction: 'Persisted',
           status: 'backlog',
         },
         success: true,
       } as any);
-      vi.mocked(mutate).mockImplementation(async () => {
-        await useTaskStore.getState().fetchTaskDetail('T-1');
+      vi.mocked(mutate).mockImplementation(async (key) => {
+        if (typeof key === 'function') await useTaskStore.getState().fetchTaskDetail('T-1');
       });
       vi.mocked(taskService.update).mockRejectedValueOnce(new Error('fail'));
 
@@ -468,18 +806,44 @@ describe('TaskDetailSliceAction', () => {
       });
     });
 
+    it('lets the caller replace the failure toast Retry with its whole action', async () => {
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
+      });
+      vi.mocked(taskService.update).mockRejectedValueOnce(new Error('fail'));
+      const retry = vi.fn();
+
+      await expect(
+        useTaskStore.getState().updateTask('T-1', { assigneeAgentId: 'agt_inbox' }, { retry }),
+      ).rejects.toThrow('fail');
+
+      const toastOptions = vi.mocked(toast.error).mock.calls.at(-1)?.[0];
+      if (!toastOptions || typeof toastOptions === 'string') {
+        throw new Error('Expected the failed save toast to expose a Retry action.');
+      }
+      toastOptions.actions?.[0]?.onClick?.();
+
+      expect(retry).toHaveBeenCalledTimes(1);
+      expect(taskService.update).toHaveBeenCalledTimes(1);
+    });
+
     it('should refresh the cached parent on failure when updating from a subtask detail page', async () => {
-      const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({
         activeTaskId: 'T-sub',
         taskDetailMap: {
           'T-parent': {
+            id: 'T-parent',
             identifier: 'T-parent',
             instruction: 'Parent',
             status: 'backlog',
-            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+            subtasks: [
+              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
+            ],
           },
-          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+          'T-sub': { id: 'T-sub', identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
         },
       });
 
@@ -489,8 +853,8 @@ describe('TaskDetailSliceAction', () => {
         useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
       ).rejects.toThrow('fail');
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+      expect(taskDetailRefreshes('T-sub')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-parent')).not.toHaveLength(0);
     });
 
     it('should not show error when update succeeds but cache refresh fails', async () => {
@@ -498,7 +862,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
@@ -512,17 +876,19 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should refresh list and affected details when reparenting', async () => {
-      const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({
         activeTaskId: 'T-sub',
         taskDetailMap: {
           'T-parent': {
+            id: 'T-parent',
             identifier: 'T-parent',
             instruction: 'Parent',
             status: 'backlog',
-            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+            subtasks: [
+              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
+            ],
           },
-          'T-sub': { identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
+          'T-sub': { id: 'T-sub', identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
         },
       });
 
@@ -535,9 +901,9 @@ describe('TaskDetailSliceAction', () => {
       expect(taskService.update).toHaveBeenCalledWith('T-sub', { parentTaskId: 'T-new-parent' });
       expect(useTaskStore.getState().taskDetailMap['T-sub']).not.toHaveProperty('parentTaskId');
       expect(refreshTaskList).toHaveBeenCalled();
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-new-parent']);
+      expect(taskDetailRefreshes('T-sub')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-parent')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-new-parent')).not.toHaveLength(0);
     });
 
     it('should refresh the list after changing priority', async () => {
@@ -551,15 +917,17 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should refresh the parent that was patched even if activeTaskId changes mid-flight', async () => {
-      const { mutate } = await import('@/libs/swr');
       useTaskStore.setState({
         activeTaskId: 'T-parent',
         taskDetailMap: {
           'T-parent': {
+            id: 'T-parent',
             identifier: 'T-parent',
             instruction: 'Parent',
             status: 'backlog',
-            subtasks: [{ assignee: null, identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+            subtasks: [
+              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
+            ],
           },
         },
       });
@@ -573,16 +941,16 @@ describe('TaskDetailSliceAction', () => {
         useTaskStore.getState().updateTask('T-sub', { assigneeAgentId: 'agent-x' }),
       ).rejects.toThrow('fail');
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-sub']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-parent']);
+      expect(taskDetailRefreshes('T-sub')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-parent')).not.toHaveLength(0);
     });
 
     it('should scope save status per task so a failure does not leak across navigation', async () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'One', status: 'backlog' },
-          'T-2': { identifier: 'T-2', instruction: 'Two', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'One', status: 'backlog' },
+          'T-2': { id: 'T-2', identifier: 'T-2', instruction: 'Two', status: 'backlog' },
         },
       });
 
@@ -602,17 +970,46 @@ describe('TaskDetailSliceAction', () => {
     });
   });
 
+  describe('updateTaskVisibility', () => {
+    it('resolves once the change is saved even when the refresh fails', async () => {
+      vi.mocked(taskService.updateVisibility).mockResolvedValue({} as any);
+      const refreshTaskList = vi.fn().mockRejectedValue(new Error('network down'));
+      useTaskStore.setState({ refreshTaskList } as any);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        useTaskStore.getState().updateTaskVisibility('T-1', 'private'),
+      ).resolves.toBeUndefined();
+      expect(taskService.updateVisibility).toHaveBeenCalledWith('T-1', 'private');
+      expect(toast.error).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it('rejects with a targeted toast when the change itself is refused', async () => {
+      vi.mocked(taskService.updateVisibility).mockRejectedValue(
+        new Error('Cannot make this task private while it has subtasks created by other members.'),
+      );
+
+      await expect(useTaskStore.getState().updateTaskVisibility('T-1', 'private')).rejects.toThrow(
+        'subtasks created by other members',
+      );
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining('subtasks created by other members'),
+      );
+    });
+  });
+
   describe('deleteTask', () => {
     it('should remove from map, clear activeTaskId, and return deleted task data', async () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
       vi.mocked(taskService.delete).mockResolvedValue({
-        data: { identifier: 'T-1', name: 'Test Task' },
+        data: { id: 'T-1', identifier: 'T-1', name: 'Test Task' },
         success: true,
       } as any);
 
@@ -628,13 +1025,13 @@ describe('TaskDetailSliceAction', () => {
     it('should set isDeletingTask during deletion', async () => {
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
       vi.mocked(taskService.delete).mockImplementation(async () => {
         expect(useTaskStore.getState().isDeletingTask).toBe(true);
-        return { data: { identifier: 'T-1' }, success: true } as any;
+        return { data: { id: 'T-1', identifier: 'T-1' }, success: true } as any;
       });
 
       await useTaskStore.getState().deleteTask('T-1');
@@ -645,12 +1042,12 @@ describe('TaskDetailSliceAction', () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       useTaskStore.setState({
         taskDetailMap: {
-          'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
+          'T-1': { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' },
         },
       });
 
       vi.mocked(taskService.delete).mockResolvedValue({
-        data: { identifier: 'T-1' },
+        data: { id: 'T-1', identifier: 'T-1' },
         success: true,
       } as any);
       vi.mocked(workService.refreshAllConversations).mockRejectedValue(new Error('refresh failed'));
@@ -665,6 +1062,7 @@ describe('TaskDetailSliceAction', () => {
 
     it('should rollback optimistic delete and propagate error on failure', async () => {
       const snapshot = {
+        id: 'T-1',
         identifier: 'T-1',
         instruction: 'Test',
         name: 'Original',
@@ -684,25 +1082,23 @@ describe('TaskDetailSliceAction', () => {
 
   describe('addComment', () => {
     it('should call service and refresh detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.addComment).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().addComment('T-1', 'Nice work');
 
       expect(taskService.addComment).toHaveBeenCalledWith('T-1', 'Nice work', undefined);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 
   describe('addDependency', () => {
     it('should call service and refresh detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.addDependency).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().addDependency('T-1', 'T-2', 'blocks');
 
       expect(taskService.addDependency).toHaveBeenCalledWith('T-1', 'T-2', 'blocks');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should propagate error from service', async () => {
@@ -716,47 +1112,50 @@ describe('TaskDetailSliceAction', () => {
 
   describe('removeDependency', () => {
     it('should call service and refresh detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.removeDependency).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().removeDependency('T-1', 'T-2');
 
       expect(taskService.removeDependency).toHaveBeenCalledWith('T-1', 'T-2');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 
   describe('unpinDocument', () => {
     it('should refresh source task and active task when they differ', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
 
       // Detail page is open at parent identifier; doc is owned by a child DB id.
-      useTaskStore.setState({ activeTaskId: 'T-1' });
+      useTaskStore.setState({ activeTaskId: 'T-1', activeTaskRef: 'T-1' });
 
       await useTaskStore.getState().unpinDocument('task_child', 'doc_1');
 
       expect(taskService.unpinDocument).toHaveBeenCalledWith('task_child', 'doc_1');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'task_child']);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('task_child')).not.toHaveLength(0);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should not double-refresh when source task equals active task', async () => {
       const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.unpinDocument).mockResolvedValue({ success: true } as any);
 
-      useTaskStore.setState({ activeTaskId: 'T-1' });
+      useTaskStore.setState({ activeTaskId: 'T-1', activeTaskRef: 'T-1' });
 
       await useTaskStore.getState().unpinDocument('T-1', 'doc_1');
 
       expect(mutate).toHaveBeenCalledTimes(1);
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 
   describe('internal_dispatchTaskDetail', () => {
     it('should set task detail via reducer', () => {
-      const detail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;
+      const detail = {
+        id: 'T-1',
+        identifier: 'T-1',
+        instruction: 'Test',
+        status: 'backlog',
+      } as any;
 
       useTaskStore.getState().internal_dispatchTaskDetail({
         id: 'T-1',
@@ -768,7 +1167,12 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should not update state if reducer returns same reference', () => {
-      const detail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;
+      const detail = {
+        id: 'T-1',
+        identifier: 'T-1',
+        instruction: 'Test',
+        status: 'backlog',
+      } as any;
       useTaskStore.setState({ taskDetailMap: { 'T-1': detail } });
 
       const spy = vi.fn();

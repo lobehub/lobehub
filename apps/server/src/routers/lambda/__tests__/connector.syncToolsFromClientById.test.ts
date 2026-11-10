@@ -15,6 +15,14 @@ vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
+const workspaceMocks = vi.hoisted(() => ({
+  getConnectorMemberManage: vi.fn(async () => 'all_members' as const),
+}));
+vi.mock('@/database/models/workspace', () => ({
+  WorkspaceModel: vi.fn(function () {
+    return workspaceMocks;
+  }),
+}));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));
@@ -43,6 +51,7 @@ describe('connectorRouter.syncToolsFromClientById', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('all_members');
 
     connectorModelMock = {
       findById: vi.fn().mockResolvedValue({
@@ -88,6 +97,18 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     );
   });
 
+  it('keeps the MCP Apps visibility the desktop reported for each tool', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [{ toolName: 'show_dashboard' }, { toolName: 'load_page', visibility: ['app'] }],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ metadata: null, toolName: 'show_dashboard' }),
+      expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+    ]);
+  });
+
   it('rejects an unknown connector id', async () => {
     connectorModelMock.findById.mockResolvedValue(undefined);
 
@@ -97,22 +118,36 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
   });
 
-  it("rejects reporting into another member's workspace connector", async () => {
+  const memberCaller = () =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId: 'user_test',
+      workspaceId: 'ws_1',
+      workspaceRole: 'member',
+    } as any);
+
+  it("lets a member co-maintain another member's workspace connector by default", async () => {
     connectorModelMock.findById.mockResolvedValue({
       id: CONNECTOR_ID,
       identifier: 'my-local-mcp',
       userId: 'someone_else',
     });
 
+    await memberCaller().syncToolsFromClientById({ id: CONNECTOR_ID, tools: [] });
+
+    expect(connectorModelMock.updateStatus).toHaveBeenCalled();
+  });
+
+  it('rejects a member when admins restricted connector management', async () => {
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+    connectorModelMock.findById.mockResolvedValue({
+      id: CONNECTOR_ID,
+      identifier: 'my-local-mcp',
+      userId: 'user_test',
+    });
+
     await expect(
-      connectorRouter
-        .createCaller({
-          serverDB: {},
-          userId: 'user_test',
-          workspaceId: 'ws_1',
-          workspaceRole: 'member',
-        } as any)
-        .syncToolsFromClientById({ id: CONNECTOR_ID, tools: [] }),
+      memberCaller().syncToolsFromClientById({ id: CONNECTOR_ID, tools: [] }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
     expect(connectorModelMock.updateStatus).not.toHaveBeenCalled();

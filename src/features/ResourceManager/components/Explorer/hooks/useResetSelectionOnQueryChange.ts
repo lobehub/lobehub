@@ -5,14 +5,14 @@ import type { FilesTabs } from '@/types/files';
 
 interface ResetSelectionOnQueryChangeOptions {
   category: FilesTabs;
-  currentFolderSlug?: string | null;
+  currentFolderId?: string | null;
   libraryId?: string;
   searchQuery: string | null;
 }
 
 export const useResetSelectionOnQueryChange = ({
   category,
-  currentFolderSlug,
+  currentFolderId,
   libraryId,
   searchQuery,
 }: ResetSelectionOnQueryChangeOptions) => {
@@ -20,5 +20,5 @@ export const useResetSelectionOnQueryChange = ({
 
   useEffect(() => {
     clearSelectAllState();
-  }, [category, clearSelectAllState, currentFolderSlug, libraryId, searchQuery]);
+  }, [category, clearSelectAllState, currentFolderId, libraryId, searchQuery]);
 };

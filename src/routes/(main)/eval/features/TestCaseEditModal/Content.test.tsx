@@ -5,7 +5,7 @@ import TestCaseEditContent from './Content';
 
 const mocks = vi.hoisted(() => ({ close: vi.fn(), updateTestCase: vi.fn() }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useModalContext: () => ({ close: mocks.close }),
 }));

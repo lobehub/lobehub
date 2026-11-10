@@ -20,12 +20,26 @@ import type {
 } from '@lobechat/types';
 import { toMetricScale } from '@lobechat/types';
 
+import { isGoalReportNode } from './report';
+import type { RolloutGateResult } from './rolloutGate';
+
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 
 /** Reason strings the recovery paths key off, written by the settle path. */
 export { LEASE_EXPIRED_ERROR, VERIFICATION_ERRORED_ERROR, VERIFICATION_FAILED_ERROR };
 
 export const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
+
+/**
+ * A Task node the coordinator decides on. The wrap-up report node is a Task too,
+ * but it runs after the Goal-level acceptance has ended and never takes part in
+ * the Goal's status: its failure or timeout must not open a gate, occupy a slot
+ * or keep a Goal from being judged.
+ */
+export const isCoordinatedTask = (
+  graph: Pick<GoalGraphSnapshot, 'goal'>,
+  node: Pick<GoalGraphNode, 'id' | 'kind'>,
+) => node.kind === 'task' && !isGoalReportNode(graph, node);
 
 /**
  * Whether a paused Task lost its run rather than failed it: the coordinator
@@ -51,13 +65,47 @@ export interface FrontierSelection {
  * before deciding, and exported so a trace keeps the whole ranking rather than
  * only the winner — "why not that node" is unanswerable from the winner alone.
  */
+/**
+ * Every unfinished Task that would wait forever once `rootIds` stop short of
+ * `resolved` — directly or through another such Task. A prerequisite only
+ * counts as met when it resolves, so these have to leave with the roots or
+ * the goal parks on `no_frontier`. The Goal acceptance is never among them:
+ * ending it ends the Goal, which belongs to its own gate.
+ */
+export const collectStrandedDependents = (
+  graph: GoalGraphSnapshot,
+  rootIds: Iterable<string>,
+): GoalGraphNode[] => {
+  const closed = new Set(rootIds);
+  const stranded: GoalGraphNode[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const edge of graph.edges) {
+      if (edge.kind !== 'depends_on' || !closed.has(edge.targetNodeId)) continue;
+      if (closed.has(edge.sourceNodeId)) continue;
+      const node = graph.nodes.find((candidate) => candidate.id === edge.sourceNodeId);
+      if (
+        !node ||
+        node.kind !== 'task' ||
+        node.title === GOAL_ACCEPTANCE_TASK_TITLE ||
+        TERMINAL_NODE_STATUSES.has(node.status)
+      )
+        continue;
+      closed.add(node.id);
+      stranded.push(node);
+      grew = true;
+    }
+  }
+  return stranded;
+};
+
 export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
   const resolvedNodeIds = new Set(
     graph.nodes.filter((node) => node.status === 'resolved').map((node) => node.id),
   );
 
   const eligible = graph.nodes
-    .filter((node) => node.kind === 'task' && !TERMINAL_NODE_STATUSES.has(node.status))
+    .filter((node) => isCoordinatedTask(graph, node) && !TERMINAL_NODE_STATUSES.has(node.status))
     .map((node) => ({
       blockedBy: graph.edges
         .filter(
@@ -137,6 +185,13 @@ export const frontierNeedsBudget = (
  */
 export const MEASURED_ACCEPTANCE_PAUSE_REASON = 'Measured acceptance not met';
 
+/**
+ * Reason recorded when the coordinator parks a goal because nothing on the
+ * frontier can run. Shared so a graph edit that removes the blocker (node
+ * retirement) can recognise this park and lift it.
+ */
+export const NO_FRONTIER_PAUSE_REASON = 'no eligible task to advance';
+
 /** Evaluate one numeric clause. Kept beside the gate that consumes it. */
 export const compareMetric = (
   rawValue: number,
@@ -175,7 +230,7 @@ export const compareMetric = (
  */
 export const needsMetricCriteria = (graph: GoalGraphSnapshot): boolean => {
   if (!graph.goal.config?.acceptance?.metrics?.length) return false;
-  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
+  const taskNodes = graph.nodes.filter((node) => isCoordinatedTask(graph, node));
   return taskNodes.length > 0 && taskNodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status));
 };
 
@@ -193,6 +248,12 @@ export interface GoalMoveInput {
    * budget does.
    */
   metricCriteria?: GoalMetricCriteriaState;
+  /**
+   * The repeated batch's gate verdict, present only once the wave it released
+   * has fully settled. Absent while a wave is running — the ordinary frontier
+   * owns that tick.
+   */
+  rolloutGate?: RolloutGateResult;
   /**
    * The responsible Task of every candidate that has one, keyed by task id.
    * A candidate whose task id is absent from the map has lost its row.
@@ -242,6 +303,7 @@ export const decideNextMove = ({
   frontier,
   graph,
   metricCriteria,
+  rolloutGate,
   tasksById,
 }: GoalMoveInput): GoalMove => {
   const { candidates, chosen } = frontier;
@@ -278,13 +340,34 @@ export const decideNextMove = ({
     };
   }
 
+  // A repeated batch settles its own gate before the terminal phase: a passed
+  // gate releases the next wave, a blocked one hands the stall to a person
+  // rather than letting the goal look finished while units remain undelivered.
+  if (rolloutGate) {
+    if (rolloutGate.met) {
+      return {
+        ...base,
+        branch: 'rollout_gate',
+        message: 'Batch gate passed; release the next wave',
+        outcome: 'advanced',
+      };
+    }
+    return {
+      ...base,
+      branch: 'pattern_break',
+      focusNodeId: graph.goal.config?.rolloutState?.assayNodeId,
+      message: rolloutGate.blockers.join('; ') || 'Batch gate is blocked',
+      outcome: 'waiting_human',
+    };
+  }
+
   // Walk the whole ranked frontier rather than stopping at its head. Four bug
   // fixes that share no code have no reason to run one after another, and the
   // old single-node frontier made them: the running node stayed eligible, was
   // re-picked every tick, and reported `waiting_external`, which ends the
   // advance before anything behind it is even considered.
   const inFlight = graph.nodes.filter(
-    (node) => node.kind === 'task' && isInFlight(tasksById.get(node.taskId ?? '')),
+    (node) => isCoordinatedTask(graph, node) && isInFlight(tasksById.get(node.taskId ?? '')),
   ).length;
 
   let parked = false;
@@ -397,7 +480,7 @@ const decideWithoutFrontier = (
   metricCriteria?: GoalMetricCriteriaState,
 ): GoalMove => {
   const base = { candidates };
-  const taskNodes = graph.nodes.filter((node) => node.kind === 'task');
+  const taskNodes = graph.nodes.filter((node) => isCoordinatedTask(graph, node));
 
   // A goal with no tasks at all has not been planned yet — decompose it into
   // explorable directions before anything runs, instead of parking it.

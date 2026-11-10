@@ -1,5 +1,5 @@
-import { toast } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { toast } from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -8,6 +8,7 @@ import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessS
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
 import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
+import { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
@@ -25,13 +26,21 @@ interface SignUpErrorLike {
     };
   };
   message?: string;
+  retryAfterDays?: number;
 }
 
 export const useSignUp = () => {
   const { t } = useTranslation(['auth', 'authError']);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [form] = Form.useForm<SignUpFormValues>();
+  const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
+  const form = useForm<SignUpFormValues>({
+    initialValues: { confirmPassword: '', email: '', password: '' },
+    onSubmit: (values) =>
+      continueWithAgreement(() => {
+        void handleSignUp(values);
+      }),
+  });
   const [loading, setLoading] = useState(false);
   const { getCaptchaTokenOnError, getFetchOptions, preSocialSignupCheck, businessElement } =
     useBusinessSignup(form);
@@ -94,9 +103,20 @@ export const useSignUp = () => {
           return;
         }
 
-        const translated = signUpError.code
-          ? t(`authError:codes.${signUpError.code}`, { defaultValue: '' })
-          : '';
+        const retryAfterDays = signUpError.retryAfterDays;
+        const retryAfterTranslated =
+          signUpError.code &&
+          typeof retryAfterDays === 'number' &&
+          Number.isSafeInteger(retryAfterDays) &&
+          retryAfterDays > 0
+            ? t(`authError:codes.${signUpError.code}_WITH_RETRY_AFTER_DAYS`, {
+                count: retryAfterDays,
+                defaultValue: '',
+              })
+            : '';
+        const translated =
+          retryAfterTranslated ||
+          (signUpError.code ? t(`authError:codes.${signUpError.code}`, { defaultValue: '' }) : '');
         toast.error(translated || signUpError.message || t('betterAuth.signup.error'));
         return;
       }
@@ -116,5 +136,12 @@ export const useSignUp = () => {
     }
   };
 
-  return { businessElement, form, loading, onSubmit: handleSignUp };
+  return {
+    agreementChecked,
+    businessElement,
+    form,
+    loading,
+    onSubmit: handleSignUp,
+    setAgreementChecked,
+  };
 };

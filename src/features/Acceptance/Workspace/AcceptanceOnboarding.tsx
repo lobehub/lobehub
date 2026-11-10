@@ -1,15 +1,24 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Button, TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  CopyButton,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  TabsIndicator,
+  TabsList,
+  TabsRoot,
+  TabsTab,
+} from '@lobehub/ui';
 import { ArrowLeft, Bot, ClipboardCheck, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
 import CommandLine from '@/components/CommandLine';
 import { CLI_INSTALL_COMMAND } from '@/features/Apps/const';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { acceptanceHomePath } from '../Viewer/routes';
 
@@ -165,7 +174,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const AcceptanceOnboarding = () => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [mode, setMode] = useState<'agent' | 'manual'>('agent');
 
   return (

@@ -6,9 +6,13 @@ import { GoalModel } from '@/database/models/goal';
 import { TopicModel } from '@/database/models/topic';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
+import { GoalService } from '@/server/services/goal';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import type { AcceptanceService } from '@/server/services/verify';
 
-import { agentNotifyRouter } from '../agentNotify';
+import type { agentNotifyRouter } from '../agentNotify';
+import { createAgentNotifyRouter } from '../agentNotify';
 
 const log = debug('lobe-server:acceptance-repair-dispatch');
 
@@ -24,7 +28,7 @@ const log = debug('lobe-server:acceptance-repair-dispatch');
  * - `failed`: the agent could not be started; the reject itself still stands.
  */
 export type AcceptanceRepairDispatch =
-  | { agentId: string; dispatched: true; operationId: string; topicId: string }
+  | { agentId: string; dispatched: true; operationId: string; taskId?: string; topicId: string }
   | {
       dispatched: false;
       error?: string;
@@ -32,6 +36,7 @@ export type AcceptanceRepairDispatch =
         | 'failed'
         | 'forbidden'
         | 'goal_coordinator'
+        | 'in_progress'
         | 'no_origin'
         | 'origin_unavailable'
         | 'skipped';
@@ -61,17 +66,33 @@ export const dispatchAcceptanceRepair = async (
   service: AcceptanceService,
   acceptance: AcceptanceItem,
   rejectComment?: string,
+  onOperationCreated?: (operationId: string) => Promise<void>,
 ): Promise<AcceptanceRepairDispatch> => {
   // A Goal Task's next attempt belongs to its coordinator, which reads the
   // rejected round through the prompt builder and claims the task. A plain
   // run in the old topic would race it into a second, unaccounted attempt.
   if (acceptance.subjectType === 'task') {
-    const goal = await new GoalModel(
-      ctx.serverDB,
-      acceptance.userId,
-      acceptance.workspaceId ?? undefined,
-    ).findByGraphTask(acceptance.subjectId);
-    if (goal) return { dispatched: false, reason: 'goal_coordinator' };
+    const workspaceId = acceptance.workspaceId ?? undefined;
+    const goal = await new GoalModel(ctx.serverDB, acceptance.userId, workspaceId).findByGraphTask(
+      acceptance.subjectId,
+    );
+    if (goal) {
+      // The Goal-level acceptance passing is what ended the Goal: sending it
+      // back reopens the Goal so the coordinator has a next attempt to start.
+      const reopened = await new GoalService(
+        ctx.serverDB,
+        acceptance.userId,
+        workspaceId,
+      ).reopenForChanges(acceptance.subjectId, rejectComment);
+      if (reopened)
+        await scheduleGoalAdvance({
+          goalId: reopened,
+          trigger: 'decide',
+          userId: acceptance.userId,
+          workspaceId,
+        });
+      return { dispatched: false, reason: 'goal_coordinator' };
+    }
   }
 
   const origin = await service.findRepairOrigin(acceptance.id);
@@ -87,12 +108,14 @@ export const dispatchAcceptanceRepair = async (
 
   let operationId: string | undefined;
   try {
-    ({ operationId } = await agentNotifyRouter.createCaller(ctx).notify({
-      agentId,
-      content: buildAcceptanceRepairPrompt(acceptance.id, rejectComment),
-      role: 'user',
-      topicId: topic.id,
-    }));
+    ({ operationId } = await createAgentNotifyRouter(onOperationCreated)
+      .createCaller(ctx)
+      .notify({
+        agentId,
+        content: buildAcceptanceRepairPrompt(acceptance.id, rejectComment),
+        role: 'user',
+        topicId: topic.id,
+      }));
   } catch (error) {
     if (error instanceof TRPCError && error.code === 'FORBIDDEN') {
       return { dispatched: false, reason: 'forbidden' };
@@ -113,6 +136,7 @@ export const dispatchAcceptanceRepair = async (
   // aggregate converges when the repair round lands.
   try {
     await service.acceptanceModel.updateStatus(acceptance.id, 'repairing');
+    notifyAcceptance(acceptance.id, 'session');
   } catch (error) {
     console.error('[acceptance] marking %s repairing failed: %O', acceptance.id, error);
   }

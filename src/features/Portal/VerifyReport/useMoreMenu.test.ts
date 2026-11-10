@@ -13,7 +13,10 @@ vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks
 vi.mock('@/libs/swr', () => ({ mutate: vi.fn() }));
 vi.mock('@/services/verify', () => ({ verifyService: { updateRunTitle: vi.fn() } }));
 vi.mock('./useReportUrl', () => ({
-  useVerifyReportUrl: () => ({ reportUrl: 'https://app.lobehub.com/verify/run_1', runId: 'run_1' }),
+  useVerifyReportUrl: () => ({
+    reportUrl: 'https://app.lobehub.com/acceptance/acc_1?r=2',
+    runId: 'run_1',
+  }),
 }));
 vi.mock('@/features/Acceptance/hooks', () => ({
   useVerifyReportBundle: () => ({
@@ -40,7 +43,7 @@ describe('useVerifyReportMoreMenu', () => {
     expect(result.current?.rename).toBeUndefined();
     expect(result.current).toMatchObject({
       copyId: 'run_1',
-      copyLink: 'https://app.lobehub.com/verify/run_1',
+      copyLink: 'https://app.lobehub.com/acceptance/acc_1?r=2',
     });
   });
 });

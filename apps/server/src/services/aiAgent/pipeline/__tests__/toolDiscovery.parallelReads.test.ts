@@ -82,6 +82,8 @@ vi.mock('@/database/models/file', () => ({
 vi.mock('@lobechat/observability-otel/modules/agent-runtime', () => ({
   tracer: {
     startActiveSpan: (_name: string, fn: (span: unknown) => unknown) => fn(discoverySpan),
+    // Marked blocks (`openStageMark`) open a plain span.
+    startSpan: () => discoverySpan,
   },
 }));
 

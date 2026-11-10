@@ -1,6 +1,6 @@
-import { BaseEdge, type EdgeProps, useReactFlow } from '@xyflow/react';
+import { BaseEdge, type EdgeProps, Position, useReactFlow } from '@xyflow/react';
 
-import { edgeLabelPoint, routeEdge } from './edgeRouting';
+import { edgeLabelPoint, routeEdge, sideToSidePath } from './edgeRouting';
 
 /** Measured card bounds, rather than estimated layout heights, keep paths out of text. */
 const ExplorationEdge = (props: EdgeProps) => {
@@ -30,12 +30,17 @@ const ExplorationEdge = (props: EdgeProps) => {
           : (n.measured?.height ?? n.height ?? n.initialHeight ?? 0),
     };
   });
-  const points = routeEdge(
-    { x: props.sourceX, y: props.sourceY },
-    { x: props.targetX, y: props.targetY },
-    boxes,
-    typeof props.data?.lane === 'number' ? props.data.lane : 0,
-  );
+  const source = { x: props.sourceX, y: props.sourceY };
+  const target = { x: props.targetX, y: props.targetY };
+  const points =
+    props.sourcePosition === Position.Right && props.targetPosition === Position.Left
+      ? sideToSidePath(source, target)
+      : routeEdge(
+          source,
+          target,
+          boxes,
+          typeof props.data?.lane === 'number' ? props.data.lane : 0,
+        );
   const label = edgeLabelPoint(points);
   return (
     <BaseEdge

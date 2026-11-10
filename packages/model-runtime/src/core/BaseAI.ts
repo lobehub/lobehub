@@ -13,6 +13,10 @@ import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResult,
+  DecisionOptions,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
   Embeddings,
   EmbeddingsOptions,
   EmbeddingsPayload,
@@ -25,6 +29,7 @@ import type {
   PullModelParams,
   TextToSpeechOptions,
   TextToSpeechPayload,
+  TextToSpeechResponse,
   VideoGenerationCapabilities,
   VideoPollingRoute,
 } from '../types';
@@ -41,6 +46,15 @@ export interface LobeRuntimeAI {
     payload: CreateVideoPayload,
     options?: CreateVideoMethodOptions,
   ) => Promise<CreateVideoResult>;
+
+  /**
+   * Answer typed questions with probabilities through a decision model.
+   * Only implemented by providers that serve decision models.
+   */
+  decide?: <Q extends DecisionQuestions>(
+    payload: DecisionPayload<Q>,
+    options?: DecisionOptions,
+  ) => Promise<DecisionResponse<Q>>;
 
   embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
 
@@ -74,7 +88,7 @@ export interface LobeRuntimeAI {
   textToSpeech?: (
     payload: TextToSpeechPayload,
     options?: TextToSpeechOptions,
-  ) => Promise<ArrayBuffer>;
+  ) => Promise<TextToSpeechResponse>;
 
   transcribe?: (payload: ASRPayload, options?: ASROptions) => Promise<ASRResponse>;
 }
@@ -100,5 +114,8 @@ export abstract class LobeOpenAICompatibleRuntime {
 
   transcribe?(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse>;
 
-  textToSpeech?(payload: TextToSpeechPayload, options?: TextToSpeechOptions): Promise<ArrayBuffer>;
+  textToSpeech?(
+    payload: TextToSpeechPayload,
+    options?: TextToSpeechOptions,
+  ): Promise<TextToSpeechResponse>;
 }

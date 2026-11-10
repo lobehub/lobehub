@@ -159,6 +159,38 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+      errorMessage:
+        'GitHub Copilot CLI could not authenticate. Run `copilot login` in your terminal, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not authenticated',
+        'not logged in',
+        'copilot login',
+        'gh auth login',
+      ],
+      signInCommand: 'copilot login',
+    },
+    defaultCommand: 'copilot',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'GithubCopilot',
+    install: {
+      commands: [
+        'curl -fsSL https://gh.io/copilot-install | bash',
+        'npm install -g @github/copilot',
+      ],
+      docsUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+    },
+    kind: 'local-cli',
+    menuKey: 'newCopilotAgent',
+    menuLabelKey: 'newCopilotAgent',
+    resume: { supported: true },
+    title: 'GitHub Copilot',
+    type: 'copilot',
+  },
+  {
+    auth: {
       docsUrl: 'https://cursor.com/docs/cli/installation',
       errorMessage: 'Cursor could not authenticate. Run `agent login`, then retry.',
       patterns: [...COMMON_AUTH_REQUIRED_PATTERNS, 'authentication required', 'not logged in'],
@@ -414,6 +446,44 @@ export interface RemoteHeterogeneousAgentDescriptor {
   type: string;
 }
 
+/**
+ * A runtime LobeHub drives over a protocol instead of parsing a CLI's JSONL
+ * dialect — the DeepSeek Harness CLI (`dsh`) serving its `acp` profile over
+ * stdio. The `dsh` executable is user-installed; nothing ships with
+ * LobeHub.
+ */
+export interface LocalRuntimeHeterogeneousAgentDescriptor {
+  /** Executable the user installs; probed before the runtime is offered. */
+  defaultCommand: string;
+  defaultModel: string;
+  defaultTopicGroupMode?: TopicGroupMode;
+  iconId: string;
+  kind: 'local-runtime';
+  title: string;
+  type: string;
+}
+
+export const LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS = [
+  {
+    defaultCommand: 'dsh',
+    defaultModel: 'deepseek-v4-flash',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'DeepSeek',
+    kind: 'local-runtime',
+    title: 'DeepSeek Harness',
+    type: 'deepseek-harness',
+  },
+] as const satisfies readonly LocalRuntimeHeterogeneousAgentDescriptor[];
+
+/**
+ * Every agent type that runs on the producer's machine and streams through
+ * `heteroIngest` / `heteroFinish`: descriptor-backed CLIs plus protocol-driven runtimes.
+ */
+export const LocalExecutionHeterogeneousAgentTypeSchema = z.enum([
+  ...LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  ...LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+]);
+
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
   {
     cli: {
@@ -443,11 +513,15 @@ export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
 
 export type HeterogeneousAgentDescriptor =
   | (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]
+  | (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number]
   | (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number];
 
 export type HeterogeneousAgentMenuLabelKey =
   (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['menuLabelKey'];
 export type LocalHeterogeneousAgentType = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
+export type LocalRuntimeHeterogeneousAgentType =
+  (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
 export type RemoteHeterogeneousAgentType =
   (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
-export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterogeneousAgentType;
+export type HeterogeneousAgentType =
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType | RemoteHeterogeneousAgentType;

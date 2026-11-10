@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Collapsible, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Collapsible,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Spin,
+  Text,
+} from '@lobehub/ui';
 import {
   ChevronRight,
   ChevronsDownUp,
@@ -284,7 +292,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
       <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
           {bundleLoading && <Spin size="middle" />}
-          {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
+          {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
             <>
               <GoalRoundTimeline rounds={bundle.rounds} />

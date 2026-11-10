@@ -426,7 +426,6 @@ describe('finish executor', () => {
       // Then
       const doneEvent = result.events[0] as AgentEventDone;
       expect(doneEvent.reasonDetail).toBe(longDetail);
-      expect(doneEvent.reasonDetail?.length).toBe(10000);
     });
 
     it('should handle state with empty messages array', async () => {

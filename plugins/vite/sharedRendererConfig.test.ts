@@ -1,7 +1,10 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
 import {
   __testing,
+  createEntrySetLabeler,
+  createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDedupe,
@@ -15,6 +18,19 @@ const getPluginNames = (platform: 'desktop' | 'web') =>
     .map((plugin) => plugin.name);
 
 describe('sharedRendererPlugins', () => {
+  it('compiles app StyleX without taking @lobehub/ui out of pre-bundling', () => {
+    const plugin = sharedRendererPlugins({ platform: 'web' })
+      .flat(Number.POSITIVE_INFINITY)
+      .find(
+        (item): item is { config?: unknown; name: string } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          (item as { name?: string }).name === '@stylexjs/unplugin',
+      );
+
+    expect(plugin?.config).toBeUndefined();
+  });
+
   it('keeps the icon barrel transform out of the Electron renderer', () => {
     expect(getPluginNames('desktop')).not.toContain('lobe-icon-named-export-proxy');
     expect(getPluginNames('web')).toContain('lobe-icon-named-export-proxy');
@@ -49,10 +65,12 @@ describe('lobe-dev-editor-provider', () => {
 });
 
 describe('sharedOptimizeDeps', () => {
-  it('pre-bundles the root and base-ui entrypoints together', () => {
-    expect(sharedOptimizeDeps.include).toEqual(
-      expect.arrayContaining(['@lobehub/ui', '@lobehub/ui/base-ui']),
-    );
+  it('pre-bundles the @lobehub/ui root entrypoint', () => {
+    expect(sharedOptimizeDeps.include).toContain('@lobehub/ui');
+    expect(sharedOptimizeDeps.exclude).toEqual([
+      '@lobehub/ui/stylex/cssVar.stylex',
+      '@lobehub/ui/stylex/media.stylex',
+    ]);
   });
 });
 
@@ -125,6 +143,32 @@ describe('sharedManualChunks', () => {
     expect(__testing.sharedManualChunks('/repo/node_modules/dayjs/locale/zh-cn.js')).toBe(
       'i18n-zh-CN-ui-runtime',
     );
+  });
+
+  it('keeps the whole antd locale graph in the ui-runtime chunk so it cannot form a cycle', () => {
+    const pnpm = '/repo/node_modules/.pnpm/antd@6.3.5/node_modules';
+    for (const id of [
+      `${pnpm}/antd/locale/zh_CN.js`,
+      `${pnpm}/antd/es/calendar/locale/zh_CN.js`,
+      `${pnpm}/antd/es/date-picker/locale/zh_CN.js`,
+      `${pnpm}/antd/es/time-picker/locale/zh_CN.js`,
+      '/repo/node_modules/@rc-component/pagination/es/locale/zh_CN.js',
+      '/repo/node_modules/@rc-component/picker/es/locale/zh_CN.js',
+    ]) {
+      expect(__testing.sharedManualChunks(id)).toBe('i18n-zh-CN-ui-runtime');
+    }
+    expect(
+      __testing.sharedManualChunks('/repo/node_modules/@rc-component/picker/es/locale/ar_EG.js'),
+    ).toBe('i18n-ar-ui-runtime');
+  });
+
+  it('leaves antd default en_US component locales with the antd vendor graph', () => {
+    expect(
+      __testing.sharedManualChunks('/repo/node_modules/antd/es/date-picker/locale/en_US.js'),
+    ).toBe(undefined);
+    expect(
+      __testing.sharedManualChunks('/repo/node_modules/@rc-component/picker/es/locale/common.js'),
+    ).toBe(undefined);
   });
 
   it('keeps locale runtime helpers out of the default locale chunk', () => {
@@ -281,5 +325,122 @@ describe('sharedChunkFileNames', () => {
         name: 'markdown',
       }),
     ).toBe('assets/[name]-[hash].js');
+  });
+});
+
+const fakeGraph: Record<string, string[]> = {
+  '/main.tsx': ['/shared.ts', '/main-only.ts', '/node_modules/antd/es/button.js'],
+  '/overlay.tsx': ['/shared.ts', '/overlay-only.ts'],
+  '/popup.tsx': ['/shared.ts', '/main-only.ts'],
+  '/shared.ts': ['/leaf.ts'],
+  '/main-only.ts': [],
+  '/overlay-only.ts': [],
+  '/leaf.ts': [],
+  '/lazy.ts': [],
+  '/node_modules/antd/es/button.js': [],
+};
+const fakeCtx = {
+  getModuleInfo: (id: string) => (id in fakeGraph ? { importedIds: fakeGraph[id] } : null),
+};
+const fakeEntries = { main: '/main.tsx', overlay: '/overlay.tsx', popup: '/popup.tsx' };
+
+describe('createEntrySetLabeler', () => {
+  const label = createEntrySetLabeler(fakeEntries);
+
+  it('labels each first-screen module by the entries that statically reach it', () => {
+    expect(label('/leaf.ts', fakeCtx)).toBe('main+overlay+popup');
+    expect(label('/main-only.ts', fakeCtx)).toBe('main+popup');
+    expect(label('/overlay-only.ts', fakeCtx)).toBe('overlay');
+    expect(label('/main.tsx', fakeCtx)).toBe('main');
+  });
+
+  it('leaves modules no entry reaches statically unlabeled', () => {
+    expect(label('/lazy.ts', fakeCtx)).toBeNull();
+  });
+
+  it('matches Windows entry paths against normalized module graph IDs', () => {
+    const windowsLabel = createEntrySetLabeler({
+      main: 'C:\\repo\\main.tsx',
+      overlay: 'C:\\repo\\overlay.tsx',
+      popup: 'C:\\repo\\popup.tsx',
+    });
+    const graph = Object.fromEntries(
+      Object.entries(fakeGraph).map(([id, imports]) => [
+        `C:/repo${id}`,
+        { importedIds: imports.map((dependency) => `C:/repo${dependency}`) },
+      ]),
+    );
+    const ctx = { getModuleInfo: (id: string) => graph[id] ?? null };
+
+    expect(windowsLabel('C:/repo/main.tsx', ctx)).toBe('main');
+    expect(windowsLabel('C:/repo/leaf.ts', ctx)).toBe('main+overlay+popup');
+    expect(windowsLabel('C:/repo/main-only.ts', ctx)).toBe('main+popup');
+    expect(windowsLabel('C:/repo/overlay-only.ts', ctx)).toBe('overlay');
+    expect(windowsLabel('C:/repo/lazy.ts', ctx)).toBeNull();
+  });
+
+  it('fails loudly when an entry module is not in the graph', () => {
+    const broken = createEntrySetLabeler({ main: '/missing.tsx' });
+    expect(() => broken('/leaf.ts', fakeCtx)).toThrow(/missing\.tsx/);
+  });
+});
+
+type OutputGroup = ReturnType<typeof createSharedRolldownOutput>['codeSplitting']['groups'][number];
+const nameOf = (group: OutputGroup | undefined, id: string) =>
+  typeof group?.name === 'function' ? group.name(id, fakeCtx) : group?.name;
+
+describe('createSharedRolldownOutput', () => {
+  const groups = (options?: Parameters<typeof createSharedRolldownOutput>[0]) =>
+    createSharedRolldownOutput(options).codeSplitting.groups as OutputGroup[];
+  const initialGroup = (list: OutputGroup[], vendor: string) =>
+    list.find(
+      (g) =>
+        g.priority >= 10 &&
+        (g.name === vendor || nameOf(g, '/node_modules/antd/es/button.js')?.startsWith(vendor)),
+    );
+
+  it('keeps the single-name first-screen catch-all for single-entry builds', () => {
+    expect(groups().at(-1)).toMatchObject({ name: 'app-initial', tags: ['$initial'] });
+    expect(initialGroup(groups(), 'vendor-antd')).toMatchObject({ tags: ['$initial'] });
+    expect(initialGroup(groups(), 'vendor-antd')?.name).toBe('vendor-antd');
+  });
+
+  it('splits first-screen chunks, vendor groups included, per entry set for multi-entry builds', () => {
+    const output = createSharedRolldownOutput({ initialEntries: fakeEntries, splitInitial: false });
+    const list = output.codeSplitting.groups as OutputGroup[];
+
+    expect(output.codeSplitting).toMatchObject({ includeDependenciesRecursively: false });
+    expect(list.some((g) => 'tags' in g)).toBe(false);
+    expect(nameOf(list.at(-1), '/main-only.ts')).toBe('initial-main+popup');
+    expect(nameOf(list.at(-1), '/lazy.ts')).toBeNull();
+    expect(nameOf(initialGroup(list, 'vendor-antd'), '/node_modules/antd/es/button.js')).toBe(
+      'vendor-antd-main',
+    );
+  });
+
+  it('keeps entry-set chunking for multi-entry builds without initial entries', () => {
+    const output = createSharedRolldownOutput({ splitInitial: false });
+    expect(output.codeSplitting).not.toHaveProperty('includeDependenciesRecursively');
+    expect((output.codeSplitting.groups as OutputGroup[]).some((g) => 'tags' in g)).toBe(false);
+  });
+
+  // Regression: base.css (which styles <body>) shared a chunk with modules the
+  // App's lazy chunks import, so loading Home restyled the App's body.
+  it('gives canvas runtime sources a chunk of their own, apart from modules the App shares', () => {
+    const entry = '/repo/packages/canvas-runtime/src/index.tsx';
+    const base = '/repo/packages/canvas-runtime/src/base.css';
+    const shared = '/repo/packages/canvas/src/index.ts';
+    const graph: Record<string, string[]> = { [base]: [], [entry]: [base, shared], [shared]: [] };
+    const ctx = { getModuleInfo: (id: string) => ({ importedIds: graph[id] }) };
+    const chunkOf = (id: string) =>
+      groups({ initialEntries: { runtime: entry } })
+        .filter((g) => (typeof g.test === 'function' ? g.test(id) : (g.test?.test(id) ?? true)))
+        .sort((a, b) => b.priority - a.priority)
+        .map((g) => (typeof g.name === 'function' ? g.name(id, ctx) : g.name))
+        .find(Boolean);
+
+    expect(chunkOf(base)).toBe('canvas-runtime-runtime');
+    expect(chunkOf(entry)).toBe('canvas-runtime-runtime');
+    expect(chunkOf(shared)).toBe('initial-runtime');
   });
 });

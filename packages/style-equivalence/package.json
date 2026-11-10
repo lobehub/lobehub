@@ -1,0 +1,28 @@
+{
+  "name": "@lobechat/style-equivalence",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Style migration equivalence verifier: synthetic per-element comparison with an evidence report",
+  "type": "module",
+  "exports": {
+    "./capture/snapshot": "./src/capture/snapshot.ts",
+    "./capture/conditionPartitions": "./src/capture/conditionPartitions.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lobehub/ui": "^6.13.1",
+    "@playwright/test": "^1.62.1",
+    "@stylexjs/stylex": "0.19.1",
+    "@vitejs/plugin-react": "^6.0.5",
+    "lucide-react": "^1.31.0",
+    "motion": "^14.1.0",
+    "postcss": "8.5.23",
+    "postcss-selector-parser": "7.1.7",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "6.0.3",
+    "vite": "8.0.16"
+  }
+}

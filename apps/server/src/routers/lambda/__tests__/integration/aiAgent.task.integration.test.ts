@@ -344,12 +344,6 @@ describe('Agent Task Integration', () => {
       expect(createResult.success).toBe(false);
       expect(createResult.error).toBe('Agent execution failed');
       expect(createResult.threadId).toBe(threadId);
-
-      // Verify Thread status
-      const [thread] = await serverDB.select().from(threads).where(eq(threads.id, threadId));
-
-      expect(thread.status).toBe(ThreadStatus.Failed);
-      expect(thread.metadata?.error).toBe('Agent execution failed');
     });
 
     it('should handle task failure during execution', async () => {

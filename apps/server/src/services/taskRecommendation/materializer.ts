@@ -4,6 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import type { CreateTaskInput } from '@/server/services/task';
 import { TaskService } from '@/server/services/task';
 
@@ -67,6 +68,7 @@ export class TaskRecommendationMaterializer {
             eq(topics.id, input.topicId),
             eq(topics.userId, this.userId),
             isNull(topics.workspaceId),
+            notTrashed(topics.isDeleted),
           ),
         )
         .for('update');
@@ -125,6 +127,7 @@ export class TaskRecommendationMaterializer {
             eq(topics.id, input.topicId),
             eq(topics.userId, this.userId),
             isNull(topics.workspaceId),
+            notTrashed(topics.isDeleted),
           ),
         );
 

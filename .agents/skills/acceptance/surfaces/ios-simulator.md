@@ -11,6 +11,7 @@ controller or private plugin is not a prerequisite.
 ## Contents
 
 - [Proof contract](#proof-contract)
+- [Resolve the host app by Xcode version](#resolve-the-host-app-by-xcode-version)
 - [Probe and choose a CLI driver](#probe-and-choose-a-cli-driver)
 - [Establish the tested build](#establish-the-tested-build)
 - [Inspect and interact](#inspect-before-acting)
@@ -33,12 +34,30 @@ Record the repository, branch, commit, dirty state, build command, Xcode version
 Simulator model/runtime/UDID, bundle identifier, and tested time. A screenshot
 from an old install is not evidence for the current source.
 
-## Probe and choose a CLI driver
+## Resolve the host app by Xcode version
 
-Prefer a CLI that talks to Simulator Accessibility and HID directly. Probe the
-host rather than assuming one tool is installed:
+Xcode 27 and later replace `Simulator.app` with **DeviceHub**
+(`Xcode.app/Contents/Applications/DeviceHub.app`, bundle id
+`com.apple.dt.Devices`). `xcrun simctl` and the simulated devices themselves are
+unchanged; only the host GUI app differs. Read the major version before opening,
+activating, or locating the host window:
 
 ```bash
+XCODE_MAJOR=$(xcodebuild -version | awk 'NR==1 { split($2, v, "."); print v[1] }')
+if [ "$XCODE_MAJOR" -ge 27 ]; then HOST_APP=DeviceHub; else HOST_APP=Simulator; fi
+open -a "$HOST_APP"
+```
+
+Never hard-code `open -a Simulator` or `tell application "Simulator"`: on Xcode 27+
+it fails, and a failed launch is a harness error, not a product failure.
+
+## Probe and choose a CLI driver
+
+Prefer the most agent-friendly CLI that talks to Simulator Accessibility and HID
+directly. Probe the host rather than assuming one tool is installed:
+
+```bash
+command -v sim-use
 command -v axe
 command -v idb
 command -v idb_companion
@@ -48,48 +67,32 @@ command -v ffprobe
 xcrun simctl help io
 ```
 
-| Tool                    | Responsibility in this workflow                                                                                  |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| AXe                     | Accessibility inspection; selector/coordinate tap; touch, swipe, drag, and preset gesture injection; screenshots |
-| `simctl`                | Device discovery and lifecycle; app install/launch; logs; authoritative framebuffer screenshots and recording    |
-| `ffprobe`               | Prove the recorded movie is readable and report its observed duration, dimensions, rate, and frame count         |
-| `ffmpeg`                | Losslessly enumerate decoded frames, sample review frames, and generate contact sheets                           |
-| `idb` + `idb_companion` | Optional alternative driver only when both halves are installed and working                                      |
-| `cliclick`              | Last-resort host-window click for smoke testing; not proof of native touch semantics                             |
+Pick the first available driver, then read **only** its reference for commands:
 
-Driver priority:
+| Priority | Driver                                | Use when                                                                                          | Commands                               |
+| -------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| 1        | sim-use                               | Default. Outline with `@N` aliases, `hint` on failed targets, built-in long press and crash check | [sim-use.md](../references/sim-use.md) |
+| 2        | AXe                                   | sim-use is absent, or the step needs `batch`, `drag --steps`, or `slider`                         | [axe.md](../references/axe.md)         |
+| 3        | Repository XCUITest or documented CLI | Neither is installed, or the project already owns stronger domain assertions                      | The repository's own docs              |
+| 4        | `idb` + `idb_companion`               | Both halves are installed and working; `idb_companion` alone is not an interaction CLI            | `idb --help`                           |
+| 5        | `cliclick`                            | Smoke-test click only; depends on `$HOST_APP` window geometry and does not prove HID semantics    | `cliclick -h`                          |
 
-1. **AXe** — preferred general-purpose agent driver. It resolves accessibility
-   selectors, injects taps/touch/swipe/drag, describes UI, and captures
-   screenshots. Treat its video recorder as a probe-only fallback to `simctl`.
-2. **The repository's existing XCUITest or documented CLI driver** — use when AXe
-   is absent or the project already owns stronger domain assertions.
-3. **`idb` + `idb_companion` together** — use only when both client and companion
-   are available. `idb_companion` alone is not an interaction CLI.
-4. **`cliclick`** — host-window fallback for a simple click only. It depends on
-   Simulator window geometry and does not independently prove native HID semantics.
+`simctl` owns device lifecycle, install/launch, logs, and framebuffer capture for
+every driver. `ffprobe` and `ffmpeg` verify and slice recordings.
 
 If no available driver can express the planned gesture, mark the case `blocked`.
 Do not switch to a private agent plugin or silently downgrade a long press to a
-tap. If AXe must be installed, use its official distribution only after the task
-scope allows installation; otherwise report the missing prerequisite.
-
-```bash
-# Only when AXe is absent and dependency installation is explicitly in scope.
-brew install cameroncooke/axe/axe
-```
-
-The examples below target AXe. Run `axe --version`, `axe --help`, and
-`axe help <subcommand>` first because capabilities may differ by installed
-version.
+tap. Install a missing driver from its official distribution only when the task
+scope allows installation; otherwise report the missing prerequisite. Record the
+driver name and version in the text evidence.
 
 ## Establish the tested build
 
-Resolve one explicit device and keep using its UDID. Avoid `booted` after device
-selection when several Simulators may be running.
+Resolve one explicit device and keep using its UDID for both the driver and
+`simctl`. Avoid `booted` after device selection when several Simulators may be
+running; the driver reference shows how to pin the device.
 
 ```bash
-axe list-simulators
 xcrun simctl list devices booted --json > ./proof/simulator-devices.json
 xcodebuild -version > ./proof/xcode-version.txt
 
@@ -104,87 +107,32 @@ Save the build product path and modification time in the text evidence.
 
 ## Inspect before acting
 
-Read the current Accessibility hierarchy before choosing selectors or coordinates:
+Read the current Accessibility hierarchy with the driver's `describe-ui` before
+choosing a target, and again after every navigation, scroll, or modal change.
+Prefer an accessibility identifier, then a label narrowed by element type; use
+coordinates only when the UI exposes no unambiguous selector. Stable identifiers
+make the same flow reusable across device sizes and reduce accidental actions on
+the wrong control. On a multi-match or zero-size frame, inspect the intended
+control by point instead of forcing the ambiguous selector.
 
-```bash
-axe describe-ui --udid "$UDID" > ./proof/before-ui.txt
-axe describe-ui --point 220,710 --udid "$UDID"
-```
+Derive coordinates from `describe-ui`, not from a screenshot: screenshots are
+device pixels while the hierarchy is in points.
 
-Prefer `--id` (accessibility identifier), then `--label` plus `--element-type`.
-Use coordinates only when the UI exposes no unambiguous selector. Stable
-identifiers make the same flow reusable across device sizes and reduce accidental
-actions on the wrong control. If selector resolution reports multiple matches or
-an invalid/zero-size frame, inspect the intended control with `--point` and use
-its device coordinates; do not force the ambiguous selector.
-
-## Tap and run multi-step flows
-
-```bash
-# Selector tap with polling and a settle delay.
-axe tap --id photo-info-button --wait-timeout 5 --post-delay 0.5 --udid "$UDID"
-
-# Disambiguated label tap.
-axe tap --label 'Exposure & Metering' --element-type Button --udid "$UDID"
-
-# Coordinate fallback using physical touch down/up.
-axe tap -x 220 -y 710 --tap-style physical --udid "$UDID"
-```
-
-Most AXe HID commands are fire-and-forget: successful dispatch does not prove the
-app processed the event. Always re-read UI or capture the post-state.
-
-Prefer `axe batch` for a fixed multi-step flow so one HID session executes all
-steps. Use selector polling for transitions and refresh the AX cache when screens
-change:
-
-```bash
-axe batch --udid "$UDID" --wait-timeout 5 --ax-cache perStep \
-  --step "tap --id first-photo" \
-  --step "sleep 0.5" \
-  --step "tap --id photo-info-button"
-```
-
-Use discrete commands instead when the next selector/coordinate depends on
-runtime inspection of the previous state.
-
-## Deliver long press, swipe, and drag precisely
-
-AXe exposes the touch primitives that host-mouse automation often lacks:
-
-```bash
-# Long press: explicit touch down, hold, and touch up.
-axe touch -x 220 -y 710 --down --up --delay 0.6 --udid "$UDID"
-
-# Horizontal page swipe with controlled duration.
-axe swipe --start-x 330 --start-y 430 --end-x 70 --end-y 430 \
-  --duration 0.6 --post-delay 0.5 --udid "$UDID"
-
-# Low-level drag with explicit move-event density.
-axe drag --start-x 200 --start-y 350 --end-x 200 --end-y 760 \
-  --duration 0.8 --steps 80 --post-delay 0.5 --udid "$UDID"
-
-# Device-relative common pattern; provide the actual screen dimensions.
-axe gesture scroll-left --screen-width 402 --screen-height 874 \
-  --duration 0.6 --udid "$UDID"
-```
-
-Derive coordinates from `describe-ui` and the selected device, not from a
-screenshot displayed at an unknown host scale. A dispatched gesture is only the
-input half of the proof; verify the expected page identity, count, disclosure,
-or visual state afterward.
+HID commands are fire-and-forget: successful dispatch does not prove the app
+processed the event. A dispatched tap or gesture is only the input half of the
+proof; verify the expected page identity, count, disclosure, or visual state
+afterward.
 
 ## Capture device evidence
 
-Capture clean device pixels with AXe or `simctl`, not a cropped host-window
-screenshot:
+Capture clean device pixels with the driver's screenshot command or `simctl`, not
+a cropped host-window screenshot:
 
 ```bash
-axe screenshot --udid "$UDID" --output ./proof/after.png
-xcrun simctl io "$UDID" screenshot --type=png ./proof/after-simctl.png
+xcrun simctl io "$UDID" screenshot --type=png ./proof/after.png
 ```
 
-For transitions and multi-step behavior, record the Simulator framebuffer and
+For transitions and multi-step behavior, record the device framebuffer and
 derive every-frame or sampled contact sheets using
 [../references/recording-ios-simulator.md](../references/recording-ios-simulator.md).
 Keep the original MP4; a contact sheet is an index for review, not a replacement
@@ -192,11 +140,8 @@ for temporal evidence. Treat requested recording FPS as a target only: Simulator
 movies may be variable-frame-rate, so verify actual duration, rate, and frame count
 with `ffprobe`.
 
-After each material action, preserve a fresh UI hierarchy as text evidence:
-
-```bash
-axe describe-ui --udid "$UDID" > ./proof/after-ui.txt
-```
+After each material action, preserve a fresh `describe-ui` hierarchy (and, with
+sim-use, `app-state`) as text evidence.
 
 For diagnostics, capture a scoped log after the interaction:
 
@@ -216,7 +161,7 @@ logs are harmless.
 - **Animation/transition:** inspect the raw MP4 plus extracted start/event/end
   frames. Extract every encoded frame when timing, flicker, or a one-frame flash
   is the claim; otherwise use a declared sampling rate and retain the video.
-- **Gesture:** pair the exact AXe command with the postcondition. A final
+- **Gesture:** pair the exact driver command with the postcondition. A final
   screenshot alone cannot prove which gesture caused it.
 - **Accessibility:** compare the visual state with `describe-ui` before/after.
   A visually correct control that cannot be identified or activated remains an
@@ -232,7 +177,7 @@ logs are harmless.
 | `fail`    | The required input was delivered and the product violated the expected behavior                       |
 | `blocked` | The build/environment/driver could not execute or observe the required condition                      |
 
-For a blocked case, attach the recording or screenshot, UI hierarchy before/after,
+For a blocked case, attach the recording or screenshot, UI outline before/after,
 the attempted command, stderr/exit status, and the missing driver capability. A
 fallback close button, ordinary tap, or static frame may be useful smoke evidence
 but cannot satisfy a different planned gesture.
@@ -243,5 +188,6 @@ disclose the exact side effect in the report.
 
 Publish the artifacts with the plan-driven submit flow or place them under the
 structured report's `assets/` directory and ingest the whole round. Tag direct
-AXe/`simctl` captures as `--by cli`, deterministic UI-test/media-transform output
-as `--by program`, and preserve the device identity in every artifact description.
+driver/`simctl` captures as `--by cli`, deterministic UI-test/media-transform
+output as `--by program`, and preserve the device identity in every artifact
+description.

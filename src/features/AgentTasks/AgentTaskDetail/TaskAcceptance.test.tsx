@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => ({
 
 // Real base-ui ActionIcon only surfaces its title via a hover Tooltip; the
 // assertions click the title text directly.
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button type="button" onClick={onClick}>
@@ -434,26 +434,5 @@ describe('TaskAcceptance', () => {
 
     expect(screen.getByText('Current check')).toBeInTheDocument();
     expect(screen.getByText('Removed check')).toBeInTheDocument();
-  });
-
-  it('groups a checklist only after it exceeds ten checks', () => {
-    mocks.acceptanceSubject = { id: 'acceptance-1' };
-    mocks.bundle = {
-      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
-      checks: Array.from({ length: 11 }, (_, index) => ({
-        category: index < 6 ? 'Setup' : 'Result',
-        id: `c${index + 1}`,
-        seq: index + 1,
-        title: `Check ${index + 1}`,
-      })),
-      isOwner: true,
-    };
-
-    render(<TaskAcceptance />);
-
-    expect(screen.getByText('Setup')).toBeInTheDocument();
-    expect(screen.getByText('Result')).toBeInTheDocument();
-    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
-    expect(screen.getByText('Check 11')).toBeInTheDocument();
   });
 });

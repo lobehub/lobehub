@@ -25,6 +25,25 @@ describe('CodexAdapter', () => {
     expect(adapter.sessionId).toBe('thread-123');
   });
 
+  it('includes the native thread id in initial and deferred stream starts', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ thread_id: 'thread-resumable', type: 'thread.started' });
+
+    expect(adapter.adapt({ type: 'turn.started' })).toMatchObject([
+      { data: { provider: 'codex', sessionId: 'thread-resumable' }, type: 'stream_start' },
+    ]);
+
+    adapter.adapt({ type: 'turn.started' });
+    const nextStep = adapter.adapt({
+      item: { id: 'item-next', text: 'Next step', type: 'agent_message' },
+      type: 'item.completed',
+    });
+    expect(nextStep[0]).toMatchObject({
+      data: { newStep: true, provider: 'codex', sessionId: 'thread-resumable' },
+      type: 'stream_start',
+    });
+  });
+
   it('emits stream start and text chunks for turn + agent messages', () => {
     const adapter = new CodexAdapter();
 
@@ -42,6 +61,7 @@ describe('CodexAdapter', () => {
       data: { provider: 'codex' },
       type: 'stream_start',
     });
+    expect(start[0].data).not.toHaveProperty('sessionId');
     expect(text[0]).toMatchObject({
       data: { chunkType: 'text', content: 'hello from codex' },
       type: 'stream_chunk',
@@ -177,6 +197,72 @@ describe('CodexAdapter', () => {
 
     expect(adapter.adapt({ model: 'gpt-5.5', type: 'session_configured' })).toHaveLength(1);
     expect(adapter.adapt({ model: 'gpt-5.5', type: 'session_configured' })).toEqual([]);
+  });
+
+  it.each([
+    'Reconnecting... 2/5 (request timed out)',
+    'Reconnecting... 2/5 (stream disconnected before completion: Connection refused (os error 61))',
+    'Reconnecting... 1/5',
+    'Reconnecting... waiting for network',
+  ])('keeps the turn and pending tools alive during %s', (message) => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+    const item = {
+      command: 'printf recovered',
+      id: 'command-recovery',
+      status: 'in_progress',
+      type: 'command_execution',
+    };
+    adapter.adapt({ item, type: 'item.started' });
+
+    expect(adapter.adapt({ message, type: 'error' })).toMatchObject([
+      { data: { message }, type: 'stream_retry' },
+    ]);
+    const tool = adapter.adapt({
+      item: { ...item, aggregated_output: 'recovered', exit_code: 0, status: 'completed' },
+      type: 'item.completed',
+    });
+    expect(tool.map((event) => event.type)).toEqual(['tool_result', 'tool_end']);
+    expect(tool[1].data).toMatchObject({ isSuccess: true, toolCallId: item.id });
+    const text = adapter.adapt({
+      item: { id: 'answer', text: 'Recovery completed.', type: 'agent_message' },
+      type: 'item.completed',
+    });
+    expect(text.at(-1)).toMatchObject({
+      data: { chunkType: 'text', content: 'Recovery completed.' },
+      type: 'stream_chunk',
+    });
+    expect(adapter.adapt({ type: 'turn.completed' }).map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'agent_runtime_end',
+    ]);
+    expect(adapter.flush()).toEqual([]);
+  });
+
+  it('emits a terminal failure exactly once after reconnect attempts are exhausted', () => {
+    const adapter = new CodexAdapter();
+    adapter.adapt({ type: 'turn.started' });
+    for (const attempt of [1, 2]) {
+      expect(
+        adapter.adapt({ message: `Reconnecting... ${attempt}/2 (timeout)`, type: 'error' }),
+      ).toMatchObject([{ type: 'stream_retry' }]);
+    }
+
+    // The event type is authoritative, even when the final message repeats a retry notice.
+    const failure = {
+      error: { message: 'Reconnecting... 2/2 (timeout)' },
+      type: 'turn.failed',
+    };
+    const events = adapter.adapt(failure);
+    expect(events.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'error',
+    ]);
+    expect(events.at(-1)?.data.message).toBe(failure.error.message);
+    expect(adapter.adapt(failure)).toEqual([]);
+    expect(adapter.adapt({ type: 'turn.completed' })).toEqual([]);
   });
 
   it('emits terminal errors from Codex JSONL error events', () => {

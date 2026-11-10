@@ -262,8 +262,10 @@ Subscribe algorithm (per connection, per op):
 1. Record sub `{ lastSeq: Number(lastEventId ?? 0), executor, state:'replaying' }`.
 2. Call op DO `hub-subscribe`. If it returns a `userId` that ≠ hub's userId ⇒
    `subscribe_failed{forbidden}` and drop the sub. If `userId` is undefined (op not inited
-   yet — the init/subscribe race, LOBE-10443): keep the sub with `state:'pending'`, send
-   `resume_complete{ pending:true, gap:false }` and return; when an `op-lifecycle` with
+   yet — the init/subscribe race: a subscriber that arrives before the op exists must not be
+   answered with an empty replay, because the client reads an empty replay as a finished
+   session and clears the shared `runningOperation`): keep the sub with `state:'pending'`,
+   send `resume_complete{ pending:true, gap:false }` and return; when an `op-lifecycle` with
    status `running` arrives for that op, run steps 3-5 for every pending sub.
 3. Call op DO `replay{ since: String(lastSeq) }`; send each returned message (with
    `operationId` added) in order, updating `lastSeq`.
@@ -361,6 +363,8 @@ Behavior:
 
 - Labs flag `enableGatewayMux` (labPrefer selector + `LAB_FEATURES` entry `gatewayMux`,
   stage `alpha`, i18n `labs` namespace en-US + zh-CN).
+  _Update: the rollout gate (later the `agent_gateway_mux` feature flag) has been
+  removed. Web takes v2 wherever `serverConfig.agentGatewayProtocol === 2`._
 - `GatewayActionImpl.createClient(options, ctx)` — when the flag is on, return
   `createOperationClient(getMux(identity), operationId, {...})` where `identity` is
   `'owner'` (getToken = `aiAgentService.issueGatewayUserToken`) or `share:${agentShareId}`

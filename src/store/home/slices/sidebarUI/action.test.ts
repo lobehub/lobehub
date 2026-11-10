@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +16,7 @@ import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
 
 // Mock dependencies
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: {
     error: vi.fn(),
@@ -202,7 +202,6 @@ describe('createSidebarUISlice', () => {
         await result.current.removeAgent(mockAgentId);
       });
 
-      // removeAgent only removes and refreshes the agent list; session switching is handled in SessionStore.removeSession
       expect(mockSwitchSession).not.toHaveBeenCalledWith(INBOX_SESSION_ID);
     });
   });
