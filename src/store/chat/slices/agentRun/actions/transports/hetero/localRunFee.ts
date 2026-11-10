@@ -64,8 +64,11 @@ const unfundedRunFeeError = (): ChatMessageError => ({
  * Any other failure (a server without this endpoint, a network blip, a hold
  * slower than {@link LOCAL_RUN_FEE_HOLD_TIMEOUT_MS}) lets the run go ahead
  * without a fee, as the server's own hold does on failures that are not a
- * refusal: a run fee is not worth failing a run the user started. The caller
- * checks for a Stop that landed during the hold before spawning the CLI.
+ * refusal: a run fee is not worth failing a run the user started.
+ *
+ * Returns `'stopped'`, with any held fee already given back as interrupted,
+ * when the user stopped the run before or during the hold: the CLI must not
+ * start then either.
  */
 export const claimLocalRunFee = async (
   claim: LocalRunFeeClaim,
@@ -77,7 +80,8 @@ export const claimLocalRunFee = async (
   },
   /** The operation's Stop signal: it ends a pending hold and marks when the run stopped. */
   abortSignal?: AbortSignal,
-): Promise<ChatMessageError | undefined> => {
+): Promise<ChatMessageError | 'stopped' | undefined> => {
+  if (abortSignal?.aborted) return 'stopped';
   if (!shouldClaimLocalRunFee(run)) return;
   claim.startedAt = Date.now();
   claim.workspaceId = run.workspaceId ?? null;
@@ -95,9 +99,12 @@ export const claimLocalRunFee = async (
   } catch (error) {
     if ((error as Error)?.message === ChatErrorType.InsufficientBudgetForAgentRunFee)
       return unfundedRunFeeError();
-    if (abortSignal?.aborted) return;
-    console.error('[HeterogeneousAgent] run fee hold failed; running without it:', error);
+    if (!abortSignal?.aborted)
+      console.error('[HeterogeneousAgent] run fee hold failed; running without it:', error);
   }
+  if (!abortSignal?.aborted) return;
+  await settleLocalRunFee(claim, { aborted: true, failed: false });
+  return 'stopped';
 };
 
 /**

@@ -130,7 +130,9 @@ describe('heterogeneousAgentExecutor run fee', () => {
     // Before: the executor spawned the CLI once the hold returned, though the
     // run had been stopped; the native cancel was registered only after spawn.
     const abortController = new AbortController();
+    const updateTopicStatus = vi.fn();
     const store = createMockStore({
+      activeTopicId: 'topic-1',
       onOperationCancel: vi.fn(),
       operations: {
         'op-1': {
@@ -139,6 +141,7 @@ describe('heterogeneousAgentExecutor run fee', () => {
           metadata: { startTime: 0 },
         },
       },
+      updateTopicStatus,
     });
     mockBeginFee.mockImplementation(async () => {
       abortController.abort();
@@ -151,6 +154,10 @@ describe('heterogeneousAgentExecutor run fee', () => {
     expect(mockFinishFee).toHaveBeenCalledWith(
       expect.objectContaining({ feeId: 'local_hetero_1_fee', reason: 'interrupted' }),
       expect.anything(),
+    );
+    // The topic leaves the running state as any other stopped run does.
+    expect(updateTopicStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'active', topicId: 'topic-1' }),
     );
   });
 
