@@ -604,6 +604,7 @@
   "goalBatch.skill.forked": "方案技能 v{{revision}} · 新类型",
   "goalBatch.skill.title": "方案技能 v{{revision}}",
   "goalBatch.status.done": "全部完成",
+  "goalBatch.status.held": "等你放行",
   "goalBatch.status.human": "{{count}} 项需要介入",
   "goalBatch.status.pending": "待开始",
   "goalBatch.status.running": "进行中",

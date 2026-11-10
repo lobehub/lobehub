@@ -478,6 +478,27 @@ export const countCells = (cells: { state: BatchCellState }[]) => {
   return counts;
 };
 
+export type BatchUnitsPhase = 'done' | 'held' | 'human' | 'pending' | 'running' | 'stale';
+
+/**
+ * One group's phase from its units: a person first, then progress. A group its
+ * gate holds for a person, with nothing running, waits on that person — its
+ * started units do not make it "in progress".
+ */
+export const unitsPhase = (
+  cells: { state: BatchCellState }[],
+  started: boolean,
+  held = false,
+): BatchUnitsPhase => {
+  const counts = countCells(cells);
+  if (counts.human) return 'human';
+  if (counts.stale && counts.stale + counts.done < cells.length) return 'stale';
+  if (cells.length > 0 && counts.done + counts.stale === cells.length) return 'done';
+  if (held && !counts.running) return 'held';
+  if (!started && !counts.running) return 'pending';
+  return 'running';
+};
+
 /**
  * The batch and round a release gate belongs to, when `nodeId` is one — so a
  * surface that opens the gate can show its verdicts rather than a bare decision.
