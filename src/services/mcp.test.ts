@@ -441,6 +441,38 @@ describe('MCPService', () => {
       expect(toolsClient.mcp.callTool.mutate).toHaveBeenCalled();
     });
 
+    it('fills config placeholders in stdio args from the current settings', async () => {
+      const { toolsClient } = await import('@/libs/trpc/client');
+
+      mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => ({
+        customParams: {
+          mcp: { args: ['-y', 'pkg', 'API_KEY={{config.API_KEY}}'], command: 'npx', type: 'stdio' },
+        },
+        manifest: { meta: { title: 'Stdio Plugin' }, version: '1.0.0' },
+        settings: { API_KEY: 'rotated' },
+      }));
+      vi.mocked(toolsClient.mcp.callTool.mutate).mockResolvedValue('ok' as never);
+
+      await mcpService.invokeMcpToolCall(
+        {
+          apiName: 'run',
+          arguments: '{}',
+          id: 'c2',
+          identifier: 'stdio-plugin',
+          type: 'standalone',
+        },
+        {},
+      );
+
+      expect(vi.mocked(toolsClient.mcp.callTool.mutate).mock.calls[0][0].params).toEqual({
+        args: ['-y', 'pkg', 'API_KEY=rotated'],
+        command: 'npx',
+        env: { API_KEY: 'rotated' },
+        name: 'stdio-plugin',
+        type: 'stdio',
+      });
+    });
+
     it('should return undefined when plugin is not found', async () => {
       mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => null);
       mockPluginSelectors.getCustomPluginById.mockReturnValue(() => null);
