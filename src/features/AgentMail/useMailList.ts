@@ -165,7 +165,9 @@ export const useMailList = ({
     {
       // A new keyword keeps the last results on screen instead of flashing a skeleton.
       keepPreviousData: Boolean(query),
-      refreshInterval: MAIL_REFRESH_INTERVAL_MS,
+      // A search is a question asked once; re-running full-text search on a timer
+      // costs more than new mail landing in it is worth. Refresh still re-asks.
+      refreshInterval: query ? 0 : MAIL_REFRESH_INTERVAL_MS,
     },
   );
 
@@ -230,6 +232,23 @@ export const useMailCounts = (accountIds: string[]) =>
     },
     { refreshInterval: MAIL_REFRESH_INTERVAL_MS },
   );
+
+/** Views that can hold mail a released address received; Starred is inside Inbox and Sent. */
+const RETAINED_FOLDERS = ['inbox', 'sent', 'trash'] as const;
+
+/**
+ * Whether any mail is left across the agent's addresses, released ones
+ * included: `undefined` until known. Only asked once no address is left.
+ */
+export const useHasRetainedMail = (agentId: string, enabled: boolean) =>
+  useSWR(agentId && enabled ? ['agent-mail-retained', agentId] : null, async ([, agent]) => {
+    const views = await Promise.all(
+      RETAINED_FOLDERS.map((folder) =>
+        agentAccountService.listMail({ agentId: agent, folder, limit: 1 }),
+      ),
+    );
+    return views.some((rows) => rows.length > 0);
+  });
 
 const formatAddress = (name: string | null | undefined, address: string) =>
   name ? `${name} <${address}>` : address;

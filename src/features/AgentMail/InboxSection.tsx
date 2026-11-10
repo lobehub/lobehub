@@ -103,6 +103,8 @@ const SearchBox = ({
     <div {...stylex.props(styles.searchBox)}>
       <Input
         allowClear
+        // The server's cap; past it a search would only fail.
+        maxLength={200}
         placeholder={t('identity.mailbox.search.placeholder')}
         prefix={<Icon icon={Search} size={14} />}
         value={value}
@@ -413,7 +415,8 @@ const InboxSection = ({
             }
           />
         )}
-        {view === 'trash' && !searching && items.length > 0 && !disabled && (
+        {/* Emptying works per address, so the mail of released ones has none. */}
+        {view === 'trash' && !searching && items.length > 0 && !disabled && accountId && (
           <ActionIcon
             aria-label={t('identity.mailbox.emptyTrash.confirm')}
             icon={Trash2}

@@ -26,7 +26,7 @@ import {
   type MailListItem,
   type MailView,
   parseMailView,
-  useMailList,
+  useHasRetainedMail,
 } from './useMailList';
 
 const styles = StyleSheet.create({
@@ -66,11 +66,11 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const search = searchParams.toString();
   const noAddress = !!mailbox.data && !mailbox.current;
   // Releasing an address keeps the mail it received, so "no address" is not
-  // "no mail": only an empty, successfully read inbox counts as nothing to show.
-  // Same key as the inbox list below, so this adds no request of its own.
-  const retained = useMailList({ agentId, enabled: noAddress, query: '', view: 'inbox' });
-  const noMail = noAddress && !retained.error && retained.items?.length === 0;
-  const checkingMail = noAddress && !retained.error && !retained.items;
+  // "no mail": only a successful read finding nothing in Inbox, Sent or Trash
+  // counts as nothing to show.
+  const retained = useHasRetainedMail(agentId, noAddress);
+  const noMail = noAddress && !retained.error && retained.data === false;
+  const checkingMail = noAddress && !retained.error && retained.data === undefined;
   // Nothing to read and nothing this deployment could open, so there is no page.
   // Until the server config has loaded, an empty provider list is only the
   // default (a cold desktop start), not the deployment saying it has none.
@@ -117,8 +117,9 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const mailboxCard = (
     <MailboxCard agentId={agentId} disabled={disabled} mailbox={mailbox} onSwitch={switchMailbox} />
   );
-  // Waits for the mailbox so the list never flashes another address's mail first.
-  const inbox = !(mailbox.isLoading && !mailbox.data) && (
+  // Waits for the addresses, read successfully, so the list never flashes every
+  // address's mail first: without them `accountId` would mean all of them.
+  const inbox = !!mailbox.data && (
     <InboxSection
       accountId={mailbox.current?.id}
       accountIds={mailbox.accounts.map((account) => account.id)}

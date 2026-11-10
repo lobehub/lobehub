@@ -1,5 +1,6 @@
 'use client';
 
+import type { AgentMailFolder } from '@lobechat/types';
 import {
   Button,
   Checkbox,
@@ -99,8 +100,15 @@ export const useMailActions = ({
 }: UseMailActionsParams) => {
   const { t } = useTranslation(['setting', 'common']);
 
-  const folderOf = (item: MailListItem) =>
-    searching ? (item.direction === 'outbound' ? 'sent' : 'inbox') : mailFolderOf(view);
+  /**
+   * The views each row's write is expanded within. A search row stands for its
+   * whole conversation, received and sent mail alike, so it acts in both:
+   * picking one by the newest mail's direction would leave the other half
+   * unread, unstarred or out of the trash.
+   */
+  const writeFolders: (AgentMailFolder | undefined)[] = searching
+    ? ['inbox', 'sent']
+    : [mailFolderOf(view)];
 
   const failureToast = (title: string, failed: number, total: number, retry: () => unknown) =>
     toast.error({
@@ -140,38 +148,37 @@ export const useMailActions = ({
       unreadDelta,
     });
 
-    const groups = new Map<string | undefined, MailListItem[]>();
+    const groups = new Map<AgentMailFolder | undefined, MailListItem[]>();
     for (const item of items) {
-      const folder = folderOf(item);
-      groups.set(folder, [...(groups.get(folder) ?? []), item]);
+      for (const folder of writeFolders) {
+        groups.set(folder, [...(groups.get(folder) ?? []), item]);
+      }
     }
     const batches = [...groups.entries()].flatMap(([folder, grouped]) =>
       chunk(grouped, MAX_IDS_PER_WRITE).map((batch) => ({ batch, folder })),
     );
 
-    const failed: MailListItem[] = [];
+    const failedById = new Map<string, MailListItem>();
     const values: R[] = [];
     try {
       await prepare?.();
       const results = await Promise.allSettled(
         batches.map(({ batch, folder }) =>
-          call({
-            conversationIn: folder as AgentMailTarget['conversationIn'],
-            ids: batch.map((item) => item.id),
-          }),
+          call({ conversationIn: folder, ids: batch.map((item) => item.id) }),
         ),
       );
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') values.push(result.value);
         else {
           console.error('[AgentMail] write failed', result.reason);
-          failed.push(...batches[index].batch);
+          for (const item of batches[index].batch) failedById.set(item.id, item);
         }
       });
     } catch (error) {
       console.error('[AgentMail] write failed', error);
-      failed.push(...items);
+      for (const item of items) failedById.set(item.id, item);
     }
+    const failed = [...failedById.values()];
 
     if (failed.length > 0) {
       // The row goes back first, so the toast describes what is on screen.
@@ -264,7 +271,8 @@ export const useMailActions = ({
     });
 
     const result = await pending;
-    if (result.failed.length > 0) undoToast.close();
+    // Undo stays while anything was moved: it restores only what the server moved.
+    if (result.values.every((value) => value.ids.length === 0)) undoToast.close();
     return result;
   };
 

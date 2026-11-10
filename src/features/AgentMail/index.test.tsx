@@ -349,6 +349,17 @@ describe('AgentMail', () => {
     expect(screen.queryByText('profile page')).not.toBeInTheDocument();
   });
 
+  it('keeps sent mail of a released address readable instead of the full-page offer', async () => {
+    service.list.mockResolvedValue([]);
+    service.listMail.mockImplementation(async ({ folder }: { folder: string }) =>
+      folder === 'sent' ? [row('msg_s', 'Sent one', { direction: 'outbound' })] : [],
+    );
+    page('/agent/agt_1/mail?folder=sent');
+
+    expect(await screen.findByText('preview of Sent one')).toBeInTheDocument();
+    expect(screen.queryByText('identity.empty.title')).not.toBeInTheDocument();
+  });
+
   it('does not leave the page while the server config is still loading', async () => {
     server.loaded = false;
     server.providers = [];
@@ -481,6 +492,35 @@ describe('AgentMail list', () => {
     expect(screen.getByText('identity.mailbox.search.truncated')).toBeInTheDocument();
     expect(service.searchMail).toHaveBeenCalledWith(
       expect.objectContaining({ accountId: 'acc_a', query: 'invoice' }),
+    );
+  });
+
+  it('acts on a search hit as its whole conversation, received and sent alike', async () => {
+    // The newest mail is the agent's reply; the unread mail it answers is in the inbox.
+    service.searchMail.mockResolvedValue({
+      items: [row('msg_hit', 'Search hit', { direction: 'outbound' })],
+      truncated: false,
+    });
+    service.trashMail.mockImplementation(async ({ conversationIn }: { conversationIn: string }) =>
+      conversationIn === 'inbox' ? { count: 1, ids: ['msg_in'] } : { count: 1, ids: ['msg_hit'] },
+    );
+    page('/agent/agt_1/mail?q=hit');
+
+    const hit = await screen.findByRole('button', { name: 'a@lobe.id — Search hit' });
+    fireEvent.click(hit.querySelector('[aria-label="identity.mailbox.action.delete"]')!);
+
+    await waitFor(() => expect(service.trashMail).toHaveBeenCalledTimes(2));
+    expect(service.trashMail).toHaveBeenCalledWith({ conversationIn: 'inbox', ids: ['msg_hit'] });
+    expect(service.trashMail).toHaveBeenCalledWith({ conversationIn: 'sent', ids: ['msg_hit'] });
+
+    const [options] = toastApi.success.mock.calls[0] as unknown as [
+      { actions: { onClick: () => void }[] },
+    ];
+    options.actions[0].onClick();
+    await waitFor(() =>
+      expect(service.restoreMail).toHaveBeenCalledWith({
+        ids: expect.arrayContaining(['msg_in', 'msg_hit']),
+      }),
     );
   });
 
