@@ -74,6 +74,7 @@ import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
 import { goalRouter } from './goal';
+import { goalShareRouter } from './goalShare';
 import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
@@ -180,6 +181,7 @@ export const lambdaRouter = router({
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,
   goal: goalRouter,
+  goalShare: goalShareRouter,
   group: agentGroupRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
