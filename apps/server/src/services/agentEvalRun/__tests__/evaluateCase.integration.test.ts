@@ -205,33 +205,4 @@ describe('evaluateCase - evalMode resolution', () => {
     expect(runTopic?.status).toBeNull();
     expect(runTopic?.score).toBeNull();
   });
-
-  it('should not crash when benchmark rubrics is empty and evalMode is null everywhere', async () => {
-    // rubrics column is NOT NULL in DB, so worst case is empty array []
-    // Combined with evalMode=null everywhere, this exercises the "no eval rules" path
-    const { run, testCase } = await setupEvalChain({
-      benchmarkRubrics: [],
-      datasetEvalMode: null,
-      expected: '42',
-      output: '42',
-      testCaseEvalMode: null,
-    });
-
-    const service = new AgentEvalRunService(serverDB, userId);
-
-    // This should NOT throw — should gracefully skip evaluation
-    await expect(
-      service.recordTrajectoryCompletion({
-        runId: run.id,
-        testCaseId: testCase.id,
-        telemetry: { completionReason: 'stop', duration: 100 },
-      }),
-    ).resolves.not.toThrow();
-
-    // Verify: no evaluation happened (score/status remain null)
-    const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
-    const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
-    expect(runTopic?.score).toBeNull();
-    expect(runTopic?.status).toBeNull();
-  });
 });

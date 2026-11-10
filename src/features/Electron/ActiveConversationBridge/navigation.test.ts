@@ -82,7 +82,7 @@ describe('active conversation navigation', () => {
     );
     const coordinate = resolveActiveConversationCoordinate({
       params: { projectId: 'prj_1', topicId: 'tpc_1' },
-      url: '/project/prj_1/conversation/tpc_1',
+      url: '/project/prj_1/topic/tpc_1',
     });
     const navigate = vi.fn();
     projectActiveConversationCoordinate(coordinate);
@@ -91,7 +91,7 @@ describe('active conversation navigation', () => {
     useChatStore.setState({ activeTopicId: 'tpc_2' }, false);
 
     expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('/project/prj_1/conversation/tpc_2', { replace: true });
+    expect(navigate).toHaveBeenCalledWith('/project/prj_1/topic/tpc_2', { replace: true });
     unsubscribe();
   });
 });

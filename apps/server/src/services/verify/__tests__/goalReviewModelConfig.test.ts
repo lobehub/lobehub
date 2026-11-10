@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
-import { resolveGoalReviewModelConfig } from '../goalReviewModelConfig';
+import {
+  resolveDisputePanelModelConfigs,
+  resolveGoalReviewModelConfig,
+} from '../goalReviewModelConfig';
 
 const mocks = vi.hoisted(() => ({
   agent: vi.fn(),
@@ -11,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   init: vi.fn(),
   models: vi.fn(),
   goal: vi.fn(),
+  serviceModel: vi.fn(),
 }));
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
@@ -32,8 +36,19 @@ vi.mock('@/server/globalConfig', () => ({
 }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: mocks.init }));
 vi.mock('@/server/services/goal/modelConfig', () => ({ resolveGoalModelConfig: mocks.goal }));
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  DEFAULT_ACCEPTANCE_DISPUTE_PANEL: [
+    { model: 'claude', provider: 'anthropic' },
+    { model: 'gemini', provider: 'google' },
+    { model: 'deepseek', provider: 'deepseek' },
+  ],
+}));
 vi.mock('../modelConfig', () => ({
   REVIEW_PREDICT_MODEL_CONFIG: { model: 'gemini', provider: 'google' },
+  // Same unavailable provider as the pinned reviewer, so the task fallbacks stay reachable.
+  VERIFY_FALLBACK_MODEL_CONFIG: { model: 'gemini-floor', provider: 'google' },
+  resolveVerifyServiceModel: mocks.serviceModel,
   isHeterogeneousVerifyProvider: (provider: string) => provider === 'codex',
 }));
 const db = {} as LobeChatDatabase;
@@ -44,6 +59,7 @@ const resolve = (requiresVision = false, verifierAgentId?: string) =>
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.agent.mockResolvedValue(null);
+  mocks.serviceModel.mockResolvedValue(undefined);
   mocks.task.mockResolvedValue({ config: configured });
   mocks.goal.mockResolvedValue({ model: 'unavailable', provider: 'google' });
   mocks.models.mockResolvedValue([{ id: 'gpt-4o', abilities: { vision: true } }]);
@@ -58,6 +74,15 @@ describe('Goal review model selection', () => {
     mocks.agent.mockResolvedValue(configured);
     expect(await resolve(true, 'verifier')).toEqual(configured);
     expect(mocks.init).toHaveBeenCalledExactlyOnceWith(db, 'u1', 'openai', 'w1');
+  });
+  it('prefers the verify service model over the pinned reviewer', async () => {
+    mocks.serviceModel.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+    mocks.init.mockResolvedValue({});
+    expect(await resolve(true)).toEqual(configured);
+  });
+  it('skips a text-only verify service model for screenshot evidence', async () => {
+    mocks.serviceModel.mockResolvedValue({ model: 'text-only', provider: 'openai' });
+    expect(await resolve(true)).toEqual(configured);
   });
   it('keeps the pinned reviewer when the deployment can initialize it', async () => {
     mocks.init.mockResolvedValue({});
@@ -81,5 +106,55 @@ describe('Goal review model selection', () => {
     mocks.task.mockResolvedValue({ config: { model: 'codex-model', provider: 'codex' } });
     expect(await resolve()).toBeUndefined();
     expect(mocks.init.mock.calls.some((call) => call[2] === 'codex')).toBe(false);
+  });
+});
+
+describe('Dispute panel selection', () => {
+  const panel = () => resolveDisputePanelModelConfigs(db, 'u1', { taskId: 't1' }, 'w1');
+
+  it('seats the pinned cross-vendor panel when every provider initializes', async () => {
+    mocks.init.mockResolvedValue({});
+    expect(await panel()).toEqual([
+      { model: 'claude', provider: 'anthropic' },
+      { model: 'gemini', provider: 'google' },
+      { model: 'deepseek', provider: 'deepseek' },
+    ]);
+    expect(mocks.task).not.toHaveBeenCalled();
+  });
+
+  it('tops up an unavailable member from the review chain without repeating a seat', async () => {
+    // Google is down: its pinned seat and the pinned reviewer (also Google) are skipped.
+    expect(await panel()).toEqual([
+      { model: 'claude', provider: 'anthropic' },
+      { model: 'deepseek', provider: 'deepseek' },
+      configured,
+    ]);
+  });
+
+  /**
+   * Regression: fallback seats only had to differ by model, so three models
+   * from one vendor could make up the majority that waives a check.
+   */
+  it('never seats a second model from a provider already on the panel', async () => {
+    mocks.init.mockImplementation(async (_db, _user, provider) => {
+      if (provider !== 'openai') throw new Error('absent');
+      return {};
+    });
+    mocks.agent.mockResolvedValue({ model: 'gpt-4.1', provider: 'openai' });
+    mocks.goal.mockResolvedValue({ model: 'o3', provider: 'openai' });
+
+    // The builtin verifier, the task model and the goal model are all OpenAI: one seat only.
+    const seated = await panel();
+    expect(seated).toHaveLength(1);
+    expect(seated[0].provider).toBe('openai');
+  });
+
+  it('returns a short panel rather than seating the same model twice', async () => {
+    mocks.init.mockImplementation(async (_db, _user, provider) => {
+      if (provider !== 'openai') throw new Error('absent');
+      return {};
+    });
+    mocks.agent.mockResolvedValue(configured);
+    expect(await panel()).toEqual([configured]);
   });
 });

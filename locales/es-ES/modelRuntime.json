@@ -1,6 +1,6 @@
 {
   "AccountDeactivated": "Tu cuenta ha sido desactivada o suspendida. Esto puede deberse a razones de política, seguridad o revisión de la cuenta. Por favor, contacta al soporte del proveedor para obtener ayuda.",
-  "AgentRuntimeError": "Error de ejecución en tiempo de ejecución del modelo de lenguaje Lobe. Por favor, soluciona el problema o vuelve a intentarlo basándote en la información siguiente.",
+  "AgentRuntimeError": "Algo salió mal al generar la respuesta. Amplía los detalles a continuación para ver la causa, o vuelve a intentarlo.",
   "CapabilityNotSupported": "Lo sentimos, este modelo no admite la capacidad solicitada (como entrada de visión o uso de herramientas). Por favor, cambia a un modelo que lo admita.",
   "ClientLlmExecutorLost": "El dispositivo que ejecuta {{provider}} para esta conversación dejó de responder antes de que se completara la respuesta; puede que se haya cerrado, actualizado o desconectado. Mantén la ventana de LobeHub abierta e inténtalo de nuevo.",
   "ClientLlmExecutorUnavailable": "{{provider}} solo se puede acceder desde tu propio dispositivo, pero ninguna ventana abierta de LobeHub recibió la solicitud. Abre LobeHub en el dispositivo donde se ejecuta {{provider}} y vuelve a intentarlo.",
@@ -32,7 +32,7 @@
   "LobeHubModelDeprecated": "El modelo seleccionado ya no está disponible. Pide al bot o al propietario del agente que seleccione un modelo disponible y vuelve a intentarlo.",
   "LocationNotSupportError": "Lo sentimos, tu ubicación actual no admite este servicio de modelo. Esto puede deberse a restricciones regionales o a que el servicio no está disponible. Por favor, confirma si la ubicación actual admite el uso de este servicio, o intenta usar una ubicación diferente.",
   "ModelEmptyCompletion": "El proveedor del modelo devolvió una respuesta vacía. Incluso sin contenido visible, esta solicitud puede generar costos. Puedes intentarlo nuevamente o cambiar de modelo y probar otra vez.",
-  "ModelEmptyCompletionWithCost": "El proveedor del modelo devolvió una respuesta vacía. Esta solicitud costó {{credits}} créditos. Reintentar puede implicar un costo similar, o puedes cambiar de modelo.",
+  "ModelEmptyCompletionWithCost": "El proveedor del modelo devolvió una respuesta vacía. Esta solicitud costó ${{credits}}. Volver a intentarlo puede generar un costo similar, o puedes cambiar de modelo.",
   "ModelNotFound": "Lo sentimos, no se pudo encontrar el modelo solicitado. Puede que no exista o que no tengas los permisos de acceso necesarios. Por favor, vuelve a intentarlo después de cambiar la clave API o ajustar tus permisos de acceso.",
   "ModelRefusal": "El modelo se negó a responder a esta solicitud. Intenta reformularla o elige otro modelo.",
   "NoAvailableChannel": "Lo sentimos, el proxy o enrutador no tiene un canal disponible para el modelo solicitado. Por favor, cambia la configuración del canal/clave o vuelve a intentarlo más tarde.",

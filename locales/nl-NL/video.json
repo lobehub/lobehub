@@ -40,7 +40,7 @@
   "generation.editing.hint": "Beschrijf wat er moet worden veranderd; alles blijft verder hetzelfde",
   "generation.editing.modelLocked": "Bewerkingen behouden het model van de originele video",
   "generation.editing.title": "Bewerken V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 Gratis tegoed opgebruikt, er worden nu credits verbruikt",
+  "generation.freeQuota.exhausted": "🎁 Gratis gebruik is op. Video's gebruiken nu je saldo.",
   "generation.freeQuota.remaining": "🎁 {{remaining}} gratis video's vandaag",
   "generation.status.editing": "Bewerking genereren...",
   "generation.status.failed": "Generatie Mislukt",

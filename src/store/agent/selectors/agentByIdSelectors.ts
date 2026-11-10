@@ -62,11 +62,14 @@ const getAgentConfigErrorById =
   (s: AgentStoreState): string | undefined =>
     agentId ? s.agentConfigErrorMap[agentId] : undefined;
 
+// A mount whose file / library the caller can no longer see (flipped back to
+// private, another member's private item) comes back from the server with the
+// entity fields nulled out — drop it so menus never render a nameless row.
 const getAgentFilesById = (agentId: string) => (s: AgentStoreState) =>
-  agentSelectors.getAgentConfigById(agentId)(s)?.files || [];
+  (agentSelectors.getAgentConfigById(agentId)(s)?.files || []).filter((item) => !!item.id);
 
 const getAgentKnowledgeBasesById = (agentId: string) => (s: AgentStoreState) =>
-  agentSelectors.getAgentConfigById(agentId)(s)?.knowledgeBases || [];
+  (agentSelectors.getAgentConfigById(agentId)(s)?.knowledgeBases || []).filter((item) => !!item.id);
 
 /**
  * The config fetch settled on `null` — the agent doesn't exist or the caller

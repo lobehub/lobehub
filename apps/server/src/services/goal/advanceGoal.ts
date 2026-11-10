@@ -6,6 +6,7 @@ import { getServerDB } from '@/database/server';
 
 import { GoalAdvanceRecorder, TERMINAL_GOAL_STATUSES } from './goalTraceRecorder';
 import { GoalService } from './index';
+import type { GoalTickOptions } from './traceObservation';
 
 const log = debug('lobe-server:goal-advance');
 
@@ -15,6 +16,8 @@ const log = debug('lobe-server:goal-advance');
  * `waiting_external` is one of them here, and that is the whole point of the
  * event-driven design: it means a graph Task is now executing, so the next move
  * belongs to that task's completion, not to a poll loop holding a worker open.
+ * The one exception is a tick that just started a run itself: another slot may
+ * still be free, so the advance ticks again (see `startedRun`).
  */
 const STOP_OUTCOMES = new Set<GoalTickOutcome>([
   'achieved',
@@ -26,7 +29,7 @@ const STOP_OUTCOMES = new Set<GoalTickOutcome>([
 
 /**
  * Safety limit for one advance. Dispatching a Task takes two ticks and an
- * advance now fills every free concurrency slot, so a healthy run is a
+ * advance fills every free concurrency slot, so a healthy run is a
  * handful; anything near this is a loop that is not converging, and the sweep
  * will come back to it.
  */
@@ -63,14 +66,36 @@ export const advanceGoal = async ({
   const service = new GoalService(db, userId, workspaceId);
   const recorder = new GoalAdvanceRecorder(db, goalId, trigger);
 
+  // A tick that starts a run reports `waiting_external` — that Task is now
+  // executing — but the other free concurrency slots are not. Stopping there
+  // started one Task per advance: a released wave of five ran one unit and left
+  // the rest in backlog until the stalled-goal sweep (15 minutes) came back.
+  // So a tick that started a run is followed by another, until a tick starts
+  // nothing (the cap is reached, or nothing else is ready).
+  let startedRun: boolean;
+  const record = recorder.onDecision;
+  const onDecision: GoalTickOptions['onDecision'] = (observation) => {
+    if (observation.effects.some((effect) => effect.type === 'started_run')) startedRun = true;
+    record?.(observation);
+  };
+
   let result: GoalTickResult | undefined;
+  // The run this advance last started. Reported in place of the tick that only
+  // found the cap reached, so a caller still learns which Task it started.
+  let lastStart: GoalTickResult | undefined;
   try {
     for (let ticks = 1; ticks <= MAX_TICKS_PER_ADVANCE; ticks++) {
-      result = await service.tick(goalId, { onDecision: recorder.onDecision });
+      startedRun = false;
+      result = await service.tick(goalId, { onDecision });
       log('goal %s tick %d → %s (%s)', goalId, ticks, result.outcome, result.message);
+      if (startedRun && result.outcome === 'waiting_external') {
+        lastStart = result;
+        continue;
+      }
       if (STOP_OUTCOMES.has(result.outcome)) {
         await settleTrace(recorder, service, goalId);
-        return { goalId, result, ticks };
+        const reported = result.outcome === 'waiting_external' && lastStart ? lastStart : result;
+        return { goalId, result: reported, ticks };
       }
     }
   } catch (error) {

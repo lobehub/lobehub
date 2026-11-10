@@ -4,15 +4,13 @@ import { memo, useMemo } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/slices/preference/selectors';
 
 import { type ActionKey, type ActionKeys } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
 import { type DropdownPlacement } from './context';
-import { ActionBarContext } from './context';
+import { ActionBarContext, useActionBarContext } from './context';
 import { filterChatOnlyActions } from './filterChatOnlyActions';
 
 const mapActionToItem = (actionKey: ActionKey) => {
@@ -63,13 +61,11 @@ const ActionToolbar = memo<ActionToolbarProps>(
       systemStatusSelectors.expandInputActionbar(s),
       s.toggleExpandInputActionbar,
     ]);
-    const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
     const { canConfigureResource, canShowControls } = useChatInputResourceAccess();
 
-    const leftActions = useChatInputStore((s) => {
-      const actions = s.leftActions.filter((item) => (enableRichRender ? true : item !== 'typo'));
-      return canConfigureResource ? actions : filterChatOnlyActions(actions);
-    });
+    const leftActions = useChatInputStore((s) =>
+      canConfigureResource ? s.leftActions : filterChatOnlyActions(s.leftActions),
+    );
 
     const mobile = useChatInputStore((s) => s.mobile);
 
@@ -78,9 +74,12 @@ const ActionToolbar = memo<ActionToolbarProps>(
       [disableCollapse, extraActionItems, leftActions],
     );
 
+    // Keep an outer action size (e.g. the compact composer preset) instead of
+    // resetting it for the toolbar's own items.
+    const { actionSize } = useActionBarContext();
     const contextValue = useMemo(
-      () => ({ borderRadius, dropdownPlacement }),
-      [borderRadius, dropdownPlacement],
+      () => ({ actionSize, borderRadius, dropdownPlacement }),
+      [actionSize, borderRadius, dropdownPlacement],
     );
 
     if (!canShowControls) return null;

@@ -1,10 +1,11 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Alert,
   Button,
   createModal,
+  Flexbox,
+  Icon,
   Input,
   type ModalInstance,
   Text,

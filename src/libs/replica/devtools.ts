@@ -1,5 +1,5 @@
-import type { ReplicaResource, ReplicaState } from '@lobechat/replica';
-import type { ReplicaLens } from '@lobechat/replica/zustand';
+import type { ReplicaResource, ReplicaState } from 'local-replica';
+import type { ReplicaLens } from 'local-replica/zustand';
 
 export interface ReplicaDevtoolsEntry {
   keys: () => string[];

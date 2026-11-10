@@ -31,6 +31,19 @@ import { getResourceQueryKey } from '../resource/utils';
 import { initialDocumentState } from './initialState';
 import { fileDocumentResource } from './projection';
 
+const documentResourceState = (document: LobeDocument, existingResource: ResourceItem) => ({
+  documentMap: { 'doc-1': { document } },
+  queryParams: { libraryId: 'kb-1', parentId: null },
+  resourceList: [existingResource],
+  resourceMap: new Map([[existingResource.id, existingResource]]),
+});
+
+const savedDocumentResponse = () => ({
+  historyAppended: false,
+  id: 'doc-1',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+});
+
 const mocks = vi.hoisted(() => ({ activeWorkspaceId: null as string | null }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -385,24 +398,12 @@ describe('file document replica', () => {
 
     it('updates the replica and the visible resource after a successful save', async () => {
       const existingResource = createResourceFixture();
-      vi.mocked(documentService.updateDocument).mockResolvedValue({
-        historyAppended: false,
-        id: 'doc-1',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      } as any);
+      vi.mocked(documentService.updateDocument).mockResolvedValue(savedDocumentResponse() as any);
 
       const { result } = renderHook(() => useFileStore(), { wrapper });
 
       act(() => {
-        useFileStore.setState(
-          {
-            documentMap: { 'doc-1': { document: lobeDocument() } },
-            queryParams: { libraryId: 'kb-1', parentId: null },
-            resourceList: [existingResource],
-            resourceMap: new Map([[existingResource.id, existingResource]]),
-          },
-          false,
-        );
+        useFileStore.setState(documentResourceState(lobeDocument(), existingResource), false);
       });
 
       await act(async () => {
@@ -444,15 +445,7 @@ describe('file document replica', () => {
       const { result } = renderHook(() => useFileStore(), { wrapper });
 
       act(() => {
-        useFileStore.setState(
-          {
-            documentMap: { 'doc-1': { document: lobeDocument() } },
-            queryParams: { libraryId: 'kb-1', parentId: null },
-            resourceList: [existingResource],
-            resourceMap: new Map([[existingResource.id, existingResource]]),
-          },
-          false,
-        );
+        useFileStore.setState(documentResourceState(lobeDocument(), existingResource), false);
       });
 
       let pendingUpdate!: Promise<void>;
@@ -499,15 +492,7 @@ describe('file document replica', () => {
       const { result } = renderHook(() => useFileStore(), { wrapper });
 
       act(() => {
-        useFileStore.setState(
-          {
-            documentMap: { 'doc-1': { document: lobeDocument() } },
-            queryParams: { libraryId: 'kb-1', parentId: null },
-            resourceList: [existingResource],
-            resourceMap: new Map([[existingResource.id, existingResource]]),
-          },
-          false,
-        );
+        useFileStore.setState(documentResourceState(lobeDocument(), existingResource), false);
       });
 
       await act(async () => {
@@ -531,11 +516,7 @@ describe('file document replica', () => {
         },
       } as any;
 
-      vi.mocked(documentService.updateDocument).mockResolvedValue({
-        historyAppended: false,
-        id: 'doc-1',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      } as any);
+      vi.mocked(documentService.updateDocument).mockResolvedValue(savedDocumentResponse() as any);
 
       const { result } = renderHook(() => useFileStore(), { wrapper });
 
@@ -581,24 +562,12 @@ describe('file document replica', () => {
       delete existingResource.knowledgeBaseId;
       delete existingResource.parentId;
 
-      vi.mocked(documentService.updateDocument).mockResolvedValue({
-        historyAppended: false,
-        id: 'doc-1',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      } as any);
+      vi.mocked(documentService.updateDocument).mockResolvedValue(savedDocumentResponse() as any);
 
       const { result } = renderHook(() => useFileStore(), { wrapper });
 
       act(() => {
-        useFileStore.setState(
-          {
-            documentMap: { 'doc-1': { document: lobeDocument() } },
-            queryParams: { libraryId: 'kb-1', parentId: null },
-            resourceList: [existingResource],
-            resourceMap: new Map([[existingResource.id, existingResource]]),
-          },
-          false,
-        );
+        useFileStore.setState(documentResourceState(lobeDocument(), existingResource), false);
       });
 
       await act(async () => {

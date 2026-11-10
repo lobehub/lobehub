@@ -1,7 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 import { type LobeAgentConfig } from '@/types/agent';
 import {
-  type ChatSessionList,
   type LobeAgentSession,
   type LobeSessionType,
   type SessionGroupItem,
@@ -10,7 +9,7 @@ import {
 
 /**
  * @deprecated Session service is legacy. Use agentService for agent CRUD operations.
- * Mobile still uses this, but should migrate to agentService.
+ * Retains session-shell compatibility and independent session-group operations.
  */
 export class SessionService {
   /** @deprecated Use agentService.createAgent instead */
@@ -26,14 +25,6 @@ export class SessionService {
     });
   };
 
-  cloneSession = (id: string, newTitle: string): Promise<string | undefined> => {
-    return lambdaClient.session.cloneSession.mutate({ id, newTitle });
-  };
-
-  getGroupedSessions = (): Promise<ChatSessionList> => {
-    return lambdaClient.session.getGroupedSessions.query();
-  };
-
   updateSession = (id: string, data: Partial<UpdateSessionParams>) => {
     const { group, pinned, meta, updatedAt } = data;
     return lambdaClient.session.updateSession.mutate({
@@ -46,10 +37,6 @@ export class SessionService {
   getSessionConfig = async (id: string): Promise<LobeAgentConfig> => {
     // @ts-ignore
     return lambdaClient.agent.getAgentConfig.query({ sessionId: id });
-  };
-
-  removeSession = (id: string) => {
-    return lambdaClient.session.removeSession.mutate({ id });
   };
 
   // ************************************** //

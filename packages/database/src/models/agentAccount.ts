@@ -2,15 +2,26 @@ import type {
   AgentAccountCapabilities,
   AgentAccountCredentialHint,
   AgentAccountKind,
+  AgentAccountPersistedKind,
+  AgentAccountSettings,
+  AgentAccountStatus,
 } from '@lobechat/types';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { AGENT_ACCOUNT_KINDS } from '@lobechat/types';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentUsableBy } from '../utils/agent-access';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
-interface GateKeeper {
+/**
+ * The encryption contract the account model needs.
+ *
+ * Structural on purpose: `KeyVaultsGateKeeper` satisfies it, and tests pass a
+ * plain stub without depending on the class's private key material.
+ */
+export interface AgentAccountGateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
   encrypt: (plaintext: string) => Promise<string>;
 }
@@ -22,16 +33,30 @@ interface GateKeeper {
  * accidentally serialize the ciphertext, and `hasCredential` answers the only
  * question a read needs to ask about it.
  */
-export type AgentAccountView = Omit<AgentAccountItem, 'credentials'> & {
+export type AgentAccountView = Omit<AgentAccountItem, 'credentials' | 'kind'> & {
   hasCredential: boolean;
+  /**
+   * Widened past {@link AgentAccountKind} on purpose: an unfiltered read still
+   * returns rows whose kind the product retired, so a view must not claim a
+   * value the row does not carry. `liveOnly` reads narrow it back.
+   */
+  kind: AgentAccountPersistedKind;
 };
 
-/** The non-secret fields a caller may patch in place. */
+/**
+ * The non-secret fields a caller may patch in place.
+ *
+ * `status` is deliberately absent. Lifecycle moves through
+ * {@link AgentAccountModel.revoke}, which releases the provider resource,
+ * purges the credential and stamps `revokedAt`; a generic patch that could
+ * write `status` would free the routing handle while skipping all of that, and
+ * could equally revive a row that had already been released.
+ */
 export interface AgentAccountPatch {
   capabilities?: AgentAccountCapabilities;
   displayName?: string | null;
   metadata?: Record<string, unknown>;
-  status?: AgentAccountItem['status'];
+  settings?: AgentAccountSettings;
 }
 
 /** Strip the ciphertext from a freshly written row. */
@@ -61,6 +86,7 @@ const viewColumns = {
   metadata: agentAccounts.metadata,
   provider: agentAccounts.provider,
   revokedAt: agentAccounts.revokedAt,
+  settings: agentAccounts.settings,
   status: agentAccounts.status,
   updatedAt: agentAccounts.updatedAt,
   userId: agentAccounts.userId,
@@ -68,7 +94,32 @@ const viewColumns = {
 };
 
 /**
- * Agent accounts (mail / phone / wallet / service) and their credentials.
+ * Statuses an inbound delivery may still reach.
+ *
+ * `provisioning` counts as live: both providers open an account synchronously,
+ * so the handle is usable the moment the row exists. `revoked` and `suspended`
+ * do not — releasing an identity has to stop its inbound, not merely its
+ * outbound.
+ */
+const INBOUND_ROUTABLE_STATUSES: AgentAccountStatus[] = ['active', 'provisioning'];
+
+/**
+ * Statuses that actually hold the routing key.
+ *
+ * Mirrors the partial unique index on `(provider, identifier)`: a revoked row
+ * keeps its audit trail but no longer holds the handle, so the same key can
+ * carry both it and the account that replaced it. Anything reconciling a write
+ * *by* routing key must read only these — reading the replaced row would act on
+ * an account that is no longer there.
+ */
+export const ROUTING_KEY_HELD_STATUSES: AgentAccountStatus[] = [
+  'provisioning',
+  'active',
+  'suspended',
+];
+
+/**
+ * Agent accounts (mail / wallet / service) and their credentials.
  *
  * Credential handling mirrors `AgentBotProviderModel` / `messengerAccountLinks`:
  * the secret is AES-GCM ciphertext written through an injected gatekeeper, and
@@ -76,19 +127,36 @@ const viewColumns = {
  */
 export class AgentAccountModel {
   private db: LobeChatDatabase;
-  private gateKeeper?: GateKeeper;
+  private gateKeeper?: AgentAccountGateKeeper;
   private userId: string;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, gateKeeper?: GateKeeper, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    gateKeeper?: AgentAccountGateKeeper,
+    workspaceId?: string,
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.gateKeeper = gateKeeper;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentAccounts);
+  /**
+   * Workspace scope AND the owning agent's visibility. An account carries its
+   * agent's secrets and inbound mail (verification codes included), so a
+   * workspace member must not reach the accounts of a colleague's private
+   * agent — workspace scope alone would let them.
+   */
+  private ownership = () => {
+    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
+
+    return and(
+      buildWorkspaceWhere(ctx, agentAccounts),
+      agentUsableBy(this.db, agentAccounts.agentId, ctx),
+    )!;
+  };
 
   private encrypt = async (value: Record<string, string>): Promise<string> => {
     if (!this.gateKeeper) {
@@ -201,9 +269,24 @@ export class AgentAccountModel {
   query = async (params?: {
     agentId?: string;
     kind?: AgentAccountKind;
+    /**
+     * Only rows inbound still routes to ({@link INBOUND_ROUTABLE_STATUSES}). A
+     * revoked or suspended address is kept for audit, but mail sent to it no
+     * longer reaches the agent — the runtime must not present it as usable.
+     */
+    liveOnly?: boolean;
     provider?: string;
   }): Promise<AgentAccountView[]> => {
     const conditions = [this.ownership()];
+
+    if (params?.liveOnly) {
+      conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
+      // `kind` is a plain text column, so a kind the product retired (the
+      // agent-owned `phone`, now a messenger channel) can outlive its
+      // provider. Such a row must not reach the runtime as a usable address;
+      // it stays visible to the unfiltered query so it can still be revoked.
+      conditions.push(inArray(agentAccounts.kind, [...AGENT_ACCOUNT_KINDS]));
+    }
 
     if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
     if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
@@ -255,22 +338,73 @@ export class AgentAccountModel {
    * the key may then carry both the revoked row and its live replacement; this
    * filter mirrors that index so inbound traffic (and the credential used to
    * verify it) always resolves to the live account.
+   *
+   * `statuses` narrows the lookup further when the caller has a liveness rule to
+   * apply; inbound routing passes {@link INBOUND_ROUTABLE_STATUSES}.
    */
   static findByRoutingKey = async (
     db: LobeChatDatabase,
     provider: string,
     identifier: string,
+    statuses?: AgentAccountStatus[],
   ): Promise<AgentAccountView | undefined> => {
+    const conditions = [
+      eq(agentAccounts.provider, provider),
+      eq(agentAccounts.identifier, identifier),
+      ne(agentAccounts.status, 'revoked'),
+    ];
+    if (statuses) conditions.push(inArray(agentAccounts.status, statuses));
+
     const [row] = await db
       .select(viewColumns)
+      .from(agentAccounts)
+      .where(and(...conditions))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
+   * Whether any non-revoked account already routes on this handle. Mirrors the
+   * partial unique index on `(provider, identifier)`: a revoked row keeps its
+   * audit trail but no longer holds the handle, so it can be bound again.
+   */
+  static isRoutingKeyHeld = async (
+    db: LobeChatDatabase,
+    provider: string,
+    identifier: string,
+  ): Promise<boolean> => {
+    const [row] = await db
+      .select({ id: agentAccounts.id })
       .from(agentAccounts)
       .where(
         and(
           eq(agentAccounts.provider, provider),
           eq(agentAccounts.identifier, identifier),
-          ne(agentAccounts.status, 'revoked'),
+          inArray(agentAccounts.status, ROUTING_KEY_HELD_STATUSES),
         ),
       )
+      .limit(1);
+
+    return !!row;
+  };
+
+  /**
+   * Resolve an account by id without a user scope.
+   *
+   * Used by the inbound path, which learns an account id from a verified
+   * (provider, identifier) match and then needs the row's `agentId` / owner to
+   * file the message. Authorization is the caller's job — exactly like
+   * {@link findByRoutingKey}.
+   */
+  static findByIdUnscoped = async (
+    db: LobeChatDatabase,
+    id: string,
+  ): Promise<AgentAccountView | undefined> => {
+    const [row] = await db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(eq(agentAccounts.id, id))
       .limit(1);
 
     return row;
@@ -280,14 +414,25 @@ export class AgentAccountModel {
    * Decrypt an account's credential while resolving an inbound webhook, so the
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.
+   *
+   * Only a live account is routable. A revoked address that keeps receiving is
+   * the worst kind of release: the row says the identity is gone while the
+   * provider still delivers to it — and when the signing secret comes from
+   * deployment config rather than the account, the credential check does not
+   * catch it either. Suspended accounts are excluded for the same reason.
    */
   static findForInboundVerification = async (
     db: LobeChatDatabase,
     provider: string,
     identifier: string,
-    gateKeeper?: GateKeeper,
+    gateKeeper?: AgentAccountGateKeeper,
   ): Promise<{ credential: Record<string, string> | null; view: AgentAccountView } | undefined> => {
-    const view = await AgentAccountModel.findByRoutingKey(db, provider, identifier);
+    const view = await AgentAccountModel.findByRoutingKey(
+      db,
+      provider,
+      identifier,
+      INBOUND_ROUTABLE_STATUSES,
+    );
     if (!view) return undefined;
 
     const [row] = await db

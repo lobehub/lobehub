@@ -16,6 +16,8 @@ const resourcePermissionMock = vi.hoisted(() => ({
   workspaceId: undefined as string | undefined,
 }));
 const wsNavigateMock = vi.hoisted(() => vi.fn());
+const favoriteMenuItemMock = vi.hoisted(() => vi.fn(() => null));
+const pageEditorState = vi.hoisted(() => ({ title: undefined as string | undefined }));
 const documentStoreMock = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const menuActionMocks = vi.hoisted(() => ({
   handleCopyLink: vi.fn(),
@@ -72,6 +74,11 @@ vi.mock('@/business/client/hooks/useDocumentTransferMenuItem', () => ({
   useDocumentTransferMenuItem: () => null,
 }));
 
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: favoriteMenuItemMock,
+}));
 vi.mock('@/features/VisibilityConfirmContent', () => ({
   default: () => null,
 }));
@@ -155,6 +162,7 @@ vi.mock('../store', () => ({
     selector({
       documentId: 'doc-1',
       setRightPanelMode: menuActionMocks.setRightPanelMode,
+      title: pageEditorState.title,
     }),
   useStoreApi: () => ({
     getState: () => ({
@@ -178,7 +186,29 @@ describe('PageEditor header menu', () => {
     resourcePermissionMock.canManage = false;
     resourcePermissionMock.workspaceId = undefined;
     documentStoreMock.state = { documentDetailMap: {} };
+    pageEditorState.title = undefined;
     vi.clearAllMocks();
+  });
+
+  it('lets a loaded untitled page be favorited, but waits while the title is loading', () => {
+    renderHook(() => useMenu());
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotReady: false }),
+    );
+
+    pageEditorState.title = '';
+    renderHook(() => useMenu());
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotReady: true, title: 'pageEditor.titlePlaceholder' }),
+    );
+  });
+
+  it('favorites the page under its canonical link, not the location underneath a modal', () => {
+    renderHook(() => useMenu());
+
+    expect(favoriteMenuItemMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/page/doc-1', targetId: 'doc-1', type: 'page' }),
+    );
   });
 
   it('exports an HTML page as HTML and offers no editor history', () => {

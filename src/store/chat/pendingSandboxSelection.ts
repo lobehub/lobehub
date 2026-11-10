@@ -1,4 +1,11 @@
-import type { SandboxSelection } from '@/features/ChatInput/ControlBar/SandboxInstancePicker';
+import type { ChatTopicMetadata } from '@lobechat/types';
+import debug from 'debug';
+
+import type { SandboxSelection } from '@/features/ChatInput/ControlBar/useSandboxPlacement';
+import { sandboxStorageService } from '@/services/sandboxStorage';
+import { sandboxSelectors, useSandboxStore } from '@/store/sandbox';
+
+const log = debug('lobe-client:sandbox:pending-selection');
 
 /**
  * Module-level singleton for a sandbox selection made before the topic exists.
@@ -11,7 +18,7 @@ import type { SandboxSelection } from '@/features/ChatInput/ControlBar/SandboxIn
  *
  * Deliberately not the agent's `agencyConfig`, which is where the device picker
  * keeps its equivalent pre-topic choice. That row is shared by every member of a
- * workspace agent, while an instance belongs to one member — writing it there
+ * workspace agent, while a folder choice belongs to one member — writing it there
  * would point other members at storage that is not theirs.
  *
  * Deliberately not persisted either: this is a choice about the conversation
@@ -50,6 +57,62 @@ export const setPendingSandboxSelection = (agentId: string, selection?: SandboxS
   emit();
 };
 
+/**
+ * The place an agent's next conversation starts when nobody picks one, and
+ * the plan turns out to include a drive. Registered by the composer as soon as
+ * it knows the agent runs in the sandbox — before the entitlement has loaded —
+ * so a message sent while that request is still in flight is not born without
+ * a folder. Kept apart from the pending pick: it is a candidate, and only
+ * becomes the pick once the entitlement is confirmed.
+ */
+const defaults = new Map<string, SandboxSelection>();
+
+/** Register an agent's default placement; `undefined` clears it. */
+export const setSandboxDefaultSelection = (agentId: string, selection?: SandboxSelection): void => {
+  if (selection) defaults.set(agentId, selection);
+  else defaults.delete(agentId);
+};
+
+/**
+ * Whether the active workspace's plan includes a drive. A cached yes is taken
+ * as is; a cached no is confirmed with the server first, because the cache is
+ * persisted — an account that has just upgraded still reads no until its
+ * revalidation lands, and its first conversation would otherwise lose the
+ * drive. A failed lookup reads as no — the run goes to the temporary sandbox,
+ * as it would have anyway.
+ */
+const isDriveEntitled = async (): Promise<boolean> => {
+  const cached = sandboxSelectors.entitlement(useSandboxStore.getState());
+  if (cached?.entitled) return true;
+
+  try {
+    return (await sandboxStorageService.getEntitlement()).entitled;
+  } catch (error) {
+    log('Failed to resolve the drive entitlement for a first send: %O', error);
+    return false;
+  }
+};
+
+/**
+ * The selection the first send carries: the pick, if one was made; otherwise
+ * the registered default, once the plan is confirmed to include a drive. The
+ * default then becomes the pick, so every later reader of this send sees it.
+ */
+export const resolvePendingSandboxSelection = async (
+  agentId: string,
+): Promise<SandboxSelection | undefined> => {
+  const picked = map.get(agentId);
+  if (picked) return picked;
+
+  const fallback = defaults.get(agentId);
+  if (!fallback || !(await isDriveEntitled())) return undefined;
+
+  // A pick made while the entitlement was in flight wins over the default.
+  if (!map.has(agentId)) setPendingSandboxSelection(agentId, fallback);
+
+  return map.get(agentId);
+};
+
 /** Read without consuming — what the closed chip names itself after. */
 export const getPendingSandboxSelection = (agentId: string): SandboxSelection | undefined =>
   map.get(agentId);
@@ -66,3 +129,14 @@ export const consumePendingSandboxSelection = (agentId: string): SandboxSelectio
   emit();
   return selection;
 };
+
+/** The topic metadata a pending selection becomes when the topic is created with it. */
+export const toSandboxTopicMetadata = (
+  selection: SandboxSelection | undefined,
+): ChatTopicMetadata | undefined =>
+  selection && {
+    sandboxDrive: selection.drive,
+    sandboxEnvironmentId: selection.environmentId,
+    sandboxInstanceId: selection.instanceId,
+    sandboxWorkingDirectory: selection.workingDirectory,
+  };

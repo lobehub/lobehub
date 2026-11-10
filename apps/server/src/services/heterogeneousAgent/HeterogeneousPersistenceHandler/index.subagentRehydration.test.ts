@@ -3,6 +3,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetOperationStatesForTesting, HeterogeneousPersistenceHandler } from '.';
+import { operationStates } from './operationState';
 
 /**
  * Regression for the SERVER-ONLY "大量无意义的 SubAgent" bug.
@@ -504,5 +505,205 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     );
     expect(toolRows).toHaveLength(2);
     expect(new Set(toolRows.map((m) => m.parentId))).toEqual(new Set([assistants[0].id]));
+  });
+});
+
+/**
+ * Regression for a production subagent thread whose assistants forked into
+ * four branches, so the thread panel followed a branch with no text.
+ *
+ * Root cause: a WARM replica that handled an earlier batch keeps the run in
+ * memory, and the in-memory copy used to win over the DB. When a later batch
+ * landed on it after another replica had advanced the thread, its stale
+ * `lastChainParentId` parented the next assistant onto an old node.
+ *
+ * Each replica gets its own `operationStates` contents; the DB is shared.
+ */
+describe('HeterogeneousPersistenceHandler — subagent run across warm replicas', () => {
+  const PARENT = 'tc-spawn-1';
+  const replicas = {
+    a: new Map<string, any>(),
+    b: new Map<string, any>(),
+    c: new Map<string, any>(),
+  };
+
+  beforeEach(() => {
+    __resetOperationStatesForTesting();
+    for (const replica of Object.values(replicas)) replica.clear();
+  });
+  afterEach(() => __resetOperationStatesForTesting());
+
+  const ingestOn = async (
+    h: ReturnType<typeof createHarness>,
+    replica: keyof typeof replicas,
+    events: AgentStreamEvent[],
+  ) => {
+    const memory = replicas[replica];
+    operationStates.clear();
+    for (const [key, value] of memory) operationStates.set(key, value);
+    try {
+      await h.handler.ingest({
+        assistantMessageId: 'asst-1',
+        events,
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+    } finally {
+      memory.clear();
+      for (const [key, value] of operationStates) memory.set(key, value);
+    }
+  };
+
+  const subTools = (stepIndex: number, turnId: string, toolIds: string[], spawn = false) =>
+    buildEvent('stream_chunk', stepIndex, {
+      chunkType: 'tools_calling',
+      subagent: {
+        parentToolCallId: PARENT,
+        ...(spawn ? { spawnMetadata: { prompt: 'go', subagentType: 'Explore' } } : {}),
+        subagentMessageId: turnId,
+      },
+      toolsCalling: toolIds.map(innerTool),
+    });
+
+  const subText = (stepIndex: number, turnId: string, content: string) =>
+    buildEvent('stream_chunk', stepIndex, {
+      chunkType: 'text',
+      content,
+      subagent: { parentToolCallId: PARENT, subagentMessageId: turnId },
+    });
+
+  const threadAssistants = (h: ReturnType<typeof createHarness>) => {
+    const threadId = [...h.threads.keys()][0];
+    return [...h.messages.values()].filter(
+      (m) => m.role === 'assistant' && m.threadId === threadId,
+    );
+  };
+
+  /** Every assistant after the first must chain off the one before it. */
+  const expectLinearChain = (h: ReturnType<typeof createHarness>) => {
+    const assistants = threadAssistants(h);
+    for (let i = 1; i < assistants.length; i++) {
+      expect(assistants[i].parentId).toBe(assistants[i - 1].id);
+    }
+  };
+
+  it('chains a new turn off the thread tail when a stale warm replica handles it', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    await ingestOn(h, 'a', [subTools(0, 'm1', ['t1'], true)]);
+    await ingestOn(h, 'b', [subTools(0, 'm2', ['t2'])]);
+    // Replica A still holds the run as of m1 in memory.
+    await ingestOn(h, 'a', [subTools(0, 'm3', ['t3'])]);
+    await ingestOn(h, 'b', [subTools(0, 'm4', ['t4'])]);
+
+    expect(h.threads.size).toBe(1);
+    expect(threadAssistants(h)).toHaveLength(4);
+    expectLinearChain(h);
+  });
+
+  it('keeps text a turn wrote on another replica when the turn continues', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    await ingestOn(h, 'a', [subTools(0, 'm1', ['t1'], true)]);
+    await ingestOn(h, 'a', [subText(0, 'm2', 'hello ')]);
+    await ingestOn(h, 'b', [subText(0, 'm2', 'world')]);
+    await ingestOn(h, 'a', [subText(0, 'm2', '!')]);
+
+    const assistants = threadAssistants(h);
+    expect(assistants).toHaveLength(2);
+    expect(assistants[1].content).toBe('hello world!');
+  });
+
+  it('keeps tools a turn persisted on another replica when the turn continues', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    await ingestOn(h, 'a', [subTools(0, 'm1', ['t1'], true)]);
+    // CC re-sends the turn's cumulative tool list.
+    await ingestOn(h, 'b', [subTools(0, 'm1', ['t1', 't2'])]);
+
+    const assistants = threadAssistants(h);
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].tools?.map((t: any) => t.id)).toEqual(['t1', 't2']);
+  });
+
+  it('resumes a finalized subagent on a stale warm replica after the tail', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    await ingestOn(h, 'a', [subTools(0, 'm1', ['t1'], true)]);
+    await ingestOn(h, 'b', [
+      subTools(0, 'm2', ['t2']),
+      buildEvent('tool_result', 0, { content: 'plan ready', toolCallId: PARENT }),
+    ]);
+    const threadId = [...h.threads.keys()][0];
+    expect(h.threads.get(threadId)!.status).toBe('active');
+
+    // SendMessage resumed the subagent; replica A still holds the m1 run.
+    await ingestOn(h, 'a', [subTools(1, 'm3', ['t3'])]);
+    await ingestOn(h, 'b', [subTools(1, 'm4', ['t4'])]);
+
+    const assistants = threadAssistants(h);
+    expect(assistants.map((m) => m.content)).toContain('plan ready');
+    expect(assistants).toHaveLength(5); // m1, m2, hand-back, m3, m4
+    expectLinearChain(h);
+    expect(h.threads.get(threadId)!.status).toBe('processing');
+  });
+
+  it('resumes a finalized subagent on a cold replica but ignores replays of its turns', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    await ingestOn(h, 'a', [
+      subTools(0, 'm1', ['t1'], true),
+      buildEvent('tool_result', 0, { content: 'plan ready', toolCallId: PARENT }),
+    ]);
+    // Cold replica C: a replayed old turn, then the resumed turn.
+    await ingestOn(h, 'c', [subTools(0, 'm1', ['t1'], true)]);
+    expect(threadAssistants(h)).toHaveLength(2);
+
+    await ingestOn(h, 'c', [subTools(1, 'm2', ['t2'])]);
+
+    expect(h.threads.size).toBe(1);
+    expect(threadAssistants(h)).toHaveLength(3);
+    expectLinearChain(h);
+    const toolRows = [...h.messages.values()].filter((m) => m.role === 'tool');
+    expect(toolRows.map((m) => m.tool_call_id)).toEqual(['t1', 't2']);
+  });
+
+  it('finalizes a resumed run on the terminal drain', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    await ingestOn(h, 'a', [
+      subTools(0, 'm1', ['t1'], true),
+      buildEvent('tool_result', 0, { content: 'plan ready', toolCallId: PARENT }),
+    ]);
+    await ingestOn(h, 'b', [subText(1, 'm2', 'evidence captured')]);
+    await ingestOn(h, 'a', [buildEvent('agent_runtime_end', 2, {})]);
+
+    const threadId = [...h.threads.keys()][0];
+    expect(h.threads.get(threadId)!.status).toBe('active');
+    expect(threadAssistants(h).at(-1)!.content).toBe('evidence captured');
   });
 });

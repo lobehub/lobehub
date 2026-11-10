@@ -248,7 +248,7 @@ describe('login command', () => {
     });
   });
 
-  it('should clear existing gateway when logging into a different server', async () => {
+  it("keeps the old server's gateway with it when logging into a different server", async () => {
     vi.mocked(loadSettings).mockReturnValueOnce({
       gatewayUrl: 'https://gateway.example.com',
       serverUrl: 'https://old.example.com',
@@ -260,7 +260,26 @@ describe('login command', () => {
     const program = createProgram();
     await runLoginAndAdvanceTimers(program, ['--server', 'https://new.example.com/']);
 
-    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://new.example.com' });
+    // Bound to the old server, so the new login never connects to it.
+    expect(saveSettings).toHaveBeenCalledWith({
+      deviceGatewayUrls: { 'https://old.example.com': 'https://gateway.example.com' },
+      serverUrl: 'https://new.example.com',
+    });
+  });
+
+  it('keeps a gateway saved with official cloud for official cloud when logging in elsewhere', async () => {
+    vi.mocked(loadSettings).mockReturnValueOnce({ gatewayUrl: 'http://localhost:8788' });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(deviceAuthResponse())
+      .mockResolvedValueOnce(tokenSuccessResponse());
+
+    const program = createProgram();
+    await runLoginAndAdvanceTimers(program, ['--server', 'https://new.example.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({
+      deviceGatewayUrls: { 'https://app.lobehub.com': 'http://localhost:8788' },
+      serverUrl: 'https://new.example.com',
+    });
   });
 
   it('should strip trailing slash from server URL', async () => {

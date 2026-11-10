@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBusinessConversationAnalytics';
 import AgentHome from '@/features/AgentHome';
+import { useSlugRouteSendGuard } from '@/features/AgentRoute/useSlugRouteSendGuard';
 import {
   TopicMigrationPlaceholder,
   useTopicMigrationPending,
@@ -15,6 +16,7 @@ import { ChatList, ConversationProvider } from '@/features/Conversation';
 import { useMessageDeepLink } from '@/features/Conversation/ChatList/hooks/useMessageDeepLink';
 import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { useTopicDetailSendGuard } from '@/features/Conversation/hooks/useTopicDetailSendGuard';
 import {
   ForwardMessageDispatcher,
   MessageForwardFooter,
@@ -25,6 +27,7 @@ import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConve
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useScheduledRunWatch } from '@/hooks/useScheduledRunWatch';
+import { useTopicRunEvents } from '@/hooks/useTopicRunEvents';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -93,6 +96,8 @@ const Conversation = memo(() => {
       : undefined,
   );
   useGatewayReconnect(context.topicId, runningOperation, context.agentId);
+  // A run started on another device pushes here, so it streams without a refetch.
+  useTopicRunEvents(context.topicId, context.agentId);
 
   // While the topic is parked as `scheduled`, pull the cron dispatch into the
   // store when `runAt` passes — nothing pushes it, and the reconnect above
@@ -107,6 +112,12 @@ const Conversation = memo(() => {
     topicId: context.topicId ?? undefined,
   });
   const businessAnalyticsHooks = useBusinessConversationAnalytics(context);
+  // First in the chain: a send on an unconfirmed `/agent/<slug>` must not reach
+  // the agent painted from the local copy before the server confirms it.
+  const slugRouteSendGuard = useSlugRouteSendGuard();
+  // A run reads the topic's pinned model and routing from the store, so a send
+  // into a topic the store has not loaded yet waits for its detail.
+  const topicDetailSendGuard = useTopicDetailSendGuard(context.topicId);
 
   // A topic still awaiting its transfer backfill shows a placeholder instead
   // of an empty (not-yet-migrated) history, and blocks sending — the server
@@ -118,8 +129,14 @@ const Conversation = memo(() => {
   );
 
   const hooks = useMemo(
-    () => mergeConversationHooks(businessAnalyticsHooks, chatFollowUpHooks),
-    [businessAnalyticsHooks, chatFollowUpHooks],
+    () =>
+      mergeConversationHooks(
+        slugRouteSendGuard,
+        topicDetailSendGuard,
+        businessAnalyticsHooks,
+        chatFollowUpHooks,
+      ),
+    [slugRouteSendGuard, topicDetailSendGuard, businessAnalyticsHooks, chatFollowUpHooks],
   );
 
   return (
@@ -143,6 +160,7 @@ const Conversation = memo(() => {
             <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
           ) : (
             <ChatList
+              printable
               headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
               messageDeepLink={messageDeepLink}
               welcome={<AgentHome />}

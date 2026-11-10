@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Center,
   Checkbox,
   ContextMenuTrigger,
@@ -10,11 +9,12 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { isEqual } from 'es-toolkit';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import UserAvatar from '@/components/UserAvatar';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
@@ -22,9 +22,9 @@ import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
 import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
-import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
+import FileListItemMenu, { type FileListItemMenuGetter } from './FileListItemMenu';
 import FileListItemName from './FileListItemName';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
@@ -102,6 +102,18 @@ const styles = createStaticStyles(({ css }) => {
       color: ${cssVar.colorText};
       white-space: nowrap;
     `,
+    menuPlaceholder: css`
+      cursor: pointer;
+
+      flex-shrink: 0;
+
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: none;
+
+      background: transparent;
+    `,
     nameContainer: css`
       overflow: hidden;
       flex: 1;
@@ -154,6 +166,7 @@ const FileListItem = ({
   finishEmbedding,
   id,
   index,
+  knowledgeBaseIds,
   metadata,
   name,
   onSelectedChange,
@@ -161,14 +174,13 @@ const FileListItem = ({
   selected,
   showUploader = true,
   size,
-  slug,
   sourceType,
   uploader,
   url,
   userId,
   visibility,
 }: FileListItemProps) => {
-  const { t } = useTranslation(['components', 'file', 'chat']);
+  const { t } = useTranslation(['components', 'file', 'chat', 'common']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
   const chunkTargetId = getChunkTargetId({ fileId, id });
@@ -249,22 +261,58 @@ const FileListItem = ({
     isPage,
     libraryId: resourceManagerState.libraryId,
     openInPanel: true,
-    slug,
   });
-  const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
-  const { menuItems } = useFileItemDropdown({
-    fileId,
-    fileType,
-    filename: name,
+  const handleItemDoubleClick = useFileItemDoubleClick({
     id,
+    isPage,
     libraryId: resourceManagerState.libraryId,
-    onRenameStart: isFolder ? handleRenameStart : undefined,
-    size,
-    sourceType,
-    url,
-    userId,
-    visibility,
   });
+
+  // The row menu (its hooks plus a Base UI menu tree) mounts on first hover or
+  // focus instead of for every row Virtuoso renders; scrolling a long list used
+  // to mount and tear down dozens of closed menus per frame.
+  const [menuActivation, setMenuActivation] = useState<'click' | 'focus' | 'pointer' | null>(null);
+  const menuActivated = menuActivation !== null;
+  const activateMenu = useCallback(() => setMenuActivation((prev) => prev ?? 'pointer'), []);
+  // Keyboard users reach the placeholder trigger first; hand focus to the real
+  // trigger once it mounts so Tab/Enter keep working.
+  const activateMenuFromFocus = useCallback(() => setMenuActivation((prev) => prev ?? 'focus'), []);
+  // A click on the placeholder (assistive tech, programmatic `click()`) opens
+  // the real menu right away instead of only swapping the trigger in.
+  const activateMenuFromClick = useCallback(() => setMenuActivation((prev) => prev ?? 'click'), []);
+  const menuItemsRef = useRef<FileListItemMenuGetter | null>(null);
+  const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
+
+  const rowMenu = menuActivated ? (
+    <FileListItemMenu
+      className={styles.hover}
+      fileId={fileId}
+      fileType={fileType}
+      filename={name}
+      focusOnMount={menuActivation === 'focus' || menuActivation === 'click'}
+      id={id}
+      isFolder={isFolder}
+      isPage={isPage}
+      libraryId={resourceManagerState.libraryId}
+      menuItemsRef={menuItemsRef}
+      openOnMount={menuActivation === 'click'}
+      size={size}
+      sourceType={sourceType}
+      url={url}
+      userId={userId}
+      visibility={visibility}
+      onRenameStart={isFolder ? handleRenameStart : undefined}
+    />
+  ) : (
+    <button
+      aria-haspopup="menu"
+      aria-label={t('more', { ns: 'common' })}
+      className={cx(styles.menuPlaceholder, styles.hover)}
+      type="button"
+      onClick={activateMenuFromClick}
+      onFocus={activateMenuFromFocus}
+    />
+  );
 
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent) => {
@@ -283,7 +331,7 @@ const FileListItem = ({
   }, []);
 
   return (
-    <ContextMenuTrigger items={menuItems}>
+    <ContextMenuTrigger items={menuActivated ? getContextMenuItems : undefined}>
       <Flexbox
         horizontal
         align={'center'}
@@ -313,6 +361,8 @@ const FileListItem = ({
         onDragOver={handleDragOver}
         onDragStart={handleDragStart}
         onDrop={handleDrop}
+        onFocus={menuActivated ? undefined : activateMenu}
+        onPointerEnter={menuActivated ? undefined : activateMenu}
       >
         <Center
           height={40}
@@ -345,6 +395,7 @@ const FileListItem = ({
             isPage={isPage}
             isPrivate={isPrivate}
             isRenaming={isRenaming}
+            knowledgeBaseIds={resourceManagerState.libraryId ? undefined : knowledgeBaseIds}
             name={name}
             privateTooltip={t('resources.visibility.privateTooltip', { ns: 'chat' })}
             renamingValue={renamingValue}
@@ -365,7 +416,7 @@ const FileListItem = ({
             isFolder={isFolder}
             isPage={isPage}
             isSupportedForChunking={isSupportedForChunking}
-            menuItems={menuItems}
+            menu={rowMenu}
             parseFiles={fileStoreState.parseFiles}
             t={t}
           />
@@ -394,9 +445,9 @@ const FileListItem = ({
                 {uploaderName ? (
                   <Tooltip title={t('file:listView.uploadedBy', { name: uploaderName })}>
                     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-                      <Avatar
-                        alt={uploaderName}
-                        avatar={uploader?.avatar || uploaderName}
+                      <UserAvatar
+                        avatar={uploader?.avatar}
+                        name={uploaderName}
                         shape={'circle'}
                         size={20}
                         style={{ flexShrink: 0 }}

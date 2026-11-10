@@ -2,6 +2,8 @@ import { decodeTextBuffer } from '@lobechat/utils/isBinaryContent';
 import { readBlobWithLimit } from '@lobechat/utils/readBlobWithLimit';
 import { useEffect, useState } from 'react';
 
+import { toSameOriginFileProxyUrl } from '../fileProxyUrl';
+
 /** Bound text downloads and decoding to 2 MiB to keep preview rendering responsive. */
 const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024;
 
@@ -41,7 +43,9 @@ export const useTextFileLoader = (url: string | null): TextFileState => {
     const loadFile = async () => {
       try {
         // Abort on navigation; enforce the limit even when Content-Length is missing or wrong.
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(toSameOriginFileProxyUrl(url), {
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error(`Failed to load file: ${response.status}`);
         const blob = await readBlobWithLimit(response, MAX_TEXT_PREVIEW_BYTES);
         const fileData = decodeTextBuffer(new Uint8Array(await blob.arrayBuffer()));

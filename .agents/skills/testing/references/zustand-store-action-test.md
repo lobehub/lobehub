@@ -121,7 +121,7 @@ it('should handle streaming chunks', async () => {
 
 ## Fetch Hook Testing
 
-### Replica-backed hooks (`useFetch*` over `@lobechat/replica`)
+### Replica-backed hooks (`useFetch*` over `local-replica`)
 
 A replica hook returns sync flags plus a `queryKey`; the data lives in the store and is read through selectors. The engine is what the test exercises, so the SWR driver is a bare recorder: capture the registered sync, run its fetcher, fold the response through `onSuccess`, then read it back with the selector.
 

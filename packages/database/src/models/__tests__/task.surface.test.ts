@@ -47,6 +47,7 @@ describe('TaskModel public surface', () => {
       'addActivities',
       'addActivity',
       'addComment',
+      'addComments',
       'addDependency',
       'areAllDependenciesCompleted',
       'areAllSubtasksCompleted',
@@ -62,7 +63,6 @@ describe('TaskModel public surface', () => {
       'findAllDescendants',
       'findAssigneesByIds',
       'findById',
-      'findByIdentifier',
       'findByIds',
       'findCommentById',
       'findSubtasks',
@@ -90,7 +90,7 @@ describe('TaskModel public surface', () => {
       'removeDependency',
       'reorder',
       'resolve',
-      'resolveMany',
+      'resolveRefs',
       'resolveVerifyConfig',
       'shouldPauseAfterComplete',
       'shouldPauseBeforeStart',
@@ -125,6 +125,7 @@ describe('TaskModel public surface', () => {
   it('keeps the static methods', () => {
     expect(
       [
+        'findInterruptedRunningTopics',
         'findOrphanedRunningTopics',
         'findStuckTasks',
         'getScheduledTasks',
@@ -138,18 +139,6 @@ describe('TaskModel public surface', () => {
 
 // Methods with no other direct test before the split.
 describe('TaskModel previously uncovered reads', () => {
-  it('resolveMany matches ids and case-insensitive identifiers within scope', async () => {
-    const model = new TaskModel(serverDB, userId);
-    const a = await model.create({ instruction: 'a' });
-    const b = await model.create({ instruction: 'b' });
-    const other = await new TaskModel(serverDB, userId2).create({ instruction: 'other' });
-
-    expect(await model.resolveMany([])).toEqual([]);
-
-    const resolved = await model.resolveMany([a.id, b.identifier.toLowerCase(), other.id]);
-    expect(resolved.map(({ id }) => id).sort()).toEqual([a.id, b.id].sort());
-  });
-
   it('findCommentById returns only comments in scope', async () => {
     const model = new TaskModel(serverDB, userId);
     const task = await model.create({ instruction: 'commented' });

@@ -36,16 +36,16 @@ interface SearchResultsProps {
  * hit opens exactly like its tree counterpart (folder → navigate, page → page
  * editor, file → file editor) and keeps the same context menu.
  *
- * The rows are a `@lobechat/replica` entry owned by the ResourceManager store:
+ * The rows are a `local-replica` entry owned by the ResourceManager store:
  * the head page is persisted, so coming back to the same search paints it
  * before the request lands, and "load more" appends further pages through the
  * engine instead of re-fetching a widening window.
  */
 const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
   const { t } = useTranslation('file');
-  const { currentFolderSlug } = useFolderPath();
+  const { currentFolderId } = useFolderPath();
   const currentViewItemId = useResourceManagerStore((s) => s.currentViewItemId);
-  const selectedKey = resolveHierarchySelectedKey({ currentFolderSlug, currentViewItemId });
+  const selectedKey = resolveHierarchySelectedKey({ currentFolderId, currentViewItemId });
   // Debounce here rather than in the input so the store always holds what the
   // user sees; only the network request lags behind the keystrokes.
   const debouncedQuery = useDebounce(query.trim(), { wait: 300 });

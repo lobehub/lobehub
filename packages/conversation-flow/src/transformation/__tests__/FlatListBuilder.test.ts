@@ -7,6 +7,28 @@ import { FlatListBuilder } from '../FlatListBuilder';
 import { MessageCollector } from '../MessageCollector';
 import { MessageTransformer } from '../MessageTransformer';
 
+const createRootMessage = (id: string, role: Message['role'], content: string): Message => ({
+  content,
+  createdAt: 0,
+  id,
+  role,
+  updatedAt: 0,
+});
+
+const createReplyMessage = (
+  id: string,
+  parentId: string,
+  role: Message['role'],
+  content: string,
+): Message => ({
+  content,
+  createdAt: 0,
+  id,
+  parentId,
+  role,
+  updatedAt: 0,
+});
+
 describe('FlatListBuilder', () => {
   const createBuilder = (
     messages: Message[],
@@ -52,21 +74,8 @@ describe('FlatListBuilder', () => {
   describe('flatten', () => {
     it('should flatten simple message chain', () => {
       const messages: Message[] = [
-        {
-          content: 'Hello',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
-        {
-          content: 'Hi',
-          createdAt: 0,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'Hello'),
+        createReplyMessage('msg-2', 'msg-1', 'assistant', 'Hi'),
       ];
 
       const builder = createBuilder(messages);
@@ -251,13 +260,7 @@ describe('FlatListBuilder', () => {
 
     it('should create assistant group virtual message', () => {
       const messages: Message[] = [
-        {
-          content: 'Request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'Request'),
         {
           content: 'Using tool',
           createdAt: 0,
@@ -295,13 +298,7 @@ describe('FlatListBuilder', () => {
       // Kimi Code only learns model/provider at run end (stamped on the LAST
       // step's assistant via turn_metadata); the group spreads the first row.
       const messages: Message[] = [
-        {
-          content: 'Request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'Request'),
         {
           content: 'Using tool',
           createdAt: 0,
@@ -347,13 +344,7 @@ describe('FlatListBuilder', () => {
 
     it('should keep the first assistant model/provider when already set', () => {
       const messages: Message[] = [
-        {
-          content: 'Request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'Request'),
         {
           content: 'Using tool',
           createdAt: 0,
@@ -398,13 +389,7 @@ describe('FlatListBuilder', () => {
 
     it('should leave group model/provider undefined when no assistant carries one', () => {
       const messages: Message[] = [
-        {
-          content: 'Request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'Request'),
         {
           content: 'Using tool',
           createdAt: 0,
@@ -425,14 +410,7 @@ describe('FlatListBuilder', () => {
           tool_call_id: 'tool-1',
           updatedAt: 0,
         },
-        {
-          content: 'Done',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'tool-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-3', 'tool-1', 'assistant', 'Done'),
       ];
 
       const builder = createBuilder(messages);
@@ -445,7 +423,7 @@ describe('FlatListBuilder', () => {
 
     it('keeps a terminal finish type on its originating assistant block', () => {
       const messages: Message[] = [
-        { content: 'Request', createdAt: 0, id: 'user-1', role: 'user', updatedAt: 0 },
+        createRootMessage('user-1', 'user', 'Request'),
         {
           content: 'Using tool',
           createdAt: 1,
@@ -497,22 +475,8 @@ describe('FlatListBuilder', () => {
           role: 'user',
           updatedAt: 0,
         },
-        {
-          content: 'Branch 1',
-          createdAt: 0,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
-        {
-          content: 'Branch 2',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-2', 'msg-1', 'assistant', 'Branch 1'),
+        createReplyMessage('msg-3', 'msg-1', 'assistant', 'Branch 2'),
       ];
 
       const builder = createBuilder(messages);
@@ -525,13 +489,7 @@ describe('FlatListBuilder', () => {
 
     it('should handle assistant message with branches', () => {
       const messages: Message[] = [
-        {
-          content: 'User',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'User'),
         {
           content: 'Assistant',
           createdAt: 0,
@@ -541,22 +499,8 @@ describe('FlatListBuilder', () => {
           role: 'assistant',
           updatedAt: 0,
         },
-        {
-          content: 'Branch 1',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 0,
-        },
-        {
-          content: 'Branch 2',
-          createdAt: 0,
-          id: 'msg-4',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-3', 'msg-2', 'user', 'Branch 1'),
+        createReplyMessage('msg-4', 'msg-2', 'user', 'Branch 2'),
       ];
 
       const builder = createBuilder(messages);
@@ -622,14 +566,7 @@ describe('FlatListBuilder', () => {
           role: 'assistant',
           updatedAt: 0,
         },
-        {
-          content: 'Assistant 2',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-3', 'msg-1', 'assistant', 'Assistant 2'),
       ];
 
       const builder = createBuilder(messages);
@@ -658,30 +595,9 @@ describe('FlatListBuilder', () => {
           role: 'user',
           updatedAt: 0,
         },
-        {
-          content: 'Branch 1',
-          createdAt: 0,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
-        {
-          content: 'Branch 2',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
-        {
-          content: 'Follow-up',
-          createdAt: 0,
-          id: 'msg-4',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-2', 'msg-1', 'assistant', 'Branch 1'),
+        createReplyMessage('msg-3', 'msg-1', 'assistant', 'Branch 2'),
+        createReplyMessage('msg-4', 'msg-2', 'user', 'Follow-up'),
       ];
 
       const builder = createBuilder(messages);
@@ -723,14 +639,7 @@ describe('FlatListBuilder', () => {
           tool_call_id: 'tool-1',
           updatedAt: 0,
         },
-        {
-          content: 'Assistant 2',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-3', 'msg-1', 'assistant', 'Assistant 2'),
       ];
 
       const builder = createBuilder(messages);
@@ -749,13 +658,7 @@ describe('FlatListBuilder', () => {
 
     it('should include follow-up messages after assistant chain', () => {
       const messages: Message[] = [
-        {
-          content: 'User request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'User request'),
         {
           content: 'Using tool',
           createdAt: 0,
@@ -776,22 +679,8 @@ describe('FlatListBuilder', () => {
           tool_call_id: 'tool-1',
           updatedAt: 0,
         },
-        {
-          content: 'Response based on tool',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'tool-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
-        {
-          content: 'User follow-up',
-          createdAt: 0,
-          id: 'msg-4',
-          parentId: 'msg-3',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-3', 'tool-1', 'assistant', 'Response based on tool'),
+        createReplyMessage('msg-4', 'msg-3', 'user', 'User follow-up'),
       ];
 
       const builder = createBuilder(messages);
@@ -806,13 +695,7 @@ describe('FlatListBuilder', () => {
 
     it('should handle user reply to tool message', () => {
       const messages: Message[] = [
-        {
-          content: 'User request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'User request'),
         {
           content: 'Using tool',
           createdAt: 0,
@@ -833,14 +716,7 @@ describe('FlatListBuilder', () => {
           tool_call_id: 'tool-1',
           updatedAt: 0,
         },
-        {
-          content: 'User reply to tool',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'tool-1',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-3', 'tool-1', 'user', 'User reply to tool'),
       ];
 
       const builder = createBuilder(messages);
@@ -867,22 +743,8 @@ describe('FlatListBuilder', () => {
           role: 'user',
           updatedAt: 0,
         },
-        {
-          content: 'Branch 1',
-          createdAt: 0,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
-        {
-          content: 'Branch 2',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-2', 'msg-1', 'assistant', 'Branch 1'),
+        createReplyMessage('msg-3', 'msg-1', 'assistant', 'Branch 2'),
       ];
 
       const builder = createBuilder(messages);
@@ -901,30 +763,9 @@ describe('FlatListBuilder', () => {
       // Scenario: Thread messages where the parent (source message) is not in the query result
       // All messages have parentId pointing to a message not in the array
       const messages: Message[] = [
-        {
-          content: 'Thread user message',
-          createdAt: 0,
-          id: 'msg-1',
-          parentId: 'source-msg-not-in-array',
-          role: 'user',
-          updatedAt: 0,
-        },
-        {
-          content: 'Thread assistant reply',
-          createdAt: 0,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 0,
-        },
-        {
-          content: 'Thread user follow-up',
-          createdAt: 0,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 0,
-        },
+        createReplyMessage('msg-1', 'source-msg-not-in-array', 'user', 'Thread user message'),
+        createReplyMessage('msg-2', 'msg-1', 'assistant', 'Thread assistant reply'),
+        createReplyMessage('msg-3', 'msg-2', 'user', 'Thread user follow-up'),
       ];
 
       const builder = createBuilder(messages);
@@ -939,21 +780,8 @@ describe('FlatListBuilder', () => {
 
     it('should create tasks message when multiple tasks have same agentId', () => {
       const messages: Message[] = [
-        {
-          content: 'User request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
-        {
-          content: 'Tool message',
-          createdAt: 0,
-          id: 'tool-1',
-          parentId: 'msg-1',
-          role: 'tool',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'User request'),
+        createReplyMessage('tool-1', 'msg-1', 'tool', 'Tool message'),
         {
           agentId: 'agent-1',
           content: 'Task 1 result',
@@ -987,21 +815,8 @@ describe('FlatListBuilder', () => {
 
     it('should create groupTasks message when multiple tasks have different agentIds', () => {
       const messages: Message[] = [
-        {
-          content: 'User request',
-          createdAt: 0,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 0,
-        },
-        {
-          content: 'Tool message',
-          createdAt: 0,
-          id: 'tool-1',
-          parentId: 'msg-1',
-          role: 'tool',
-          updatedAt: 0,
-        },
+        createRootMessage('msg-1', 'user', 'User request'),
+        createReplyMessage('tool-1', 'msg-1', 'tool', 'Tool message'),
         {
           agentId: 'agent-1',
           content: 'Task 1 result',
@@ -1046,13 +861,7 @@ describe('FlatListBuilder', () => {
 
     it('should create groupTasks with correct timestamps from task messages', () => {
       const messages: Message[] = [
-        {
-          content: 'Tool message',
-          createdAt: 0,
-          id: 'tool-1',
-          role: 'tool',
-          updatedAt: 0,
-        },
+        createRootMessage('tool-1', 'tool', 'Tool message'),
         {
           agentId: 'agent-1',
           content: 'Task 1',
@@ -1102,7 +911,7 @@ describe('FlatListBuilder', () => {
 
       const messages: Message[] = [
         // User
-        { content: 'go', createdAt: 0, id: 'u-1', role: 'user', updatedAt: 0 },
+        createRootMessage('u-1', 'user', 'go'),
         // Step 0: assistant with Monitor tool
         {
           agentId: 'a',

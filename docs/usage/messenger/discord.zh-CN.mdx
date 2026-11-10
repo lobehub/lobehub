@@ -98,6 +98,7 @@ Discord 也有两种含义不同的断开操作，有一处和 Slack 不同需�
 - **"Server already connected"（服务器已连接）** —— 服务器已被另一位 LobeHub 用户加过机器人。直接在 Discord 私聊 LobeHub 机器人完成个人关联即可，无需重新添加。
 - **Discord 安装失败（`<原因>`）** —— 常见原因：用户取消授权、安装会话过期（重新打开弹窗再试）、Discord 返回的数据不完整（重试；持续失败请联系支持）。
 - **机器人在服务器但不回我消息** —— 检查 **设置 → Messenger → Discord** 下你是否有个人关联。机器人只回复完成了个人关联的用户。
+- **机器人在其他频道能回复，在某个私有频道不回复** —— Discord 只会把私有频道的消息发给其权限列表里的成员。打开该频道的 **设置 → Permissions（权限）**，点击 **Add members or roles**，把 LobeHub 机器人加进来，并允许 **查看频道**、**发送消息**、**阅读消息历史记录** 和 **在子区内发送消息**。
 - **断开了审计行，但机器人还在服务器里** —— 这是预期行为。在 LobeHub 里断开只移除审计记录，需要 Discord 服务器管理员手动从 Discord 那边把机器人踢出。
 - **"This link is already used"** —— 一次性确认链接只能用一次，给机器人再发一条消息获取新链接。
 - **"This account is already linked"** —— 这个 Discord 账号已绑定到另一个 LobeHub 账号。请用那个 LobeHub 账号登录管理，或先在那边解绑。

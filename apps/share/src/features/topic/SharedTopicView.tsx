@@ -16,7 +16,7 @@ import { type SharedTopicData } from '@/types/topic';
 
 import { clientOnly } from '../../shell/clientOnly';
 import ShareLayout from '../../shell/ShareLayout';
-import ExplainTopic from './ExplainTopic';
+import ExplainTopic, { useExplainTopicAction } from './ExplainTopic';
 import {
   primeSharedTopicMessages,
   type SharedTopicFirstPage,
@@ -47,6 +47,7 @@ interface SharedTopicViewProps {
 const SharedTopicView = memo<SharedTopicViewProps>(({ messageReadMode }) => {
   const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
   const { id } = useParams<{ id: string }>();
+  const explain = useExplainTopicAction(id ?? '');
 
   const { data, error, isLoading } = useSWR(
     id ? shareKeys.topic(id) : null,
@@ -74,14 +75,25 @@ const SharedTopicView = memo<SharedTopicViewProps>(({ messageReadMode }) => {
 
   return (
     <ShareLayout
-      actions={id && data?.visibility === 'link' ? <ExplainTopic shareId={id} /> : undefined}
+      actions={id && data?.visibility === 'link' ? <ExplainTopic action={explain} /> : undefined}
       aside={<SharedTopicAside />}
       contentWidth={wideScreen ? undefined : CONVERSATION_MIN_WIDTH}
       error={error}
-      // The SSR document already carries the hero, and SWR revalidates on mount
-      // with that data in cache — gating on `isLoading` alone would blank it.
       loading={isLoading && !data}
       title={data?.title}
+      compactActions={
+        id && data?.visibility === 'link'
+          ? [
+              {
+                key: 'explain-topic',
+                label: explain.label,
+                onClick: () => {
+                  void explain.copyPrompt();
+                },
+              },
+            ]
+          : undefined
+      }
     >
       {id && data ? (
         <SharedTopicBody fallback={hero} messageReadMode={messageReadMode} shareId={id} />

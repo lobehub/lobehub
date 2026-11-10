@@ -8,7 +8,6 @@ import {
   CONNECT_RETRYABLE_EXIT_CODE,
   getWorkspaceFailureExitCode,
   installConnectService,
-  readConnectServiceStatus,
   startConnectService,
 } from './connect';
 
@@ -166,10 +165,6 @@ describe('connect service', () => {
     expect(systemctlCalls.some((call) => call.includes('import-environment'))).toBe(false);
     expect(systemctlCalls.some((call) => call.includes('unset-environment'))).toBe(false);
     expect(systemctlCalls).not.toContainEqual(['--user', 'import-environment']);
-  });
-
-  it('returns null status when the unit file is not installed', () => {
-    expect(readConnectServiceStatus()).toBeNull();
   });
 
   it('starts an installed service after preflight checks pass', () => {

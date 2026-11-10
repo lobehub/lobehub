@@ -2,7 +2,7 @@ export default {
   AccountDeactivated:
     'Your account has been deactivated or suspended. This may be due to policy, security, or account review reasons. Please contact the provider support for assistance.',
   AgentRuntimeError:
-    'Lobe language model runtime execution error. Please troubleshoot or retry based on the following information.',
+    'Something went wrong while generating the reply. Expand the details below to see the cause, or try again.',
   CapabilityNotSupported:
     'Sorry, this model does not support the requested capability (such as vision input or tool calling). Please switch to a model that supports it.',
   ClientLlmExecutorLost:
@@ -64,7 +64,7 @@ export default {
   ModelEmptyCompletion:
     'The model provider returned an empty response. Even without visible content, this request may still incur charges. You can retry or switch models and try again.',
   ModelEmptyCompletionWithCost:
-    'The model provider returned an empty response. This request cost {{credits}} credits. Retrying may incur a similar cost, or you can switch models.',
+    'The model provider returned an empty response. This request cost ${{credits}}. Retrying may incur a similar cost, or you can switch models.',
   ModelRefusal:
     'The model declined to answer this request. Try rephrasing it or choose another model.',
   ModelNotFound:
@@ -91,6 +91,8 @@ export default {
     'The provider timed out while downloading an attached image or file. Please try again.',
   ProviderServiceUnavailable:
     'The provider is temporarily overloaded or unavailable. Please try again shortly.',
+  ProviderStreamInterrupted:
+    'The provider closed the connection before finishing the response. This is usually temporary, please try again.',
   QuotaLimitReached:
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   RateLimitExceeded:

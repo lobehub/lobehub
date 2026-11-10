@@ -3,25 +3,26 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { TaskArchiveModel } from '@/database/models/taskArchive';
+import { TaskLabelError, TaskLabelModel } from '@/database/models/taskLabel';
 import { router } from '@/libs/trpc/lambda';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { assertNotInOpenGoal } from '@/server/services/task/archiveGuard';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import {
+  assertTaskOriginAccessible,
+  taskOriginInputSchema,
+} from '@/server/services/task/originValidation';
+import {
   assertResultingScheduleValid,
   schedulePatternSchema,
   scheduleTimezoneSchema,
 } from '@/server/services/task/scheduleValidation';
+import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { TransferErrorCode } from '@/types/transferError';
 
-import {
-  idInput,
-  resolveOrThrow,
-  taskProcedureWrite,
-  taskVerifyConfigPatchSchema,
-} from './procedures';
+import { idInput, taskProcedureWrite, taskVerifyConfigPatchSchema } from './procedures';
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 // Unknown fields are stripped, including the removed identifierPrefix. Released
@@ -35,10 +36,15 @@ const createSchema = z.object({
   // schedule-dispatch sweep to pick the task up.
   automationMode: z.enum(['heartbeat', 'schedule']).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
+  // Only `origin` is caller-settable: the conversation to notify when the task
+  // finishes. The server checks the caller owns it before storing it.
+  context: z.object({ origin: taskOriginInputSchema.optional() }).optional(),
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
   instruction: z.string().min(1),
+  // Labels to attach on creation; validated before the task row is written.
+  labelIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   name: z.string().optional(),
   parentTaskId: z.string().optional(),
   priority: z.number().min(0).max(4).optional(),
@@ -122,7 +128,7 @@ export const lifecycleRouter = router({
       }
     }),
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
-    const { goal: legacyGoal, ...createInput } = input;
+    const { context, goal: legacyGoal, labelIds, ...createInput } = input;
     if (legacyGoal !== undefined) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -131,14 +137,45 @@ export const lifecycleRouter = router({
       });
     }
     assertResultingScheduleValid(null, createInput);
+    const labelModel = new TaskLabelModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+    if (labelIds?.length) {
+      // Reject unknown / group / conflicting labels before anything is written.
+      await labelModel.assertAssignable(labelIds).catch((error) => {
+        if (error instanceof TaskLabelError) {
+          throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+        }
+        throw error;
+      });
+    }
+    // Origin is optional: without one the task stores no context, as before.
+    const origin = context?.origin;
+    if (origin) {
+      await assertTaskOriginAccessible(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        origin,
+      );
+    }
     try {
       const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
       const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
       const task = await ctx.taskService.createTask({
         ...createInput,
-        config: parsedVerify.success ? taskConfig : createInput.config,
+        ...(origin && { context: { origin } }),
+        parentTaskId: createInput.parentTaskId
+          ? (await resolveTaskOrThrow(ctx.taskModel, createInput.parentTaskId)).id
+          : undefined,
+        config: await normalizeTaskConfig(
+          ctx.taskModel,
+          parsedVerify.success ? taskConfig : createInput.config,
+        ),
       });
       try {
+        // Labels first: their links cascade with the task on rollback, while an
+        // acceptance (no FK to its subject) would outlive a later failure here.
+        if (labelIds?.length) {
+          task.labels = await labelModel.addTaskLabels(task.id, labelIds);
+        }
         if (parsedVerify.success) {
           const { requirement, ...rawConfig } = parsedVerify.data;
           const config = Object.fromEntries(
@@ -193,7 +230,7 @@ export const lifecycleRouter = router({
     try {
       // Any member who can edit tasks may delete one they can see, whoever
       // created it; viewers are gated by `taskProcedureWrite`.
-      const task = await resolveOrThrow(ctx.taskModel, input.id);
+      const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
       await ctx.taskService.deleteTask(task.id);
       return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
@@ -212,7 +249,7 @@ export const lifecycleRouter = router({
     .input(idInput.extend({ archived: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       try {
-        const task = await resolveOrThrow(ctx.taskModel, input.id);
+        const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
         // Same scope as delete: any member who can edit tasks, whoever created it.
         if (input.archived) {
           await assertNotInOpenGoal(

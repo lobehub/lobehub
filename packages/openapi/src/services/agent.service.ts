@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
@@ -43,6 +43,18 @@ export class AgentService extends BaseService {
       title,
     );
     if (!result) throw this.createNotFoundError('Agent not found');
+
+    // AgentModel.duplicate copies an explicit field list without metadata, and the
+    // rest of metadata is private, so only the public personal flag is carried over.
+    const source = await this.db.query.agents.findFirst({ where: eq(agents.id, id) });
+    if (source?.metadata?.personal === true) {
+      const copy = await this.db.query.agents.findFirst({ where: eq(agents.id, result.agentId) });
+      await this.db
+        .update(agents)
+        .set({ metadata: { ...copy?.metadata, personal: true } })
+        .where(eq(agents.id, result.agentId));
+    }
+
     return this.getAgentById(result.agentId);
   }
 
@@ -55,7 +67,7 @@ export class AgentService extends BaseService {
   async queryAgents(request: GetAgentsRequest): ServiceResult<AgentListResponse> {
     this.log('info', 'get agent list', { request });
 
-    const { keyword } = request;
+    const { keyword, personal } = request;
 
     try {
       // Base filter: current user + exclude virtual agents (inbox, supervisor, etc.)
@@ -64,9 +76,12 @@ export class AgentService extends BaseService {
         or(eq(agents.virtual, false), isNull(agents.virtual)),
       );
 
-      const whereConditions = keyword
-        ? and(baseConditions, ilike(agents.title, `%${keyword}%`))
-        : baseConditions;
+      const personalCondition = sql`coalesce(${agents.metadata} -> 'personal' = 'true'::jsonb, false)`;
+      const whereConditions = and(
+        baseConditions,
+        keyword ? ilike(agents.title, `%${keyword}%`) : undefined,
+        personal === undefined ? undefined : personal ? personalCondition : not(personalCondition),
+      );
 
       const query = this.db.query.agents.findMany({
         ...processPaginationConditions(request),
@@ -108,6 +123,7 @@ export class AgentService extends BaseService {
           createdAt: new Date(),
           description: request.description || null,
           id: idGenerator('agents'),
+          metadata: request.personal ? { personal: true } : null,
           model: request.model || null,
           params: request.params ?? {},
           // JSONB accepts mixed plugin entries; the legacy DB column remains string[].
@@ -218,6 +234,10 @@ export class AgentService extends BaseService {
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
         if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;
         if (request.title !== undefined) updateData.title = request.title;
+
+        if (request.personal !== undefined) {
+          updateData.metadata = { ...existingAgent.metadata, personal: request.personal };
+        }
 
         // Merge params instead of fully overwriting
         if (request.params !== undefined) {

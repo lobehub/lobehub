@@ -1,14 +1,17 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
+export const styles = stylex.create({
   // Main container - non-PWA mode (no top border)
-  mainContainer: css`
-    position: relative;
-  `,
+  mainContainer: {
+    position: 'relative',
+  },
 
   // Main container - PWA mode (with top border)
-  mainContainerPWA: css`
-    position: relative;
-    border-block-start: 1px solid ${cssVar.colorBorder};
-  `,
-}));
+  mainContainerPWA: {
+    position: 'relative',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorder,
+  },
+});

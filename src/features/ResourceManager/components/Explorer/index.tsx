@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useMemo } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
@@ -32,7 +32,12 @@ import { useCheckTaskStatus } from './useCheckTaskStatus';
  * It's a un-reusable component for business logic only.
  * So we depend on context, not props.
  */
-const ResourceExplorer = memo(() => {
+interface ResourceExplorerProps {
+  /** Rendered between the toolbar and the list (a library's cover header). */
+  hero?: ReactNode;
+}
+
+const ResourceExplorer = memo<ResourceExplorerProps>(({ hero }) => {
   // Sync store state with URL query parameters
   useResourceManagerUrlSync();
 
@@ -58,7 +63,7 @@ const ResourceExplorer = memo(() => {
   ]);
 
   // Get folder path for empty state check
-  const { currentFolderSlug } = useFolderPath();
+  const { currentFolderId } = useFolderPath();
 
   // Build query params for SWR
   const queryParams = useMemo(
@@ -66,10 +71,13 @@ const ResourceExplorer = memo(() => {
       // Only use category filter when NOT in a specific library
       // When viewing a library, show all items regardless of category
       category: libraryId ? undefined : category,
+      // Outside a library the explorer is the drive: every uploaded file,
+      // including those filed into libraries (tagged on the row), and no pages.
+      filesOnly: !libraryId,
       includeContentPreview: viewMode === 'masonry',
       libraryId,
-      parentId: currentFolderSlug || null,
-      showFilesInKnowledgeBase: false,
+      parentId: currentFolderId || null,
+      showFilesInKnowledgeBase: !libraryId,
       sortType,
       sorter,
       sourceFilter,
@@ -81,7 +89,7 @@ const ResourceExplorer = memo(() => {
     [
       category,
       libraryId,
-      currentFolderSlug,
+      currentFolderId,
       sortType,
       sorter,
       listVisibility,
@@ -121,7 +129,7 @@ const ResourceExplorer = memo(() => {
 
   useResetSelectionOnQueryChange({
     category,
-    currentFolderSlug,
+    currentFolderId,
     libraryId,
     searchQuery,
   });
@@ -136,6 +144,7 @@ const ResourceExplorer = memo(() => {
     <KnowledgeBaseListProvider>
       <Flexbox height={'100%'}>
         <Header />
+        {hero}
         <Flexbox horizontal flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minWidth: 0 }}>
             {/*

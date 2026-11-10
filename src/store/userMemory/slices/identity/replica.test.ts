@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The identities list is a `@lobechat/replica` paged resource whose view is the
+ * The identities list is a `local-replica` paged resource whose view is the
  * userMemory store's flat `identities` array (with `identitiesMeta` beside it):
  * the persisted head page paints while the network confirms it, "load more"
  * appends through the engine, an optimistic delete rolls back on failure, and a

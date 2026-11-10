@@ -8,6 +8,7 @@ import type { SandboxPolicy } from '@lobechat/device-sandbox';
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellBackend, ShellOutputFiles } from './backend';
 import { ChildProcessBackend } from './child-process-backend';
+import { registerDeviceOperationResource } from './deviceOperation';
 import type { ShellProcess, ShellProcessManager } from './process-manager';
 import { DEFAULT_OBSERVATION_TIMEOUT_MS } from './process-manager';
 import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
@@ -245,6 +246,7 @@ export async function runCommand(
       { args: launchCommand.args, cmd: launchCommand.cmd },
       { cwd: effectiveCwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
     );
+    registerDeviceOperationResource(() => backend.terminate?.(shellId) ?? Promise.resolve(false));
 
     const shellProcess: ShellProcess = {
       backend,

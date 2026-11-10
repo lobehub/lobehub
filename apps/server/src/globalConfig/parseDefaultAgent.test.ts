@@ -71,14 +71,6 @@ describe('parseAgentConfig', () => {
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });
 
-    it('parses OpenAI TTS voice configuration correctly', () => {
-      const envStr = 'tts.voice.openai=english-voice';
-      const expected = {
-        tts: { voice: { openai: 'english-voice' } },
-      };
-      expect(parseAgentConfig(envStr)).toEqual(expected);
-    });
-
     it('parses inputTemplate with special characters correctly', () => {
       const envStr = 'inputTemplate="Hello, I am {name}"';
       const expected = { inputTemplate: 'Hello, I am {name}' };

@@ -181,7 +181,9 @@ export class RbacModel {
         and(
           eq(userRoles.userId, userId),
           isNull(userRoles.workspaceId),
-          permissionCodes ? inArray(permissions.code, permissionCodes) : undefined,
+          permissionCodes
+            ? inArray(permissions.code, permissionCodes)
+            : /* v8 ignore next -- unreachable: the only caller (`hasAnyPermission`) always passes a code array */ undefined,
           eq(roles.isActive, true),
           eq(permissions.isActive, true),
           // Check if role assignment is not expired
@@ -211,6 +213,7 @@ export class RbacModel {
         userIds: [targetUserId],
         workspaceId: opts.workspaceId,
       });
+      /* v8 ignore next -- unreachable: without `requireMembership` every requested user id gets an entry, so `?? []` never runs */
       return permissionsByUserId.get(targetUserId) ?? [];
     }
 

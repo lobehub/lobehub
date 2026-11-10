@@ -34,6 +34,9 @@ export const EDITOR_DOCUMENT_SOURCE_TYPES = [
  * page/resource listings exclude these by default so agent working artifacts
  * (tool outputs, skill bundles) don't flood the library.
  */
+/** Folder holding an agent's archived tool results; runtime data, never browsable content. */
+export const AGENT_TOOL_RESULTS_DIR_NAME = '.tool-results';
+
 export const AGENT_ARTIFACT_SOURCE_TYPES = ['agent', 'agent-signal'] as const;
 
 /**

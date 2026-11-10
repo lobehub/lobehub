@@ -1,8 +1,10 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cx, Input, toast } from '@lobehub/ui';
-import { type Dayjs } from 'dayjs';
+import { ActionIcon, Input, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import { Check, Edit, X } from 'lucide-react';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,52 +29,39 @@ export interface EditableCellProps {
 }
 
 // Style definitions
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionButtons: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 4px;
-  `,
-  container: css`
-    position: relative;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    min-height: 32px;
-
-    &:hover .edit-button {
-      opacity: 1;
-    }
-  `,
-  content: css`
-    min-width: 0;
-    line-height: 1.5;
-    color: ${cssVar.colorText};
-    word-break: break-all;
-  `,
-  editButton: css`
-    opacity: 0;
-    transition: opacity 0.2s ease;
-
-    &.edit-button {
-      opacity: 0;
-    }
-  `,
-  editingContainer: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-  `,
-  inputWrapper: css`
-    flex: 1;
-  `,
-  textareaWrapper: css`
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  actionButtons: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '4px',
+  },
+  container: {
+    position: 'relative',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minHeight: '32px',
+  },
+  content: {
+    minWidth: 0,
+    lineHeight: 1.5,
+    color: cssVar.colorText,
+    wordBreak: 'break-all',
+  },
+  editButton: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'opacity 0.2s ease',
+  },
+  editingContainer: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    width: '100%',
+  },
+  inputWrapper: {
+    flex: '1',
+  },
+});
 
 // Main component implementation
 const EditableCell = memo<EditableCellProps>(
@@ -147,7 +136,7 @@ const EditableCell = memo<EditableCellProps>(
       switch (type) {
         case 'text': {
           return (
-            <div className={styles.inputWrapper}>
+            <div {...stylex.props(styles.inputWrapper)}>
               <Input
                 autoFocus
                 defaultValue={value as string}
@@ -174,9 +163,9 @@ const EditableCell = memo<EditableCellProps>(
     // Text type editing mode, showing save and cancel buttons
     if (type === 'text' && isEditing) {
       return (
-        <div className={styles.editingContainer}>
+        <div {...stylex.props(styles.editingContainer)}>
           {renderEditMode()}
-          <div className={styles.actionButtons}>
+          <div {...stylex.props(styles.actionButtons)}>
             <ActionIcon icon={Check} size="small" onClick={handleSubmit} />
             <ActionIcon icon={X} size="small" onClick={handleCancel} />
           </div>
@@ -187,7 +176,7 @@ const EditableCell = memo<EditableCellProps>(
     // Date type editing mode, showing date picker
     if (type === 'date' && isEditing) {
       return (
-        <div className={styles.editingContainer}>
+        <div {...stylex.props(styles.editingContainer)}>
           {renderEditMode()}
           <ActionIcon icon={X} size="small" onClick={handleCancel} />
         </div>
@@ -196,10 +185,10 @@ const EditableCell = memo<EditableCellProps>(
 
     // Display mode
     return (
-      <div className={styles.container}>
-        <div className={styles.content}>{formatDisplayValue(value)}</div>
+      <div {...stylex.props(styles.container, stylex.defaultMarker())}>
+        <div {...stylex.props(styles.content)}>{formatDisplayValue(value)}</div>
         <ActionIcon
-          className={cx(styles.editButton, 'edit-button')}
+          className={stylex.props(styles.editButton).className}
           icon={Edit}
           size="small"
           onClick={handleEdit}

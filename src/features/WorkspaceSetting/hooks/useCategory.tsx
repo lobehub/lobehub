@@ -5,16 +5,17 @@ import {
   AppWindowIcon,
   BellIcon,
   Blocks,
-  BlocksIcon,
   Brain,
   Building2,
   ChartColumnBigIcon,
+  ChartPieIcon,
   Coins,
   ContainerIcon,
   CreditCard,
   Database,
   EllipsisIcon,
   FlaskConical,
+  GaugeIcon,
   HandCoins,
   Info,
   KeyboardIcon,
@@ -22,11 +23,14 @@ import {
   KeyRound,
   Map,
   MessageCircleIcon,
+  MessagesSquareIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
+  PlugIcon,
   ScrollText,
   Sparkles,
   TagIcon,
+  Trash2,
   Users,
   UsersRound,
 } from 'lucide-react';
@@ -45,8 +49,9 @@ export enum WorkspaceSettingsGroupKey {
   Account = 'account',
   Admin = 'admin',
   Agent = 'agent',
-  Developer = 'developer',
+  Connection = 'connection',
   General = 'general',
+  Resource = 'resource',
   Subscription = 'subscription',
   System = 'system',
 }
@@ -76,10 +81,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   // immediately 403s.
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
-  const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
-  // Behind the same experiment that gates the persistent sandbox itself: a tab
-  // for environments nothing can run in would be a dead end.
-  const enablePersistentSandbox = useUserStore(labPreferSelectors.enablePersistentSandbox);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
@@ -123,6 +124,14 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Hotkey,
               label: t('tab.hotkey'),
             },
+            // Follow-up chips / input completion act on the member's own chat
+            // surface, so every role configures them here — the workspace
+            // Service Model page stays admin-only.
+            {
+              icon: MessagesSquareIcon,
+              key: WorkspaceSettingsTabs.ChatPreference,
+              label: t('tab.chatPreference'),
+            },
             // The System Bot binding is a per-user identity (owned by userId,
             // not the workspace); reaching a workspace's agents happens via the
             // scope selector on the page itself.
@@ -131,18 +140,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Messenger,
               label: t('tab.messenger'),
             },
-            // An installation connected here belongs to the workspace, so
-            // every member sees the same one. Labs alpha, like the personal
-            // surface.
-            ...(enableIntegrations
-              ? [
-                  {
-                    icon: BlocksIcon,
-                    key: WorkspaceSettingsTabs.Integrations,
-                    label: t('tab.integrations'),
-                  },
-                ]
-              : []),
           ],
           key: WorkspaceSettingsGroupKey.Account,
           title: t('group.profile'),
@@ -163,16 +160,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: UsersRound,
               key: WorkspaceSettingsTabs.Teams,
               label: t('workspaceSetting.tab.teams'),
-            },
-            {
-              icon: MonitorSmartphoneIcon,
-              key: WorkspaceSettingsTabs.Devices,
-              label: t('tab.devices'),
-            },
-            enablePersistentSandbox && {
-              icon: ContainerIcon,
-              key: WorkspaceSettingsTabs.Environments,
-              label: t('tab.environments'),
             },
             {
               icon: BellIcon,
@@ -196,7 +183,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: tSubscription('tab.plans'),
             },
             {
-              icon: ChartColumnBigIcon,
+              icon: ChartPieIcon,
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
@@ -252,6 +239,22 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Labels,
               label: t('workspaceSetting.tab.labels'),
             },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Agent,
+          title: t('workspaceSetting.group.agent'),
+        },
+        // Outside services the workspace's agents can reach. These bindings
+        // belong to the workspace; Messenger stays in Account because it is a
+        // per-user binding.
+        {
+          items: [
+            // An installation connected here belongs to the workspace, so
+            // every member sees the same one.
+            {
+              icon: PlugIcon,
+              key: WorkspaceSettingsTabs.Integrations,
+              label: t('tab.integrations'),
+            },
             {
               icon: Blocks,
               key: WorkspaceSettingsTabs.Connector,
@@ -262,11 +265,37 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
-            // Messenger lives in the Account group above — it is a per-user
-            // binding, not workspace configuration.
+          ],
+          key: WorkspaceSettingsGroupKey.Connection,
+          title: t('group.connection'),
+        },
+        // What the workspace's agents run on and spend: machines, coding-agent
+        // subscriptions, code environments and the drive. Each item keeps its
+        // own gate; the group only puts the shared capacity in one place.
+        {
+          items: [
+            {
+              icon: MonitorSmartphoneIcon,
+              key: WorkspaceSettingsTabs.Devices,
+              label: t('tab.devices'),
+            },
+            // The coding-agent accounts are shared capacity every agent routes
+            // onto, so taking one in or out of rotation is an admin decision.
+            canManageWorkspace && {
+              icon: GaugeIcon,
+              key: WorkspaceSettingsTabs.SubscriptionAccounts,
+              label: t('tab.subscriptionAccounts'),
+            },
+            // Always there: a code environment is a definition, written down before
+            // anything runs it, and useful with or without a drive to run it on.
+            {
+              icon: ContainerIcon,
+              key: WorkspaceSettingsTabs.Environments,
+              label: t('tab.environments'),
+            },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
-          key: WorkspaceSettingsGroupKey.Agent,
-          title: t('workspaceSetting.group.agent'),
+          key: WorkspaceSettingsGroupKey.Resource,
+          title: t('group.resource'),
         },
         // The Admin group is available to Admin and Owner.
         canManageWorkspace && {
@@ -285,24 +314,19 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Admin,
           title: t('workspaceSetting.group.admin'),
         },
-        // System group: Storage stays in Admin because it is workspace-scoped
-        // there; About is informational and visible to every role.
-        !hideDocs && {
-          items: [
-            {
-              icon: Info,
-              key: WorkspaceSettingsTabs.About,
-              label: t('tab.about'),
-            },
-          ],
-          key: WorkspaceSettingsGroupKey.System,
-          title: t('group.system'),
-        },
-        // Developer group sits last, mirroring the personal sidebar: Advanced
-        // and Labs are user preferences (always shown), API Key / OAuth apps
-        // keep their gates.
+        // System & developer sits last and starts collapsed, mirroring the
+        // personal sidebar. Storage stays in Admin because it is
+        // workspace-scoped there. Trash is visible to every role — the server
+        // shows owners the whole bin and members only what they deleted.
+        // Advanced and Labs are user preferences; API Key / OAuth apps keep
+        // their gates.
         {
           items: [
+            {
+              icon: Trash2,
+              key: WorkspaceSettingsTabs.Trash,
+              label: t('tab.trash'),
+            },
             {
               icon: EllipsisIcon,
               key: WorkspaceSettingsTabs.Advanced,
@@ -323,9 +347,14 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Labs,
               label: tLabs('title'),
             },
+            !hideDocs && {
+              icon: Info,
+              key: WorkspaceSettingsTabs.About,
+              label: t('tab.about'),
+            },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
-          key: WorkspaceSettingsGroupKey.Developer,
-          title: t('group.developer'),
+          key: WorkspaceSettingsGroupKey.System,
+          title: t('group.systemDeveloper'),
         },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
     [
@@ -334,8 +363,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       tLabs,
       tSubscription,
       enableOAuthApps,
-      enableIntegrations,
-      enablePersistentSandbox,
       canManageWorkspace,
       canViewBilling,
       canCreateContent,

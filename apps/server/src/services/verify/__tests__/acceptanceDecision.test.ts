@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   findRunById: vi.fn(),
   foldIntoRound: vi.fn(),
   ensureForSubject: vi.fn(),
+  fillProject: vi.fn(),
+  taskTopicFindByTopicId: vi.fn(),
   listResultsByRun: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock('@/database/models/acceptance', () => ({
   AcceptanceModel: vi.fn(function () {
     return {
       ensureForSubject: mocks.ensureForSubject,
+      fillProject: mocks.fillProject,
       findById: mocks.findById,
       findPolicyById: mocks.findPolicyById,
       updatePolicyStatus: mocks.updatePolicyStatus,
@@ -62,6 +65,11 @@ vi.mock('@/database/models/task', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(function () {
     return { findOwnTopicById: mocks.findOwnTopicById };
+  }),
+}));
+vi.mock('@/database/models/taskTopic', () => ({
+  TaskTopicModel: vi.fn(function () {
+    return { findByTopicId: mocks.taskTopicFindByTopicId };
   }),
 }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
@@ -179,6 +187,32 @@ describe('AcceptanceService decision gating', () => {
       acceptanceId: 'acc-1',
     });
     expect(mocks.attachToAcceptance).toHaveBeenCalledWith('run-2', 'acc-1', undefined);
+  });
+
+  it("files an ungrouped acceptance under its subject's project when a round lands", async () => {
+    mocks.findById.mockResolvedValue({ ...acceptance('delivered'), projectId: null });
+    mocks.findOwnTopicById.mockResolvedValue({ projectId: 'project-topic' });
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2' });
+    mocks.attachToAcceptance.mockResolvedValue({ acceptanceId: 'acc-1', id: 'run-2' });
+
+    await service().attachRun('run-2', 'acc-1');
+
+    expect(mocks.fillProject).toHaveBeenCalledWith('acc-1', 'project-topic');
+  });
+
+  it('leaves a grouped acceptance alone, and still attaches when the subject cannot be read', async () => {
+    mocks.findById.mockResolvedValue({ ...acceptance('delivered'), projectId: 'project-kept' });
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2' });
+    mocks.attachToAcceptance.mockResolvedValue({ acceptanceId: 'acc-1', id: 'run-2' });
+
+    await service().attachRun('run-2', 'acc-1');
+    expect(mocks.findOwnTopicById).not.toHaveBeenCalled();
+
+    mocks.findById.mockResolvedValue({ ...acceptance('delivered'), projectId: null });
+    mocks.findOwnTopicById.mockRejectedValue(new Error('db down'));
+
+    await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ id: 'run-2' });
+    expect(mocks.fillProject).not.toHaveBeenCalled();
   });
 
   it('distils the previous round once a new one lands', async () => {

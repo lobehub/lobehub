@@ -1,4 +1,5 @@
-import type { TaskStatus } from '@lobechat/types';
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
+import { normalizeTaskListFilter, type TaskListFilter, type TaskStatus } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
@@ -50,18 +51,21 @@ const filterToServerVisibility = (
 };
 
 /**
- * `complete` mode paging. The server caps one `task.list` page at 100 rows, so
- * the full list is assembled from consecutive pages; the ceiling bounds the
- * fan-out for very large workspaces (10 requests) — past it the store keeps
- * the real `total` so the list can say it is showing a subset.
+ * `complete` mode paging. The server caps one `task.list` page at 500 rows, so
+ * the full list is assembled from consecutive pages — sequential round trips,
+ * so the page is as large as the server allows; the ceiling bounds the fan-out
+ * for very large workspaces (2 requests) — past it the store keeps the real
+ * `total` so the list can say it is showing a subset.
  */
-export const COMPLETE_TASK_LIST_PAGE_SIZE = 100;
+export const COMPLETE_TASK_LIST_PAGE_SIZE = 500;
 
 /** Page size of the Tasks page's paginated collections (scheduled, "My tasks"). */
 export const TASK_COLLECTION_PAGE_SIZE = 50;
 
 export interface ScheduledTaskListOptions {
   agentId?: string;
+  /** The Tasks page filter; Home's roll-up sends none. */
+  filter?: TaskListFilter;
   limit?: number;
   offset?: number;
   projectId?: string;
@@ -74,12 +78,14 @@ export interface ScheduledTaskListOptions {
  */
 export const scheduledTaskListQuery = ({
   agentId,
+  filter,
   limit,
   offset,
   projectId,
 }: ScheduledTaskListOptions): TaskListQuery => ({
   agentId: projectId ? undefined : agentId,
   automated: true,
+  filter: normalizeTaskListFilter(filter),
   limit,
   offset,
   orderBy: 'updatedAt',
@@ -106,6 +112,51 @@ export interface TaskCollectionSyncResult extends ReplicaSyncResult {
   /** Read the collection with `taskListSelectors.*(queryKey)`; undefined while disabled. */
   queryKey?: string;
 }
+
+/** What a batch overlay needs to know about the collection it patches. */
+export interface CollectionQueryShape {
+  /** The collection is one agent's tasks (assignee filter). */
+  agentId?: string;
+  /** The collection lists archived rows ("Show archived"); undefined when unknown. */
+  includeArchived?: boolean;
+  /** "My tasks" narrowing. */
+  scope?: 'assigned' | 'created';
+}
+
+/** A batch overlay's patch of one task; `undefined` takes the row out of the collection. */
+export type CollectionTasksPatch = (
+  task: CollectionTask,
+  query: CollectionQueryShape,
+) => CollectionTask | undefined;
+
+export interface CollectionTasksOptimistic {
+  /** Keep the rows in `keep` (id → final patch; default: every id, original patch). */
+  commit: (keep?: ReadonlyMap<string, CollectionTasksPatch>) => void;
+  rollback: () => void;
+}
+
+/**
+ * The query behind a list / board entry, read back from its key (the
+ * canonical JSON `stableQueryKey` writes). A key that does not parse — or a
+ * persisted row patched without its key — reports nothing.
+ */
+const collectionQueryShape = (queryKey?: string): CollectionQueryShape => {
+  if (!queryKey) return {};
+  try {
+    const query = JSON.parse(queryKey) as {
+      agentId?: unknown;
+      includeArchived?: unknown;
+      scope?: unknown;
+    };
+    return {
+      agentId: typeof query?.agentId === 'string' ? query.agentId : undefined,
+      includeArchived: query?.includeArchived === true,
+      scope: query?.scope === 'assigned' || query?.scope === 'created' ? query.scope : undefined,
+    };
+  } catch {
+    return {};
+  }
+};
 
 type Setter = StoreSetter<TaskStore>;
 
@@ -156,6 +207,8 @@ export class TaskListSliceActionImpl {
     const params = {
       ...(query.agentId ? { assigneeAgentId: query.agentId } : {}),
       automated: query.automated,
+      ...(query.completedWithin && { completedWithin: query.completedWithin }),
+      ...(query.filter && { filter: query.filter }),
       includeArchived: query.includeArchived,
       orderBy: query.orderBy,
       projectId: query.projectId,
@@ -172,10 +225,14 @@ export class TaskListSliceActionImpl {
     taskService.groupList({
       assigneeAgentId: query.agentId,
       ...(query.automated === undefined ? {} : { automated: query.automated }),
+      ...(query.completedWithin && { completedWithin: query.completedWithin }),
       excludeStatuses: query.excludeStatuses,
+      ...(query.filter && { filter: query.filter }),
       ...(query.groupBy === 'status'
         ? { groups: DEFAULT_KANBAN_GROUPS }
-        : { groupBy: query.groupBy }),
+        : query.groupBy.startsWith('label:')
+          ? { groupBy: 'label' as const, labelGroupId: query.groupBy.slice('label:'.length) }
+          : { groupBy: query.groupBy as 'assignee' | 'member' | 'priority' }),
       includeArchived: query.includeArchived,
       projectId: query.projectId,
       scope: query.scope,
@@ -207,15 +264,15 @@ export class TaskListSliceActionImpl {
   });
 
   /** The task (by identifier) as any loaded list or board holds it. */
-  internal_findCollectionTask = (identifier: string): CollectionTask | undefined => {
+  internal_findCollectionTask = (taskId: string): CollectionTask | undefined => {
     const { taskGroupListMap, taskListMap } = this.#get();
     for (const value of Object.values(taskListMap)) {
-      const task = value.items.find((item) => item.identifier === identifier);
+      const task = value.items.find((item) => item.id === taskId);
       if (task) return task;
     }
     for (const value of Object.values(taskGroupListMap)) {
       for (const group of value.groups) {
-        const task = group.tasks.find((item) => item.identifier === identifier);
+        const task = group.tasks.find((item) => item.id === taskId);
         if (task) return task;
       }
     }
@@ -230,20 +287,109 @@ export class TaskListSliceActionImpl {
    * every loaded collection exactly, card order included.
    */
   internal_beginCollectionTaskOptimistic = (
-    identifier: string,
+    taskId: string,
     fn: <T extends CollectionTask>(task: T) => T,
   ) => {
     const tokens = [
-      ...this.#taskList.beginEntityOptimistic<CollectionTask>(identifier, fn),
-      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+      ...this.#taskList.beginEntityOptimistic<CollectionTask>(taskId, fn),
+      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(taskId, fn),
     ];
     return {
       commit: () => {
         tokens.forEach((token) => token.commit());
-        void this.#taskList.patchStoredEntity<CollectionTask>(identifier, fn);
-        void this.#taskGroupList.patchStoredEntity<CollectionTask>(identifier, fn);
+        void this.#taskList.patchStoredEntity<CollectionTask>(taskId, fn);
+        void this.#taskGroupList.patchStoredEntity<CollectionTask>(taskId, fn);
       },
       rollback: () => tokens.forEach((token) => token.rollback()),
+    };
+  };
+
+  /**
+   * `internal_beginCollectionTaskOptimistic` for a whole selection (the list's
+   * batch actions): ONE overlay per loaded list / board that holds any of
+   * `ids`, applying `fn` to each of them — a 500-task batch is one store write
+   * per collection, not one per task. `fn` returning `undefined` takes the row
+   * out (delete, archive in a list that hides archived rows); it is told
+   * whether the collection shows archived rows.
+   *
+   * `commit(keep)` settles with the rows the server actually changed: `keep`
+   * maps those ids to their final patch (default: `fn` for every id), so a
+   * failed or skipped row falls back to its confirmed value while the others
+   * stay as shown until the refresh lands — persisted, unloaded lists and
+   * boards get the same change. `rollback` restores every collection exactly.
+   */
+  internal_beginCollectionTasksOptimistic = (
+    ids: readonly string[],
+    fn: CollectionTasksPatch,
+  ): CollectionTasksOptimistic => {
+    const wanted = new Set(ids);
+    const { taskGroupListMap, taskListMap } = this.#get();
+    const applyTo =
+      <TValue>(
+        entity: {
+          map: (data: TValue, id: string, fn: (task: any) => any) => TValue | undefined;
+        },
+        patches: ReadonlyMap<string, CollectionTasksPatch>,
+        query: CollectionQueryShape,
+      ) =>
+      (data: TValue): TValue => {
+        let next = data;
+        for (const [id, patch] of patches) {
+          // Task adapters drop a row, never the whole value; keep it if one did.
+          next = entity.map(next, id, (task: CollectionTask) => patch(task, query)) ?? next;
+        }
+        return next;
+      };
+    const all = new Map(ids.map((id) => [id, fn] as const));
+
+    const listKeys = Object.entries(taskListMap)
+      .filter(([, value]) => value.items.some((task) => wanted.has(task.id)))
+      .map(([key]) => key);
+    const groupKeys = Object.entries(taskGroupListMap)
+      .filter(([, value]) =>
+        value.groups.some((group) => group.tasks.some((task) => wanted.has(task.id))),
+      )
+      .map(([key]) => key);
+
+    const listTokens = listKeys.map((key) => ({
+      key,
+      token: this.#taskList.beginOptimistic(
+        key,
+        applyTo(taskListEntity, all, collectionQueryShape(key)),
+      ),
+    }));
+    const groupTokens = groupKeys.map((key) => ({
+      key,
+      token: this.#taskGroupList.beginOptimistic(
+        key,
+        applyTo(taskGroupListEntity, all, collectionQueryShape(key)),
+      ),
+    }));
+
+    let settled = false;
+    return {
+      commit: (keep = all) => {
+        if (settled) return;
+        settled = true;
+        for (const { key, token } of listTokens)
+          token.commit(applyTo(taskListEntity, keep, collectionQueryShape(key)));
+        for (const { key, token } of groupTokens)
+          token.commit(applyTo(taskGroupListEntity, keep, collectionQueryShape(key)));
+        if (keep.size === 0) return;
+        // Persisted lists and boards that are not loaded: one pass over the
+        // stored rows per resource, whatever the selection size.
+        void this.#taskList.patchStoredRows((data) =>
+          applyTo(taskListEntity, keep, collectionQueryShape())(data),
+        );
+        void this.#taskGroupList.patchStoredRows((data) =>
+          applyTo(taskGroupListEntity, keep, collectionQueryShape())(data),
+        );
+      },
+      rollback: () => {
+        if (settled) return;
+        settled = true;
+        for (const { token } of [...listTokens, ...groupTokens]) token.rollback();
+      },
     };
   };
 
@@ -256,9 +402,15 @@ export class TaskListSliceActionImpl {
     apply: (value: TaskGroupListValue) => TaskGroupListValue,
   ) => this.#taskGroupList.beginOptimistic(queryKey, apply);
 
-  setActiveTaskListKey = (queryKey?: string): void => {
-    if (this.#get().activeTaskListKey === queryKey) return;
-    this.#set({ activeTaskListKey: queryKey }, false, 'setActiveTaskListKey');
+  setActiveTaskListKey = (queryKey?: string, filtered?: boolean): void => {
+    const state = this.#get();
+    if (state.activeTaskListKey === queryKey && !!state.activeTaskListFiltered === !!filtered)
+      return;
+    this.#set(
+      { activeTaskListFiltered: !!queryKey && !!filtered, activeTaskListKey: queryKey },
+      false,
+      'setActiveTaskListKey',
+    );
   };
 
   refreshTaskGroupList = async (): Promise<void> => {
@@ -321,8 +473,12 @@ export class TaskListSliceActionImpl {
       agentId?: string;
       allAgents?: boolean;
       automated?: boolean;
+      /** Keep completed / canceled cards only when closed within this window. */
+      completedWithin?: TaskCompletedWindow;
       enabled?: boolean;
       excludeStatuses?: readonly TaskStatus[];
+      /** The Tasks page filter; part of the key. */
+      filter?: TaskListFilter;
       groupBy?: TaskKanbanGroupBy;
       includeArchived?: boolean;
       projectId?: string;
@@ -339,8 +495,10 @@ export class TaskListSliceActionImpl {
       agentId,
       allAgents = false,
       automated,
+      completedWithin,
       enabled = true,
       excludeStatuses,
+      filter,
       groupBy = 'status',
       includeArchived,
       projectId,
@@ -354,7 +512,9 @@ export class TaskListSliceActionImpl {
       ? {
           agentId: allAgents || scope ? undefined : agentId,
           automated,
+          completedWithin,
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses].sort() : undefined,
+          filter: normalizeTaskListFilter(filter),
           groupBy,
           includeArchived: includeArchived || undefined,
           projectId,
@@ -406,22 +566,40 @@ export class TaskListSliceActionImpl {
    * collection into the other.
    */
   useFetchMyTaskList = (options: {
+    /**
+     * Server-side look-back for completed / canceled tasks (the "Completed
+     * tasks" display option), cut before `limit` / `offset` like `statuses`.
+     */
+    completedWithin?: TaskCompletedWindow;
     enabled?: boolean;
+    /** The Tasks page filter, applied before `limit` / `offset`. */
+    filter?: TaskListFilter;
     includeArchived?: boolean;
     limit?: number;
     offset?: number;
     scope: 'assigned' | 'created';
     /**
-     * Server-side status narrowing (the `hideCompleted` display option
+     * Server-side status narrowing (the "Completed tasks: None" display option
      * translated by `getVisibleTaskStatuses`). Applied before `limit` /
      * `offset` so a page can never come back empty while older unfinished
      * tasks exist; part of the query for the same reason as `scope`.
      */
     statuses?: TaskStatus[];
   }): TaskCollectionPageResult => {
-    const { enabled = true, includeArchived, limit, offset, scope, statuses } = options;
+    const {
+      completedWithin,
+      enabled = true,
+      filter,
+      includeArchived,
+      limit,
+      offset,
+      scope,
+      statuses,
+    } = options;
     return this.#useCollectionPage(
       {
+        completedWithin,
+        filter: normalizeTaskListFilter(filter),
         // Archived rows are a different server page, like the status filter.
         includeArchived: includeArchived || undefined,
         limit,
@@ -457,6 +635,8 @@ export class TaskListSliceActionImpl {
        */
       complete?: boolean;
       enabled?: boolean;
+      /** The Tasks page filter, applied server-side; part of the key. */
+      filter?: TaskListFilter;
       /** Include archived tasks (the "Show archived" option); part of the key. */
       includeArchived?: boolean;
       /**
@@ -484,6 +664,7 @@ export class TaskListSliceActionImpl {
       automated,
       complete = false,
       enabled = true,
+      filter,
       includeArchived,
       orderBy,
       projectId,
@@ -498,6 +679,7 @@ export class TaskListSliceActionImpl {
           agentId: allAgents || projectId ? undefined : agentId,
           automated,
           complete: complete || undefined,
+          filter: normalizeTaskListFilter(filter),
           includeArchived: includeArchived || undefined,
           orderBy,
           projectId,
@@ -506,7 +688,7 @@ export class TaskListSliceActionImpl {
         }
       : undefined;
     const queryKey = query ? taskListQueryKey(query) : undefined;
-    // No refetch on focus: a `complete` list walks up to ten pages per sync.
+    // No refetch on focus: a `complete` list walks up to two pages per sync.
     const sync = this.#taskList.useSync(query, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(
       sync,

@@ -55,6 +55,12 @@ import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
 import { recordBedrockResponseEvent } from './providerDiagnostics';
 
 /**
+ * Bedrock accepts a 20MB request body and 3.75MB per image (5MB of base64), so
+ * images get a smaller share than on the Anthropic API.
+ */
+const BEDROCK_INLINE_IMAGE_BUDGET = { maxTotalBase64Bytes: 12 * 1024 * 1024 };
+
+/**
  * A prompt constructor for HuggingFace LLama 2 chat models.
  * Does not support `function` messages.
  * @see https://huggingface.co/meta-llama/Llama-2-70b-chat-hf and https://huggingface.co/blog/llama2#how-to-prompt-llama-2
@@ -331,6 +337,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       await buildAnthropicMessages(user_messages, {
         cacheTTL: contextCachingTTL,
         enabledContextCaching,
+        imageBudget: BEDROCK_INLINE_IMAGE_BUDGET,
       }),
     );
 

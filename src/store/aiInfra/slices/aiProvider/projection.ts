@@ -1,8 +1,7 @@
-import type { ReplicaStorage } from '@lobechat/replica';
+import type { ReplicaStorage } from 'local-replica';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
 
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
-import { defineReplica, stableQueryKey } from '@/libs/replica';
+import { AppIndexedDBStorage, defineReplica, stableQueryKey } from '@/libs/replica';
 import { aiProviderService } from '@/services/aiProvider';
 import type {
   AiProviderDetailItem,
@@ -13,7 +12,7 @@ import type {
 
 /**
  * The aiProvider reads — the provider list, one provider detail, and the
- * derived runtime state — as `@lobechat/replica` resources. Each used to be a
+ * derived runtime state — as `local-replica` resources. Each used to be a
  * bare `useClientDataSWR`; the replica engine now owns hydration, scope
  * isolation and head revalidation.
  *
@@ -138,7 +137,7 @@ export const toRuntimeStateDisplaySnapshot = (
 };
 
 const createRuntimeStateStorage = (): ReplicaStorage<AiProviderRuntimeStateView> => {
-  const storage = new IndexedDBQueryProjectionStorage<AiProviderRuntimeStateView>({
+  const storage = new AppIndexedDBStorage<AiProviderRuntimeStateView>({
     namespace: 'replica:aiProviderRuntimeState:v2',
   });
   const read = async (

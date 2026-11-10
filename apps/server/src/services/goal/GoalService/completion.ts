@@ -8,17 +8,23 @@ import type {
   WorkVersionEventItem,
 } from '@lobechat/types';
 import { experimentOwner } from '@lobechat/utils/goalGraph';
+import debug from 'debug';
 
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { GoalRepository } from '@/database/repositories/goal';
 
 import {
   GOAL_ACCEPTANCE_TASK_TITLE,
   type GoalMove,
   TERMINAL_NODE_STATUSES,
 } from '../decideNextMove';
+import { lastAnsweredGateAt } from '../machineRecovery';
 import { GoalSupervisorService } from '../supervisor';
 import { TaskRecoveryCoordinator } from '../taskRecoveryCoordinator';
+import { readVerificationStall, REPEATED_FAILURE_LIMIT } from '../verificationStall';
 import type { GoalServiceContext } from './types';
+
+const log = debug('lobe-server:goal-completion');
 
 /**
  * Version events read per task run when harvesting deliverables. Generous
@@ -41,6 +47,16 @@ export const settleTerminalAcceptance = async (
   const goalId = graph.goal.id;
 
   if (move.outcome === 'achieved') {
+    // Re-read the numeric clauses right before the terminal transition: bindings,
+    // provenance and freshness can change between the verdict and here, and the
+    // earlier verdict is not a lease.
+    const measurementChanged: GoalTickResult = {
+      goalId,
+      message: 'Measured acceptance changed before the Goal could be achieved; re-evaluating',
+      outcome: 'no_progress',
+    };
+    const numeric = await ctx.evaluateMetricCriteria(await ctx.requireGraph(goalId));
+    if (!numeric.allMet) return measurementChanged;
     // The map must agree with the verdict: only task nodes get resolved as
     // Tasks complete, so without this the seeded problem nodes would read
     // "active / unanswered" forever on an achieved goal.
@@ -54,7 +70,24 @@ export const settleTerminalAcceptance = async (
     // the ask for good. Failing here leaves the goal open for the next tick,
     // and the write is idempotent per acceptance.
     await ctx.requestSignOff(graph);
-    await ctx.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
+    // The final verdict and the terminal write commit together: the evidence
+    // locks taken by the re-read are held until `achieved` lands, so a rebind,
+    // disable or newer below-target observation cannot slip in between.
+    const achieved = await ctx.db.transaction(async (tx) => {
+      const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
+      const current = await model.lockById(goalId);
+      if (!current || current.status !== graph.goal.status) return false;
+      if (!(await ctx.evaluateMetricCriteria({ ...graph, goal: current }, tx)).allMet) return false;
+      await model.updateStatus(goalId, 'achieved');
+      await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      })
+        .recordGoalStatus(goalId, current.status, 'achieved', 'Goal-level acceptance passed')
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      return true;
+    });
+    if (!achieved) return measurementChanged;
     effects.push({ type: 'goal_status', detail: 'achieved' });
     return { goalId, message: move.message, outcome: 'achieved' };
   }
@@ -153,6 +186,30 @@ export const recoverAfterVerification = async (
   effects: GoalAdvanceEffect[],
 ): Promise<GoalTickResult> => {
   const goalId = graph.goal.id;
+
+  // Attempts that keep failing the same way will not stop doing so because the
+  // budget allows another: ask a person now, with that as the reason, instead of
+  // spending the rest of the budget. An unreadable history keeps the retry.
+  const stalled = await readVerificationStall(
+    ctx.db,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    task.id,
+    lastAnsweredGateAt(graph, nodeId),
+  ).catch((error) => {
+    log('task %s verification history unavailable: %O', task.identifier, error);
+    return false;
+  });
+  if (stalled) {
+    return escalateVerificationFailure(
+      ctx,
+      graph,
+      nodeId,
+      task,
+      `Task ${task.identifier} failed verification the same way ${REPEATED_FAILURE_LIMIT} times in a row`,
+      effects,
+    );
+  }
+
   const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
   const runs = await ctx.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
   const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
@@ -231,26 +288,38 @@ export const recoverAfterVerification = async (
       ? 'Goal cost budget was exhausted'
       : recovery.outcome === 'exhausted-rounds'
         ? 'Task attempt budget was exhausted'
-        : 'Automatic recovery could not start the next attempt';
-  // R6: a batch member that ran out of attempts to pass its own check breaks
-  // the class, like one that failed outright — revise the recipe and re-probe,
-  // not a standalone retry/retire gate (retiring a last-wave member would let
-  // the goal head for acceptance with the unit undone). A spent goal budget
-  // and a run that never started are not the recipe's fault: those keep the
-  // ordinary gate.
-  if (
-    recovery.outcome !== 'exhausted-cost' &&
-    recovery.outcome !== 'spawn-failed' &&
-    ctx.isBatchMember(graph, nodeId)
-  ) {
-    const title = graph.nodes.find((node) => node.id === nodeId)?.title ?? task.identifier;
-    return ctx.openPatternBreakGate(graph, `${title}: ${exhaustedReason}`, effects, {
-      unitId: nodeId,
-    });
+        : `Automatic recovery could not start the next attempt${recovery.error ? `: ${recovery.error}` : ''}`;
+  if (recovery.outcome === 'spawn-failed') {
+    return ctx.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects, { machine: true });
   }
-  return ctx.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects, {
-    machine: recovery.outcome === 'spawn-failed',
-  });
+  // A spent goal budget is not the recipe's fault either: the ordinary gate.
+  if (recovery.outcome === 'exhausted-cost') {
+    return ctx.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects);
+  }
+  return escalateVerificationFailure(ctx, graph, nodeId, task, exhaustedReason, effects);
+};
+
+/**
+ * Hand a Task that cannot pass its verification on its own to a person.
+ *
+ * R6: a batch member that cannot pass its own check breaks the class, like one
+ * that failed outright — revise the recipe and re-probe, not a standalone
+ * retry/retire gate (retiring a last-wave member would let the goal head for
+ * acceptance with the unit undone).
+ */
+const escalateVerificationFailure = (
+  ctx: GoalServiceContext,
+  graph: GoalGraphSnapshot,
+  nodeId: string,
+  task: TaskItem,
+  reason: string,
+  effects: GoalAdvanceEffect[],
+): Promise<GoalTickResult> => {
+  if (ctx.isBatchMember(graph, nodeId)) {
+    const title = graph.nodes.find((node) => node.id === nodeId)?.title ?? task.identifier;
+    return ctx.openPatternBreakGate(graph, `${title}: ${reason}`, effects, { unitId: nodeId });
+  }
+  return ctx.gateOrTakeOver(graph, nodeId, task.id, reason, effects);
 };
 
 /**

@@ -1,8 +1,14 @@
+import { inspect } from 'node:util';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolCallContent } from '@/libs/mcp';
 
 import { contentBlocksToString, processContentBlocks } from './contentProcessor';
+
+const debugLog = vi.hoisted(() => vi.fn());
+
+vi.mock('debug', () => ({ default: () => debugLog }));
 
 describe('contentProcessor', () => {
   describe('contentBlocksToString', () => {
@@ -33,8 +39,6 @@ describe('contentProcessor', () => {
       ];
       const result = contentBlocksToString(blocks);
       expect(result).toBe('![](https://example.com/f/abc-123)');
-      // Ensure no double URL prefix
-      expect(result).not.toContain('https://example.com/https://example.com');
     });
 
     it('should convert audio content with full URL without double prefix', () => {
@@ -47,7 +51,6 @@ describe('contentProcessor', () => {
       ];
       const result = contentBlocksToString(blocks);
       expect(result).toBe('<resource type="audio" url="https://example.com/f/audio-123" />');
-      expect(result).not.toContain('https://example.com/https://example.com');
     });
 
     it('should join multiple content blocks with double newlines', () => {
@@ -172,6 +175,34 @@ describe('contentProcessor', () => {
       );
     });
 
+    it('should not log resource or uploaded URL credentials', async () => {
+      mockFileService.uploadBase64.mockResolvedValue({
+        url: 'https://storage.example/proxy-path-secret?signature=proxy-query-secret',
+        fileId: 'file-secret-log-test',
+        key: 'mcp/images/2025-01-01/secret.png',
+      });
+
+      const blocks: ToolCallContent[] = [
+        {
+          type: 'resource',
+          resource: {
+            blob: 'resourceImageBase64==',
+            mimeType: 'image/png',
+            uri: 'https://remote.example/resource-path-secret?token=resource-query-secret',
+          },
+        },
+      ];
+
+      await processContentBlocks(blocks, mockFileService);
+
+      const logOutput = inspect(debugLog.mock.calls, { depth: null });
+      expect(logOutput).toContain("mediaType: 'image'");
+      expect(logOutput).not.toContain('resource-path-secret');
+      expect(logOutput).not.toContain('resource-query-secret');
+      expect(logOutput).not.toContain('proxy-path-secret');
+      expect(logOutput).not.toContain('proxy-query-secret');
+    });
+
     it('should convert resource audio blobs to uploaded audio content', async () => {
       mockFileService.uploadBase64.mockResolvedValue({
         url: 'https://example.com/f/resource-audio',
@@ -274,8 +305,6 @@ describe('contentProcessor', () => {
       const str = contentBlocksToString(processed);
 
       expect(str).toBe('Here is the screenshot:\n\n![](https://myapp.com/f/img-uuid)');
-      // The critical assertion: no double URL prefix
-      expect(str).not.toContain('https://myapp.com/https://myapp.com');
     });
   });
 });

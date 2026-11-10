@@ -32,6 +32,7 @@ export const ModelRowRender = memo<ModelRowRenderProps>(
         nameSuffix={model.abilities?.imageOutput && <ImageOutputMark />}
         newBadgeLabel={newLabel}
         proBadgeLabel={proBadgeLabel}
+        provider={provider}
         secondaryText={(isActive && activeEffortLabel) || effortLabel}
       />
     );

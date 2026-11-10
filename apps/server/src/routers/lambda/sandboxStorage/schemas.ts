@@ -1,4 +1,4 @@
-import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
+import { isSafeSandboxCwd, SANDBOX_DRIVES } from '@lobechat/builtin-tool-cloud-sandbox';
 import { z } from 'zod';
 
 /** Relative workspace path, validated with the same rule the runtime applies. */
@@ -37,3 +37,16 @@ export const idSchema = z.string().uuid();
  * client sends.
  */
 export const visibilitySchema = z.enum(['private', 'public']);
+
+export const driveSchema = z.enum(SANDBOX_DRIVES).optional();
+
+/**
+ * An environment directory's path: one folder at the drive's root, never
+ * nested. Every member's environment directories sit side by side there, which
+ * is what lets a listing tell them apart from ordinary folders at a glance.
+ */
+export const instanceDirectorySchema = relativePathSchema.refine((value) => !value.includes('/'), {
+  message: 'An environment directory sits at the root of the drive',
+});
+
+export const instanceIdSchema = idSchema.optional();

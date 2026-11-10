@@ -1,7 +1,7 @@
 # PR-time guard for the share micro app (apps/share). The deployed worker is
 # built with the private business overlay, so same-repo PRs overlay it (repo
-# name and token come from the OVERLAY_REPOSITORY variable and
-# OVERLAY_REPO_TOKEN secret — never hardcoded) and upload a preview version.
+# name comes from the OVERLAY_REPOSITORY variable and access from a LobeHub bot
+# GitHub App token — never hardcoded) and upload a preview version.
 # Without that configuration — fork PRs included — the workflow builds with the
 # open-source business stubs and dry-runs the worker upload as a pure
 # compile/size guard. The production deploy lives in the overlay repository,
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-      USE_OVERLAY: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.OVERLAY_REPOSITORY != '' && secrets.LOBEHUB_CLOUD_TOKEN != '' }}
+      USE_OVERLAY: ${{ github.event.pull_request.head.repo.full_name == github.repository && vars.OVERLAY_REPOSITORY != '' && secrets.LOBEHUB_BOT_APP_PRIVATE_KEY != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -76,12 +76,21 @@ jobs:
               "origin/${{ github.base_ref }}" HEAD
           fi
 
+      - name: Create overlay token
+        id: overlay-token
+        if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY == 'true'
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
       - name: Overlay business repository
         if: steps.detect.outputs.should_build == 'true' && env.USE_OVERLAY == 'true'
         uses: ./.github/actions/business-overlay
         with:
           overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
-          overlay-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
 
       - name: Setup environment
         if: steps.detect.outputs.should_build == 'true'

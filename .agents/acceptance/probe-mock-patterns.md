@@ -41,7 +41,7 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableGoals`                                                                                       |
 | P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                                                     |
 | P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                                                       |
-| P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                                                             |
+| P20 | cli           | any             | fixture        | Strip ambient conversation ids and set the local credential's workspace for LOCAL API/ingest; retain production scope for publishing                         |
 | P21 | web           | any             | drive          | Upload through the Add-menu input, poll `dockUploadFileList`, A/B the hashing worker with `window.Worker = undefined`                                        |
 | P22 | web, electron | any             | drive          | `keyboard type` emits no keydown; fire `/` (and any menu trigger) with `press`                                                                               |
 | P23 | web, electron | any             | drive          | Tag `svg.lucide-<rendered-name>` and click through agent-browser; `el.click()` on the wrapper does nothing                                                   |
@@ -658,6 +658,20 @@ data rather than an env leak.
 (`env -u LOBEHUB_TOPIC_ID -u LOBEHUB_AGENT_ID -u LOBEHUB_OPERATION_ID …`) so it lands
 standalone. Keep them for the final PRODUCTION publish of the verification round —
 there the auto-attach to the current conversation is exactly what you want.
+
+The same leak hits a local `lh hetero exec --topic <t> --operation-id <op>` replay: the run
+also exports `LOBEHUB_ASSISTANT_MESSAGE_ID`, which the CLI forwards as the ingest's seeded
+assistant, so every batch fails with `Seeded assistantMessageId msg_… was not found for
+topic <t>`. Set it to the fixture's seeded assistant id and unset
+`LOBEHUB_HETERO_EXEC_INHERIT_PROCESS_GROUP` together with the ids above.
+
+`LOBEHUB_WORKSPACE_ID` is also inherited. A personal local seed API key with a
+production workspace header returns HTTP 401 even when its hash, enabled flag,
+and user are valid. For local API creation and native CLI replay, explicitly set
+`LOBEHUB_WORKSPACE_ID=personal` (or the verified workspace owned by the test
+credential) in that subprocess. Verify a real authenticated API call on the local
+server before creating the operation. Do not change persistent CLI workspace
+scope, and restore the production context for report publication.
 
 ### Driving the UI
 

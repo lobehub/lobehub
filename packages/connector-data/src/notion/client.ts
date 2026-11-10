@@ -6,7 +6,7 @@ import {
 } from '../composio';
 import { ConnectorDataError, getConnectorErrorMessage } from '../errors';
 import { parseNotionItems, parseNotionPageMarkdown } from './parser';
-import type { NotionConnectorClient } from './types';
+import type { NotionConnectorClient, NotionListItemsInput } from './types';
 
 const DEFAULT_MAX_RESULTS = 50;
 const MAX_QUERY_LENGTH = 500;
@@ -56,7 +56,7 @@ export const createNotionConnectorClient = (
       });
       return parseNotionPageMarkdown(response);
     },
-    listItems: async ({ maxResults = DEFAULT_MAX_RESULTS, query } = {}) => {
+    listItems: async ({ maxResults = DEFAULT_MAX_RESULTS, query }: NotionListItemsInput = {}) => {
       const finiteMaxResults = Number.isFinite(maxResults) ? maxResults : DEFAULT_MAX_RESULTS;
       const boundedMaxResults = Math.min(
         Math.max(1, Math.floor(finiteMaxResults)),

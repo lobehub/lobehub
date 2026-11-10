@@ -20,11 +20,20 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
 import { useGlobalStore } from '@/store/global';
 import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 
-import type { TaskGroupBy, TaskListViewOptions, TaskOrderBy } from './listViewOptions';
+import type {
+  TaskCompletedFilter,
+  TaskGroupBy,
+  TaskListViewOptions,
+  TaskOrderBy,
+} from './listViewOptions';
+import { TASK_COMPLETED_FILTERS, toTaskLabelGroupBy } from './listViewOptions';
 
 /** A display control the active collection fixes, so it has nothing to change. */
 export type TaskListPinnedOption = 'ordering' | 'showSubTasks';
@@ -59,6 +68,8 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const form = useForm();
+  useFetchTaskLabels();
+  const labelGroups = useTaskStore(taskLabelSelectors.labelGroups);
   const groupingOptions = useMemo<Array<{ label: string; value: TaskGroupBy }>>(
     () => [
       { label: t('taskList.groupBy.none'), value: 'none' },
@@ -66,8 +77,14 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
       { label: t('taskList.groupBy.assignee'), value: 'assignee' },
       { label: t('taskList.groupBy.member'), value: 'member' },
       { label: t('taskList.groupBy.priority'), value: 'priority' },
+      // One entry per label group: a task carries at most one label per
+      // group, so each lands in exactly one group / column.
+      ...labelGroups.map((group) => ({
+        label: t('taskList.groupBy.labelGroup', { name: group.name }),
+        value: toTaskLabelGroupBy(group.id),
+      })),
     ],
-    [t],
+    [labelGroups, t],
   );
   const boardGroupingOptions = useMemo(
     () => groupingOptions.filter((item) => item.value !== 'none'),
@@ -113,18 +130,24 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
     label: viewMode === 'kanban' ? t('taskList.form.columns') : t('taskList.form.grouping'),
   } satisfies FormFieldProps;
 
-  const showCompletedFormItem = {
+  const completedTasksOptions = TASK_COMPLETED_FILTERS.map((value) => ({
+    label: t(`taskList.completedTasks.${value}`),
+    value,
+  }));
+
+  const completedTasksFormItem = {
     children: (
-      <Switch
-        checked={!options.hideCompleted}
+      <Select
+        options={completedTasksOptions}
         size={'small'}
-        onChange={(checked) => {
-          setOptions((prev) => ({ ...prev, hideCompleted: !checked }));
+        style={{ width: 120 }}
+        value={options.completedTasks}
+        onChange={(value: TaskCompletedFilter) => {
+          setOptions((prev) => ({ ...prev, completedTasks: value }));
         }}
       />
     ),
-    minWidth: undefined,
-    label: t('taskList.form.showCompleted'),
+    label: t('taskList.form.completedTasks'),
   } satisfies FormFieldProps;
 
   const showArchivedFormItem = {
@@ -204,7 +227,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
       minWidth: undefined,
       label: t('taskList.form.orderCompletedByRecency'),
     },
-    showCompletedFormItem,
+    completedTasksFormItem,
     showArchivedFormItem,
     ...(isPinned('showSubTasks')
       ? []
@@ -243,7 +266,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
         ]
       : []),
   ];
-  const boardFormItems = [groupingFormItem, showCompletedFormItem, showArchivedFormItem];
+  const boardFormItems = [groupingFormItem, completedTasksFormItem, showArchivedFormItem];
 
   const panelContent = (
     <Flexbox gap={12} width={280}>

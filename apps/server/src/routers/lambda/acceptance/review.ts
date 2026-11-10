@@ -19,15 +19,21 @@ import {
   REVIEW_PREDICT_MODEL_CONFIG,
   VerifyReviewPredictorService,
 } from '@/server/services/verify';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import {
-  type AcceptanceRepairDispatch,
-  dispatchAcceptanceRepair,
-} from '../_helpers/acceptanceRepairDispatch';
+  dispatchAcceptanceFeedbackRepair as dispatchAcceptanceRepair,
+  readAcceptanceRepair,
+} from '../_helpers/acceptanceFeedbackRepair';
+import { type AcceptanceRepairDispatch } from '../_helpers/acceptanceRepairDispatch';
 import { settleGoalSignOff } from '../_helpers/acceptanceStatus';
 import * as goalGate from '../_helpers/goalGateAcceptance';
-import { acceptanceWriteProcedure, resolveAcceptanceForWrite } from './procedures';
+import {
+  acceptanceWriteProcedure,
+  resolveAcceptanceForReject,
+  resolveAcceptanceForWrite,
+} from './procedures';
 import { reviewAnnotationsSchema } from './schemas';
 
 export const reviewRouter = router({
@@ -71,7 +77,7 @@ export const reviewRouter = router({
       );
       // Signed where it lives — the inbox stops asking for the same sign-off.
       await settleGoalSignOff(ctx.serverDB, acceptance, 'signOff', input.comment);
-      return accepted;
+      return acceptanceResponse(accepted);
     }),
   /**
    * Feedback addressed to a check GROUP (business category) rather than any
@@ -328,6 +334,11 @@ export const reviewRouter = router({
    * outcome rides on `repairDispatch` so every surface (UI, CLI, external
    * callers) reports the same thing. Without one the caller hands the repair
    * prompt over itself.
+   *
+   * A reader a decider granted reject access to may call this too. Their
+   * decision is recorded as theirs, but the repair is dispatched as the owner:
+   * it runs the owner's agent in the owner's conversation, which the grantee
+   * could never reach themselves — that reach is exactly what was granted.
    */
   reject: acceptanceWriteProcedure
     .input(
@@ -346,38 +357,60 @@ export const reviewRouter = router({
         ctx,
         input,
       }): Promise<AcceptanceItem & { repairDispatch: AcceptanceRepairDispatch }> => {
-        const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+        const { acceptance, delegated, service } = await resolveAcceptanceForReject(ctx, input.id);
+
+        const active = await readAcceptanceRepair(ctx, acceptance);
+        if (active?.state === 'starting' || active?.state === 'running') {
+          return {
+            ...acceptanceResponse(acceptance),
+            repairDispatch: { dispatched: false, reason: 'in_progress' },
+          };
+        }
 
         const comment = input.comment || undefined;
-        const rejected = await goalGate.withGoalGateAnswer(
-          ctx.serverDB,
-          service,
-          acceptance,
-          'revise',
-          { comment, roundId: input.roundId },
-          () => service.reject(acceptance.id, comment),
-        );
-        await settleGoalSignOff(
-          ctx.serverDB,
-          acceptance,
-          'requestChanges',
-          input.comment || undefined,
-        );
+        const retry =
+          input.dispatch !== false &&
+          active?.state === 'failed' &&
+          (acceptance.status === 'rejected' || acceptance.status === 'repairing');
+        // A retry resumes the recorded handoff; it does not decide the same round again.
+        const rejected = retry
+          ? acceptance
+          : await goalGate.withGoalGateAnswer(
+              ctx.serverDB,
+              service,
+              acceptance,
+              'revise',
+              { comment, roundId: input.roundId },
+              () => service.reject(acceptance.id, comment),
+            );
+        if (!retry)
+          await settleGoalSignOff(
+            ctx.serverDB,
+            acceptance,
+            'requestChanges',
+            input.comment || undefined,
+          );
         // A gate's revision is carried out by the goal: its main Agent rewrites the plan.
         if (input.dispatch === false || acceptance.subjectType === 'goal_gate') {
-          return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
+          return {
+            ...acceptanceResponse(rejected),
+            repairDispatch: { dispatched: false, reason: 'skipped' },
+          };
         }
 
         const repairDispatch = await dispatchAcceptanceRepair(
-          ctx,
+          delegated
+            ? { ...ctx, userId: acceptance.userId, workspaceId: acceptance.workspaceId }
+            : ctx,
           service,
           acceptance,
           input.comment || undefined,
+          ctx,
         );
-        if (!repairDispatch.dispatched) return { ...rejected, repairDispatch };
+        if (!repairDispatch.dispatched) return { ...acceptanceResponse(rejected), repairDispatch };
 
         const current = await service.acceptanceModel.findById(acceptance.id);
-        return { ...(current ?? rejected), repairDispatch };
+        return { ...acceptanceResponse(current ?? rejected), repairDispatch };
       },
     ),
 });

@@ -13,6 +13,8 @@ import type { GoalListFilter } from './initialState';
 const goalListFilterStatuses: Record<GoalListFilter, GoalStatus[] | null> = {
   achieved: ['achieved'],
   all: null,
+  // Archived goals in any status; every other tab leaves them out.
+  archived: null,
   review: ['review'],
   running: ['running'],
 };
@@ -30,3 +32,11 @@ const allGoalStatuses = (): GoalStatus[] => [...goalStatuses];
  */
 export const goalStatusesForFilter = (filter: GoalListFilter): GoalStatus[] =>
   goalListFilterStatuses[filter] ?? allGoalStatuses();
+
+/**
+ * Whether the tab lists archived goals. Only the Archived tab does: the server
+ * leaves archived goals out of every other read, so `all` never shows a goal
+ * the user put away.
+ */
+export const goalArchivedForFilter = (filter: GoalListFilter): true | undefined =>
+  filter === 'archived' ? true : undefined;

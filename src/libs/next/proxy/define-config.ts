@@ -48,9 +48,9 @@ const persistLocaleCookie = (
 };
 
 export function defineConfig() {
-  // `/oauth/connector` is a backend route handler (custom connector OAuth callback);
-  // the rest of `/oauth/*` (e.g. /oauth/callback/success) are SPA pages, so scope
-  // the passthrough to the connector subtree only.
+  // `/oauth/connector` holds backend route handlers (custom connector OAuth callback
+  // and client metadata document); the rest of `/oauth/*` (e.g. /oauth/callback/success)
+  // are SPA pages, so scope the passthrough to the connector subtree only.
   const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc', '/oauth/connector'];
 
   const defaultMiddleware = (request: NextRequest) => {
@@ -238,6 +238,8 @@ export function defineConfig() {
     // Custom connector OAuth callback — hit via a cross-site redirect from the
     // provider, carries its own code+state, so it must not be session-gated.
     '/oauth/connector/callback',
+    // Client ID Metadata Document — fetched by the provider's authorization server.
+    '/oauth/connector/client-metadata.json',
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
@@ -249,6 +251,8 @@ export function defineConfig() {
     '/oidc/.well-known/openid-configuration',
     '/oidc/jwks',
     '/oidc/me',
+    // The review popup's last page: a code or a refusal for the opener, never a session read.
+    '/oidc/acceptance/callback',
     // Interaction details for the consent/login page — must be reachable
     // before the user has a session, so it cannot be session-gated.
     '/oidc/interaction/(.*)',

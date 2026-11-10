@@ -1,17 +1,11 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { type ChatModelCard } from '@lobechat/types';
 import { type IconAvatarProps } from '@lobehub/icons';
 import { LobeHub } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
-import {
-  Avatar,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-  useResponsive,
-} from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag, Text, Tooltip, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   AudioLines,
   Infinity as InfinityIcon,
@@ -27,40 +21,38 @@ import { type CSSProperties, type FC, type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { ModelIcon, ProviderIcon } from '@/components/LobeIcons';
+import { isCustomBranding } from '@/const/version';
 import { type AiProviderSourceType } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 
 import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewModelBadge';
+import RoutingBadge from './RoutingBadge';
 
 export const TAG_CLASSNAME = 'lobe-model-info-tags';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  tag: css`
-    cursor: default;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px !important;
-    height: 20px;
-    border-radius: 4px;
-  `,
-  token: css`
-    width: 36px !important;
-    height: 20px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
-
-type TooltipStyles = typeof styles;
+const styles = stylex.create({
+  tag: {
+    cursor: 'default',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+  },
+  token: {
+    width: '36px',
+    height: '20px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface ModelInfoTagsProps extends ModelAbilities {
   contextWindowTokens?: number | null;
@@ -190,18 +182,16 @@ const Context = memo(
     contextWindowTokens,
     disableTooltip,
     placement,
-    styles,
   }: {
     contextWindowTokens: number;
     disableTooltip?: boolean;
     placement: 'top' | 'right';
-    styles: TooltipStyles;
   }) => {
     const { t } = useTranslation('components');
     const tokensText = contextWindowTokens === 0 ? '∞' : formatTokenNumber(contextWindowTokens);
 
     const tag = (
-      <Tag className={styles.token} size={'small'}>
+      <Tag className={stylex.props(styles.token).className} size={'small'}>
         {contextWindowTokens === 0 ? <InfinityIcon size={17} strokeWidth={1.6} /> : tokensText}
       </Tag>
     );
@@ -238,7 +228,7 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
           functionCall={model.functionCall}
           imageOutput={model.imageOutput}
           placement={placement}
-          tagClassName={styles.tag}
+          tagClassName={stylex.props(styles.tag).className ?? ''}
           video={model.video}
           vision={model.vision}
         />
@@ -247,7 +237,6 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
             contextWindowTokens={model.contextWindowTokens}
             disableTooltip={disableTooltip}
             placement={placement}
-            styles={styles}
           />
         )}
       </Flexbox>
@@ -264,6 +253,8 @@ interface ModelItemRenderProps extends ChatModelCard, Pick<FlexboxProps, 'classN
   nameSuffix?: ReactNode;
   newBadgeLabel?: string;
   proBadgeLabel?: string;
+  /** The provider the row belongs to, which some markers read the id against */
+  provider?: string;
   /** Muted text right after the model name, e.g. the current reasoning effort */
   secondaryText?: string;
   showInfoTag?: boolean;
@@ -282,6 +273,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     nameSuffix,
     newBadgeLabel,
     proBadgeLabel,
+    provider,
     secondaryText,
     video,
     vision,
@@ -330,6 +322,7 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
             </Text>
           )}
           {nameSuffix}
+          <RoutingBadge id={id} provider={provider} />
           {newBadgeLabel ? (
             <NewModelBadgeCore label={newBadgeLabel} releasedAt={releasedAt} />
           ) : (
@@ -389,6 +382,8 @@ export const ProviderItemRender = memo<ProviderItemRenderProps>(
             style={isMono ? { filter: 'grayscale(1)' } : {}}
             title={name}
           />
+        ) : isCustomBranding && provider === BRANDING_PROVIDER ? (
+          <ProductLogo size={size} type={isMono ? 'mono' : 'flat'} />
         ) : provider === 'lobehub' ? (
           <LobeHub.Morden size={size} />
         ) : (

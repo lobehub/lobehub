@@ -1,4 +1,3 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { getCachedTextInputUnitRate } from '@lobechat/utils';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
@@ -32,7 +31,7 @@ import { useGlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
-import { formatNumber, formatShortenNumber, formatTokenNumber } from '@/utils/format';
+import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getOriginalUnitRateByName, getUnitRateByName } from '@/utils/index';
 
 import type { PricingMode } from '../types';
@@ -48,62 +47,64 @@ interface TextPriceSummary {
   output: FormattedUnitPrice;
 }
 
-const BRANDING_CREDIT_UNIT = 1_000_000;
-const MILLION_SCALE_UNITS = new Set<PricingUnit['unit']>(['millionCharacters', 'millionTokens']);
-
-interface FormatPricingRateOptions {
-  isCreditPricing?: boolean;
-  unit?: PricingUnit['unit'];
-}
-
-const formatBrandingCreditRate = (rate: number, unit?: PricingUnit['unit']) => {
-  if (unit && MILLION_SCALE_UNITS.has(unit)) return `${formatNumber(rate)}M`;
-
-  return String(formatShortenNumber(Math.round(rate * BRANDING_CREDIT_UNIT)));
-};
-
-const formatPricingRate = (
-  rate: number | undefined,
-  currency?: ModelPriceCurrency,
-  options: FormatPricingRateOptions = {},
-) => {
+const formatPricingRate = (rate: number | undefined, currency?: ModelPriceCurrency) => {
   if (typeof rate !== 'number') return '0';
 
-  return options.isCreditPricing
-    ? formatBrandingCreditRate(rate, options.unit)
-    : formatPriceByCurrency(rate, currency);
+  return formatPriceByCurrency(rate, currency);
 };
 
-const getFormattedUnitPrice = (
-  pricing: Pricing,
-  unitName: PricingUnitName,
-  isCreditPricing: boolean,
-): FormattedUnitPrice => {
+const getFormattedUnitPrice = (pricing: Pricing, unitName: PricingUnitName): FormattedUnitPrice => {
   const currency = pricing.currency as ModelPriceCurrency | undefined;
   const currentRate = getUnitRateByName(pricing, unitName);
   const originalRate = getOriginalUnitRateByName(pricing, unitName);
 
   return {
-    current: formatPricingRate(currentRate, currency, {
-      isCreditPricing,
-      unit: 'millionTokens',
-    }),
+    current: formatPricingRate(currentRate, currency),
     original:
-      typeof originalRate === 'number'
-        ? formatPricingRate(originalRate, currency, {
-            isCreditPricing,
-            unit: 'millionTokens',
-          })
-        : undefined,
+      typeof originalRate === 'number' ? formatPricingRate(originalRate, currency) : undefined,
   };
 };
 
-export const getPrice = (pricing: Pricing, isCreditPricing: boolean): TextPriceSummary => {
-  return {
-    cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead', isCreditPricing),
-    input: getFormattedUnitPrice(pricing, 'textInput', isCreditPricing),
-    output: getFormattedUnitPrice(pricing, 'textOutput', isCreditPricing),
-  };
+const DECIMAL_PATTERN = /\d+\.(\d+)/g;
+
+/** The most decimals any number inside the given price texts carries (`0.075` -> 3). */
+const getMaxDecimals = (texts: (string | undefined)[]) =>
+  texts.reduce(
+    (max, text) =>
+      [...(text ?? '').matchAll(DECIMAL_PATTERN)].reduce(
+        (acc, match) => Math.max(acc, match[1].length),
+        max,
+      ),
+    0,
+  );
+
+/** Pad every number in a price text to `digits` decimals (`0.30` -> `0.300`). */
+const padDecimals = (text: string, digits: number) =>
+  text.replaceAll(DECIMAL_PATTERN, (match, fraction: string) =>
+    fraction.length >= digits ? match : match + '0'.repeat(digits - fraction.length),
+  );
+
+/**
+ * Show prices that are read side by side with the same number of decimals, so `$0.075` and
+ * `$0.30` do not sit in one column with their decimal points apart.
+ */
+const unifyDecimals = (prices: FormattedUnitPrice[]): FormattedUnitPrice[] => {
+  const digits = getMaxDecimals(prices.flatMap((price) => [price.current, price.original]));
+
+  return prices.map((price) => ({
+    current: padDecimals(price.current, digits),
+    original: price.original === undefined ? undefined : padDecimals(price.original, digits),
+  }));
+};
+
+export const getPrice = (pricing: Pricing): TextPriceSummary => {
+  const [cachedInput, input, output] = unifyDecimals([
+    getFormattedUnitPrice(pricing, 'textInput_cacheRead'),
+    getFormattedUnitPrice(pricing, 'textInput'),
+    getFormattedUnitPrice(pricing, 'textOutput'),
+  ]);
+
+  return { cachedInput, input, output };
 };
 
 type PricingGroup = 'audio' | 'image' | 'text' | 'video';
@@ -156,6 +157,7 @@ const UNIT_SORT_ORDER: Record<PricingUnitName, number> = {
   videoGeneration: 1,
 };
 
+/** English fallback for the localized `ModelSwitchPanel.detail.pricing.suffix.*` keys. */
 const UNIT_LABEL_MAP: Record<string, string> = {
   image: '/img',
   megapixel: '/MP',
@@ -164,15 +166,9 @@ const UNIT_LABEL_MAP: Record<string, string> = {
   second: '/s',
 };
 
-const formatUnitRate = (
-  unit: PricingUnit,
-  currency?: ModelPriceCurrency,
-  isCreditPricing?: boolean,
-): FormattedUnitPrice => {
-  const formatRate = (rate: number) =>
-    formatPricingRate(rate, currency, { isCreditPricing, unit: unit.unit });
-  const formatRange = (low: string, high: string) =>
-    isCreditPricing ? `${low} ~ ${high}` : `${low} ~ $${high}`;
+const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): FormattedUnitPrice => {
+  const formatRate = (rate: number) => formatPricingRate(rate, currency);
+  const formatRange = (low: string, high: string) => `${low} ~ $${high}`;
 
   if (unit.strategy === 'fixed') {
     const fixedUnit = unit as FixedPricingUnit;
@@ -212,7 +208,7 @@ const formatUnitRate = (
 
   if (unit.strategy === 'lookup') {
     const entries = Object.entries(unit.lookup.prices);
-    if (entries.length === 0) return { current: '-' };
+    if (entries.length === 0) return { current: '--' };
 
     if (entries.length === 1) {
       const [key, price] = entries[0];
@@ -239,7 +235,7 @@ const formatUnitRate = (
     return { current: formatRange(formatRate(lowPrice), formatRate(highPrice)), original };
   }
 
-  return { current: '-' };
+  return { current: '--' };
 };
 
 interface PricingGroupData {
@@ -316,9 +312,8 @@ export const useModelDetailPanel = ({
     () => applyBusinessModelPricing({ model: modelId, pricing, provider }),
     [applyBusinessModelPricing, modelId, pricing, provider],
   );
-  const isCreditPricing = provider === BRANDING_PROVIDER;
   const hasPricing = !!displayPricing;
-  const formatPrice = displayPricing ? getPrice(displayPricing, isCreditPricing) : null;
+  const formatPrice = displayPricing ? getPrice(displayPricing) : null;
   const hasCachedInputPricing = displayPricing
     ? !!getCachedTextInputUnitRate(displayPricing)
     : false;
@@ -331,50 +326,24 @@ export const useModelDetailPanel = ({
     if (!displayPricing || !pricingMode) return null;
     const currency = displayPricing.currency as ModelPriceCurrency | undefined;
     if (pricingMode === 'image' && typeof displayPricing.approximatePricePerImage === 'number') {
-      const amount = isCreditPricing
-        ? formatBrandingCreditRate(displayPricing.approximatePricePerImage, 'image')
-        : formatPriceByCurrency(displayPricing.approximatePricePerImage, currency);
-      return t(
-        isCreditPricing
-          ? 'ModelSwitchPanel.detail.pricing.credits.perImage'
-          : 'ModelSwitchPanel.detail.pricing.perImage',
-        {
-          amount,
-          defaultValue: isCreditPricing ? '~ {{amount}} credits / image' : '~ ${{amount}} / image',
-        },
-      );
+      const amount = formatPriceByCurrency(displayPricing.approximatePricePerImage, currency);
+      return t('ModelSwitchPanel.detail.pricing.perImage', {
+        amount,
+        defaultValue: '~ ${{amount}} / image',
+      });
     }
     if (pricingMode === 'video' && typeof displayPricing.approximatePricePerVideo === 'number') {
-      const amount = isCreditPricing
-        ? formatBrandingCreditRate(displayPricing.approximatePricePerVideo)
-        : formatPriceByCurrency(displayPricing.approximatePricePerVideo, currency);
-      return t(
-        isCreditPricing
-          ? 'ModelSwitchPanel.detail.pricing.credits.perVideo'
-          : 'ModelSwitchPanel.detail.pricing.perVideo',
-        {
-          amount,
-          defaultValue: isCreditPricing ? '~ {{amount}} credits / video' : '~ ${{amount}} / video',
-        },
-      );
+      const amount = formatPriceByCurrency(displayPricing.approximatePricePerVideo, currency);
+      return t('ModelSwitchPanel.detail.pricing.perVideo', {
+        amount,
+        defaultValue: '~ ${{amount}} / video',
+      });
     }
     return null;
-  }, [displayPricing, isCreditPricing, pricingMode, t]);
-
-  const getCreditsUnitLabel = useCallback(
-    (unit: PricingUnit['unit']) =>
-      t(`ModelSwitchPanel.detail.pricing.credits.${unit}` as any, {
-        defaultValue: `credits${UNIT_LABEL_MAP[unit] || ''}`,
-      }),
-    [t],
-  );
+  }, [displayPricing, pricingMode, t]);
 
   const getPricingTooltip = useCallback(
     (key: 'cachedInput' | 'input' | 'output', amount: string): string => {
-      if (isCreditPricing) {
-        return t(`ModelSwitchPanel.detail.pricing.credits.${key}` as any, { amount });
-      }
-
       const fallbackKey =
         key === 'cachedInput'
           ? 'ModelSwitchPanel.detail.pricing.cachedInput'
@@ -382,19 +351,46 @@ export const useModelDetailPanel = ({
 
       return t(fallbackKey as any, { amount });
     },
-    [isCreditPricing, t],
+    [t],
   );
 
+  // Rows priced in the same unit (`/M tokens`) are compared by eye, so they share decimals
+  const decimalsByUnit = useMemo(() => {
+    const currency = displayPricing?.currency as ModelPriceCurrency | undefined;
+    const texts = new Map<string, (string | undefined)[]>();
+    for (const unit of displayPricing?.units ?? []) {
+      const price = formatUnitRate(unit, currency);
+      texts.set(unit.unit, [...(texts.get(unit.unit) ?? []), price.current, price.original]);
+    }
+
+    return new Map<string, number>(
+      [...texts].map(([unit, values]) => [unit, getMaxDecimals(values)] as [string, number]),
+    );
+  }, [displayPricing?.currency, displayPricing?.units]);
+
   const formatUnitPrice = useCallback(
-    (unit: PricingUnit) =>
-      formatUnitRate(unit, displayPricing?.currency as ModelPriceCurrency, isCreditPricing),
-    [displayPricing?.currency, isCreditPricing],
+    (unit: PricingUnit): FormattedUnitPrice => {
+      const price = formatUnitRate(unit, displayPricing?.currency as ModelPriceCurrency);
+      const digits = decimalsByUnit.get(unit.unit) ?? 0;
+
+      return {
+        current: padDecimals(price.current, digits),
+        original: price.original === undefined ? undefined : padDecimals(price.original, digits),
+      };
+    },
+    [decimalsByUnit, displayPricing?.currency],
   );
 
   const getUnitPriceSuffix = useCallback(
     (unit: PricingUnit['unit']) =>
-      isCreditPricing ? ` ${getCreditsUnitLabel(unit)}` : UNIT_LABEL_MAP[unit] || '',
-    [getCreditsUnitLabel, isCreditPricing],
+      UNIT_LABEL_MAP[unit]
+        ? String(
+            t(`ModelSwitchPanel.detail.pricing.suffix.${unit}` as any, {
+              defaultValue: UNIT_LABEL_MAP[unit],
+            }),
+          )
+        : '',
+    [t],
   );
 
   const handleExpandedChange = useCallback(
@@ -432,7 +428,6 @@ export const useModelDetailPanel = ({
     hasCachedInputPricing,
     hasPricing,
     isAbilitiesExpanded: expandedKeys.includes('abilities'),
-    isCreditPricing,
     isPricingExpanded: expandedKeys.includes('pricing'),
     model,
     pricingGroups,

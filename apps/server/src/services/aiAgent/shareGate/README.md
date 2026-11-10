@@ -32,7 +32,7 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   system-only tools whose every API WRITES agent-document rows under the
   creator's account. No write grant exists to honor.
 
-- `lobe-task` / `lobe-goal`: `TaskModel`/`taskRouter` are scoped only by
+- `lobe-task` / `builtin-goal`: `TaskModel`/`taskRouter` are scoped only by
   `userId`/`workspaceId` — the CREATOR's. Every mutating and single-task-read
   API takes a model-supplied identifier resolved with no topic/conversation
   check, letting a visitor read, edit, delete, reschedule or RUN (spending
@@ -114,7 +114,11 @@ absence of a known exploit.
   `agentShareVisitor` runs (`serverRuntimes/cloudSandbox.ts`), and
   `lobe-creds` stays denied above so nothing ever writes `~/.creds/env`
   into that session either. No creator credential or JWT is therefore
-  reachable from inside a visitor's sandbox command.
+  reachable from inside a visitor's sandbox command. The kept manifest's
+  `systemRole` also gets `shareVisitorSystemPrompt` appended
+  (`applyShareGateToCloudSandbox` in `toolSet.ts`), so the model knows `lh`
+  is refused before it plans a flow the agent prompt or a skill routes
+  through the CLI.
 
 - `lobe-activator`: widens the run's tool surface at runtime, so it is
   allowed only because every source it reads is already the gated set.

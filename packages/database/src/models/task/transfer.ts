@@ -9,7 +9,9 @@ import {
   taskDocuments,
   tasks,
 } from '../../schemas/task';
+import { taskLabelLinks } from '../../schemas/taskLabel';
 import type { LobeChatDatabase } from '../../type';
+import { type CheckpointTaskRelocation, remapCheckpointConfig } from './checkpoint';
 import type { TaskModelContext } from './context';
 import { collectTaskSubtree } from './tree';
 import { DEFAULT_TASK_IDENTIFIER_PREFIX } from './utils';
@@ -69,6 +71,10 @@ export const transferTo = async (
 
     // Reallocate identifier + seq in target scope to avoid collisions.
     const baseSeq = await nextSeqIn(trx as LobeChatDatabase, targetWorkspaceId, targetUserId);
+    const relocations = subtree.map((task, index) => ({
+      source: task,
+      target: { id: task.id, identifier: `T-${baseSeq + index}` },
+    }));
     // Update each task individually because identifier/seq are per-row.
     for (const [idx, task] of subtree.entries()) {
       const seq = baseSeq + idx;
@@ -79,6 +85,7 @@ export const transferTo = async (
           // Clear cross-scope refs: agent / topic may be invalid in new scope.
           assigneeAgentId: targetWorkspaceId === ctx.workspaceId ? task.assigneeAgentId : null,
           createdByUserId: targetUserId,
+          config: remapCheckpointConfig(task.config, relocations),
           currentTopicId: null,
           identifier,
           seq,
@@ -110,6 +117,24 @@ export const transferTo = async (
       .set({ ...ownershipUpdate, ...visibilityUpdate })
       .where(inArray(taskActivities.taskId, ids));
 
+    // Labels belong to the source scope's registry, which the destination
+    // cannot see. Keep the links on a same-scope handover only.
+    const sameLabelScope = targetWorkspaceId
+      ? targetWorkspaceId === ctx.workspaceId
+      : !ctx.workspaceId && targetUserId === ctx.userId;
+    if (sameLabelScope) {
+      // Re-own the kept links like the other child rows, so deleting the
+      // previous owner (user_id cascades) does not drop live assignments.
+      await (trx as LobeChatDatabase)
+        .update(taskLabelLinks)
+        .set(ownershipUpdate)
+        .where(inArray(taskLabelLinks.taskId, ids));
+    } else {
+      await (trx as LobeChatDatabase)
+        .delete(taskLabelLinks)
+        .where(inArray(taskLabelLinks.taskId, ids));
+    }
+
     return { taskIds: ids };
   });
 };
@@ -138,6 +163,7 @@ export const copyToWorkspace = async (
     // BFS clone — parent inserted before children, so we always know the
     // new parentTaskId by the time we reach the child.
     const idMap = new Map<string, string>();
+    const relocations: CheckpointTaskRelocation[] = [];
     const byId = new Map(subtree.map((t) => [t.id, t]));
     const queue: string[] = [taskId];
     const seen = new Set<string>();
@@ -146,12 +172,16 @@ export const copyToWorkspace = async (
 
     while (queue.length > 0) {
       const currentId = queue.shift()!;
+      /* v8 ignore next -- unreachable: each subtree id is queued once, by its single parent */
       if (seen.has(currentId)) continue;
       seen.add(currentId);
       const original = byId.get(currentId);
+      /* v8 ignore next -- unreachable: the queue only holds ids taken from the subtree */
       if (!original) continue;
 
+      /* v8 ignore start -- unreachable `?? null`: BFS clones a parent before its children, so idMap always holds it */
       const newParentId = currentId === taskId ? null : (idMap.get(original.parentTaskId!) ?? null);
+      /* v8 ignore stop */
 
       const identifier = `${DEFAULT_TASK_IDENTIFIER_PREFIX}-${seq}`;
       const inserted = (await (trx as LobeChatDatabase)
@@ -193,9 +223,13 @@ export const copyToWorkspace = async (
           workspaceId: targetWorkspaceId,
           ...visibilityOverride,
         } as NewTask)
-        .returning({ id: tasks.id })) as { id: string }[];
+        .returning({ id: tasks.id, identifier: tasks.identifier })) as {
+        id: string;
+        identifier: string;
+      }[];
 
       idMap.set(original.id, inserted[0]!.id);
+      relocations.push({ source: original, target: inserted[0]! });
       seq++;
 
       for (const c of subtree) {
@@ -203,6 +237,17 @@ export const copyToWorkspace = async (
       }
     }
 
+    for (const original of subtree) {
+      await (trx as LobeChatDatabase)
+        .update(tasks)
+        .set({
+          config: remapCheckpointConfig(
+            withoutTaskExecutionSelection(original.config as Record<string, unknown> | null),
+            relocations,
+          ),
+        })
+        .where(eq(tasks.id, idMap.get(original.id)!));
+    }
     return { rootId: idMap.get(taskId)! };
   });
 };

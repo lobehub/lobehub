@@ -3,14 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatTerminalStore } from './store';
 import { xtermManager } from './xtermManager';
 
-const { createSession, exitListeners, navListeners } = vi.hoisted(() => ({
+const { createSession, exitListeners, navListeners, openDeviceSession } = vi.hoisted(() => ({
   createSession: vi.fn(),
+  openDeviceSession: vi.fn(),
   exitListeners: [] as ((sessionId: string, exitCode: number) => void)[],
   navListeners: [] as ((sessionId: string, direction: -1 | 1) => void)[],
 }));
 
 vi.mock('@/services/electron/terminal', () => ({
   electronTerminalService: { createSession },
+}));
+
+vi.mock('./deviceTerminal', () => ({
+  DeviceTerminalSession: { open: openDeviceSession },
 }));
 
 vi.mock('./xtermManager', () => ({
@@ -85,6 +90,28 @@ describe('closeOtherTabs', () => {
 
     expect(xtermManager.close).toHaveBeenCalledTimes(3);
     for (const id of ['b', 'b2', 'b3']) expect(xtermManager.close).toHaveBeenCalledWith(id);
+  });
+});
+
+describe('createTab', () => {
+  const info = { cwd: '/repo', id: 'n', pid: 1, shell: '/bin/zsh' };
+
+  it('opens the shell on the given device', async () => {
+    openDeviceSession.mockResolvedValue({ info });
+
+    await useChatTerminalStore.getState().createTab('topic', '/repo', 'dev_sg');
+
+    expect(openDeviceSession).toHaveBeenCalledWith('dev_sg', { cols: 80, cwd: '/repo', rows: 24 });
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it('opens a local shell without a device', async () => {
+    createSession.mockResolvedValue(info);
+
+    await useChatTerminalStore.getState().createTab('topic', '/repo');
+
+    expect(createSession).toHaveBeenCalledWith({ cols: 80, cwd: '/repo', rows: 24 });
+    expect(openDeviceSession).not.toHaveBeenCalled();
   });
 });
 

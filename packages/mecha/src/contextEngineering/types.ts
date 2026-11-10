@@ -5,6 +5,7 @@ import type {
   AgentManagementContext,
   BotPlatformContext,
   DiscordContext,
+  DocumentReferenceItem,
   EvalContext,
   FileContextConfig,
   GroupAgentBuilderContext,
@@ -20,8 +21,9 @@ import type {
   UserMemoryConfig,
   WorkspaceContext,
 } from '@lobechat/context-engine';
-import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext } from '@lobechat/prompts';
 import type {
+  AgentAccountContext,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -128,11 +130,17 @@ export interface ContextWorldSnapshot {
  * state. The host decides how to fetch them; the core only places them.
  */
 export interface ContextStepSnapshot {
+  /**
+   * The agent's own accounts and inbox, gathered fresh this step. First-class
+   * identity state — it is what lets the runtime stop carrying an always-on
+   * mailbox tool.
+   */
+  agentAccountContext?: AgentAccountContext;
   agentBuilderContext?: AgentBuilderContext;
   agentManagementContext?: AgentManagementContext;
+  documentReferences?: DocumentReferenceItem[];
   groupAgentBuilderContext?: GroupAgentBuilderContext;
   onboardingContext?: OnboardingContext;
-  pageContentContext?: PageContentContext;
   planTodo?: PlanTodoConfig;
   topicReferences?: TopicReferenceItem[];
   workspaceContext?: WorkspaceContext;

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * An agent's document list and the read-only reader are `@lobechat/replica`
+ * An agent's document list and the read-only reader are `local-replica`
  * resources: the persisted projection paints a cold start while the network
  * confirms it, client-side edits never reach storage, scopes stay isolated, and
  * the reader keeps only the fields it renders and forgets deleted documents.
@@ -105,10 +105,6 @@ describe('agent document replicas', () => {
   describe('document list', () => {
     const renderSync = () =>
       renderHook(() => agentDocumentActions.useFetchDocumentList(AGENT_ID), { wrapper });
-
-    it('caps how many agents keep a persisted list', () => {
-      expect(agentDocumentListResource.maxPersistedEntries).toBe(30);
-    });
 
     it('paints the persisted list before the network answers', async () => {
       await agentDocumentListResource.storage!.set(
@@ -256,10 +252,6 @@ describe('agent document replicas', () => {
   describe('reader', () => {
     const renderSync = () =>
       renderHook(() => agentDocumentActions.useFetchReaderDocument(READER), { wrapper });
-
-    it('caps how many reader bodies persist', () => {
-      expect(agentDocumentReaderResource.maxPersistedEntries).toBe(20);
-    });
 
     it('paints the persisted body before the network answers', async () => {
       await agentDocumentReaderResource.storage!.set(

@@ -1,3 +1,4 @@
+import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
@@ -97,13 +98,18 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     // Auto mode lets the model pick the sandbox or the routed device per
     // call, so the dedicated sandbox tool is offered there too.
     [AttachmentsManifest.identifier]: attachmentsEnabled,
-    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud' || executionTarget === 'auto',
+    [CloudSandboxManifest.identifier]:
+      runtimeMode === 'cloud' || executionTarget === 'auto' || !!request.pageScope,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [LocalSystemManifest.identifier]: localToolsEnabled,
     // The in-app browser drives the same machine as local-system.
     [BrowserManifest.identifier]: runtimeMode === 'local' && request.localExecutionReady,
     [MemoryManifest.identifier]: memoryEnabled,
     ...(request.isBotConversation && { [MessageManifest.identifier]: true }),
+    // The identity/inbox state is context, not a tool; this tool is the
+    // on-demand action half and only costs a schema when the agent owns an
+    // account. Replaces the always-on mailbox slot the channel design paid.
+    [AgentAccountManifest.identifier]: request.hasIdentityAccount ?? false,
     ...(request.isGroupSupervisor && enableAll(groupSupervisorToolIds)),
     // The device picker: only for device-capable targets behind a gateway,
     // and only while the run still has a device decision to make. The wall
@@ -132,7 +138,11 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
         ? [...pinnedPluginIds]
         : toolMode === 'chat'
           ? [...chatModeAllowedToolIds]
-          : [...defaultToolIds, ...(request.isGroupSupervisor ? groupSupervisorToolIds : [])],
+          : [
+              ...defaultToolIds,
+              ...(request.hasIdentityAccount ? [AgentAccountManifest.identifier] : []),
+              ...(request.isGroupSupervisor ? groupSupervisorToolIds : []),
+            ],
     deviceCapable,
     deviceLocked,
     excludedIdentifiers,

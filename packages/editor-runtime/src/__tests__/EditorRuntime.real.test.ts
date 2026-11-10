@@ -11,6 +11,7 @@ import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
+import { parseLiteXMLBlocks } from '../liteXMLBlockDiff';
 import editAllFixture from './fixtures/edit-all.json';
 import removeFixture from './fixtures/remove.json';
 import removeThenAddFixture from './fixtures/remove-then-add.json';
@@ -147,13 +148,13 @@ describe('EditorRuntime - Real Cases', () => {
 
       const result = await runtime.modifyNodes({
         operations: [
-          { action: 'remove', id: 'wps3' },
-          { action: 'remove', id: 'w936' },
-          { action: 'remove', id: 'vse9' },
-          { action: 'remove', id: 'sp45' },
-          { action: 'remove', id: 's8f8' },
-          { action: 'remove', id: 'rrqb' },
-          { action: 'remove', id: 'plu1' },
+          { action: 'remove', id: '73' },
+          { action: 'remove', id: '70' },
+          { action: 'remove', id: '67' },
+          { action: 'remove', id: '47' },
+          { action: 'remove', id: '44' },
+          { action: 'remove', id: '41' },
+          { action: 'remove', id: '27' },
         ],
       });
       await moment();
@@ -168,13 +169,13 @@ describe('EditorRuntime - Real Cases', () => {
       const xmlAfter = editor.getDocument('litexml') as unknown as string;
 
       // Verify the removed IDs are no longer present
-      expect(xmlAfter).not.toContain('id="wps3"');
-      expect(xmlAfter).not.toContain('id="w936"');
-      expect(xmlAfter).not.toContain('id="vse9"');
-      expect(xmlAfter).not.toContain('id="sp45"');
-      expect(xmlAfter).not.toContain('id="s8f8"');
-      expect(xmlAfter).not.toContain('id="rrqb"');
-      expect(xmlAfter).not.toContain('id="plu1"');
+      expect(xmlAfter).not.toContain('id="73"');
+      expect(xmlAfter).not.toContain('id="70"');
+      expect(xmlAfter).not.toContain('id="67"');
+      expect(xmlAfter).not.toContain('id="47"');
+      expect(xmlAfter).not.toContain('id="44"');
+      expect(xmlAfter).not.toContain('id="41"');
+      expect(xmlAfter).not.toContain('id="27"');
 
       expect(xmlAfter).toMatchSnapshot();
     });
@@ -254,7 +255,7 @@ describe('EditorRuntime - Real Cases', () => {
       expect(xml.indexOf('P2')).toBeLessThan(xml.indexOf('P3'));
     });
 
-    it('does not report inserts erased by a later replacement of the enclosing list as applied', async () => {
+    it('preserves pending inserts when a later replacement of the enclosing list is rejected', async () => {
       const anchor = idOf('li', 'a');
       const list = liteXML().match(/<ul id="\w+">[\s\S]*?<\/ul>/)![0];
       const result = await runtime.modifyNodes({
@@ -265,12 +266,14 @@ describe('EditorRuntime - Real Cases', () => {
         ],
       });
 
-      // Applied in caller order: the list replacement drops A and re-keys the
-      // list, so the later insert is reported as failed instead of vanishing
-      // behind a success.
-      expect(result.results.map((r) => r.success)).toEqual([true, true, false]);
-      expect(result.results[2].error).toContain('not found');
-      expect(editor.getDocument('markdown') as unknown as string).toContain('- b2');
+      // Wrapping an existing pending edit in another diff is rejected. Keep
+      // both pending inserts instead of silently discarding the first one.
+      expect(result.results.map((r) => r.success)).toEqual([true, false, true]);
+      expect(result.results[1].error).toContain('did not change');
+      const markdown = editor.getDocument('markdown') as unknown as string;
+      expect(markdown).toContain('- A');
+      expect(markdown).toContain('- B');
+      expect(markdown).not.toContain('- b2');
     });
 
     it('rejects a multi-fragment modify that replaces a list and an item inside it', async () => {
@@ -363,19 +366,19 @@ describe('EditorRuntime - Real Cases', () => {
       // First operation: remove 13 paragraphs
       const removeResult = await runtime.modifyNodes({
         operations: [
-          { action: 'remove', id: 'x4qr' },
-          { action: 'remove', id: 'xfvd' },
-          { action: 'remove', id: 'xqzz' },
-          { action: 'remove', id: 'zrby' },
-          { action: 'remove', id: '02gk' },
-          { action: 'remove', id: '0dl6' },
-          { action: 'remove', id: '0ops' },
-          { action: 'remove', id: '1rnx' },
-          { action: 'remove', id: '22sj' },
-          { action: 'remove', id: '2dx5' },
-          { action: 'remove', id: '3gva' },
-          { action: 'remove', id: '3rzw' },
-          { action: 'remove', id: '434i' },
+          { action: 'remove', id: '17545' },
+          { action: 'remove', id: '17547' },
+          { action: 'remove', id: '17549' },
+          { action: 'remove', id: '17562' },
+          { action: 'remove', id: '17564' },
+          { action: 'remove', id: '17566' },
+          { action: 'remove', id: '17568' },
+          { action: 'remove', id: '17575' },
+          { action: 'remove', id: '17577' },
+          { action: 'remove', id: '17579' },
+          { action: 'remove', id: '17586' },
+          { action: 'remove', id: '17588' },
+          { action: 'remove', id: '17590' },
         ],
       });
 
@@ -391,12 +394,12 @@ describe('EditorRuntime - Real Cases', () => {
       const removed = editor.getDocument('litexml') as unknown as string;
       expect(removed).toMatchSnapshot('remove 13 paragraphs');
 
-      // Second operation: insert a list after wtm5
+      // Second operation: insert a list after 17543
       const insertResult = await runtime.modifyNodes({
         operations: [
           {
             action: 'insert',
-            afterId: 'wtm5',
+            afterId: '17543',
             litexml:
               '<ul><li>西湖风景区：杭州的灵魂，世界文化遗产</li><li>灵隐寺：杭州最著名的佛教寺庙</li><li>西溪国家湿地公园：中国第一个国家湿地公园</li><li>宋城：以宋代文化为主题的大型主题公园</li></ul>',
           },
@@ -410,9 +413,14 @@ describe('EditorRuntime - Real Cases', () => {
       expect(insertResult.results.every((r) => r.success)).toBe(true);
       expect(insertResult.results.every((r) => r.action === 'insert')).toBe(true);
 
-      // Verify full output
       const xmlAfter = editor.getDocument('litexml') as unknown as string;
-      expect(xmlAfter).toMatchSnapshot('insert new');
+      const blocks = parseLiteXMLBlocks(xmlAfter);
+      if (typeof blocks === 'string') throw new Error(blocks);
+      expect(blocks.map(({ tag }) => tag)).toEqual(['p', 'h2', 'ul', 'h2']);
+      expect(blocks[2].text).toBe(
+        '西湖风景区：杭州的灵魂，世界文化遗产 灵隐寺：杭州最著名的佛教寺庙 西溪国家湿地公园：中国第一个国家湿地公园 宋城：以宋代文化为主题的大型主题公园',
+      );
+      expect(JSON.stringify(editor.getDocument('json'))).toContain('"diffType":"add"');
     });
   });
 });

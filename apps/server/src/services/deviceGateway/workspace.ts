@@ -145,7 +145,8 @@ export async function enrollWorkspace(
   },
 ): Promise<{
   error?: string;
-  identity?: { deviceId: string; identitySource: 'fallback' | 'machine-id' };
+  /** As the device reported it; callers validate `identitySource`. */
+  identity?: { deviceId: string; identitySource: string };
   success: boolean;
 }> {
   const { deviceId, identityOnly, timeout = 30_000, token, userId, workspaceId } = params;
@@ -153,10 +154,7 @@ export async function enrollWorkspace(
   if (!client) return { error: 'Device Gateway is not configured', success: false };
 
   try {
-    const result = await client.invokeRpc<{
-      deviceId: string;
-      identitySource: 'fallback' | 'machine-id';
-    }>(
+    const result = await client.invokeRpc<{ deviceId: string; identitySource: string }>(
       { deviceId, timeout, userId },
       {
         method: 'enrollWorkspace',
@@ -229,7 +227,13 @@ export async function statPath(
     workspaceId?: string;
   },
 ): Promise<
-  | { exists: boolean; isDirectory: boolean; repositoryUrl?: string; repoType?: 'git' | 'github' }
+  | {
+      canonicalPath?: string;
+      exists: boolean;
+      isDirectory: boolean;
+      repositoryUrl?: string;
+      repoType?: 'git' | 'github';
+    }
   | undefined
 > {
   const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
@@ -238,6 +242,7 @@ export async function statPath(
 
   try {
     const result = await client.invokeRpc<{
+      canonicalPath?: string;
       exists: boolean;
       isDirectory: boolean;
       repoType?: 'git' | 'github';

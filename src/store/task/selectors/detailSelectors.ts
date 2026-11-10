@@ -17,7 +17,8 @@ const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
 
 const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
 
-const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
+const taskDetailById = (ref: string) => (s: TaskStoreState) =>
+  s.taskDetailMap[s.taskRefIndex?.[ref] ?? ref];
 
 const isTaskDetailLoading = (s: TaskStoreState): boolean =>
   !s.activeTaskId || !s.taskDetailMap[s.activeTaskId];
@@ -27,6 +28,9 @@ const activeTaskName = (s: TaskStoreState) => activeTaskDetail(s)?.name;
 const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
 const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority ?? 0;
+
+const EMPTY_LABELS: NonNullable<TaskDetailData['labels']> = [];
+const activeTaskLabels = (s: TaskStoreState) => activeTaskDetail(s)?.labels ?? EMPTY_LABELS;
 
 const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
   activeTaskDetail(s)?.visibility ?? 'public';
@@ -175,6 +179,7 @@ const topicDrawerFocusRequest = (s: TaskStoreState) => s.activeTopicDrawerFocusR
 
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskLabels,
   activeTaskAssigneeUserId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,

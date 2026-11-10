@@ -1,23 +1,28 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { ArrowRightIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
+import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
+import { LIBRARY_INDEX_PATH } from '../../../paths';
+import { pickRecentLibraries, useLibraryVisits } from '../../../recentLibraries';
 import Item from './Item';
 import { getLibraryListAsyncState } from './state';
 
 /**
- * Show library list in the sidebar
+ * The sidebar's "Recent libraries" shortcut list: the few libraries opened most
+ * recently on this device. The full index is the library gallery.
  */
 const LibraryList = memo(() => {
   const { t } = useTranslation('file');
@@ -37,6 +42,8 @@ const LibraryList = memo(() => {
   // §1.1 failure-as-empty): read `error` / `revalidate` and branch first.
   const { error, isHydrated, isValidating, revalidate } = useFetchKnowledgeBaseList(visibility);
   const data = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseList(visibility));
+  const visits = useLibraryVisits();
+  const recent = useMemo(() => (data ? pickRecentLibraries(data, visits) : data), [data, visits]);
 
   const navigate = useWorkspaceAwareNavigate();
 
@@ -78,7 +85,7 @@ const LibraryList = memo(() => {
       onRetry={() => revalidate()}
     >
       <Flexbox gap={1} paddingInline={4}>
-        {data?.map((item) => (
+        {recent?.map((item) => (
           <Item
             description={item.description}
             id={item.id}
@@ -90,6 +97,11 @@ const LibraryList = memo(() => {
             visibility={item.visibility}
           />
         ))}
+        <NavItem
+          icon={ArrowRightIcon}
+          title={t('docs.allLibraries')}
+          onClick={() => navigate(LIBRARY_INDEX_PATH)}
+        />
       </Flexbox>
     </AsyncBoundary>
   );

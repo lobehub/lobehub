@@ -103,6 +103,18 @@ describe('useNavLayout', () => {
     expect(memoryItem?.hidden).not.toBe(true);
   });
 
+  it('does not list Pages, which now lives in Docs', async () => {
+    const { useNavLayout } = await import('./useNavLayout');
+    const { result } = renderHook(() => useNavLayout());
+
+    const navKeys = [...result.current.topNavItems, ...result.current.bottomMenuItems].map(
+      (item) => item.key,
+    );
+
+    expect(navKeys).not.toContain('pages');
+    expect(navKeys).toContain('resource');
+  });
+
   it('hides Memory in workspace mode', async () => {
     mocks.activeWorkspaceSlug = 'lobe-team';
 

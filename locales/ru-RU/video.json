@@ -40,7 +40,7 @@
   "generation.editing.hint": "Опишите, что нужно изменить; все остальное останется без изменений",
   "generation.editing.modelLocked": "Редактирование сохраняет модель оригинального видео",
   "generation.editing.title": "Редактирование V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 Бесплатная квота исчерпана, будут списаны кредиты",
+  "generation.freeQuota.exhausted": "🎁 Бесплатное использование закончилось. Теперь видео расходуют ваш баланс.",
   "generation.freeQuota.remaining": "🎁 Осталось {{remaining}} бесплатных видео сегодня",
   "generation.status.editing": "Создание редактирования...",
   "generation.status.failed": "Ошибка генерации",

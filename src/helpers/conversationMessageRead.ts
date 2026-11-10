@@ -24,13 +24,15 @@ import { canUseGatewayProtocolV2 } from './gatewayProtocol';
  * since switched to the browser, which is why `ClientMessageTransport` refills
  * omitted payloads before building a context rather than trusting this gate.
  */
+export const isProjectedConversationRead = (agentId?: string | null): boolean =>
+  canUseGatewayProtocolV2() &&
+  resolveGatewayModeEnabled(getAgentStoreState(), agentId ?? undefined);
+
 const withConversationReadOptions = (
   context: MessageReadQueryContext,
 ): MessageReadQueryContext => ({
   ...context,
-  projectToolPayloads:
-    canUseGatewayProtocolV2() &&
-    resolveGatewayModeEnabled(getAgentStoreState(), context.agentId ?? undefined),
+  projectToolPayloads: isProjectedConversationRead(context.agentId),
 });
 
 export const readConversationMessages = (
@@ -47,3 +49,9 @@ export const readConversationMessageListPage = (
   context: MessageReadQueryContext,
 ): ReturnType<typeof messageService.getMessageListPage> =>
   messageService.getMessageListPage(withConversationReadOptions(context));
+
+export const readEarlierConversationMessages = (
+  context: MessageReadQueryContext,
+  cursor: Parameters<typeof messageService.getEarlierMessages>[1],
+): ReturnType<typeof messageService.getEarlierMessages> =>
+  messageService.getEarlierMessages(withConversationReadOptions(context), cursor);

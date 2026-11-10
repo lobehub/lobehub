@@ -16,6 +16,8 @@ const {
   mockCreateServerAgentToolsEngine,
   mockFindByIds,
   mockGetAgentConfig,
+  mockGetComposioManifests,
+  mockGetLobehubSkillManifests,
   mockGetUserSettings,
   mockMessageCreate,
   mockPluginQuery,
@@ -29,6 +31,8 @@ const {
   }),
   mockFindByIds: vi.fn(),
   mockGetAgentConfig: vi.fn(),
+  mockGetComposioManifests: vi.fn().mockResolvedValue([]),
+  mockGetLobehubSkillManifests: vi.fn().mockResolvedValue([]),
   mockGetUserSettings: vi.fn(),
   mockMessageCreate: vi.fn(),
   // Installed MCP plugin rows; empty unless a test seeds one.
@@ -150,7 +154,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn().mockImplementation(function () {
     return {
-      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+      getLobehubSkillManifests: mockGetLobehubSkillManifests,
     };
   }),
 }));
@@ -158,7 +162,7 @@ vi.mock('@/server/services/market', () => ({
 vi.mock('@/server/services/composio', () => ({
   ComposioService: vi.fn().mockImplementation(function () {
     return {
-      getComposioManifests: vi.fn().mockResolvedValue([]),
+      getComposioManifests: mockGetComposioManifests,
     };
   }),
 }));
@@ -415,5 +419,72 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
     await visitorTurn([{ identifier: 'granted-plugin' }, { identifier: 'installed-mcp' }]);
 
     expect(mockCreateOperation.mock.calls[0][0].toolSet.manifestMap['installed-mcp']).toBeDefined();
+  });
+  describe('unpinned connection sources', () => {
+    const visitorTurn = (toolGrants: { identifier: string }[]) =>
+      service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+        shareGate: {
+          agentId: 'agent-1',
+          shareConfig: { toolGrants },
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      });
+    const manifestOf = (identifier: string) => ({
+      api: [{ description: 'Run', name: 'run', parameters: {} }],
+      identifier,
+      meta: { title: identifier },
+      type: 'builtin',
+    });
+
+    it('lists LobeHub Skill tools only for granted providers', async () => {
+      await visitorTurn([{ identifier: 'lobe-calculator' }, { identifier: 'linear' }]);
+
+      expect(mockGetLobehubSkillManifests).toHaveBeenCalledWith(
+        expect.objectContaining({ providerIds: ['linear'] }),
+      );
+    });
+
+    it('does not ask the Market about the creator connections without an extension grant', async () => {
+      await visitorTurn([{ identifier: 'lobe-calculator' }]);
+
+      expect(mockGetLobehubSkillManifests).not.toHaveBeenCalled();
+      expect(mockGetComposioManifests).not.toHaveBeenCalled();
+    });
+
+    it('reads only granted Composio connections into the activatable pool', async () => {
+      mockGetComposioManifests.mockResolvedValue([manifestOf('gmail')]);
+
+      await visitorTurn([{ identifier: 'gmail' }, { identifier: 'lobe-calculator' }]);
+
+      expect(mockGetComposioManifests).toHaveBeenCalledWith(expect.anything(), {
+        identifiers: ['gmail'],
+      });
+      const { manifestMap, sourceMap } = mockCreateOperation.mock.calls[0][0].toolSet;
+      expect(manifestMap.gmail).toBeDefined();
+      expect(sourceMap.gmail).toBe('composio');
+    });
+
+    it('does not read a granted connection the owner disabled on the Agent', async () => {
+      mockGetAgentConfig.mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        model: 'gpt-4',
+        plugins: [{ identifier: 'gmail', mode: 'disabled' }],
+        provider: 'openai',
+        systemRole: '',
+      });
+
+      await visitorTurn([{ identifier: 'gmail' }, { identifier: 'linear' }]);
+
+      expect(mockGetComposioManifests).toHaveBeenCalledWith(expect.anything(), {
+        identifiers: ['linear'],
+      });
+      expect(mockGetLobehubSkillManifests).toHaveBeenCalledWith(
+        expect.objectContaining({ providerIds: ['linear'] }),
+      );
+    });
   });
 });

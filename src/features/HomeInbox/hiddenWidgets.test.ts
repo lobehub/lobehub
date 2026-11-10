@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { filterHiddenWidgetSections, hasVisibleRailWidget } from './hiddenWidgets';
-import { resolveInboxScopeToggleSection } from './scopeTogglePlacement';
 
 const assembled = [
   { key: 'needsYou' },
@@ -120,75 +119,5 @@ describe('hasVisibleRailWidget', () => {
         usageActive: true,
       }),
     ).toBe(false);
-  });
-});
-
-describe('resolveInboxScopeToggleSection', () => {
-  const populated = { needsYouCount: 2, unreadCount: 3 };
-
-  it('keeps the scope toggle on needs-you while that widget is visible', () => {
-    expect(resolveInboxScopeToggleSection({ ...populated, hiddenWidgets: [] })).toBe('needsYou');
-  });
-
-  it('moves the scope toggle to unread when needs-you is hidden', () => {
-    expect(resolveInboxScopeToggleSection({ ...populated, hiddenWidgets: ['needsYou'] })).toBe(
-      'unread',
-    );
-  });
-
-  it('hides the scope toggle when both titled topic widgets are hidden', () => {
-    expect(
-      resolveInboxScopeToggleSection({ ...populated, hiddenWidgets: ['needsYou', 'unread'] }),
-    ).toBeNull();
-  });
-
-  it('gives up the scope toggle only once every host widget is hidden', () => {
-    expect(
-      resolveInboxScopeToggleSection({
-        ...populated,
-        hiddenWidgets: ['needsYou', 'unread', 'running'],
-      }),
-    ).toBeNull();
-  });
-
-  it('suppresses titled sections through the task-mode props as well as the hidden set', () => {
-    expect(
-      resolveInboxScopeToggleSection({
-        ...populated,
-        hiddenWidgets: [],
-        hideNeedsYou: true,
-        hideUnread: true,
-      }),
-    ).toBeNull();
-  });
-
-  it('still leads with unread in the main column when needs-you is hidden', () => {
-    expect(
-      resolveInboxScopeToggleSection({
-        ...populated,
-        hiddenWidgets: ['needsYou'],
-        preferUnread: true,
-      }),
-    ).toBe('unread');
-  });
-
-  it('skips a hidden unread widget even when the main column prefers it', () => {
-    expect(
-      resolveInboxScopeToggleSection({
-        ...populated,
-        hiddenWidgets: ['unread'],
-        preferUnread: true,
-      }),
-    ).toBe('needsYou');
-  });
-
-  it('skips sections with nothing in them and lands on the one that has content', () => {
-    expect(
-      resolveInboxScopeToggleSection({
-        hiddenWidgets: [],
-        needsYouCount: 0,
-        unreadCount: 4,
-      }),
-    ).toBe('unread');
   });
 });

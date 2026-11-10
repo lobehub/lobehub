@@ -18,9 +18,14 @@ import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
-import { resolveDocumentEditorData } from '@/server/services/document/editorData';
+import { resolveDocumentWrite } from '@/server/services/document/editorData';
 import { canViewDocumentContent, getDocumentForViewer } from '@/server/services/documentAccess';
 import { FileService } from '@/server/services/file';
+import { resolvePageAccess } from '@/server/services/pageCollab';
+import {
+  snapshotPageThroughRoom,
+  updateDocumentThroughRoom,
+} from '@/server/services/pageCollab/bodyWriter';
 import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
@@ -38,6 +43,8 @@ import {
 import { resolveRootOperation } from './_helpers/runProvenance';
 import {
   compareDocumentHistoryItemsInputSchema,
+  DOCUMENT_CONTENT_MAX_LENGTH,
+  DOCUMENT_EDITOR_DATA_MAX_LENGTH,
   getDocumentHistoryItemInputSchema,
   listDocumentHistoryInputSchema,
   saveDocumentHistoryInputSchema,
@@ -198,8 +205,8 @@ export const documentRouter = router({
     .use(withScopedPermission('document:create'))
     .input(
       z.object({
-        content: z.string().optional(),
-        editorData: z.string().optional(),
+        content: z.string().max(DOCUMENT_CONTENT_MAX_LENGTH).optional(),
+        editorData: z.string().max(DOCUMENT_EDITOR_DATA_MAX_LENGTH).optional(),
         fileType: z.string().optional(),
         knowledgeBaseId: z.string().optional(),
         metadata: z.record(z.string(), z.any()).optional(),
@@ -226,13 +233,15 @@ export const documentRouter = router({
 
       await assertCanCreateUnderParent(ctx, resolvedParentId);
 
-      const editorData = await resolveDocumentEditorData({
+      const { content, editorData } = await resolveDocumentWrite({
         content: documentInput.content,
         editorData: documentInput.editorData ? JSON.parse(documentInput.editorData) : undefined,
         fileType: documentInput.fileType,
+        title: documentInput.title,
       });
       const document = await ctx.documentService.createDocument({
         ...documentInput,
+        content,
         editorData,
         parentId: resolvedParentId,
       });
@@ -259,8 +268,8 @@ export const documentRouter = router({
       z.object({
         documents: z.array(
           z.object({
-            content: z.string().optional(),
-            editorData: z.string().optional(),
+            content: z.string().max(DOCUMENT_CONTENT_MAX_LENGTH).optional(),
+            editorData: z.string().max(DOCUMENT_EDITOR_DATA_MAX_LENGTH).optional(),
             fileType: z.string().optional(),
             knowledgeBaseId: z.string().optional(),
             metadata: z.record(z.string(), z.any()).optional(),
@@ -285,14 +294,16 @@ export const documentRouter = router({
             }
           }
 
-          const editorData = await resolveDocumentEditorData({
+          const { content, editorData } = await resolveDocumentWrite({
             content: doc.content,
             editorData: doc.editorData ? JSON.parse(doc.editorData) : undefined,
             fileType: doc.fileType,
+            title: doc.title,
           });
 
           return {
             ...doc,
+            content,
             editorData,
             parentId: resolvedParentId,
           };
@@ -441,11 +452,38 @@ export const documentRouter = router({
       );
     }),
 
+  /**
+   * Store a page's live collaboration room as a version (manual save, accepting
+   * AI suggestions): the edits are already in the room, so there is no body to
+   * send. A page without a live room returns `recorded: false`, and the client
+   * saves it the usual way.
+   */
+  snapshotPageVersion: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ documentId: z.string(), saveSource: z.enum(['manual']) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
+      if ((await resolvePageAccess(ctx.serverDB, ctx.userId, input.documentId)) !== 'edit') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'No permission to edit this page' });
+      }
+
+      const recorded = await snapshotPageThroughRoom(ctx.serverDB, input.documentId, {
+        saveSource: input.saveSource,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+        writeSource: 'user',
+      });
+      return { recorded };
+    }),
+
   getFolderBreadcrumb: documentProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
       const chain = [];
-      let currentFolder = await ctx.documentModel.findBySlug(input.slug);
+      // Folder URLs carry the id; older links still carry the slug.
+      let currentFolder =
+        (await ctx.documentModel.findBySlug(input.slug)) ??
+        (await ctx.documentModel.findById(input.slug));
 
       // Build chain from current folder to root
       while (currentFolder) {
@@ -499,10 +537,13 @@ export const documentRouter = router({
     .input(
       z
         .object({
+          creator: z.enum(['others', 'self']).optional(),
           current: z.number().optional(),
           fileTypes: z.array(z.string()).optional(),
           pageSize: z.number().max(100).optional(),
+          sortBy: z.enum(['createdAt', 'title', 'updatedAt']).optional(),
           sourceTypes: z.array(z.string()).optional(),
+          standaloneOnly: z.boolean().optional(),
         })
         .optional(),
     )
@@ -557,13 +598,16 @@ export const documentRouter = router({
       await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.id]);
 
       const { id, editorData: editorDataString, operationId, ...params } = input;
-      // A content-only write (the CLI) sends no editorData and names no fileType;
-      // the stored fileType decides whether to build editorData from Markdown.
+      // A content-only write (the CLI) sends no editorData and often no fileType
+      // or title; the stored fileType decides whether to build editorData from
+      // Markdown, and the stored title names the heading to drop from it.
       // An HTML page never gets any (the service drops editorData sent for one).
-      const needsStoredFileType =
-        params.content !== undefined && params.fileType === undefined && !editorDataString;
+      const needsStoredDocument =
+        params.content !== undefined &&
+        !editorDataString &&
+        (params.fileType === undefined || params.title === undefined);
       const currentDocument =
-        input.parentId !== undefined || needsStoredFileType
+        input.parentId !== undefined || needsStoredDocument
           ? await ctx.documentModel.findById(input.id)
           : undefined;
 
@@ -580,15 +624,21 @@ export const documentRouter = router({
         }
       }
 
-      const editorData = await resolveDocumentEditorData({
+      const { content, editorData } = await resolveDocumentWrite({
         content: params.content,
         editorData: editorDataString ? JSON.parse(editorDataString) : undefined,
         fileType: params.fileType ?? currentDocument?.fileType,
+        title: params.title ?? currentDocument?.title ?? undefined,
       });
-      const result = await ctx.documentService.updateDocument(id, {
-        ...params,
-        editorData,
-      });
+      // A page with a live room projects the room over its row, so the body
+      // (from the CLI or a client that predates rooms) goes into the room.
+      const result = await updateDocumentThroughRoom(
+        ctx.serverDB,
+        ctx.documentService,
+        id,
+        { ...params, content, editorData },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+      );
 
       // Only a change to what the document says is a new deliverable version;
       // a move or a file-type change is not.

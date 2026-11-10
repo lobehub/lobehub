@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * Generation batches are a `@lobechat/replica` resource with one entry per
+ * Generation batches are a `local-replica` resource with one entry per
  * topic (`generationBatchesMap[topicId]`): the persisted projection paints the
  * feed before the network answers, an unchanged response keeps the array
  * reference, and a cache-scope switch drops the previous identity's batches

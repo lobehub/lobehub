@@ -28,6 +28,15 @@ export const gridStyles = createStaticStyles(({ css, cssVar }) => ({
     outline: 1px dashed ${cssVar.colorBorder};
     outline-offset: 2px;
   `,
+  editCell: css`
+    position: relative;
+
+    &:hover [data-resize-handle],
+    & [data-resize-handle]:focus-visible,
+    & [data-resize-handle][data-active='true'] {
+      opacity: 1;
+    }
+  `,
   grid: css`
     display: grid;
     grid-auto-rows: ${DASHBOARD_ROW_HEIGHT}px;
@@ -36,6 +45,47 @@ export const gridStyles = createStaticStyles(({ css, cssVar }) => ({
 
     @media (width <= 767px) {
       grid-template-columns: minmax(0, 1fr);
+    }
+  `,
+  resizeHandle: css`
+    touch-action: none;
+    cursor: nwse-resize;
+
+    position: absolute;
+    z-index: 1;
+    inset-block-end: 2px;
+    inset-inline-end: 2px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    color: ${cssVar.colorTextTertiary};
+
+    opacity: 0.6;
+    background: transparent;
+
+    transition: opacity ${cssVar.motionDurationMid};
+
+    &:hover,
+    &[data-active='true'] {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+    }
+
+    /* Stacked cards span the full width: the handle resizes height only. */
+    @media (width <= 767px) {
+      cursor: ns-resize;
     }
   `,
   handle: css`
