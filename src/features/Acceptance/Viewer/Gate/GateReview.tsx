@@ -494,7 +494,10 @@ interface GateReviewProps {
 const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided }) => {
   const { t } = useTranslation('verify');
   const [selected, setSelected] = useState<Selection>();
-  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(dossier.plan.skillId);
+  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(
+    dossier.plan.skillId,
+    dossier.plan.revision,
+  );
   const average =
     dossier.units.reduce((sum, unit) => sum + unit.tokens, 0) / Math.max(1, dossier.units.length);
   const probes = dossier.kind === 'probes';

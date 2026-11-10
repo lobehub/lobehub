@@ -37,7 +37,6 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  empty: { color: cssVar.colorTextTertiary, fontSize: 13 },
   heading: { color: cssVar.colorTextTertiary, fontSize: 12, fontWeight: 500 },
   item: {
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
@@ -159,9 +158,6 @@ const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; no
         now={now}
         title={t('team.attention.failed')}
       />
-      {items.length === 0 && (
-        <span {...stylex.props(styles.empty)}>{t('team.attention.empty')}</span>
-      )}
     </Flexbox>
   );
 };

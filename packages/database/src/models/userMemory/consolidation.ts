@@ -7,6 +7,7 @@ import {
   userMemoriesContexts,
   userMemoriesDossiers,
   userMemoriesOperations,
+  users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
@@ -112,7 +113,8 @@ export const listConsolidatedUserIds = async (db: LobeChatDatabase): Promise<str
   const rows = await db
     .selectDistinct({ userId: userMemoriesDossiers.userId })
     .from(userMemoriesDossiers)
-    .where(isNotNull(userMemoriesDossiers.userId));
+    .innerJoin(users, eq(users.id, userMemoriesDossiers.userId))
+    .where(sql`COALESCE(${users.banned}, false) = false`);
   return rows.map((r) => r.userId).filter((id): id is string => !!id);
 };
 

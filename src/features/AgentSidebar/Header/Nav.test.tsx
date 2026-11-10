@@ -3,7 +3,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Nav from './Nav';
 
@@ -244,33 +244,57 @@ describe('Agent sidebar header nav', () => {
     },
   );
 
-  it('navigates to the agent self-learning page', () => {
+  it('moves self-evolving into the profile group for members who can open it', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toBeInTheDocument();
+  });
+
+  it('keeps self-evolving reachable when the profile entry is hidden', () => {
+    permissionMock.edit_own_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'title' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/self-evolving');
   });
 
-  // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
-  // rather than lead everyone to a page whose data pipeline isn't running yet.
-  it('hides the self-learning entry when the labs toggle is off', () => {
-    labMock.enableSelfLearning = false;
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+  describe('on mobile, where the profile Segmented has no room for it', () => {
+    beforeEach(() => {
+      vi.stubGlobal('__MOBILE__', true);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
 
-    render(<Nav />);
+    it('lights only the self-evolving entry on its own route', () => {
+      usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving/dom_1');
 
-    expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
-  });
+      render(<Nav />);
 
-  it('keeps the self-learning entry active on its own route', () => {
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving');
+      expect(screen.getByRole('button', { name: 'title' })).toHaveAttribute('data-active', 'true');
+      expect(screen.getByRole('button', { name: 'tab.profile' })).toHaveAttribute(
+        'data-active',
+        'false',
+      );
+    });
 
-    render(<Nav />);
+    // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
+    // rather than lead everyone to a page whose data pipeline isn't running yet.
+    it('hides the entry when the labs toggle is off', () => {
+      labMock.enableSelfLearning = false;
+      usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
-    expect(screen.getByRole('button', { name: 'title' })).toHaveAttribute('data-active', 'true');
+      render(<Nav />);
+
+      expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+    });
   });
 
   it('places topics above profile, goals, self-learning, and tasks in the agent navigation', () => {

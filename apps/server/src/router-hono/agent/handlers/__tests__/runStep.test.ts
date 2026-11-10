@@ -38,6 +38,7 @@ const mockFinalizeAbandoned = vi.hoisted(() => vi.fn());
 const mockSettleStaleRunning = vi.hoisted(() => vi.fn());
 const mockResumeAbandonedParent = vi.hoisted(() => vi.fn());
 const mockScheduleOpportunisticStaleSweep = vi.hoisted(() => vi.fn());
+const mockScheduleOpportunisticVerifySweep = vi.hoisted(() => vi.fn());
 // Lets a test force the step-boundary flush to report a timeout; undefined
 // means use the real implementation.
 const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
@@ -79,6 +80,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
     return { finalizeAbandoned: mockFinalizeAbandoned };
   }),
   scheduleOpportunisticStaleSweep: mockScheduleOpportunisticStaleSweep,
+  scheduleOpportunisticVerifySweep: mockScheduleOpportunisticVerifySweep,
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -376,6 +378,7 @@ describe('runStep handler', () => {
 
     expect(res.status).toBe(200);
     expect(mockScheduleOpportunisticStaleSweep).toHaveBeenCalledTimes(1);
+    expect(mockScheduleOpportunisticVerifySweep).toHaveBeenCalledTimes(1);
   });
 
   it('opts the AiAgentService into visitor rows when metadata carries streamOwnerUserId', async () => {

@@ -32,6 +32,7 @@ const styles = stylex.create({
     },
     alignItems: 'start',
   },
+  columnsFull: { gridTemplateColumns: 'minmax(0, 1fr)' },
   empty: {
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: 12,
@@ -72,6 +73,10 @@ const HomeTeamBoard = () => {
   );
 
   if (error && !data) return <AsyncError error={error} variant={'inline'} onRetry={mutate} />;
+
+  // An older server can omit the field; the board must still render.
+  const attention = data?.attention ?? [];
+  const hasAttention = attention.length > 0;
 
   return (
     <Flexbox data-testid={'team-board'} gap={20} {...stylex.props(styles.root)}>
@@ -118,7 +123,7 @@ const HomeTeamBoard = () => {
             onAgentChange={setAgentId}
             onUserChange={setUserId}
           />
-          <div {...stylex.props(styles.columns)}>
+          <div {...stylex.props(styles.columns, !hasAttention && styles.columnsFull)}>
             {!data.lanes?.length ? (
               <div {...stylex.props(styles.empty)}>
                 {t(scope === 'involved' ? 'team.emptyInvolved' : 'team.empty', {
@@ -130,7 +135,7 @@ const HomeTeamBoard = () => {
             ) : (
               <Timeline board={data} />
             )}
-            <AttentionList items={data.attention} now={data.generatedAt} />
+            {hasAttention && <AttentionList items={attention} now={data.generatedAt} />}
           </div>
         </Flexbox>
       )}

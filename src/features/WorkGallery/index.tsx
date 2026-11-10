@@ -1,20 +1,12 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-} from '@lobehub/ui';
+import { Button, Center, createStaticStyles, cssVar, cx, Empty, Flexbox } from '@lobehub/ui';
 import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import CanvasStorageSummary from '@/features/CanvasStorage/Summary';
 import {
@@ -161,11 +153,11 @@ const AgentFilter = memo<AgentFilterProps>(({ active, agentId, onSelect }) => {
       size={'small'}
       type={'text'}
       icon={
-        <Avatar
-          emojiScaleWithBackground
+        <AgentAvatar
+          agentId={agentId}
           avatar={agent.avatar}
           background={agent.backgroundColor}
-          shape={'square'}
+          name={agent.title}
           size={20}
         />
       }

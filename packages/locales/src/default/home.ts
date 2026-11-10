@@ -199,7 +199,6 @@ export default {
   'team.agent.untitled': 'Untitled agent',
   'team.attention.approvalNeeded': 'Waiting for approval to continue',
   'team.attention.blocked': 'Waiting on teammates',
-  'team.attention.empty': 'Nothing is waiting on anyone right now.',
   'team.attention.failed': 'Failed',
   'team.attention.failedAgo': 'Failed {{time}} ago',
   'team.attention.handle': 'Review',

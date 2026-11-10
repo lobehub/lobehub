@@ -1,27 +1,13 @@
 'use client';
 
 import type { AgentInboxMessageSummary } from '@lobechat/types';
-import { confirmModal, createModal, toast } from '@lobehub/ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentAccountService, type AgentAccountView } from '@/services/agentAccount';
 
 import type { IdentityChannel } from './const';
-import InboxMessageModal from './InboxMessageModal';
-
-/** Open one stored message. Imperative because the trigger is a list row. */
-const openMessageModal = (id: string) =>
-  createModal({
-    content: <InboxMessageModal id={id} />,
-    footer: null,
-    maskClosable: true,
-    styles: {
-      content: { padding: 20 },
-      header: { display: 'none' },
-    },
-    width: 640,
-  });
 
 export interface UseAccountActionsParams {
   agentId: string;
@@ -94,18 +80,26 @@ export const useAccountActions = ({ agentId, onChanged }: UseAccountActionsParam
 };
 
 export interface UseInboxActionsParams {
+  /** Keep "mark all read" to the mailbox on screen. */
+  accountId?: string;
   agentId: string;
   /** Revalidate the inbox after its read state changes. */
   onChanged: () => Promise<unknown> | void;
+  onOpen: (id: string) => void;
 }
 
 /** Reading the inbox: open one message, or clear the unread marks. */
-export const useInboxActions = ({ agentId, onChanged }: UseInboxActionsParams) => {
+export const useInboxActions = ({
+  accountId,
+  agentId,
+  onChanged,
+  onOpen,
+}: UseInboxActionsParams) => {
   const { t } = useTranslation('setting');
 
   const openMessage = useCallback(
     async (message: Pick<AgentInboxMessageSummary, 'id' | 'readAt'>) => {
-      openMessageModal(message.id);
+      onOpen(message.id);
 
       // Already read: opening it again must not re-stamp `readAt`.
       if (message.readAt) return;
@@ -118,18 +112,18 @@ export const useInboxActions = ({ agentId, onChanged }: UseInboxActionsParams) =
         console.error('[AgentIdentity] mark read failed', error);
       }
     },
-    [onChanged],
+    [onChanged, onOpen],
   );
 
   const markAllRead = useCallback(async () => {
     try {
-      await agentAccountService.markAllInboxRead(agentId);
+      await agentAccountService.markAllInboxRead(agentId, accountId);
       await onChanged();
     } catch (error) {
       console.error('[AgentIdentity] mark all read failed', error);
       toast.error(t('identity.inbox.markAllReadFailed'));
     }
-  }, [agentId, onChanged, t]);
+  }, [accountId, agentId, onChanged, t]);
 
   return { markAllRead, openMessage };
 };
