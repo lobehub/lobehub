@@ -7,6 +7,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentHistories,
   documentLikes,
   documents,
   files,
@@ -15,6 +16,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '../document';
+import { DocumentHistoryModel } from '../documentHistory';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -85,6 +87,58 @@ describe('DocumentModel.transferTo', () => {
     const updated = await serverDB.query.documents.findFirst({ where: eq(documents.id, page.id) });
     expect(updated?.workspaceId).toBe(wsId1);
     expect(updated?.userId).toBe(userId);
+  });
+
+  it('carries revision history into the target workspace scope', async () => {
+    const personal = new DocumentModel(serverDB, userId);
+    const folder = await createFolder(personal, 'History Folder', 'history-folder');
+    const page = await createPage(personal, 'History Page', 'history-page', folder.id);
+    const personalHistory = new DocumentHistoryModel(serverDB, userId);
+    await personalHistory.create({
+      documentId: page.id,
+      editorData: { tag: 'v1' },
+      saveSource: 'manual',
+      savedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await personalHistory.create({
+      documentId: page.id,
+      editorData: { tag: 'v2' },
+      saveSource: 'autosave',
+      savedAt: new Date('2026-01-02T00:00:00.000Z'),
+    });
+
+    await personal.transferTo(folder.id, wsId1, userId);
+
+    // A teammate in the workspace sees every pre-move version.
+    const wsHistory = new DocumentHistoryModel(serverDB, otherUserId, wsId1);
+    const listed = await wsHistory.list({ documentId: page.id });
+    expect(listed.map((row) => row.editorData)).toEqual([{ tag: 'v2' }, { tag: 'v1' }]);
+    // Author attribution is preserved.
+    for (const row of listed) expect(row.userId).toBe(userId);
+
+    // And the personal scope no longer lists them.
+    expect(await personalHistory.list({ documentId: page.id })).toHaveLength(0);
+  });
+
+  it('rehomes revision history to the new owner when moving back to personal scope', async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'WS History Page', 'ws-history-page');
+    await new DocumentHistoryModel(serverDB, otherUserId, wsId1).create({
+      documentId: page.id,
+      editorData: { tag: 'teammate' },
+      saveSource: 'manual',
+      savedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await ws1.transferTo(page.id, null, userId);
+
+    const listed = await new DocumentHistoryModel(serverDB, userId).list({ documentId: page.id });
+    expect(listed.map((row) => row.editorData)).toEqual([{ tag: 'teammate' }]);
+    const [row] = await serverDB
+      .select()
+      .from(documentHistories)
+      .where(eq(documentHistories.documentId, page.id));
+    expect(row).toMatchObject({ userId, workspaceId: null });
   });
 
   it('transfers a folder and all descendants', async () => {
