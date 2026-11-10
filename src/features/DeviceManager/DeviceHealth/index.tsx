@@ -32,12 +32,14 @@ const styles = stylex.create({
   /**
    * Charts side by side, at most two per row: each column is at least half
    * the row, so a third chart wraps instead of squeezing in, and a row too
-   * narrow for two 320px charts falls back to one column.
+   * narrow for two 320px charts falls back to one column, which itself
+   * shrinks to the row when the row is under 320px.
    */
   charts: {
     display: 'grid',
     gap: 16,
-    gridTemplateColumns: 'repeat(auto-fill, minmax(max(320px, calc((100% - 16px) / 2)), 1fr))',
+    gridTemplateColumns:
+      'repeat(auto-fill, minmax(max(min(100%, 320px), calc((100% - 16px) / 2)), 1fr))',
   },
 });
 
