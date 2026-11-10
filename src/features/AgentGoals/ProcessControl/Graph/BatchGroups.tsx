@@ -465,8 +465,19 @@ const GroupShell = memo<{
 
 GroupShell.displayName = 'GoalBatchGroupShell';
 
+/**
+ * Drawn at the square's own size and scaled about its centre: the glyph's box
+ * is centred in its 24-unit frame, so the tick lands in the middle of the
+ * square. A smaller icon box rounded to whole pixels and rendered off-centre.
+ */
 const AcceptedTick = () => (
-  <Icon color={cssVar.colorBgContainer} icon={Check} size={9} style={{ strokeWidth: 3.5 }} />
+  <Check
+    data-accepted-tick
+    color={cssVar.colorBgContainer}
+    size={BATCH_SQUARE}
+    strokeWidth={3.5}
+    style={{ display: 'block', flex: 'none', transform: 'scale(0.78)' }}
+  />
 );
 
 export const Square = memo<{
