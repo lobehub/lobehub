@@ -6,11 +6,6 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
-import { stripUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudePrefill';
-import {
-  isAlwaysThinkingClaudeModel,
-  rejectsDisabledThinkingAtEffort,
-} from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -21,49 +16,30 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { respondJsonAfterStream } from '../../utils/consumeStream';
 import { AgentRuntimeError } from '../../utils/createError';
-import { debugPayload, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
-import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
-import { resolveModelSamplingParameters } from '../parameterResolver';
-import {
-  initializeAnthropicDiagnostics,
-  observeAnthropicStream,
-  recordAnthropicNonStreamingResponse,
-  recordAnthropicResponseMetadata,
-} from '../protocols/anthropicMessages/diagnostics';
+import { chatViaMessages } from '../protocols/anthropicMessages/chat';
 import { handleAnthropicError } from '../protocols/anthropicMessages/errors';
 import {
   type AnthropicGenerateObjectConfig,
   createAnthropicGenerateObject,
 } from '../protocols/anthropicMessages/generateObject';
 import {
-  buildAnthropicMessages,
-  buildAnthropicTools,
-  buildSearchTool,
-} from '../protocols/anthropicMessages/messages';
-import { resolveCacheTTL } from '../protocols/anthropicMessages/resolveCacheTTL';
-import { resolveMaxTokens } from '../protocols/anthropicMessages/resolveMaxTokens';
-import { resolveClaudeThinkingConfig } from '../protocols/anthropicMessages/resolveThinkingConfig';
-import {
-  AnthropicStream,
-  type AnthropicStreamOptions,
-} from '../protocols/anthropicMessages/stream';
-import { readableFromAsyncIterable } from '../streams/protocol';
+  buildDefaultAnthropicPayload,
+  resolveDefaultAnthropicPricingOptions,
+} from '../protocols/anthropicMessages/payload';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
+import type { AnthropicCompatibleRuntimeContext } from './context';
 
-type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions &
+export type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions &
   ModelIdMappingOptions &
   T;
-
-type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
 export const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 const ANTHROPIC_CLIENT_TIMEOUT_ENV = 'ANTHROPIC_CLIENT_TIMEOUT';
@@ -84,6 +60,11 @@ const resolveDefaultAnthropicTimeout = () => {
 
   return Number.isInteger(timeout) && timeout > 0 ? timeout : DEFAULT_ANTHROPIC_TIMEOUT;
 };
+
+export {
+  buildDefaultAnthropicPayload,
+  resolveDefaultAnthropicPricingOptions,
+} from '../protocols/anthropicMessages/payload';
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createClient?: (options: ConstructorOptions<T>) => Anthropic;
@@ -152,139 +133,6 @@ export interface AnthropicCompatibleParamsInput<T extends Record<string, any> = 
   generateObject?: AnthropicCompatibleFactoryOptions<T>['generateObject'];
   models?: AnthropicCompatibleFactoryOptions<T>['models'];
 }
-
-/**
- * Build the default Anthropic Messages payload with LobeChat normalization.
- */
-export const buildDefaultAnthropicPayload = async (
-  payload: ChatStreamPayload,
-): Promise<Anthropic.MessageCreateParams> => {
-  const {
-    messages,
-    model,
-    max_tokens,
-    temperature,
-    top_p,
-    tools,
-    thinking,
-    effort,
-    enabledContextCaching = true,
-    enabledSearch,
-  } = payload;
-
-  const { anthropic: anthropicModels } = await import('model-bank');
-
-  const resolvedMaxTokens = await resolveMaxTokens({
-    max_tokens,
-    model,
-    providerModels: anthropicModels,
-    thinking,
-  });
-
-  // Filter out empty/whitespace-only system prompts — Anthropic API rejects them
-  const systemMessage = messages.find((message) => message.role === 'system');
-  const userMessages = messages.filter((message) => message.role !== 'system');
-  const systemPromptText =
-    typeof systemMessage?.content === 'string' && systemMessage.content.trim()
-      ? systemMessage.content
-      : undefined;
-
-  const systemPrompts = systemPromptText
-    ? ([
-        {
-          cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-          text: systemPromptText,
-          type: 'text',
-        },
-      ] as Anthropic.TextBlockParam[])
-    : undefined;
-
-  const postMessages = stripUnsupportedClaudeAssistantPrefill(
-    model,
-    await buildAnthropicMessages(userMessages, { enabledContextCaching }),
-  );
-
-  let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
-    AnthropicTools[] | undefined;
-
-  if (enabledSearch) {
-    const webSearchTool = buildSearchTool();
-    postTools = postTools?.length ? [...postTools, webSearchTool] : [webSearchTool];
-  }
-
-  const resolvedThinking = resolveClaudeThinkingConfig({
-    maxTokens: resolvedMaxTokens,
-    model,
-    thinking,
-  });
-
-  if (resolvedThinking && resolvedThinking.type !== 'disabled') {
-    return {
-      max_tokens: resolvedMaxTokens,
-      messages: postMessages,
-      model,
-      ...(effort ? { output_config: { effort } } : {}),
-      system: systemPrompts,
-      thinking: resolvedThinking as Anthropic.MessageCreateParams['thinking'],
-      tools: postTools as Anthropic.MessageCreateParams['tools'],
-    } as Anthropic.MessageCreateParams;
-  }
-
-  // Resolve temperature/top_p: Claude 4+ doesn't allow both simultaneously.
-  // normalizeTemperature divides by 2 to map LobeChat's 0-2 range to Anthropic's 0-1 range.
-  const resolvedSamplingParams = resolveModelSamplingParameters(
-    model,
-    { temperature, top_p },
-    { normalizeTemperature: true, preferTemperature: true },
-  );
-
-  // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
-  // effort level stays valid, so only that pairing is dropped.
-  const forwardsEffort =
-    !!effort &&
-    !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
-
-  // Support effort parameter even without thinking (per Claude 4.6 guidance)
-  const basePayload: Anthropic.MessageCreateParams = {
-    max_tokens: resolvedMaxTokens,
-    messages: postMessages,
-    model,
-    system: systemPrompts,
-    temperature: resolvedSamplingParams.temperature,
-    tools: postTools as Anthropic.MessageCreateParams['tools'],
-    ...(resolvedThinking
-      ? { thinking: resolvedThinking as Anthropic.MessageCreateParams['thinking'] }
-      : {}),
-    top_p: resolvedSamplingParams.top_p,
-  };
-
-  // If effort is specified without an incompatible thinking mode, add output_config
-  if (forwardsEffort) {
-    return {
-      ...basePayload,
-      output_config: { effort },
-    } as Anthropic.MessageCreateParams;
-  }
-
-  return basePayload;
-};
-
-/**
- * Resolve cache-aware pricing options for usage cost calculation.
- */
-export const resolveDefaultAnthropicPricingOptions = (
-  requestPayload: ChatStreamPayload,
-  anthropicPayload: Anthropic.MessageCreateParams,
-): ComputeChatCostOptions | undefined => {
-  const cacheTTL = resolveCacheTTL(requestPayload, {
-    messages: anthropicPayload.messages,
-    system: anthropicPayload.system,
-  });
-
-  if (!cacheTTL) return undefined;
-
-  return { lookupParams: { ttl: cacheTTL } };
-};
 
 /**
  * Create Anthropic SDK client with optional beta headers.
@@ -476,18 +324,20 @@ export const createAnthropicCompatibleParams = <T extends Record<string, any> = 
   } as AnthropicCompatibleFactoryOptions<T>;
 };
 
-export const createAnthropicCompatibleRuntime = <T extends Record<string, any> = any>({
-  provider,
-  baseURL: DEFAULT_BASE_URL = DEFAULT_ANTHROPIC_BASE_URL,
-  apiKey: DEFAULT_API_KEY,
-  errorType,
-  debug: debugParams,
-  constructorOptions,
-  chatCompletion,
-  customClient,
-  models,
-  generateObject,
-}: AnthropicCompatibleFactoryOptions<T>) => {
+export const createAnthropicCompatibleRuntime = <T extends Record<string, any> = any>(
+  factory: AnthropicCompatibleFactoryOptions<T>,
+) => {
+  const {
+    provider,
+    baseURL: DEFAULT_BASE_URL = DEFAULT_ANTHROPIC_BASE_URL,
+    apiKey: DEFAULT_API_KEY,
+    errorType,
+    constructorOptions,
+    chatCompletion,
+    customClient,
+    models,
+    generateObject,
+  } = factory;
   const ErrorType = {
     bizError: errorType?.bizError || AgentRuntimeErrorType.ProviderBizError,
     invalidAPIKey: errorType?.invalidAPIKey || AgentRuntimeErrorType.InvalidProviderAPIKey,
@@ -566,228 +416,22 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       return { ...requestPayload, model: mappedModel };
     }
 
+    /** What the protocol modules read; built per call so it always reflects current state. */
+    private get context(): AnthropicCompatibleRuntimeContext {
+      return {
+        _options: this._options,
+        baseURL: this.baseURL,
+        client: this.client,
+        id: this.id,
+        logPrefix: this.logPrefix,
+        withMappedRequestModel: (payload, logicalModel) =>
+          this.withMappedRequestModel(payload, logicalModel),
+      };
+    }
+
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
-        if (!chatCompletion?.handlePayload) {
-          throw new Error('Anthropic-compatible runtime requires chatCompletion.handlePayload');
-        }
-
-        const log = debug(`${this.logPrefix}:chat`);
-        const inputStartAt = Date.now();
-
-        log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
-
-        const postPayload = await chatCompletion.handlePayload(payload, this._options);
-        const shouldStream = postPayload.stream ?? payload.stream ?? true;
-        const finalPayload = { ...postPayload, stream: shouldStream };
-        const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
-
-        // Re-apply the prefill guard against the ACTUAL request model:
-        // handlePayload stripped by the logical id, but a custom logical id the
-        // parser doesn't recognize can map to a Claude 4.6+/5 request model
-        // here. The strip is idempotent, so this is a no-op otherwise.
-        if (requestPayload.model && Array.isArray(requestPayload.messages)) {
-          requestPayload.messages = stripUnsupportedClaudeAssistantPrefill(
-            requestPayload.model,
-            requestPayload.messages,
-          );
-        }
-
-        // Same for disabled thinking: handlePayload resolved it by the logical id, but the
-        // mapped request model may be an always-thinking Claude that rejects `disabled` with a
-        // 400. Omitting the config is the documented fallback (see resolveClaudeThinkingConfig).
-        if (
-          requestPayload.model &&
-          (requestPayload as { thinking?: { type?: string } }).thinking?.type === 'disabled' &&
-          isAlwaysThinkingClaudeModel(requestPayload.model)
-        ) {
-          delete (requestPayload as { thinking?: unknown }).thinking;
-        }
-
-        const shouldDebugChatCompletion = debugParams?.chatCompletion?.() ?? false;
-        if (shouldDebugChatCompletion) {
-          debugPayload(requestPayload);
-        }
-
-        const providerRequestPayload = {
-          ...requestPayload,
-          metadata: options?.user ? { user_id: options.user } : undefined,
-        };
-        const providerRequestStartedAt = Date.now();
-        const providerResponseDiagnostics = initializeAnthropicDiagnostics({
-          diagnostics: options?.diagnostics,
-          endpoint: desensitizeUrl(this.baseURL),
-          payload: providerRequestPayload,
-          sentAt: providerRequestStartedAt,
-        });
-        const responsePromise = this.client.messages.create(providerRequestPayload, {
-          headers: options?.requestHeaders,
-          signal: options?.signal,
-        });
-        /**
-         * Custom Anthropic-compatible clients may return a plain Promise instead
-         * of the SDK's APIPromise. Prefer withResponse() for request IDs and safe
-         * headers, while preserving compatibility with those clients.
-         */
-        const responseWithMetadata =
-          typeof responsePromise.withResponse === 'function'
-            ? await responsePromise.withResponse()
-            : { data: await responsePromise };
-        const response = responseWithMetadata.data;
-        recordAnthropicResponseMetadata(providerResponseDiagnostics, {
-          requestId:
-            'request_id' in responseWithMetadata ? responseWithMetadata.request_id : undefined,
-          response: 'response' in responseWithMetadata ? responseWithMetadata.response : undefined,
-        });
-
-        const pricing = await getModelPricing(payload.model, this.id, options?.pricingContext);
-        const pricingOptions = await chatCompletion?.getPricingOptions?.(payload, postPayload);
-        const streamOptions = {
-          callbacks: options?.callback,
-          payload: {
-            apiMode: 'messages',
-            model: payload.model,
-            pricing,
-            pricingOptions,
-            provider: this.id,
-          },
-        } satisfies Pick<AnthropicStreamOptions, 'callbacks' | 'payload'>;
-
-        if (shouldStream) {
-          const streamResponse = response as
-            Stream<Anthropic.MessageStreamEvent> | ReadableStream<Anthropic.MessageStreamEvent>;
-          let prod: Stream<Anthropic.MessageStreamEvent> | ReadableStream = streamResponse;
-
-          if (shouldDebugChatCompletion) {
-            const [productionStream, useForDebug] = streamResponse.tee();
-            prod = productionStream;
-            const useForDebugStream =
-              useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
-
-            debugStream(useForDebugStream).catch(console.error);
-          }
-
-          if (providerResponseDiagnostics) {
-            /** Observe provider-native events before the protocol adapter transforms them. */
-            const observedStream = observeAnthropicStream(
-              prod,
-              providerResponseDiagnostics,
-              options?.signal,
-            );
-            prod =
-              observedStream instanceof ReadableStream
-                ? observedStream
-                : readableFromAsyncIterable(observedStream, {
-                    model: payload.model,
-                    provider: this.id,
-                  });
-          }
-
-          return StreamingResponse(
-            chatCompletion?.handleStream
-              ? chatCompletion.handleStream(prod, {
-                  callbacks: streamOptions.callbacks,
-                  inputStartAt,
-                  payload,
-                })
-              : AnthropicStream(prod, { ...streamOptions, inputStartAt }),
-            {
-              headers: options?.headers,
-            },
-          );
-        }
-
-        await recordAnthropicNonStreamingResponse(
-          providerResponseDiagnostics,
-          response as Anthropic.Message,
-          options?.signal,
-        );
-
-        const stream = new ReadableStream<Anthropic.MessageStreamEvent>({
-          start(controller) {
-            const message = response as Anthropic.Message;
-
-            controller.enqueue({
-              message,
-              type: 'message_start',
-            } satisfies Anthropic.MessageStreamEvent);
-
-            message.content?.forEach((block, index) => {
-              if (block.type === 'tool_use' || block.type === 'server_tool_use') {
-                controller.enqueue({
-                  content_block: block,
-                  index,
-                  type: 'content_block_start',
-                } satisfies Anthropic.MessageStreamEvent);
-
-                controller.enqueue({
-                  delta: {
-                    partial_json: JSON.stringify(block.input ?? {}),
-                    type: 'input_json_delta',
-                  },
-                  index,
-                  type: 'content_block_delta',
-                } satisfies Anthropic.MessageStreamEvent);
-              }
-
-              if (block.type === 'thinking' || block.type === 'redacted_thinking') {
-                controller.enqueue({
-                  content_block: block,
-                  index,
-                  type: 'content_block_start',
-                } satisfies Anthropic.MessageStreamEvent);
-              }
-
-              if (block.type === 'text') {
-                controller.enqueue({
-                  delta: { text: block.text, type: 'text_delta' },
-                  index,
-                  type: 'content_block_delta',
-                } satisfies Anthropic.MessageStreamEvent);
-              }
-            });
-
-            controller.enqueue({
-              delta: {
-                stop_reason: message.stop_reason,
-                stop_sequence: message.stop_sequence ?? null,
-              },
-              type: 'message_delta',
-              usage: {
-                cache_creation_input_tokens: message.usage?.cache_creation_input_tokens ?? null,
-                cache_read_input_tokens: message.usage?.cache_read_input_tokens ?? null,
-                input_tokens: message.usage?.input_tokens ?? null,
-                // `message_delta.usage` is cumulative, so it repeats the full output count.
-                output_tokens: message.usage?.output_tokens ?? 0,
-                server_tool_use: message.usage?.server_tool_use ?? null,
-              },
-            } satisfies Anthropic.MessageStreamEvent);
-
-            controller.enqueue({ type: 'message_stop' } satisfies Anthropic.MessageStreamEvent);
-            controller.close();
-          },
-        });
-
-        const streamingResponse = StreamingResponse(
-          chatCompletion?.handleStream
-            ? chatCompletion.handleStream(stream, {
-                callbacks: streamOptions.callbacks,
-                inputStartAt,
-                payload,
-              })
-            : AnthropicStream(stream, {
-                ...streamOptions,
-                enableStreaming: false,
-                inputStartAt,
-              }),
-          {
-            headers: options?.headers,
-          },
-        );
-
-        if (payload.responseMode === 'json')
-          return await respondJsonAfterStream(streamingResponse, response);
-        return streamingResponse;
+        return await chatViaMessages(this.context, factory, payload, options);
       } catch (error) {
         throw this.handleError(error);
       }
