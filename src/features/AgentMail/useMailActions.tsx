@@ -160,8 +160,16 @@ export const useMailActions = ({
 
     const failedById = new Map<string, MailListItem>();
     const values: R[] = [];
+    // Tracked apart from the rows: with nothing loaded to act on, a failed
+    // preparation would otherwise leave no failed row and read as success.
+    let prepareFailed = false;
     try {
-      await prepare?.();
+      try {
+        await prepare?.();
+      } catch (error) {
+        prepareFailed = true;
+        throw error;
+      }
       const results = await Promise.allSettled(
         batches.map(({ batch, folder }) =>
           call({ conversationIn: folder, ids: batch.map((item) => item.id) }),
@@ -180,10 +188,11 @@ export const useMailActions = ({
     }
     const failed = [...failedById.values()];
 
-    if (failed.length > 0) {
+    if (failed.length > 0 || prepareFailed) {
       // The row goes back first, so the toast describes what is on screen.
       mailWriteActions.end(writeId);
-      failureToast(failure, failed.length, items.length, () => retry(failed));
+      if (prepareFailed) failureToast(failure, 1, 1, () => retry(items));
+      else failureToast(failure, failed.length, items.length, () => retry(failed));
       void refresh().catch(() => undefined);
     } else {
       // Held until the refresh lands, or the row flickers back to its old state.

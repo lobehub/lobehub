@@ -474,6 +474,26 @@ describe('AgentMail list', () => {
   const within = async (label: string) =>
     (await firstRow()).querySelector(`[aria-label="${label}"]`) as HTMLElement;
 
+  it('reports a failed mark-all-read even when no unread row is loaded', async () => {
+    // The unread mail sits beyond the loaded page, so no loaded row is affected.
+    service.listMail.mockResolvedValue([row('msg_a', 'For A', { isUnread: false })]);
+    service.getMailAccountCounts.mockImplementation(async (accountIds: string[]) =>
+      accountIds.map((accountId) => ({ accountId, drafts: 0, unread: 5 })),
+    );
+    service.markAllInboxRead.mockRejectedValue(new Error('down'));
+    page();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'identity.mailbox.action.markAllRead' }),
+    );
+
+    await waitFor(() => expect(toastApi.error).toHaveBeenCalledTimes(1));
+    expect(toastApi.error.mock.calls[0][0]).toMatchObject({
+      actions: [{ label: 'identity.mailbox.retry' }],
+      title: 'identity.mailbox.failed.markRead',
+    });
+  });
+
   it('lists the view named in the URL', async () => {
     service.listMail.mockResolvedValue([row('msg_s', 'Sent one', { direction: 'outbound' })]);
     page('/agent/agt_1/mail?folder=sent');
