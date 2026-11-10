@@ -35,6 +35,7 @@ import HunyuanProvider from './hunyuan';
 import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
 import JinaProvider from './jina';
+import JZSTOKENProvider from './jzstoken';
 import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
@@ -197,6 +198,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   UpstageProvider,
   SuperGrokProvider,
   JinaProvider,
+  JZSTOKENProvider,
   SambaNovaProvider,
   CohereProvider,
   V0Provider,
@@ -339,6 +341,7 @@ export { default as HunyuanProviderCard } from './hunyuan';
 export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
 export { default as JinaProviderCard } from './jina';
+export { default as JZSTOKENProviderCard } from './jzstoken';
 export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
