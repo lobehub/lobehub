@@ -7,7 +7,6 @@ import { debugPayload, debugResponse, debugStream } from '../../../utils/debugSt
 import { desensitizeUrl } from '../../../utils/desensitizeUrl';
 import { getModelPricing } from '../../../utils/getModelPricing';
 import { StreamingResponse } from '../../../utils/response';
-import { convertOpenAIResponseInputs } from '../../contextBuilders/openai';
 import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
 import type {
   OpenAICompatibleFactoryOptions,
@@ -25,6 +24,7 @@ import {
 import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { readableFromAsyncIterable } from '../../streams/protocol';
 import type { OpenAIStreamOptions } from '../openaiChatCompletions/stream';
+import { convertOpenAIResponseInputs } from './inputs';
 import { OpenAIResponsesStream } from './stream';
 import { convertChatCompletionToolToResponseTool, stripChatCompletionParameters } from './tools';
 

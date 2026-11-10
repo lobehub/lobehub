@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { convertOpenAIMessages } from './openai';
+import { convertOpenAIMessages } from './messages';
 
 /**
  * Moonshot (official API and Novita) rejects `{ type: 'text', text: '' }` with 400

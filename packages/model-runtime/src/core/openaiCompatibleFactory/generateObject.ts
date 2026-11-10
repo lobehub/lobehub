@@ -5,7 +5,8 @@ import type { ChatCompletionTool, GenerateObjectOptions, GenerateObjectPayload }
 import { AgentRuntimeErrorType } from '../../types/error';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { detectModelProvider } from '../../utils/modelParse';
-import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
+import { convertOpenAIMessages } from '../protocols/openaiChatCompletions/messages';
+import { convertOpenAIResponseInputs } from '../protocols/openaiResponses/inputs';
 import { convertChatCompletionToolToResponseTool } from '../protocols/openaiResponses/tools';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';

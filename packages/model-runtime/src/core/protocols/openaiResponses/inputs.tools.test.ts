@@ -1,7 +1,7 @@
 import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
-import { convertOpenAIResponseInputs } from './openai';
+import { convertOpenAIResponseInputs } from './inputs';
 
 export const nativeTools: OpenAI.Responses.Tool[] = [
   {

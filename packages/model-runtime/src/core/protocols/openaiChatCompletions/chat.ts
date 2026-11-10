@@ -8,7 +8,6 @@ import { debugPayload, debugResponse, debugStream } from '../../../utils/debugSt
 import { desensitizeUrl } from '../../../utils/desensitizeUrl';
 import { getModelPricing } from '../../../utils/getModelPricing';
 import { StreamingResponse } from '../../../utils/response';
-import { convertOpenAIMessages } from '../../contextBuilders/openai';
 import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
 import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatibleFactory/factoryOptions';
 import { transformResponseToStream } from '../../openaiCompatibleFactory/nonStreamToStream';
@@ -21,6 +20,7 @@ import {
 } from '../../openaiCompatibleFactory/providerDiagnostics';
 import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { readableFromAsyncIterable } from '../../streams/protocol';
+import { convertOpenAIMessages } from './messages';
 import type { OpenAIStreamOptions } from './stream';
 import { OpenAIStream } from './stream';
 
