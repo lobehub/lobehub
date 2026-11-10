@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Collapsible,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Spin,
+  Text,
+} from '@lobehub/ui';
 import {
   ChevronRight,
   ChevronsDownUp,
@@ -14,7 +22,6 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
   checkDisplayTitle,
@@ -26,18 +33,20 @@ import {
   useAcceptanceBundle,
   useAcceptanceBySubject,
 } from '@/features/Acceptance';
-import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/AcceptanceCheckInventory';
-import AcceptanceDecision from '@/features/Acceptance/Viewer/AcceptanceDecision';
 import {
   AcceptanceBundleGate,
   AcceptanceScope,
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
+import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
+import AcceptanceDecision from '@/features/Acceptance/Viewer/Review/AcceptanceDecision';
+import { openAcceptanceDeleteConfirm } from '@/features/Acceptance/Workspace/AcceptanceDeleteConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { useVerifyStore } from '@/store/verify';
 
 import GoalRoundTimeline from './GoalRoundTimeline';
 import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
@@ -128,6 +137,8 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
+  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
@@ -138,7 +149,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     error: subjectError,
     isLoading: subjectLoading,
     mutate: mutateSubject,
-  } = useAcceptanceBySubject('task', taskDatabaseId ?? null);
+  } = useAcceptanceBySubject('task', automationMode ? null : (taskDatabaseId ?? null));
   const {
     data: bundle,
     error: bundleError,
@@ -175,7 +186,12 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const groupKeys = groups.map((group) => group.key);
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
-  if (subjectLoading) return <NeuralNetworkLoading size={28} />;
+  // A recurring task (schedule / heartbeat) never gets a verify plan on the
+  // server — its ticks are not deliveries. Offering the Verifier config or an
+  // acceptance section here would advertise a contract that never runs.
+  if (automationMode) return null;
+
+  if (subjectLoading) return <Spin size="middle" />;
   // Before the first Acceptance round exists, the configured criteria ARE the
   // delivery acceptance. Keep them in this single slot; once a round exists,
   // replace the definitions with their live/result projection below.
@@ -191,20 +207,21 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // to recreate it on the next run.
   const handleRemoveAcceptance = () => {
     if (!acceptanceSubject || !taskId) return;
-    confirmModal({
-      content: t('taskDetail.acceptance.removeConfirm.content'),
-      okButtonProps: { danger: true },
-      okText: t('taskDetail.acceptance.removeConfirm.ok'),
-      onOk: async () => {
+    openAcceptanceDeleteConfirm({
+      description: t('taskDetail.acceptance.removeConfirm.content'),
+      ids: [acceptanceSubject.id],
+      title: taskName || requirement || t('taskDetail.acceptance.untitled'),
+      onDelete: async (purge) => {
         await useTaskStore.getState().updateVerifyConfig(taskId, {
           enabled: false,
           requirement: null,
           verifyCriteriaIds: null,
         });
-        await verifyService.deleteAcceptance(acceptanceSubject.id);
+        await verifyService.deleteAcceptance(acceptanceSubject.id, purge);
+        useVerifyStore.getState().removeAcceptancesFromLists([acceptanceSubject.id]);
+        void useVerifyStore.getState().refreshAcceptanceLists();
         await mutateSubject();
       },
-      title: t('taskDetail.acceptance.removeConfirm.title'),
     });
   };
 
@@ -275,10 +292,10 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   return (
     <Flexbox gap={8}>
       {header}
-      {sectionExpanded && (
+      <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
-          {bundleLoading && <NeuralNetworkLoading size={28} />}
-          {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
+          {bundleLoading && <Spin size="middle" />}
+          {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
             <>
               <GoalRoundTimeline rounds={bundle.rounds} />
@@ -381,7 +398,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
             </>
           )}
         </Flexbox>
-      )}
+      </Collapsible>
     </Flexbox>
   );
 });

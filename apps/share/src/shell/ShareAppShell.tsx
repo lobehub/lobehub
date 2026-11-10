@@ -1,7 +1,6 @@
 'use client';
 
-import { ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui/base-ui';
-import { StyleProvider } from 'antd-style';
+import { ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui';
 import { memo, type PropsWithChildren } from 'react';
 
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
@@ -38,9 +37,7 @@ const ShareAppShell = memo<ShareAppShellProps>((props) => {
           featureFlags={serverConfig?.featureFlags}
           serverConfig={serverConfig?.config}
         >
-          <TooltipGroup layoutAnimation={false}>
-            <StyleProvider speedy={import.meta.env.PROD}>{children}</StyleProvider>
-          </TooltipGroup>
+          <TooltipGroup layoutAnimation={false}>{children}</TooltipGroup>
           <ModalHost />
           <ToastHost />
         </ServerConfigStoreProvider>

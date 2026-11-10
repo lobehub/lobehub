@@ -1,13 +1,14 @@
 'use client';
 
 import { builtinTools } from '@lobechat/builtin-tools';
-import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import type { BuiltinToolManifest, LobeChatPluginApi } from '@lobechat/types';
 
 import type { ToolRenderFixture } from '../lifecycleMode';
 import { buildSchemaSample, humanize, single, type ToolsetFixtureModule } from './_helpers';
 import claudeCode from './claude-code';
 import codex from './codex';
+import devin from './devin';
 import github from './github';
 import kimiCode from './kimi-code';
 import linear from './linear';
@@ -32,6 +33,7 @@ import lobeUserInteraction from './lobe-user-interaction';
 import lobeUserMemory from './lobe-user-memory';
 import lobeWebBrowsing from './lobe-web-browsing';
 import lobeWebOnboarding from './lobe-web-onboarding';
+import { lobeAuv } from './lobeAuv';
 
 export type { ToolRenderFixture, ToolRenderFixtureVariant } from '../lifecycleMode';
 
@@ -56,7 +58,7 @@ export const DEVTOOLS_AGENT_ID = 'devtools-render-gallery';
 
 export const DEVTOOLS_AGENT_META = {
   avatar: DEFAULT_INBOX_AVATAR,
-  title: 'Lobe AI',
+  title: DEFAULT_INBOX_TITLE,
 };
 
 export const DEVTOOLS_GROUP_DETAIL = {
@@ -84,6 +86,7 @@ export const DEVTOOLS_GROUP_DETAIL = {
 const toolsetModules: ToolsetFixtureModule[] = [
   claudeCode,
   codex,
+  devin,
   github,
   kimiCode,
   linear,
@@ -92,6 +95,7 @@ const toolsetModules: ToolsetFixtureModule[] = [
   lobeAgentBuilder,
   lobeAgentDocuments,
   lobeAgentManagement,
+  lobeAuv,
   lobeBrowser,
   lobeCloudSandbox,
   lobeGroupAgentBuilder,

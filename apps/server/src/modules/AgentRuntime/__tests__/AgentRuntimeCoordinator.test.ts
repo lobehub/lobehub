@@ -1,8 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentRuntimeCoordinatorOptions } from '../AgentRuntimeCoordinator';
 import { AgentRuntimeCoordinator } from '../AgentRuntimeCoordinator';
 import { createAgentStateManager, createStreamEventManager } from '../factory';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
+
+const resolverOptions = (
+  stateManager: AgentRuntimeCoordinatorOptions['stateManager'],
+  streamEventManager: AgentRuntimeCoordinatorOptions['streamEventManager'],
+  uiMessagesResolver: AgentRuntimeCoordinatorOptions['uiMessagesResolver'],
+) => ({
+  stateManager,
+  streamEventManager,
+  uiMessagesResolver,
+});
 
 // Mock factory module to avoid Redis/env access
 vi.mock('../factory', () => ({
@@ -31,6 +42,8 @@ describe('AgentRuntimeCoordinator', () => {
       isInterrupted: vi.fn(),
       loadAgentState: vi.fn(),
       markInterrupted: vi.fn(),
+      hasQueuedMessages: vi.fn(),
+      setQueuedMessages: vi.fn(),
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
     };
@@ -72,6 +85,25 @@ describe('AgentRuntimeCoordinator', () => {
       expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, data);
       expect(mockStateManager.getOperationMetadata).toHaveBeenCalledWith(operationId);
       expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, metadata);
+    });
+
+    it('adds the routing meta to the init event without persisting it', async () => {
+      const operationId = 'test-operation-id';
+      const data = { userId: 'user-123' };
+      const metadata = { createdAt: '2024-01-01T00:00:00.000Z', status: 'idle', ...data };
+      mockStateManager.getOperationMetadata.mockResolvedValue(metadata);
+
+      await coordinator.createAgentOperation(operationId, data, {
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
+
+      expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, data);
+      expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, {
+        ...metadata,
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
     });
 
     it('should not publish init event if metadata creation fails', async () => {
@@ -590,11 +622,9 @@ describe('AgentRuntimeCoordinator', () => {
             resolveUiMessages = resolve;
           }),
       );
-      const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        stateManager: mockStateManager,
-        streamEventManager: mockStreamManager,
-        uiMessagesResolver: resolver,
-      });
+      const coordinatorWithResolver = new AgentRuntimeCoordinator(
+        resolverOptions(mockStateManager, mockStreamManager, resolver),
+      );
 
       const previousState = { status: 'running', stepCount: 3 };
       const newState = { status: 'done', stepCount: 5 };
@@ -620,11 +650,9 @@ describe('AgentRuntimeCoordinator', () => {
     it('passes resolver result through saveAgentState terminal publish', async () => {
       const uiMessages = [{ id: 'msg_1', role: 'user' }] as any[];
       const resolver = vi.fn().mockResolvedValue(uiMessages);
-      const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        stateManager: mockStateManager,
-        streamEventManager: mockStreamManager,
-        uiMessagesResolver: resolver,
-      });
+      const coordinatorWithResolver = new AgentRuntimeCoordinator(
+        resolverOptions(mockStateManager, mockStreamManager, resolver),
+      );
 
       const previousState = { status: 'running', stepCount: 3 };
       const newState = { status: 'done', stepCount: 5 };
@@ -645,11 +673,9 @@ describe('AgentRuntimeCoordinator', () => {
     it('passes resolver result through saveStepResult terminal publish', async () => {
       const uiMessages = [{ id: 'msg_a', role: 'assistantGroup' }] as any[];
       const resolver = vi.fn().mockResolvedValue(uiMessages);
-      const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        stateManager: mockStateManager,
-        streamEventManager: mockStreamManager,
-        uiMessagesResolver: resolver,
-      });
+      const coordinatorWithResolver = new AgentRuntimeCoordinator(
+        resolverOptions(mockStateManager, mockStreamManager, resolver),
+      );
 
       const stepResult = {
         executionTime: 100,
@@ -670,13 +696,38 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
-    it('publishes with uiMessages=undefined when resolver rejects (must never fail the surrounding save)', async () => {
-      const resolver = vi.fn().mockRejectedValue(new Error('db down'));
+    it('marks a protocol-v2 patched terminal event with its expected revision', async () => {
       const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        messagePatchModeResolver: vi.fn().mockReturnValue(true),
         stateManager: mockStateManager,
         streamEventManager: mockStreamManager,
-        uiMessagesResolver: resolver,
+        uiMessagesResolver: vi.fn().mockResolvedValue(undefined),
       });
+      const stepResult = {
+        executionTime: 100,
+        newState: { status: 'done', stepCount: 4 },
+        stepIndex: 4,
+      };
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinatorWithResolver.saveStepResult('op-patch', stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-patch',
+        reason: 'done',
+        stepIndex: 4,
+        uiMessages: undefined,
+      });
+    });
+
+    it('publishes with uiMessages=undefined when resolver rejects (must never fail the surrounding save)', async () => {
+      const resolver = vi.fn().mockRejectedValue(new Error('db down'));
+      const coordinatorWithResolver = new AgentRuntimeCoordinator(
+        resolverOptions(mockStateManager, mockStreamManager, resolver),
+      );
 
       const previousState = { status: 'running', stepCount: 3 };
       const newState = { status: 'error', stepCount: 5 };
@@ -720,11 +771,9 @@ describe('AgentRuntimeCoordinator', () => {
     // content, so the resolver is skipped entirely for status='interrupted'.
     it('skips uiMessages on saveAgentState when status=interrupted', async () => {
       const resolver = vi.fn().mockResolvedValue([{ id: 'placeholder', role: 'assistant' }]);
-      const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        stateManager: mockStateManager,
-        streamEventManager: mockStreamManager,
-        uiMessagesResolver: resolver,
-      });
+      const coordinatorWithResolver = new AgentRuntimeCoordinator(
+        resolverOptions(mockStateManager, mockStreamManager, resolver),
+      );
 
       const previousState = { status: 'running', stepCount: 3 };
       const newState = { status: 'interrupted', stepCount: 3 };
@@ -746,11 +795,9 @@ describe('AgentRuntimeCoordinator', () => {
 
     it('skips uiMessages on saveStepResult when stepResult.newState.status=interrupted', async () => {
       const resolver = vi.fn().mockResolvedValue([{ id: 'placeholder', role: 'assistant' }]);
-      const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        stateManager: mockStateManager,
-        streamEventManager: mockStreamManager,
-        uiMessagesResolver: resolver,
-      });
+      const coordinatorWithResolver = new AgentRuntimeCoordinator(
+        resolverOptions(mockStateManager, mockStreamManager, resolver),
+      );
 
       const stepResult = {
         executionTime: 100,

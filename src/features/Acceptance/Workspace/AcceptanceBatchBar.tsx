@@ -1,25 +1,26 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, DropdownMenu } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAcceptanceProjectMenu } from './useAcceptanceProjectMenuItem';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    flex: none;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    flex: 'none',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface AcceptanceBatchBarProps {
   /** Selected rows the accept sweep can actually move. */
@@ -65,7 +66,7 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
     });
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.bar} gap={6}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.bar).className} gap={6}>
         <Button
           disabled={pending || acceptCount === 0}
           icon={CircleCheck}

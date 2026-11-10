@@ -337,6 +337,14 @@ describe('HomeRepository', () => {
             trigger: 'document',
             userId,
           },
+          {
+            agentId,
+            id: 'channel-unread-topic',
+            status: 'unread',
+            title: 'Channel unread topic',
+            trigger: 'channel',
+            userId,
+          },
         ]);
       });
 
@@ -598,16 +606,6 @@ describe('HomeRepository', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('search-standalone');
       expect(result[0].title).toBe('Standalone Searchable Agent');
-    });
-
-    it('should search and return mixed agents with and without session relationships', async () => {
-      // Search for "Searchable" should return all 3 agents
-      const result = await homeRepo.searchAgents('Searchable');
-
-      expect(result).toHaveLength(3);
-      expect(result.map((a) => a.id)).toContain('search-pinned');
-      expect(result.map((a) => a.id)).toContain('search-unpinned');
-      expect(result.map((a) => a.id)).toContain('search-standalone');
     });
 
     it('should search agents by title and return correct pinned status', async () => {

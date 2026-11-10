@@ -2,26 +2,67 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { messages, sessions, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { ChatErrorType } from '@lobechat/types';
+import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { SessionModel } from '@/database/models/session';
 
 import { messageRouter } from '../../message';
 import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 // Mock FileService to avoid S3 initialization issues in tests
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockResolvedValue('mock-url'),
-    deleteFile: vi.fn().mockResolvedValue(undefined),
-    deleteFiles: vi.fn().mockResolvedValue(undefined),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockResolvedValue('mock-url'),
+      deleteFile: vi.fn().mockResolvedValue(undefined),
+      deleteFiles: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // We need to mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
+
+const firstSessionMessage = (
+  testSessionId: string,
+): Parameters<ReturnType<typeof messageRouter.createCaller>['createMessage']>[0] => ({
+  content: 'Message 1',
+  role: 'user',
+  sessionId: testSessionId,
+});
+
+const assistantSessionMessage = (
+  testSessionId: string,
+): Parameters<ReturnType<typeof messageRouter.createCaller>['createMessage']>[0] => ({
+  content: 'Message 2',
+  role: 'assistant',
+  sessionId: testSessionId,
+});
+
+const secondSessionMessage = (
+  testSessionId: string,
+): Parameters<ReturnType<typeof messageRouter.createCaller>['createMessage']>[0] => ({
+  content: 'Message 2',
+  role: 'user',
+  sessionId: testSessionId,
+});
+
+const topicMessageInput = (
+  testSessionId: string,
+  testTopicId: string,
+): Parameters<ReturnType<typeof messageRouter.createCaller>['createMessage']>[0] => ({
+  content: 'Message in topic',
+  role: 'user',
+  sessionId: testSessionId,
+  topicId: testTopicId,
+});
 
 /**
  * Message Router Integration Tests
@@ -317,17 +358,9 @@ describe('Message Router Integration Tests', () => {
         const caller = messageRouter.createCaller(createTestContext(userId));
 
         // Create two messages
-        const msg1 = await caller.createMessage({
-          content: 'Message 1',
-          role: 'user',
-          sessionId: testSessionId,
-        });
+        const msg1 = await caller.createMessage(firstSessionMessage(testSessionId));
 
-        const msg2 = await caller.createMessage({
-          content: 'Message 2',
-          role: 'user',
-          sessionId: testSessionId,
-        });
+        const msg2 = await caller.createMessage(secondSessionMessage(testSessionId));
 
         // Delete message using agentId
         const result = await caller.removeMessage({
@@ -345,17 +378,9 @@ describe('Message Router Integration Tests', () => {
       it('should remove multiple messages using agentId', async () => {
         const caller = messageRouter.createCaller(createTestContext(userId));
 
-        const msg1 = await caller.createMessage({
-          content: 'Message 1',
-          role: 'user',
-          sessionId: testSessionId,
-        });
+        const msg1 = await caller.createMessage(firstSessionMessage(testSessionId));
 
-        const msg2 = await caller.createMessage({
-          content: 'Message 2',
-          role: 'user',
-          sessionId: testSessionId,
-        });
+        const msg2 = await caller.createMessage(secondSessionMessage(testSessionId));
 
         const msg3 = await caller.createMessage({
           content: 'Message 3',
@@ -405,17 +430,9 @@ describe('Message Router Integration Tests', () => {
       it('should remove messages by assistant using agentId', async () => {
         const caller = messageRouter.createCaller(createTestContext(userId));
 
-        await caller.createMessage({
-          content: 'Message 1',
-          role: 'user',
-          sessionId: testSessionId,
-        });
+        await caller.createMessage(firstSessionMessage(testSessionId));
 
-        await caller.createMessage({
-          content: 'Message 2',
-          role: 'assistant',
-          sessionId: testSessionId,
-        });
+        await caller.createMessage(assistantSessionMessage(testSessionId));
 
         // Delete all messages in the session using agentId
         await caller.removeMessagesByAssistant({
@@ -434,12 +451,7 @@ describe('Message Router Integration Tests', () => {
         const caller = messageRouter.createCaller(createTestContext(userId));
 
         // Create a message in the topic
-        await caller.createMessage({
-          content: 'Message in topic',
-          role: 'user',
-          sessionId: testSessionId,
-          topicId: testTopicId,
-        });
+        await caller.createMessage(topicMessageInput(testSessionId, testTopicId));
 
         // Create a message in the session (outside the topic)
         const msgOutside = await caller.createMessage({
@@ -519,26 +531,12 @@ describe('Message Router Integration Tests', () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create multiple messages
-      const msg1Result = await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg1Result = await caller.createMessage(firstSessionMessage(testSessionId));
 
-      const msg2Result = await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
+      const msg2Result = await caller.createMessage(assistantSessionMessage(testSessionId));
 
-      // Create messages for another session
-      const [anotherSession] = await serverDB
-        .insert(sessions)
-        .values({
-          userId,
-          type: 'agent',
-        })
-        .returning();
+      // A legacy session context includes its Agent and relationship.
+      const anotherSession = await new SessionModel(serverDB, userId).create({ type: 'agent' });
 
       await caller.createMessage({
         content: 'Message in another session',
@@ -560,12 +558,9 @@ describe('Message Router Integration Tests', () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create a message in the topic
-      const msgInTopicResult = await caller.createMessage({
-        content: 'Message in topic',
-        role: 'user',
-        sessionId: testSessionId,
-        topicId: testTopicId,
-      });
+      const msgInTopicResult = await caller.createMessage(
+        topicMessageInput(testSessionId, testTopicId),
+      );
 
       // Create a message in the session (outside the topic)
       await caller.createMessage({
@@ -792,50 +787,168 @@ describe('Message Router Integration Tests', () => {
     });
   });
 
+  describe('getMessagesByCursor', () => {
+    const seedTwoRounds = async (topicId: string, workspaceId?: string) => {
+      await serverDB.insert(messages).values(
+        [
+          ['cur-u1', 'user', '2024-01-01T00:00:00.000Z'],
+          ['cur-a1', 'assistant', '2024-01-01T00:00:01.000Z'],
+          ['cur-u2', 'user', '2024-01-01T00:00:02.000Z'],
+          ['cur-a2', 'assistant', '2024-01-01T00:00:03.000Z'],
+        ].map(([id, role, at]) => ({
+          content: id,
+          createdAt: new Date(at),
+          id,
+          role,
+          topicId,
+          userId,
+          workspaceId,
+        })),
+      );
+    };
+
+    it('pages rounds newest-first via nextCursor', async () => {
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({ title: 'Cursor Topic', userId })
+        .returning();
+      await seedTwoRounds(topic.id);
+
+      const caller = messageRouter.createCaller(createTestContext(userId));
+
+      const newest = await caller.getMessagesByCursor({ roundLimit: 1, topicId: topic.id });
+      expect(newest.messages.map((m) => m.id)).toEqual(['cur-u2', 'cur-a2']);
+      expect(newest.hasMore).toBe(true);
+
+      const older = await caller.getMessagesByCursor({
+        cursor: newest.nextCursor,
+        roundLimit: 1,
+        topicId: topic.id,
+      });
+      expect(older.messages.map((m) => m.id)).toEqual(['cur-u1', 'cur-a1']);
+      expect(older.hasMore).toBe(false);
+      expect(older.nextCursor).toBeNull();
+    });
+
+    it('requires topicId when no topicShareId is given', async () => {
+      const caller = messageRouter.createCaller(createTestContext(userId));
+
+      await expect(caller.getMessagesByCursor({})).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    });
+
+    it.each([
+      { countBudget: 2001 },
+      { countBudget: -1 },
+      { countBudget: 1.5 },
+      { roundLimit: 0 },
+      { roundLimit: 1001 },
+    ])('rejects an out-of-range scan budget %o', async (bounds) => {
+      const caller = messageRouter.createCaller(createTestContext(userId));
+
+      await expect(
+        caller.getMessagesByCursor({ ...bounds, topicId: testTopicId }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it.each([
+      { createdAt: 'not-a-date', id: 'cur-u2' },
+      { createdAt: '2024-01-01 00:00:02', id: 'cur-u2' },
+      { createdAt: '2024-01-01T00:00:02.000000Z', id: '' },
+    ])('rejects a malformed cursor %o as BAD_REQUEST', async (cursor) => {
+      const caller = messageRouter.createCaller(createTestContext(userId));
+
+      await expect(
+        caller.getMessagesByCursor({ cursor, topicId: testTopicId }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('accepts the microsecond cursor format that nextCursor emits', async () => {
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({ title: 'Cursor Format Topic', userId })
+        .returning();
+      await seedTwoRounds(topic.id);
+
+      const caller = messageRouter.createCaller(createTestContext(userId));
+      const newest = await caller.getMessagesByCursor({ roundLimit: 1, topicId: topic.id });
+      expect(newest.nextCursor?.createdAt).toMatch(/\.\d{6}Z$/);
+
+      const older = await caller.getMessagesByCursor({
+        cursor: newest.nextCursor,
+        roundLimit: 1,
+        topicId: topic.id,
+      });
+      expect(older.messages.map((m) => m.id)).toEqual(['cur-u1', 'cur-a1']);
+    });
+
+    it('serves a link share from topicShareId alone, with visitor-safe errors', async () => {
+      const { topicShares } = await import('@/database/schemas');
+
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({ title: 'Shared Cursor Topic', userId })
+        .returning();
+      await seedTwoRounds(topic.id);
+      await serverDB
+        .update(messages)
+        .set({ error: { body: { secret: 'provider-key', traceId: 't1' }, type: 'InvalidAPIKey' } })
+        .where(eq(messages.id, 'cur-a2'));
+
+      const [share] = await serverDB
+        .insert(topicShares)
+        .values({ topicId: topic.id, userId, visibility: 'link' })
+        .returning();
+
+      const visitorId = await createTestUser(serverDB);
+      const caller = messageRouter.createCaller(createTestContext(visitorId));
+
+      const page = await caller.getMessagesByCursor({ topicShareId: share.id });
+
+      expect(page.messages.map((m) => m.id)).toEqual(['cur-u1', 'cur-a1', 'cur-u2', 'cur-a2']);
+      expect(page.messages.find((m) => m.id === 'cur-a2')?.error).toEqual({
+        body: { traceId: 't1' },
+        type: ChatErrorType.InternalServerError,
+      });
+
+      await cleanupTestUser(serverDB, visitorId);
+    });
+  });
+
   describe('removeMessages', () => {
     it('should remove multiple messages', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create messages
-      const msg1Result = await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg1Result = await caller.createMessage(firstSessionMessage(testSessionId));
 
-      const msg2Result = await caller.createMessage({
-        content: 'Message 2',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg2Result = await caller.createMessage(secondSessionMessage(testSessionId));
 
       // Delete messages
       await caller.removeMessages({ ids: [msg1Result.id, msg2Result.id] });
 
-      // Verify messages were deleted
+      // Recycle bin: rows are stamped (hidden from reads), not dropped.
       const remainingMessages = await serverDB
         .select()
         .from(messages)
-        .where(eq(messages.agentId, testAgentId));
-
+        .where(and(eq(messages.agentId, testAgentId), isNull(messages.deletedAt)));
       expect(remainingMessages).toHaveLength(0);
+      const stamped = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.agentId, testAgentId));
+      expect(stamped).toHaveLength(2);
+      expect(await caller.getMessages({ sessionId: testSessionId })).toHaveLength(0);
     });
 
     it('should return message list when sessionId is provided', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create messages
-      const msg1Result = await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg1Result = await caller.createMessage(firstSessionMessage(testSessionId));
 
-      const msg2Result = await caller.createMessage({
-        content: 'Message 2',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg2Result = await caller.createMessage(secondSessionMessage(testSessionId));
 
       const msg3Result = await caller.createMessage({
         content: 'Message 3',
@@ -870,28 +983,21 @@ describe('Message Router Integration Tests', () => {
       await caller.removeMessage({ id: msgResult.id });
 
       // Verify messages were deleted
-      const deletedMessage = await serverDB
+      // Recycle bin: still on disk with a stamp, invisible to reads.
+      const [deletedMessage] = await serverDB
         .select()
         .from(messages)
         .where(eq(messages.id, msgResult.id));
-
-      expect(deletedMessage).toHaveLength(0);
+      expect(deletedMessage.deletedAt).toBeTruthy();
+      expect(await caller.getMessages({ sessionId: testSessionId })).toHaveLength(0);
     });
 
     it('should return message list when sessionId is provided', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
-      const msg1Result = await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg1Result = await caller.createMessage(firstSessionMessage(testSessionId));
 
-      const msg2Result = await caller.createMessage({
-        content: 'Message 2',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg2Result = await caller.createMessage(secondSessionMessage(testSessionId));
 
       const result = await caller.removeMessage({
         id: msg1Result.id,
@@ -943,17 +1049,9 @@ describe('Message Router Integration Tests', () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create multiple messages
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(firstSessionMessage(testSessionId));
 
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(assistantSessionMessage(testSessionId));
 
       // Delete all messages in the session
       await caller.removeMessagesByAssistant({
@@ -973,12 +1071,7 @@ describe('Message Router Integration Tests', () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create a message in the topic
-      await caller.createMessage({
-        content: 'Message in topic',
-        role: 'user',
-        sessionId: testSessionId,
-        topicId: testTopicId,
-      });
+      await caller.createMessage(topicMessageInput(testSessionId, testTopicId));
 
       // Create a message in the session (outside the topic)
       const msgOutsideTopicResult = await caller.createMessage({
@@ -1069,17 +1162,9 @@ describe('Message Router Integration Tests', () => {
     it('should update message and return message list when sessionId is provided', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
-      const msg1 = await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      const msg1 = await caller.createMessage(firstSessionMessage(testSessionId));
 
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(secondSessionMessage(testSessionId));
 
       const result = await caller.update({
         id: msg1.id,
@@ -1219,11 +1304,7 @@ describe('Message Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(assistantSessionMessage(testSessionId));
 
       // Create required dependencies: chunks -> messageQueries
       const { chunks, messageQueries } = await import('@/database/schemas');
@@ -1337,11 +1418,7 @@ describe('Message Router Integration Tests', () => {
         type: 'default',
       });
 
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(assistantSessionMessage(testSessionId));
 
       const result = await caller.updatePluginError({
         id: msg1.id,
@@ -1557,17 +1634,9 @@ describe('Message Router Integration Tests', () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create some messages
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(firstSessionMessage(testSessionId));
 
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(assistantSessionMessage(testSessionId));
 
       const heatmaps = await caller.getHeatmaps();
 
@@ -1602,17 +1671,9 @@ describe('Message Router Integration Tests', () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
       // Create message
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(firstSessionMessage(testSessionId));
 
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(assistantSessionMessage(testSessionId));
 
       const count = await caller.count();
 
@@ -1622,11 +1683,7 @@ describe('Message Router Integration Tests', () => {
     it('should count messages with date range', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
+      await caller.createMessage(firstSessionMessage(testSessionId));
 
       const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const endDate = new Date().toISOString();

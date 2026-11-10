@@ -48,6 +48,48 @@ describe('OIDC HTTP adapter', () => {
   });
 
   describe('createNodeRequest', () => {
+    it('hands discovery to the provider route it hardcodes', async () => {
+      const request = new Request(
+        'https://example.com/oidc/.well-known/openid-configuration',
+      ) as unknown as NextRequest;
+
+      const { createNodeRequest } = await import('./http-adapter');
+      const nodeRequest = await createNodeRequest(request);
+
+      expect(nodeRequest.url).toBe('/.well-known/openid-configuration');
+    });
+
+    it('leaves the prefixed routes untouched', async () => {
+      const { createNodeRequest } = await import('./http-adapter');
+
+      for (const path of ['/oidc/jwks', '/oidc/me', '/oidc/auth', '/oidc/token']) {
+        const request = new Request(`https://example.com${path}`) as unknown as NextRequest;
+        const nodeRequest = await createNodeRequest(request);
+
+        expect(nodeRequest.url).toBe(path);
+      }
+    });
+
+    it('pins the host to APP_URL even when a proxy forwards another domain', async () => {
+      const request = new Request('https://lobehub-cloud-next-stable.vercel.app/oidc/device/auth', {
+        headers: {
+          'host': 'lobehub-cloud-next-stable.vercel.app',
+          'x-forwarded-host': 'lobehub-cloud-next-stable.vercel.app',
+          'x-forwarded-proto': 'http',
+        },
+        method: 'POST',
+      }) as unknown as NextRequest;
+
+      const { createNodeRequest } = await import('./http-adapter');
+      const nodeRequest = await createNodeRequest(request);
+
+      expect(nodeRequest.headers).toMatchObject({
+        'host': 'example.com',
+        'x-forwarded-host': 'example.com',
+        'x-forwarded-proto': 'https',
+      });
+    });
+
     it('passes POST bodies through as a readable Node stream without pre-parsing', async () => {
       const body = 'grant_type=authorization_code&code=test-code';
       const request = new Request('https://example.com/oidc/token?client_id=test', {

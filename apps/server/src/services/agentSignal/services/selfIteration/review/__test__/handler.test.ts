@@ -114,6 +114,9 @@ describe('nightly review source handler', () => {
     );
     expect(deps.collectContext).toHaveBeenCalledWith({
       agentId: 'agent-1',
+      // The reviewed local date rides along so receipt lookback can start from the
+      // nightly run that actually exists instead of the window end's future day.
+      localDate: '2026-05-04',
       reviewWindowEnd: reviewPayload.reviewWindowEnd,
       reviewWindowStart: reviewPayload.reviewWindowStart,
       userId: 'user-1',
@@ -147,6 +150,58 @@ describe('nightly review source handler', () => {
         userId: 'user-1',
       }),
     );
+  });
+
+  /**
+   * Once earlier agents used up the user's 50 nightly topics, a later agent whose topics were
+   * all refused is skipped instead of reviewing an empty context.
+   */
+  it('skips the review when the nightly topic quota refused every topic', async () => {
+    const deps = createDependencies({
+      collectContext: vi.fn(async () => ({
+        ...reviewContext,
+        topicQuota: { admittedTopicCount: 0, reason: 'exhausted' as const, refusedTopicCount: 3 },
+      })),
+    });
+
+    const result = await createNightlyReviewSourceHandler(deps).handle(createReviewSource());
+
+    expect(deps.dispatch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      detail: 'Nightly review topic limit reached (50 topics per night).',
+      reason: 'topic_quota_exhausted',
+      status: ReviewRunStatus.Skipped,
+    });
+  });
+
+  it("asks the run to write proposals in the owner's response language", async () => {
+    const resolveResponseLanguage = vi.fn(async () => 'zh-CN');
+    const deps = createDependencies({ resolveResponseLanguage });
+
+    await createNightlyReviewSourceHandler(deps).handle(createReviewSource());
+
+    expect(resolveResponseLanguage).toHaveBeenCalledWith(deps.db, 'user-1');
+    expect(deps.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining(
+          "Write every user-visible field in the user's language (zh-CN)",
+        ),
+      }),
+    );
+  });
+
+  it('still dispatches when the quota admitted some of the topics', async () => {
+    const deps = createDependencies({
+      collectContext: vi.fn(async () => ({
+        ...reviewContext,
+        topicQuota: { admittedTopicCount: 1, reason: 'exhausted' as const, refusedTopicCount: 2 },
+      })),
+    });
+
+    const result = await createNightlyReviewSourceHandler(deps).handle(createReviewSource());
+
+    expect(deps.dispatch).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ status: ReviewRunStatus.Dispatched });
   });
 
   it('returns skipped without acquiring the guard when gates reject the review', async () => {

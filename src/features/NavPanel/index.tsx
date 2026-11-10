@@ -9,6 +9,7 @@ import {
   NavSideBarSkeleton,
 } from './components/SideBarSkeleton';
 import { NAV_PANEL_RIGHT_DRAWER_ID } from './constants';
+import { NAV_PANEL_HIDDEN_KEY } from './railRouteKey';
 import { getNavPanelRegistrySnapshot, subscribeNavPanelRegistry } from './registry';
 import { useActiveNavKey } from './useActiveNavKey';
 
@@ -18,19 +19,28 @@ const NavPanelFallback = memo<{ navKey: string }>(({ navKey }) => (
 
 const NavPanel = memo(() => {
   const activeNavKey = useActiveNavKey();
-  const registry = useSyncExternalStore(
+  const getActiveContent = () => getNavPanelRegistrySnapshot().get(activeNavKey);
+  const registeredContent = useSyncExternalStore(
     subscribeNavPanelRegistry,
-    getNavPanelRegistrySnapshot,
-    getNavPanelRegistrySnapshot,
+    getActiveContent,
+    getActiveContent,
   );
-  const registeredContent = registry.get(activeNavKey);
   const activeContent = registeredContent
     ? { key: activeNavKey, node: registeredContent.node }
     : { key: `pending:${activeNavKey}`, node: <NavPanelFallback navKey={activeNavKey} /> };
+  const getHomeContent = () => getNavPanelRegistrySnapshot().get('home')?.node;
+  const homeContent = useSyncExternalStore(
+    subscribeNavPanelRegistry,
+    getHomeContent,
+    getHomeContent,
+  );
+
+  // Full-page tabs (tasks, goals, project index) render without a list column.
+  const hidden = activeNavKey === NAV_PANEL_HIDDEN_KEY;
 
   return (
     <>
-      <NavPanelDraggable activeContent={activeContent} />
+      {!hidden && <NavPanelDraggable activeContent={activeContent} homeContent={homeContent} />}
       <div
         id={NAV_PANEL_RIGHT_DRAWER_ID}
         style={{

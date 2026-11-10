@@ -1,27 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { getHeterogeneousAgentDriver } from '../index';
-import type {
-  HeterogeneousAgentBuildPlanHelpers,
-  HeterogeneousAgentBuildPlanParams,
-  PrepareProviderBindingContext,
-} from '../types';
+import type { PrepareProviderBindingContext } from '../types';
 import { piDriver, sanitizePiProviderBindingArgs } from './pi';
-
-const buildAgentInput = vi.fn(async () => ({
-  args: ['@/tmp/image.png'],
-  stdin: 'raw prompt',
-}));
-const helpers: HeterogeneousAgentBuildPlanHelpers = { buildAgentInput };
-
-const buildParams = (
-  overrides: Partial<HeterogeneousAgentBuildPlanParams> = {},
-): HeterogeneousAgentBuildPlanParams => ({
-  args: [],
-  helpers,
-  promptInput: 'raw prompt',
-  ...overrides,
-});
 
 const bindingContext = (
   protocol: PrepareProviderBindingContext['resolution']['protocol'] = 'openai-chat-completions',
@@ -112,26 +93,41 @@ describe('piDriver', () => {
     expect(content).not.toContain('stale-token');
   });
 
-  it('is registered and composes base, resume, configured, and input args in order', async () => {
+  it('describes a server-default model to Pi from the deployment card', async () => {
+    const plan = await piDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'kimi-k3',
+      modelDescriptor: {
+        abilities: { reasoning: true, vision: true },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        maxOutput: 32_768,
+        model: 'kimi-k3',
+        nativeResponses: false,
+      },
+      profileDir: '/managed/pi',
+    });
+    const config = JSON.parse(plan.profileFiles?.[0]?.content ?? '{}');
+
+    expect(config.providers['lobehub-server-default'].models).toEqual([
+      {
+        contextWindow: 262_144,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+        id: 'lobehub/kimi-k3',
+        input: ['text', 'image'],
+        maxTokens: 32_768,
+        name: 'Kimi K3',
+        reasoning: true,
+      },
+    ]);
+  });
+
+  it('is registered but rejects the legacy CLI spawn plan — pi is RPC-only', async () => {
     expect(getHeterogeneousAgentDriver('pi')).toBe(piDriver);
 
-    const plan = await piDriver.buildSpawnPlan(
-      buildParams({ args: ['--provider', 'anthropic'], resumeSessionId: 'pi-session-exact' }),
-    );
-
-    expect(buildAgentInput).toHaveBeenCalledWith('pi', 'raw prompt');
-    expect(plan).toEqual({
-      args: [
-        '--mode',
-        'json',
-        '--session-id',
-        'pi-session-exact',
-        '--provider',
-        'anthropic',
-        '@/tmp/image.png',
-      ],
-      stdinPayload: 'raw prompt',
-    });
+    await expect(piDriver.buildSpawnPlan({} as any)).rejects.toThrow(/RPC transport only/);
   });
 
   it.each([
@@ -184,23 +180,6 @@ describe('piDriver', () => {
     });
     expect(content).not.toContain('bound-key');
     expect(content).not.toContain('argv-secret');
-
-    const spawnPlan = await piDriver.buildSpawnPlan(
-      buildParams({ args: plan.args, resumeSessionId: 'pi-session-exact' }),
-    );
-    expect(spawnPlan.args).toEqual([
-      '--mode',
-      'json',
-      '--session-id',
-      'pi-session-exact',
-      '--provider',
-      'lobehub-profile-digest',
-      '--model',
-      'vendor/model-test',
-      '--thinking',
-      'high',
-      '@/tmp/image.png',
-    ]);
   });
 
   it('uses conservative Pi metadata defaults when server model metadata is unavailable', async () => {
@@ -248,17 +227,13 @@ describe('piDriver', () => {
     context.args = ['--', '--provider', 'message-provider'];
 
     const plan = await piDriver.prepareProviderBinding!(context);
-    const spawnPlan = await piDriver.buildSpawnPlan(buildParams({ args: plan.args }));
 
-    expect(spawnPlan.args).toEqual([
-      '--mode',
-      'json',
+    expect(plan.args).toEqual([
       '--provider',
       'lobehub-profile-digest',
       '--model',
       'vendor/model-test',
       '--',
-      '@/tmp/image.png',
     ]);
   });
 

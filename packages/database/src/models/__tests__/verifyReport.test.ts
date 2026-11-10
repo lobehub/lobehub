@@ -8,6 +8,17 @@ import { AgentOperationModel } from '../agentOperation';
 import { VerifyReportModel } from '../verifyReport';
 import { VerifyRunModel } from '../verifyRun';
 
+const createPassedReport = (
+  verifyRunId: string,
+): Parameters<VerifyReportModel['upsertByRun']>[0] => ({
+  failedChecks: 0,
+  passedChecks: 1,
+  totalChecks: 1,
+  uncertainChecks: 0,
+  verdict: 'passed',
+  verifyRunId,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'verify-report-test-user';
@@ -134,14 +145,7 @@ describe('VerifyReportModel', () => {
 
   it('marks a report reviewed by its run', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    await model.upsertByRun(createPassedReport(verifyRunId));
 
     await model.markReviewed(verifyRunId);
     expect((await model.findByRun(verifyRunId))?.reviewedByUser).toBe(true);
@@ -149,14 +153,7 @@ describe('VerifyReportModel', () => {
 
   it('survives deletion of the linked Agent Run (decoupled from agent_operations)', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    await model.upsertByRun({
-      failedChecks: 0,
-      passedChecks: 1,
-      totalChecks: 1,
-      uncertainChecks: 0,
-      verdict: 'passed',
-      verifyRunId,
-    });
+    await model.upsertByRun(createPassedReport(verifyRunId));
 
     // Deleting the operation only nulls verify_runs.operation_id; the session and
     // its report live on.
@@ -166,16 +163,100 @@ describe('VerifyReportModel', () => {
 
   it('cascades when its verification session is removed', async () => {
     const model = new VerifyReportModel(serverDB, userId);
-    await model.upsertByRun({
+    await model.upsertByRun(createPassedReport(verifyRunId));
+
+    await new VerifyRunModel(serverDB, userId).delete(verifyRunId);
+    expect(await model.findByRun(verifyRunId)).toBeUndefined();
+  });
+
+  it('reads a report by id and hides it from other users', async () => {
+    const model = new VerifyReportModel(serverDB, userId);
+    const created = await model.upsertByRun(createPassedReport(verifyRunId));
+
+    expect((await model.findById(created.id))?.id).toBe(created.id);
+    expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+    expect(
+      await new VerifyReportModel(serverDB, 'someone-else').findById(created.id),
+    ).toBeUndefined();
+  });
+
+  it('reads the reports of several rounds in one query', async () => {
+    const model = new VerifyReportModel(serverDB, userId);
+    const secondOperationId = 'verify-report-test-op-2';
+
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: secondOperationId });
+    const secondRun = await new VerifyRunModel(serverDB, userId).ensureForOperation(
+      secondOperationId,
+    );
+
+    const first = await model.upsertByRun(createPassedReport(verifyRunId));
+    const second = await model.upsertByRun({
+      failedChecks: 1,
+      passedChecks: 0,
+      totalChecks: 1,
+      uncertainChecks: 0,
+      verdict: 'failed',
+      verifyRunId: secondRun.id,
+    });
+
+    // an empty round chain short-circuits instead of querying
+    expect(await model.findByRuns([])).toEqual([]);
+    expect(await new VerifyReportModel(serverDB, 'someone-else').findByRuns([verifyRunId])).toEqual(
+      [],
+    );
+
+    const reports = await model.findByRuns([verifyRunId, secondRun.id]);
+    expect(reports.map((report) => report.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it('updates and deletes a report it owns', async () => {
+    const model = new VerifyReportModel(serverDB, userId);
+    const created = await model.upsertByRun({
       failedChecks: 0,
       passedChecks: 1,
+      summary: 'Original summary',
       totalChecks: 1,
       uncertainChecks: 0,
       verdict: 'passed',
       verifyRunId,
     });
 
-    await new VerifyRunModel(serverDB, userId).delete(verifyRunId);
-    expect(await model.findByRun(verifyRunId)).toBeUndefined();
+    await model.update(created.id, { summary: 'Edited by hand' });
+    expect((await model.findById(created.id))?.summary).toBe('Edited by hand');
+
+    await model.delete(created.id);
+    expect(await model.findById(created.id)).toBeUndefined();
+  });
+
+  describe('upsert conflict guard', () => {
+    // The conflicting row is excluded by the ownership `setWhere`, so no row comes
+    // back. Drive that path with a stubbed driver — `assertRunOwned` sees the run.
+    const createStubDB = (ownedRunIds: string[]) => {
+      const stub = {
+        insert: () => ({
+          values: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }),
+        }),
+        select: () => ({
+          from: () => ({ where: () => ({ limit: async () => ownedRunIds.map((id) => ({ id })) }) }),
+        }),
+      };
+
+      return stub as unknown as LobeChatDatabase;
+    };
+
+    it('throws when the conflicting report is out of the caller scope', async () => {
+      const model = new VerifyReportModel(createStubDB(['stub-run']), userId);
+
+      await expect(
+        model.upsertByRun({
+          failedChecks: 0,
+          passedChecks: 1,
+          totalChecks: 1,
+          uncertainChecks: 0,
+          verdict: 'passed',
+          verifyRunId: 'stub-run',
+        }),
+      ).rejects.toThrow('not found in the current workspace');
+    });
   });
 });

@@ -46,10 +46,9 @@ describe('extractToolKeyword', () => {
       );
     });
 
-    it('truncates long queries', () => {
+    it('keeps long queries intact for CSS truncation', () => {
       const query = 'a'.repeat(50);
-      const keyword = extractToolKeyword({ query });
-      expect(keyword).toBe('a'.repeat(32) + '…');
+      expect(extractToolKeyword({ query })).toBe(query);
     });
   });
 

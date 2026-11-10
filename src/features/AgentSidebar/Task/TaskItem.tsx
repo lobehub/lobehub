@@ -1,7 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import { useNavigateToTaskDetail } from '@/features/AgentTasks/shared/taskDetailPath';
@@ -19,8 +18,8 @@ const TaskItem = memo<TaskItemProps>(({ task, active }) => {
   const navigateToTaskDetail = useNavigateToTaskDetail();
 
   const handleClick = useCallback(() => {
-    navigateToTaskDetail(task.identifier);
-  }, [navigateToTaskDetail, task.identifier]);
+    navigateToTaskDetail(task.identifier, undefined, task.name);
+  }, [navigateToTaskDetail, task.identifier, task.name]);
 
   const hasName = Boolean(task.name?.trim());
   const displayTitle = hasName ? task.name : task.identifier;

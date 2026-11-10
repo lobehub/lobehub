@@ -1,6 +1,4 @@
-import { Flexbox, Popover } from '@lobehub/ui';
-import { Select, Switch, Tag } from '@lobehub/ui/base-ui';
-import { Space, theme, Typography } from 'antd';
+import { cssVar, Flexbox, Popover, Select, Switch, Tag, Text } from '@lobehub/ui';
 import { type ExtendParamsType } from 'model-bank';
 import { memo, type ReactNode, type SyntheticEvent, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -21,6 +19,7 @@ import { GPT56ReasoningEffortSlider } from '@/features/ModelSwitchPanel/componen
 import Grok43ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok43ReasoningEffortSlider';
 import Grok45ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok45ReasoningEffortSlider';
 import Grok46ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok46ReasoningEffortSlider';
+import Grok47ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok47ReasoningEffortSlider';
 import Grok420ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Grok420ReasoningEffortSlider';
 import Hy3ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Hy3ReasoningEffortSlider';
 import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatio2Select';
@@ -157,6 +156,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'grok4_6ReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_7ReasoningEffort.hint',
+    key: 'grok4_7ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint',
     key: 'hy3ReasoningEffort',
   },
@@ -244,6 +247,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   grok4_3ReasoningEffort: 'reasoningEffort',
   grok4_5ReasoningEffort: 'reasoningEffort',
   grok4_6ReasoningEffort: 'reasoningEffort',
+  grok4_7ReasoningEffort: 'reasoningEffort',
   hy3ReasoningEffort: 'reasoningEffort',
   kimiK3ReasoningEffort: 'reasoningEffort',
   qwen38ReasoningEffort: 'reasoningEffort',
@@ -324,6 +328,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   },
   grok4_6ReasoningEffort: {
     labelSuffix: ' (Grok 4.6)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
+  grok4_7ReasoningEffort: {
+    labelSuffix: ' (Grok 4.7)',
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
@@ -423,7 +432,6 @@ const PreviewContent = ({
   previewFallback: string;
   previewWidth?: number;
 }) => {
-  const { token } = theme.useToken();
   const containerStyle = previewWidth
     ? { minWidth: previewWidth, width: previewWidth }
     : { minWidth: 240 };
@@ -445,35 +453,35 @@ const PreviewContent = ({
       onPointerUpCapture={stop}
     >
       <Flexbox gap={12} style={containerStyle}>
-        <Typography.Text style={{ whiteSpace: 'normal' }} type={'secondary'}>
+        <Text type={'secondary'} whiteSpace={'normal'}>
           {hint}
-        </Typography.Text>
+        </Text>
         <Flexbox gap={12}>
           <Flexbox
             gap={8}
             style={{
-              background: token.colorBgElevated,
-              border: `1px solid ${token.colorBorderSecondary}`,
+              background: cssVar.colorBgElevated,
+              border: `1px solid ${cssVar.colorBorderSecondary}`,
               borderRadius: 10,
               padding: 12,
               width: previewWidth,
             }}
           >
             <Flexbox horizontal align={'center'} gap={8}>
-              <Typography.Text strong>{label}</Typography.Text>
+              <Text strong>{label}</Text>
               {parameterTag ? <Tag color={'cyan'}>{parameterTag}</Tag> : null}
             </Flexbox>
             {desc ? (
-              <Typography.Text style={{ fontSize: 12, whiteSpace: 'normal' }} type={'secondary'}>
+              <Text fontSize={12} type={'secondary'} whiteSpace={'normal'}>
                 {desc}
-              </Typography.Text>
+              </Text>
             ) : null}
             {preview ? (
               <div aria-hidden style={{ opacity: 0.72, pointerEvents: 'none', width: '100%' }}>
                 {preview}
               </div>
             ) : (
-              <Typography.Text type={'secondary'}>{previewFallback}</Typography.Text>
+              <Text type={'secondary'}>{previewFallback}</Text>
             )}
           </Flexbox>
         </Flexbox>
@@ -510,6 +518,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       grok4_3ReasoningEffort: <Grok43ReasoningEffortSlider value="low" />,
       grok4_5ReasoningEffort: <Grok45ReasoningEffortSlider value="high" />,
       grok4_6ReasoningEffort: <Grok46ReasoningEffortSlider value="high" />,
+      grok4_7ReasoningEffort: <Grok47ReasoningEffortSlider value="high" />,
       hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
       kimiK3ReasoningEffort: <KimiK3ReasoningEffortSlider value="max" />,
       ring2_6ReasoningEffort: <Ring26ReasoningEffortSlider value="high" />,
@@ -650,10 +659,10 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
               }
             >
               <Flexbox gap={4}>
-                <Typography.Text>{def.label}</Typography.Text>
-                <Typography.Text style={{ fontSize: 12 }} type={'secondary'}>
+                <Text>{def.label}</Text>
+                <Text fontSize={12} type={'secondary'}>
                   {def.hint}
-                </Typography.Text>
+                </Text>
               </Flexbox>
             </Popover>
           );
@@ -661,7 +670,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
         onChange={(val) => handleChange(val as ExtendParamsType[])}
       />
       {value && value.length > 0 && (
-        <Space wrap size={[8, 8]}>
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
           {value.map((key) => {
             const def = definitionMap.get(key);
             if (!def) return null;
@@ -685,7 +694,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
               </Popover>
             );
           })}
-        </Space>
+        </Flexbox>
       )}
     </Flexbox>
   );

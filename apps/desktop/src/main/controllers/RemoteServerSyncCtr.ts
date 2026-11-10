@@ -12,6 +12,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 
 import { defaultProxySettings } from '@/const/store';
 import { appendVercelCookie } from '@/utils/http-headers';
+import { describeJwtClaims } from '@/utils/jwt-claims';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
@@ -126,6 +127,11 @@ export default class RemoteServerSyncCtr extends ControllerModule {
 
     const clientReq = requester.request(requestOptions, (clientRes: IncomingMessage) => {
       logger.debug(`${logPrefix} Received response with status ${clientRes.statusCode}`);
+      if (clientRes.statusCode === 401 || clientRes.statusCode === 403) {
+        logger.info(
+          `${logPrefix} auth response status=${clientRes.statusCode} authRequired=${clientRes.headers['x-auth-required'] === 'true'} authFailure=${clientRes.headers['x-auth-failure'] ?? ''} ${describeJwtClaims(accessToken)}`,
+        );
+      }
 
       // Add debug information
       logger.debug(`${logPrefix} Response details:`, {

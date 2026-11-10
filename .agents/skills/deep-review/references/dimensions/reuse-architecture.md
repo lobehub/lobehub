@@ -33,7 +33,7 @@ Reuse operates at three levels, and AI-authored diffs most often fail at the upp
 - `.agents/skills/project-overview/SKILL.md` — layer map: what belongs in apps/packages/src
 - `.agents/skills/spa-routes/SKILL.md` — roots vs features split
 - `.agents/skills/data-fetching-architecture/SKILL.md` — the canonical cross-layer route for server data (component → store SWR hook → service → `lambdaClient`)
-- `.agents/skills/store-data-structures/SKILL.md`, `.agents/skills/zustand/SKILL.md` — store shape and action patterns when the diff touches stores
+- `.agents/skills/zustand/SKILL.md` and its `references/data-structures.md` — store shape and action patterns when the diff touches stores
 - Category pattern skills when the diff's category has one (`modal`, `trpc-router`, `builtin-tool`, `drizzle`, ...) — check `.agents/skills/` for a skill matching the touched domain; when one exists it is the yardstick, cite it in `rule_source`
 
 ## How to check
@@ -61,7 +61,7 @@ Three passes — precedent, outward, inward:
 
 1. Identify the pipeline and list the candidate layers where this fix could live.
 2. Ask: is the root cause specific to one variant (one provider, one platform, one client) or common to the whole class?
-3. Variant-specific → the fix belongs in the variant's own layer: a DeepSeek parameter quirk goes in `packages/model-runtime/src/providers/deepseek/`, not in the shared `core/openaiCompatibleFactory/` where it would branch for every provider. Class-wide → the fix belongs in the shared layer, not replicated at one call site.
+3. Variant-specific → the fix belongs in the variant's own layer: a DeepSeek parameter quirk goes in `packages/model-runtime/src/providers/deepseek/`, not in the shared `core/openaiCompatible/` where it would branch for every provider. Class-wide → the fix belongs in the shared layer, not replicated at one call site.
 4. Check the shared layer's existing extension points first (factory options, hooks, per-variant config) — the repo usually already provides a seam for variant behavior; adding an `if (variant === ...)` branch to shared code when a seam exists is the violation.
 
 Large-repo fallback: if a single `rg` exceeds \~30s, restrict to the changed files' top-level directories plus the default reuse sources.

@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 const mockTopicFindOwnTopicById = vi.fn();
@@ -18,18 +20,31 @@ const mockTopicDuplicate = vi.fn();
 const mockTopicSettleRunningOperation = vi.fn();
 const mockTopicUpdate = vi.fn();
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({
-    batchCreate: mockTopicBatchCreate,
-    batchMoveToAgent: mockTopicBatchMoveToAgent,
-    create: mockTopicCreate,
-    delete: mockTopicDelete,
-    duplicate: mockTopicDuplicate,
-    findOwnersByIds: mockTopicFindOwnersByIds,
-    findOwnTopicById: mockTopicFindOwnTopicById,
-    findShareVisitorTopicIds: mockTopicFindShareVisitorTopicIds,
-    settleRunningOperation: mockTopicSettleRunningOperation,
-    update: mockTopicUpdate,
-  })),
+  TopicModel: vi.fn(function () {
+    return {
+      create: mockTopicCreate,
+      delete: mockTopicDelete,
+      findOwnersByIds: mockTopicFindOwnersByIds,
+      findOwnTopicById: mockTopicFindOwnTopicById,
+      findShareVisitorTopicIds: mockTopicFindShareVisitorTopicIds,
+      settleRunningOperation: mockTopicSettleRunningOperation,
+      update: mockTopicUpdate,
+    };
+  }),
+}));
+
+// Cross-aggregate topic writes (create with messages, batch create, clone/fork,
+// move) go through TopicRepository; share the spies so guard tests still prove
+// the write never ran.
+vi.mock('@/database/repositories/topic', () => ({
+  TopicRepository: vi.fn(function () {
+    return {
+      batchCreate: mockTopicBatchCreate,
+      batchMoveToAgent: mockTopicBatchMoveToAgent,
+      create: mockTopicCreate,
+      duplicate: mockTopicDuplicate,
+    };
+  }),
 }));
 
 const mockMessageFindShareVisitorMessageIds = vi.fn();
@@ -37,12 +52,15 @@ const mockMessageDeleteMessagesBySession = vi.fn();
 const mockMessageUpdateTTS = vi.fn();
 const mockMessageUpdateTranslate = vi.fn();
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    deleteMessagesBySession: mockMessageDeleteMessagesBySession,
-    findShareVisitorMessageIds: mockMessageFindShareVisitorMessageIds,
-    updateTTS: mockMessageUpdateTTS,
-    updateTranslate: mockMessageUpdateTranslate,
-  })),
+  MESSAGE_KEYWORD_SEARCH_MAX_LIMIT: 100,
+  MessageModel: vi.fn(function () {
+    return {
+      deleteMessagesBySession: mockMessageDeleteMessagesBySession,
+      findShareVisitorMessageIds: mockMessageFindShareVisitorMessageIds,
+      updateTTS: mockMessageUpdateTTS,
+      updateTranslate: mockMessageUpdateTranslate,
+    };
+  }),
 }));
 
 const mockServiceAddFilesToMessage = vi.fn();
@@ -56,38 +74,57 @@ const mockServiceUpdateMessageGroupMetadata = vi.fn();
 const mockServiceUpdateMessagePlugin = vi.fn();
 const mockServiceUpdateToolArguments = vi.fn();
 vi.mock('@/server/services/message', () => ({
-  MessageService: vi.fn(() => ({
-    addFilesToMessage: mockServiceAddFilesToMessage,
-    batchMutate: mockServiceBatchMutate,
-    cancelCompression: mockServiceCancelCompression,
-    createCompressionGroup: mockServiceCreateCompressionGroup,
-    createMessage: mockServiceCreateMessage,
-    finalizeCompression: mockServiceFinalizeCompression,
-    updateMessage: mockServiceUpdateMessage,
-    updateMessageGroupMetadata: mockServiceUpdateMessageGroupMetadata,
-    updateMessagePlugin: mockServiceUpdateMessagePlugin,
-    updateToolArguments: mockServiceUpdateToolArguments,
-  })),
+  MessageService: vi.fn(function () {
+    return {
+      addFilesToMessage: mockServiceAddFilesToMessage,
+      batchMutate: mockServiceBatchMutate,
+      cancelCompression: mockServiceCancelCompression,
+      createCompressionGroup: mockServiceCreateCompressionGroup,
+      createMessage: mockServiceCreateMessage,
+      finalizeCompression: mockServiceFinalizeCompression,
+      updateMessage: mockServiceUpdateMessage,
+      updateMessageGroupMetadata: mockServiceUpdateMessageGroupMetadata,
+      updateMessagePlugin: mockServiceUpdateMessagePlugin,
+      updateToolArguments: mockServiceUpdateToolArguments,
+    };
+  }),
 }));
 
 const mockFindDeletableFilesByTopicId = vi.fn();
 const mockFileDeleteMany = vi.fn();
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({
-    deleteMany: mockFileDeleteMany,
-    findDeletableFilesByTopicId: mockFindDeletableFilesByTopicId,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      deleteMany: mockFileDeleteMany,
+      findDeletableFilesByTopicId: mockFindDeletableFilesByTopicId,
+    };
+  }),
+}));
+
+// removeTopic moves the topic to the recycle bin; attachments flagged with
+// `removeFiles` are only dropped when that bin row is purged.
+const mockTrashTopics = vi.fn();
+vi.mock('@/server/services/trash', () => ({
+  TrashService: vi.fn(function () {
+    return { trashTopics: mockTrashTopics };
+  }),
 }));
 
 const mockDeleteFiles = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ deleteFiles: mockDeleteFiles })),
+  FileService: vi.fn(function () {
+    return { deleteFiles: mockDeleteFiles };
+  }),
 }));
 
-// Topic creation canonicalizes agent/session through the DB; the guard under
+// Creation canonicalizes agent/session through the DB; the guard under
 // test runs after that step, so short-circuit it.
 vi.mock('../_helpers/resolveContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  resolveContext: vi.fn(async (input: { agentId?: string; topicId?: string }) => ({
+    ...input,
+    sessionId: 'session-1',
+  })),
   resolveContextWithAgentId: vi.fn(async (input: { agentId?: string }) => ({
     agentId: input.agentId,
     sessionId: 'session-1',
@@ -123,23 +160,25 @@ describe('agent-share visitor guards on creator-facing RPCs', () => {
   });
 
   describe('topic.removeTopic', () => {
-    it('does not delete attachments when the id is a visitor topic', async () => {
-      // The visitor topic is invisible to `findOwnTopicById`, and
-      // `TopicModel.delete` refuses to remove it — so its files must survive.
+    it('neither trashes nor touches attachments when the id is a visitor topic', async () => {
+      // The visitor topic is invisible to `findOwnTopicById`, so it must not
+      // reach the recycle bin and its files must survive.
       mockTopicFindOwnTopicById.mockResolvedValue(undefined);
 
       await topicCaller().removeTopic({ id: visitorTopicId, removeFiles: true });
 
+      expect(mockTrashTopics).not.toHaveBeenCalled();
       expect(mockFindDeletableFilesByTopicId).not.toHaveBeenCalled();
       expect(mockFileDeleteMany).not.toHaveBeenCalled();
       expect(mockDeleteFiles).not.toHaveBeenCalled();
     });
 
-    it('still deletes attachments of the creator’s own topic', async () => {
+    it('moves the creator’s own topic to the bin with its attachment removal deferred to purge', async () => {
       await topicCaller().removeTopic({ id: 'topic-1', removeFiles: true });
 
-      expect(mockFindDeletableFilesByTopicId).toHaveBeenCalledWith('topic-1');
-      expect(mockDeleteFiles).toHaveBeenCalledWith(['s3://file-1']);
+      expect(mockTrashTopics).toHaveBeenCalledWith(['topic-1'], { removeFiles: true });
+      // nothing is dropped from storage until the bin row is purged
+      expect(mockDeleteFiles).not.toHaveBeenCalled();
     });
   });
 

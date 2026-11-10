@@ -1,16 +1,32 @@
 import { spawn } from 'node:child_process';
 
 import {
+  listDefaultClaudeLogin,
+  resolveClaudeAccountSpawnEnv,
+} from '@lobechat/device-control/claude-code-account-routing';
+import {
+  buildClaudeCodeEntrypointEnv,
   buildHeteroExecStdinPayload,
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
   type HeteroExecImageRef,
+  stripInheritedRunIdentity,
 } from '@lobechat/heterogeneous-agents/protocol';
+import type { ClaudeCodeAccountRouting } from '@lobechat/heterogeneous-agents/quota';
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
 
+import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
+import { registerAgentRun } from './agentRunRegistry';
+
 export interface SpawnHeteroAgentRunParams {
+  agentId?: string;
   agentType: string;
   /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
   assistantMessageId?: string;
+  /** Claude Code account the server routed this run to. */
+  claudeAccountRouting?: ClaudeCodeAccountRouting;
+  /** Entrypoint name the agent asked Claude Code to report. */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
@@ -54,6 +70,26 @@ interface SpawnHeteroAgentRunLogger {
  */
 export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
+  logger?: SpawnHeteroAgentRunLogger,
+): Promise<AgentRunAckResult> {
+  if (!params.claudeAccountRouting) return startHeteroAgentRun(params, {}, logger);
+
+  // A plain CLI device holds one Claude Code login (the one `claude` uses
+  // here), so routing either confirms it or rejects a run pinned elsewhere.
+  const inheritedEnv = stripInheritedRunIdentity(process.env);
+  return resolveClaudeAccountSpawnEnv(params.claudeAccountRouting, {
+    inheritedEnv,
+    listLogins: () => listDefaultClaudeLogin(inheritedEnv),
+  }).then((account) => {
+    if (account.kind === 'spawn') return startHeteroAgentRun(params, account.env, logger);
+    logger?.error?.(`hetero exec rejected (op=${params.operationId}): ${account.reason}`);
+    return { reason: account.reason, status: 'rejected' as const };
+  });
+}
+
+function startHeteroAgentRun(
+  params: SpawnHeteroAgentRunParams,
+  accountEnv: Record<string, string>,
   logger?: SpawnHeteroAgentRunLogger,
 ): Promise<AgentRunAckResult> {
   const {
@@ -106,10 +142,15 @@ export function spawnHeteroAgentRun(
   // coerceJsonPrompt.
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList,
+    isNewSession: !resumeSessionId,
     prompt,
     resumeFallbackSystemContext,
     systemContext,
   });
+
+  // A connector can itself be started inside another agent run. Its ambient
+  // identity (and JWT file) belongs to that ancestor, not this dispatched run.
+  const childEnv = stripInheritedRunIdentity(process.env);
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;
@@ -119,19 +160,49 @@ export function spawnHeteroAgentRun(
       resolve(result);
     };
 
+    let pid: number | undefined;
     const child = spawn(process.execPath, [...process.execArgv, ...cliArgs], {
       cwd: spawnCwd,
+      detached: true,
       env: {
-        ...process.env,
+        ...childEnv,
+        ...(params.agentId ? { LOBEHUB_AGENT_ID: params.agentId } : {}),
         ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
+        [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
         LOBEHUB_JWT: jwt,
+        LOBEHUB_OPERATION_ID: operationId,
         LOBEHUB_SERVER: serverUrl,
+        LOBEHUB_TOPIC_ID: topicId,
         ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
+        ...accountEnv,
+        ...(agentType === 'claude-code'
+          ? buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)
+          : {}),
       },
       stdio: ['pipe', 'inherit', 'inherit'],
+      windowsHide: true,
     });
 
     child.once('spawn', () => {
+      registerAgentRun(operationId, child);
+      // Register the child into the task registry so `cancelHeteroTask`
+      // dispatched from the server can resolve it by operationId and signal
+      // the whole process group. `detached: true` places the CLI in its own
+      // group; the inherited-group env contract keeps its agent descendants
+      // in that same group without affecting the connect daemon.
+      pid = child.pid;
+      if (pid !== undefined) {
+        saveTask({
+          agentType,
+          operationId,
+          pid,
+          startedAt: new Date().toISOString(),
+          taskId: operationId,
+          topicId,
+          workspaceId,
+        });
+      }
+
       // Only safe to write stdin once the process actually started.
       try {
         child.stdin?.write(stdinPayload);
@@ -150,6 +221,22 @@ export function spawnHeteroAgentRun(
     });
 
     child.on('exit', (code, signal) => {
+      // Only remove the registry entry if the exiting PID still owns this
+      // task — a newer run that reused the same operationId must not be
+      // cleared by a stale exit event.
+      if (pid !== undefined && getTask(operationId)?.pid === pid) {
+        // The wrapper can exit before a background tool. Keep its process-group
+        // identity until cancellation can confirm all descendants have exited.
+        let groupExited = process.platform === 'win32';
+        if (!groupExited) {
+          try {
+            process.kill(-pid, 0);
+          } catch (error) {
+            groupExited = (error as NodeJS.ErrnoException).code === 'ESRCH';
+          }
+        }
+        if (groupExited) removeTask(operationId);
+      }
       logger?.info?.(`hetero exec exited (op=${operationId}) code=${code} signal=${signal}`);
     });
   });

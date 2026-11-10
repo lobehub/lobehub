@@ -7,19 +7,25 @@ import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 // serverDatabase middleware calls getServerDB(); stub it (our model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // RBAC middleware → pass-through.
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 const mockTopicFindById = vi.fn();
 // The entry lookup goes through the visitor-excluding twin; by default it
 // mirrors `findById` so the existing scenarios keep their single source of
 // topic state.
-const mockTopicFindOwnTopicById = vi.fn((...args: unknown[]) => mockTopicFindById(...args));
+const mockTopicFindOwnTopicById = vi.fn(function (...args: unknown[]) {
+  return mockTopicFindById(...args);
+});
 const mockTopicSettleRunningOperation = vi.fn();
 const mockTopicUpdateMetadata = vi.fn();
 const mockTopicRemoveRunningOperationChild = vi.fn();
@@ -28,10 +34,13 @@ const mockMessageUpdate = vi.fn();
 const mockMessageCreate = vi.fn();
 const mockExecAgent = vi.fn();
 const mockOpFindById = vi.fn();
+const mockOpTouchRunning = vi.fn();
 const mockInstantiateVerifyPlan = vi.fn();
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: mockOpFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: mockOpFindById, touchRunning: mockOpTouchRunning };
+  }),
 }));
 // Partial mock: keep the real runVerifyOnCompletion (CompletionLifecycle's gate
 // imports it from this barrel) and only stub the start-side plan instantiation.
@@ -41,33 +50,41 @@ vi.mock('@/server/services/verify', async (orig) => ({
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({
-    findById: mockTopicFindById,
-    findOwnTopicById: mockTopicFindOwnTopicById,
-    removeRunningOperationChild: mockTopicRemoveRunningOperationChild,
-    settleRunningOperation: mockTopicSettleRunningOperation,
-    updateMetadata: mockTopicUpdateMetadata,
-  })),
+  TopicModel: vi.fn(function () {
+    return {
+      findById: mockTopicFindById,
+      findOwnTopicById: mockTopicFindOwnTopicById,
+      removeRunningOperationChild: mockTopicRemoveRunningOperationChild,
+      settleRunningOperation: mockTopicSettleRunningOperation,
+      updateMetadata: mockTopicUpdateMetadata,
+    };
+  }),
 }));
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    create: mockMessageCreate,
-    findById: mockMessageFindById,
-    update: mockMessageUpdate,
-  })),
+  MessageModel: vi.fn(function () {
+    return {
+      create: mockMessageCreate,
+      findById: mockMessageFindById,
+      update: mockMessageUpdate,
+    };
+  }),
 }));
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn(() => ({ execAgent: mockExecAgent })),
+  AiAgentService: vi.fn(function () {
+    return { execAgent: mockExecAgent };
+  }),
 }));
 
 const mockPublishAgentRuntimeEnd = vi.fn();
 const mockPublishStreamEvent = vi.fn();
 vi.mock('@/server/modules/AgentRuntime/factory', async (orig) => ({
   ...(await (orig as () => Promise<Record<string, unknown>>)()),
-  createStreamEventManager: vi.fn(() => ({
-    publishAgentRuntimeEnd: mockPublishAgentRuntimeEnd,
-    publishStreamEvent: mockPublishStreamEvent,
-  })),
+  createStreamEventManager: vi.fn(function () {
+    return {
+      publishAgentRuntimeEnd: mockPublishAgentRuntimeEnd,
+      publishStreamEvent: mockPublishStreamEvent,
+    };
+  }),
 }));
 
 // Imported after the mocks above are registered.
@@ -124,6 +141,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     // Default: a non-task op so the plan-instantiation guard no-ops unless a
     // test opts into a task-bound op.
     mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: null });
+    mockOpTouchRunning.mockResolvedValue(true);
     mockInstantiateVerifyPlan.mockResolvedValue(undefined);
   });
 
@@ -544,5 +562,27 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       childOperationId,
       expect.objectContaining({ type: 'notify_update' }),
     );
+  });
+
+  it('refreshes the run lease on a nonterminal remote progress callback', async () => {
+    await createCaller().notify({
+      content: 'progress',
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    // The stale-operation sweep retires a stateless run whose lease went silent
+    // for the hetero window; a remote provider never calls `heteroIngest`, so
+    // this path is the only thing keeping an active remote run's lease fresh.
+    expect(mockOpTouchRunning).toHaveBeenCalledWith(OP);
+    expect(mockOpTouchRunning).toHaveBeenCalledTimes(1);
+    expect(mockMessageUpdate).toHaveBeenCalledWith(FINAL_MSG_ID, { content: 'progress' });
+  });
+
+  it('does not touch the lease on a terminal signal', async () => {
+    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+
+    expect(mockOpTouchRunning).not.toHaveBeenCalled();
   });
 });

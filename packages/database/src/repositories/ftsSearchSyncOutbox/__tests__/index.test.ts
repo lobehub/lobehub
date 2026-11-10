@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import type { SQL } from 'drizzle-orm';
@@ -7,13 +8,23 @@ import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { runCleanupBatch } from '../../../../../../scripts/elasticsearchCleanupIneligibleMessages';
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, ftsSearchSyncOutbox, users } from '../../../schemas';
-import { FtsSearchDocumentBuilder } from '../../ftsSearchDocument';
+import {
+  agents,
+  ftsSearchSyncCaptureVersion,
+  ftsSearchSyncOutbox,
+  messages,
+  topics,
+  users,
+} from '../../../schemas';
+import { FTS_SEARCH_DOCUMENT_ENTITIES, FtsSearchDocumentBuilder } from '../../ftsSearchDocument';
 import { FtsSearchSyncOutboxRepository } from '..';
+import captureHistory from '../captureHistory.json';
 import {
   FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
   FTS_SEARCH_SYNC_MEMORY_CONTEXTS_GIN_INDEX,
+  getFtsSearchSyncCaptureSourceTables,
 } from '../captureInfrastructure';
 
 const USER_ID = 'fts-search-sync-integration-user';
@@ -61,7 +72,7 @@ const createRecordedRepository = (revisionRows: unknown[]) => {
   const execute = vi.fn(async (statement: SQL) => {
     const normalized = normalizeSql(statement);
     statements.push(normalized);
-    return normalized.includes('FROM fts_search_sync_revision_seq') ? { rows: revisionRows } : [];
+    return normalized.includes('fts_search_sync_revision_seq') ? { rows: revisionRows } : [];
   });
   const database = {
     execute,
@@ -81,6 +92,22 @@ const dropCaptureInfrastructure = async () => {
     const signature =
       functionName === 'enqueue_fts_search_sync_outbox' ? '(text, text[], smallint)' : '()';
     await db.execute(sql.raw(`DROP FUNCTION IF EXISTS "${functionName}"${signature}`));
+  }
+  await db.delete(ftsSearchSyncCaptureVersion);
+};
+
+const installHistoricalCapture = async (version: 0 | 1) => {
+  const snapshot = captureHistory.find((item) => item.version === version)!;
+  for (const target of snapshot.functions) {
+    await db.execute(
+      sql.raw(`
+      CREATE FUNCTION ${target.name}(${target.identityArguments}) RETURNS ${target.result}
+      AS $fts_search_sync_capture$ ${target.body} $fts_search_sync_capture$ LANGUAGE plpgsql
+    `),
+    );
+  }
+  for (const target of snapshot.triggers) {
+    await db.execute(sql.raw(`${target.definition};`));
   }
 };
 
@@ -154,7 +181,26 @@ afterAll(async () => {
   }
 }, CAPTURE_INSTALL_TEST_TIMEOUT);
 
-describe.sequential('FtsSearchSyncOutboxRepository', () => {
+describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
+  it.each(FTS_SEARCH_DOCUMENT_ENTITIES)(
+    'maps %s to at least one capture source table',
+    (entity) => {
+      expect(getFtsSearchSyncCaptureSourceTables([entity])).not.toHaveLength(0);
+    },
+  );
+
+  it('pins immutable historical capture snapshots independently of current definitions', () => {
+    const digests = captureHistory.map((snapshot) => ({
+      digest: createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'),
+      version: snapshot.version,
+    }));
+
+    expect(digests).toEqual([
+      { digest: 'fdc9c529f0b72e1eb7fc75d298456de9f9ce2d01a4d206ace2dbb080aa140bd8', version: 0 },
+      { digest: 'b34bcad257cf1351708bdf82aa5d031653b54b15c0d06ddc013328c58e4e99e1', version: 1 },
+    ]);
+  });
+
   it('keeps optional capture infrastructure out of the deployment migration', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),
@@ -321,41 +367,135 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
       expect(rows).toEqual(firstRows);
       expect(rows).toHaveLength(16);
       await expect(repository.readCaptureFingerprint()).resolves.toMatch(/^[a-f\d]{64}$/);
+      await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([
+        { id: 'capture', version: 2 },
+      ]);
     },
     CAPTURE_INSTALL_TEST_TIMEOUT,
   );
 
-  it(
-    'atomically upgrades the known predecessor trigger definition',
-    async () => {
-      await db.execute(sql`DROP TRIGGER fts_search_sync_agents ON public.agents`);
-      await db.execute(sql`
-        CREATE TRIGGER fts_search_sync_agents
-        AFTER INSERT OR DELETE OR UPDATE OF
-          description, slug, system_role, tags, title, user_id, virtual, visibility, workspace_id
-        ON public.agents
-        FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
-          'agents', 'user_id', 'visibility', 'workspace_id'
-        )
-      `);
+  it('serializes concurrent installation attempts at the same version', async () => {
+    await Promise.all([
+      repository.installCaptureInfrastructure(),
+      new FtsSearchSyncOutboxRepository(db).installCaptureInfrastructure(),
+    ]);
+
+    await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([
+      { id: 'capture', version: 2 },
+    ]);
+  });
+
+  it('refuses a database version newer than this binary without changing definitions', async () => {
+    await db.update(ftsSearchSyncCaptureVersion).set({ version: 99 });
+    try {
+      await expect(repository.installCaptureInfrastructure()).rejects.toThrow(
+        'unknown capture version 99',
+      );
+      await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
+        'unknown capture version 99',
+      );
+    } finally {
+      await db.update(ftsSearchSyncCaptureVersion).set({ version: 2 });
+    }
+    await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+  });
+
+  it.each([0, 1] as const)(
+    'atomically upgrades unversioned capture v%i through fixed migrations',
+    async (version) => {
+      await dropCaptureInfrastructure();
+      await installHistoricalCapture(version);
 
       try {
-        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow(
-          'trigger fts_search_sync_agents',
-        );
+        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow('capture version');
         await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
         await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+        await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([
+          { id: 'capture', version: 2 },
+        ]);
       } finally {
-        try {
-          await repository.assertCaptureInfrastructure();
-        } catch {
-          await dropCaptureInfrastructure();
-          await repository.installCaptureInfrastructure();
-        }
+        await dropCaptureInfrastructure();
+        await repository.installCaptureInfrastructure();
       }
     },
     CAPTURE_INSTALL_TEST_TIMEOUT,
   );
+
+  it('upgrades v1 without dropping triggers or locking unchanged source tables', async () => {
+    await dropCaptureInfrastructure();
+    await installHistoricalCapture(1);
+    const statements: string[] = [];
+    const recordingDatabase = {
+      execute: db.execute.bind(db),
+      transaction: (
+        callback: (transaction: { execute: (statement: SQL) => unknown }) => Promise<void>,
+      ) =>
+        db.transaction(async (transaction) =>
+          callback({
+            execute: (statement) => {
+              statements.push(normalizeSql(statement));
+              return transaction.execute(statement);
+            },
+          }),
+        ),
+    } as unknown as ConstructorParameters<typeof FtsSearchSyncOutboxRepository>[0];
+
+    try {
+      await new FtsSearchSyncOutboxRepository(recordingDatabase).installCaptureInfrastructure();
+      expect(statements.filter((statement) => statement.startsWith('DROP TRIGGER'))).toEqual([]);
+      expect(statements.filter((statement) => statement.startsWith('LOCK TABLE'))).toEqual([
+        'LOCK TABLE "public"."messages", "public"."topics" IN SHARE ROW EXCLUSIVE MODE',
+      ]);
+      expect(
+        statements.filter((statement) => statement.startsWith('SET LOCAL lock_timeout')),
+      ).toEqual(["SET LOCAL lock_timeout = '60s'"]);
+      expect(
+        statements
+          .filter((statement) => statement.startsWith('CREATE OR REPLACE TRIGGER'))
+          .map((statement) => statement.split(' ')[4])
+          .sort(),
+      ).toEqual(['fts_search_sync_messages', 'fts_search_sync_topics']);
+      await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+    } finally {
+      await dropCaptureInfrastructure();
+      await repository.installCaptureInfrastructure();
+    }
+  });
+
+  it('rolls back definitions and the version marker when an upgrade fails', async () => {
+    await dropCaptureInfrastructure();
+    await installHistoricalCapture(1);
+
+    const failingDatabase = {
+      execute: db.execute.bind(db),
+      transaction: (
+        callback: (transaction: { execute: (statement: SQL) => unknown }) => Promise<void>,
+      ) =>
+        db.transaction(async (transaction) =>
+          callback({
+            execute: (statement) => {
+              if (/^CREATE (?:OR REPLACE )?TRIGGER/.test(normalizeSql(statement))) {
+                throw new Error('injected trigger creation failure');
+              }
+              return transaction.execute(statement);
+            },
+          }),
+        ),
+    } as unknown as ConstructorParameters<typeof FtsSearchSyncOutboxRepository>[0];
+
+    try {
+      await expect(
+        new FtsSearchSyncOutboxRepository(failingDatabase).installCaptureInfrastructure(),
+      ).rejects.toThrow('injected trigger creation failure');
+      await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([]);
+      await expect(repository.assertCaptureInfrastructure()).rejects.toThrow('capture version');
+      await repository.installCaptureInfrastructure();
+      await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+    } finally {
+      await dropCaptureInfrastructure();
+      await repository.installCaptureInfrastructure();
+    }
+  });
 
   it(
     'rejects a managed trigger name installed on an unexpected public table',
@@ -380,16 +520,37 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
   );
 
   it('reserves and fences revisions for a local full-reindex checkpoint', async () => {
-    const revision = await repository.reserveRevisionWithWriteFence();
+    const revision = await repository.reserveRevisionWithWriteFence(FTS_SEARCH_DOCUMENT_ENTITIES);
 
     expect(revision).toBeGreaterThan(0);
     await expect(repository.readHighWaterRevision()).resolves.toBeGreaterThanOrEqual(revision);
   });
 
+  it.each([
+    { entities: ['messages'] as const, tables: ['messages'] },
+    { entities: ['documents'] as const, tables: ['documents', 'knowledge_base_files'] },
+  ])('fences only capture sources for $entities', async ({ entities, tables }) => {
+    const { repository: recordedRepository, statements } = createRecordedRepository([
+      { revision: '42' },
+    ]);
+
+    await expect(recordedRepository.reserveRevisionWithWriteFence(entities)).resolves.toBe(42);
+    expect(statements).toHaveLength(3);
+    expect(statements[0]).toBe(
+      "SELECT nextval('fts_search_sync_revision_seq')::bigint AS revision",
+    );
+    expect(statements[1]).toBe("SET LOCAL lock_timeout = '3s'");
+    expect(statements[2]).toBe(
+      `LOCK TABLE ${tables.map((table) => `"public"."${table}"`).join(', ')} IN SHARE MODE`,
+    );
+  });
+
   it('reads a committed revision boundary without allocating a new revision', async () => {
     const before = await repository.readHighWaterRevision();
 
-    await expect(repository.readCommittedRevisionBoundary()).resolves.toBe(before);
+    await expect(
+      repository.readCommittedRevisionBoundary(FTS_SEARCH_DOCUMENT_ENTITIES),
+    ).resolves.toBe(before);
     await expect(repository.readHighWaterRevision()).resolves.toBe(before);
   });
 
@@ -398,10 +559,10 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
       { revision: '42' },
     ]);
 
-    await expect(recordedRepository.readCommittedRevisionBoundary()).resolves.toBe(42);
+    await expect(recordedRepository.readCommittedRevisionBoundary(['messages'])).resolves.toBe(42);
     expect(statements).toHaveLength(3);
     expect(statements[0]).toBe("SET LOCAL lock_timeout = '3s'");
-    expect(statements[1]).toMatch(/^LOCK TABLE .* IN SHARE MODE$/);
+    expect(statements[1]).toBe('LOCK TABLE "public"."messages" IN SHARE MODE');
     expect(statements[2]).toBe(
       'SELECT CASE WHEN is_called THEN last_value ELSE 0 END AS revision FROM fts_search_sync_revision_seq',
     );
@@ -410,7 +571,7 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
   it('rejects an invalid committed revision boundary', async () => {
     const { repository: recordedRepository } = createRecordedRepository([]);
 
-    await expect(recordedRepository.readCommittedRevisionBoundary()).rejects.toThrow(
+    await expect(recordedRepository.readCommittedRevisionBoundary(['messages'])).rejects.toThrow(
       'Failed to read a valid FTS search sync revision while reading the committed revision boundary',
     );
   });
@@ -561,6 +722,114 @@ describe.sequential('FtsSearchSyncOutboxRepository', () => {
         .select({ documentId: ftsSearchSyncOutbox.documentId, entity: ftsSearchSyncOutbox.entity })
         .from(ftsSearchSyncOutbox),
     ).resolves.toEqual([{ documentId: 'updated-at-agent', entity: 'agents' }]);
+  });
+
+  it('skips message timestamp-only and same-value search updates', async () => {
+    await repository.installCaptureInfrastructure();
+    await db.insert(messages).values({
+      content: 'searchable text',
+      id: 'unchanged-message',
+      role: 'user',
+      userId: USER_ID,
+    });
+    await db.delete(ftsSearchSyncOutbox);
+
+    await db.execute(sql`UPDATE messages SET updated_at = now() WHERE id = 'unchanged-message'`);
+    await db.execute(sql`UPDATE messages SET content = content WHERE id = 'unchanged-message'`);
+
+    await expect(db.select().from(ftsSearchSyncOutbox)).resolves.toEqual([]);
+
+    await db.execute(sql`UPDATE messages SET content = 'new text' WHERE id = 'unchanged-message'`);
+    await expect(
+      db.select({ documentId: ftsSearchSyncOutbox.documentId }).from(ftsSearchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'unchanged-message' }]);
+  });
+
+  it('skips ineligible message writes and captures eligibility transitions', async () => {
+    await repository.installCaptureInfrastructure();
+    await db.insert(messages).values({
+      content: '\u00A0',
+      id: 'unicode-blank-message',
+      role: 'assistant',
+      userId: USER_ID,
+    });
+    await db.insert(messages).values({
+      content: 'Internal tool output',
+      id: 'changing-message-eligibility',
+      role: 'tool',
+      userId: USER_ID,
+    });
+    await expect(db.select().from(ftsSearchSyncOutbox)).resolves.toEqual([]);
+
+    await db.execute(sql`
+      UPDATE messages SET content = 'Changed tool output'
+      WHERE id = 'changing-message-eligibility'
+    `);
+    await expect(db.select().from(ftsSearchSyncOutbox)).resolves.toEqual([]);
+
+    await db.execute(sql`
+      UPDATE messages SET role = 'assistant'
+      WHERE id = 'changing-message-eligibility'
+    `);
+    await expect(
+      db.select({ documentId: ftsSearchSyncOutbox.documentId }).from(ftsSearchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'changing-message-eligibility' }]);
+
+    await db.delete(ftsSearchSyncOutbox);
+    await db.execute(sql`
+      UPDATE messages SET content = ' \t\n', summary = NULL
+      WHERE id = 'changing-message-eligibility'
+    `);
+    await expect(
+      db.select({ documentId: ftsSearchSyncOutbox.documentId }).from(ftsSearchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'changing-message-eligibility' }]);
+
+    await db.delete(ftsSearchSyncOutbox);
+    await db.execute(sql`
+      UPDATE messages SET summary = 'Visible summary'
+      WHERE id = 'changing-message-eligibility'
+    `);
+    await expect(
+      db.select({ documentId: ftsSearchSyncOutbox.documentId }).from(ftsSearchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'changing-message-eligibility' }]);
+  });
+
+  it('skips topic usage and same-value updates while capturing title changes', async () => {
+    await repository.installCaptureInfrastructure();
+    await db.insert(topics).values({ id: 'unchanged-topic', title: 'Original', userId: USER_ID });
+    await db.delete(ftsSearchSyncOutbox);
+
+    await db.execute(sql`UPDATE topics SET updated_at = now() WHERE id = 'unchanged-topic'`);
+    await db.execute(sql`UPDATE topics SET title = title WHERE id = 'unchanged-topic'`);
+    await expect(db.select().from(ftsSearchSyncOutbox)).resolves.toEqual([]);
+
+    await db.execute(sql`UPDATE topics SET title = 'Changed' WHERE id = 'unchanged-topic'`);
+    await expect(
+      db.select({ documentId: ftsSearchSyncOutbox.documentId }).from(ftsSearchSyncOutbox),
+    ).resolves.toEqual([{ documentId: 'unchanged-topic' }]);
+  });
+
+  it('queues only ineligible source messages for fenced cleanup', async () => {
+    await repository.installCaptureInfrastructure();
+    await db.insert(messages).values([
+      { content: 'Tool output', id: 'cleanup-batch-1-tool', role: 'tool', userId: USER_ID },
+      { content: '  ', id: 'cleanup-batch-2-blank', role: 'assistant', userId: USER_ID },
+      { content: 'Visible task', id: 'cleanup-batch-3-visible', role: 'task', userId: USER_ID },
+    ]);
+    await db.delete(ftsSearchSyncOutbox);
+
+    const result = await runCleanupBatch(db, 'cleanup-batch-', 2);
+
+    expect(result).toEqual({ complete: false, cursor: 'cleanup-batch-2-blank', queued: 2 });
+    await expect(
+      db
+        .select({ documentId: ftsSearchSyncOutbox.documentId })
+        .from(ftsSearchSyncOutbox)
+        .orderBy(ftsSearchSyncOutbox.documentId),
+    ).resolves.toEqual([
+      { documentId: 'cleanup-batch-1-tool' },
+      { documentId: 'cleanup-batch-2-blank' },
+    ]);
   });
 
   it('rolls the outbox entry back with the source transaction', async () => {

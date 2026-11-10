@@ -2,7 +2,8 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquareHeart } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
@@ -14,12 +15,12 @@ import { GITHUB, GITHUB_ISSUES } from '@/const/url';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { isOnServerSide } from '@/utils/env';
 
-const styles = createStaticStyles(
-  ({ css, cssVar }) => css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-);
+const styles = stylex.create({
+  footer: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 export const LayoutSettingsFooterClassName = 'settings-layout-footer';
 
@@ -70,7 +71,14 @@ const Footer = memo<PropsWithChildren>(() => {
 
   return hideGitHubEngagementFooter ? null : (
     <Flexbox className={LayoutSettingsFooterClassName} justify={'flex-end'}>
-      <Center horizontal as={'footer'} className={styles} flex={'none'} padding={16} width={'100%'}>
+      <Center
+        horizontal
+        as={'footer'}
+        className={stylex.props(styles.footer).className}
+        flex={'none'}
+        padding={16}
+        width={'100%'}
+      >
         <div style={{ textAlign: 'center' }}>
           <Icon icon={MessageSquareHeart} /> {`${t('footer.title')} `}
           <a

@@ -1,12 +1,12 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Center, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useEvalStore } from '@/store/eval';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
@@ -18,7 +18,7 @@ const Page = memo(() => {
 
   const useFetchTestCase = useEvalStore((s) => s.useFetchTestCase);
   const useFetchDatasetDetail = useEvalStore((s) => s.useFetchDatasetDetail);
-  const { data: testCase, error, mutate } = useFetchTestCase(caseId);
+  const { data: testCase, error, isLoading, mutate } = useFetchTestCase(caseId);
   const { data: dataset } = useFetchDatasetDetail(testCase?.datasetId);
 
   // A deleted or mistyped case id is an absent resource, not a failed request:
@@ -33,6 +33,8 @@ const Page = memo(() => {
       error={isMissing ? undefined : error}
       errorVariant={'page'}
       isEmpty={isMissing || !testCase}
+      isLoading={isLoading}
+      loading={<RouteLoading />}
       empty={
         <Center flex={1}>
           <Text type="secondary">{t('testCaseDetail.notFound')}</Text>

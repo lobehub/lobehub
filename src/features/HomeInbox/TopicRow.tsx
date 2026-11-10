@@ -1,10 +1,9 @@
-import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -28,27 +27,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+/**
+ * Where a topic opens: its agent's chat, or its group's chat for a group
+ * conversation (which carries no `agentId`). Undefined when it has neither.
+ */
+export const getTopicChatUrl = (
+  topic: Pick<InboxTopic, 'agentId' | 'groupId' | 'id'>,
+): string | undefined => {
+  if (topic.agentId) return AGENT_CHAT_TOPIC_URL(topic.agentId, topic.id);
+  if (topic.groupId) return GROUP_CHAT_TOPIC_URL(topic.groupId, topic.id);
+  return undefined;
+};
+
 interface TopicRowProps {
+  /** Rendered last, after the time — e.g. an explicit "open" button. */
+  action?: ReactNode;
   /** Status glyph or live spinner — supplied by the caller so a running row can spin. */
   leading: ReactNode;
   topic: InboxTopic;
   trailing?: ReactNode;
 }
 
-const TopicRow = memo<TopicRowProps>(({ topic, leading, trailing }) => {
+const TopicRow = memo<TopicRowProps>(({ action, topic, leading, trailing }) => {
   const navigate = useWorkspaceAwareNavigate();
   const agent = useAgentDisplayMeta(topic.agentId);
 
   const open = () => {
-    if (!topic.agentId) return;
-    navigate(AGENT_CHAT_TOPIC_URL(topic.agentId, topic.id));
+    const url = getTopicChatUrl(topic);
+    if (url) navigate(url);
   };
 
   return (
     <Flexbox horizontal align={'center'} className={styles.row} gap={10} onClick={open}>
       {leading}
       {agent && (
-        <Avatar
+        <AgentAvatar
+          agentId={topic.agentId}
           avatar={agent.avatar}
           background={agent.backgroundColor}
           shape={'circle'}
@@ -67,6 +81,7 @@ const TopicRow = memo<TopicRowProps>(({ topic, leading, trailing }) => {
       <Time
         date={resolveTopicTriggerTime(topic.runStartedAt, topic.updatedAt ?? topic.createdAt)}
       />
+      {action}
     </Flexbox>
   );
 });

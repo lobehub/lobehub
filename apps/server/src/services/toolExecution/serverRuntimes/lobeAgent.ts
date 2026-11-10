@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
   buildAnalyzeMediaContent,
+  buildBackgroundSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
@@ -23,26 +24,44 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
-import { createVentService, formatVentResultContent } from '@/server/services/vent';
+import {
+  createRedisVentLedger,
+  createVentService,
+  formatVentResultContent,
+  type VentRuntimeService,
+} from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
 
 // The durable record of a vent is the persisted vent tool-call message itself.
 // This shared service only validates input, assigns a stable id, and enforces
-// per-scope rate limits. Module-scoped so the rate-limit state survives across
-// per-request runtime instances.
-const sharedVentService = createVentService({ nextToolCallId: () => nanoid() });
+// the per-run cap. The cap lives in Redis because consecutive steps of one run
+// may execute on different instances; created lazily so importing this module
+// does not open a connection.
+let sharedVentService: VentRuntimeService | undefined;
+const getVentService = () => {
+  if (!sharedVentService) {
+    const redis = getAgentRuntimeRedisClient();
+    sharedVentService = createVentService({
+      ledger: redis ? createRedisVentLedger(redis) : undefined,
+      nextToolCallId: () => nanoid(),
+    });
+  }
+  return sharedVentService;
+};
 
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
@@ -67,6 +86,72 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
   error: { code, message: content },
   success: false,
 });
+
+/**
+ * Quota rejections from the configured multimodal provider. analyzeMedia always
+ * runs on the platform-configured model, so a user chatting with their own API
+ * key can still hit the LobeHub credit budget here.
+ */
+const CREDIT_ERROR_TYPES = new Set<string>([
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.SubscriptionPlanLimit,
+]);
+
+const getCreditErrorType = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const errorType = (error as { errorType?: unknown }).errorType;
+
+  return typeof errorType === 'string' && CREDIT_ERROR_TYPES.has(errorType) ? errorType : undefined;
+};
+
+/**
+ * Structured rejection from the model gateway (e.g. `{ errorType: 403,
+ * message: "Request blocked.", _responseBody: { provider, reason:
+ * "not_onboarded" } }`). The raw message alone gives the agent nothing to act
+ * on — the gateway's `reason` is the only actionable signal, and rethrowing
+ * collapses the whole payload into that bare string before the tool result is
+ * built. Surface it instead of letting the failure degrade to "Request
+ * blocked." with no code, no cause, and no recovery path.
+ */
+const getGatewayRejection = (error: unknown): { content: string; code: string } | undefined => {
+  if (!error || typeof error !== 'object') return;
+
+  const raw = error as {
+    _responseBody?: { provider?: unknown; reason?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+  };
+
+  const errorType = typeof raw.errorType === 'number' ? raw.errorType : undefined;
+  const provider =
+    typeof raw._responseBody?.provider === 'string' ? raw._responseBody.provider : undefined;
+  const reason =
+    typeof raw._responseBody?.reason === 'string' ? raw._responseBody.reason : undefined;
+  const message = typeof raw.message === 'string' ? raw.message : undefined;
+
+  // Numeric error types are part of the generic model-runtime error contract
+  // (429 rate limits, 4xx validation, provider-policy refusals), and
+  // `normalizeChatMessageError` propagates `provider` (and other display
+  // metadata) into every error body — so neither establishes a gateway-level
+  // refusal on its own. `_responseBody.reason` is the gateway-specific marker:
+  // require it before suppressing the throw, and keep ordinary structured
+  // errors (including provider-only response bodies, e.g. a 429 rate limit)
+  // transparent and retryable via the existing rethrow behavior.
+  if (errorType === undefined || !reason) return;
+
+  const parts = [
+    `Media analysis was rejected by the platform model gateway (HTTP ${errorType}${provider ? `, provider: ${provider}` : ''}).`,
+    `Gateway reason: ${reason}.`,
+    message && message !== 'error' ? `Upstream message: ${message}.` : undefined,
+    'This is an account/gateway-level refusal, not a content-policy verdict on the media. Do not retry blindly or treat the media as blocked content.',
+  ].filter(Boolean);
+
+  return {
+    code: `GATEWAY_${reason.toUpperCase().replaceAll(/[^A-Z0-9]+/g, '_')}`,
+    content: parts.join(' '),
+  };
+};
 
 const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
 const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
@@ -235,22 +320,59 @@ class LobeAgentExecutionRuntime {
     if (!instruction || typeof instruction !== 'string') {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
+    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
+      return buildError('subAgentId must be a string.', 'INVALID_ARGUMENTS');
+    }
+    // Models trained on strict function schemas (the GPT family) fill every
+    // declared field, so "start a new sub-agent" arrives as `subAgentId: ""`
+    // rather than an omitted key. Blank means new.
+    const subAgentId = params.subAgentId?.trim() || undefined;
+    const background = params.runInBackground === true;
 
-    const { started, error, threadId, subOperationId, toolMessageId } = await ctx.subAgent.run({
-      description,
-      instruction,
-      timeout,
-    });
+    const runner = ctx.subAgent;
+    const startRun = () =>
+      runner.run({ background, description, instruction, subAgentId, timeout });
+
+    let runResult: Awaited<ReturnType<typeof startRun>>;
+    if (background) {
+      const outcome = await startBackgroundSubAgent({
+        db: this.db,
+        groupId: this.groupId,
+        retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
+        start: startRun,
+        threadId: this.threadId,
+        topicId: this.topicId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if ('refusal' in outcome) return buildError(outcome.refusal.message, outcome.refusal.code);
+      runResult = outcome.result;
+    } else {
+      runResult = await startRun();
+    }
+    const { started, error, threadId, subOperationId, toolMessageId } = runResult;
 
     // The child op failed to start — no completion bridge will ever fire to
     // backfill a placeholder, so we must NOT defer/park here. Return a normal
     // (non-deferred) tool error so the parent's LLM sees the failure and the
     // batch continues instead of hanging in `waiting_for_async_tool`.
     if (!started) {
+      const action = subAgentId ? 'could not be continued' : 'failed to start';
       return buildError(
-        error ? `Sub-agent failed to start: ${error}` : 'Sub-agent failed to start.',
+        error ? `Sub-agent ${action}: ${error}` : `Sub-agent ${action}.`,
         'SUB_AGENT_START_FAILED',
       );
+    }
+
+    // Detached: the receipt is the whole tool result and the parent keeps going.
+    // It goes into the placeholder the runner created (it anchors the thread);
+    // the answer reaches the parent later as its own message.
+    if (background) {
+      return {
+        content: buildBackgroundSubAgentReceipt(threadId),
+        success: true,
+        toolMessageId,
+      };
     }
 
     return {
@@ -276,7 +398,7 @@ class LobeAgentExecutionRuntime {
     }
 
     try {
-      const result = await sharedVentService.recordVent({
+      const result = await getVentService().recordVent({
         agentId: this.agentId,
         input: params,
         topicId: this.topicId,
@@ -505,24 +627,41 @@ class LobeAgentExecutionRuntime {
       stream: false,
     } satisfies ChatStreamPayload;
 
-    const response = await runtime.chat(payload, {
-      callback: {
-        onCompletion: (data) => {
-          usage = data.usage;
+    try {
+      const response = await runtime.chat(payload, {
+        callback: {
+          onCompletion: (data) => {
+            usage = data.usage;
+          },
+          onContentPart: (part) => {
+            if (part.partType === 'text') content += part.content;
+          },
+          onText: (text) => {
+            content += text;
+          },
         },
-        onContentPart: (part) => {
-          if (part.partType === 'text') content += part.content;
+        metadata: {
+          trigger: RequestTrigger.MultimodalAnalysis,
         },
-        onText: (text) => {
-          content += text;
-        },
-      },
-      metadata: {
-        trigger: RequestTrigger.MultimodalAnalysis,
-      },
-    });
+      });
 
-    await consumeStreamUntilDone(response);
+      await consumeStreamUntilDone(response);
+    } catch (error) {
+      const creditErrorType = getCreditErrorType(error);
+      if (!creditErrorType) {
+        const rejection = getGatewayRejection(error);
+        if (!rejection) throw error;
+
+        return buildError(rejection.content, rejection.code);
+      }
+
+      return buildError(
+        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub balance, and that balance is exhausted (${creditErrorType}). ` +
+          "The user's own API key for the chat model is not used by this tool, so retrying will not help. " +
+          'Tell the user to top up or upgrade their LobeHub plan, or to switch the conversation to a vision-capable model on their own API key.',
+        creditErrorType,
+      );
+    }
 
     return {
       content: content.trim(),

@@ -1,13 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { Outlet } from 'react-router';
-import { SWRConfig } from 'swr';
 
-import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import SideBar from '@/features/Settings/Layout/SideBar';
-import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
 import SettingsContextProvider from './ContextProvider';
 import { styles } from './style';
@@ -21,14 +19,10 @@ const Layout: FC = () => {
       }}
     >
       <SideBar />
-      <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
-        <SWRConfig value={{ suspense: true }}>
-          <SuspenseRouteBoundary>
-            <RouteSkeletonChromeProvider>
-              <Outlet />
-            </RouteSkeletonChromeProvider>
-          </SuspenseRouteBoundary>
-        </SWRConfig>
+      <Flexbox className={stylex.props(styles.mainContainer).className} flex={1} height={'100%'}>
+        {/* The layout draws no header: every tab's route skeleton draws the
+            shared settings header with the real tab title itself. */}
+        <Outlet />
       </Flexbox>
     </SettingsContextProvider>
   );

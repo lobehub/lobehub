@@ -1,8 +1,15 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  Center,
+  createModal,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Icon,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { FileSearch, ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -20,8 +27,8 @@ import type { ResourceItem } from '@/types/resource';
 import Item from '../AssignKnowledgeBase/Item';
 import MasonryItem from '../AssignKnowledgeBase/Item/MasonryItem';
 import Loading from '../AssignKnowledgeBase/Loading';
-import { type ViewMode } from '../AssignKnowledgeBase/ViewSwitcher';
 import ViewSwitcher from '../AssignKnowledgeBase/ViewSwitcher';
+import { type ViewMode } from '../AssignKnowledgeBase/ViewSwitcher';
 
 const PAGE_SIZE = 50;
 

@@ -1,4 +1,3 @@
-import { ModelIcon } from '@lobehub/icons';
 import {
   DropdownMenuItem,
   DropdownMenuItemContent,
@@ -13,43 +12,38 @@ import {
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
   renderDropdownMenuItems,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { ModelSwitchSubmenuPopup } from '@/features/ModelSwitchPanel';
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import type { SelectorSubmenuItem } from '../../components/buildSelectorSubmenu';
 import { buildSelectorSubmenu } from '../../components/buildSelectorSubmenu';
 import type { ReasoningEffortControl } from '../../hooks/useReasoningEffortControl';
 import { type DropdownPlacement } from '../context';
 
-const styles = createStaticStyles(({ css }) => ({
-  meta: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    max-width: 150px;
-
-    /* The packaged extra slot defaults to the code font (it is styled for
-       keyboard hints); a model name belongs in the UI font. */
-    font-family: ${cssVar.fontFamily};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  name: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  popup: css`
-    width: 240px;
-  `,
-}));
+const styles = stylex.create({
+  meta: {
+    overflow: 'hidden',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    maxWidth: '150px',
+    // The packaged extra slot defaults to the code font (it is styled for
+    // keyboard hints); a model name belongs in the UI font.
+    fontFamily: cssVar.fontFamily,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  name: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  popup: { width: '240px' },
+});
 
 /**
  * The effort rows go through `renderDropdownMenuItems`, which draws base-ui's own
@@ -74,7 +68,9 @@ interface SelectorMenuProps {
   children: ReactNode;
   displayName: string;
   effort: ReasoningEffortControl;
+  enabledList?: EnabledProviderWithModels[];
   model: string;
+  modelNotice?: ReactNode;
   onModelChange: (params: { model: string; provider: string }) => Promise<void>;
   openOnHover?: boolean;
   placement?: DropdownPlacement;
@@ -93,7 +89,9 @@ const SelectorMenu = memo<SelectorMenuProps>(
     children,
     displayName,
     effort,
+    enabledList,
     model,
+    modelNotice,
     onModelChange,
     openOnHover = false,
     placement = 'topLeft',
@@ -153,9 +151,9 @@ const SelectorMenu = memo<SelectorMenuProps>(
     }, [effortKey, effortLevels, effortValue, hasReasoningMode, modeLevels, modeValue, select, t]);
 
     const modelMeta = (
-      <DropdownMenuItemExtra className={styles.meta}>
+      <DropdownMenuItemExtra className={stylex.props(styles.meta).className}>
         <ModelIcon model={model} size={16} />
-        <span className={styles.name}>{displayName}</span>
+        <span {...stylex.props(styles.name)}>{displayName}</span>
       </DropdownMenuItemExtra>
     );
 
@@ -164,7 +162,7 @@ const SelectorMenu = memo<SelectorMenuProps>(
         <DropdownMenuTrigger openOnHover={openOnHover}>{children}</DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner hoverTrigger={openOnHover} placement={placement} sideOffset={8}>
-            <DropdownMenuPopup className={styles.popup}>
+            <DropdownMenuPopup className={stylex.props(styles.popup).className}>
               {canSelectModel ? (
                 <DropdownMenuSubmenuRoot>
                   <DropdownMenuSubmenuTrigger label={t('modelSelector.model')}>
@@ -177,8 +175,13 @@ const SelectorMenu = memo<SelectorMenuProps>(
                     </DropdownMenuItemContent>
                   </DropdownMenuSubmenuTrigger>
                   <ModelSwitchSubmenuPopup
+                    enabledList={enabledList}
                     model={model}
+                    notice={modelNotice}
                     provider={provider}
+                    activeSecondaryText={
+                      effortValue ? t(`reasoningEffort.levels.${effortValue}`) : undefined
+                    }
                     onModelChange={onModelChange}
                     onOpenChange={handleModelPanelOpenChange}
                   />

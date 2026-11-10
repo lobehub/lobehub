@@ -1,3 +1,6 @@
+import type { ModelPricingContext } from './pricing';
+import type { OnUsageCallback } from './routeAttempt';
+
 export interface ASRPayload {
   /**
    * The audio content to transcribe. A `File` is passed through as-is; any other
@@ -32,6 +35,14 @@ export interface ASRPayload {
 
 export interface ASROptions {
   headers?: Record<string, any>;
+  /** Metadata passed to hooks (billing, tracing, route attempts), e.g. `trigger`. */
+  metadata?: Record<string, unknown>;
+  /**
+   * Receives the provider-reported token usage (with `cost` when the model has
+   * pricing) after a successful transcription.
+   */
+  onUsage?: OnUsageCallback;
+  pricingContext?: ModelPricingContext;
   signal?: AbortSignal;
   /**
    * userId for the request

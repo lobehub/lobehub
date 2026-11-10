@@ -61,6 +61,7 @@ export const toTraceGraphState = (graph: GoalGraphSnapshot): GoalGraphState => (
   })),
   goal: {
     agentId: graph.goal.agentId,
+    exploration: graph.goal.config?.exploration,
     id: graph.goal.id,
     maxRounds: graph.goal.maxRounds,
     maxTotalCost: graph.goal.maxTotalCost,

@@ -31,6 +31,9 @@ import { asyncTasks } from './asyncTask';
 import { users } from './user';
 import { workspaces } from './workspace';
 
+export const nextDocumentUpdatedAt = () =>
+  sql`GREATEST(date_trunc('milliseconds', clock_timestamp()), "documents"."updated_at" + interval '1 millisecond')`;
+
 export const DOCUMENT_FOLDER_TYPE = 'custom/folder';
 
 /** File type used by the parent document for a managed skill bundle. */
@@ -38,6 +41,31 @@ export const SKILL_BUNDLE_FILE_TYPE = 'skills/bundle';
 
 /** File type used by the SKILL.md index document inside a managed skill bundle. */
 export const SKILL_INDEX_FILE_TYPE = 'skills/index';
+
+/**
+ * File type of a file beside `SKILL.md` in a skill bundle, its path in
+ * `filename`. Text sits in `content`; a binary file links its `files` row
+ * through `fileId`. Its MIME type and a script's language sit in `metadata`.
+ */
+export const SKILL_FILE_FILE_TYPE = 'skills/file';
+
+/**
+ * What a bundle's files were written as before they held more than scripts.
+ * Still read; rewritten as `skills/file` the next time one is written.
+ */
+export const SKILL_SCRIPT_FILE_TYPE = 'skills/script';
+
+/**
+ * File type of a version snapshot of a user skill's `SKILL.md`, from before
+ * versions were published as archives in `files`. Still read, never written.
+ */
+export const SKILL_VERSION_FILE_TYPE = 'skills/version';
+
+/**
+ * Source attribution of a user-level skill: a bundle owned by the user, not
+ * bound to any agent, so any agent or run can load it by name.
+ */
+export const USER_SKILL_SOURCE = 'user-skills';
 
 /** Source attribution stored on documents created by skill-management tooling. */
 export const SKILL_MANAGEMENT_SOURCE = 'agent-signal:skill-management';
@@ -133,6 +161,13 @@ export const documents = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
+     * Agent that created this document through a tool (e.g. notebook or
+     * knowledge base), used to separate agent output from user-authored
+     * documents. `NULL` means user-created.
+     */
+    createdByAgentId: text('created_by_agent_id'),
+
+    /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see the document; `private` constrains it to the
      * creator (`user_id`). Within a documents tree (folder/Page hierarchy) the
@@ -150,6 +185,10 @@ export const documents = pgTable(
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
     ...timestamps,
+    updatedAt: timestamptz('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => nextDocumentUpdatedAt()),
   },
   (table) => [
     index('documents_source_idx').on(table.source),
@@ -298,6 +337,14 @@ export type FileUploadItem = typeof fileUploads.$inferSelect;
 
 /** Knowledge-base visibility — shared by column def and insert schema. */
 export const KNOWLEDGE_BASE_VISIBILITY = ['private', 'public'] as const;
+
+/**
+ * `knowledge_bases.type` values marking a library dedicated to one owner (an
+ * agent's or project's own space). A NULL type is an ordinary user library.
+ * Owned libraries are reached through their owner, never through library lists.
+ */
+export const DEDICATED_KNOWLEDGE_BASE_TYPES = ['agent', 'project'] as const;
+export type DedicatedKnowledgeBaseType = (typeof DEDICATED_KNOWLEDGE_BASE_TYPES)[number];
 
 export const knowledgeBases = pgTable(
   'knowledge_bases',

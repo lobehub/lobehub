@@ -1,12 +1,12 @@
 'use client';
 
-import { Text } from '@lobehub/ui/base-ui';
-import { type FC, memo } from 'react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { type CSSProperties, type FC, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useMatch } from 'react-router';
-import { SWRConfig } from 'swr';
 
-import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import NavHeader from '@/features/NavHeader';
+import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
 import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
@@ -15,38 +15,65 @@ import { useWorkspaceSettingCategory } from './hooks/useCategory';
 import SideBar from './SideBar';
 
 const COMPACT_HEADER_TABS = new Set<string>([
+  WorkspaceSettingsTabs.About,
   WorkspaceSettingsTabs.APIKey,
+  WorkspaceSettingsTabs.Appearance,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Budget,
+  WorkspaceSettingsTabs.ChatPreference,
   WorkspaceSettingsTabs.Creds,
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
+  WorkspaceSettingsTabs.Environments,
   WorkspaceSettingsTabs.General,
+  WorkspaceSettingsTabs.Hotkey,
+  WorkspaceSettingsTabs.Integrations,
   WorkspaceSettingsTabs.Labels,
+  WorkspaceSettingsTabs.Labs,
   WorkspaceSettingsTabs.Members,
+  WorkspaceSettingsTabs.Messenger,
   WorkspaceSettingsTabs.Notification,
   WorkspaceSettingsTabs.Plans,
+  WorkspaceSettingsTabs.Profile,
   WorkspaceSettingsTabs.ServiceModel,
   WorkspaceSettingsTabs.Stats,
   WorkspaceSettingsTabs.Storage,
+  WorkspaceSettingsTabs.SubscriptionAccounts,
+  WorkspaceSettingsTabs.Teams,
+  WorkspaceSettingsTabs.Trash,
   WorkspaceSettingsTabs.Usage,
 ]);
 
 /**
+ * Tabs whose content spans the full pane instead of the centered 1024 column —
+ * card grids that add columns as the pane widens (Devices), and the
+ * subscription account list, whose usage columns need the room.
+ */
+const FULL_WIDTH_TABS = new Set<string>([
+  WorkspaceSettingsTabs.Devices,
+  WorkspaceSettingsTabs.SubscriptionAccounts,
+]);
+
+const outletContainerStyle: CSSProperties = { overflow: 'hidden', position: 'relative' };
+
+/**
  * Bare workspace settings shell — sidebar + outlet, no content padding.
  * Use this when a child route owns its own full-bleed layout (e.g. Provider).
+ *
+ * The outlet sits in its own full-height flex column: on web the router outlet
+ * is already a flex item, but each Electron tab pane is a plain block box, so
+ * full-bleed pages sized with `max-height: 100%` (Provider) lost their bounded
+ * height there and their inner scroll area stopped scrolling.
  */
 const WorkspaceSettingsLayout: FC = () => {
   return (
     <>
       <SideBar />
-      <SWRConfig value={{ suspense: true }}>
-        <SuspenseRouteBoundary>
-          <RouteSkeletonChromeProvider>
-            <Outlet />
-          </RouteSkeletonChromeProvider>
-        </SuspenseRouteBoundary>
-      </SWRConfig>
+      <Flexbox allowShrink flex={1} height={'100%'} style={outletContainerStyle} width={'100%'}>
+        <RouteSkeletonChromeProvider>
+          <Outlet />
+        </RouteSkeletonChromeProvider>
+      </Flexbox>
     </>
   );
 };
@@ -57,15 +84,26 @@ const WorkspaceSettingsLayout: FC = () => {
  * other tabs keep the existing content-only wrapper.
  */
 const WorkspaceSettingsContentLayout: FC = memo(() => {
+  const { t } = useTranslation('auth');
   const categories = useWorkspaceSettingCategory();
   const match = useMatch('/:workspaceSlug/settings/:tab/*');
   const activeTab = match?.params.tab;
-  const title = categories
-    .flatMap((category) => category.items)
-    .find((item) => item.key === activeTab)?.label;
+  // Settings-search results deep-link to `#anchor` rows on these pages.
+  useSettingsAnchorScroll();
+  // The Profile nav item is labelled with the user's name (like the personal
+  // sidebar); the page header keeps the generic title instead.
+  const title =
+    activeTab === WorkspaceSettingsTabs.Profile
+      ? t('profile.title')
+      : categories.flatMap((category) => category.items).find((item) => item.key === activeTab)
+          ?.label;
 
   const content = (
-    <Container maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
+    <Container
+      maxWidth={activeTab && FULL_WIDTH_TABS.has(activeTab) ? '100%' : 1024}
+      paddingBlock={'24px 128px'}
+      paddingInline={24}
+    >
       <Outlet />
     </Container>
   );

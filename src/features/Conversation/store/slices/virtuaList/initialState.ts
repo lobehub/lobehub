@@ -8,6 +8,8 @@
 export interface VirtuaScrollMethods {
   getItemOffset: (index: number) => number;
   getItemSize: (index: number) => number;
+  /** The VList scroll element, `null` before it mounts */
+  getScrollElement: () => HTMLElement | null;
   getScrollOffset: () => number;
   getScrollSize: () => number;
   /**
@@ -20,6 +22,15 @@ export interface VirtuaScrollMethods {
   getTotalCount: () => number;
   getViewportSize: () => number;
   scrollTo: (offset: number) => void;
+  /**
+   * One-shot jump to the end by writing the scroller's `scrollTop` directly.
+   *
+   * Streaming auto-scroll must not use `scrollToIndex`: virtua keeps an
+   * imperative scroll alive and re-applies its target on every item resize
+   * that lands within 150ms, so while the reply keeps growing it pins the
+   * viewport to the bottom and overrides the user's own wheel/touch scroll.
+   */
+  scrollToEnd: () => void;
   scrollToIndex: (
     index: number,
     options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
@@ -47,6 +58,14 @@ export interface VirtuaListState {
   atBottom: boolean;
 
   /**
+   * Whether the user scrolled away from the bottom on purpose. While set,
+   * streaming output no longer pulls the viewport down, even when the user is
+   * still inside the `atBottom` threshold band. Cleared when the viewport
+   * reaches the real bottom again, on send, or on context switch.
+   */
+  autoScrollDetached: boolean;
+
+  /**
    * Whether the list is currently scrolling
    */
   isScrolling: boolean;
@@ -65,6 +84,7 @@ export interface VirtuaListState {
 export const virtuaListInitialState: VirtuaListState = {
   activeIndex: null,
   atBottom: true,
+  autoScrollDetached: false,
   isScrolling: false,
   virtuaScrollMethods: null,
   visibleItems: new Map(),

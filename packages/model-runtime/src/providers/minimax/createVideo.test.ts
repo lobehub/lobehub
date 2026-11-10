@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../core/openaiCompatible';
 import type { CreateVideoPayload } from '../../types/video';
 import {
   createMiniMaxVideo,
@@ -270,6 +270,34 @@ describe('createMiniMaxVideo', () => {
       {
         image_url: { url: 'https://example.com/ignored-last.jpg' },
         role: 'reference_image',
+        type: 'image_url',
+      },
+    ]);
+  });
+
+  it('should keep H3 frames as frames when the reference list has only empty entries', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ task_id: 'h3-frame-task' }),
+    });
+
+    const payload: CreateVideoPayload = {
+      model: 'MiniMax-H3',
+      params: {
+        imageUrl: 'https://example.com/first.jpg',
+        imageUrls: [''],
+        prompt: 'Animate the frame',
+      },
+    };
+
+    await createMiniMaxVideo(payload, mockOptions);
+
+    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(body.content).toEqual([
+      { text: 'Animate the frame', type: 'text' },
+      {
+        image_url: { url: 'https://example.com/first.jpg' },
+        role: 'first_frame',
         type: 'image_url',
       },
     ]);

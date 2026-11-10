@@ -680,6 +680,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'codex': {
     validateKeywords: ['codex'],
   },
+  'copilot': {
+    validateHelpKeywords: ['--acp'],
+    validateKeywords: ['github copilot cli', 'copilot'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'cursor': {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
@@ -688,6 +693,9 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validateHelpArgs: ['exec', '--help'],
     validateHelpKeywords: ['--output-format', 'ACP modes'],
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
+  'devin': {
+    validateKeywords: ['devin'],
   },
   'grok-build': {
     validateHelpArgs: ['agent', '--help'],
@@ -701,9 +709,9 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'opencode': {
-    // OpenCode prints only a bare version (for example `1.18.3`) for
-    // `--version`, without a product-name prefix.
-    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+    // OpenCode 1.x prints a bare version (`1.18.3`); 2.x prefixes the product
+    // name (`opencode v2.2.6`).
+    validatePattern: /^(?:opencode\s+)?v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/i,
   },
   'pi': {
     // Pi prints a bare semantic version for `--version`.
@@ -790,16 +798,32 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
 
       if (platform() !== 'darwin') return [];
 
-      // Codex.app was renamed to ChatGPT.app. Prefer the current bundle name,
-      // while keeping Codex.app as a fallback for older installations.
-      return ['ChatGPT.app', 'Codex.app'].flatMap((appBundleName) => {
-        const bundledCli = path.join(appBundleName, 'Contents', 'Resources', 'codex');
+      // Codex.app was renamed to ChatGPT.app. ChatGPT.app 26.9 then moved the
+      // CLI from `Resources/codex` into a self-contained `Resources/codex-cli/`
+      // package whose `codex-package.json` declares `bin/codex` as the
+      // entrypoint. Probe newest first; legacy Codex.app only ever shipped the
+      // flat binary.
+      return [
+        path.join('ChatGPT.app', 'Contents', 'Resources', 'codex-cli', 'bin', 'codex'),
+        path.join('ChatGPT.app', 'Contents', 'Resources', 'codex'),
+        path.join('Codex.app', 'Contents', 'Resources', 'codex'),
+      ].flatMap((bundledCli) => [
+        path.join('/Applications', bundledCli),
+        path.join(homedir(), 'Applications', bundledCli),
+      ]);
+    }
+    case 'copilot': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'copilot.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
 
-        return [
-          path.join('/Applications', bundledCli),
-          path.join(homedir(), 'Applications', bundledCli),
-        ];
-      });
+      return [
+        path.join(homedir(), '.local', 'bin', 'copilot'),
+        path.join(homedir(), '.bun', 'bin', 'copilot'),
+        path.join(homedir(), '.npm-global', 'bin', 'copilot'),
+        path.join(homedir(), 'Library', 'pnpm', 'copilot'),
+      ];
     }
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
@@ -822,6 +846,10 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join(homedir(), '.npm-global', 'bin', 'droid'),
         path.join(homedir(), 'Library', 'pnpm', 'droid'),
       ];
+    }
+    case 'devin': {
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.local', 'bin', 'devin')];
     }
     case 'grok-build': {
       if (platform() === 'win32') {
@@ -932,6 +960,8 @@ export interface ResolvedHeteroCommand {
    * login-shell PATH; undefined when nothing extra is needed.
    */
   pathEnv?: string;
+  /** Version the validating `--version` probe reported; undefined when not resolved. */
+  version?: string;
 }
 
 /**
@@ -961,7 +991,7 @@ export const resolveHeteroSpawnCommand = async (
   try {
     const status = await detectHeterogeneousCliCommand(agentType, defaultCommand);
     if (status.available && status.path) {
-      return { command: status.path, pathEnv: status.resolvedPathEnv };
+      return { command: status.path, pathEnv: status.resolvedPathEnv, version: status.version };
     }
   } catch {
     // best-effort: fall through to the bare command below

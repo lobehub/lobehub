@@ -1,6 +1,7 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import {
   type ChatToolPayload,
+  describeLockedDevicePicker,
   type ExtendedHumanInterventionConfig,
   type HumanInterventionConfig,
   type HumanInterventionPolicy,
@@ -25,11 +26,43 @@ import {
   type SubAgentResultPayload,
   type SubAgentsBatchResultPayload,
 } from '../types';
+import {
+  buildEmptyArgsToolContent,
+  EMPTY_ARGS_TOOL_CONTENT,
+  EMPTY_ARGS_TOOL_REASON,
+  partitionEmptyArgumentsCalls,
+} from '../utils/emptyArgumentsCalls';
+import { selectEffectiveToolManifestMap, selectRunTools } from '../utils/operationToolSet';
+import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
+import {
+  findCurrentTurnPendingToolMessages,
+  isFoldedAssistantGroup,
+  pendingToolMessagesFromGroup,
+} from './pendingToolMessages';
 
 const TOOL_NOT_ALLOWED_CONTENT =
   'Tool execution blocked because the tool is not allowed in the current execution scope.';
 const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
+/**
+ * Names the offending calls so the model sees what it actually emitted. The
+ * name it reads back from its own turn is regenerated from the persisted
+ * identifier/apiName pair, which for an unparseable name is not what it typed.
+ */
+const unresolvedToolContent = (names: string) =>
+  `Tool call rejected: no available tool is named ${names}. Copy a name exactly as declared in the tools schema and call it again.`;
+
+/** The remote-device picker; walled off on device-locked runs. */
+const REMOTE_DEVICE_IDENTIFIER = 'lobe-remote-device';
+const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
+/**
+ * How many times one operation may answer unresolvable tool calls with a
+ * rejected tool result before giving up. The feedback exists so the model can
+ * fix a garbled name; a model that keeps emitting names nothing can match is
+ * broken, and failing loudly beats burning the step budget on it.
+ */
+const UNRESOLVED_TOOL_FEEDBACK_LIMIT = 2;
+const PLUGIN_SCHEMA_SEPARATOR = '____';
 // Leave 35% of the model window for server-side context engineering (system
 // role, knowledge, memories, skills, etc.) and the model's completion. The
 // initial 50% threshold still supplies the lower side of the hysteresis band.
@@ -56,7 +89,7 @@ export class GeneralChatAgent implements Agent {
   }
 
   private getTools(state: AgentState, fallbackTools?: any[]): any[] | undefined {
-    return this.config.tools ?? state.tools ?? state.operationToolSet?.tools ?? fallbackTools;
+    return this.config.tools ?? selectRunTools(state) ?? fallbackTools;
   }
 
   private getAllowedToolNamesPayload() {
@@ -92,7 +125,7 @@ export class GeneralChatAgent implements Agent {
     state: AgentState,
   ): ExtendedHumanInterventionConfig | undefined {
     const { identifier, apiName } = toolCalling;
-    const manifest = state.toolManifestMap[identifier];
+    const manifest = selectEffectiveToolManifestMap(state)[identifier];
 
     if (!manifest) return undefined;
 
@@ -143,13 +176,19 @@ export class GeneralChatAgent implements Agent {
     const toolsToExecute: ChatToolPayload[] = [];
 
     // Get security blacklist for resolver metadata
-    const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+    const securityBlacklist = selectSecurityBlacklist(state) ?? DEFAULT_SECURITY_BLACKLIST;
 
-    // Build resolver metadata: merge state.metadata with security blacklist
-    const resolverMetadata = { ...state.metadata, securityBlacklist };
+    // Resolvers see one flat record: the run ledger plus the facts they audit
+    // against — the security blacklist and the plan's working directory (the
+    // path-scope audit fences file paths to it).
+    const resolverMetadata = {
+      ...state.metadata,
+      securityBlacklist,
+      workingDirectory: state.plan?.workingDirectory,
+    };
 
     // Get user config (default to 'manual' mode)
-    const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
+    const userConfig = selectUserInterventionConfig(state) || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
 
     // Global audits: default to security blacklist audit if not provided
@@ -195,12 +234,12 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Phase 2.5: Get manifest for later use
-      const manifest = state.toolManifestMap?.[identifier];
+      const manifest = selectEffectiveToolManifestMap(state)[identifier];
 
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
       const isDynamicConfig = this.isDynamicInterventionConfig(config);
-      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, state.metadata);
+      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, resolverMetadata);
       const staticConfig = isDynamicConfig
         ? undefined
         : (config as HumanInterventionConfig | undefined);
@@ -240,8 +279,7 @@ export class GeneralChatAgent implements Agent {
 
       if (dynamicPolicy !== undefined) {
         if (dynamicPolicy === 'never') toolsToExecute.push(toolCalling);
-        else if (approvalMode === 'allow-list' && allowList.includes(toolKey))
-          toolsToExecute.push(toolCalling);
+        else if (allowList.includes(toolKey)) toolsToExecute.push(toolCalling);
         else toolsNeedingIntervention.push(toolCalling);
         continue;
       }
@@ -250,7 +288,7 @@ export class GeneralChatAgent implements Agent {
       // Only applies to manual/allow-list modes; auto-run users accept the risk
       if (!manifest) {
         console.warn(
-          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(state.toolManifestMap ?? {}).join(', ')}), requiring intervention`,
+          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in effective toolManifestMap (keys: ${Object.keys(selectEffectiveToolManifestMap(state)).join(', ')}), requiring intervention`,
         );
         toolsNeedingIntervention.push(toolCalling);
         continue;
@@ -266,8 +304,11 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Phase 7: User config is 'manual' (default), use tool's own config
-      if (staticPolicy === 'never') {
+      // Phase 7: User config is 'manual' (default), use tool's own config —
+      // except for tools the user approved with "don't ask again for similar
+      // actions", which joined the allow-list. Calls that must always ask
+      // never reach here (handled above).
+      if (staticPolicy === 'never' || allowList.includes(toolKey)) {
         toolsToExecute.push(toolCalling);
       } else {
         toolsNeedingIntervention.push(toolCalling);
@@ -335,65 +376,9 @@ export class GeneralChatAgent implements Agent {
     return { existingToolMessageIds, hasToolsCalling, parentMessageId, toolsCalling };
   }
 
-  /**
-   * Pending-tool scope guard for the main loop.
-   *
-   * The pending-approval check must only count tool messages produced by the
-   * **current** assistant turn. Stale `pluginIntervention.status === 'pending'`
-   * rows from a previous turn (e.g. an abandoned approval flow whose user
-   * never clicked approve/reject) get loaded back into `state.messages` via
-   * `historyMessages` and would otherwise hijack every subsequent
-   * `tool_result` / `tools_batch_result` phase, parking the loop in
-   * `waiting_for_human` forever.
-   *
-   * "Current turn" = the most recent assistant message that emitted tool calls,
-   * stored as either model-native `tool_calls` or persisted `tools`. All pending
-   * tool messages legitimately belonging to this turn have
-   * `parentId === currentAssistantId`.
-   *
-   * Two message shapes reach this method and BOTH must be handled:
-   *
-   * 1. **Raw shape** (client runtime, and any step that never round-tripped
-   *    through the DB): a `role: 'assistant'` row carrying `tools` /
-   *    `tool_calls`, followed by sibling `role: 'tool'` rows whose
-   *    `pluginIntervention.status` is the approval state.
-   * 2. **Parsed shape** (server runtime): `AgentRuntimeService` rebuilds
-   *    `state.messages` from the DB through `conversation-flow`'s `parse()` on
-   *    every step entry, and `FlatListBuilder` folds an assistant plus its tool
-   *    rows into ONE `role: 'assistantGroup'` virtual message. In that shape
-   *    there is no `role: 'assistant'` row carrying tools and no top-level
-   *    `role: 'tool'` row at all — the tool calls live in
-   *    `children[].tools[]`, each carrying `intervention` and `result_msg_id`.
-   *
-   * Matching only shape 1 made this guard a no-op on the entire server runtime:
-   * approving one tool of a parallel batch resumed the LLM immediately while the
-   * other N-1 tool rows were still `pending` with empty content, so the model
-   * saw blank tool results and (visibly, in reproduction) re-issued the whole
-   * batch. Every parallel-approval defect downstream of that — forked parent
-   * chains, duplicate batches — starts here.
-   */
+  /** See {@link findCurrentTurnPendingToolMessages}. */
   private getCurrentTurnPendingToolMessages(state: AgentState): any[] {
-    const messages = (state.messages ?? []) as any[];
-
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-
-      // Shape 2 — parsed `assistantGroup`. Read the folded tool entries; their
-      // `result_msg_id` is the tool message id the approval flow addresses.
-      if (this.isFoldedAssistantGroup(m)) {
-        return this.pendingToolMessagesFromGroup(m);
-      }
-
-      // Shape 1 — raw assistant + sibling tool rows.
-      if (m.role === 'assistant' && (m.tool_calls?.length > 0 || m.tools?.length > 0)) {
-        return messages.filter(
-          (t: any) =>
-            t.role === 'tool' && t.pluginIntervention?.status === 'pending' && t.parentId === m.id,
-        );
-      }
-    }
-
-    return [];
+    return findCurrentTurnPendingToolMessages(state.messages);
   }
 
   /**
@@ -480,35 +465,11 @@ export class GeneralChatAgent implements Agent {
   }
 
   private isFoldedAssistantGroup(message: any): boolean {
-    return (
-      (message?.role === 'assistantGroup' || message?.role === 'supervisor') &&
-      (message.children ?? []).some((child: any) => child.tools?.length > 0)
-    );
+    return isFoldedAssistantGroup(message);
   }
 
-  /**
-   * Normalize an `assistantGroup`'s folded tool entries back into the tool-row
-   * shape the rest of the runner expects (`plugin`, `pluginIntervention`,
-   * `parentId`), keeping only the pending ones.
-   */
   private pendingToolMessagesFromGroup(group: any): any[] {
-    return (group.children ?? [])
-      .flatMap((child: any) => child.tools ?? [])
-      .filter((tool: any) => tool.intervention?.status === 'pending')
-      .map((tool: any) => {
-        // Drop the display-only fields FlatListBuilder merges onto the entry so
-        // `plugin` is a plain ChatToolPayload — the same shape the raw path
-        // produces, and what `request_human_approve` / `call_tool` expect.
-        const { intervention, result: _result, result_msg_id, ...plugin } = tool;
-        return {
-          id: result_msg_id,
-          parentId: group.id,
-          plugin: plugin as ChatToolPayload,
-          pluginIntervention: intervention,
-          role: 'tool',
-          tool_call_id: tool.id,
-        };
-      });
+    return pendingToolMessagesFromGroup(group);
   }
 
   /**
@@ -554,6 +515,31 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Fit the upcoming request under the compression threshold. Runs whether or
+   * not compression is enabled: the attachment preview plan keeps attachment
+   * text within the room the conversation leaves even when the conversation
+   * itself is never compressed.
+   */
+  private checkContextBudget(messages: any[], tools: any[] | undefined, state: AgentState) {
+    // Mirror RuntimeExecutors.callLlm: when state.forceFinish is set, the
+    // executor strips all tools via buildStepToolDelta (deactivatedToolIds: ['*']),
+    // so they must not count against the compression budget either — otherwise
+    // we'd burn an extra summarization pass on tool tokens that won't be sent.
+    return shouldCompress(messages, {
+      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      thresholdRatio: this.getCompressionThresholdRatio(messages),
+      tools: state.forceFinish ? undefined : tools,
+    });
+  }
+
+  private withAttachmentPreviews<T extends object>(
+    payload: T,
+    attachmentPreviewFileIds: string[],
+  ): T {
+    return attachmentPreviewFileIds.length > 0 ? { ...payload, attachmentPreviewFileIds } : payload;
+  }
+
+  /**
    * Proceed to the next LLM call, inserting compression first when needed.
    */
   private toLLMCall(
@@ -562,37 +548,36 @@ export class GeneralChatAgent implements Agent {
   ): AgentInstruction {
     const payloadWithAllowedToolNames = {
       ...payload,
+      // A resume-seeded placeholder (tool-first resume, client-wait resume) is
+      // filled by the first LLM turn whichever phase plans it.
+      ...(!payload.assistantMessageId &&
+        state.pendingAssistantMessageId && { assistantMessageId: state.pendingAssistantMessageId }),
       ...this.getAllowedToolNamesPayload(),
     };
     const compressionEnabled = this.config.compressionConfig?.enabled ?? true;
-    // Mirror RuntimeExecutors.callLlm: when state.forceFinish is set, the
-    // executor strips all tools via buildStepToolDelta (deactivatedToolIds: ['*']),
-    // so they must not count against the compression budget either — otherwise
-    // we'd burn an extra summarization pass on tool tokens that won't be sent.
-    const compressionOptions = {
-      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-      thresholdRatio: this.getCompressionThresholdRatio(payloadWithAllowedToolNames.messages),
-      tools: state.forceFinish ? undefined : payloadWithAllowedToolNames.tools,
-    };
+    const messages = payloadWithAllowedToolNames.messages;
+    const compressionCheck = this.checkContextBudget(
+      messages,
+      payloadWithAllowedToolNames.tools,
+      state,
+    );
 
-    if (compressionEnabled) {
-      const messages = payloadWithAllowedToolNames.messages;
-      const compressionCheck = shouldCompress(messages, compressionOptions);
-
-      if (compressionCheck.needsCompression) {
-        return {
-          payload: {
-            currentTokenCount: compressionCheck.currentTokenCount,
-            existingSummary: this.findExistingSummary(messages),
-            messages,
-          },
-          type: 'compress_context',
-        };
-      }
+    if (compressionEnabled && compressionCheck.needsCompression) {
+      return {
+        payload: {
+          currentTokenCount: compressionCheck.currentTokenCount,
+          existingSummary: this.findExistingSummary(messages),
+          messages,
+        },
+        type: 'compress_context',
+      };
     }
 
     return {
-      payload: payloadWithAllowedToolNames,
+      payload: this.withAttachmentPreviews(
+        payloadWithAllowedToolNames,
+        compressionCheck.attachmentPreviewFileIds,
+      ),
       type: 'call_llm',
     };
   }
@@ -638,28 +623,22 @@ export class GeneralChatAgent implements Agent {
       case 'user_input': {
         // Check if context compression is enabled and needed before calling LLM
         const compressionEnabled = this.config.compressionConfig?.enabled ?? true; // Default to enabled
-        // Mirror RuntimeExecutors.callLlm: force-finish steps ship without tools,
-        // so they must not count against the compression budget here either.
-        const compressionOptions = {
-          maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-          thresholdRatio: this.getCompressionThresholdRatio(state.messages),
-          tools: state.forceFinish ? undefined : this.getTools(state),
-        };
+        const compressionCheck = this.checkContextBudget(
+          state.messages,
+          this.getTools(state),
+          state,
+        );
 
-        if (compressionEnabled) {
-          const compressionCheck = shouldCompress(state.messages, compressionOptions);
-
-          if (compressionCheck.needsCompression) {
-            // Context exceeds threshold, compress ALL messages into a single summary
-            return {
-              payload: {
-                currentTokenCount: compressionCheck.currentTokenCount,
-                existingSummary: this.findExistingSummary(state.messages),
-                messages: state.messages,
-              },
-              type: 'compress_context',
-            } as AgentInstructionCompressContext;
-          }
+        if (compressionEnabled && compressionCheck.needsCompression) {
+          // Context exceeds threshold, compress ALL messages into a single summary
+          return {
+            payload: {
+              currentTokenCount: compressionCheck.currentTokenCount,
+              existingSummary: this.findExistingSummary(state.messages),
+              messages: state.messages,
+            },
+            type: 'compress_context',
+          } as AgentInstructionCompressContext;
         }
 
         // User input received, call LLM to generate response
@@ -667,12 +646,15 @@ export class GeneralChatAgent implements Agent {
         const basePayload = context.payload as any;
         const tools = this.getTools(state, basePayload?.tools);
         return {
-          payload: {
-            ...basePayload,
-            ...this.getAllowedToolNamesPayload(),
-            messages: state.messages,
-            tools,
-          } as GeneralAgentCallLLMInstructionPayload,
+          payload: this.withAttachmentPreviews(
+            {
+              ...basePayload,
+              ...this.getAllowedToolNamesPayload(),
+              messages: state.messages,
+              tools,
+            } as GeneralAgentCallLLMInstructionPayload,
+            compressionCheck.attachmentPreviewFileIds,
+          ),
           type: 'call_llm',
         };
       }
@@ -683,14 +665,42 @@ export class GeneralChatAgent implements Agent {
           context.payload as GeneralAgentCallLLMResultPayload;
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
-          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(toolsCalling);
+          // Reject argument-loss calls before they reach the executor: a
+          // parallel batch that lost its arguments would otherwise burn one
+          // schema-validation error per call with no hint at the real cause
+          // (see EMPTY_ARGS_TOOL_CONTENT). Executable calls in the same batch
+          // still run, and the feedback rides the resolve_blocked_tools path
+          // so the model sees one rejected tool row per lost call.
+          const { emptyArgsCalls, executableCalls } = partitionEmptyArgumentsCalls(
+            toolsCalling,
+            state,
+          );
+
+          const instructions: AgentInstruction[] = [];
+
+          if (emptyArgsCalls.length > 0) {
+            instructions.push({
+              payload: {
+                blockedContent: EMPTY_ARGS_TOOL_CONTENT,
+                blockedContentByCallId: Object.fromEntries(
+                  emptyArgsCalls.map((call) => [call.id, buildEmptyArgsToolContent(call)]),
+                ),
+                blockedReason: EMPTY_ARGS_TOOL_REASON,
+                parentMessageId,
+                toolsCalling: emptyArgsCalls,
+              },
+              type: 'resolve_blocked_tools',
+            } satisfies AgentInstruction);
+          }
+
+          if (executableCalls.length === 0) return instructions;
+
+          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(executableCalls);
           // Check which tools need human intervention
           const [toolsNeedingIntervention, toolsToExecute] = await this.checkInterventionNeeded(
             allowedTools,
             state,
           );
-
-          const instructions: AgentInstruction[] = [];
 
           // Execute tools that don't need intervention first
           // These will run immediately before any approval requests
@@ -730,9 +740,12 @@ export class GeneralChatAgent implements Agent {
           // Request approval for tools that need intervention
           // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            if (state.userInterventionConfig?.approvalMode === 'headless') {
+            if (selectUserInterventionConfig(state)?.approvalMode === 'headless') {
               instructions.push({
                 payload: {
+                  blockedContent:
+                    'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+                  blockedReason: 'human_intervention_unavailable',
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,
                 },
@@ -757,64 +770,101 @@ export class GeneralChatAgent implements Agent {
           return instructions;
         }
 
-        // Silent-drop diagnostic: LLM emitted raw tool_calls but every one
-        // failed to resolve to a known tool (e.g. malformed names without the
-        // `____` separator). Surface this in reasonDetail so dashboards can
-        // distinguish it from a genuine no-tool completion. See .
-        const rawToolCallCount = result?.tool_calls?.length ?? 0;
-        const hasUnresolvedToolCalls = rawToolCallCount > 0;
+        // The model asked for tools but not one name resolved — it garbled the
+        // `____` separator beyond repair, or named a tool that was never
+        // offered. Finishing here would write an empty assistant message and
+        // mark the operation `done` while the requested work never ran, which
+        // reads as a conversation that just stopped mid-task. Hand the model a
+        // rejected tool result instead so it can retry with a real name.
+        const rawToolCalls = result?.tool_calls ?? [];
+        if (rawToolCalls.length > 0) {
+          const namedToolCalls = rawToolCalls.filter((toolCall) => !!toolCall.function?.name);
+          const unresolvedNames = namedToolCalls
+            .map((toolCall) => toolCall.function.name)
+            .join(', ');
+          const overFeedbackLimit =
+            (state.unresolvedToolFeedbackRounds ?? 0) >= UNRESOLVED_TOOL_FEEDBACK_LIMIT;
+
+          // Past max steps the LLM payload carries no tools at all, so a tool
+          // call here is the model ignoring that. The run is already over
+          // budget — end it rather than spending more steps on a retry, and
+          // keep the names for the dashboards.
+          if (state.forceFinish) {
+            return {
+              reason: 'max_steps_completed',
+              reasonDetail: `LLM returned ${rawToolCalls.length} unresolvable tool_calls after max steps: ${unresolvedNames || 'unnamed'}`,
+              type: 'finish',
+            };
+          }
+
+          // Nothing addressable to reject (nameless calls), or the model has
+          // already been told twice: fail the operation so it surfaces as an
+          // error instead of a silent `done`.
+          if (namedToolCalls.length === 0 || overFeedbackLimit) {
+            throw new Error(
+              `LLM returned ${rawToolCalls.length} unresolvable tool_calls: ${unresolvedNames || 'unnamed'}`,
+            );
+          }
+
+          // A picker call on a locked run is not a typo: the tool was withheld on
+          // purpose, and "copy the name exactly" sends the model into a retry
+          // loop that ends the operation. Say why and who can switch instead;
+          // any other unresolved name in the batch keeps the typo feedback.
+          const lockedPickerNote = state.plan?.execution
+            ? describeLockedDevicePicker(state.plan.execution)
+            : undefined;
+          const isPickerCall = (name: string) =>
+            name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === REMOTE_DEVICE_IDENTIFIER;
+          const allNames = namedToolCalls.map((toolCall) => toolCall.function.name);
+          const pickerNames = lockedPickerNote ? allNames.filter(isPickerCall) : [];
+          const otherNames = allNames.filter((name) => !pickerNames.includes(name));
+          const blockedContent = [
+            pickerNames.length > 0 &&
+              `Tool call rejected: ${pickerNames.join(', ')} is not available in this run. ${lockedPickerNote}`,
+            otherNames.length > 0 && unresolvedToolContent(otherNames.join(', ')),
+          ]
+            .filter(Boolean)
+            .join('\n\n');
+
+          return {
+            payload: {
+              blockedContent,
+              blockedReason: UNRESOLVED_TOOL_REASON,
+              parentMessageId,
+              unresolvedToolNames: true,
+              toolsCalling: namedToolCalls.map((toolCall): ChatToolPayload => {
+                const [identifier, apiName] = toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+
+                return {
+                  apiName: apiName ?? identifier,
+                  arguments: toolCall.function.arguments,
+                  id: toolCall.id,
+                  identifier,
+                  // A garbled name does not mean a garbled signature: Gemini
+                  // 3.x still requires `thoughtSignature` to come back on the
+                  // next turn or it 400s, which would kill the retry this
+                  // rejection exists to enable.
+                  thoughtSignature: toolCall.thoughtSignature,
+                  type: 'builtin',
+                };
+              }),
+            },
+            type: 'resolve_blocked_tools',
+          } satisfies AgentInstruction;
+        }
 
         // No tool calls, conversation is complete
         return {
           reason: state.forceFinish ? 'max_steps_completed' : 'completed',
-          reasonDetail: hasUnresolvedToolCalls
-            ? `LLM returned ${rawToolCallCount} unresolvable tool_calls: ${(
-                result?.tool_calls ?? []
-              )
-                .map((tc) => tc.function?.name)
-                .filter(Boolean)
-                .join(', ')}`
-            : state.forceFinish
-              ? 'Force finish: LLM produced final text response after max steps'
-              : 'LLM response completed without tool calls',
+          reasonDetail: state.forceFinish
+            ? 'Force finish: LLM produced final text response after max steps'
+            : 'LLM response completed without tool calls',
           type: 'finish',
         };
       }
 
       case 'tool_result': {
-        const { data, parentMessageId, stop } =
-          context.payload as GeneralAgentCallToolResultPayload;
-
-        // Legacy async agent invocation path. `callAgent({ runAsTask: true })`
-        // emits state.type=execSubAgent* with stop=true so the runtime can fork
-        // a background agent run after the tool call is persisted.
-        if (stop && data?.state) {
-          const stateType = data.state.type;
-
-          // Server-side legacy agent invocation (single)
-          if (stateType === 'execSubAgent') {
-            const { parentMessageId: execParentId, task } = data.state as {
-              parentMessageId: string;
-              task: any;
-            };
-            return {
-              payload: { parentMessageId: execParentId, task },
-              type: 'exec_sub_agent',
-            };
-          }
-
-          // Server-side legacy agent invocations (multiple)
-          if (stateType === 'execSubAgents') {
-            const { parentMessageId: execParentId, tasks } = data.state as {
-              parentMessageId: string;
-              tasks: any[];
-            };
-            return {
-              payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_sub_agents',
-            };
-          }
-        }
+        const { parentMessageId } = context.payload as GeneralAgentCallToolResultPayload;
 
         // Scope pending check to the current assistant turn so stale
         // `pending` rows from prior turns can never block the loop.
@@ -885,6 +935,12 @@ export class GeneralChatAgent implements Agent {
         // Single sub-agent completed, continue to call LLM with result
         const { parentMessageId } = context.payload as SubAgentResultPayload;
 
+        // Same decision point as the batch variant: hand the turn back for
+        // queued user messages instead of another model call first.
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
+
         // Continue to call LLM with the latest state after the sub-agent run.
         return this.toLLMCall(
           {
@@ -947,20 +1003,27 @@ export class GeneralChatAgent implements Agent {
         // Otherwise, messages have been updated with compressed content, and a
         // normal turn forces a fresh assistant message.
         const seededAssistantMessageId = state.pendingAssistantMessageId;
+        const messages = compressionPayload.compressedMessages ?? state.messages;
+        // The kept latest user message can still carry more attachment text than
+        // the compressed context has room for.
+        const { attachmentPreviewFileIds } = this.checkContextBudget(messages, tools, state);
 
         return {
-          payload: {
-            ...(seededAssistantMessageId
-              ? { assistantMessageId: seededAssistantMessageId }
-              : // Force create new assistant message after compression
-                { createAssistantMessage: true }),
-            messages: compressionPayload.compressedMessages ?? state.messages,
-            model: this.config.modelRuntimeConfig?.model,
-            parentMessageId: compressionPayload.parentMessageId,
-            provider: this.config.modelRuntimeConfig?.provider,
-            tools,
-            ...this.getAllowedToolNamesPayload(),
-          } as GeneralAgentCallLLMInstructionPayload,
+          payload: this.withAttachmentPreviews(
+            {
+              ...(seededAssistantMessageId
+                ? { assistantMessageId: seededAssistantMessageId }
+                : // Force create new assistant message after compression
+                  { createAssistantMessage: true }),
+              messages,
+              model: this.config.modelRuntimeConfig?.model,
+              parentMessageId: compressionPayload.parentMessageId,
+              provider: this.config.modelRuntimeConfig?.provider,
+              tools,
+              ...this.getAllowedToolNamesPayload(),
+            } as GeneralAgentCallLLMInstructionPayload,
+            attachmentPreviewFileIds,
+          ),
           type: 'call_llm',
         };
       }

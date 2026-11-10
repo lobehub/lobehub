@@ -1,8 +1,17 @@
 import type { HeteroSessionDirGroup, HeteroSessionDirPref } from '@lobechat/types';
 import { ClaudeCode, Codex } from '@lobehub/icons';
-import { DraggablePanel, Flexbox, Icon, ScrollShadow, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DraggablePanel,
+  Flexbox,
+  Icon,
+  ScrollShadow,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronRight, Eye, EyeOff, Folder, FolderGit2, Timer, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -134,6 +143,7 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
 
   return (
     <DraggablePanel
+      backgroundColor={cssVar.colorBgLayout}
       defaultSize={{ width: 232 }}
       expandable={false}
       maxWidth={420}

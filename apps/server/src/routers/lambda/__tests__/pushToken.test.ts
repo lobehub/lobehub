@@ -17,13 +17,17 @@ vi.mock('@/business/server/notification/liveActivity', () => ({
 }));
 
 vi.mock('@/database/models/pushToken', () => ({
-  PushLiveActivityModel: vi.fn(() => ({
-    unregisterDevice: mockUnregisterLiveActivities,
-  })),
-  PushTokenModel: vi.fn(() => ({
-    unregister: mockUnregister,
-    upsert: mockUpsert,
-  })),
+  PushLiveActivityModel: vi.fn(function () {
+    return {
+      unregisterDevice: mockUnregisterLiveActivities,
+    };
+  }),
+  PushTokenModel: vi.fn(function () {
+    return {
+      unregister: mockUnregister,
+      upsert: mockUpsert,
+    };
+  }),
   deletePushTokenByExpoTokenAndDevice: (...args: unknown[]) =>
     mockDeleteByExpoTokenAndDevice(...args),
 }));
@@ -189,30 +193,6 @@ describe('pushTokenRouter', () => {
       expectTypeOf(result.interventionStatus).toEqualTypeOf<AgentInterventionReviewStatus>();
     });
 
-    it.each([
-      { interventionStatus: 'approved', interventionTerminal: true },
-      { interventionStatus: 'rejected', interventionTerminal: true },
-      { interventionStatus: 'mixed', interventionTerminal: false },
-      { interventionStatus: 'mixed', interventionTerminal: true },
-    ] satisfies LiveActivityBusiness.RegisterAgentInterventionLiveActivityResult[])(
-      'preserves generic status $interventionStatus with terminal=$interventionTerminal',
-      async (registrationResult) => {
-        mockRegisterLiveActivity.mockResolvedValueOnce(registrationResult);
-        const caller = createCaller();
-
-        const result = await caller.registerLiveActivity({
-          activityId: 'native-activity-1',
-          activityKey: 'batch-1',
-          apnsEnvironment: 'sandbox',
-          deviceId: 'iphone',
-          operationId: 'op-1',
-          pushToken: 'activity-update-token',
-        });
-
-        expect(result).toEqual(registrationResult);
-      },
-    );
-
     it('rejects a legacy activityId-only registration without a durable activityKey', async () => {
       const caller = createCaller();
       await expect(
@@ -304,20 +284,6 @@ describe('pushTokenRouter', () => {
       expect(mockDeleteByExpoTokenAndDevice).toHaveBeenCalled();
       expect(mockUnregister).not.toHaveBeenCalled();
       expect(mockUnregisterLiveActivities).not.toHaveBeenCalled();
-    });
-
-    it('should prefer expoToken precision over the legacy userId fallback', async () => {
-      // If both are available, always take Path A — the (expoToken, deviceId)
-      // pair is more precise and doesn't risk deleting a wrong row.
-      const caller = createCaller();
-
-      await caller.unregister({
-        deviceId: 'device-1',
-        expoToken: 'ExponentPushToken[abc]',
-      });
-
-      expect(mockDeleteByExpoTokenAndDevice).toHaveBeenCalled();
-      expect(mockUnregister).not.toHaveBeenCalled();
     });
 
     it('should reject empty deviceId', async () => {

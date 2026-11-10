@@ -9,9 +9,11 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { AgentSpaceRepository } from '@/database/repositories/agentSpace';
+import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { FileService } from '@/server/services/file';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -43,9 +45,23 @@ import {
  */
 const updatableKnowledgeBaseFields = z.object({
   avatar: z.string().nullish(),
+  /** Cover image (preset key or uploaded URL); `null` restores the generated default. */
+  cover: z.string().nullish(),
   description: z.string().nullish(),
   name: z.string().optional(),
 });
+
+/**
+ * The cover lives in the `settings` jsonb next to other library settings, so an
+ * edit merges into the stored object instead of replacing it.
+ */
+export const mergeKnowledgeBaseCover = (
+  settings: unknown,
+  cover: string | null | undefined,
+): Record<string, unknown> => {
+  const { cover: _previous, ...rest } = (settings as Record<string, unknown> | null) ?? {};
+  return cover ? { ...rest, cover } : rest;
+};
 
 const assertKnowledgeItemsAccessible = async (
   ctx: {
@@ -56,7 +72,6 @@ const assertKnowledgeItemsAccessible = async (
     workspaceId?: string | null;
   },
   ids: string[],
-  targetVisibility?: 'private' | 'public' | null,
 ): Promise<void> => {
   const uniqueIds = [...new Set(ids)];
   const documentIds = uniqueIds.filter((id) => id.startsWith('docs_'));
@@ -70,17 +85,6 @@ const assertKnowledgeItemsAccessible = async (
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'One or more resources were not found or are not accessible',
-    });
-  }
-
-  if (
-    ctx.workspaceId &&
-    targetVisibility &&
-    [...documents, ...files].some((item) => item.visibility !== targetVisibility)
-  ) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Resource visibility must match knowledge base visibility',
     });
   }
 
@@ -100,6 +104,16 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
   });
 });
 
+/** A dedicated space follows its agent or project; it is never removed or moved on its own. */
+const assertNotDedicatedKnowledgeBase = (knowledgeBase: { type: string | null }) => {
+  if ((DEDICATED_KNOWLEDGE_BASE_TYPES as readonly (string | null)[]).includes(knowledgeBase.type)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This knowledge base belongs to an agent or project',
+    });
+  }
+};
+
 export const knowledgeBaseRouter = router({
   addFilesToKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))
@@ -112,7 +126,14 @@ export const knowledgeBaseRouter = router({
         visibility: kb.visibility ?? null,
         workspaceId: kb.workspaceId ?? null,
       });
-      await assertKnowledgeItemsAccessible(ctx, input.ids, kb.visibility);
+      // A library is a directory of references, not a container that makes its
+      // contents uniform: who can see a row is decided by the row's own
+      // `visibility`, which is what every listing already filters on. This
+      // entry used to additionally demand `item.visibility === kb.visibility`,
+      // which blocked the ordinary "file the draft now, share it when it's
+      // ready" move while doing nothing to stop the same state being reached by
+      // adding first and flipping visibility afterwards.
+      await assertKnowledgeItemsAccessible(ctx, input.ids);
 
       try {
         return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
@@ -137,6 +158,7 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         avatar: z.string().optional(),
+        cover: z.string().optional(),
         description: z.string().optional(),
         name: z.string(),
         visibility: z.enum(['private', 'public']).optional(),
@@ -147,6 +169,7 @@ export const knowledgeBaseRouter = router({
         avatar: input.avatar,
         description: input.description,
         name: input.name,
+        settings: input.cover ? { cover: input.cover } : undefined,
         visibility: input.visibility,
       });
 
@@ -368,6 +391,22 @@ export const knowledgeBaseRouter = router({
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
 
+  getAgentSpaces: knowledgeBaseProcedure.query(async ({ ctx }) => {
+    const { enableAgentKnowledgeSpace } = await getServerFeatureFlagsStateFromRuntimeConfig(
+      ctx.userId,
+    );
+    if (!enableAgentKnowledgeSpace) return [];
+
+    const spaces = await new AgentSpaceRepository(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    ).list();
+
+    // Same rule as the library list: a card must open for whoever can see it.
+    return filterRestrictedKnowledgeBases(ctx, spaces);
+  }),
+
   removeKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .input(z.object({ id: z.string() }))
@@ -375,6 +414,7 @@ export const knowledgeBaseRouter = router({
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertNotDedicatedKnowledgeBase(existing);
       await assertKnowledgeBaseBrowsable(ctx, input.id, {
         userId: existing.userId,
         visibility: existing.visibility ?? null,
@@ -421,6 +461,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertNotDedicatedKnowledgeBase(knowledgeBase);
       assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
       // The transfer rehomes every linked file/document — a non-owner member
       // must not move teammates' rows along with their own KB.
@@ -501,6 +542,12 @@ export const knowledgeBaseRouter = router({
         workspaceId: existing.workspaceId ?? null,
       });
 
-      return ctx.knowledgeBaseModel.update(input.id, input.value);
+      const { cover, ...value } = input.value;
+      return ctx.knowledgeBaseModel.update(
+        input.id,
+        cover === undefined
+          ? value
+          : { ...value, settings: mergeKnowledgeBaseCover(existing.settings, cover) },
+      );
     }),
 });

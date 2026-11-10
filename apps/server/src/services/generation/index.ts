@@ -8,6 +8,7 @@ import { IMAGE_GENERATION_CONFIG } from 'model-bank';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 
+import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { FileService } from '@/server/services/file';
 import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
@@ -57,18 +58,70 @@ export async function fetchImageFromUrl(
     // are read and returned, other responses leak status/statusText for blind probing.
     // ssrfSafeFetch blocks private/link-local IPs at connect time and on every redirect hop.
     // See GHSA-53h9-fmjf-frwr / #16536.
-    const response = await ssrfSafeFetch(url, { headers: fetchHeaders });
-    if (!response.ok) {
+    return downloadWithRetry(url, fetchHeaders);
+  }
+}
+
+/**
+ * Delays before each retry of a remote image download. Providers such as xAI return a
+ * short-lived CDN URL after the generation is already billed upstream, so a single reset
+ * connection (ECONNRESET while reading the body) would otherwise discard a paid image.
+ */
+export const IMAGE_DOWNLOAD_RETRY_DELAYS_MS = [500, 1500];
+
+const isRetryableStatus = (status: number) => status === 408 || status === 429 || status >= 500;
+
+/**
+ * Download through ssrfSafeFetch, retrying transient failures: thrown network/body-read
+ * errors and 408/429/5xx responses. SSRF blocks and other 4xx responses are final.
+ */
+const downloadWithRetry = async (
+  url: string,
+  fetchHeaders?: Record<string, string>,
+): Promise<{ buffer: Buffer; mimeType: string }> => {
+  for (let attempt = 0; ; attempt++) {
+    const canRetry = attempt < IMAGE_DOWNLOAD_RETRY_DELAYS_MS.length;
+    let response: Response;
+
+    try {
+      response = await ssrfSafeFetch(url, { headers: fetchHeaders });
+      // ssrfSafeFetch resolves at the headers, so a reset while downloading the body
+      // surfaces here and must stay inside the retry.
+      if (response.ok) {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+        return { buffer, mimeType };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith('SSRF blocked')) throw error;
+
+      if (!canRetry) {
+        // Keep the transport detail in `cause` only: body-read failures surface as
+        // "...: aborted", which the async image task would misreport as TaskTimeout.
+        throw new Error(
+          `Failed to fetch image from ${url} after ${attempt + 1} attempts: network error`,
+          { cause: error },
+        );
+      }
+
+      log('Image download failed, retrying (attempt %d): %s', attempt + 1, message);
+      await new Promise((resolve) => setTimeout(resolve, IMAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt]));
+      continue;
+    }
+
+    // The error body is never read; release its connection.
+    await response.body?.cancel().catch(() => {});
+    if (!canRetry || !isRetryableStatus(response.status)) {
       throw new Error(
         `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,
       );
     }
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-    return { buffer, mimeType };
+
+    log('Image download returned %d, retrying (attempt %d)', response.status, attempt + 1);
+    await new Promise((resolve) => setTimeout(resolve, IMAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt]));
   }
-}
+};
 
 interface ImageForGeneration {
   buffer: Buffer;
@@ -86,9 +139,11 @@ interface ImageForGeneration {
  */
 export class GenerationService {
   private fileService: FileService;
+  private generationTopicModel: GenerationTopicModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.fileService = new FileService(db, userId, workspaceId);
+    this.generationTopicModel = new GenerationTopicModel(db, userId, workspaceId);
   }
 
   /**
@@ -267,8 +322,63 @@ export class GenerationService {
     log('Creating cover image from URL:', coverUrl.startsWith('data:') ? 'base64 data' : coverUrl);
 
     // Fetch image buffer using utility function
-    const { buffer: originalImageBuffer } = await fetchImageFromUrl(coverUrl);
+    const { buffer } = await fetchImageFromUrl(coverUrl);
 
+    return this.createCoverFromBuffer(buffer);
+  }
+
+  /**
+   * Fill an empty topic cover from a generated asset stored in S3.
+   *
+   * Runs on the server success path so topics get a cover no matter where the
+   * generation was started (image/video page, agent tools) or whether any
+   * client is still polling. Failures are logged and swallowed: the generation
+   * itself already succeeded.
+   *
+   * @param topicId - The generation topic to fill
+   * @param sourceKey - S3 key of the generated image or video thumbnail
+   */
+  async ensureTopicCover(topicId: string, sourceKey: string): Promise<void> {
+    let coverKey: string | undefined;
+    try {
+      const topic = await this.generationTopicModel.findById(topicId);
+      if (!topic || topic.coverUrl) return;
+
+      // Read the object directly instead of fetching its URL, which may be an
+      // internal S3 endpoint rejected by the SSRF-safe fetch in self-hosted setups.
+      const source = await this.fileService.getFileByteArray(sourceKey);
+      coverKey = await this.createCoverFromBuffer(Buffer.from(source));
+
+      const updated = await this.generationTopicModel.updateCoverIfEmpty(topicId, coverKey);
+      if (updated) return;
+
+      log('Topic %s got a cover from a concurrent generation, removing %s', topicId, coverKey);
+    } catch (error) {
+      console.error('[generation] Failed to set topic cover:', error);
+      if (!coverKey) return;
+
+      // The update may have committed before failing (e.g. the connection dropped
+      // before returning). Deleting a committed cover would leave a broken
+      // reference that later generations never repair, so only delete when the
+      // topic provably does not use it; keep the object if that cannot be checked.
+      try {
+        const topic = await this.generationTopicModel.findById(topicId);
+        if (topic?.coverUrl === coverKey) return;
+      } catch (checkError) {
+        console.error('[generation] Failed to verify topic cover, keeping upload:', checkError);
+        return;
+      }
+    }
+
+    // The uploaded cover was not saved on the topic; delete it so it is not orphaned
+    try {
+      await this.fileService.deleteFile(coverKey);
+    } catch (error) {
+      console.error('[generation] Failed to delete unused topic cover:', error);
+    }
+  }
+
+  private async createCoverFromBuffer(originalImageBuffer: Buffer): Promise<string> {
     // Get image metadata to calculate proper cover dimensions
     const sharpInstance = sharp(originalImageBuffer);
     const { width, height } = await sharpInstance.metadata();

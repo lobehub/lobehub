@@ -1,8 +1,12 @@
+import { randomUUID } from 'node:crypto';
+import posixPath from 'node:path/posix';
+
 import {
   type SandboxCallToolResult,
   type SandboxExportFileResult,
   selectSandboxInitFiles,
 } from '@lobechat/builtin-tool-cloud-sandbox';
+import { getLocalImageMimeType, MAX_IMAGE_READ_BYTES } from '@lobechat/local-file-shell/read-image';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
@@ -13,6 +17,15 @@ import {
   SANDBOX_INIT_TIMEOUT_MS,
   type SandboxInitDownload,
 } from './bootstrap';
+import {
+  buildSandboxEnvironmentInitCommand,
+  environmentInitRan,
+  environmentInitReport,
+  hasEnvironmentInitWork,
+  SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS,
+  withEnvironmentVariables,
+} from './environmentInit';
+import { isSandboxAccessDeniedError, isSandboxAuthError } from './errors';
 import type {
   SandboxCommandResult,
   SandboxProvider,
@@ -24,10 +37,16 @@ import type {
 
 const log = debug('lobe-server:sandbox:service');
 
+/** `readLocalFile` is the legacy name still used by ComputerRuntime and remote sandboxes. */
+const READ_FILE_TOOL_NAMES = new Set(['readFile', 'readLocalFile']);
+
 export class SandboxMiddlewareService implements SandboxService {
   readonly capabilities: SandboxProviderCapabilities;
   readonly kind: SandboxProviderKind;
 
+  private environmentInitialized = false;
+  /** What applying the environment said, until a shell result carries it. */
+  private pendingEnvironmentReport: string | undefined;
   private filesInitialized = false;
 
   constructor(
@@ -42,8 +61,166 @@ export class SandboxMiddlewareService implements SandboxService {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
+    const report = await this.ensureEnvironmentInitialized();
+    if (report) this.pendingEnvironmentReport = report;
     await this.ensureFilesInitialized();
-    return this.provider.callTool(toolName, params);
+
+    if (READ_FILE_TOOL_NAMES.has(toolName) && typeof params.path === 'string') {
+      const mimeType = getLocalImageMimeType(params.path);
+      if (mimeType) return this.readSandboxImageFile(params.path, mimeType);
+    }
+
+    const result = await this.provider.callTool(
+      toolName,
+      this.applyEnvironmentVariables(toolName, params),
+    );
+
+    // Held until a shell result can carry it: a first call that lists or
+    // reads files has no output to put it in, and dropping it would hide a
+    // failed setup from the rest of the conversation.
+    const pending = this.pendingEnvironmentReport;
+    if (!pending || !SHELL_TOOLS.has(toolName)) return result;
+    this.pendingEnvironmentReport = undefined;
+
+    return withEnvironmentReport(toolName, result, pending);
+  }
+
+  /**
+   * A shell call with the topic's environment variables exported in front of
+   * its command, so the conversation's commands — and anything they start,
+   * like a coding agent — see what the environment declares, not only its
+   * clone and setup. Other tools, and calls without a string command, pass
+   * through unchanged.
+   */
+  private applyEnvironmentVariables(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const env = this.options.sandboxInitialization?.env;
+    if (
+      !env ||
+      !SHELL_TOOLS.has(toolName) ||
+      typeof params.command !== 'string' ||
+      !params.command.trim()
+    )
+      return params;
+
+    return { ...params, command: withEnvironmentVariables(params.command, env) };
+  }
+
+  /**
+   * Apply the topic's environment to the working directory the first time this
+   * service instance is used: clone its repository and run its setup there.
+   *
+   * The command itself decides whether to run: only an empty directory is
+   * initialized, so a temporary sandbox is initialized each time it starts
+   * empty and a folder on the drive once. Best-effort: a failure is reported,
+   * never thrown, and the tool call it precedes still runs.
+   *
+   * Returns what the run printed when it did something, for the next shell
+   * result to carry; nothing when the directory was already initialized.
+   */
+  private async ensureEnvironmentInitialized(): Promise<string | undefined> {
+    if (this.environmentInitialized) return;
+    this.environmentInitialized = true;
+
+    const init = this.options.sandboxInitialization;
+    // An environment that only declares variables has nothing to apply to the
+    // folder: its variables go on each command instead.
+    if (!init || !hasEnvironmentInitWork(init) || !this.provider.capabilities.shell) return;
+
+    try {
+      const result = await this.provider.callTool('runCommand', {
+        command: buildSandboxEnvironmentInitCommand(init),
+        timeout: SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS,
+      });
+      const stdout = (result.result as { stdout?: string } | null | undefined)?.stdout;
+      // The command always exits cleanly, so a failed call that printed
+      // nothing never reached the sandbox: said so, not passed off as a
+      // folder that was already initialized.
+      if (!environmentInitRan(stdout)) {
+        return result.success ? undefined : environmentInitUnreachable(init.name);
+      }
+
+      log(
+        'Environment %s applied for topic %s: success=%s',
+        init.environmentId,
+        this.options.topicId,
+        result.success,
+      );
+
+      return environmentInitReport(stdout) || undefined;
+    } catch (error) {
+      log('Environment init failed for topic %s: %O', this.options.topicId, error);
+
+      return environmentInitUnreachable(init.name);
+    }
+  }
+
+  /**
+   * Sandbox counterpart of `readLocalImageFile`: remote readers decode files as
+   * UTF-8, so image bytes either fail or come back as mojibake. Upload the
+   * image through the export pipeline instead and return the same
+   * `{ isImage, imageUrl, imageFileId }` shape the device path produces, which
+   * ComputerRuntime routes to `state.images`. Failures degrade to an
+   * `[Image: name]` placeholder rather than failing the read.
+   */
+  private async readSandboxImageFile(
+    filePath: string,
+    mimeType: string,
+  ): Promise<SandboxCallToolResult> {
+    const filename = posixPath.basename(filePath);
+    const buildResult = (content: string, extra: Record<string, unknown> = {}) => ({
+      result: { content, fileType: mimeType, filename, isImage: true, ...extra },
+      success: true,
+    });
+
+    if (!this.provider.capabilities.exportFile || !this.options.fileService) {
+      return buildResult(
+        `[Image: ${filename}] (upload unavailable — this sandbox cannot export files; the model cannot view this image)`,
+      );
+    }
+
+    const exported = await this.exportAndUploadFile(filePath, filename, {
+      // A visitor's image preview gets the same share provenance the upload
+      // path stamps, so it never surfaces in the creator's library while
+      // `/f/:id` stays openable.
+      ...(this.options.agentShareVisitor
+        ? { metadata: { agentShare: this.options.agentShareVisitor } }
+        : {}),
+      storageName: `${randomUUID()}-${filename}`,
+    });
+
+    if (!exported.success) {
+      // Auth failures must stay failed so the execInSandbox route re-prompts
+      // for Market auth; access-denied refusals must stop the run. Neither may
+      // be softened into the upload-unavailable placeholder.
+      if (isSandboxAuthError(exported.error) || isSandboxAccessDeniedError(exported.error)) {
+        return { error: exported.error, result: null, success: false };
+      }
+
+      return buildResult(
+        `[Image: ${filename}] (upload unavailable — ${exported.error?.message || 'export failed'}; the model cannot view this image)`,
+      );
+    }
+
+    if (!exported.url) {
+      return buildResult(
+        `[Image: ${filename}] (upload unavailable — export failed; the model cannot view this image)`,
+      );
+    }
+
+    if (exported.size !== undefined && exported.size > MAX_IMAGE_READ_BYTES) {
+      return buildResult(
+        `Error: Image file is too large to preview (${exported.size} bytes, limit ${MAX_IMAGE_READ_BYTES}).`,
+      );
+    }
+
+    return buildResult(`[Image: ${filename}]`, {
+      fileType: exported.mimeType?.startsWith('image/') ? exported.mimeType : mimeType,
+      imageFileId: exported.fileId,
+      imageUrl: exported.url,
+    });
   }
 
   /**
@@ -105,7 +282,11 @@ export class SandboxMiddlewareService implements SandboxService {
   async exportAndUploadFile(
     path: string,
     filename: string,
-    options?: { storageName?: string },
+    options?: {
+      /** Server-owned file-record metadata, e.g. Agent Share provenance. */
+      metadata?: Record<string, unknown>;
+      storageName?: string;
+    },
   ): Promise<SandboxExportFileResult> {
     const { fileService, topicId } = this.options;
 
@@ -148,8 +329,8 @@ export class SandboxMiddlewareService implements SandboxService {
       if (!exported.success) {
         return {
           error: {
+            ...exported.error,
             message: exported.error?.message || 'Failed to export file from sandbox',
-            name: exported.error?.name,
           },
           filename,
           success: false,
@@ -169,6 +350,7 @@ export class SandboxMiddlewareService implements SandboxService {
       const { fileId, url } = await fileService.createFileRecord({
         fileHash,
         fileType: mimeType,
+        ...(options?.metadata ? { metadata: options.metadata } : {}),
         name: filename,
         size: fileSize,
         url: key,
@@ -197,8 +379,12 @@ export class SandboxMiddlewareService implements SandboxService {
 export const normalizeSandboxCommandResult = (
   result: SandboxCallToolResult,
 ): SandboxCommandResult => {
+  const sessionState = result.sessionExpiredAndRecreated
+    ? { sessionExpiredAndRecreated: true }
+    : {};
   if (!result.success) {
     return {
+      ...sessionState,
       exitCode: 1,
       output: '',
       stderr: result.error?.message || 'Command execution failed',
@@ -214,9 +400,41 @@ export const normalizeSandboxCommandResult = (
   const success = typeof raw.success === 'boolean' ? raw.success : exitCode === 0;
 
   return {
+    ...sessionState,
     exitCode,
     output,
     stderr,
     success,
+  };
+};
+
+const SHELL_TOOLS = new Set(['execScript', 'runCommand']);
+
+/**
+ * What the conversation is told when the initializer could not be run at all
+ * — the sandbox did not answer — so a command that follows in an empty folder
+ * is not mistaken for one in the checkout. Nothing was recorded, so the next
+ * call tries again.
+ */
+const environmentInitUnreachable = (name: string) =>
+  `The environment "${name}" could not be applied: the sandbox did not respond. It will be tried again on the next command.`;
+
+/**
+ * The first shell result after an environment was applied, with what applying
+ * it said in front — so the conversation sees why its directory now holds a
+ * checkout, or why it does not. Other tools' results are left as they are:
+ * they have no output to put it in.
+ */
+const withEnvironmentReport = (
+  toolName: string,
+  result: SandboxCallToolResult,
+  report: string,
+): SandboxCallToolResult => {
+  const payload = result.result as { stdout?: string } | null | undefined;
+  if (!SHELL_TOOLS.has(toolName) || !payload || typeof payload !== 'object') return result;
+
+  return {
+    ...result,
+    result: { ...payload, stdout: `[environment] ${report}\n\n${payload.stdout ?? ''}` },
   };
 };

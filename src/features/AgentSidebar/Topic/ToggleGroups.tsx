@@ -1,9 +1,10 @@
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -13,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
+import { useScopedSidebarTopics } from './useScopedTopics';
 
 const ToggleGroups = memo(() => {
   const { t } = useTranslation('topic');
@@ -21,6 +23,7 @@ const ToggleGroups = memo(() => {
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
+  const localDeviceIds = useLocalMachineDeviceIds();
   const groupSelector = useMemo(
     () =>
       topicSelectors.groupedTopicsForSidebar(
@@ -28,10 +31,18 @@ const ToggleGroups = memo(() => {
         topicSortBy,
         topicGroupMode,
         topicIncludeCompleted,
+        localDeviceIds,
       ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted, localDeviceIds],
   );
-  const groupTopics = useChatStore(groupSelector, isEqual);
+  const agentGroups = useChatStore(groupSelector, isEqual);
+  const scoped = useScopedSidebarTopics(
+    topicPageSize,
+    topicSortBy,
+    topicGroupMode,
+    topicIncludeCompleted,
+  );
+  const groupTopics = scoped.scope ? scoped.groups : agentGroups;
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);

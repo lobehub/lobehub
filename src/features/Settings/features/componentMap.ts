@@ -1,11 +1,10 @@
 import { createElement } from 'react';
 
-import SettingsProfileSkeleton from '@/components/Skeleton/Settings/Profile';
-import SettingsSectionSkeleton from '@/components/Skeleton/Settings/Section';
+import { SettingsChunkSkeleton } from '@/components/Skeleton/Settings/Page';
 import dynamic from '@/libs/next/dynamic';
 import { SettingsTabs } from '@/store/global/initialState';
 
-const loading = (_debugId: string) => () => createElement(SettingsSectionSkeleton);
+const loading = (_debugId: string) => () => createElement(SettingsChunkSkeleton);
 
 export const componentMap = {
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
@@ -29,6 +28,9 @@ export const componentMap = {
   [SettingsTabs.Messenger]: dynamic(() => import('../messenger'), {
     loading: loading('Settings > Messenger'),
   }),
+  [SettingsTabs.Integrations]: dynamic(() => import('../integrations'), {
+    loading: loading('Settings > Integrations'),
+  }),
   [SettingsTabs.Notification]: dynamic(
     () => import('@/business/client/BusinessSettingPages/Notification'),
     {
@@ -50,15 +52,21 @@ export const componentMap = {
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: loading('Settings > Storage'),
   }),
+  [SettingsTabs.Trash]: dynamic(() => import('../trash'), {
+    loading: loading('Settings > Trash'),
+  }),
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
+  }),
+  [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
+    loading: loading('Settings > Environments'),
   }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
   }),
   // Profile related tabs
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
-    loading: () => createElement(SettingsProfileSkeleton),
+    loading: loading('Settings > Profile'),
   }),
   [SettingsTabs.Stats]: dynamic(() => import('../stats'), {
     loading: loading('Settings > Stats'),
@@ -83,6 +91,9 @@ export const componentMap = {
   }),
   [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
     loading: loading('Settings > Connector'),
+  }),
+  [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
+    loading: loading('Settings > Tools'),
   }),
 
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {

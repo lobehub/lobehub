@@ -1,9 +1,9 @@
 import createDebug from 'debug';
 
-import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../core/openaiCompatible';
 import type {
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   PollVideoStatusResult,
 } from '../../types/video';
 
@@ -55,7 +55,7 @@ const parseInferenceId = (inferenceId: string) => {
 export async function createHunyuanVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { apiKey } = options;
   const { model, params } = payload;
   const { prompt, imageUrl, resolution, watermark } = params;

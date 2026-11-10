@@ -1,9 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui/base-ui';
-import { cssVar, cx } from 'antd-style';
+import { ActionIcon, cssVar, cx, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,15 +21,32 @@ interface HeaderProps {
   agentDocumentId?: string;
   agentId: string;
   documentId: string;
+  /** Hide editor-only actions for original uploaded files. */
+  fileBacked?: boolean;
   itemError?: unknown;
   onBack: () => void;
   onDeleted: () => void;
+  onToggleTopicPanel?: () => void;
   title?: string;
+  /** Topic panel visibility; omit while the page has no topic panel. */
+  topicPanelExpand?: boolean;
   updatedAt?: Date | string | null;
 }
 
 const Header = memo<HeaderProps>(
-  ({ agentId, agentDocumentId, documentId, itemError, onBack, onDeleted, title, updatedAt }) => {
+  ({
+    agentId,
+    agentDocumentId,
+    documentId,
+    fileBacked,
+    itemError,
+    onBack,
+    onDeleted,
+    title,
+    topicPanelExpand,
+    onToggleTopicPanel,
+    updatedAt,
+  }) => {
     const { t } = useTranslation(['file', 'chat']);
     const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
     const showTitleError = !!itemError && !title;
@@ -43,6 +58,7 @@ const Header = memo<HeaderProps>(
       agentId,
       documentId,
       onDeleted,
+      fileBacked,
       title,
       updatedAt,
     });
@@ -82,9 +98,15 @@ const Header = memo<HeaderProps>(
         }
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            {documentId && <AutoSaveHint documentId={documentId} />}
-            {documentId && <ShareButton documentId={documentId} />}
-            <ToggleRightPanelButton hideWhenExpanded />
+            {documentId && !fileBacked && <AutoSaveHint documentId={documentId} />}
+            {documentId && !fileBacked && <ShareButton documentId={documentId} />}
+            {topicPanelExpand !== undefined && (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={topicPanelExpand}
+                onToggle={onToggleTopicPanel}
+              />
+            )}
           </Flexbox>
         }
       />

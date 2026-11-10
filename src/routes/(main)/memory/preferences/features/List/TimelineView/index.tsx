@@ -19,13 +19,17 @@ const PreferenceTimelineView = memo<PreferenceTimelineViewProps>(
   ({ preferences, isLoading, onClick }) => {
     const loadMorePreferences = useUserMemoryStore((s) => s.loadMorePreferences);
     const preferencesHasMore = useUserMemoryStore((s) => s.preferencesHasMore);
+    // Load-more progress / failure of the query on screen (footer + retry).
+    const isLoadingMore = useUserMemoryStore((s) => Boolean(s.preferenceListData?.isLoadingMore));
+    const loadMoreError = useUserMemoryStore((s) => s.preferenceListData?.loadMoreError);
 
     return (
       <GenericTimelineView
         data={preferences}
         groupBy="day"
         hasMore={preferencesHasMore}
-        isLoading={isLoading}
+        isLoading={isLoading || isLoadingMore}
+        loadMoreError={loadMoreError}
         renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(preference) => (
           <TimelineItemWrapper>

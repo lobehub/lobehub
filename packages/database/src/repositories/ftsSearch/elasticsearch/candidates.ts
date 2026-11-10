@@ -282,8 +282,11 @@ export const searchElasticsearchCandidates = async (
   if (request.filters.agentId && (entity === 'topics' || entity === 'messages')) {
     filter.push({ term: { agent_id: request.filters.agentId } });
   }
-  if (entity === 'messages' && request.mode !== 'candidates') {
+  if (entity === 'messages') {
     mustNot.push({ term: { role: 'tool' } });
+    const { roles, topicId } = request.filters.messageScope ?? {};
+    if (roles?.length) filter.push({ terms: { role: roles } });
+    if (topicId) filter.push({ term: { topic_id: topicId } });
   }
   if (request.filters.excludeVirtual && entity === 'agents') {
     mustNot.push({ term: { virtual: true } });
@@ -318,6 +321,20 @@ export const searchElasticsearchCandidates = async (
       request.filters.excludeKnowledgeBaseIds?.length
     ) {
       mustNot.push({ terms: { knowledge_base_ids: request.filters.excludeKnowledgeBaseIds } });
+    }
+  }
+
+  if (
+    request.filters.timeRange &&
+    (entity === 'topics' || entity === 'messages' || entity === 'documents')
+  ) {
+    const { end, field, start } = request.filters.timeRange;
+    const dateRange = {
+      ...(start ? { gte: start.toISOString() } : {}),
+      ...(end ? { lte: end.toISOString() } : {}),
+    };
+    if (Object.keys(dateRange).length > 0) {
+      filter.push({ range: { [field === 'createdAt' ? 'created_at' : 'updated_at']: dateRange } });
     }
   }
 

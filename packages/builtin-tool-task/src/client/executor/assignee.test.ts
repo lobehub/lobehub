@@ -37,7 +37,9 @@ vi.mock('@/store/task/slices/detail/reducer', () => ({
   findSubtaskParentId: vi.fn(() => undefined),
 }));
 
-vi.mock('@/services/task', () => ({ taskService: {} }));
+vi.mock('@/services/task', () => ({
+  taskService: { find: vi.fn(async () => ({ data: { id: 'task-1', identifier: 'T-1' } })) },
+}));
 
 // Keep the role gate deterministic: only 'viewer' is excluded here.
 vi.mock('@lobechat/const/rbac', () => ({
@@ -98,6 +100,17 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       );
     });
 
+    it('treats empty-string assignees as omitted instead of sending them to the server', async () => {
+      await taskExecutor.createTask(
+        { assigneeAgentId: '', assigneeUserId: '', instruction: 'x', name: 'x' },
+        { agentId: 'agt-current' } as any,
+      );
+
+      expect(mocks.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: 'agt-current', assigneeUserId: undefined }),
+      );
+    });
+
     it('accepts an explicit agent and a member in the same call (coexisting assignees)', async () => {
       const result = await taskExecutor.createTask({
         assigneeAgentId: 'agt-1',
@@ -119,18 +132,30 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
 
       expect(result.success).toBe(true);
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeUserId: 'usr_2' },
         { source: 'external' },
       );
       expect(result.content).toContain('assignee member → Alice Chen (usr_2)');
     });
 
+    it('names the acting agent so the client-first runtime is attributed to it, not the user', async () => {
+      await taskExecutor.editTask({ assigneeUserId: 'usr_2', identifier: 'T-1' }, {
+        agentId: 'agt-self',
+      } as any);
+
+      expect(mocks.updateTask).toHaveBeenCalledWith(
+        'task-1',
+        { assigneeUserId: 'usr_2' },
+        { actorAgentId: 'agt-self', source: 'external' },
+      );
+    });
+
     it('setting the agent leaves the member side untouched (assignees coexist)', async () => {
       await taskExecutor.editTask({ assigneeAgentId: 'agt-new', identifier: 'T-1' });
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeAgentId: 'agt-new' },
         { source: 'external' },
       );
@@ -144,7 +169,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       });
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeAgentId: 'agt-new', assigneeUserId: 'usr_2' },
         { source: 'external' },
       );
@@ -154,7 +179,7 @@ describe('TaskExecutor — human assignee (assigneeUserId)', () => {
       const result = await taskExecutor.editTask({ assigneeUserId: null, identifier: 'T-1' });
 
       expect(mocks.updateTask).toHaveBeenCalledWith(
-        'T-1',
+        'task-1',
         { assigneeUserId: null },
         { source: 'external' },
       );

@@ -1,14 +1,29 @@
 import path from 'node:path';
 
 import { zipSync } from 'fflate';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
-const { execaMock, ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
-  execaMock: vi.fn(),
+const createFileStats = (isDirectory: boolean, size: number) => ({
+  isDirectory: () => isDirectory,
+  birthtime: new Date('2024-01-01'),
+  mtime: new Date('2024-01-15'),
+  atime: new Date('2024-01-20'),
+  size,
+});
+
+const createEditFileInput = () => ({
+  file_path: '/test/file.txt',
+  old_string: 'Hello',
+  new_string: 'Hi',
+  replace_all: false,
+});
+
+const { getProjectFileIndexMock, ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
+  getProjectFileIndexMock: vi.fn(),
   ipcMainHandleMock: vi.fn(),
   fetchMock: vi.fn(),
 }));
@@ -17,8 +32,8 @@ vi.mock('@/utils/net-fetch', () => ({
   netFetch: fetchMock,
 }));
 
-vi.mock('execa', () => ({
-  execa: execaMock,
+vi.mock('@lobechat/device-control/project-file-index', () => ({
+  defaultGetProjectFileIndex: getProjectFileIndexMock,
 }));
 
 // Mock file-loaders
@@ -34,12 +49,17 @@ vi.mock('electron', () => ({
   },
   shell: {
     openPath: vi.fn(),
+    showItemInFolder: vi.fn(),
+    trashItem: vi.fn(),
   },
 }));
 
 // Mock node:fs/promises and node:fs
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
+  chmod: vi.fn(),
+  cp: vi.fn(),
+  lstat: vi.fn(),
   mkdir: vi.fn(),
   readFile: vi.fn(),
   readdir: vi.fn(),
@@ -80,6 +100,8 @@ const mockLocalFileProtocolManager = {
   approveIndexedProjectRoot: vi.fn(),
   approveProjectRootFromScope: vi.fn(),
   createPreviewUrl: vi.fn(),
+  copyExternalFileForPublish: vi.fn(),
+  readExternalFileForPublish: vi.fn(),
   readPreviewFile: vi.fn(),
 };
 
@@ -116,6 +138,38 @@ describe('LocalFileCtr', () => {
     mockFsPromises = await import('node:fs/promises');
 
     localFileCtr = new LocalFileCtr(mockApp);
+  });
+
+  /**
+   * Back the fs mock with an in-memory disk. editLocalFile / writeLocalFile
+   * write a sibling temp file, rename it over the target and read the target
+   * back before reporting success, so a write has to be visible to later reads.
+   * Returns the disk so a test can assert what actually landed at a path.
+   */
+  const useDisk = (files: Record<string, string> = {}) => {
+    const disk = new Map(Object.entries(files));
+    vi.mocked(mockFsPromises.readFile).mockImplementation(async (filePath: string) => {
+      if (!disk.has(filePath)) throw new Error(`ENOENT: ${filePath}`);
+      return disk.get(filePath);
+    });
+    vi.mocked(mockFsPromises.writeFile).mockImplementation(
+      async (filePath: string, content: string) => {
+        disk.set(filePath, content);
+      },
+    );
+    vi.mocked(mockFsPromises.rename).mockImplementation(async (from: string, to: string) => {
+      disk.set(to, disk.get(from)!);
+      disk.delete(from);
+    });
+    return disk;
+  };
+
+  afterEach(() => {
+    // clearAllMocks keeps implementations; drop the disk and the per-test
+    // existence probes so they cannot leak into later tests.
+    for (const fn of ['readFile', 'writeFile', 'rename', 'lstat', 'cp', 'mkdir'] as const) {
+      vi.mocked(mockFsPromises[fn]).mockReset();
+    }
   });
 
   describe('handleOpenLocalFile', () => {
@@ -174,16 +228,29 @@ describe('LocalFileCtr', () => {
       expect(mockShell.openPath).toHaveBeenCalledWith(path.join(os.homedir(), 'git/work'));
     });
 
-    it('should open parent directory when isDirectory is false', async () => {
-      vi.mocked(mockShell.openPath).mockResolvedValue('');
-
+    it('should reveal and select the file when isDirectory is false', async () => {
       const result = await localFileCtr.handleOpenLocalFolder({
         path: '/test/folder/file.txt',
         isDirectory: false,
       });
 
       expect(result).toEqual({ success: true });
-      expect(mockShell.openPath).toHaveBeenCalledWith('/test/folder');
+      expect(mockShell.showItemInFolder).toHaveBeenCalledWith('/test/folder/file.txt');
+      expect(mockShell.openPath).not.toHaveBeenCalled();
+    });
+
+    it('should expand a leading ~ when revealing a file', async () => {
+      const os = await import('node:os');
+
+      const result = await localFileCtr.handleOpenLocalFolder({
+        path: '~/git/work/file.txt',
+        isDirectory: false,
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockShell.showItemInFolder).toHaveBeenCalledWith(
+        path.join(os.homedir(), 'git/work/file.txt'),
+      );
     });
 
     it('should return error when opening folder fails', async () => {
@@ -235,9 +302,28 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({
+        code: 'forbidden',
         error: 'File is outside the approved workspace',
         success: false,
       });
+    });
+
+    it('marks a file that vanished before its preview URL exists as not found', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockRejectedValue(
+        Object.assign(
+          new Error("ENOENT: no such file or directory, realpath '/workspace/gone.md'"),
+          {
+            code: 'ENOENT',
+          },
+        ),
+      );
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/workspace/gone.md',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toMatchObject({ code: 'not_found', success: false });
     });
 
     it('should forward image-only preview URL constraints', async () => {
@@ -311,6 +397,84 @@ describe('LocalFileCtr', () => {
     });
   });
 
+  describe('external publish asset channels', () => {
+    it('creates a URL with external access only on the publish-scoped IPC method', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(
+        'localfile://publish/outside.css?token=abc',
+      );
+
+      const result = await localFileCtr.getExternalAssetForPublishUrl({
+        path: '/outside/app.css',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.createPreviewUrl).toHaveBeenCalledWith({
+        allowExternalFile: true,
+        filePath: '/outside/app.css',
+        persistExternalApproval: false,
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        success: true,
+        url: 'localfile://publish/outside.css?token=abc',
+      });
+    });
+
+    it('returns raw bytes for the publish-scoped device RPC handler', async () => {
+      mockLocalFileProtocolManager.readExternalFileForPublish.mockResolvedValue({
+        buffer: Buffer.from([1, 2, 3]),
+        contentType: 'image/png',
+        realPath: '/outside/image.png',
+      });
+
+      const result = await localFileCtr.readExternalAssetForPublish({
+        path: '/outside/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.readExternalFileForPublish).toHaveBeenCalledWith({
+        filePath: '/outside/image.png',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        base64: 'AQID',
+        contentType: 'image/png',
+        success: true,
+      });
+    });
+  });
+
+  describe('copyAssetForPublish', () => {
+    it('copies through the protocol manager gate', async () => {
+      mockLocalFileProtocolManager.copyExternalFileForPublish.mockResolvedValue(true);
+
+      const result = await localFileCtr.copyAssetForPublish({
+        from: '/outside/image.png',
+        to: '/workspace/.lobe-artifacts/site/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.copyExternalFileForPublish).toHaveBeenCalledWith({
+        filePath: '/outside/image.png',
+        targetPath: '/workspace/.lobe-artifacts/site/image.png',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it('reports a refused copy as a failure', async () => {
+      mockLocalFileProtocolManager.copyExternalFileForPublish.mockResolvedValue(false);
+
+      const result = await localFileCtr.copyAssetForPublish({
+        from: '/outside/image.png',
+        to: '/elsewhere/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('getLocalFilePreview', () => {
     it('should return text preview content for an approved workspace file', async () => {
       mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
@@ -349,6 +513,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({
+        code: 'forbidden',
         error: 'File is outside the approved workspace',
         success: false,
       });
@@ -480,7 +645,7 @@ describe('LocalFileCtr', () => {
   describe('handleWriteFile', () => {
     it('should write file successfully', async () => {
       vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      const disk = useDisk();
 
       const result = await localFileCtr.handleWriteFile({
         path: '/test/file.txt',
@@ -488,6 +653,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({ success: true });
+      expect(disk.get('/test/file.txt')).toBe('test content');
     });
 
     it('should return error when path is empty', async () => {
@@ -518,6 +684,125 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({ success: false, error: 'Failed to write file: Write failed' });
+    });
+  });
+
+  describe('handleMoveFiles', () => {
+    it('should refuse to move onto an existing entry', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.lstat).mockImplementation(async (target: string) => ({
+        dev: 1,
+        ino: target === '/p/a.txt' ? 10 : 20,
+      }));
+
+      const result = await localFileCtr.handleMoveFiles({
+        items: [{ newPath: '/p/sub/a.txt', oldPath: '/p/a.txt' }],
+      });
+
+      expect(result).toEqual([
+        {
+          error: 'An item already exists at the target path: /p/sub/a.txt.',
+          newPath: undefined,
+          sourcePath: '/p/a.txt',
+          success: false,
+        },
+      ]);
+      expect(mockFsPromises.rename).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleCreateFile', () => {
+    it('creates the file exclusively so an existing one is never overwritten', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleCreateFile({ path: '/p/new.ts' });
+
+      expect(result).toEqual({ path: '/p/new.ts', success: true });
+      expect(mockFsPromises.writeFile).toHaveBeenCalledWith('/p/new.ts', '', { flag: 'wx' });
+    });
+
+    it('reports an existing file as an error', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockRejectedValue(
+        Object.assign(new Error('exists'), { code: 'EEXIST' }),
+      );
+
+      const result = await localFileCtr.handleCreateFile({ content: 'x', path: '/p/taken.ts' });
+
+      expect(result).toEqual({
+        error: 'An item already exists at /p/taken.ts.',
+        path: '/p/taken.ts',
+        success: false,
+      });
+    });
+  });
+
+  describe('handleCreateDirectory', () => {
+    it('creates the final folder non-recursively', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleCreateDirectory({ path: '/p/new-dir' });
+
+      expect(result).toEqual({ path: '/p/new-dir', success: true });
+      expect(mockFsPromises.mkdir).toHaveBeenCalledTimes(1);
+      expect(mockFsPromises.mkdir).toHaveBeenCalledWith('/p/new-dir', { recursive: false });
+    });
+
+    it('reports an existing folder as an error', async () => {
+      vi.mocked(mockFsPromises.mkdir).mockRejectedValueOnce(
+        Object.assign(new Error('exists'), { code: 'EEXIST' }),
+      );
+
+      const result = await localFileCtr.handleCreateDirectory({ path: '/p/src' });
+
+      expect(result).toEqual({
+        error: 'An item already exists at /p/src.',
+        path: '/p/src',
+        success: false,
+      });
+    });
+  });
+
+  describe('handleCopyFiles', () => {
+    const enoent = () => Object.assign(new Error('missing'), { code: 'ENOENT' });
+
+    it('duplicates in place under a Finder-style name when targetPath is omitted', async () => {
+      const existing = new Set(['/p/a.ts', '/p/a copy.ts']);
+      vi.mocked(mockFsPromises.lstat).mockImplementation(async (target: string) => {
+        if (!existing.has(target)) throw enoent();
+        return { isDirectory: () => false };
+      });
+      vi.mocked(mockFsPromises.cp).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.handleCopyFiles({ items: [{ sourcePath: '/p/a.ts' }] });
+
+      expect(result).toEqual([
+        { sourcePath: '/p/a.ts', success: true, targetPath: '/p/a copy 2.ts' },
+      ]);
+      expect(mockFsPromises.cp).toHaveBeenCalledWith('/p/a.ts', '/p/a copy 2.ts', {
+        errorOnExist: true,
+        force: false,
+        recursive: true,
+        verbatimSymlinks: true,
+      });
+    });
+
+    it('refuses an explicit target that already exists without copying', async () => {
+      vi.mocked(mockFsPromises.lstat).mockResolvedValue({ isDirectory: () => true });
+
+      const result = await localFileCtr.handleCopyFiles({
+        items: [{ sourcePath: '/p/src', targetPath: '/p/dst' }],
+      });
+
+      expect(result).toEqual([
+        {
+          error: 'An item already exists at the target path: /p/dst.',
+          sourcePath: '/p/src',
+          success: false,
+        },
+      ]);
+      expect(mockFsPromises.cp).not.toHaveBeenCalled();
     });
   });
 
@@ -722,6 +1007,22 @@ describe('LocalFileCtr', () => {
       expect(result.error).toContain('File or directory not found');
     });
 
+    it('should refuse to overwrite an existing sibling instead of renaming over it', async () => {
+      vi.mocked(mockFsPromises.lstat).mockImplementation(async (target: string) => ({
+        dev: 1,
+        ino: target === '/test/old.txt' ? 10 : 20,
+      }));
+
+      const result = await localFileCtr.handleRenameFile({
+        path: '/test/old.txt',
+        newName: 'taken.txt',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+      expect(mockFsPromises.rename).not.toHaveBeenCalled();
+    });
+
     it('should handle file already exists error', async () => {
       const error: any = new Error('File exists');
       error.code = 'EEXIST';
@@ -781,109 +1082,52 @@ describe('LocalFileCtr', () => {
   });
 
   describe('getProjectFileIndex', () => {
-    it('should build a project file index from git files', async () => {
-      execaMock
-        .mockResolvedValueOnce({ exitCode: 0, stdout: '/workspace/project' })
-        .mockResolvedValueOnce({
-          exitCode: 0,
-          stdout: 'src/index.ts\nsrc/components/Button.tsx',
-        })
-        .mockResolvedValueOnce({ exitCode: 0, stdout: 'tmp/local.ts' })
-        .mockResolvedValueOnce({ exitCode: 0, stdout: '.env.local\ncache/' });
+    it.each(['git', 'glob'] as const)(
+      'returns the shared %s index and authorizes its root for previews',
+      async (source) => {
+        const index = {
+          entries: [
+            {
+              gitIgnored: true,
+              isDirectory: true,
+              name: '.husky',
+              path: '/workspace/project/.husky',
+              relativePath: '.husky/',
+            },
+          ],
+          indexedAt: '2026-09-08T00:00:00.000Z',
+          root: '/workspace/project',
+          source,
+        };
+        getProjectFileIndexMock.mockResolvedValueOnce(index);
 
-      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
+        const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project/src' });
 
-      expect(result.source).toBe('git');
-      expect(result.root).toBe('/workspace/project');
-      expect(result.entries).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            isDirectory: true,
-            path: '/workspace/project/src',
-            relativePath: 'src/',
-          }),
-          expect.objectContaining({
-            isDirectory: false,
-            path: '/workspace/project/src/index.ts',
-            relativePath: 'src/index.ts',
-          }),
-          expect.objectContaining({
-            isDirectory: false,
-            path: '/workspace/project/tmp/local.ts',
-            relativePath: 'tmp/local.ts',
-          }),
-          expect.objectContaining({
-            gitIgnored: true,
-            isDirectory: false,
-            path: '/workspace/project/.env.local',
-            relativePath: '.env.local',
-          }),
-          expect.objectContaining({
-            gitIgnored: true,
-            isDirectory: true,
-            path: '/workspace/project/cache',
-            relativePath: 'cache/',
-          }),
-        ]),
+        expect(result).toEqual(index);
+        expect(getProjectFileIndexMock).toHaveBeenCalledWith({ scope: '/workspace/project/src' });
+        expect(
+          mockLocalFileProtocolManager.approveIndexedProjectRoot,
+        ).toHaveBeenCalledExactlyOnceWith('/workspace/project');
+      },
+    );
+
+    it('does not authorize a preview root when indexing fails', async () => {
+      getProjectFileIndexMock.mockRejectedValueOnce(new Error('Index unavailable'));
+
+      await expect(
+        localFileCtr.getProjectFileIndex({ scope: '/workspace/project' }),
+      ).rejects.toThrow('Index unavailable');
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).not.toHaveBeenCalled();
+    });
+
+    it('returns the index even when preview authorization fails', async () => {
+      const index = { entries: [], indexedAt: '', root: '/workspace/project', source: 'git' };
+      getProjectFileIndexMock.mockResolvedValueOnce(index);
+      mockLocalFileProtocolManager.approveIndexedProjectRoot.mockRejectedValueOnce(
+        new Error('Authorization unavailable'),
       );
-      expect(result).not.toHaveProperty('totalCount');
-    });
 
-    it('should fall back to glob when git indexing fails', async () => {
-      execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: '' });
-      mockSearchService.glob.mockResolvedValue({
-        engine: 'fast-glob',
-        files: ['/workspace/project/src', '/workspace/project/src/index.ts'],
-        success: true,
-        total_files: 2,
-      });
-      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath: string) => ({
-        isDirectory: () => filePath === '/workspace/project/src',
-      }));
-
-      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
-
-      expect(mockSearchService.glob).toHaveBeenCalledWith({
-        limit: 5000,
-        pattern: '**/*',
-        scope: '/workspace/project',
-      });
-      expect(result.source).toBe('glob');
-      expect(result.entries).toEqual([
-        expect.objectContaining({
-          isDirectory: true,
-          path: '/workspace/project/src',
-          relativePath: 'src/',
-        }),
-        expect.objectContaining({
-          isDirectory: false,
-          path: '/workspace/project/src/index.ts',
-          relativePath: 'src/index.ts',
-        }),
-      ]);
-      expect(result).not.toHaveProperty('totalCount');
-    });
-
-    it('should mark glob entries as files when stat fails', async () => {
-      execaMock.mockResolvedValueOnce({ exitCode: 1, stdout: '' });
-      mockSearchService.glob.mockResolvedValue({
-        engine: 'fast-glob',
-        files: ['/workspace/project/src/index.ts'],
-        success: true,
-        total_files: 1,
-      });
-      vi.mocked(mockFsPromises.stat).mockRejectedValue(new Error('missing'));
-
-      const result = await localFileCtr.getProjectFileIndex({ scope: '/workspace/project' });
-
-      expect(result.source).toBe('glob');
-      expect(result.entries).toEqual([
-        expect.objectContaining({
-          isDirectory: false,
-          path: '/workspace/project/src/index.ts',
-          relativePath: 'src/index.ts',
-        }),
-      ]);
+      await expect(localFileCtr.getProjectFileIndex()).resolves.toEqual(index);
     });
   });
 
@@ -934,27 +1178,16 @@ describe('LocalFileCtr', () => {
 
   describe('handleEditFile', () => {
     it('should replace a unique occurrence successfully', async () => {
-      const originalContent = 'Hello world\nGreetings again\nGoodbye world';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      const disk = useDisk({ '/test/file.txt': 'Hello world\nGreetings again\nGoodbye world' });
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(true);
       expect(result.replacements).toBe(1);
       expect(result.linesAdded).toBe(1);
       expect(result.linesDeleted).toBe(1);
       expect(result.diffText).toContain('diff --git a/test/file.txt b/test/file.txt');
-      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/test/file.txt',
-        'Hi world\nGreetings again\nGoodbye world',
-        'utf8',
-      );
+      expect(disk.get('/test/file.txt')).toBe('Hi world\nGreetings again\nGoodbye world');
     });
 
     // Editing an arbitrary one of several matches is worse than not editing:
@@ -964,12 +1197,7 @@ describe('LocalFileCtr', () => {
       const originalContent = 'Hello world\nHello again\nGoodbye world';
       vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(false);
       expect(result.replacements).toBe(0);
@@ -979,9 +1207,7 @@ describe('LocalFileCtr', () => {
     });
 
     it('should replace all occurrences when replace_all is true', async () => {
-      const originalContent = 'Hello world\nHello again\nHello there';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      const disk = useDisk({ '/test/file.txt': 'Hello world\nHello again\nHello there' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.txt',
@@ -994,17 +1220,11 @@ describe('LocalFileCtr', () => {
       expect(result.replacements).toBe(3);
       expect(result.linesAdded).toBe(3);
       expect(result.linesDeleted).toBe(3);
-      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
-        '/test/file.txt',
-        'Hi world\nHi again\nHi there',
-        'utf8',
-      );
+      expect(disk.get('/test/file.txt')).toBe('Hi world\nHi again\nHi there');
     });
 
     it('should handle multiline replacement correctly', async () => {
-      const originalContent = 'function test() {\n  console.log("old");\n}';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      useDisk({ '/test/file.js': 'function test() {\n  console.log("old");\n}' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.js',
@@ -1041,12 +1261,7 @@ describe('LocalFileCtr', () => {
     it('should handle file read error', async () => {
       vi.mocked(mockFsPromises.readFile).mockRejectedValue(new Error('Permission denied'));
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Permission denied');
@@ -1058,21 +1273,14 @@ describe('LocalFileCtr', () => {
       vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
       vi.mocked(mockFsPromises.writeFile).mockRejectedValue(new Error('Disk full'));
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Disk full');
     });
 
     it('should generate correct diff format', async () => {
-      const originalContent = 'line 1\nline 2\nline 3';
-      vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
-      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+      useDisk({ '/test/file.txt': 'line 1\nline 2\nline 3' });
 
       const result = await localFileCtr.handleEditFile({
         file_path: '/test/file.txt',
@@ -1094,13 +1302,7 @@ describe('LocalFileCtr', () => {
       vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
         const name = (filePath as string).split('/').pop();
         if (name === 'folder1') {
-          return {
-            isDirectory: () => true,
-            birthtime: new Date('2024-01-01'),
-            mtime: new Date('2024-01-15'),
-            atime: new Date('2024-01-20'),
-            size: 4096,
-          } as any;
+          return createFileStats(true, 4096) as any;
         }
         return {
           isDirectory: () => false,
@@ -1128,13 +1330,7 @@ describe('LocalFileCtr', () => {
       vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
         const name = (filePath as string).split('/').pop();
         if (name === 'folder1') {
-          return {
-            isDirectory: () => true,
-            birthtime: new Date('2024-01-01'),
-            mtime: new Date('2024-01-15'),
-            atime: new Date('2024-01-20'),
-            size: 4096,
-          } as any;
+          return createFileStats(true, 4096) as any;
         }
         return {
           isDirectory: () => false,
@@ -1180,13 +1376,7 @@ describe('LocalFileCtr', () => {
 
     it('should sort by name ascending when specified', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['zebra.txt', 'alpha.txt', 'apple.txt']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1256,13 +1446,7 @@ describe('LocalFileCtr', () => {
         'file4.txt',
         'file5.txt',
       ]);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1277,13 +1461,7 @@ describe('LocalFileCtr', () => {
       // Create 150 files
       const files = Array.from({ length: 150 }, (_, i) => `file${i}.txt`);
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(files);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
@@ -1355,13 +1533,7 @@ describe('LocalFileCtr', () => {
 
     it('should sort by name descending when specified', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['alpha.txt', 'zebra.txt', 'middle.txt']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1479,13 +1651,7 @@ describe('LocalFileCtr', () => {
 
     it('should handle limit larger than file count', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['file1.txt', 'file2.txt']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1541,13 +1707,7 @@ describe('LocalFileCtr', () => {
         if ((filePath as string).includes('bad.txt')) {
           throw new Error('Cannot stat file');
         }
-        return {
-          isDirectory: () => false,
-          birthtime: new Date('2024-01-01'),
-          mtime: new Date('2024-01-15'),
-          atime: new Date('2024-01-20'),
-          size: 1024,
-        } as any;
+        return createFileStats(false, 1024) as any;
       });
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
@@ -1560,13 +1720,7 @@ describe('LocalFileCtr', () => {
 
     it('should handle directory type correctly', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['my_folder']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => true,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 4096,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(true, 4096) as any);
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
@@ -1660,6 +1814,50 @@ describe('LocalFileCtr', () => {
       await localFileCtr.handleGrepContent(params);
 
       expect(mockContentSearchService.grep).toHaveBeenCalledWith(params);
+    });
+  });
+
+  describe('trashLocalFiles', () => {
+    it('reports every path when a later one fails, so earlier trashed items are not lost', async () => {
+      vi.mocked(mockShell.trashItem)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('Operation not permitted'))
+        .mockResolvedValueOnce(undefined);
+
+      const result = await localFileCtr.trashLocalFiles({
+        paths: ['/p/first.txt', '/p/locked.txt', '/p/third.txt'],
+      });
+
+      // The batch is not atomic: first and third really are in the trash, so a
+      // bare { success: false } would strand them in the caller's tree.
+      expect(result.success).toBe(false);
+      expect(result.items).toEqual([
+        { path: '/p/first.txt', success: true },
+        { error: 'Operation not permitted', path: '/p/locked.txt', success: false },
+        { path: '/p/third.txt', success: true },
+      ]);
+      expect(mockShell.trashItem).toHaveBeenCalledTimes(3);
+    });
+
+    it('succeeds only when every path was trashed', async () => {
+      vi.mocked(mockShell.trashItem).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.trashLocalFiles({ paths: ['/p/a.txt', '/p/b.txt'] });
+
+      expect(result).toEqual({
+        items: [
+          { path: '/p/a.txt', success: true },
+          { path: '/p/b.txt', success: true },
+        ],
+        success: true,
+      });
+    });
+
+    it('rejects an empty batch without touching the trash', async () => {
+      const result = await localFileCtr.trashLocalFiles({ paths: [] });
+
+      expect(result).toEqual({ items: [], success: false });
+      expect(mockShell.trashItem).not.toHaveBeenCalled();
     });
   });
 });

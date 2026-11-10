@@ -1,9 +1,9 @@
 import createDebug from 'debug';
 
-import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../core/openaiCompatible';
 import type {
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   PollVideoStatusResult,
 } from '../../types/video';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
@@ -89,7 +89,7 @@ export async function pollZhipuVideoStatus(
 export async function createZhipuVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const requestModel = resolveMappedModelId(model, options);
   const {

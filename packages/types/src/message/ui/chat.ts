@@ -50,6 +50,12 @@ export interface ChatFileItem {
    */
   inaccessible?: boolean;
   name: string;
+  /**
+   * Character count of the original parsed text when the stored `content` was cut at parse time
+   * (see `metadata.originalCharCount` on the document). Lets prompts tell the model the text is
+   * incomplete instead of leaving it to guess from the file size.
+   */
+  originalCharCount?: number;
   size: number;
   url: string;
 }
@@ -181,7 +187,10 @@ export interface TaskDetail {
   totalCost?: number;
   /** Total messages created during execution */
   totalMessages?: number;
-  /** Total execution steps */
+  /**
+   * Total LLM calls made during execution — the user-facing step metric.
+   * Tool-only runtime iterations are not counted here.
+   */
   totalSteps?: number;
   /** Total tokens consumed */
   totalTokens?: number;
@@ -210,12 +219,34 @@ export interface UIChatMessage {
    */
   children?: AssistantContentBlock[];
   chunksList?: ChatFileChunk[];
+  /** Parallel response columns created by conversation-flow for virtual compare messages. */
+  columns?: UIChatMessage[][];
   /**
    * All messages within a compression group (role: 'compressedGroup')
    * Used for rendering expanded view with conversation-flow parsing
    */
   compressedMessages?: UIChatMessage[];
+  /**
+   * Ids of the group's oldest members that `compressedMessages` leaves out. A
+   * compression group can hold thousands of messages; the read path only
+   * hydrates the newest ones (see `MAX_COMPRESSED_GROUP_MEMBERS`) but keeps
+   * every member addressable, e.g. by a `#<message-id>` deep link.
+   */
+  compressedOmittedIds?: string[];
+  /**
+   * Conversation turns (mainline `user` messages) across the WHOLE group, set
+   * when `compressedOmittedIds` is: `compressedMessages` then holds only the
+   * newest members and undercounts the history it folded away.
+   */
+  compressedTurnCount?: number;
   content: string;
+  /**
+   * Character length of the STORED tool result body, kept when the read path
+   * replaced `content` with a render-facing view model. Presence checks (the
+   * tool status icon, "is this tool settled") must read this instead of
+   * `content.length`, which would otherwise report a trimmed body as empty.
+   */
+  contentLength?: number;
   createdAt: number;
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any> | null;
@@ -244,6 +275,14 @@ export interface UIChatMessage {
    * parent message id
    */
   parentId?: string;
+  /**
+   * The UI read path reduced this tool message's `content` / `pluginState` to
+   * a view model, and which surface has to fetch the stored payload back:
+   * `'detail'` when the inline card is complete on its own (a detail portal or
+   * the raw viewer fetches), `'render'` when the card itself renders the body
+   * and must be hydrated as the row expands.
+   */
+  payloadOmitted?: 'detail' | 'render';
   /**
    * Performance metrics (tps, ttft, duration, latency)
    * Aggregated from all children in group messages
@@ -306,19 +345,6 @@ export interface UIChatMessage {
    * target member ID for DM messages in group chat
    */
   targetId?: string | null;
-  /**
-   * Post-task summary blocks (). Set on virtual assistantGroup
-   * messages by FlatListBuilder when the chain contains toolless
-   * assistants tagged with `signal.type === 'task-completion'` — the
-   * final-summary turn the LLM emits after CC delivers
-   * `system task_notification` for a long-running tool (Monitor, etc.).
-   *
-   * Rendered after `<SignalCallbacks>` so the natural narrative inside
-   * the same AssistantGroup reads: initial reply → callback accordion →
-   * summary. Multiple entries are possible (rare) if several tools
-   * completed within one LLM run.
-   */
-  taskCompletions?: AssistantContentBlock[];
   /**
    * Task execution details for role='task' messages
    * Retrieved from the associated Thread via sourceMessageId

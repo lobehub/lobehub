@@ -58,8 +58,10 @@ app.post('/v1/messages', requireHeteroModelInvocation('anthropic-messages'), asy
     });
     body = response.body;
   } catch (error) {
-    const { message, status } = describeRelayFailure(error);
-    return c.json({ error: { message, type: 'api_error' }, type: 'error' }, status);
+    const { message, retryable, status } = describeRelayFailure(error);
+    return c.json({ error: { message, type: 'api_error' }, type: 'error' }, status, {
+      'x-should-retry': String(retryable),
+    });
   }
   if (!body) {
     return c.json(

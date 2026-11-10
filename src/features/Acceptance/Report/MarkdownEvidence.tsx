@@ -1,8 +1,8 @@
 'use client';
 
-import { Center, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Drawer, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Center, Flexbox, Highlighter, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, FileText } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,12 +11,27 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { useTextFileLoader } from '@/features/FileViewer/hooks/useTextFileLoader';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
+import { AcceptanceDrawer } from '../AcceptanceDrawer';
+
 /**
  * Prose evidence (root-cause write-ups, findings) renders as body markdown, not
  * a monospace raw box — shared by the verify report and the acceptance union so
  * the two surfaces can't drift apart.
  */
 export const markdownTextEvidenceTypes = new Set(['markdown', 'text']);
+
+/**
+ * Which of those two render as prose, and which stay verbatim.
+ *
+ * Only a document that says it is markdown gets markdown rendering. A `text`
+ * artifact is usually captured command output, where `###`, `-` and `*` are
+ * literal characters the reviewer is meant to read: rendering it as markdown
+ * turned transcript sections into headings, argument lists into bullets, and
+ * reflowed the lines so column alignment — often the point of the capture —
+ * was lost. Everything that is not explicitly markdown is shown verbatim.
+ */
+export const rendersAsMarkdown = (evidence: { fileName?: string | null; type: string }): boolean =>
+  evidence.type === 'markdown' || /\.(?:md|markdown)$/i.test(evidence.fileName ?? '');
 
 export const filenameFromUrl = (url: string): string => {
   try {
@@ -26,123 +41,103 @@ export const filenameFromUrl = (url: string): string => {
   }
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  foldBody: css`
-    padding-block: 4px 8px;
-    padding-inline: 22px 0;
-  `,
+const styles = stylex.create({
+  foldBody: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    paddingInlineStart: { 'default': '22px', '@media (width <= 767px)': 0 },
+    paddingInlineEnd: 0,
+  },
   /* Reviewer-directed: no fill, no border — the row is just a line of text
      with a chevron; the surrounding check card provides the container. */
-  foldCard: css`
-    overflow: hidden;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  foldChevron: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 160ms ease;
-  `,
-  foldChevronOpen: css`
-    transform: rotate(90deg);
-  `,
-  foldHeader: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 4px;
-    padding-inline: 0;
-    border: none;
-
-    text-align: start;
-
-    background: transparent;
-
+  foldCard: { overflow: 'hidden', borderRadius: cssVar.borderRadius },
+  foldChevron: {
+    flex: 'none',
+    color: cssVar.colorTextTertiary,
+    transition: 'transform 160ms ease',
+  },
+  foldChevronOpen: { transform: 'rotate(90deg)' },
+  foldHeader: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: {
+      'default': null,
+      '@media (width <= 767px), (pointer: coarse)': '44px',
+    },
+    paddingBlock: '4px',
+    paddingInline: 0,
+    borderStyle: 'none',
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  foldTitle: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    lineHeight: 1.35,
     /* No fill and no border by design — the hover feedback lives on the text. */
-    &:hover [data-fold-title] {
-      color: ${cssVar.colorText};
-    }
-  `,
-  foldTitle: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    transition: color 120ms ease;
-  `,
+    color: {
+      default: cssVar.colorTextSecondary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+    textOverflow: 'ellipsis',
+    whiteSpace: { 'default': 'nowrap', '@media (width <= 767px)': 'normal' },
+    overflowWrap: { 'default': null, '@media (width <= 767px)': 'anywhere' },
+    transition: 'color 120ms ease',
+  },
   /* A plain block, deliberately not a Flexbox: `Markdown`'s root is
      `overflow: hidden`, so as a flex item its automatic minimum size collapses
      to 0 and a long document gets squeezed to the viewer's height and clipped
      instead of overflowing it — leaving this box scrollable in name only. */
-  docViewer: css`
-    overflow: auto;
-    flex: 1;
-
-    height: 100%;
-    min-height: 0;
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-  fileCard: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    gap: 8px;
-    align-items: center;
-
-    width: min(100%, 520px);
-    padding-block: 7px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &:hover {
-      border-color: ${cssVar.colorLink};
-      color: ${cssVar.colorLink};
-    }
-  `,
-  fileCardBody: css`
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  `,
-  fileCardDesc: css`
-    overflow: hidden;
-
-    margin-block-start: 2px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  fileCardIcon: css`
-    display: flex;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  fileCardName: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    line-height: 1.35;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+  docViewer: {
+    overflow: 'auto',
+    flex: '1',
+    height: '100%',
+    minHeight: '0',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
+  fileCard: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: '18px minmax(0, 1fr)',
+    gap: '8px',
+    alignItems: 'center',
+    width: 'min(100%, 520px)',
+    paddingBlock: '7px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorLink },
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+    textAlign: 'start',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  fileCardBody: { display: 'flex', flexDirection: 'column', minWidth: '0' },
+  fileCardDesc: {
+    overflow: 'hidden',
+    marginBlockStart: '2px',
+    fontSize: '12px',
+    lineHeight: 1.35,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  fileCardIcon: { display: 'flex', color: cssVar.colorTextTertiary },
+  fileCardName: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    lineHeight: 1.35,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 /** Content small enough that folding it would cost more than it saves. */
 const INLINE_RENDER_MAX_CHARS = 160;
@@ -153,7 +148,22 @@ const INLINE_RENDER_MAX_CHARS = 160;
  * and blank lines are skipped — a document that opens with a code block should
  * be labeled by its first code line, not by "```bash".
  */
-export const evidenceTitleFromMarkdown = (content: string): string => {
+export const evidenceTitleFromMarkdown = (
+  content: string,
+  description?: string | null,
+  fileName?: string | null,
+): string => {
+  const label = description?.trim() || fileName?.trim();
+  if (label) return label;
+  // Raw JSON has no prose heading; its first line is not a useful document title.
+  if (/^[{[]/.test(content.trim())) {
+    try {
+      JSON.parse(content);
+      return 'JSON';
+    } catch {
+      // Markdown links and non-JSON text still use their first meaningful line.
+    }
+  }
   for (const raw of content.split('\n')) {
     let line = raw.trim();
     if (!line || line.startsWith('```') || /^-{3,}$/.test(line)) continue;
@@ -183,7 +193,9 @@ export const resolveMarkdownEvidenceFold = (content: string, authoredTitle?: str
   const foldTitle = authoredTitle?.trim() || derivedTitle;
   const trimmed = content.trim();
   const inlineEligible = !trimmed.includes('\n') && trimmed.length <= INLINE_RENDER_MAX_CHARS;
-  const fold = Boolean(foldTitle) && (Boolean(authoredTitle?.trim()) || !inlineEligible);
+  const fold =
+    Boolean(foldTitle) &&
+    (Boolean(authoredTitle?.trim()) || derivedTitle === 'JSON' || !inlineEligible);
   return { fold, foldTitle };
 };
 
@@ -203,55 +215,67 @@ export const resolveMarkdownEvidenceFold = (content: string, authoredTitle?: str
  * card of space showing the least informative part of the document — and read
  * as noise. Need it → expand; don't → one quiet line.
  */
-export const CollapsibleMarkdownEvidence = memo<{ children: string; title?: string }>(
-  ({ children, title }) => {
-    const { t } = useTranslation('verify');
-    const [expanded, setExpanded] = useState(false);
-    const { fold, foldTitle } = useMemo(
-      () => resolveMarkdownEvidenceFold(children, title),
-      [children, title],
-    );
+export const CollapsibleMarkdownEvidence = memo<{
+  children: string;
+  fileName?: string | null;
+  /** False renders the document verbatim — see `rendersAsMarkdown`. */
+  markdown?: boolean;
+  title?: string;
+}>(({ children, fileName, markdown = true, title }) => {
+  const { t } = useTranslation('verify');
+  const [expanded, setExpanded] = useState(false);
+  const { fold, foldTitle } = useMemo(
+    () => resolveMarkdownEvidenceFold(children, title),
+    [children, title],
+  );
+  const body = markdown ? (
+    <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
+      {children}
+    </Markdown>
+  ) : (
+    <Highlighter
+      wrap
+      language={getLanguageFromFilename(fileName)}
+      showLanguage={false}
+      variant={'borderless'}
+    >
+      {children}
+    </Highlighter>
+  );
 
-    if (!fold) {
-      return (
-        <Markdown fontSize={13} variant={'chat'}>
-          {children}
-        </Markdown>
-      );
-    }
-
-    return (
-      <Flexbox className={styles.foldCard}>
-        <button
-          aria-expanded={expanded}
-          className={styles.foldHeader}
-          title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
-          type={'button'}
-          onClick={() => setExpanded(!expanded)}
-        >
-          <Icon
-            className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
-            icon={ChevronRight}
-            size={14}
-          />
-          <span className={styles.fileCardIcon}>
-            <Icon icon={FileText} size={13} />
-          </span>
-          <span data-fold-title className={styles.foldTitle}>
-            {foldTitle}
-          </span>
-        </button>
-        {expanded && (
-          <div className={styles.foldBody}>
-            <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
-              {children}
-            </Markdown>
-          </div>
-        )}
-      </Flexbox>
+  if (!fold) {
+    return markdown ? (
+      <Markdown fontSize={13} variant={'chat'}>
+        {children}
+      </Markdown>
+    ) : (
+      body
     );
-  },
-);
+  }
+
+  return (
+    <Flexbox className={stylex.props(styles.foldCard).className}>
+      <button
+        aria-expanded={expanded}
+        {...stylex.props(styles.foldHeader, stylex.defaultMarker())}
+        title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
+        type={'button'}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Icon
+          className={stylex.props(styles.foldChevron, expanded && styles.foldChevronOpen).className}
+          icon={ChevronRight}
+          size={14}
+        />
+        <span {...stylex.props(styles.fileCardIcon)}>
+          <Icon icon={FileText} size={13} />
+        </span>
+        <span {...stylex.props(styles.foldTitle)}>{foldTitle}</span>
+      </button>
+      {expanded && <div {...stylex.props(styles.foldBody)}>{body}</div>}
+    </Flexbox>
+  );
+});
 
 CollapsibleMarkdownEvidence.displayName = 'CollapsibleMarkdownEvidence';
 
@@ -279,7 +303,7 @@ export const DocumentViewer = memo<{ fileName?: string | null; markdown?: boolea
       );
 
     return (
-      <div className={styles.docViewer}>
+      <div {...stylex.props(styles.docViewer)}>
         {markdown ? (
           <Markdown fontSize={13} variant={'chat'}>
             {fileData}
@@ -320,21 +344,21 @@ export const EvidenceFileCard = memo<{
   return (
     <>
       <button
-        className={styles.fileCard}
+        {...stylex.props(styles.fileCard)}
         title={t('report.evidence.openDetail', { name })}
         type={'button'}
         onClick={() => setOpen(true)}
       >
-        <span className={styles.fileCardIcon}>
+        <span {...stylex.props(styles.fileCardIcon)}>
           <Icon icon={FileText} size={13} />
         </span>
-        <span className={styles.fileCardBody}>
-          <span className={styles.fileCardName}>{name}</span>
-          {desc && <span className={styles.fileCardDesc}>{desc}</span>}
+        <span {...stylex.props(styles.fileCardBody)}>
+          <span {...stylex.props(styles.fileCardName)}>{name}</span>
+          {desc && <span {...stylex.props(styles.fileCardDesc)}>{desc}</span>}
         </span>
       </button>
       {open && (
-        <Drawer
+        <AcceptanceDrawer
           containerMaxWidth={'100%'}
           open={open}
           placement={'right'}
@@ -346,7 +370,7 @@ export const EvidenceFileCard = memo<{
           onClose={() => setOpen(false)}
         >
           <DocumentViewer fileName={name} markdown={markdown} url={url} />
-        </Drawer>
+        </AcceptanceDrawer>
       )}
     </>
   );

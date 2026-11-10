@@ -6,9 +6,15 @@ import {
   DERIVED_DOCUMENT_SOURCE_TYPE,
 } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
-import { type DropdownItem, DropdownMenu, Icon, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
+import {
+  ActionIcon,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  stopPropagation,
+  toast,
+  Upload,
+} from '@lobehub/ui';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback, useId, useMemo, useState } from 'react';
@@ -168,12 +174,10 @@ const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
         label: (
           <Upload
             multiple
-            showUploadList={false}
-            beforeUpload={async (file) => {
+            onFiles={async (files) => {
               setMenuOpen(false);
-              await pushDockFileList([file], libraryId, folderId);
+              await pushDockFileList(files, libraryId, folderId);
               revealChildren();
-              return false;
             }}
           >
             <div>{t('header.actions.uploadFile')}</div>

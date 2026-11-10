@@ -1,4 +1,4 @@
-import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
+import type { AgentRuntimeHost, AgentState } from '@lobechat/agent-runtime';
 import { callTool, callToolsBatch } from '@lobechat/agent-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,21 +33,19 @@ const createUsage = () => ({
   tools: { byTool: [], totalCalls: 0, totalTimeMs: 0 },
 });
 
-const createState = (overrides?: Record<string, unknown>) =>
-  ({
-    cost: createCost(),
-    createdAt: '2026-07-09T00:00:00.000Z',
-    lastModified: '2026-07-09T00:00:00.000Z',
-    maxSteps: 100,
-    messages: [],
-    metadata: { agentId: 'agent-1', topicId: 'topic-1' },
-    operationId: 'op-1',
-    status: 'running',
-    stepCount: 0,
-    toolManifestMap: {},
-    usage: createUsage(),
-    ...overrides,
-  }) as never;
+const createState = (overrides?: Partial<AgentState>): AgentState => ({
+  cost: createCost(),
+  createdAt: '2026-07-09T00:00:00.000Z',
+  lastModified: '2026-07-09T00:00:00.000Z',
+  maxSteps: 100,
+  messages: [],
+  operationId: 'op-1',
+  origin: { agentId: 'agent-1', topicId: 'topic-1' },
+  status: 'running',
+  stepCount: 0,
+  usage: createUsage(),
+  ...overrides,
+});
 
 const createToolCall = (id = 'tool-call-1') => ({
   apiName: 'search',
@@ -128,6 +126,35 @@ describe('CliMessageTransport driving the real runtime executors', () => {
     expect(rebuilt).toContainEqual(expect.objectContaining({ id: assistant.id }));
     expect(result.nextContext?.phase).toBe('tool_result');
   });
+
+  it.each(['single', 'batch'])(
+    'replays a committed %s tool step against the local store',
+    async (mode) => {
+      const assistant = await transport.createAssistantMessage({
+        content: 'call',
+        role: 'assistant',
+        topicId: 'topic-1',
+      });
+      const instruction =
+        mode === 'single'
+          ? {
+              type: 'call_tool',
+              payload: { parentMessageId: assistant.id, toolCalling: createToolCall() },
+            }
+          : {
+              type: 'call_tools_batch',
+              payload: { parentMessageId: assistant.id, toolsCalling: [createToolCall()] },
+            };
+      const execute = mode === 'single' ? callTool(host) : callToolsBatch(host);
+      await execute(instruction as never, createState());
+      const replay = await execute(instruction as never, createState());
+      expect(host.transports.tools!.run).toHaveBeenCalledTimes(1);
+      expect(replay.newState.messages.filter((row) => row.role === 'tool')).toHaveLength(1);
+      expect(replay.newState.messages).toContainEqual(
+        expect.objectContaining({ content: 'Tool result' }),
+      );
+    },
+  );
 
   it('answers the runtime read-back without waiting on the sink', async () => {
     // A sink that never settles stands in for an unreachable network.

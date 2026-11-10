@@ -16,7 +16,10 @@ vi.mock('react-router', async () => {
   };
 });
 
-vi.mock('@/const/version', () => ({ isDesktop: false }));
+vi.mock(import('@/const/version'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDesktop: false,
+}));
 vi.mock('@/hooks/useInitAgentConfig', () => ({ useInitAgentConfig: vi.fn() }));
 vi.mock('@/features/ProtocolUrlHandler', () => ({ default: () => null }));
 vi.mock('./RegisterHotkeys', () => ({ default: () => null }));

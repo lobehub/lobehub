@@ -1,25 +1,13 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetFloatingChatPanelRegistry } from './guard';
 import FloatingChatPanel from './index';
 
-vi.mock('./ChatBody', async () => {
-  const { useSWRConfig } = await import('swr');
-  // Probe the effective SWR config so the suspense opt-out is testable: the
-  // panel must shield its conversation subtree from suspense-mode hosts.
-  const ChatBodyProbe = () => {
-    const { suspense } = useSWRConfig();
-    return (
-      <div data-swr-suspense={String(suspense ?? false)} data-testid="chat-body">
-        body
-      </div>
-    );
-  };
-  return { default: ChatBodyProbe };
-});
+vi.mock('./ChatBody', () => ({
+  default: () => <div data-testid="chat-body">body</div>,
+}));
 
 const sheetHandlers = vi.hoisted(() => ({
   current: {
@@ -28,7 +16,7 @@ const sheetHandlers = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({
     onClick,
@@ -123,19 +111,11 @@ vi.mock('@/features/Conversation', () => ({
     />
   ),
   ChatList: () => null,
-  ConversationProvider: ({
-    children,
-    context,
-    hooks,
-    skipFetch,
-    hasInitMessages,
-    messages,
-  }: any) => {
+  ConversationProvider: ({ children, context, hooks, skipFetch, messages }: any) => {
     mergedHooksCaptured.current = hooks;
     return (
       <div
         data-context={JSON.stringify(context)}
-        data-has-init-messages={String(hasInitMessages ?? false)}
         data-has-messages-prop={String(messages !== undefined)}
         data-skip-fetch={String(skipFetch ?? false)}
         data-testid="provider"
@@ -260,21 +240,14 @@ describe('FloatingChatPanel', () => {
     });
   });
 
-  it('lets ConversationProvider drive the fetch when the chat store has no slice yet', () => {
-    const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
-    const provider = getByTestId('provider');
-    expect(provider.dataset.skipFetch).toBe('false');
-    expect(provider.dataset.hasInitMessages).toBe('false');
-  });
-
-  it('syncs the chat store slice into ConversationProvider when the topic already has messages', () => {
+  it('shows the chat store bucket of its context instead of passing a static transcript', () => {
     mockChatState.current.dbMessagesMap = {
       'agent-1:topic-1:null': [{ id: 'msg-1' }],
     };
     const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
     const provider = getByTestId('provider');
-    expect(provider.dataset.hasInitMessages).toBe('true');
-    expect(provider.dataset.hasMessagesProp).toBe('true');
+    expect(provider.dataset.skipFetch).toBe('false');
+    expect(provider.dataset.hasMessagesProp).toBe('false');
   });
 
   it('forwards title and headerActions to floating panel header', () => {
@@ -322,21 +295,6 @@ describe('FloatingChatPanel', () => {
     expect(panel).toContainElement(getByTestId('chat-input'));
     expect(queryByTestId('floating-panel-shell')).toBeNull();
     expect(queryByTestId('floating-chat-panel-collapse-button')).toBeNull();
-  });
-
-  it('opts its subtree out of a suspense-mode SWRConfig host', () => {
-    // The agent-doc layout wraps its whole outlet in SWRConfig{suspense:true}.
-    // The panel's loading model is messagesInit gating, not suspense — without
-    // the opt-out any conversation hook whose fetcher resolves undefined
-    // (e.g. a missing model reasoning config) strands the panel on the host's
-    // Suspense fallback forever.
-    const { getByTestId } = render(
-      <SWRConfig value={{ suspense: true }}>
-        <FloatingChatPanel agentId="agent-1" mode="embedded" topicId="topic-1" />
-      </SWRConfig>,
-    );
-
-    expect(getByTestId('chat-body').dataset.swrSuspense).toBe('false');
   });
 
   it('binds the embedded toolbar topic selection to the conversation context', () => {

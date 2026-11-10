@@ -70,7 +70,7 @@ const isCreatingFileParseTask = (id: string) => (s: FilesStoreState) =>
 const isCreatingChunkEmbeddingTask = (id: string) => (s: FilesStoreState) =>
   s.creatingEmbeddingTaskIds.includes(id);
 
-const fileListHasMore = (s: FilesStoreState) => s.fileListHasMore;
+const fileListHasMore = (s: FilesStoreState) => s.fileListMeta?.hasMore ?? false;
 
 export const fileManagerSelectors = {
   dockFileList,

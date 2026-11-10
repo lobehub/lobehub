@@ -1,4 +1,8 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import {
+  type AgentState,
+  selectUserInterventionConfig,
+  type ToolRunResult,
+} from '@lobechat/agent-runtime';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { dispatchWorkRegistrationIntent } from '@lobechat/builtin-tools/workRegistration';
 import { getSubAgentChatConfigOverride, resolveSubAgentModel } from '@lobechat/const';
@@ -7,12 +11,19 @@ import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtim
 import {
   type ChatToolPayload,
   type LobeAgentConfig,
+  RequestTrigger,
+  type WorkAccessScope,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { WorkModel } from '@/database/models/work';
 import { type LobeChatDatabase } from '@/database/type';
+import {
+  controlDeferredToolResult,
+  loadDurableToolResultHooks,
+} from '@/server/services/agentRuntime/hooks/deferredToolResultControl';
 import { FileService } from '@/server/services/file';
 import {
   type ServerAgentMemberRunner,
@@ -23,6 +34,7 @@ import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archi
 import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
+import { resolveRunActiveDeviceId } from './executors/resolveRunActiveDeviceId';
 
 export const log = debug('lobe-server:agent-runtime:streaming-executors');
 export const timing = debug('lobe-server:agent-runtime:timing');
@@ -56,6 +68,7 @@ export const archiveRuntimeToolResult = async (
   result: ToolExecutionResultResponse,
   {
     agentId,
+    canReadArchive,
     identifier,
     limit,
     serverDB,
@@ -65,6 +78,7 @@ export const archiveRuntimeToolResult = async (
     workspaceId,
   }: {
     agentId?: string | null;
+    canReadArchive?: boolean;
     identifier?: string;
     limit?: number;
     serverDB: LobeChatDatabase;
@@ -76,6 +90,7 @@ export const archiveRuntimeToolResult = async (
 ): Promise<ToolExecutionResultResponse> => {
   const archive = await archiveToolResultIfNeeded({
     agentId,
+    canReadArchive,
     content: result.content,
     identifier,
     limit,
@@ -107,6 +122,7 @@ export const archiveRuntimeToolResult = async (
  * sidebar refresh gap is tracked as a follow-up.
  */
 export const registerWorkFromIntent = async ({
+  accessScope,
   agentId,
   intent,
   rootOperationId,
@@ -121,6 +137,11 @@ export const registerWorkFromIntent = async ({
   userId,
   workspaceId,
 }: {
+  /**
+   * Agent Share boundary the Work is registered under (see
+   * `resolveRunWorkAccessScope`); omitted = ordinary creator scope.
+   */
+  accessScope?: WorkAccessScope;
   agentId?: string | null;
   intent: WorkRegistrationIntent;
   rootOperationId?: string;
@@ -142,7 +163,7 @@ export const registerWorkFromIntent = async ({
   const cumulative = buildWorkVersionCumulativeUsage({ cost: state.cost, usage: state.usage });
 
   try {
-    const workModel = new WorkModel(serverDB, userId, workspaceId);
+    const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
 
     await dispatchWorkRegistrationIntent(
       intent,
@@ -150,6 +171,7 @@ export const registerWorkFromIntent = async ({
         deleteDocumentWork: (params) => workModel.deleteDocumentWork(params),
         deleteTaskWork: (params) => workModel.deleteTaskWork(params),
         handleSkillToolResult: (params) => workModel.handleSkillToolResult(params),
+        registerCanvas: (params) => workModel.registerCanvas(params),
         registerDocument: (params) => workModel.registerDocument(params),
         registerTask: (params) => workModel.registerTask(params),
       },
@@ -211,6 +233,13 @@ export const buildServerVirtualSubAgentRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The row this tool call already owns — set when the call went through human
+   * approval, whose intervention row is then executed in place. The sub-agent
+   * must report into that row: a second placeholder left the approved row empty
+   * forever, so the parent's barrier never cleared and it was never resumed.
+   */
+  existingToolMessageId?: string,
 ): ServerSubAgentRunner | undefined => {
   // Share-visitor runs never get a sub-agent runner: the child run spawned
   // here does not thread the parent's shareGate, so it would execute with the
@@ -220,20 +249,44 @@ export const buildServerVirtualSubAgentRunner = (
   const execVirtualSubAgent = ctx.execVirtualSubAgent;
   if (!execVirtualSubAgent) return undefined;
 
-  const agentId = state.metadata?.agentId;
-  const topicId = ctx.topicId ?? state.metadata?.topicId;
+  const agentId = state.origin?.agentId;
+  const topicId = ctx.topicId ?? state.origin?.topicId;
   if (!agentId || !topicId) return undefined;
 
-  const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
-  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  const parentAgentConfig = state.world?.agent as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `world.agent` alone is not
   // enough: when a run continues a topic whose model was switched, execAgent
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
-  // metadata config retains the agent default.
-  const parentEffectiveModel =
-    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
+  // world config retains the agent default.
+  const parentEffectiveModel = state.modelRuntimeConfig ?? parentAgentConfig;
+  // The device the parent run executes on. The child re-resolves its own
+  // execution plan, and without this it falls back to the agent-level
+  // `boundDeviceId` — whichever machine last picked "this device" — so with two
+  // desktops online the parent and the child land on different machines. An
+  // anonymous `callSubAgent` clone requests this device outright; a named
+  // `callAgent` target only takes it as its `local` device, keeping its own
+  // execution target.
+  const parentDeviceId = resolveRunActiveDeviceId(state);
+  // A child forked inside an eval attempt stays inside that attempt's sandbox:
+  // same session clock, same tool forwarding and Memory scope, same step cap.
+  const parentEval =
+    state.origin?.trigger === RequestTrigger.Eval
+      ? {
+          ...(state.world?.eval && { context: state.world.eval }),
+          ...(state.maxSteps && { maxSteps: state.maxSteps }),
+          ...(state.plan?.eval && { runtime: state.plan.eval }),
+        }
+      : undefined;
 
   return {
-    run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+    run: async ({
+      agentId: targetAgentId,
+      background,
+      description,
+      instruction,
+      subAgentId,
+      timeout,
+    }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
       //     the parent — it takes the parent's `agencyConfig.subagent` override,
@@ -253,34 +306,60 @@ export const buildServerVirtualSubAgentRunner = (
         ? undefined
         : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent);
 
-      // 1. Create the pending placeholder tool message (mirrors the normal
+      // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
-      const placeholder = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId: state.metadata?.groupId ?? undefined,
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        pluginState: { status: 'pending' },
-        role: 'tool',
-        threadId: state.metadata?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      // `background` is written before the child starts so the completion bridge
+      // can never see this row without it, however fast the child finishes. The
+      // sender is who the answer will be delivered as: the named target, or the
+      // parent itself for an anonymous clone.
+      const pendingState = {
+        ...(background && {
+          background: true,
+          sender: { agentId: targetAgentId ?? agentId, name: description },
+        }),
+        status: 'pending',
+        ...(subAgentId && { threadId: subAgentId }),
+      };
+      if (existingToolMessageId) {
+        await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
+      }
+      const placeholder = existingToolMessageId
+        ? { id: existingToolMessageId }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId: state.origin?.groupId ?? undefined,
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            // A continued sub-agent already has its thread, so the card can link to
+            // it while the new turn is still running.
+            pluginState: pendingState,
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
 
       // 2. Fork the virtual child op anchored to the placeholder. The virtual
       //    entry marks the child as `isSubAgent` and registers the completion
       //    bridge that backfills this tool message and resumes the parent op.
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
+        background,
         chatConfig: subAgentChatConfig,
-        groupId: state.metadata?.groupId ?? undefined,
+        deviceId: targetAgentId ? undefined : parentDeviceId,
+        ...(parentEval && { eval: parentEval }),
+        groupId: state.origin?.groupId ?? undefined,
         instruction,
+        localDeviceId: parentDeviceId,
         model: subAgentModel?.model,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
         provider: subAgentModel?.provider,
+        // Marks the thread as a sub-agent (the right panel, the thread portal).
+        sourceToolCallId: chatToolPayload.id,
+        threadId: subAgentId,
         timeout,
         title: description,
         topicId,
@@ -292,6 +371,16 @@ export const buildServerVirtualSubAgentRunner = (
       //    `started: false` (with the underlying reason) so callSubAgent surfaces
       //    an inline tool error instead.
       if (!result?.success) {
+        // A reused approval row is the call's own result slot: the runtime writes
+        // this failure into it, so it must not be deleted.
+        if (existingToolMessageId) {
+          return {
+            error: result?.error,
+            started: false,
+            subOperationId: result?.operationId,
+            threadId: '',
+          };
+        }
         try {
           // Runtime placeholder cleanup — also valid inside an agent-share
           // visitor topic, hence the explicit opt-in.
@@ -309,6 +398,21 @@ export const buildServerVirtualSubAgentRunner = (
           subOperationId: result?.operationId,
           threadId: '',
         };
+      }
+
+      // A background parent never parks, so its card has no other way to link
+      // the running thread. Only `threadId` is patched: the merge leaves the
+      // `status` key to the completion bridge, which may already have written it.
+      if (background && result.threadId && !subAgentId) {
+        await ctx.messageModel
+          .updatePluginState(placeholder.id, { threadId: result.threadId })
+          .catch((error: unknown) =>
+            log(
+              'buildServerVirtualSubAgentRunner: failed to link thread on %s: %O',
+              placeholder.id,
+              error,
+            ),
+          );
       }
 
       return {
@@ -344,6 +448,13 @@ export const buildServerAgentMemberRunner = (
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
+  /**
+   * The call's own pending tool row when it resumes after a human approval
+   * (`call_tool` with `skipCreateToolMessage`, where `parentMessageId` is that
+   * row). Reused as the group tool message instead of writing a second row
+   * with the same `tool_call_id` under it.
+   */
+  existingToolMessageId?: string,
 ): ServerAgentMemberRunner | undefined => {
   // Same share-visitor fail-close as `buildServerVirtualSubAgentRunner`:
   // member runs would not inherit the parent's shareGate.
@@ -351,15 +462,15 @@ export const buildServerAgentMemberRunner = (
   const execGroupMember = ctx.execGroupMember;
   if (!execGroupMember) return undefined;
 
-  const agentId = state.metadata?.agentId;
-  const topicId = ctx.topicId ?? state.metadata?.topicId;
-  const groupId = state.metadata?.groupId ?? undefined;
+  const agentId = state.origin?.agentId;
+  const topicId = ctx.topicId ?? state.origin?.topicId;
+  const groupId = state.origin?.groupId ?? undefined;
   if (!agentId || !topicId || !groupId) return undefined;
 
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
       const agentMap = (
-        state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> } | undefined
+        state.world?.group as { agentMap?: Record<string, { name: string }> } | undefined
       )?.agentMap;
       const resolvedMembers = members.map((member) => ({
         ...member,
@@ -379,19 +490,37 @@ export const buildServerAgentMemberRunner = (
       // 1. Group tool placeholder — the parked tool call the supervisor op waits
       //    on. Stamped with the barrier target + finish disposition so the resume
       //    path (and verify watchdog) resolve resume-vs-finish on their own.
-      const groupTool = await ctx.messageModel.create({
-        agentId,
-        content: '',
-        groupId,
-        ...(isCouncil ? { metadata: { agentCouncil: true } } : {}),
-        parentId: parentMessageId,
-        plugin: chatToolPayload as any,
-        pluginState: { expectedMembers, onComplete, status: 'pending' },
-        role: 'tool',
-        threadId: state.metadata?.threadId,
-        tool_call_id: chatToolPayload.id,
-        topicId,
-      });
+      const existingToolMessage = existingToolMessageId
+        ? await ctx.messageModel.findById(existingToolMessageId)
+        : undefined;
+      // The supervisor assistant message owning this tool call. An approved
+      // call resumes with its own tool row as the parent, so step up from it.
+      const supervisorMessageId = existingToolMessage?.parentId ?? parentMessageId;
+      const groupTool = existingToolMessage
+        ? { id: existingToolMessage.id }
+        : await ctx.messageModel.create({
+            agentId,
+            content: '',
+            groupId,
+            ...(isCouncil && {
+              metadata: { agentCouncil: true },
+            }),
+            parentId: parentMessageId,
+            plugin: chatToolPayload as any,
+            pluginState: { expectedMembers, onComplete, status: 'pending' },
+            role: 'tool',
+            threadId: state.origin?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId,
+          });
+      if (existingToolMessage) {
+        await ctx.messageModel.updatePluginState(groupTool.id, {
+          expectedMembers,
+          onComplete,
+          status: 'pending',
+        });
+        if (isCouncil) await ctx.messageModel.updateMetadata(groupTool.id, { agentCouncil: true });
+      }
 
       // 2. Per-member anchors. A single member collapses onto the group tool
       //    message; multiple members each get a child anchor under it. These
@@ -409,11 +538,13 @@ export const buildServerAgentMemberRunner = (
             agentId,
             content: '',
             groupId,
+            // Lets the reader hide the anchor and the tool card show this member's progress.
+            metadata: { groupMemberAnchor: { agentId: resolvedMembers[i].agentId, index: i } },
             parentId: groupTool.id,
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
             role: 'tool',
-            threadId: state.metadata?.threadId,
+            threadId: state.origin?.threadId,
             tool_call_id: memberToolCallId,
             topicId,
           });
@@ -423,6 +554,8 @@ export const buildServerAgentMemberRunner = (
 
       // 3. Fork members.
       let startedCount = 0;
+      const startErrors: string[] = [];
+      const failedAnchorIds: string[] = [];
       await Promise.all(
         resolvedMembers.map(async (member, i) => {
           const anchorMessageId = anchorIds[i];
@@ -440,15 +573,31 @@ export const buildServerAgentMemberRunner = (
               parentOperationId: ctx.operationId,
               // The supervisor assistant message owning this tool call — council
               // members parent their response here (siblings of the council tool).
-              supervisorMessageId: parentMessageId,
+              supervisorMessageId,
               timeout,
               topicId,
+              userInterventionConfig: selectUserInterventionConfig(state),
             });
             if (result?.started) {
               startedCount += 1;
+              // The tool card follows an isolated member's progress by polling
+              // its thread, which it can only find through the anchor until the
+              // member finishes. Best-effort: the run proceeds either way.
+              if (result.threadId) {
+                await ctx.messageModel
+                  .updatePluginState(anchorMessageId, { threadId: result.threadId })
+                  .catch((error) =>
+                    log(
+                      'buildServerAgentMemberRunner: failed to stamp thread on anchor: %O',
+                      error,
+                    ),
+                  );
+              }
               return;
             }
+            if (result?.error) startErrors.push(result.error);
           } catch (error) {
+            startErrors.push(String(error));
             log(
               'buildServerAgentMemberRunner: member %s failed to start: %O',
               member.agentId,
@@ -458,10 +607,46 @@ export const buildServerAgentMemberRunner = (
           // Member failed to start — its completion bridge will never fire, so
           // backfill the anchor as errored to keep the K=N barrier reachable.
           try {
-            await ctx.messageModel.updateToolMessage(anchorMessageId, {
+            const result: ToolRunResult = {
               content: `Agent member "${member.agentId}" failed to start.`,
-              pluginState: { status: 'error' },
+              state: { status: 'error' },
+              success: false,
+            };
+            const controlled =
+              ctx.hookDispatcher && ctx.userId
+                ? await controlDeferredToolResult(
+                    {
+                      dispatcher: ctx.hookDispatcher,
+                      loadState: (id) =>
+                        id === ctx.operationId
+                          ? Promise.resolve(state)
+                          : (ctx.loadAgentState?.(id) ?? Promise.resolve(null)),
+                      loadDurableHooks: (id) =>
+                        loadDurableToolResultHooks(
+                          new AgentOperationModel(ctx.serverDB, ctx.userId!, ctx.workspaceId),
+                          id,
+                        ),
+                      messageModel: ctx.messageModel,
+                      userId: ctx.userId,
+                      workspaceId: ctx.workspaceId,
+                    },
+                    {
+                      contextToolMessageId: groupTool.id,
+                      operationId: ctx.operationId,
+                      toolMessageId: anchorMessageId,
+                      result,
+                    },
+                  )
+                : { blocked: false, result };
+            const saved = await ctx.messageModel.updateToolMessage(anchorMessageId, {
+              content: controlled.result.content,
+              pluginError: controlled.result.error ?? null,
+              pluginState: controlled.result.state,
+              onlyIfEmpty: true,
+              ...(controlled.blocked && { replacePluginState: true }),
             });
+            if (!saved.success) throw new Error('Failed to persist member startup failure');
+            failedAnchorIds.push(anchorMessageId);
           } catch (error) {
             log(
               'buildServerAgentMemberRunner: failed to mark anchor %s as errored: %O',
@@ -475,7 +660,10 @@ export const buildServerAgentMemberRunner = (
       // None started — no bridge will ever fire, so tear down the placeholders
       // and let the caller surface an inline tool error instead of parking.
       if (startedCount === 0) {
+        // A reused approved row is the call's own record — the caller writes
+        // the inline error into it, so only drop what this run created.
         for (const id of new Set([...anchorIds, groupTool.id])) {
+          if (id === existingToolMessage?.id) continue;
           try {
             // Runtime placeholder cleanup — see the sub-agent runner above.
             await ctx.messageModel.deleteMessage(id, { includeShareVisitor: true });
@@ -483,27 +671,29 @@ export const buildServerAgentMemberRunner = (
             log('buildServerAgentMemberRunner: cleanup failed for %s: %O', id, error);
           }
         }
-        return { started: false, startedCount: 0 };
+        return { errors: startErrors, started: false, startedCount: 0 };
       }
 
+      // A sibling may complete while the failed member waits on its result hook.
+      // Recheck after publishing the last startup receipt so local mode cannot
+      // strand the group waiting for a callback that will never arrive.
+      if (failedAnchorIds.length)
+        await ctx.onGroupMemberResult?.({
+          anchorMessageId: failedAnchorIds[0],
+          expectedMembers,
+          groupToolMessageId: groupTool.id,
+          parentOperationId: ctx.operationId,
+        });
       return { started: true, startedCount };
     },
   };
 };
 
-export const resolveRuntimeHistoryCount = (historyCount?: number) => {
-  if (historyCount === undefined) return undefined;
-
-  // Agent config stores historical message count, excluding the current turn.
-  // Runtime executors already pass the current user/tool turn in `llmPayload.messages`;
-  // without this +1, `historyCount: 0` truncates the current message too and sends
-  // `messages: []` to providers.
-  return historyCount + 1;
-};
-
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const isOperationInterrupted = async (ctx: RuntimeExecutorContext) => {
+  // The sentinel survives stale in-flight state writes and is cheaper than loading the state blob.
+  if (ctx.isInterrupted) return ctx.isInterrupted(ctx.operationId);
   if (!ctx.loadAgentState) return false;
 
   try {

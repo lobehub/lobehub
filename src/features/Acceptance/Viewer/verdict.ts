@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheck,

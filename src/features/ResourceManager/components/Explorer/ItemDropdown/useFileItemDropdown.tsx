@@ -1,8 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { copyToClipboard, Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from '@lobehub/ui';
+import { confirmModal, copyToClipboard, Icon, toast } from '@lobehub/ui';
 import {
   BookMinusIcon,
   BookPlusIcon,
@@ -18,14 +17,19 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import RepoIcon from '@/components/LibIcon';
 import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { buildPagePath } from '@/features/ResourceManager/utils/resourcePath';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { documentService } from '@/services/document';
+import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useTreeStore } from '@/store/tree';
@@ -77,7 +81,16 @@ interface UseFileItemDropdownReturn {
 }
 
 /**
- * Shared with folder tree and explorer
+ * Builds resource actions shared by the folder tree and explorer.
+ *
+ * Use when:
+ * - Rendering an explorer or folder-tree resource menu.
+ *
+ * Expects:
+ * - Parsed file rows carry their backing files.id in fileId.
+ *
+ * Returns:
+ * - Available actions with file visibility changes targeting the backing file.
  */
 export const useFileItemDropdown = ({
   fileId,
@@ -99,6 +112,8 @@ export const useFileItemDropdown = ({
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const {
     deleteResource,
@@ -141,15 +156,23 @@ export const useFileItemDropdown = ({
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
   // Pages/documents have no storage URL to attach, so only real files get the
-  // "Send to chat platform" entry. The server resolves the attachment by
+  // "Send to chat platform" entry. It is gated on the file type, not on `url`:
+  // a row restored from the persisted tree has none, and the server needs only
+  // the id. The server resolves the attachment by
   // `files.id`, but a file that backs a derived page is listed under the PAGE
   // id — always prefer the row's underlying `fileId` when it carries one.
   const sendToMessengerItem = useSendToMessengerMenuItem({
-    enabled: !isFolder && !isPage && !!url,
+    enabled: !isFolder && !isPage,
     file: { fileType, id: fileId ?? id, name: filename, size },
   });
 
   const menuItems = useCallback(() => {
+    // A sidebar row restored from the persisted tree carries no storage URL (a
+    // signed link never reaches storage) until its folder refreshes; fetch it on
+    // demand so Copy URL / Download never act on an empty string.
+    const resolveFileUrl = async (): Promise<string> =>
+      url || (await fileService.getFile(fileId ?? id)).url;
+
     // Filter out current knowledge base and constrain by visibility scope:
     // a private file can only join a private KB, a workspace-public file can
     // only join a public KB. Personal-mode files (visibility null/undefined)
@@ -272,23 +295,23 @@ export const useFileItemDropdown = ({
 
     const hasKnowledgeBaseActions = libraryRelatedActions.some(Boolean);
 
+    // Visibility is a workspace concept: `files.visibility` defaults to
+    // `'public'` even for personal-mode rows (`workspace_id IS NULL`), where it
+    // is meaningless. Without this gate every personal file would offer
+    // "Make private" (and, once flipped, "Publish to workspace").
+    const isOwnWorkspaceFile =
+      !!activeWorkspaceId &&
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      !!currentUserId &&
+      userId === currentUserId;
     // Only the creator of a still-private file (not a folder, since folders
     // live in the `documents` table and have their own publish flow) sees the
     // "Publish to workspace" entry. Mirrors the agent / task one-way publish.
-    const isOwnPrivateFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'private' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPrivateFile = isOwnWorkspaceFile && visibility === 'private';
     // Bidirectional counterpart: workspace-public files owned by the caller
     // can be pulled back to private via the same guarded server path.
-    const isOwnPublicFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'public' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPublicFile = isOwnWorkspaceFile && visibility === 'public';
 
     return (
       [
@@ -306,7 +329,8 @@ export const useFileItemDropdown = ({
                 title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
                 onOk: async () => {
                   try {
-                    await publishFileToWorkspace(id);
+                    // Parsed file rows use a document ID; file endpoints require the backing file ID.
+                    await publishFileToWorkspace(fileId ?? id);
                     toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
@@ -326,13 +350,13 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: <VisibilityConfirmContent variant="makePrivate" />,
+                content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
                 okButtonProps: { danger: true },
                 okText: t('continue', { ns: 'common' }),
                 title: t('makePrivate.confirm.title', { ns: 'common' }),
                 onOk: async () => {
                   try {
-                    await setFileVisibility(id, 'private');
+                    await setFileVisibility(fileId ?? id, 'private');
                     toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
@@ -350,18 +374,21 @@ export const useFileItemDropdown = ({
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
 
-            // For pages, use the route path instead of the storage URL
-            let urlToCopy = url;
-            if (isPage) {
-              if (libraryId) {
-                urlToCopy = `${appOrigin}/resource/library/${libraryId}?file=${id}`;
-              } else {
-                urlToCopy = `${appOrigin}/resource?file=${id}`;
-              }
-            }
+            // For pages, use the route path instead of the storage URL. Workspace
+            // routes are mounted under `/:workspaceSlug`, so the shared link must
+            // carry the active slug or recipients land in the personal scope
+            // where the page does not resolve.
+            try {
+              const urlToCopy = isPage
+                ? `${appOrigin}${buildPagePath(id, activeWorkspaceSlug, libraryId)}`
+                : await resolveFileUrl();
 
-            await copyToClipboard(urlToCopy);
-            toast.success(t('FileManager.actions.copyUrlSuccess'));
+              await copyToClipboard(urlToCopy);
+              toast.success(t('FileManager.actions.copyUrlSuccess'));
+            } catch (error) {
+              console.error('Failed to copy file url:', error);
+              toast.error(t('FileManager.actions.copyUrlError'));
+            }
           },
           sfSymbol: 'doc.on.doc',
         },
@@ -393,15 +420,21 @@ export const useFileItemDropdown = ({
                   await downloadFile(blobUrl, mdFilename);
                   URL.revokeObjectURL(blobUrl);
                 } else {
-                  toast.error('Failed to download page: no content available');
+                  toast.error(t('FileManager.actions.downloadPageEmpty'));
                 }
               } catch (error) {
                 console.error('Failed to download page:', error);
-                toast.error('Failed to download page');
+                toast.error(t('FileManager.actions.downloadPageError'));
               }
             } else {
-              // For regular files, download from URL
-              await downloadFile(url, filename);
+              // For regular files, download from URL (resolved first for a row
+              // restored without one, which can fail offline or once deleted).
+              try {
+                await downloadFile(await resolveFileUrl(), filename);
+              } catch (error) {
+                console.error('Failed to download file:', error);
+                toast.error(t('FileManager.actions.downloadError'));
+              }
             }
 
             downloadingToast.close();
@@ -472,6 +505,9 @@ export const useFileItemDropdown = ({
                     // `dropNodes` forgets the whole subtree synchronously.
                     onDeleted?.();
                     void useTreeStore.getState().dropNodes([id], treeParentKey);
+                    // The search overlays persist their hits per query, so the
+                    // deleted row must leave those too or it repaints there.
+                    useResourceManagerStore.getState().removeSearchHits([id]);
                     await refreshFileList({ revalidateResources: false });
 
                     toast.success(t('FileManager.actions.deleteSuccess'));
@@ -490,9 +526,12 @@ export const useFileItemDropdown = ({
   }, [
     addFilesToKnowledgeBase,
     appOrigin,
+    activeWorkspaceId,
+    activeWorkspaceSlug,
     canEditResources,
     currentUserId,
     deleteResource,
+    fileId,
     filename,
     id,
     isFolder,

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 
 import { AcceptanceViewer, OriginConversationProvider } from '@/features/Acceptance';
-import TopicPanel from '@/features/Acceptance/Viewer/TopicPanel';
+import TopicPanel from '@/features/Acceptance/Viewer/Conversation/TopicPanel';
 import { draftToMainComposer } from '@/features/Conversation/composerDraftBus';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';

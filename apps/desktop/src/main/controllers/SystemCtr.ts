@@ -17,6 +17,7 @@ import {
 } from '@/utils/permissions';
 import * as electronIs from '@/utils/platform';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
+import { safeGetPath } from '@/utils/user-path';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
@@ -65,12 +66,12 @@ export default class SystemController extends ControllerModule {
         // User Paths (ensure keys match UserPathData / DesktopAppState interface)
         desktop: app.getPath('desktop'),
         documents: app.getPath('documents'),
-        downloads: app.getPath('downloads'),
+        downloads: safeGetPath('downloads'),
         home: app.getPath('home'),
-        music: app.getPath('music'),
-        pictures: app.getPath('pictures'),
+        music: safeGetPath('music'),
+        pictures: safeGetPath('pictures'),
         userData: app.getPath('userData'),
-        videos: app.getPath('videos'),
+        videos: safeGetPath('videos'),
       },
     };
   }
@@ -93,7 +94,10 @@ export default class SystemController extends ControllerModule {
   }
 
   @IpcMethod()
-  requestAccessibilityAccess() {
+  async requestAccessibilityAccess(): Promise<boolean> {
+    if (await this.app.permissionGuide.open('accessibility')) {
+      return getAccessibilityStatus() === 'granted';
+    }
     return requestAccessibilityAccess();
   }
 
@@ -134,6 +138,8 @@ export default class SystemController extends ControllerModule {
       logger.info('[FullDiskAccess] Not macOS, returning granted');
       return 'granted';
     }
+
+    if (await this.app.permissionGuide.open('fullDisk')) return 'opened_settings';
 
     const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
 
@@ -180,11 +186,15 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   async requestScreenAccess(): Promise<boolean> {
+    if (await this.app.permissionGuide.open('screen')) {
+      return getMediaAccessStatus('screen') === 'granted';
+    }
     return requestScreenCaptureAccess();
   }
 
   @IpcMethod()
   async openFullDiskAccessSettings() {
+    if (await this.app.permissionGuide.open('fullDisk')) return;
     return openFullDiskAccessSettings();
   }
 

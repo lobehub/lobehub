@@ -1,11 +1,11 @@
 import type { ModelParamsSchema, RuntimeImageGenParams } from 'model-bank';
-import { extractDefaultValues, ModelProvider } from 'model-bank';
 import { nanoBanana2Parameters } from 'model-bank/imageParameters';
+import { extractDefaultValues } from 'model-bank/standardParameters';
 
 import { DEFAULT_IMAGE_CONFIG } from '@/const/settings';
+import { DEFAULT_AI_IMAGE_MODEL, DEFAULT_AI_IMAGE_PROVIDER } from '@/utils/defaultImageModel';
 
-export const DEFAULT_AI_IMAGE_PROVIDER = ModelProvider.Google;
-export const DEFAULT_AI_IMAGE_MODEL = 'gemini-3.1-flash-image:image';
+export { DEFAULT_AI_IMAGE_MODEL, DEFAULT_AI_IMAGE_PROVIDER };
 
 export interface GenerationConfigState {
   parameters: RuntimeImageGenParams;

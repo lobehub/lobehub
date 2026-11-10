@@ -1,5 +1,4 @@
-import { Collapse } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Accordion, cssVar } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,10 +8,10 @@ const Summary = memo(() => {
   const { description, summary } = useDetailContext();
   const { t } = useTranslation('discover');
   return (
-    <Collapse
-      defaultActiveKey={['summary']}
-      expandIconPlacement={'end'}
-      size={'small'}
+    <Accordion
+      defaultValue={['summary']}
+      indicatorPlacement={'end'}
+      styles={{ trigger: { paddingInline: 0 } }}
       variant={'borderless'}
       items={[
         {
@@ -27,7 +26,7 @@ const Summary = memo(() => {
             </p>
           ),
           key: 'summary',
-          label: t('assistants.details.summary.title'),
+          title: t('assistants.details.summary.title'),
         },
       ]}
     />

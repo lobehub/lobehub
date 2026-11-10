@@ -179,6 +179,31 @@ describe('VoiceMessageAction', () => {
     });
   });
 
+  it('keeps an adopted row through a later snapshot that does not repeat it', async () => {
+    vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
+    const send = vi.fn<VoiceMessageSend>(async (file, { messageId }) => {
+      adoptUploadedFile(file, messageId);
+    });
+
+    const messageId = startVoiceMessage({ send });
+
+    await waitFor(() =>
+      expect(useChatStore.getState().voiceMessageUploadMap[messageId]).toBeUndefined(),
+    );
+
+    // A gateway message_patch never re-sends an unchanged user row: the client applies the patch
+    // to its own bucket and replaces with the result, so the adopted row reaches
+    // `replaceMessages` as-is rather than as a server copy.
+    act(() => {
+      useChatStore
+        .getState()
+        .replaceMessages(useChatStore.getState().dbMessagesMap[messagesKey] ?? [], { context });
+    });
+
+    expect(getMessage(messageId)).toMatchObject({ id: messageId, role: 'user' });
+    expect(getMessage(messageId)?.metadata?.scope).toBeUndefined();
+  });
+
   it('removes a successful local row when queue-like acceptance did not adopt it', async () => {
     vi.spyOn(useFileStore.getState(), 'uploadWithProgress').mockResolvedValue(uploadedResult);
     const send = vi.fn<VoiceMessageSend>().mockResolvedValue(undefined);
@@ -290,6 +315,7 @@ describe('VoiceMessageAction', () => {
       url: uploadedResult.url,
     });
     expect(useChatStore.getState().voiceMessageUploadMap[messageId]).toBeUndefined();
+    expect(getMessage(messageId)?.metadata?.scope).toBeUndefined();
     expect(removeFile).not.toHaveBeenCalled();
   });
 

@@ -1,8 +1,15 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Forward, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -44,7 +51,9 @@ const SelectionFooterBar = memo(() => {
   const [forwardOpen, setForwardOpen] = useState(false);
   const storeApi = useConversationStoreApi();
   const selectedCount = useConversationStore(messageStateSelectors.selectedMessageCount);
-  const selectedMessageIds = useConversationStore((s) => s.selectedMessageIds);
+  const selectedMessageIds = useConversationStore(
+    messageStateSelectors.selectedDeletableMessageIds,
+  );
   const exitSelectionMode = useConversationStore((s) => s.exitSelectionMode);
   const deleteMessages = useConversationStore((s) => s.deleteMessages);
 

@@ -33,7 +33,7 @@ const useProviderCard = (): ProviderItem => {
         ),
         desc: t(`${providerKey}.apiKey.desc`),
         label: t(`${providerKey}.apiKey.title`),
-        name: [KeyVaultsConfigKey, 'apiKey'],
+        name: `${KeyVaultsConfigKey}.apiKey`,
       },
       {
         children: isLoading ? (
@@ -43,7 +43,7 @@ const useProviderCard = (): ProviderItem => {
         ),
         desc: t(`${providerKey}.baseURLOrAccountID.desc`),
         label: t(`${providerKey}.baseURLOrAccountID.title`),
-        name: [KeyVaultsConfigKey, 'baseURLOrAccountID'],
+        name: `${KeyVaultsConfigKey}.baseURLOrAccountID`,
       },
     ],
   };

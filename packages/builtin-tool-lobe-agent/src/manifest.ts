@@ -234,7 +234,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     // ==================== Sub-Agent ====================
     {
       description:
-        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation.',
+        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation. Pass `subAgentId` to send a follow-up message to an earlier sub-agent instead of starting a new one.',
       name: LobeAgentApiName.callSubAgent,
       parameters: {
         properties: {
@@ -249,6 +249,16 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           inheritMessages: {
             description:
               'Whether to inherit context messages from the parent conversation. Default is false.',
+            type: 'boolean',
+          },
+          subAgentId: {
+            description:
+              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Leave empty (or omit) to start a new sub-agent; never invent an id.',
+            type: 'string',
+          },
+          runInBackground: {
+            description:
+              'Optional. Start the sub-agent and get control back immediately instead of waiting for it. Use it only when you have other independent work to do meanwhile, or when the user should not wait on this result. The result arrives later as a new message (waking you up if your turn has ended) — never poll or wait for it. Default is false: wait for the result in this turn.',
             type: 'boolean',
           },
           ...(isDesktop && {
@@ -269,7 +279,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per task, only for the single worst blocker.',
+        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per run, only for the single worst blocker. It never stops a tool loop or ends your turn — to stop, just reply to the user; repeated or empty vents are rejected.',
       name: LobeAgentApiName.vent,
       parameters: {
         additionalProperties: false,

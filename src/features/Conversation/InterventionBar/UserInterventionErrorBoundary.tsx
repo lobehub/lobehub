@@ -1,9 +1,7 @@
 'use client';
 
 import { safeParseJSON } from '@lobechat/utils';
-import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
 import { AlertTriangle } from 'lucide-react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, memo, useMemo } from 'react';

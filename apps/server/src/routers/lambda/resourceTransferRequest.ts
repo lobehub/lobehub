@@ -25,6 +25,7 @@ import { buildMemberTransferManifest } from '@/database/repositories/resourceTra
 import type { ResourceTransferRequestItem } from '@/database/schemas';
 import { agents, chatGroups, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
@@ -131,7 +132,13 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
             title: agents.title,
           })
           .from(agents)
-          .where(and(inArray(agents.id, agentIds), eq(agents.workspaceId, requestWorkspaceId)))
+          .where(
+            and(
+              inArray(agents.id, agentIds),
+              eq(agents.workspaceId, requestWorkspaceId),
+              notTrashed(agents.isDeleted),
+            ),
+          )
       : Promise.resolve([]),
     groupIds.length > 0
       ? db
@@ -143,7 +150,11 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
           })
           .from(chatGroups)
           .where(
-            and(inArray(chatGroups.id, groupIds), eq(chatGroups.workspaceId, requestWorkspaceId)),
+            and(
+              inArray(chatGroups.id, groupIds),
+              eq(chatGroups.workspaceId, requestWorkspaceId),
+              notTrashed(chatGroups.isDeleted),
+            ),
           )
       : Promise.resolve([]),
   ]);
@@ -288,13 +299,14 @@ export const resourceTransferRequestRouter = router({
           });
         }
         if (error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
-          // Not permanently stale: once the share row is removed (no product
-          // entry point yet — see the `transferAgents` guard) the recipient
-          // can retry, so the request stays pending.
+          // A share row, including a paused row, blocks ownership transfer.
+          // Keep this request pending so it can be canceled or retried only
+          // after the share row is actually removed.
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
             code: 'PRECONDITION_FAILED',
-            message: 'This agent has a share link, so its owner cannot be changed.',
+            message:
+              'This agent cannot be transferred while a share link exists, including paused links.',
           });
         }
       }

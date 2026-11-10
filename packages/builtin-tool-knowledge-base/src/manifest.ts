@@ -97,7 +97,7 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     // ---- Search & Read ----
     {
       description:
-        'Search the knowledge base. Returns two result types: (1) <files> — uploaded files matched by semantic vector search at chunk-level (file_* IDs); (2) <documents> — inline notes/documents matched by full-text BM25 search at document-level (docs_* IDs). Use this to discover relevant content first, then call readKnowledge with the returned IDs to get full content. Resolve pronouns/references to concrete entities for best vector recall.',
+        'Search the knowledge base. Returns two result types: (1) <files> — uploaded files matched by semantic vector search at chunk-level (file_* IDs); (2) <documents> — inline notes/documents matched by full-text BM25 search at document-level (docs_* IDs). Only covers knowledge bases attached to and enabled for this agent (plus, in task runs, knowledge bases enabled on the task project) — a knowledge base or document you just created is not searchable until it is attached and enabled; if readKnowledge or viewKnowledgeBase is among your available tools, read or browse those directly instead, otherwise tell the user. Use this to discover relevant content first, then call readKnowledge with the returned IDs to get full content. Resolve pronouns/references to concrete entities for best vector recall.',
       name: KnowledgeBaseApiName.searchKnowledgeBase,
       parameters: {
         properties: {
@@ -121,7 +121,7 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read the full content of specific resources from the knowledge base. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents created via createDocument. Use this after searchKnowledgeBase or viewKnowledgeBase to get complete content. You can read multiple resources at once.',
+        'Read the content of specific resources from the knowledge base, one bounded window per file. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents created via createDocument. Use this after searchKnowledgeBase or viewKnowledgeBase. Each call returns at most `limit` lines (default 400) and about 10,000 characters per file; when the result says truncated="true", call again with the suggested offset to continue. Prefer searchKnowledgeBase to locate the relevant part first, and do not re-read a file you have already read in this conversation.',
       name: KnowledgeBaseApiName.readKnowledge,
       parameters: {
         properties: {
@@ -132,6 +132,19 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
               type: 'string',
             },
             type: 'array',
+          },
+          limit: {
+            description:
+              'Maximum number of lines to return per file (default 400, max 2000). Applies to every file in fileIds. Output is additionally capped at about 10,000 characters per file.',
+            maximum: 2000,
+            minimum: 1,
+            type: 'number',
+          },
+          offset: {
+            description:
+              '1-based line number to start reading from (default 1). Applies to every file in fileIds, so page one file per call when their suggested offsets differ. Use the offset suggested in a previous truncated result to read the next window.',
+            minimum: 1,
+            type: 'number',
           },
         },
         required: ['fileIds'],

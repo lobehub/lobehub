@@ -44,6 +44,11 @@ export const goalNodes = pgTable(
     goalId: text('goal_id')
       .references(() => goals.id, { onDelete: 'cascade' })
       .notNull(),
+    /**
+     * Node role. Deliberately `text` + TS union, never a pgEnum: the vocabulary
+     * moves (`work` → `task`, and now `batch`), and a CHECK would pin it into
+     * DDL and cost an ALTER on every rename.
+     */
     kind: text('kind').$type<GoalNodeKind>().notNull(),
     status: text('status').$type<GoalNodeStatus>().default('proposed').notNull(),
     title: text('title').notNull(),
@@ -64,6 +69,7 @@ export const goalNodes = pgTable(
   },
   (t) => [
     index('goal_nodes_goal_id_status_idx').on(t.goalId, t.status),
+    index('goal_nodes_created_by_user_id_idx').on(t.createdByUserId),
     index('goal_nodes_goal_id_kind_idx').on(t.goalId, t.kind),
     unique('goal_nodes_goal_id_id_unique').on(t.goalId, t.id),
     /**
@@ -170,6 +176,7 @@ export const goalNodeDecisions = pgTable(
   (t) => [
     uniqueIndex('goal_node_decisions_node_id_unique').on(t.nodeId),
     index('goal_node_decisions_status_idx').on(t.status),
+    index('goal_node_decisions_resolved_by_user_id_idx').on(t.resolvedByUserId),
     index('goal_node_decisions_requested_user_id_status_idx').on(t.requestedUserId, t.status),
   ],
 );

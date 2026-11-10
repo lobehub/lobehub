@@ -17,14 +17,13 @@
       }
     </style>
 
-    <!-- The prototype runtime: react + @lobehub/ui(+base-ui) + antd + antd-style +
-     lucide-react, bundled once from this repo's node_modules (production versions).
-     Build both files next to this HTML:
+    <!-- The prototype runtime: react + @lobehub/ui 6 (+ its theme/global/style CSS) +
+     lucide-react + motion, bundled once from this repo's node_modules (production versions).
+     Build all three files next to this HTML:
        bash .agents/skills/design-prototype/scripts/build-runtime.sh <this-dir> -->
+    <link rel="stylesheet" href="./lobe-prototype-runtime.css" />
     <script src="./lobe-prototype-runtime.js"></script>
     <script>
-      // Map bare module specifiers onto the bundled namespaces, so the code below
-      // keeps production-style `import { X } from '@lobehub/ui'`.
       window.require = (name) => {
         const m = __PROTO_DEPS_NS__.default[name];
         if (!m)
@@ -35,6 +34,14 @@
       };
       window.exports = {};
       window.module = { exports: window.exports };
+
+      (() => {
+        const { setLobeTheme } = window.require('@lobehub/ui');
+        const media = matchMedia('(prefers-color-scheme: dark)');
+        const sync = () => setLobeTheme({ appearance: media.matches ? 'dark' : 'light' });
+        sync();
+        media.addEventListener('change', sync);
+      })();
     </script>
     <script src="./babel.min.js"></script>
   </head>
@@ -43,23 +50,28 @@
     <div id="root"></div>
 
     <script type="text/babel" data-presets="react" data-plugins="transform-modules-commonjs">
-      // Production-style React from here on. Real tokens, real components.
-      import { Button, Center, Empty, Flexbox, Text, ThemeProvider } from '@lobehub/ui';
-      import { createStyles } from 'antd-style';
+      import {
+        Button,
+        Center,
+        ConfigProvider,
+        createStaticStyles,
+        Empty,
+        Flexbox,
+        Text,
+        ToastHost,
+      } from '@lobehub/ui';
+      import { motion } from 'motion/react';
       import React, { memo, useState } from 'react';
       import { createRoot } from 'react-dom/client';
 
-      const useStyles = createStyles(({ css, token }) => ({
+      const styles = createStaticStyles(({ css, cssVar }) => ({
         page: css`
           min-height: 100dvh;
-          background: ${token.colorBgLayout};
+          background: ${cssVar.colorBgLayout};
         `,
       }));
 
       const App = memo(() => {
-        const { styles } = useStyles();
-        // Prototypes must demo at least one non-happy-path state (ux skill ground
-        // rule) — wire a state toggle like this instead of hardcoding the happy path.
         const [state, setState] = useState('data');
 
         return (
@@ -79,9 +91,7 @@
             <Center flex={1}>
               {state === 'data' && <Text>Replace me with the real surface.</Text>}
               {state === 'empty' && <Empty description="Nothing here yet" />}
-              {state === 'loading' && (
-                <Text type="secondary">skeleton / NeuralNetworkLoading here…</Text>
-              )}
+              {state === 'loading' && <Text type="secondary">skeleton / Spin here…</Text>}
               {state === 'error' && (
                 <Flexbox align="center" gap={8}>
                   <Text type="danger">Failed to load.</Text>
@@ -95,9 +105,10 @@
 
       document.querySelector('#boot').remove();
       createRoot(document.querySelector('#root')).render(
-        <ThemeProvider themeMode="auto">
+        <ConfigProvider motion={motion}>
           <App />
-        </ThemeProvider>,
+          <ToastHost />
+        </ConfigProvider>,
       );
     </script>
   </body>

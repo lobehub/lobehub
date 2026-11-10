@@ -1,6 +1,5 @@
 const ONBOARDING_PATH = '/onboarding';
 const CALLBACK_STORAGE_KEY = 'onboarding-callback-url';
-export const POST_ONBOARDING_HOME_TASK_URL = '/?onboarding=task';
 
 /**
  * Only same-site relative paths are allowed as post-onboarding redirect
@@ -114,5 +113,4 @@ export const consumeOnboardingCallbackUrl = (): string | undefined => {
   return url;
 };
 
-export const resolvePostOnboardingTargetUrl = (): string =>
-  consumeOnboardingCallbackUrl() || POST_ONBOARDING_HOME_TASK_URL;
+export const resolvePostOnboardingTargetUrl = (): string => consumeOnboardingCallbackUrl() || '/';

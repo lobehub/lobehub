@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, chatGroups, sessions, threads, topics } from '@lobechat/database/schemas';
+import {
+  agentOperations,
+  agents,
+  chatGroups,
+  sessions,
+  threads,
+  topics,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
@@ -12,21 +19,47 @@ import { cleanupTestUser, createTestUser } from './integration/setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 const mockInterruptOperation = vi.fn();
 
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: mockInterruptOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: mockInterruptOperation,
+    };
+  }),
 }));
 
 // Mock AiChatService
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
+}));
+
+// Mock deviceGateway so we can assert cancelHeteroTask dispatches without a
+// live device connection. Use vi.hoisted so the mock fn is available to the
+// hoisted vi.mock factory.
+const { mockExecuteToolCall } = vi.hoisted(() => ({
+  mockExecuteToolCall: vi.fn(),
+}));
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    executeToolCall: mockExecuteToolCall,
+  },
+  getScopedOnlineDevices: vi.fn(() => []),
+}));
+
+const { mockSettleAgentRunFee } = vi.hoisted(() => ({
+  mockSettleAgentRunFee: vi.fn(),
+}));
+vi.mock('@/business/server/agent-run/runFee', () => ({
+  settleAgentRunFee: mockSettleAgentRunFee,
 }));
 
 describe('aiAgentRouter.interruptTask', () => {
@@ -43,6 +76,9 @@ describe('aiAgentRouter.interruptTask', () => {
     userId = await createTestUser(serverDB);
     mockInterruptOperation.mockReset();
     mockInterruptOperation.mockResolvedValue(true);
+    mockExecuteToolCall.mockReset();
+    mockExecuteToolCall.mockResolvedValue({ content: '{}', success: true });
+    mockSettleAgentRunFee.mockReset();
 
     // Create test agent
     const [agent] = await serverDB
@@ -293,6 +329,165 @@ describe('aiAgentRouter.interruptTask', () => {
       });
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  // Regression: previously only remote-task hetero types (openclaw / hermes)
+  // triggered a `cancelHeteroTask` dispatch to the device. Local-cli types
+  // (claude-code / codex / devin / trae / qoder) that also run on a remote
+  // device via `dispatchAgentRun` were silently skipped — the UI showed
+  // cancelled but the CLI process kept running. Now any hetero type with a
+  // deviceId in the topic's runningOperation triggers the cancel dispatch.
+  describe('device hetero cancel dispatch', () => {
+    it.each(['devin', 'claude-code', 'codex', 'trae', 'qoder', 'openclaw', 'hermes'] as const)(
+      'dispatches cancelHeteroTask for %s running on a device',
+      async (heteroType) => {
+        // Seed topic.metadata.runningOperation with a device + heteroType so
+        // interruptTask can resolve the target without a separate device lookup.
+        await serverDB
+          .update(topics)
+          .set({
+            metadata: {
+              runningOperation: {
+                assistantMessageId: 'asst-cancel-test',
+                deviceId: 'device-1',
+                deviceWorkspaceId: 'ws-device',
+                heteroType,
+                operationId: 'op-device-cancel',
+              },
+            },
+          })
+          .where(eq(topics.id, testTopicId));
+
+        // Also point the thread's operationId at the same op so the router
+        // resolves it without needing a separate operation row.
+        await serverDB
+          .update(threads)
+          .set({ metadata: { operationId: 'op-device-cancel' } })
+          .where(eq(threads.id, testThreadId));
+
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        await caller.interruptTask({
+          operationId: 'op-device-cancel',
+          topicId: testTopicId,
+        });
+
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: 'device-1' }),
+          expect.objectContaining({
+            apiName: 'cancelHeteroTask',
+            identifier: 'cancelHeteroTask',
+          }),
+          10_000,
+        );
+
+        // The signal should be SIGINT (graceful) and taskId should match the
+        // operationId so the device can look up the process.
+        const [, toolCall] = mockExecuteToolCall.mock.calls[0];
+        const args = JSON.parse(toolCall.arguments);
+        expect(args.signal).toBe('SIGINT');
+        expect(args.taskId).toBe('op-device-cancel');
+      },
+    );
+
+    // Regression: a stopped device CLI run never reaches CompletionLifecycle
+    // (heteroFinish skips a cancelled run), so its run fee stayed held until
+    // the hold expired instead of being charged or given back.
+    describe('run fee of a stopped device run', () => {
+      const seedRunningCodexRun = async (operationId: string) => {
+        await serverDB.insert(agentOperations).values({
+          id: operationId,
+          startedAt: new Date(Date.now() - 40_000),
+          status: 'running',
+          topicId: testTopicId,
+          userId,
+        });
+        await serverDB
+          .update(topics)
+          .set({
+            metadata: {
+              runningOperation: {
+                assistantMessageId: 'asst-fee',
+                deviceId: 'device-1',
+                heteroType: 'codex',
+                operationId,
+              },
+            },
+          })
+          .where(eq(topics.id, testTopicId));
+        mockExecuteToolCall.mockResolvedValue({ state: { exited: true }, success: true });
+      };
+
+      it('settles the fee as interrupted with the run duration once the device exits', async () => {
+        await seedRunningCodexRun('op-fee-stop');
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        await caller.interruptTask({ operationId: 'op-fee-stop', topicId: testTopicId });
+
+        expect(mockSettleAgentRunFee).toHaveBeenCalledTimes(1);
+        const [params] = mockSettleAgentRunFee.mock.calls[0];
+        expect(params).toMatchObject({
+          operationId: 'op-fee-stop',
+          reason: 'interrupted',
+          userId,
+        });
+        expect(params.durationMs).toBeGreaterThanOrEqual(40_000);
+      });
+
+      it('does not settle the fee again when a repeated stop finds the run already settled', async () => {
+        await seedRunningCodexRun('op-fee-stop-twice');
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        await caller.interruptTask({ operationId: 'op-fee-stop-twice', topicId: testTopicId });
+        await caller.interruptTask({ operationId: 'op-fee-stop-twice', topicId: testTopicId });
+
+        expect(mockSettleAgentRunFee).toHaveBeenCalledTimes(1);
+      });
+
+      it('keeps the stop successful when settling the fee fails', async () => {
+        await seedRunningCodexRun('op-fee-stop-fails');
+        mockSettleAgentRunFee.mockRejectedValue(new Error('billing down'));
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        const result = await caller.interruptTask({
+          operationId: 'op-fee-stop-fails',
+          topicId: testTopicId,
+        });
+
+        expect(result.success).toBe(true);
+      });
+    });
+
+    it('does not dispatch cancelHeteroTask when the operation has no deviceId', async () => {
+      // runningOperation with heteroType but no deviceId — e.g. a cloud-sandbox
+      // run that has no remote process to kill.
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'asst-no-device',
+              heteroType: 'devin',
+              operationId: 'op-no-device',
+            },
+          },
+        })
+        .where(eq(topics.id, testTopicId));
+
+      await serverDB
+        .update(threads)
+        .set({ metadata: { operationId: 'op-no-device' } })
+        .where(eq(threads.id, testThreadId));
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.interruptTask({
+        operationId: 'op-no-device',
+        topicId: testTopicId,
+      });
+
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
     });
   });
 });

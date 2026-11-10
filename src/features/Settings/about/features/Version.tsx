@@ -4,17 +4,18 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Button, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, Button, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
-import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
+import { CHANGELOG_URL, DOWNLOAD_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import {
@@ -24,12 +25,31 @@ import {
 } from '@/utils/devDockUnlock';
 
 import { APP_VERSION } from './appVersion';
+import { formatOtaVersionLabel, getDisplayedOtaVersion } from './otaVersion';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  logo: css`
-    border-radius: calc(${cssVar.borderRadiusLG} * 2);
-  `,
-}));
+const OtaVersionTag = memo(() => {
+  const [otaVersion, setOtaVersion] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    rendererOtaService
+      .getStatus()
+      .then((status) => {
+        if (active) setOtaVersion((version) => version ?? getDisplayedOtaVersion(status));
+      })
+      .catch(console.error);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useWatchBroadcast('coreUpdateApplied', setOtaVersion);
+
+  if (!otaVersion) return null;
+  return <Tag style={{ minWidth: 60 }}>{formatOtaVersionLabel(otaVersion)}</Tag>;
+});
+
+OtaVersionTag.displayName = 'OtaVersionTag';
+
+const styles = stylex.create({ logo: { borderRadius: `calc(${cssVar.borderRadiusLG} * 2)` } });
 
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
@@ -140,6 +160,17 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           </Button>
         );
       }
+      // snap / tar.gz / a runtime-less AppImage cannot replace themselves, so the
+      // only honest action is sending the user to a fresh build.
+      case 'unsupported': {
+        return (
+          <Tooltip title={t('updateUnsupported.desc')}>
+            <a href={DOWNLOAD_URL.default} rel="noreferrer" style={{ flex: 1 }} target="_blank">
+              <Button block={mobile}>{t('updateUnsupported.action')}</Button>
+            </a>
+          </Tooltip>
+        );
+      }
       default: {
         return (
           <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate()}>
@@ -163,7 +194,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Block
             clickable
             align={'center'}
-            className={styles.logo}
+            className={stylex.props(styles.logo).className}
             height={64}
             justify={'center'}
             width={64}
@@ -180,6 +211,8 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
             >
               v{APP_VERSION}
             </Tag>
+
+            {isDesktop && <OtaVersionTag />}
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

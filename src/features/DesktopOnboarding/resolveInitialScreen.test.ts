@@ -48,7 +48,7 @@ describe('resolveInitialScreen', () => {
     ).toBe(DesktopOnboardingScreen.Welcome);
   });
 
-  it('rewrites Permissions to DataMode on non-macOS', () => {
+  it('rewrites Permissions to KeepAwake on non-macOS', () => {
     expect(
       resolveInitialScreen({
         everCompleted: false,
@@ -56,6 +56,6 @@ describe('resolveInitialScreen', () => {
         requested: DesktopOnboardingScreen.Permissions,
         saved: null,
       }),
-    ).toBe(DesktopOnboardingScreen.DataMode);
+    ).toBe(DesktopOnboardingScreen.KeepAwake);
   });
 });

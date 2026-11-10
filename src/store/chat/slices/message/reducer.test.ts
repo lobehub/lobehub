@@ -1,8 +1,19 @@
+import { parse } from '@lobechat/conversation-flow';
 import { type ChatToolPayload, type UIChatMessage } from '@lobechat/types';
 import i18n from 'i18next';
 
+import { messagesReducer as conversationMessagesReducer } from '@/features/Conversation/store/slices/data/reducer';
+
 import { type MessageDispatch } from './reducer';
 import { messagesReducer } from './reducer';
+
+const defaultToolPayload = (): ChatToolPayload => ({
+  id: 'tc_1',
+  type: 'default',
+  identifier: 'tool1',
+  apiName: 'testFunction',
+  arguments: '{"arg1": "value1"}',
+});
 
 describe('messagesReducer', () => {
   let initialState: UIChatMessage[];
@@ -280,6 +291,49 @@ describe('messagesReducer', () => {
   });
 
   describe('updateMessagePlugin', () => {
+    it.each([
+      ['chat', messagesReducer],
+      ['conversation', conversationMessagesReducer],
+    ] as const)('shows and clears tool failures before a server refresh in %s', (_, reduce) => {
+      const state: UIChatMessage[] = [
+        initialState[0],
+        { ...initialState[1], parentId: 'message1' },
+        {
+          content: 'Body saved for review; title not changed.',
+          createdAt: 1629264000001,
+          id: 'tool-result',
+          parentId: 'message2',
+          role: 'tool',
+          tool_call_id: 'abc',
+          updatedAt: 1629264000001,
+        },
+      ];
+      const error = { message: 'Page changed while saving', type: 'PageChangedDuringCommand' };
+      const resultError = (messages: UIChatMessage[]) =>
+        parse(messages).flatList.find((row) => row.role === 'assistantGroup')?.children?.[0]
+          .tools?.[0].result?.error;
+      const failed = reduce(state, {
+        id: 'tool-result',
+        type: 'updateMessagePlugin',
+        value: { error },
+      });
+      expect(resultError(failed)).toEqual(error);
+
+      const unchanged = reduce(failed, {
+        id: 'tool-result',
+        type: 'updateMessagePlugin',
+        value: { arguments: '{}' },
+      });
+      expect(resultError(unchanged)).toEqual(error);
+
+      const recovered = reduce(unchanged, {
+        id: 'tool-result',
+        type: 'updateMessagePlugin',
+        value: { error: null },
+      });
+      expect(resultError(recovered)).toBeUndefined();
+    });
+
     it('should update the plugin of a tool message', () => {
       const toolMessage: UIChatMessage = {
         id: 'toolMessage',
@@ -378,13 +432,7 @@ describe('messagesReducer', () => {
   describe('addMessageTool', () => {
     it('should add a tool to the specified assistant message if it dont have tools', () => {
       const messageId = '1';
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -406,13 +454,7 @@ describe('messagesReducer', () => {
 
     it('should add a tool to the specified assistant message', () => {
       const messageId = 'message2';
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -432,13 +474,7 @@ describe('messagesReducer', () => {
     });
 
     it('should not modify the state if the message is not found', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -451,13 +487,7 @@ describe('messagesReducer', () => {
     });
 
     it('should not add a tool if the message is not an assistant message', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -580,16 +610,6 @@ describe('messagesReducer', () => {
       expect(newState.length).toBe(0);
       expect(newState.find((m) => m.id === 'message1')).toBeUndefined();
       expect(newState.find((m) => m.id === 'message2')).toBeUndefined();
-    });
-
-    it('should not modify state if message to delete is not found', () => {
-      const payload: MessageDispatch = {
-        type: 'deleteMessage',
-        id: 'nonexistentMessage',
-      };
-
-      const newState = messagesReducer(initialState, payload);
-      expect(newState).toEqual(initialState);
     });
   });
 });

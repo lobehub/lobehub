@@ -9,6 +9,27 @@ import {
 } from './fixtures';
 import { createInitialState, createTestContext, executeWithMockContext } from './helpers';
 
+const createSearchTool = (): ChatToolPayload => ({
+  id: 'tool_1',
+  identifier: 'lobe-web-browsing',
+  apiName: 'search',
+  arguments: JSON.stringify({ query: 'test' }),
+  type: 'default',
+});
+
+const createApprovalExecutionOptions = (
+  instruction: Parameters<typeof executeWithMockContext>[0]['instruction'],
+  state: Parameters<typeof executeWithMockContext>[0]['state'],
+  mockStore: Parameters<typeof executeWithMockContext>[0]['mockStore'],
+  context: Parameters<typeof executeWithMockContext>[0]['context'],
+): Parameters<typeof executeWithMockContext>[0] => ({
+  executor: 'request_human_approve',
+  instruction,
+  state,
+  mockStore,
+  context,
+});
+
 describe('request_human_approve executor', () => {
   describe('Basic Behavior', () => {
     it('should create tool messages with pending intervention status', async () => {
@@ -18,27 +39,15 @@ describe('request_human_approve executor', () => {
       mockStore.dbMessagesMap['test-session_test-topic'] = [assistantMessage];
 
       const context = createTestContext();
-      const toolCalls: ChatToolPayload[] = [
-        {
-          id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'test' }),
-          type: 'default',
-        },
-      ];
+      const toolCalls: ChatToolPayload[] = [createSearchTool()];
 
       const instruction = createRequestHumanApproveInstruction(toolCalls);
       const state = createInitialState();
 
       // When
-      await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(1);
@@ -69,13 +78,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(result.newState.status).toBe('waiting_for_human');
@@ -89,13 +94,7 @@ describe('request_human_approve executor', () => {
 
       const context = createTestContext();
       const toolCalls: ChatToolPayload[] = [
-        {
-          id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'test' }),
-          type: 'default',
-        },
+        createSearchTool(),
         {
           id: 'tool_2',
           identifier: 'lobe-web-browsing',
@@ -109,13 +108,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(result.newState.pendingToolsCalling).toEqual(toolCalls);
@@ -128,27 +123,15 @@ describe('request_human_approve executor', () => {
       mockStore.dbMessagesMap['test-session_test-topic'] = [assistantMessage];
 
       const context = createTestContext();
-      const toolCalls: ChatToolPayload[] = [
-        {
-          id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'test' }),
-          type: 'default',
-        },
-      ];
+      const toolCalls: ChatToolPayload[] = [createSearchTool()];
 
       const instruction = createRequestHumanApproveInstruction(toolCalls);
       const state = createInitialState({ operationId: 'test-session' });
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(result.events).toContainEqual(
@@ -173,13 +156,9 @@ describe('request_human_approve executor', () => {
 
       // When/Then
       await expect(
-        executeWithMockContext({
-          executor: 'request_human_approve',
-          instruction,
-          state,
-          mockStore,
-          context,
-        }),
+        executeWithMockContext(
+          createApprovalExecutionOptions(instruction, state, mockStore, context),
+        ),
       ).rejects.toThrow('No assistant message found for intervention');
     });
 
@@ -197,13 +176,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
@@ -227,13 +202,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(
@@ -254,15 +225,7 @@ describe('request_human_approve executor', () => {
       const assistantMessage = createAssistantMessage({ id: 'msg_assistant' });
 
       const context = createTestContext();
-      const toolCalls: ChatToolPayload[] = [
-        {
-          id: 'tool_1',
-          identifier: 'lobe-web-browsing',
-          apiName: 'search',
-          arguments: JSON.stringify({ query: 'test' }),
-          type: 'default',
-        },
-      ];
+      const toolCalls: ChatToolPayload[] = [createSearchTool()];
       const durableToolMessage = createPendingToolMessage({
         id: 'msg_tool_1',
         parentId: assistantMessage.id,
@@ -285,13 +248,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).not.toHaveBeenCalled();
@@ -338,13 +297,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(3);
@@ -378,13 +333,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState({ lastModified: oldTimestamp });
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(result.newState.lastModified).not.toBe(oldTimestamp);
@@ -437,13 +388,9 @@ describe('request_human_approve executor', () => {
       });
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(result.newState.operationId).toBe(state.operationId);
@@ -464,13 +411,9 @@ describe('request_human_approve executor', () => {
       const originalState = structuredClone(state);
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(state).toEqual(originalState);
@@ -495,13 +438,9 @@ describe('request_human_approve executor', () => {
 
       // When/Then
       await expect(
-        executeWithMockContext({
-          executor: 'request_human_approve',
-          instruction,
-          state,
-          mockStore,
-          context,
-        }),
+        executeWithMockContext(
+          createApprovalExecutionOptions(instruction, state, mockStore, context),
+        ),
       ).rejects.toThrow('Failed to create tool message');
     });
   });
@@ -526,13 +465,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      const result = await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      const result = await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(50);
@@ -556,13 +491,9 @@ describe('request_human_approve executor', () => {
       const state = createInitialState();
 
       // When
-      await executeWithMockContext({
-        executor: 'request_human_approve',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
+      await executeWithMockContext(
+        createApprovalExecutionOptions(instruction, state, mockStore, context),
+      );
 
       // Then
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledWith(

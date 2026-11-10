@@ -29,6 +29,20 @@ const loadParityFixture = async () => {
 };
 
 describe('CodexAppServerAdapter', () => {
+  it('carries the native turn boundary across tool-separated steps', async () => {
+    const adapter = new CodexAppServerAdapter({ sessionId: 'native-thread' });
+    const events = (await loadFixture()).flatMap(({ method, params }) =>
+      adapter.adapt(method, params),
+    );
+    const starts = events.filter(({ type }) => type === 'stream_start');
+    expect(starts.length).toBeGreaterThan(1);
+    for (const start of starts) {
+      expect(start.data).toMatchObject({
+        codexTurnId: 'turn-1',
+        sessionId: 'native-thread',
+      });
+    }
+  });
   it('maps a native v2 turn directly into the existing stream contract', async () => {
     const adapter = new CodexAppServerAdapter({ initialModel: 'gpt-5.5-codex' });
     const raw = await loadFixture();
@@ -258,6 +272,47 @@ describe('CodexAppServerAdapter', () => {
       },
       type: 'error',
     });
+  });
+
+  it.each([null, 'other'])('classifies capacity errors with info %s for auto-retry', (info) => {
+    const adapter = new CodexAppServerAdapter();
+    const message = 'Selected model is at capacity. Please try a different model.';
+    const error = { additionalDetails: null, codexErrorInfo: info, message };
+    const events = adapter.adapt('error', {
+      error,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      willRetry: false,
+    });
+    expect(events.at(-1)).toMatchObject({
+      data: {
+        agentType: 'codex',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        details: { kind: 'server_overloaded' },
+        message,
+      },
+      type: 'error',
+    });
+    expect(
+      adapter.adapt('turn/completed', {
+        threadId: 'thread-1',
+        turn: { error, id: 'turn-1', items: [], status: 'failed' },
+      }),
+    ).toEqual([]);
+  });
+
+  it('preserves native retry notifications for capacity failures', () => {
+    const adapter = new CodexAppServerAdapter();
+    const message = 'Selected model is at capacity. Please try a different model.';
+    expect(
+      adapter.adapt('error', {
+        error: { additionalDetails: null, codexErrorInfo: null, message },
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        willRetry: true,
+      }),
+    ).toMatchObject([{ data: { message }, type: 'stream_retry' }]);
   });
 
   it('keeps native and exec adapters semantically aligned during migration', async () => {

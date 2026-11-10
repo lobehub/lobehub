@@ -1,74 +1,56 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, confirmModal, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import {
-  ChevronRightIcon,
-  MoreVerticalIcon,
-  PowerIcon,
-  PowerOffIcon,
-  Trash2Icon,
-} from 'lucide-react';
+import { MoreVerticalIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useOAuthAppStore } from '@/store/oauthApp';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
-import ClientIdDisplay from '../ClientIdDisplay';
+import { appTypeLabelKey } from '../../appList';
+import AppLogo from '../AppLogo';
+import { confirmDisableOAuthApp } from '../confirmDisable';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  meta: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    padding-block: 12px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  meta: { flex: 'none', fontSize: cssVar.fontSizeSM, color: cssVar.colorTextTertiary },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.15s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+  },
+});
 
 interface AppItemProps {
   app: OAuthAppItem;
   canEdit: boolean;
-  onChanged: () => void;
-  onDeleted: () => void;
   onOpen: () => void;
 }
 
-const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen }) => {
-  const { t } = useTranslation('auth');
+const AppItem = memo<AppItemProps>(({ app, canEdit, onOpen }) => {
+  const { t } = useTranslation(['auth', 'common']);
 
-  const setEnabled = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: onChanged });
-  const deleteApp = lambdaQuery.oauthApp.delete.useMutation({ onSuccess: onDeleted });
+  const [setAppEnabled, deleteApp] = useOAuthAppStore((s) => [s.setAppEnabled, s.deleteApp]);
 
   const handleDelete = () =>
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
       content: t('oauthApp.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('oauthApp.deleteConfirm.ok'),
       onOk: async () => {
-        await deleteApp.mutateAsync({ id: app.id });
+        await deleteApp(app.id);
       },
       title: t('oauthApp.deleteConfirm.title'),
     });
@@ -81,7 +63,7 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.row}
+      className={stylex.props(styles.row).className}
       gap={12}
       role={'button'}
       tabIndex={0}
@@ -93,8 +75,9 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
         }
       }}
     >
-      <Avatar avatar={app.logoUri || app.name} shape={'square'} size={36} title={app.name} />
+      <AppLogo logoUri={app.logoUri} name={app.name} size={36} />
 
+      {/* The client ID lives on the app page; the row only identifies the app. */}
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text ellipsis weight={500}>
@@ -102,13 +85,16 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
           </Text>
           {!app.enabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
         </Flexbox>
-        <span style={{ alignSelf: 'flex-start' }} onClick={(e) => e.stopPropagation()}>
-          <ClientIdDisplay clientId={app.id} />
-        </span>
-        <span className={styles.meta}>
-          {t('oauthApp.type.deviceFlow')} · {lastUsed}
-        </span>
+        {app.description && (
+          <Text ellipsis style={{ fontSize: 12 }} type={'secondary'}>
+            {app.description}
+          </Text>
+        )}
       </Flexbox>
+
+      <span {...stylex.props(styles.meta)}>
+        {t(appTypeLabelKey(app.applicationType))} · {lastUsed}
+      </span>
 
       {canEdit && (
         <span style={{ flex: 'none' }} onClick={(e) => e.stopPropagation()}>
@@ -119,13 +105,14 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
                     icon: <Icon icon={PowerOffIcon} />,
                     key: 'disable',
                     label: t('oauthApp.actions.disable'),
-                    onClick: () => setEnabled.mutate({ enabled: false, id: app.id }),
+                    onClick: () => confirmDisableOAuthApp(() => setAppEnabled(app.id, false)),
                   }
                 : {
                     icon: <Icon icon={PowerIcon} />,
                     key: 'enable',
                     label: t('oauthApp.actions.enable'),
-                    onClick: () => setEnabled.mutate({ enabled: true, id: app.id }),
+                    // A failed call rolls the row back to disabled.
+                    onClick: () => void setAppEnabled(app.id, true).catch(() => {}),
                   },
               {
                 danger: true,
@@ -140,8 +127,6 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
           </DropdownMenu>
         </span>
       )}
-
-      <Icon className={styles.chevron} icon={ChevronRightIcon} size={'small'} />
     </Flexbox>
   );
 });

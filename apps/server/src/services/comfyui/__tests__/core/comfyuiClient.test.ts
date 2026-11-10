@@ -17,6 +17,13 @@ vi.mock('@saintno/comfyui-sdk', () => ({
 vi.mock('@/server/services/comfyui/core/comfyUIAuthService');
 vi.mock('@/server/services/comfyui/core/comfyUIConnectionService');
 
+const workflowCallWrapper = () => ({
+  onFailed: vi.fn().mockReturnThis(),
+  onFinished: vi.fn().mockReturnThis(),
+  onProgress: vi.fn().mockReturnThis(),
+  run: vi.fn(),
+});
+
 describe('ComfyUIClientService', () => {
   let service: ComfyUIClientService;
   let mockClient: any;
@@ -56,9 +63,15 @@ describe('ComfyUIClientService', () => {
     };
 
     // Mock constructors
-    vi.mocked(ComfyApi).mockImplementation(() => mockClient);
-    vi.mocked(ComfyUIAuthService).mockImplementation(() => mockAuthService);
-    vi.mocked(ComfyUIConnectionService).mockImplementation(() => mockConnectionService);
+    vi.mocked(ComfyApi).mockImplementation(function () {
+      return mockClient;
+    });
+    vi.mocked(ComfyUIAuthService).mockImplementation(function () {
+      return mockAuthService;
+    });
+    vi.mocked(ComfyUIConnectionService).mockImplementation(function () {
+      return mockConnectionService;
+    });
   });
 
   afterEach(() => {
@@ -97,7 +110,7 @@ describe('ComfyUIClientService', () => {
 
     it('should handle auth service errors during initialization', () => {
       // Mock AuthService constructor to throw
-      vi.mocked(ComfyUIAuthService).mockImplementation(() => {
+      vi.mocked(ComfyUIAuthService).mockImplementation(function () {
         throw new ServicesError('Invalid auth config', ServicesError.Reasons.INVALID_ARGS);
       });
 
@@ -240,18 +253,15 @@ describe('ComfyUIClientService', () => {
       };
 
       // Create CallWrapper mock instance
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
+      const mockCallWrapper = workflowCallWrapper();
 
       // Setup CallWrapper mock
-      vi.mocked(CallWrapper).mockImplementation(() => mockCallWrapper as any);
+      vi.mocked(CallWrapper).mockImplementation(function () {
+        return mockCallWrapper as any;
+      });
 
       // Simulate successful execution
-      mockCallWrapper.run.mockImplementation(() => {
+      mockCallWrapper.run.mockImplementation(function () {
         const finishCallback = mockCallWrapper.onFinished.mock.calls[0][0];
         finishCallback(mockResult);
       });
@@ -270,17 +280,14 @@ describe('ComfyUIClientService', () => {
       const mockWorkflow = { id: 'test' };
       const mockError = new Error('Workflow failed');
 
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
+      const mockCallWrapper = workflowCallWrapper();
 
-      vi.mocked(CallWrapper).mockImplementation(() => mockCallWrapper as any);
+      vi.mocked(CallWrapper).mockImplementation(function () {
+        return mockCallWrapper as any;
+      });
 
       // Simulate failure
-      mockCallWrapper.run.mockImplementation(() => {
+      mockCallWrapper.run.mockImplementation(function () {
         const failCallback = mockCallWrapper.onFailed.mock.calls[0][0];
         failCallback(mockError);
       });
@@ -296,17 +303,14 @@ describe('ComfyUIClientService', () => {
       const mockProgress = { step: 1, total: 10 };
       const progressCallback = vi.fn();
 
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
+      const mockCallWrapper = workflowCallWrapper();
 
-      vi.mocked(CallWrapper).mockImplementation(() => mockCallWrapper as any);
+      vi.mocked(CallWrapper).mockImplementation(function () {
+        return mockCallWrapper as any;
+      });
 
       // Simulate progress and completion
-      mockCallWrapper.run.mockImplementation(() => {
+      mockCallWrapper.run.mockImplementation(function () {
         const progressCb = mockCallWrapper.onProgress.mock.calls[0][0];
         progressCb(mockProgress);
 
@@ -583,7 +587,9 @@ describe('ComfyUIClientService', () => {
 
       // Simulate time passing (more than 1 minute)
       const originalNow = Date.now;
-      Date.now = vi.fn(() => originalNow() + 61_000);
+      Date.now = vi.fn(function () {
+        return originalNow() + 61_000;
+      });
 
       // Second call after TTL - should fetch again
       const result2 = await service.getNodeDefs();

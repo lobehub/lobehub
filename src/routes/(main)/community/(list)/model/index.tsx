@@ -4,8 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { modelSelectors } from '@/store/discover/selectors';
 import { type ModelQueryParams } from '@/types/discover';
 import { DiscoverTab } from '@/types/discover';
 
@@ -15,8 +17,8 @@ import List from './features/List';
 
 const ModelPage = memo<{ mobile?: boolean }>(() => {
   const { q, page, category, sort, order } = useQuery() as ModelQueryParams;
-  const useModelList = useDiscoverStore((s) => s.useModelList);
-  const { data, error, mutate } = useModelList({
+  const useModelList = useDiscoverStore((s) => s.useFetchModelList);
+  const { error, isLoading, mutate, queryKey } = useModelList({
     category,
     order,
     page,
@@ -24,6 +26,8 @@ const ModelPage = memo<{ mobile?: boolean }>(() => {
     q,
     sort,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(modelSelectors.modelList(queryKey));
 
   const items = data?.items ?? [];
 
@@ -34,6 +38,8 @@ const ModelPage = memo<{ mobile?: boolean }>(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
+      isLoading={isLoading}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {data && (

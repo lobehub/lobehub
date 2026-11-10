@@ -5,12 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 const mockTopicFindOwnTopicById = vi.fn();
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({ findOwnTopicById: mockTopicFindOwnTopicById })),
+  TopicModel: vi.fn(function () {
+    return { findOwnTopicById: mockTopicFindOwnTopicById };
+  }),
 }));
 
 const mockShareCreate = vi.fn();
@@ -18,22 +22,28 @@ const mockShareGetByTopicId = vi.fn();
 const mockShareUpdateVisibility = vi.fn();
 const mockShareDeleteByTopicId = vi.fn();
 vi.mock('@/database/models/topicShare', () => ({
-  TopicShareModel: vi.fn(() => ({
-    create: mockShareCreate,
-    deleteByTopicId: mockShareDeleteByTopicId,
-    getByTopicId: mockShareGetByTopicId,
-    updateVisibility: mockShareUpdateVisibility,
-  })),
+  TopicShareModel: vi.fn(function () {
+    return {
+      create: mockShareCreate,
+      deleteByTopicId: mockShareDeleteByTopicId,
+      getByTopicId: mockShareGetByTopicId,
+      updateVisibility: mockShareUpdateVisibility,
+    };
+  }),
 }));
 
 const mockAuditCreate = vi.fn();
 vi.mock('@/database/models/workspaceAuditLog', () => ({
-  WorkspaceAuditLogModel: vi.fn(() => ({ create: mockAuditCreate })),
+  WorkspaceAuditLogModel: vi.fn(function () {
+    return { create: mockAuditCreate };
+  }),
 }));
 
 const mockHasPermission = vi.fn();
 vi.mock('@/database/models/rbac', () => ({
-  RbacModel: vi.fn(() => ({ hasPermission: mockHasPermission })),
+  RbacModel: vi.fn(function () {
+    return { hasPermission: mockHasPermission };
+  }),
 }));
 
 const mockAssertCanUseTopicTargets = vi.fn();

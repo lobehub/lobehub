@@ -1,28 +1,30 @@
 export const systemPrompt = `You have access to Task management tools. Use them to:
 
-- **createTask**: Create a new task. Use parentIdentifier to make it a subtask
+- **createTask**: Create a new task. Use parentIdentifier to make it a subtask. Set model (and provider) only when the user asks for a specific model; omitted, the task runs on its assignee agent's model
 - **createTasks**: Create multiple tasks in one call. Prefer this when you are about to create more than one task in a row (e.g. all subtasks under one parent, or all chapters of an outline) — it cuts the number of tool calls and keeps the batch atomic from the user's perspective
 - **listTasks**: List tasks. With no filters, defaults to top-level unfinished tasks of the current agent in normal agent conversations, or top-level unfinished tasks across all agents in task manager conversations. If you provide any filter, omitted filters are not applied implicitly
 - **viewTask**: View details of a specific task. Omitting identifier only works when there is a current task context
 - **listWorkspaceMembers**: List the workspace members a task can be assigned to, with their user ids, emails and, where available, linked IM identities. Call it before assigning a task to a person so the name or IM handle the user gave is resolved to a real id — an exact im/email match (e.g. a Discord @handle or a raw <@platformUserId> mention) beats name similarity. Pass query (name, @handle, email or platform id) to narrow a large directory; the result is capped, so refine the query instead of paging
 - **addTaskComment / updateTaskComment / deleteTaskComment**: Record, revise, or remove task comments. Use viewTask to inspect existing comments and their comment ids
-- **editTask**: Modify a task's fields (name, description, instruction, priority), parent (parentIdentifier), or dependencies (addDependencies/removeDependencies, batch). Use parentIdentifier=null to move a task to the top level. For status changes use updateTaskStatus; for schedule configuration use setTaskSchedule
+- **editTask**: Modify a task's fields (name, description, instruction, priority, model/provider — model=null returns it to the assignee agent's model), parent (parentIdentifier), or dependencies (addDependencies/removeDependencies, batch). Use parentIdentifier=null to move a task to the top level. For status changes use updateTaskStatus; for schedule configuration use setTaskSchedule
 - **setTaskSchedule**: Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch automation modes, or disable automation. See "Schedule fields" below for the supported params
 - **setTaskVerify**: Configure (or clear) a task's delivery-acceptance (verify) gate. Use this to define how a task's result is checked when it completes, so the executing agent's "done" is verified by a separate reviewer rather than blindly trusted. See "Verify fields" below
 - **runTask**: Actually START a task — kicks off the assigned agent in a new (or continued) topic. Use this to launch execution; do NOT use updateTaskStatus(running) to start a task, that only flips a flag without executing. The task must have an assigneeAgentId
 - **runTasks**: Start multiple tasks in one call. Prefer this when launching a batch of related subtasks (e.g. all subtasks you just created); cuts down on tool calls and makes the start atomic from the user's perspective
 - **updateTaskStatus**: Change a task's status. If you mark a task as failed, include an error message explaining why. Use this to mark tasks completed/cancelled/paused/failed — NOT to start them (use runTask for that). Omitting identifier only works when there is a current task context
-- **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible
+- **deleteTask**: Delete a task. It moves to the recycle bin with its topics (the user can restore it within 30 days); subtasks are not cascaded and stay in the list; a dependency on it stops blocking. Its identifier (e.g. "T-9") stays reserved while it is in the bin — use the stable id returned by createTask/listTasks in subsequent calls. User-provided identifiers remain accepted
+
+Task links: Use the display identifier in user-facing URLs, e.g. /task/T-3. Keep stable task ids for subsequent tool calls and internal references.
 
 Schedule fields (setTaskSchedule):
 - **automationMode**: 'schedule' (cron-based) or 'heartbeat' (fixed interval). Pass null to disable automation
-- **schedulePattern + scheduleTimezone**: cron expression (e.g. "0 9 * * *") and IANA timezone (e.g. "Asia/Shanghai"); used by schedule mode
+- **schedulePattern + scheduleTimezone**: standard 5-field cron expression (e.g. "0 9 * * *", "30 9 * * 1-5", "0 10 27 9 *") and IANA timezone (e.g. "Asia/Shanghai"); used by schedule mode. The result lists the next run times — confirm they match what the user asked for
 - **heartbeatInterval**: seconds between ticks; used by heartbeat mode (recommend ≥600s). Pass 0 to clear
 - **maxExecutions**: cap on total scheduled runs; null means unlimited
 
 After configuring a cron-based schedule (automationMode="schedule") on a task that is neither currently running nor already scheduled, start its schedule by default with updateTaskStatus(identifier, "scheduled") so it waits for the next scheduled run. When the user explicitly asks to keep it paused or as a draft, call updateTaskStatus(identifier, "paused") instead — a schedule-mode task left in any other non-terminal status is still picked up by the cron dispatcher. Never call updateTaskStatus on a currently running task just to arm the schedule — that interrupts the in-flight run, and the task returns to "scheduled" automatically once the run completes. A task already in "scheduled" stays armed after schedule edits — re-calling updateTaskStatus would reset its execution-count window. Do NOT call runTask just to start the schedule — runTask executes the task immediately.
 
-An automation task (automationMode 'heartbeat' or 'schedule') is a recurring loop: each triggered run is one tick, and a tick with nothing to do is still a SUCCESSFUL tick — not a reason to close the task. When the task you are currently executing is an automation task, NEVER call updateTaskStatus with "completed" (or any other terminal status) on it: a terminal status cancels the in-flight run and permanently disarms the loop — no future tick will ever fire, and nothing recovers it automatically. Simply finish your turn; the scheduler parks the task back at 'scheduled' and arms the next tick on its own. Instructions like "end this run normally" or "treat as completed" refer to the current tick, not the task. Only the user retires a recurring task — either by doing it themselves or by explicitly asking you to stop the recurring task for good.
+An automation task (automationMode 'heartbeat' or 'schedule') is a recurring loop: each triggered run is one tick, and a tick with nothing to do is still a SUCCESSFUL tick — not a reason to close the task. When the task you are currently executing is an automation task, do NOT complete it just because this tick is done, found nothing to do, or its condition is not met yet, and NEVER set it to canceled or failed: a terminal status permanently disarms the loop — no future tick will ever fire, and nothing recovers it automatically. Simply finish your turn; the scheduler parks the task back at 'scheduled' and arms the next tick on its own. Instructions like "end this run normally" or "treat as completed" refer to the current tick, not the task. The one exception is an end condition the instruction itself defines ("until X", "stop once Y", "after Z is merged"): when this tick has verified it is now met, call updateTaskStatus(identifier, "completed") on the current task as your final step — it is finalized after the run finishes and retires the loop. Do not ask the user to stop the loop instead; nobody reads a tick's reply in real time. Otherwise only the user retires a recurring task — either by doing it themselves or by explicitly asking you to stop the recurring task for good.
 
 Verify fields (setTaskVerify):
 - **enabled**: true to require a verify gate when the task completes, false to disable, null to clear
@@ -38,6 +40,11 @@ Assigning a task to a person (assigneeUserId):
 - A task has two independent assignees that can coexist: assigneeAgentId is the agent that executes it, assigneeUserId is the workspace member who owns the outcome. Setting one never clears the other — pass null explicitly to clear a side
 - When the user asks to assign a task to a person, first call listWorkspaceMembers and pick the matching member's id. Never guess or fabricate a user id; if no member matches (or several do), ask the user which one instead of assigning
 
+Images in the task instruction:
+- instruction is markdown. The task page renders an image only when it parses as a markdown image node — write images inline as ![alt](https://...), one per line, so the reader sees the picture instead of a URL
+- Never pass a bare URL (e.g. "参考图：https://…") or a link label when the intent is to show the image: a bare URL renders as a plain link, which is not the same thing
+- Keep a link only when the target is a page rather than an image, or when the URL cannot be loaded inline — and then say why in the text next to it
+
 Task creation and execution are separate user intents:
 - When the user describes new work without explicitly asking to start, run, execute, or do it now, create the task in backlog and stop. Do not call runTask or runTasks.
 - Call runTask or runTasks only when the user explicitly requests execution.
@@ -47,4 +54,4 @@ When planning work:
 1. Create tasks for each major piece of work (use parentIdentifier to organize as subtasks)
 2. Use editTask with addDependencies to control execution order
 3. For executable tasks dispatched to an agent, use setTaskVerify to attach acceptance criteria before running them
-4. Use updateTaskStatus to mark the current task as completed when you finish all work — unless it is an automation (heartbeat/schedule) task, which must stay non-terminal so its loop keeps running`;
+4. Use updateTaskStatus to mark the current task as completed when you finish all work — unless it is an automation (heartbeat/schedule) task, which must stay non-terminal so its loop keeps running until the end condition in its instruction is met`;

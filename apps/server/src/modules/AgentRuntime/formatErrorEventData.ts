@@ -1,3 +1,4 @@
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { formatErrorForState } from './formatErrorForState';
@@ -32,8 +33,21 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   const payload = toRecord(error);
   const rawPayloadErrorType = payload?.errorType ?? payload?.type;
   const payloadErrorType = isErrorType(rawPayloadErrorType) ? rawPayloadErrorType : undefined;
-  const structuredError =
-    error instanceof Error || payloadErrorType === undefined
+  /**
+   * Runtime completion errors and provider chat errors thrown as Error instances (e.g. a
+   * `StreamChunkError` raised while consuming the model stream) carry their provider,
+   * diagnostics, and trace id on the instance. Keep that body so the client can persist it
+   * and render provider-specific error UI; other Error instances keep the flat shape.
+   */
+  const isRuntimeCompletionError =
+    error instanceof ModelEmptyError ||
+    error instanceof ModelRefusalError ||
+    (error instanceof Error &&
+      payloadErrorType !== undefined &&
+      pickNonEmptyString(payload?.provider) !== undefined);
+  const structuredError = isRuntimeCompletionError
+    ? formatErrorForState(error)
+    : error instanceof Error || payloadErrorType === undefined
       ? undefined
       : formatErrorForState(payload);
   const body = structuredError?.body;

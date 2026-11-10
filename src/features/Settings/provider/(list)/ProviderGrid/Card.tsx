@@ -1,13 +1,11 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import { Avatar, cssVar, Divider, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
+import { ProviderCombine, ProviderIcon } from '@/components/LobeIcons';
 import { useIsDark } from '@/hooks/useIsDark';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
@@ -36,9 +34,11 @@ const ProviderCard = memo<ProviderCardProps>(
     if (loading)
       return (
         <Flexbox
-          className={cx(isDarkMode ? styles.containerDark : styles.containerLight)}
           gap={24}
           padding={16}
+          className={
+            stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className
+          }
         >
           <Skeleton />
         </Flexbox>
@@ -49,7 +49,12 @@ const ProviderCard = memo<ProviderCardProps>(
     }
 
     return (
-      <Flexbox className={cx(isDarkMode ? styles.containerDark : styles.containerLight)} gap={24}>
+      <Flexbox
+        gap={24}
+        className={
+          stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className
+        }
+      >
         <Flexbox gap={12} padding={16} width={'100%'}>
           <div
             style={{ cursor: 'pointer' }}
@@ -98,7 +103,7 @@ const ProviderCard = memo<ProviderCardProps>(
                 )}
               </Flexbox>
               <Text
-                className={styles.desc}
+                className={stylex.props(styles.desc).className}
                 ellipsis={{
                   rows: 2,
                 }}

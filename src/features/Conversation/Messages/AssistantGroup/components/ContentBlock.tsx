@@ -1,6 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { memo, useCallback } from 'react';
 
+import AssistantMessageNotice from '@/business/client/components/AssistantMessageNotice';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
@@ -10,7 +12,9 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../.
 import ImageFileListViewer from '../../components/ImageFileListViewer';
 import Reasoning, { hasRenderableReasoning } from '../../components/Reasoning';
 import { Tools } from '../Tools';
+import { resolveTaskCompletionSource } from '../utils/taskCompletionSource';
 import MessageContent from './MessageContent';
+import TaskCompletionNotice from './TaskCompletionNotice';
 import type { RenderableAssistantContentBlock } from './types';
 
 interface ContentBlockProps extends RenderableAssistantContentBlock {
@@ -31,7 +35,9 @@ const ContentBlock = memo<ContentBlockProps>(
     disableEditing,
     disableMarkdownStreaming,
     hasToolsOverride,
+    metadata,
     projectionKey,
+    showTaskCompletionNotice,
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
@@ -43,6 +49,23 @@ const ContentBlock = memo<ContentBlockProps>(
     // (survives the delete+recreate a retry performs) and the regenerate target.
     const groupParentId = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(assistantId)(s)?.parentId,
+    );
+    /** The persisted reason may arrive after the grouped projection without changing its props. */
+    const persistedFinishType = useConversationStore(
+      (s) => s.dbMessages.find((message) => message.id === id)?.metadata?.finishType,
+    );
+    const finishType = metadata?.finishType ?? persistedFinishType;
+    // The call that launched the finished task can sit in an earlier step or
+    // an earlier steered turn, so look it up across the topic's messages.
+    const taskCompletionSource = useConversationStore(
+      (s) =>
+        showTaskCompletionNotice
+          ? resolveTaskCompletionSource({ metadata }, s.dbMessages)
+          : undefined,
+      isEqual,
+    );
+    const taskCompletionNotice = taskCompletionSource && (
+      <TaskCompletionNotice {...taskCompletionSource} />
     );
     const hasTools = !!tools?.length;
     const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
@@ -79,7 +102,14 @@ const ContentBlock = memo<ContentBlockProps>(
     // Nothing was streamed before the turn died: the error stands in for the
     // whole block.
     if (error && (content === LOADING_FLAT || !content)) {
-      return errorBlock;
+      return taskCompletionNotice ? (
+        <Flexbox gap={8}>
+          {taskCompletionNotice}
+          {errorBlock}
+        </Flexbox>
+      ) : (
+        errorBlock
+      );
     }
 
     // A freshly created step block can mount before anything about it is
@@ -87,12 +117,14 @@ const ContentBlock = memo<ContentBlockProps>(
     // hasn't started. Mounting the wrapper anyway would consume a flex `gap`
     // slot in the parent block list, visibly pushing the next sibling (e.g. the
     // message footer) down a beat before the block's content appears.
-    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock) {
+    if (!showReasoning && !showMessageContent && !showImageItems && !errorBlock && !finishType) {
       return null;
     }
 
     return (
       <Flexbox gap={8} id={domId ?? id}>
+        {taskCompletionNotice}
+
         {showReasoning && (
           <SafeBoundary>
             <Reasoning {...reasoning} id={id} />
@@ -109,6 +141,8 @@ const ContentBlock = memo<ContentBlockProps>(
             />
           </SafeBoundary>
         )}
+
+        <AssistantMessageNotice finishType={finishType} />
 
         {showImageItems && (
           <SafeBoundary>

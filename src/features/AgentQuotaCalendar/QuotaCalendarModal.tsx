@@ -2,24 +2,25 @@
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   type ModalInstance,
   Segmented,
   Skeleton,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';
 import { BanIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon, RotateCcwIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { agentQuotaService } from '@/services/agentQuota';
 
 import {
   buildBurnSeries,
@@ -32,13 +33,13 @@ import {
   currentWindow,
   dayKeyOf,
   type DaySpend,
+  discoverSessionBuckets,
   formatCost,
   formatTokens,
   isCalendarMonthAvailable,
   projectBurnout,
   type QuotaSeriesKey,
   type QuotaWindowSpan,
-  selectQuotaAccount,
   seriesId,
   SESSION_SERIES,
   shouldShowHeatDot,
@@ -46,8 +47,10 @@ import {
   trackedCostOf,
   type UsageTurn,
   utilizationStatusOf,
+  windowSeriesIdOf,
   type WindowStat,
 } from './quotaCalendarModel';
+import { useQuotaCalendarHistory } from './useQuotaCalendarHistory';
 
 const styles = createStaticStyles(({ css }) => ({
   calendarGrid: css`
@@ -97,7 +100,10 @@ const styles = createStaticStyles(({ css }) => ({
     /* "at least $404" must stay one line — a wrap pushes it out of the cell. */
     white-space: nowrap;
   `,
-  /** Keep the content surface neutral; intensity is carried by the corner dot. */
+  /**
+   * The cell is the only surface here — no panel behind it — so it carries a
+   * fill of its own. Intensity stays on the corner dot, not on this tint.
+   */
   dayCell: css`
     position: relative;
 
@@ -112,7 +118,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     &[data-in-month='false'] {
       opacity: 0.35;
@@ -188,7 +194,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 10px;
     height: 10px;
     border-radius: 3px;
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     &[data-rate-limited='true'] {
       background: ${cssVar.colorErrorBg};
@@ -289,7 +295,7 @@ const styles = createStaticStyles(({ css }) => ({
     /* "09:42 100%" is one unit — wrapping it splits the percentage in half. */
     white-space: nowrap;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     &[data-rate-limited='true'] {
       color: ${cssVar.colorErrorText};
@@ -302,9 +308,11 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 4px;
   `,
   /**
-   * One line per window — the row is a scannable comparison, not a card. The
-   * panel around them is the only card; a fill per row would stack a second
-   * surface on it for six rows running, so they are separated by rules instead.
+   * One line per window — the row is a scannable comparison, not a card. Six
+   * filled rows running would read as a block of surfaces, so the rows are
+   * separated by rules instead. The rule is translucent: it sits straight on the
+   * modal surface, and in dark mode the solid secondary border is that surface's
+   * exact colour.
    */
   windowListRow: css`
     display: grid;
@@ -317,13 +325,8 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 2px;
 
     &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorSplit};
     }
-  `,
-  sectionPanel: css`
-    padding: 10px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
   `,
   weekday: css`
     font-size: 11px;
@@ -331,8 +334,6 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: center;
   `,
 }));
-
-type WindowRow = Awaited<ReturnType<typeof agentQuotaService.getWindows>>[number];
 
 const toMs = (value: Date | number | string | null | undefined): number | null =>
   value == null ? null : new Date(value).getTime();
@@ -355,13 +356,12 @@ const normalizeWindows = (rows: WindowLike[]): NormalizedWindow[] =>
     peakUtilization: row.peakUtilization,
     rateLimitedAt: toMs(row.rateLimitedAt),
     resetsAt: toMs(row.resetsAt)!,
-    seriesId: row.limitType.startsWith('weekly') ? `weekly:${row.scopeKey || ''}` : 'session:',
+    seriesId: windowSeriesIdOf(row.limitType, row.scopeKey),
     windowStartAt: toMs(row.windowStartAt)!,
   }));
 
 const CHART_W = 640;
 const CHART_H = 120;
-const HISTORY_DAYS = 90;
 const RING_RADIUS = 22;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
@@ -639,7 +639,7 @@ const WindowHistory = memo<{
     const grid = buildSessionGrid(stats, latestDay);
 
     return (
-      <Flexbox className={styles.sectionPanel} gap={8}>
+      <Flexbox gap={8}>
         <Flexbox horizontal align={'baseline'} justify={'space-between'}>
           <Text strong style={{ fontSize: 13 }}>
             {t('heteroAgent.claudeQuota.calendar.sessionHistory')}
@@ -693,10 +693,14 @@ const WindowHistory = memo<{
   }
 
   return (
-    <Flexbox className={styles.sectionPanel} gap={6}>
+    <Flexbox gap={6}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'}>
         <Text strong style={{ fontSize: 13 }}>
-          {t('heteroAgent.claudeQuota.calendar.weeklyHistory')}
+          {t(
+            series.type === 'monthly'
+              ? 'heteroAgent.claudeQuota.calendar.monthlyHistory'
+              : 'heteroAgent.claudeQuota.calendar.weeklyHistory',
+          )}
         </Text>
         <Text style={{ fontSize: 11 }} type={'secondary'}>
           {t('heteroAgent.claudeQuota.calendar.weeklyHistoryHint')}
@@ -751,54 +755,42 @@ const WindowHistory = memo<{
 
 WindowHistory.displayName = 'WindowHistory';
 
+/** Quota providers that persist accounts readable by the calendar. */
+export type QuotaCalendarProvider = 'claude-code' | 'codex' | 'kimi-code';
+
 interface QuotaCalendarProps {
   externalAccountId?: string;
+  provider: QuotaCalendarProvider;
 }
 
-const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
+/** Labels for the monthly series Kimi Code reports; anything else falls back to its raw limitType. */
+const MONTHLY_LABEL_KEYS: Record<
+  string,
+  'heteroAgent.kimiCodeQuota.monthly' | 'heteroAgent.kimiCodeQuota.monthlyCode'
+> = {
+  month_code: 'heteroAgent.kimiCodeQuota.monthlyCode',
+  month_total: 'heteroAgent.kimiCodeQuota.monthly',
+};
+
+const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider }) => {
   const { t } = useTranslation('chat');
-  const [accountUnavailable, setAccountUnavailable] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [readings, setReadings] = useState<QuotaLimitReading[]>([]);
-  const [turns, setTurns] = useState<UsageTurn[]>([]);
-  const [windows, setWindows] = useState<NormalizedWindow[]>([]);
+  const { accountUnavailable, loading, readings, turns, windowRows } = useQuotaCalendarHistory(
+    provider,
+    externalAccountId,
+  );
+  const windows = useMemo(() => normalizeWindows(windowRows as WindowLike[]), [windowRows]);
   const [series, setSeries] = useState<QuotaSeriesKey>(SESSION_SERIES);
   const [month, setMonth] = useState(() => dayjs().startOf('month'));
   const now = Date.now();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const accounts = await agentQuotaService.listAccounts().catch(() => []);
-      const claude = accounts.filter((a) => a.provider === 'claude-code');
-      const account = selectQuotaAccount(claude, externalAccountId);
-      if (!account) {
-        if (!cancelled) setAccountUnavailable(true);
-        return;
-      }
-      setAccountUnavailable(false);
-
-      const [windowRows, snapshotSeries, usageTurns] = await Promise.all([
-        agentQuotaService.getWindows(account.id, 200).catch(() => [] as WindowRow[]),
-        agentQuotaService
-          .listSnapshots(account.id, HISTORY_DAYS)
-          .catch(() => [] as QuotaLimitReading[]),
-        agentQuotaService.listUsageTurns(account.id, HISTORY_DAYS).catch(() => [] as UsageTurn[]),
-      ]);
-      if (cancelled) return;
-      setWindows(normalizeWindows(windowRows));
-      setReadings(snapshotSeries);
-      setTurns(usageTurns);
-    })().finally(() => setLoading(false));
-
-    return () => {
-      cancelled = true;
-    };
-  }, [externalAccountId]);
-
-  // The 5-hour session window comes first: it is the window an agent actually
-  // works inside, and the one that stops a run mid-task.
+  // The session window comes first: it is the window an agent actually
+  // works inside, and the one that stops a run mid-task. Codex reports one
+  // primary bucket per rate-limit scope, so each discovered bucket gets its
+  // own series instead of folding into the base session view.
   const seriesOptions = useMemo(() => {
+    const sessionBuckets = discoverSessionBuckets(readings).filter(
+      (bucket) => bucket.scopeKey !== '',
+    );
     const scoped = [
       ...new Set(
         readings
@@ -806,13 +798,24 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
           .map((r) => r.scopeKey),
       ),
     ].sort();
+    const monthly = [
+      ...new Set(readings.filter((r) => r.limitType.startsWith('month')).map((r) => r.limitType)),
+    ].sort();
 
     return [
       { label: t('heteroAgent.claudeQuota.calendar.sessionWindow'), value: 'session:' },
+      ...sessionBuckets.map((bucket) => ({
+        label: bucket.limitName ?? bucket.scopeKey,
+        value: `session:${bucket.scopeKey}`,
+      })),
       { label: t('heteroAgent.quota.weekly'), value: 'weekly:' },
       ...scoped.map((key) => ({
         label: t('heteroAgent.claudeQuota.scopedWeekly', { model: key }),
         value: `weekly:${key}`,
+      })),
+      ...monthly.map((limitType) => ({
+        label: MONTHLY_LABEL_KEYS[limitType] ? t(MONTHLY_LABEL_KEYS[limitType]) : limitType,
+        value: `monthly:${limitType}`,
       })),
     ];
   }, [readings, t]);
@@ -934,7 +937,10 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
             value={seriesId(series)}
             onChange={(value) => {
               const [type, scopeKey = ''] = String(value).split(':');
-              setSeries({ scopeKey, type: type === 'session' ? 'session' : 'weekly' });
+              setSeries({
+                scopeKey,
+                type: type === 'session' ? 'session' : type === 'monthly' ? 'monthly' : 'weekly',
+              });
             }}
           />
 
@@ -951,7 +957,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
           <WindowHistory series={series} stats={windowStats} />
         </Flexbox>
 
-        <Flexbox className={styles.sectionPanel} gap={8}>
+        <Flexbox gap={8}>
           <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
             <Flexbox horizontal align={'baseline'} gap={8}>
               <Text strong style={{ fontSize: 13 }}>
@@ -1086,15 +1092,28 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
 
 QuotaCalendar.displayName = 'QuotaCalendar';
 
+const CALENDAR_TITLE_KEYS: Record<
+  QuotaCalendarProvider,
+  | 'heteroAgent.claudeQuota.calendar.title'
+  | 'heteroAgent.codexQuota.calendar.title'
+  | 'heteroAgent.kimiCodeQuota.calendar.title'
+> = {
+  'claude-code': 'heteroAgent.claudeQuota.calendar.title',
+  'codex': 'heteroAgent.codexQuota.calendar.title',
+  'kimi-code': 'heteroAgent.kimiCodeQuota.calendar.title',
+};
+
 /** Calling this opens the modal — `createModal` mounts immediately. */
 export const openQuotaCalendarModal = (
-  params: { externalAccountId?: string } = {},
-): ModalInstance =>
-  createModal({
-    content: <QuotaCalendar externalAccountId={params.externalAccountId} />,
+  params: { externalAccountId?: string; provider?: QuotaCalendarProvider } = {},
+): ModalInstance => {
+  const provider = params.provider ?? 'claude-code';
+  return createModal({
+    content: <QuotaCalendar externalAccountId={params.externalAccountId} provider={provider} />,
     footer: null,
-    title: i18nT('heteroAgent.claudeQuota.calendar.title', { ns: 'chat' }),
+    title: i18nT(CALENDAR_TITLE_KEYS[provider], { ns: 'chat' }),
     width: 1040,
   });
+};
 
 export default QuotaCalendar;

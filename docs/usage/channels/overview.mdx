@@ -2,8 +2,9 @@
 title: Channels Overview
 description: >-
   Connect your LobeHub agents to external messaging platforms like Discord,
-  Slack, Telegram, LINE, QQ, WeChat, Feishu, and Lark, allowing users to
-  interact with AI assistants directly in their favorite chat apps.
+  Slack, Telegram, LINE, QQ, WeChat, Feishu, and Lark; check the announced
+  status of WhatsApp and iMessage; and let users interact with AI assistants
+  directly in their favorite chat apps.
 tags:
   - Channels
   - Message Channels
@@ -16,17 +17,40 @@ tags:
   - WeChat
   - Feishu
   - Lark
+  - WhatsApp
+  - iMessage
 ---
 
 # Channels
 
-Channels allow you to connect your LobeHub agents to external messaging platforms. Once connected, users can interact with your AI assistant directly in the chat apps they already use — no need to visit LobeHub.
+**Channels connect an Agent to a bot that you configure.** First create or connect a bot on Discord, Slack, Telegram, or another supported platform. Then bind that bot to one Agent in LobeHub. When someone messages the bot, they are talking to that Agent.
+
+```text
+Users or group members → Your bot → One bound Agent
+```
+
+## Should I use Channels or Messenger?
+
+- **Choose Channels** when you want your own bot name and identity, or want teammates, customers, or community members to use a specific Agent.
+- **Choose [Messenger](/docs/usage/messenger/overview)** when you only want to use your Agents through LobeHub's official bot and do not want to create a bot or manage tokens.
+
+| | **Channels** | **Messenger** |
+| --- | --- | --- |
+| Chat entry | A bot you create or connect | A LobeHub-managed bot or service |
+| Agent relationship | Each channel is bound to one Agent | Each linked account selects an active Agent and can switch it |
+| Who uses it | You, approved users, a team, or a community | The user whose platform account is linked to LobeHub |
+| Configured at | **Agent → Channels** | **Settings → Messenger** |
+| What you set up | Platform bot or app credentials and access rules | Account link and active Agent |
+
+Access policies decide whether a Channel is private or shared. You can restrict your bot to yourself or selected users.
 
 > \[!NOTE]
 >
-> WeChat currently requires an active subscription. If you are using the community edition without a subscription, the WeChat channel option may not appear in the Channels settings yet.
+> WeChat requires a paid personal plan. The [2026-07-08 announcement](/changelog/2026-07-08-wechat-chat-adjustment) covers new connections, reconnections, and continued use after the notice period. It gives an expected effective time of July 10, 2026 at 12:00 PM ET (July 11 at 00:00 Beijing time). The option can be absent without an eligible plan.
 
 ## Supported Platforms
+
+### Available Now
 
 | Platform                                   | Description                                                                                   |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------- |
@@ -34,24 +58,31 @@ Channels allow you to connect your LobeHub agents to external messaging platform
 | [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations                                 |
 | [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations                                       |
 | [LINE](/docs/usage/channels/line)          | Connect to LINE Messaging API for direct and group chats                                      |
-| [iMessage](/docs/usage/channels/imessage)  | Connect to iMessage through the local LobeHub Desktop BlueBubbles bridge (Labs)               |
 | [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages                                             |
-| [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for private and group chats (requires an active subscription) |
+| [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for direct messages (Pro; group support unconfirmed)          |
 | [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                                    |
 | [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                                |
 
+### Coming Soon
+
+| Platform                                      | Status and description                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [WhatsApp](/docs/usage/channels/whatsapp)     | Coming Soon; configuration is not available. Planned for mobile customer support and follow-up. |
+| [iMessage](/docs/usage/channels/imessage)     | Coming Soon; currently a placeholder. Existing Labs documentation does not mean general availability. |
+
 ## How It Works
 
-Each channel integration works by linking a bot account on the target platform to a LobeHub agent. When a user sends a message to the bot, LobeHub processes it through the agent and sends the response back to the same conversation.
+Each Channel belongs to the current Agent. LobeHub passes incoming platform messages to that Agent and sends its reply back to the original conversation.
 
-- **Per-agent configuration** — Each agent can have its own set of channel connections, so different agents can serve different platforms or communities.
-- **Multiple channels simultaneously** — A single agent can be connected to Discord, Slack, Telegram, LINE, QQ, WeChat, Feishu, and Lark at the same time. LobeHub routes messages to the correct agent automatically.
-- **Secure credential storage** — All bot tokens and app secrets are encrypted before being stored.
+- **One Agent can connect to several platforms** — for example, Discord, Slack, and Telegram at the same time.
+- **Different Agents can use different bots** — useful for separate teams, customers, or communities.
+- **Access can be restricted** — supported platforms include controls for DMs, groups, users, and channels.
+- **Credentials are encrypted** — bot tokens and app secrets are encrypted before storage.
 
 ## Getting Started
 
 1. Navigate to your agent's settings and select the **Channels** tab
-2. Choose a platform and follow the setup guide:
+2. Choose a platform that is currently available and follow its setup guide:
    - [Discord](/docs/usage/channels/discord)
    - [Slack](/docs/usage/channels/slack)
    - [Telegram](/docs/usage/channels/telegram)
@@ -61,7 +92,9 @@ Each channel integration works by linking a bot account on the target platform t
    - [Feishu (飞书)](/docs/usage/channels/feishu)
    - [Lark](/docs/usage/channels/lark)
 
-If you do not see **WeChat** in the channel list, check that your account has an active subscription first.
+WhatsApp and iMessage currently appear as **Coming Soon** and cannot be configured as generally available channels. See the [WhatsApp status page](/docs/usage/channels/whatsapp) and [iMessage preview page](/docs/usage/channels/imessage).
+
+If **WeChat** is absent from the list, check that your personal account meets the paid-plan requirements above.
 
 ## Feature Support
 
@@ -71,9 +104,11 @@ Text messages are supported across all platforms. Some features vary by platform
 | ---------------------- | ------- | ----- | -------- | ------- | --- | ------ | ------- | ------- |
 | Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
 | Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
-| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
+| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Unconfirmed | Yes     | Yes     |
 | Reactions              | Yes     | Yes   | Yes      | No      | No  | No     | Partial | Partial |
 | Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes    | Yes     | Yes     |
+
+Repository documentation does not confirm WeChat group support. This guide covers direct messages only. The July 8 announcement changes paid access, not group support. See [WeChat](/docs/usage/channels/wechat).
 
 ## Allowed Users (global)
 
@@ -108,7 +143,7 @@ For the same group-capable platforms, each channel has a **Group Policy** that c
 | Policy        | Behavior                                                                                                               |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | **Open**      | Respond to `@mentions` in any group, channel, or thread the bot can read. Default.                                     |
-| **Allowlist** | Respond only when the channel / group / chat ID is in **Allowed Channels**. Use to scope a bot to specific workspaces. |
+| **Allowlist** | Respond only when the channel / group / chat ID is in **Allowed Channels**. Use to limit a bot to specific channels or groups. |
 | **Disabled**  | Ignore all non-DM traffic. The bot becomes DM-only.                                                                    |
 
 When **Allowlist** is selected, **Allowed Channels** appears as a row editor — one entry per channel / group / chat ID, with an optional note (e.g. `#general`) shown only to you so you can recognise each ID later.
@@ -117,7 +152,7 @@ When **Allowlist** is selected, **Allowed Channels** appears as a row editor —
 
 ### Per-platform defaults
 
-Every supported platform defaults to **Open** for both policies so the bot stays reachable out of the box. Tighten per-channel via **Allowlist** or **Disabled** when you want a private bot. WeChat does not expose these settings because the WeChat integration is DM-only by design.
+Platforms that expose both policies default to **Open**. To restrict access, select **Allowlist** or **Disabled** per channel. The WeChat setup covers direct messages and does not expose these two policy settings. This does not establish group-chat support.
 
 ### Finding a user's platform ID
 

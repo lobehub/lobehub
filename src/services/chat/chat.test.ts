@@ -1,6 +1,6 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import { REQUEST_OPERATION_ID_HEADER, REQUEST_TRIGGER_HEADER } from '@lobechat/const';
 import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';
@@ -12,13 +12,16 @@ import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
+import { oneShotRelay } from '@/services/llmRelay';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
+import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
+import * as chatHelper from './helper';
 import { chatService } from './index';
 import * as mechaModule from './mecha';
 import { type ResolvedAgentConfig } from './mecha';
@@ -97,6 +100,14 @@ vi.mock('i18next', () => ({
   t: vi.fn((key) => `translated_${key}`),
 }));
 
+// 默认设置 isServerMode 为 false
+vi.mock(import('@/const/version'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  isServerMode: false,
+  isDeprecatedEdition: true,
+  isDesktop: false,
+}));
+
 vi.stubGlobal(
   'fetch',
   vi.fn(() => Promise.resolve(new Response(JSON.stringify({ some: 'data' })))),
@@ -107,6 +118,13 @@ vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
   const module = await importOriginal();
 
   return { ...(module as any), getMessageError: vi.fn() };
+});
+vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
+  const module = await importOriginal();
+  return {
+    ...(module as any),
+    fetchSSE: vi.fn(),
+  };
 });
 vi.mock('@lobechat/utils/url', () => ({
   isDesktopLocalStaticServerUrl: vi.fn(),
@@ -128,12 +146,9 @@ beforeEach(async () => {
   // 清除所有模块的缓存
   vi.resetModules();
 
-  // 默认设置 isServerMode 为 false
-  vi.mock('@/const/version', () => ({
-    isServerMode: false,
-    isDeprecatedEdition: true,
-    isDesktop: false,
-  }));
+  // Vitest 5 keeps the module-mock factory instance across `vi.resetModules()`, so a
+  // `mockReturnValue` set inside a test leaks into every later test; restore the default.
+  vi.mocked(isCanUseFC).mockReturnValue(true);
 
   // Default mock for agentSelectors - resolveAgentConfig needs these
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
@@ -160,6 +175,70 @@ vi.mock('../_auth', () => ({
 vi.mock('@/helpers/isCanUseFC', () => ({
   isCanUseFC: vi.fn(() => true), // Default to true, tests can override
 }));
+
+const seoInstalledPlugin = (): LobeTool => ({
+  identifier: 'seo',
+  manifest: {
+    api: [
+      {
+        description: 'Get data from users',
+        name: 'getData',
+        parameters: {
+          properties: {
+            keyword: {
+              type: 'string',
+            },
+            url: {
+              type: 'string',
+            },
+          },
+          required: ['keyword', 'url'],
+          type: 'object',
+        },
+      },
+    ],
+    homepage: 'https://seo-plugin.orrenprunckun.com/terms.php',
+    identifier: 'seo',
+    meta: {
+      avatar: 'https://seo-plugin.orrenprunckun.com/icon.png',
+      description: 'Enter any URL and keyword and get an On-Page SEO analysis & insights!',
+      title: 'SEO',
+    },
+    openapi: 'https://openai-collections.chat-plugin.lobehub.com/seo/openapi.yaml',
+    systemRole:
+      'The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.',
+    type: 'default',
+    version: '1',
+    settings: {
+      properties: {},
+      type: 'object',
+    },
+  },
+  type: 'plugin',
+});
+
+const seoEnabledManifest = () => ({
+  identifier: 'seo',
+  api: [
+    {
+      description: 'Get data from users',
+      name: 'getData',
+      parameters: {
+        properties: { keyword: { type: 'string' }, url: { type: 'string' } },
+        required: ['keyword', 'url'],
+        type: 'object',
+      },
+    },
+  ],
+  systemRole:
+    'The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.',
+  meta: {
+    avatar: 'https://seo-plugin.orrenprunckun.com/icon.png',
+    description: 'Enter any URL and keyword and get an On-Page SEO analysis & insights!',
+    title: 'SEO',
+  },
+  type: 'default',
+});
 
 describe('ChatService', () => {
   describe('createAssistantMessage', () => {
@@ -201,7 +280,7 @@ describe('ChatService', () => {
       );
     });
 
-    it('should pass chat mode to context engineering when the selected model lacks function calling', async () => {
+    it('should keep the stored agent mode when the selected model lacks function calling', async () => {
       const contextEngineeringSpy = vi
         .spyOn(mechaModule, 'contextEngineering')
         .mockResolvedValue([]);
@@ -221,10 +300,12 @@ describe('ChatService', () => {
         }),
       });
 
-      expect(isCanUseFC).toHaveBeenCalledWith('gemini-3.1-flash-lite-image', ModelProvider.LobeHub);
+      // The stored mode passes through untouched, as on the server runtime: a
+      // model without function calling is handled by the tools engine, not by
+      // demoting the whole turn to chat mode.
       expect(contextEngineeringSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          enableAgentMode: false,
+          enableAgentMode: true,
         }),
       );
     });
@@ -1121,49 +1202,7 @@ describe('ChatService', () => {
 
         act(() => {
           useToolStore.setState({
-            installedPlugins: [
-              {
-                identifier: 'seo',
-                manifest: {
-                  api: [
-                    {
-                      description: 'Get data from users',
-                      name: 'getData',
-                      parameters: {
-                        properties: {
-                          keyword: {
-                            type: 'string',
-                          },
-                          url: {
-                            type: 'string',
-                          },
-                        },
-                        required: ['keyword', 'url'],
-                        type: 'object',
-                      },
-                    },
-                  ],
-                  homepage: 'https://seo-plugin.orrenprunckun.com/terms.php',
-                  identifier: 'seo',
-                  meta: {
-                    avatar: 'https://seo-plugin.orrenprunckun.com/icon.png',
-                    description:
-                      'Enter any URL and keyword and get an On-Page SEO analysis & insights!',
-                    title: 'SEO',
-                  },
-                  openapi: 'https://openai-collections.chat-plugin.lobehub.com/seo/openapi.yaml',
-                  systemRole:
-                    'The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.',
-                  type: 'default',
-                  version: '1',
-                  settings: {
-                    properties: {},
-                    type: 'object',
-                  },
-                },
-                type: 'plugin',
-              } as LobeTool,
-            ],
+            installedPlugins: [seoInstalledPlugin() as LobeTool],
           });
         });
 
@@ -1184,30 +1223,7 @@ describe('ChatService', () => {
         ];
 
         // Pre-generated enabledManifests (from internal_createAgentState)
-        const seoManifests = [
-          {
-            identifier: 'seo',
-            api: [
-              {
-                description: 'Get data from users',
-                name: 'getData',
-                parameters: {
-                  properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                  required: ['keyword', 'url'],
-                  type: 'object',
-                },
-              },
-            ],
-            systemRole:
-              'The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.',
-            meta: {
-              avatar: 'https://seo-plugin.orrenprunckun.com/icon.png',
-              description: 'Enter any URL and keyword and get an On-Page SEO analysis & insights!',
-              title: 'SEO',
-            },
-            type: 'default',
-          },
-        ] as any;
+        const seoManifests = [seoEnabledManifest()] as any;
 
         await chatService.createAssistantMessage({
           messages,
@@ -1244,7 +1260,7 @@ describe('ChatService', () => {
         );
         expect(requestMessages[0].content).toContain('<available_skills>');
         expect(requestMessages[0].content).toContain(
-          'Use the runSkill tool to activate a skill when needed.',
+          'Use the activateSkill tool to activate a skill when needed.',
         );
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
@@ -1270,49 +1286,7 @@ describe('ChatService', () => {
 
         act(() => {
           useToolStore.setState({
-            installedPlugins: [
-              {
-                identifier: 'seo',
-                manifest: {
-                  api: [
-                    {
-                      description: 'Get data from users',
-                      name: 'getData',
-                      parameters: {
-                        properties: {
-                          keyword: {
-                            type: 'string',
-                          },
-                          url: {
-                            type: 'string',
-                          },
-                        },
-                        required: ['keyword', 'url'],
-                        type: 'object',
-                      },
-                    },
-                  ],
-                  homepage: 'https://seo-plugin.orrenprunckun.com/terms.php',
-                  identifier: 'seo',
-                  meta: {
-                    avatar: 'https://seo-plugin.orrenprunckun.com/icon.png',
-                    description:
-                      'Enter any URL and keyword and get an On-Page SEO analysis & insights!',
-                    title: 'SEO',
-                  },
-                  openapi: 'https://openai-collections.chat-plugin.lobehub.com/seo/openapi.yaml',
-                  systemRole:
-                    'The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.',
-                  type: 'default',
-                  version: '1',
-                  settings: {
-                    properties: {},
-                    type: 'object',
-                  },
-                },
-                type: 'plugin',
-              } as LobeTool,
-            ],
+            installedPlugins: [seoInstalledPlugin() as LobeTool],
           });
         });
 
@@ -1333,30 +1307,7 @@ describe('ChatService', () => {
         ];
 
         // Pre-generated enabledManifests (from internal_createAgentState)
-        const seoManifests = [
-          {
-            identifier: 'seo',
-            api: [
-              {
-                description: 'Get data from users',
-                name: 'getData',
-                parameters: {
-                  properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                  required: ['keyword', 'url'],
-                  type: 'object',
-                },
-              },
-            ],
-            systemRole:
-              'The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.',
-            meta: {
-              avatar: 'https://seo-plugin.orrenprunckun.com/icon.png',
-              description: 'Enter any URL and keyword and get an On-Page SEO analysis & insights!',
-              title: 'SEO',
-            },
-            type: 'default',
-          },
-        ] as any;
+        const seoManifests = [seoEnabledManifest()] as any;
 
         await chatService.createAssistantMessage({
           messages,
@@ -1682,65 +1633,12 @@ describe('ChatService', () => {
     });
 
     describe('agent documents readiness', () => {
-      it('should ensure agent documents before assistant generation when cache is empty', async () => {
+      it('should hand the agent builder run to context engineering without prefetching documents', async () => {
         const contextEngineeringSpy = vi
           .spyOn(mechaModule, 'contextEngineering')
           .mockResolvedValue([]);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
-          {
-            content: 'Project setup steps',
-            filename: 'setup.md',
-            id: 'doc-1',
-            loadRules: [],
-            policy: null,
-            policyLoadFormat: null,
-            policyLoadPosition: null,
-            templateId: null,
-            title: 'Setup',
-          },
-        ] as any);
-
-        await chatService.createAssistantMessage({
-          agentId: 'agent-1',
-          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
-          resolvedAgentConfig: createMockResolvedConfig(),
-        });
-
-        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
-          agentId: 'agent-1',
-        });
-        expect(contextEngineeringSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            agentDocuments: [
-              expect.objectContaining({
-                content: 'Project setup steps',
-                filename: 'setup.md',
-                id: 'doc-1',
-              }),
-            ],
-          }),
-        );
-      });
-
-      it('should resolve agent builder documents from the edited agent', async () => {
-        const contextEngineeringSpy = vi
-          .spyOn(mechaModule, 'contextEngineering')
-          .mockResolvedValue([]);
-        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
-          {
-            content: 'Edited agent setup',
-            filename: 'builder-target.md',
-            id: 'doc-1',
-            loadRules: [],
-            policy: null,
-            policyLoadFormat: null,
-            policyLoadPosition: null,
-            templateId: null,
-            title: 'Builder Target',
-          },
-        ] as any);
+        const getContextDocuments = vi.spyOn(agentDocumentService, 'getContextDocuments');
 
         useChatStore.setState({ activeAgentId: 'edited-agent' } as any);
 
@@ -1752,18 +1650,17 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
-          agentId: 'edited-agent',
-        });
+        // Which agent's documents to read (the edited one while the builder is
+        // active) is decided by the shared context rules inside
+        // contextEngineering; the service no longer resolves it up front.
+        expect(getContextDocuments).not.toHaveBeenCalled();
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            agentDocuments: [
-              expect.objectContaining({
-                content: 'Edited agent setup',
-              }),
-            ],
+            agentId: 'builder-agent',
+            tools: [AgentBuilderIdentifier],
           }),
         );
+        expect(contextEngineeringSpy.mock.calls[0][0]).not.toHaveProperty('agentDocuments');
       });
     });
   });
@@ -1777,6 +1674,113 @@ describe('ChatService', () => {
       mockFetchSSE = vi.fn().mockResolvedValue(new Response('mock response'));
       vi.mocked(fetchSSE).mockImplementation(mockFetchSSE);
       mockCreateHeaderWithAuth.mockClear();
+    });
+
+    it('should preserve the topic ID when using the browser runtime', async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      useUserStore.setState({ isSignedIn: true });
+      const runtime = await import('@lobechat/model-runtime');
+      const chat = vi.fn().mockResolvedValue(new Response('ok'));
+      vi.spyOn(mechaModule, 'initializeWithClientStore').mockResolvedValue(
+        new runtime.ModelRuntime({ chat }),
+      );
+      mockFetchSSE.mockImplementation(
+        async (_url: string, options: { fetcher: () => Promise<Response> }) => options.fetcher(),
+      );
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'glm-5', provider: ModelProvider.OpenCodeCodingPlan },
+        { topicId: 'topic-browser' },
+      );
+
+      expect(chat).toHaveBeenCalledWith(
+        expect.not.objectContaining({ topicId: expect.anything() }),
+        expect.objectContaining({ metadata: { topicId: 'topic-browser' } }),
+      );
+    });
+
+    // Within the LLM relay a device-only provider is called by the server and
+    // relayed back to this tab: the browser must not dial it itself.
+    it('sends a device-only provider through the server with the one-shot relay headers', async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'needsRelay').mockReturnValue(true);
+      const relayHeaders = {
+        'x-lobe-client-id': 'tab-1',
+        'x-lobe-llm-relay-channel': 'llmcall:user-1:abcdefgh',
+      };
+      const run = vi
+        .spyOn(oneShotRelay, 'run')
+        .mockImplementation(async (_provider, request) =>
+          request({ channel: relayHeaders['x-lobe-llm-relay-channel'], headers: relayHeaders }),
+        );
+      const initializeWithClientStore = vi.spyOn(mechaModule, 'initializeWithClientStore');
+
+      await chatService.getChatCompletion({ messages: [], model: 'qwen3', provider: 'ollama' });
+
+      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), { signal: undefined });
+      const [url, options] = mockFetchSSE.mock.calls[0];
+      expect(url).toContain('/ollama');
+      expect(options.fetcher).toBeUndefined();
+      expect(options.headers).toMatchObject(relayHeaders);
+      expect(options.requestContext.fetchOnClient).toBe(false);
+      expect(initializeWithClientStore).not.toHaveBeenCalled();
+    });
+
+    // A relayed call that fails on the device streams its executor's error
+    // (`{ provider, errorType, error }`). Callers read the `ChatMessageError`
+    // shape the legacy browser path gave them: the Ollama provider checker
+    // dereferenced `body.error` and crashed the settings page on a missing model.
+    it('hands a relayed device error to the caller as a ChatMessageError', async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'needsRelay').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'run').mockImplementation(async (_provider, request) =>
+        request({ channel: 'llmcall:user-1:abcdefgh', headers: {} }),
+      );
+      const relayedError = {
+        error: {
+          message: "model 'gpt-oss:20b' not found",
+          name: 'ResponseError',
+          status_code: 404,
+        },
+        errorType: 'OllamaBizError',
+        provider: 'ollama',
+      };
+      mockFetchSSE.mockImplementation(async (_url: string, options: any) => {
+        options.onErrorHandle(relayedError);
+        return new Response('');
+      });
+      const onErrorHandle = vi.fn();
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'gpt-oss:20b', provider: 'ollama' },
+        { onErrorHandle },
+      );
+
+      expect(onErrorHandle).toHaveBeenCalledWith({
+        body: relayedError,
+        message: "model 'gpt-oss:20b' not found",
+        type: 'OllamaBizError',
+      });
+    });
+
+    // An abort while the relay channel is still being set up must not sit out
+    // the subscribe timeout (manual compaction, preset-task loading state).
+    it("hands the caller's abort signal to the relay setup", async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'needsRelay').mockReturnValue(true);
+      const run = vi
+        .spyOn(oneShotRelay, 'run')
+        .mockImplementation(async (_provider, request) => request());
+      const controller = new AbortController();
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'qwen3', provider: 'ollama' },
+        { signal: controller.signal },
+      );
+
+      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), {
+        signal: controller.signal,
+      });
     });
 
     it('should make a POST request with the correct payload', async () => {
@@ -1805,24 +1809,17 @@ describe('ChatService', () => {
       );
     });
 
-    it('should send request trigger as a header without adding it to the model payload', async () => {
-      const params: Partial<ChatStreamPayload> = {
-        messages: [],
-        model: 'test-model',
-      };
+    it('should send request trigger and operation id as headers, not in the model payload', async () => {
+      const params: Partial<ChatStreamPayload> = { messages: [], model: 'test-model' };
 
       await chatService.getChatCompletion(params, {
         metadata: { trigger: RequestTrigger.MultimodalAnalysis },
+        operationId: 'op_client_1',
       });
 
-      expect(mockFetchSSE).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            [REQUEST_TRIGGER_HEADER]: RequestTrigger.MultimodalAnalysis,
-          }),
-        }),
-      );
+      const { headers } = mockFetchSSE.mock.calls[0][1];
+      expect(headers[REQUEST_OPERATION_ID_HEADER]).toBe('op_client_1');
+      expect(headers[REQUEST_TRIGGER_HEADER]).toBe(RequestTrigger.MultimodalAnalysis);
 
       const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
       expect(payload).not.toHaveProperty('requestTrigger');
@@ -1932,6 +1929,25 @@ describe('ChatService', () => {
   });
 
   describe('fetchPresetTaskResult', () => {
+    it('should forward the preset task trigger as request metadata', async () => {
+      const getChatCompletionSpy = vi
+        .spyOn(chatService, 'getChatCompletion')
+        .mockResolvedValue(new Response(''));
+
+      await chatService.fetchPresetTaskResult({
+        params: {
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+        trigger: RequestTrigger.TopicTitle,
+      });
+
+      expect(getChatCompletionSpy.mock.calls[0][1]?.metadata).toEqual({
+        trigger: RequestTrigger.TopicTitle,
+      });
+    });
+
     it('should not wait for agent documents on preset task chains', async () => {
       vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
       vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([]);
@@ -1943,6 +1959,7 @@ describe('ChatService', () => {
           model: 'gpt-4',
           provider: 'openai',
         },
+        trigger: RequestTrigger.Translate,
       });
 
       expect(agentDocumentService.getContextDocuments).not.toHaveBeenCalled();
@@ -1987,6 +2004,7 @@ describe('ChatService', () => {
         onLoadingChange,
         abortController,
         trace,
+        trigger: RequestTrigger.Translate,
       });
 
       expect(onFinish).toHaveBeenCalledWith('AI response', {
@@ -2027,6 +2045,7 @@ describe('ChatService', () => {
         onLoadingChange,
         abortController,
         trace,
+        trigger: RequestTrigger.Translate,
       });
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error), {
@@ -2050,13 +2069,6 @@ describe('ChatService private methods', () => {
   describe('getChatCompletion', () => {
     it('should merge responseAnimation styles correctly', async () => {
       const { fetchSSE } = await import('@lobechat/fetch-sse');
-      vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
-        const module = await importOriginal();
-        return {
-          ...(module as any),
-          fetchSSE: vi.fn(),
-        };
-      });
 
       // Mock provider config
       const { aiProviderSelectors } = await import('@/store/aiInfra');

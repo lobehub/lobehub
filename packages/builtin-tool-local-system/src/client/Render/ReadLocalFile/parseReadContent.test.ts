@@ -92,6 +92,23 @@ plain line
     });
   });
 
+  it.each([
+    [
+      'Read file /repo/long.txt, lines 10-12\n10: row 10\n11: row 11\n12: row 12\n[Output truncated. Continue reading with offset: 13]',
+      { content: 'row 10\nrow 11\nrow 12', hasEnvelope: true, path: '/repo/long.txt' },
+    ],
+    [
+      'Read file /repo/a, lines 1.txt, lines 1-1\n1: hello',
+      { content: 'hello', hasEnvelope: true, path: '/repo/a, lines 1.txt' },
+    ],
+    [
+      'Read file /repo/empty.txt, 0 lines',
+      { content: '', hasEnvelope: true, path: '/repo/empty.txt' },
+    ],
+  ])('parses the OpenCode 2.x read header %#', (raw, expected) => {
+    expect(parseOpenCodeReadContent(raw)).toEqual(expected);
+  });
+
   it('leaves content without a complete OpenCode envelope unchanged', () => {
     expect(parseOpenCodeReadContent('raw file content')).toEqual({ content: 'raw file content' });
     expect(parseOpenCodeReadContent('<content>unterminated')).toEqual({

@@ -162,13 +162,13 @@ describe('MessageActionBar', () => {
     actionMocks.commentsAvailable = true;
     permissionMock.canEdit = true;
 
-    // 'tts' is not in the mocked registry — the slot resolves to nothing, like
+    // 'unavailableAction' is not in the mocked registry — the slot resolves to nothing, like
     // copyOperationId with dev mode off. ActionIconGroup would render an empty
     // overflow trigger for [], so the bar must pass undefined instead.
     render(
       <MessageActionBar
         bar={['copy']}
-        menu={['tts']}
+        menu={['unavailableAction']}
         ctx={{
           data: { content: 'hello', role: 'assistant' } as UIChatMessage,
           id: 'message-1',
@@ -184,18 +184,26 @@ describe('MessageActionBar', () => {
     actionMocks.commentsAvailable = true;
     permissionMock.canEdit = true;
 
-    // 'tts' resolves to nothing (not in the mocked registry), so the trailing
+    // 'unavailableAction' resolves to nothing (not in the mocked registry), so the trailing
     // "divider + hidden group" must collapse away, and the double boundary
     // around the missing middle group must merge into one divider.
     render(
       <MessageActionBar
         bar={['copy']}
-        menu={['edit', 'divider', 'tts', 'divider', 'del', 'divider', 'restoreToInput']}
         ctx={{
           data: { content: 'hello', role: 'assistant' } as UIChatMessage,
           id: 'message-1',
           role: 'assistant',
         }}
+        menu={[
+          'edit',
+          'divider',
+          'unavailableAction',
+          'divider',
+          'del',
+          'divider',
+          'restoreToInput',
+        ]}
       />,
     );
 

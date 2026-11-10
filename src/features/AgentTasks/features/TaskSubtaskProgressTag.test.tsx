@@ -11,20 +11,25 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   DropdownMenu: ({
     children,
     items,
+    onOpenChange,
     open,
   }: {
     children: ReactNode;
     items?: Array<{ key: string; onClick?: () => void }>;
+    onOpenChange?: (open: boolean) => void;
     open?: boolean;
   }) => (
     <div>
       {children}
       <span data-testid="dropdown-open">{String(open)}</span>
+      <button data-testid="dropdown-hover" type="button" onClick={() => onOpenChange?.(true)}>
+        hover
+      </button>
       {items?.map((item) => (
         <button
           data-testid={`subtask-${item.key}`}
@@ -50,7 +55,7 @@ describe('TaskSubtaskProgressTag', () => {
     mocks.toastError.mockClear();
   });
 
-  it("passes the clicked subtask's assignee to the navigation callback", () => {
+  it("passes the clicked subtask's assignee and name to the navigation callback", () => {
     const onSubtaskClick = vi.fn();
 
     render(
@@ -58,6 +63,7 @@ describe('TaskSubtaskProgressTag', () => {
         subtasks={[
           {
             assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+            id: 'task_child',
             identifier: 'T-2',
             name: 'Child task',
             status: 'backlog',
@@ -67,9 +73,9 @@ describe('TaskSubtaskProgressTag', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('subtask-T-2'));
+    fireEvent.click(screen.getByTestId('subtask-task_child'));
 
-    expect(onSubtaskClick).toHaveBeenCalledWith('T-2', 'agt_child');
+    expect(onSubtaskClick).toHaveBeenCalledWith('T-2', 'agt_child', 'Child task');
   });
 
   it('renders a lightweight progress summary without a subtask tree', () => {
@@ -78,15 +84,29 @@ describe('TaskSubtaskProgressTag', () => {
     expect(screen.getByText('2/3')).toBeInTheDocument();
   });
 
+  it('keeps the progress badge on one line when a narrow card row squeezes it', () => {
+    render(<TaskSubtaskProgressTag progress={{ completed: 1, total: 2 }} />);
+
+    const text = screen.getByText('1/2');
+    const badge = text.parentElement!;
+
+    expect(text).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(badge).toHaveStyle({ flex: 'none' });
+  });
+
   it('uses the list summary until detail is refreshed, then yields to a newer list summary', async () => {
     const onRequestSubtasks = vi
       .fn()
-      .mockResolvedValue([{ identifier: 'T-current', name: 'Current child', status: 'completed' }]);
+      .mockResolvedValue([
+        { id: 'T-current', identifier: 'T-current', name: 'Current child', status: 'completed' },
+      ]);
 
     const { rerender } = render(
       <TaskSubtaskProgressTag
         progress={{ completed: 1, total: 2 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Stale child', status: 'completed' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -99,7 +119,9 @@ describe('TaskSubtaskProgressTag', () => {
     rerender(
       <TaskSubtaskProgressTag
         progress={{ completed: 2, total: 3 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Stale child', status: 'completed' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -112,7 +134,7 @@ describe('TaskSubtaskProgressTag', () => {
     const onParentClick = vi.fn();
     const onRequestSubtasks = vi
       .fn()
-      .mockResolvedValue([{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
+      .mockResolvedValue([{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
     const onSubtaskClick = vi.fn();
 
     render(
@@ -132,15 +154,31 @@ describe('TaskSubtaskProgressTag', () => {
     await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true'));
   });
 
+  it('keeps a hover-opened static menu open when the tag is clicked', async () => {
+    render(
+      <TaskSubtaskProgressTag
+        subtasks={[{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
+        onSubtaskClick={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('dropdown-hover'));
+    await waitFor(() => expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true'));
+
+    fireEvent.click(screen.getByText('0/1'));
+
+    expect(screen.getByTestId('dropdown-open')).toHaveTextContent('true');
+  });
+
   it('closes an open subtask menu without refreshing it again', async () => {
     const onRequestSubtasks = vi
       .fn()
-      .mockResolvedValue([{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
+      .mockResolvedValue([{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
 
     render(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
-        subtasks={[{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
+        subtasks={[{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -161,7 +199,9 @@ describe('TaskSubtaskProgressTag', () => {
     const { rerender } = render(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Removed child', status: 'backlog' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -175,7 +215,9 @@ describe('TaskSubtaskProgressTag', () => {
     rerender(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Removed child', status: 'backlog' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,

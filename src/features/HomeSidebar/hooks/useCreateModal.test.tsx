@@ -1,4 +1,4 @@
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ModalInstance } from '@lobehub/ui';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,39 +44,40 @@ const chatInputState = vi.hoisted(() => {
   return state;
 });
 
-vi.mock('@lobehub/analytics', () => ({
-  getSingletonAnalyticsOptional: () => ({
-    getStatus: () => ({ initialized: true, providersCount: 1 }),
-    track: analyticsTrack,
-  }),
+vi.mock('@/libs/analytics/client', () => ({
+  analyticsClient: { track: analyticsTrack },
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-    type,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-    type?: string;
-  }) => (
-    <button
-      data-button-loading={loading ? 'true' : undefined}
-      data-button-type={type}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  ),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    Button: ({
+      children,
+      disabled,
+      loading,
+      onClick,
+      type,
+    }: {
+      children?: ReactNode;
+      disabled?: boolean;
+      loading?: boolean;
+      onClick?: () => void;
+      type?: string;
+    }) => (
+      <button
+        data-button-loading={loading ? 'true' : undefined}
+        data-button-type={type}
+        disabled={disabled}
+        type="button"
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    ),
+    createModal: vi.fn(),
+  };
+});
 
 vi.mock('@/services/marketApi', () => ({
   marketApiService: {
@@ -88,34 +89,6 @@ vi.mock('@/services/skill', () => ({
   agentSkillService: {
     importFromMarket: skillServiceMocks.importFromMarket,
   },
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-    type,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-    type?: string;
-  }) => (
-    <button
-      data-button-loading={loading ? 'true' : undefined}
-      data-button-type={type}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  ),
-  createModal: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -222,6 +195,23 @@ vi.mock('@/store/tool', () => ({
       refreshAgentSkills: toolStoreMocks.refreshAgentSkills,
     }),
 }));
+
+const createResumeSkillSearchResult = () => ({
+  currentPage: 1,
+  items: [
+    {
+      createdAt: '2026-01-01',
+      description: 'Review and improve resumes with a reusable checklist.',
+      identifier: 'resume-reviewer',
+      installCount: 12,
+      name: 'Resume Reviewer',
+      updatedAt: '2026-01-01',
+    },
+  ],
+  pageSize: 3,
+  totalCount: 1,
+  totalPages: 1,
+});
 
 const renderModal = (type: 'agent' | 'group' = 'agent') => {
   const onClose = vi.fn();
@@ -402,22 +392,7 @@ describe('CreateAgentModal analytics', () => {
   });
 
   it('interrupts high-confidence skill prompts with a stronger skill recommendation', async () => {
-    marketApiMocks.searchSkill.mockResolvedValueOnce({
-      currentPage: 1,
-      items: [
-        {
-          createdAt: '2026-01-01',
-          description: 'Review and improve resumes with a reusable checklist.',
-          identifier: 'resume-reviewer',
-          installCount: 12,
-          name: 'Resume Reviewer',
-          updatedAt: '2026-01-01',
-        },
-      ],
-      pageSize: 3,
-      totalCount: 1,
-      totalPages: 1,
-    });
+    marketApiMocks.searchSkill.mockResolvedValueOnce(createResumeSkillSearchResult());
     const { onSubmit } = renderModal();
 
     fireEvent.change(screen.getByLabelText('chat input'), {
@@ -481,22 +456,7 @@ describe('CreateAgentModal analytics', () => {
   });
 
   it('interrupts role-framed reusable prompts when the role maps to a skill workflow', async () => {
-    marketApiMocks.searchSkill.mockResolvedValueOnce({
-      currentPage: 1,
-      items: [
-        {
-          createdAt: '2026-01-01',
-          description: 'Review and improve resumes with a reusable checklist.',
-          identifier: 'resume-reviewer',
-          installCount: 12,
-          name: 'Resume Reviewer',
-          updatedAt: '2026-01-01',
-        },
-      ],
-      pageSize: 3,
-      totalCount: 1,
-      totalPages: 1,
-    });
+    marketApiMocks.searchSkill.mockResolvedValueOnce(createResumeSkillSearchResult());
     const { onSubmit } = renderModal();
 
     fireEvent.change(screen.getByLabelText('chat input'), {
@@ -563,22 +523,7 @@ describe('CreateAgentModal analytics', () => {
   });
 
   it('shows an installing state while adding the suggested skill', async () => {
-    marketApiMocks.searchSkill.mockResolvedValueOnce({
-      currentPage: 1,
-      items: [
-        {
-          createdAt: '2026-01-01',
-          description: 'Review and improve resumes with a reusable checklist.',
-          identifier: 'resume-reviewer',
-          installCount: 12,
-          name: 'Resume Reviewer',
-          updatedAt: '2026-01-01',
-        },
-      ],
-      pageSize: 3,
-      totalCount: 1,
-      totalPages: 1,
-    });
+    marketApiMocks.searchSkill.mockResolvedValueOnce(createResumeSkillSearchResult());
     let resolveImport: (value: {
       skill: { id: string; name: string };
       status: string;
@@ -608,22 +553,7 @@ describe('CreateAgentModal analytics', () => {
   });
 
   it('shows a completed skill state after installing the recommended skill', async () => {
-    marketApiMocks.searchSkill.mockResolvedValueOnce({
-      currentPage: 1,
-      items: [
-        {
-          createdAt: '2026-01-01',
-          description: 'Review and improve resumes with a reusable checklist.',
-          identifier: 'resume-reviewer',
-          installCount: 12,
-          name: 'Resume Reviewer',
-          updatedAt: '2026-01-01',
-        },
-      ],
-      pageSize: 3,
-      totalCount: 1,
-      totalPages: 1,
-    });
+    marketApiMocks.searchSkill.mockResolvedValueOnce(createResumeSkillSearchResult());
     const { onClose, onOpenSkills, onSubmit, onTryInLobeAI, update } = renderModal();
 
     fireEvent.change(screen.getByLabelText('chat input'), {
@@ -674,22 +604,7 @@ describe('CreateAgentModal analytics', () => {
   });
 
   it('keeps the suggestion visible when installing the recommended skill fails', async () => {
-    marketApiMocks.searchSkill.mockResolvedValueOnce({
-      currentPage: 1,
-      items: [
-        {
-          createdAt: '2026-01-01',
-          description: 'Review and improve resumes with a reusable checklist.',
-          identifier: 'resume-reviewer',
-          installCount: 12,
-          name: 'Resume Reviewer',
-          updatedAt: '2026-01-01',
-        },
-      ],
-      pageSize: 3,
-      totalCount: 1,
-      totalPages: 1,
-    });
+    marketApiMocks.searchSkill.mockResolvedValueOnce(createResumeSkillSearchResult());
     skillServiceMocks.importFromMarket.mockRejectedValueOnce(new Error('Import failed'));
     const { onClose } = renderModal();
 

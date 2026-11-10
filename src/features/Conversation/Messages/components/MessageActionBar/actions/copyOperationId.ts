@@ -1,5 +1,4 @@
-import { copyToClipboard } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, toast } from '@lobehub/ui';
 import { Hash } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +38,7 @@ export const copyOperationIdAction = defineAction({
         s.messageOperationMap[ctx.id];
       if (!localOpId) return;
       // Only accept an AI-runtime ancestor: messageOperationMap is
-      // last-write-wins, so per-message utility operations (translate, tts, …)
+      // last-write-wins, so per-message utility operations (translate, …)
       // can own the slot — their ids are not what this action traces.
       const rootOp = operationSelectors.findRootRuntimeOperation(localOpId)(s);
       if (!rootOp) return;

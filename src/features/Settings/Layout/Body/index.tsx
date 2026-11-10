@@ -1,7 +1,6 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Accordion, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -13,9 +12,11 @@ import { SettingsTabs } from '@/store/global/initialState';
 import { isModifierClick } from '@/utils/navigation';
 
 import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
+import { useExpandedSettingsGroups } from '../../hooks/useExpandedSettingsGroups';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
+  const searchScope = useMemo(() => ({ categoryGroups }), [categoryGroups]);
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
 
@@ -29,31 +30,28 @@ const Body = memo(() => {
     return SettingsTabs.Profile;
   }, [location.pathname]);
 
+  const { expandedGroups, onExpandedGroupsChange } = useExpandedSettingsGroups(
+    categoryGroups,
+    activeTab,
+    SettingsGroupKey.System,
+  );
+
   return (
     <Flexbox gap={4} paddingInline={4}>
-      <SearchSection>
+      <SearchSection scope={searchScope}>
         <Accordion
           gap={8}
-          defaultExpandedKeys={[
-            SettingsGroupKey.General,
-            SettingsGroupKey.Subscription,
-            SettingsGroupKey.Agent,
-            SettingsGroupKey.System,
-            SettingsGroupKey.Developer,
-          ]}
-        >
-          {categoryGroups.map((group) => (
-            <AccordionItem
-              itemKey={group.key}
-              key={group.key}
-              paddingBlock={4}
-              paddingInline={'8px 4px'}
-              title={
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                  {group.title}
-                </Text>
-              }
-            >
+          indicatorPlacement="inline"
+          styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+          value={expandedGroups}
+          items={categoryGroups.map((group) => ({
+            key: group.key,
+            title: (
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {group.title}
+              </Text>
+            ),
+            children: (
               <Flexbox gap={1} paddingBlock={1}>
                 {group.items.map((item) => {
                   const url = item.href ?? getTabUrl(item.key);
@@ -76,9 +74,10 @@ const Body = memo(() => {
                   );
                 })}
               </Flexbox>
-            </AccordionItem>
-          ))}
-        </Accordion>
+            ),
+          }))}
+          onValueChange={(keys) => onExpandedGroupsChange(keys as SettingsGroupKey[])}
+        />
       </SearchSection>
     </Flexbox>
   );

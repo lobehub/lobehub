@@ -1,17 +1,15 @@
-import { FORM_STYLE } from '@lobechat/const';
 import { type TopicExportMode } from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
-import { type FormItemProps } from '@lobehub/ui';
-import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
-import { Button, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
-import { CopyIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { formatSize } from '@lobechat/utils/format';
+import { Button, copyToClipboard, toast } from '@lobehub/ui';
+import { CopyIcon, DownloadIcon } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsMobile } from '@/hooks/useIsMobile';
-
+import ExportLayout, { ToolbarDivider } from '../components/ExportLayout';
+import { SelectChip, ToggleChip } from '../components/OptionChips';
 import { useShareData } from '../ShareDataProvider';
-import { styles } from '../style';
+import { useExportMessages } from '../useExportMessages';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
 import Preview from './Preview';
@@ -27,114 +25,84 @@ const ShareJSON = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
 
-  const exportModeOptions = useMemo(
-    () => [
-      { key: 'full' as TopicExportMode, label: t('shareModal.exportMode.full') },
-      { key: 'simple' as TopicExportMode, label: t('shareModal.exportMode.simple') },
-    ],
-    [t],
-  );
+  const { dbMessages, displayMessages, systemRole, title, topic } = useShareData();
+  // Tool bodies the read path left on the server would otherwise serialize as
+  // empty strings and be lost on re-import — see `useExportMessages`.
+  const { isHydrating, isIncomplete, messages: exportMessages } = useExportMessages(dbMessages);
 
-  const settings: FormItemProps[] = [
-    {
-      children: (
-        <Tabs
-          activeKey={fieldValue.exportMode}
-          items={exportModeOptions}
-          styles={{
-            list: { display: 'flex', width: '100%' },
-            tab: { flex: 1 },
-          }}
-          onChange={(key) =>
-            setFieldValue((prev) => ({ ...prev, exportMode: key as TopicExportMode }))
-          }
-        />
-      ),
-      label: t('shareModal.exportMode.label'),
-      layout: 'vertical',
-      minWidth: undefined,
-      name: 'exportMode',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.withSystemRole'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withSystemRole',
-      valuePropName: 'checked',
-    },
-  ];
-
-  const { dbMessages, systemRole, title, topic } = useShareData();
-
-  // Always include tool messages (includeTool: true)
   const data =
     fieldValue.exportMode === 'simple'
       ? generateMessages({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
         })
       : generateFullExport({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
           topic: topic ?? undefined,
         });
 
   const content = JSON.stringify(data, null, 2);
-
-  const isMobile = useIsMobile();
-
-  const button = (
-    <>
-      <Button
-        block
-        icon={CopyIcon}
-        size={isMobile ? undefined : 'large'}
-        type={'primary'}
-        onClick={async () => {
-          await copyToClipboard(content);
-          toast.success(t('copySuccess', { ns: 'common' }));
-        }}
-      >
-        {t('copy', { ns: 'common' })}
-      </Button>
-      <Button
-        block
-        size={isMobile ? undefined : 'large'}
-        onClick={() => {
-          exportFile(content, `${title}.json`);
-        }}
-      >
-        {t('shareModal.downloadFile')}
-      </Button>
-    </>
-  );
+  // Both actions serialize `content`; until the omitted tool bodies land it is
+  // still the projected view, which would export as empty results.
+  const disabled = isHydrating || isIncomplete;
 
   return (
-    <>
-      <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-        <Preview content={content} />
-        <Flexbox className={styles.sidebar} gap={12}>
-          <Form
-            initialValues={DEFAULT_FIELD_VALUE}
-            items={settings}
-            itemsType={'flat'}
-            onValuesChange={(_, v) => setFieldValue(v)}
-            {...FORM_STYLE}
+    <ExportLayout
+      actions={
+        <>
+          <Button
+            disabled={disabled}
+            icon={CopyIcon}
+            loading={isHydrating}
+            onClick={async () => {
+              await copyToClipboard(content);
+              toast.success(t('copySuccess', { ns: 'common' }));
+            }}
+          >
+            {t('shareModal.actions.copyJson')}
+          </Button>
+          <Button
+            disabled={disabled}
+            icon={DownloadIcon}
+            type={'primary'}
+            onClick={() => exportFile(content, `${title}.json`)}
+          >
+            {t('shareModal.actions.download')}
+          </Button>
+        </>
+      }
+      meta={[
+        t('shareModal.meta.messages', { count: displayMessages.length }),
+        formatSize(new Blob([content]).size),
+        '.json',
+      ].join(' · ')}
+      toolbar={
+        <>
+          <SelectChip<TopicExportMode>
+            label={t('shareModal.options.schema')}
+            value={fieldValue.exportMode}
+            options={[
+              { label: t('shareModal.exportMode.full'), value: 'full' },
+              { label: t('shareModal.exportMode.simple'), value: 'simple' },
+            ]}
+            onChange={(exportMode) => setFieldValue((prev) => ({ ...prev, exportMode }))}
           />
-          {!isMobile && button}
-        </Flexbox>
-      </Flexbox>
-      {isMobile && (
-        <Flexbox horizontal className={styles.footer} gap={8}>
-          {button}
-        </Flexbox>
-      )}
-    </>
+          <ToolbarDivider />
+          <ToggleChip
+            checked={fieldValue.withSystemRole}
+            label={t('shareModal.options.agentProfile')}
+            onChange={(withSystemRole) => setFieldValue((prev) => ({ ...prev, withSystemRole }))}
+          />
+        </>
+      }
+    >
+      <Preview content={content} />
+    </ExportLayout>
   );
 });
 

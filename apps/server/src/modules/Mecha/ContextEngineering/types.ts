@@ -6,6 +6,7 @@ import type {
   AgentManagementContext,
   BotPlatformContext,
   DiscordContext,
+  DocumentReferenceItem,
   EvalContext,
   FileContent,
   GroupAgentBuilderContext,
@@ -13,13 +14,16 @@ import type {
   LobeToolManifest,
   OnboardingContext,
   PlanTodoConfig,
+  ProjectInstructionFile,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
   UserMemoryData,
+  WorkspaceContext,
 } from '@lobechat/context-engine';
-import type { PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext } from '@lobechat/prompts';
 import type {
+  AgentAccountContext,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -83,6 +87,11 @@ export interface ServerMessagesEngineParams {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** Additional variable values to merge with defaults (e.g. device paths) */
   additionalVariables?: Record<string, string>;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
   /** Agent documents to inject into context based on load rules and positions */
   agentDocuments?: AgentContextDocument[];
   /** Immutable expertise captured when the operation started. */
@@ -105,11 +114,17 @@ export interface ServerMessagesEngineParams {
   capabilities?: ServerModelCapabilities;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /** App origin + workspace slug so the model writes links that resolve to the right scope */
+  workspaceContext?: WorkspaceContext;
   /** Discord context for injecting channel/guild info */
   discordContext?: DiscordContext;
   // ========== Eval context ==========
   /** Eval context for injecting environment prompts into system message */
+  /** Borrowed-connector attribution, injected into the system message. */
+  connectorOwnershipNote?: string;
   evalContext?: EvalContext;
+  /** A project's root instruction files, injected into the system message. */
+  projectInstructions?: ProjectInstructionFile[];
   // ========== Onboarding context ==========
   /** Onboarding context for injecting phase guidance and documents */
   onboardingContext?: OnboardingContext;
@@ -124,6 +139,12 @@ export interface ServerMessagesEngineParams {
 
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
+
+  /**
+   * Whether stale tool results are replaced with short placeholders in the
+   * model context. Undefined / true → trimming enabled (default).
+   */
+  enableStaleToolResultTrim?: boolean;
 
   /** Force finish flag: when true, injects summary prompt for max-steps completion */
   forceFinish?: boolean;
@@ -152,9 +173,6 @@ export interface ServerMessagesEngineParams {
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
   modelKnowledgeCutoff?: string;
 
-  /** Page content context (optional, for document editing) */
-  pageContentContext?: PageContentContext;
-
   /** Plan document TODO state used when conversation messages contain no TODO state */
   planTodo?: PlanTodoConfig;
 
@@ -163,6 +181,15 @@ export interface ServerMessagesEngineParams {
 
   /** System role */
   systemRole?: string;
+
+  /** The agent's identity (personal name + role title) for self-introduction */
+  agentIdentity?: AgentIdentityContext;
+  /**
+   * The agent's own accounts and inbox, gathered fresh this step. Injected as
+   * first-class identity state so the model knows its addresses and what
+   * arrived without a resident mailbox tool.
+   */
+  agentAccountContext?: AgentAccountContext;
 
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */
@@ -175,6 +202,9 @@ export interface ServerMessagesEngineParams {
   // ========== Topic References ==========
   /** Topic reference summaries to inject into last user message */
   topicReferences?: TopicReferenceItem[];
+  // ========== Document References ==========
+  /** Agent documents referenced via `<refer_document>`, injected into last user message */
+  documentReferences?: DocumentReferenceItem[];
   // ========== User memory ==========
   /** User memory configuration */
   userMemory?: ServerUserMemoryConfig;
@@ -194,4 +224,3 @@ export {
   type TopicReferenceItem,
   type UserMemoryData,
 } from '@lobechat/context-engine';
-export type { PageContentContext } from '@lobechat/prompts';

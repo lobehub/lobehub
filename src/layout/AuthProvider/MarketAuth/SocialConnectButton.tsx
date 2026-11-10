@@ -1,10 +1,8 @@
 'use client';
 
-import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { Spin } from 'antd';
-import { cssVar } from 'antd-style';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
+import { ActionIcon, Button, cssVar, Flexbox, Spin, Text, Tooltip } from '@lobehub/ui';
 import { ArrowRight, Link2Off, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

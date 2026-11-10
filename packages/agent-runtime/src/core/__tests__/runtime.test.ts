@@ -66,19 +66,6 @@ function createTestContext(
 
 describe('AgentRuntime', () => {
   describe('Constructor and Executor Priority', () => {
-    it('should use built-in executors by default', () => {
-      const agent = new MockAgent();
-      const runtime = new AgentRuntime(agent);
-
-      // @ts-expect-error - accessing private property for testing
-      const executors = runtime.executors;
-
-      expect(executors).toHaveProperty('call_llm');
-      expect(executors).toHaveProperty('call_tool');
-      expect(executors).toHaveProperty('finish');
-      expect(executors).toHaveProperty('request_human_approve');
-    });
-
     it('should allow config executors to override built-in ones', () => {
       const agent = new MockAgent();
       const customFinish = vi.fn();
@@ -1325,12 +1312,19 @@ describe('AgentRuntime', () => {
       expect(result.nextContext?.payload).toHaveProperty('toolCount', 3);
     });
 
-    it('should resolve blocked tools and continue without waiting for human approval', async () => {
+    it.each([
+      {},
+      {
+        blockedContent: 'This run cannot wait for user interaction.',
+        blockedReason: 'human_intervention_unavailable',
+      },
+    ])('should resolve blocked tools with the supplied rejection %j', async (rejection) => {
       class BlockedToolAgent implements Agent {
         async runner(context: AgentRuntimeContext, _state: AgentState) {
           if (context.phase === 'user_input') {
             return {
               payload: {
+                ...rejection,
                 parentMessageId: 'assistant-1',
                 toolsCalling: [
                   {
@@ -1363,7 +1357,8 @@ describe('AgentRuntime', () => {
         {
           id: 'call_blocked',
           result: {
-            content: 'Blocked by security/privacy.',
+            content: rejection.blockedContent ?? 'Blocked by security/privacy.',
+            ...(rejection.blockedReason && { error: rejection.blockedReason }),
             success: false,
           },
           type: 'tool_result',

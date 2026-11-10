@@ -59,7 +59,9 @@ const createUpload = (overrides: Record<string, unknown> = {}) => ({
 });
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => routerMocks.serverDB),
+  getServerDB: vi.fn(function () {
+    return routerMocks.serverDB;
+  }),
 }));
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
@@ -68,18 +70,22 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
 
 vi.mock('@/server/services/fileUpload', () => ({
   FILE_UPLOAD_SESSION_TTL: 2 * 60 * 60 * 1000,
-  FileUploadService: vi.fn(() => routerMocks.fileUploadService),
+  FileUploadService: vi.fn(function () {
+    return routerMocks.fileUploadService;
+  }),
 }));
 
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn(() => ({
-    abortMultipartUpload: routerMocks.abortMultipartUpload,
-    completeMultipartUpload: routerMocks.completeMultipartUpload,
-    createMultipartUpload: routerMocks.createMultipartUpload,
-    createPreSignedUploadPartUrl: routerMocks.createPreSignedUploadPartUrl,
-    createPreSignedUrl: routerMocks.createPreSignedUrl,
-    getFileMetadata: routerMocks.getFileMetadata,
-  })),
+  FileS3: vi.fn(function () {
+    return {
+      abortMultipartUpload: routerMocks.abortMultipartUpload,
+      completeMultipartUpload: routerMocks.completeMultipartUpload,
+      createMultipartUpload: routerMocks.createMultipartUpload,
+      createPreSignedUploadPartUrl: routerMocks.createPreSignedUploadPartUrl,
+      createPreSignedUrl: routerMocks.createPreSignedUrl,
+      getFileMetadata: routerMocks.getFileMetadata,
+    };
+  }),
 }));
 
 describe('uploadRouter', () => {
@@ -254,5 +260,60 @@ describe('uploadRouter', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
 
     expect(routerMocks.createPreSignedUploadPartUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe("uploadRouter with a run's operation token", () => {
+  const caller = uploadRouter.createCaller({
+    heteroOperationScope: 'op_task_run',
+    userId: 'user-1',
+  } as any);
+  const evidencePath = `files/2026-10-21/${'a'.repeat(64)}.png`;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
+    routerMocks.createPreSignedUrl.mockResolvedValue('https://example.com/upload');
+    routerMocks.getFileMetadata.mockRejectedValue(
+      Object.assign(new Error('Not Found'), { name: 'NotFound' }),
+    );
+    routerMocks.model.findActiveByPathname.mockResolvedValue(undefined);
+    routerMocks.model.create.mockImplementation(async (input: Record<string, unknown>) =>
+      createUpload(input),
+    );
+  });
+
+  it('signs a sized evidence upload through the reservation', async () => {
+    await expect(caller.createS3PreSignedUrl({ pathname: evidencePath, size: 100 })).resolves.toBe(
+      'https://example.com/upload',
+    );
+
+    expect(routerMocks.model.create).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: evidencePath, size: 100 }),
+      routerMocks.transactionClient,
+    );
+    expect(routerMocks.createPreSignedUrl).toHaveBeenCalledWith(evidencePath, 100);
+  });
+
+  it.each([
+    ['an unsized PUT', { pathname: evidencePath }],
+    ['a pathname of its choosing', { pathname: 'files/avatars/owner.png', size: 100 }],
+    ['a traversal out of the files tree', { pathname: `files/../${'a'.repeat(64)}`, size: 100 }],
+  ])('refuses %s', async (_label, input) => {
+    // Without the reservation the signed key could overwrite an existing object
+    // and the upload would bypass quota and the length bound.
+    await expect(caller.createS3PreSignedUrl(input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(routerMocks.model.create).not.toHaveBeenCalled();
+    expect(routerMocks.createPreSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it('still refuses a content-addressed key that already holds an object', async () => {
+    routerMocks.getFileMetadata.mockResolvedValue({ contentLength: 100 });
+
+    await expect(
+      caller.createS3PreSignedUrl({ pathname: evidencePath, size: 100 }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(routerMocks.createPreSignedUrl).not.toHaveBeenCalled();
   });
 });

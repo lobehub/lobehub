@@ -2,20 +2,17 @@
 
 import { type FC } from 'react';
 import { Outlet } from 'react-router';
-import { SWRConfig } from 'swr';
 
-import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
+import { useDocsMergeNotice } from '@/features/ResourceHome/MergeNotice';
 
 import RegisterHotkeys from './RegisterHotkeys';
 
 const ResourceLayout: FC = () => {
+  useDocsMergeNotice();
+
   return (
     <>
-      <SWRConfig value={{ suspense: true }}>
-        <SuspenseRouteBoundary>
-          <Outlet />
-        </SuspenseRouteBoundary>
-      </SWRConfig>
+      <Outlet />
       <RegisterHotkeys />
     </>
   );

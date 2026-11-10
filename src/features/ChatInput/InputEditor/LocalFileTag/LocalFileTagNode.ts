@@ -1,4 +1,5 @@
 import { addClassNamesToElement } from '@lexical/utils';
+import type { LocalFileStats } from '@lobechat/electron-client-ipc';
 import { getKernelFromEditor } from '@lobehub/editor';
 import type { HeadlessRenderableNode, HeadlessRenderContext } from '@lobehub/editor/renderer';
 import {
@@ -19,8 +20,11 @@ import { LocalFile } from '@/features/LocalFile';
 export type SerializedLocalFileTagNode = Spread<
   {
     isDirectory: boolean;
+    lineCount?: number;
+    mimeType?: string;
     name: string;
     path: string;
+    size?: number;
   },
   SerializedLexicalNode
 >;
@@ -36,13 +40,16 @@ export class LocalFileTagNode extends DecoratorNode<any> implements HeadlessRend
   __name: string;
   __path: string;
   __isDirectory: boolean;
+  __stats: Partial<LocalFileStats>;
 
   static getType(): string {
     return 'local-file-tag';
   }
 
   static clone(node: LocalFileTagNode): LocalFileTagNode {
-    return new LocalFileTagNode(node.__name, node.__path, node.__isDirectory, node.__key);
+    const clone = new LocalFileTagNode(node.__name, node.__path, node.__isDirectory, node.__key);
+    clone.__stats = node.__stats;
+    return clone;
   }
 
   static importJSON(serializedNode: SerializedLocalFileTagNode): LocalFileTagNode {
@@ -50,6 +57,11 @@ export class LocalFileTagNode extends DecoratorNode<any> implements HeadlessRend
       serializedNode.name,
       serializedNode.path,
       serializedNode.isDirectory,
+      {
+        lineCount: serializedNode.lineCount,
+        mimeType: serializedNode.mimeType,
+        size: serializedNode.size,
+      },
     ).updateFromJSON(serializedNode);
   }
 
@@ -62,6 +74,7 @@ export class LocalFileTagNode extends DecoratorNode<any> implements HeadlessRend
     this.__name = name;
     this.__path = path;
     this.__isDirectory = isDirectory;
+    this.__stats = {};
   }
 
   get name(): string {
@@ -74,6 +87,17 @@ export class LocalFileTagNode extends DecoratorNode<any> implements HeadlessRend
 
   get isDirectory(): boolean {
     return this.__isDirectory;
+  }
+
+  /** Size, line count, and MIME type, filled in asynchronously after insertion when available. */
+  get stats(): Partial<LocalFileStats> {
+    return this.__stats;
+  }
+
+  setStats(stats: Partial<LocalFileStats>): this {
+    const writable = this.getWritable();
+    writable.__stats = stats;
+    return writable;
   }
 
   exportDOM(): DOMExportOutput {
@@ -102,8 +126,11 @@ export class LocalFileTagNode extends DecoratorNode<any> implements HeadlessRend
     return {
       ...super.exportJSON(),
       isDirectory: this.__isDirectory,
+      lineCount: this.__stats.lineCount,
+      mimeType: this.__stats.mimeType,
       name: this.__name,
       path: this.__path,
+      size: this.__stats.size,
     };
   }
 
@@ -135,8 +162,11 @@ export function $createLocalFileTagNode(
   name: string,
   path: string,
   isDirectory = false,
+  stats: Partial<LocalFileStats> = {},
 ): LocalFileTagNode {
-  return $applyNodeReplacement(new LocalFileTagNode(name, path, isDirectory));
+  const node = new LocalFileTagNode(name, path, isDirectory);
+  node.__stats = stats;
+  return $applyNodeReplacement(node);
 }
 
 export function $isLocalFileTagNode(

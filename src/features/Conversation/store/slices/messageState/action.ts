@@ -3,6 +3,12 @@ import { type StateCreator } from 'zustand';
 
 import { isSelectableRole } from '../../../MessageForward/selectableRoles';
 import { type State } from '../../initialState';
+import { collectSteerChains } from '../data/steerChains';
+
+const selectableRowIds = (slice: State['displayMessages'], all: State['displayMessages']) => {
+  const { hostOf } = collectSteerChains(all);
+  return slice.filter((m) => isSelectableRole(m.role) && !hostOf.has(m.id)).map((m) => m.id);
+};
 
 export interface MessageEditingAction {
   /**
@@ -95,10 +101,7 @@ export const messageEditingSlice: StateCreator<
 
     const [lo, hi] =
       anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-    const rangeIds = displayMessages
-      .slice(lo, hi + 1)
-      .filter((m) => isSelectableRole(m.role))
-      .map((m) => m.id);
+    const rangeIds = selectableRowIds(displayMessages.slice(lo, hi + 1), displayMessages);
 
     const next = new Set(selectedMessageIds);
     for (const rangeId of rangeIds) next.add(rangeId);
@@ -113,10 +116,7 @@ export const messageEditingSlice: StateCreator<
       : displayMessages.length - 1;
     if (anchorIndex < 0) return;
 
-    const ids = displayMessages
-      .slice(0, anchorIndex + 1)
-      .filter((m) => isSelectableRole(m.role))
-      .map((m) => m.id);
+    const ids = selectableRowIds(displayMessages.slice(0, anchorIndex + 1), displayMessages);
 
     set({ selectedMessageIds: ids }, false, 'selectToHere');
   },

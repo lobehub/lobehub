@@ -6,14 +6,16 @@ const upsertSource = vi.fn();
 const extractBenchmarkSource = vi.fn();
 
 vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
-  parseMemoryExtractionConfig: () => ({ webhook: { headers: {} } }),
+  parseMemoryExtractionConfig: () => ({ webhook: { headers: { 'x-memory-secret': 'secret' } } }),
 }));
 
 vi.mock('@/database/models/userMemory/sources/benchmarkLoCoMo', () => ({
-  UserMemorySourceBenchmarkLoCoMoModel: vi.fn().mockImplementation(() => ({
-    replaceParts,
-    upsertSource,
-  })),
+  UserMemorySourceBenchmarkLoCoMoModel: vi.fn().mockImplementation(function () {
+    return {
+      replaceParts,
+      upsertSource,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/memory/userMemory/extract', () => ({
@@ -25,7 +27,9 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
 }));
 
 vi.mock('@lobechat/memory-user-memory', () => ({
-  BenchmarkLocomoContextProvider: vi.fn().mockImplementation((params) => params),
+  BenchmarkLocomoContextProvider: vi.fn().mockImplementation(function (params) {
+    return params;
+  }),
 }));
 
 /**
@@ -101,7 +105,7 @@ describe('benchmark LoCoMo memory extraction webhook', () => {
           ],
           userId: 'locomo-user-conv-26',
         }),
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-memory-secret': 'secret' },
         method: 'POST',
       }),
     );

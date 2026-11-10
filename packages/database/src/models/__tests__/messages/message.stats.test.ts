@@ -8,7 +8,24 @@ import { getTestDB } from '../../../core/getTestDB';
 import { agents, embeddings, files, messages, sessions, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
+import { MessageScope } from '../../message/scope';
 import { codeEmbedding } from '../fixtures/embedding';
+
+const oldStatsMessage = (createdAt: Date): typeof messages.$inferInsert => ({
+  id: '1',
+  userId,
+  role: 'user',
+  content: 'old message',
+  createdAt,
+});
+
+const newStatsMessage = (createdAt: Date): typeof messages.$inferInsert => ({
+  id: '2',
+  userId,
+  role: 'user',
+  content: 'new message',
+  createdAt,
+});
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -176,13 +193,69 @@ describe('MessageModel Statistics Tests', () => {
     });
   });
 
+  describe('countApproximate', () => {
+    it('returns the exact count when under the cap', async () => {
+      await serverDB.insert(messages).values([
+        { id: 'approx-1', userId, role: 'user', content: 'message 1' },
+        { id: 'approx-2', userId, role: 'user', content: 'message 2' },
+        { id: 'approx-3', userId: otherUserId, role: 'user', content: 'message 3' },
+      ]);
+
+      const result = await messageModel.countApproximate();
+
+      expect(result).toBe(2);
+    });
+
+    it('excludes agent-share visitor messages like count does', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-visitor-approx',
+        userId,
+        senderId: 'visitor-user-y',
+        title: 'visitor topic',
+      });
+      await serverDB.insert(messages).values([
+        {
+          id: 'approx-visitor-1',
+          userId,
+          role: 'user',
+          content: 'visitor message',
+          topicId: 'topic-visitor-approx',
+        },
+        { id: 'approx-creator-1', userId, role: 'user', content: 'creator message' },
+      ]);
+
+      const result = await messageModel.countApproximate();
+
+      expect(result).toBe(1);
+    });
+
+    it('falls back to a planner estimate once past the cap', async () => {
+      await serverDB.insert(messages).values(
+        Array.from({ length: 8 }, (_, i) => ({
+          id: `approx-cap-${i}`,
+          userId,
+          role: 'user',
+          content: `message ${i}`,
+        })),
+      );
+
+      const result = await messageModel.countApproximate(undefined, { cap: 5 });
+
+      // The estimate itself depends on planner statistics; what must hold is
+      // that it never reports fewer rows than the capped scan already saw.
+      expect(result).toBeGreaterThanOrEqual(6);
+      expect(Number.isFinite(result)).toBe(true);
+    });
+  });
+
   describe('genId', () => {
     it('should generate unique message IDs', () => {
-      const model = new MessageModel(serverDB, userId);
-      // @ts-ignore - accessing private method for testing
-      const id1 = model.genId();
-      // @ts-ignore - accessing private method for testing
-      const id2 = model.genId();
+      // genId lives on the shared scope every MessageModel sub-domain extends
+      const scope = new MessageScope(serverDB, userId);
+      // @ts-ignore - accessing protected method for testing
+      const id1 = scope.genId();
+      // @ts-ignore - accessing protected method for testing
+      const id2 = scope.genId();
 
       expect(id1).toHaveLength(22);
       expect(id2).toHaveLength(22);
@@ -211,13 +284,7 @@ describe('MessageModel Statistics Tests', () => {
     it('should count words within date range', async () => {
       // Create test data
       await serverDB.insert(messages).values([
-        {
-          id: '1',
-          userId,
-          role: 'user',
-          content: 'old message',
-          createdAt: new Date('2023-01-01'),
-        },
+        oldStatsMessage(new Date('2023-01-01')),
         {
           id: '2',
           userId,
@@ -251,22 +318,9 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should count words with startDate filter', async () => {
-      await serverDB.insert(messages).values([
-        {
-          id: '1',
-          userId,
-          role: 'user',
-          content: 'old message',
-          createdAt: new Date('2023-01-01'),
-        },
-        {
-          id: '2',
-          userId,
-          role: 'user',
-          content: 'new message',
-          createdAt: new Date('2023-03-01'),
-        },
-      ]);
+      await serverDB
+        .insert(messages)
+        .values([oldStatsMessage(new Date('2023-01-01')), newStatsMessage(new Date('2023-03-01'))]);
 
       const result = await messageModel.countWords({ startDate: '2023-02-01' });
 
@@ -275,22 +329,9 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should count words with endDate filter', async () => {
-      await serverDB.insert(messages).values([
-        {
-          id: '1',
-          userId,
-          role: 'user',
-          content: 'old message',
-          createdAt: new Date('2023-01-01'),
-        },
-        {
-          id: '2',
-          userId,
-          role: 'user',
-          content: 'new message',
-          createdAt: new Date('2023-03-01'),
-        },
-      ]);
+      await serverDB
+        .insert(messages)
+        .values([oldStatsMessage(new Date('2023-01-01')), newStatsMessage(new Date('2023-03-01'))]);
 
       const result = await messageModel.countWords({ endDate: '2023-02-01' });
 
@@ -979,9 +1020,9 @@ describe('MessageModel Statistics Tests', () => {
     it('does not leak other users’ topics', async () => {
       const otherModel = new MessageModel(serverDB, otherUserId);
       const stats = await otherModel.topicMessageStats({ role: 'user' });
-      // otherUser only has the single leaked message in s-t1
-      expect(stats.topics).toBe(1);
-      expect(stats.totalMessages).toBe(1);
+      // The mismatched message snapshot cannot grant access to a topic owned by another user.
+      expect(stats.topics).toBe(0);
+      expect(stats.totalMessages).toBe(0);
     });
   });
 

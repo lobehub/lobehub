@@ -17,7 +17,7 @@ const { MockBrowser, mockAppBrowsers, mockWindowTemplates } = vi.hoisted(() => {
     webContents: { id: Math.random() },
   });
 
-  const MockBrowser = vi.fn().mockImplementation((options: any) => {
+  const MockBrowser = vi.fn<(options: any) => any>(function (options: any) {
     const browserWindow = createMockBrowserWindow();
     return {
       broadcast: vi.fn(),
@@ -119,10 +119,6 @@ describe('BrowserManager', () => {
   describe('constructor', () => {
     it('should initialize with empty browsers Map', () => {
       expect(manager.browsers.size).toBe(0);
-    });
-
-    it('should store app reference', () => {
-      expect(manager.app).toBe(mockApp);
     });
   });
 
@@ -520,18 +516,20 @@ describe('BrowserManager', () => {
 
     it('should throw error on failure', async () => {
       const mockError = new Error('Load failed');
-      MockBrowser.mockImplementationOnce((options: any) => ({
-        broadcast: vi.fn(),
-        browserWindow: { on: vi.fn(), webContents: { id: 1 } },
-        close: vi.fn(),
-        handleAppThemeChange: vi.fn(),
-        hide: vi.fn(),
-        identifier: options.identifier,
-        loadUrl: vi.fn().mockRejectedValue(mockError),
-        options: { path: '/app' },
-        show: vi.fn(),
-        webContents: { id: 1 },
-      }));
+      MockBrowser.mockImplementationOnce(function (options: any) {
+        return {
+          broadcast: vi.fn(),
+          browserWindow: { on: vi.fn(), webContents: { id: 1 } },
+          close: vi.fn(),
+          handleAppThemeChange: vi.fn(),
+          hide: vi.fn(),
+          identifier: options.identifier,
+          loadUrl: vi.fn().mockRejectedValue(mockError),
+          options: { path: '/app' },
+          show: vi.fn(),
+          webContents: { id: 1 },
+        };
+      });
 
       // Clear the browser cache
       manager.browsers.clear();

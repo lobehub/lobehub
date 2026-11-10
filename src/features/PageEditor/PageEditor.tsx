@@ -1,34 +1,42 @@
 'use client';
 
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { cssVar, Flexbox } from '@lobehub/ui';
+import type { FC, MouseEvent, ReactNode, UIEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePermission } from '@/hooks/usePermission';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import { focusEditorAtBlankPoint } from './blankAreaClick';
+import CollabBlockedBanner from './collab/CollabBlockedBanner';
+import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
+import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
+import { DocumentCommentsProvider } from './DocumentComments/context';
+import DocumentCommentsPanel from './DocumentComments/Gutter';
+import { GUTTER_COLUMN_ATTRIBUTE } from './DocumentComments/Gutter/useGutterLayout';
 import DocumentLikes from './DocumentLikes';
 import EditorCanvas from './EditorCanvas';
+import { recallEditorScrollTop, rememberEditorScrollTop } from './editorScrollMemory';
 import Header from './Header';
+import HtmlPageBody, { useIsHtmlPage } from './HtmlPageBody';
 import LockedAlert from './LockedAlert';
 import LockStatusBanner from './LockStatusBanner';
 import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
+import TableOfContents from './TableOfContents';
 import TitleSection from './TitleSection';
+import { usePageBodyInteractions } from './usePageBodyInteractions';
 import { usePageEditable } from './usePageEditable';
 
 /**
@@ -41,9 +49,6 @@ import { usePageEditable } from './usePageEditable';
  * call hooks like `usePageEditorStore` and reuse internal pieces such as `useMenu`.
  */
 type PageEditorHeader = ReactNode | null;
-
-const WIDE_SCREEN_CONTAINER_PADDING = 16;
-const TABLE_BASE_BLEED = DEFAULT_BLOCK_ANCHOR_PADDING + WIDE_SCREEN_CONTAINER_PADDING;
 
 const getMaxScrollTop = (node: HTMLElement) => Math.max(node.scrollHeight - node.clientHeight, 0);
 
@@ -64,6 +69,11 @@ const shouldRestoreEditorScroll = ({
   !isUserInteractingWithEditor;
 
 const styles = StyleSheet.create({
+  artifactContent: {
+    minWidth: 0,
+    paddingBlock: 24,
+    paddingInline: 24,
+  },
   contentWrapper: {
     containerType: 'inline-size',
     display: 'flex',
@@ -83,23 +93,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 });
-
-const overrideStyles = createStaticStyles(({ css }) => ({
-  editorContent: css`
-    .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper {
-      --lobe-block-anchor-padding: var(--lobe-pageeditor-table-bleed-inline);
-
-      position: relative;
-      box-sizing: border-box;
-      width: 100cqi;
-      margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
-    }
-
-    .lobe-editor-table-scroll-wrapper .editor_table {
-      width: max-content;
-    }
-  `,
-}));
 
 interface PageEditorProps {
   /** Composer that receives selections created by the Ask Copilot toolbar item. */
@@ -155,21 +148,20 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const editable = usePageEditable();
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
-  const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
-  const tableBleedInline = wideScreen
-    ? `${TABLE_BASE_BLEED}px`
-    : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;
-  const editorContentStyle = {
-    ...styles.editorContent,
-    '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
-  } as CSSProperties;
+  const isHtmlPage = useIsHtmlPage(documentId);
   const resizeFrameRef = useRef<number | undefined>(undefined);
   const restoreScrollFrameRef = useRef<number | undefined>(undefined);
   const isRestoringScrollRef = useRef(false);
   const isPointerInsideEditorPaneRef = useRef(false);
   const lastEditorScrollTopRef = useRef(0);
+  // Set while a freshly switched-in document is still loading its content and
+  // has a remembered offset to return to. Cleared once we land there or the
+  // user scrolls on their own.
+  const pendingDocumentRestoreRef = useRef(false);
+  const activeDocumentIdRef = useRef<string | undefined>(undefined);
   const editorPaneRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
+  const editorContentRef = useRef<HTMLDivElement>(null);
 
   const isUserInteractingWithEditor = useCallback(() => {
     if (isPointerInsideEditorPaneRef.current) return true;
@@ -186,6 +178,12 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
     const targetScrollTop = Math.min(lastEditorScrollTopRef.current, maxScrollTop);
 
     if (targetScrollTop <= 0 || node.scrollTop === targetScrollTop) return;
+
+    // The remembered offset is only reachable once the document's content has
+    // grown tall enough; keep waiting for the next layout change otherwise.
+    if (targetScrollTop === lastEditorScrollTopRef.current) {
+      pendingDocumentRestoreRef.current = false;
+    }
 
     isRestoringScrollRef.current = true;
     node.scrollTop = targetScrollTop;
@@ -216,6 +214,17 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
       const nextScrollTop = node.scrollTop;
       const previousScrollTop = lastEditorScrollTopRef.current;
 
+      // While a switched-in document is still loading, the browser clamps the
+      // offset as content streams in. Those events are layout noise, not the
+      // user scrolling — keep aiming for the remembered offset.
+      if (pendingDocumentRestoreRef.current) {
+        if (nextScrollTop < previousScrollTop && !isUserInteractingWithEditor()) {
+          scheduleRestoreEditorScrollPosition();
+          return;
+        }
+        pendingDocumentRestoreRef.current = false;
+      }
+
       if (
         shouldRestoreEditorScroll({
           isUserInteractingWithEditor: isUserInteractingWithEditor(),
@@ -229,9 +238,59 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
       }
 
       lastEditorScrollTopRef.current = nextScrollTop;
+      rememberEditorScrollTop(activeDocumentIdRef.current, nextScrollTop);
     },
     [isUserInteractingWithEditor, scheduleRestoreEditorScrollPosition],
   );
+
+  // Every document keeps its own scroll offset. Switching documents in place
+  // (ResourceManager renders PageEditor without a key) must not carry the
+  // previous document's offset over: a never-opened document starts at the
+  // top, a revisited one returns to where the reader left off once its
+  // content has loaded.
+  useLayoutEffect(() => {
+    if (activeDocumentIdRef.current === documentId) return;
+
+    activeDocumentIdRef.current = documentId;
+
+    const rememberedScrollTop = recallEditorScrollTop(documentId);
+    lastEditorScrollTopRef.current = rememberedScrollTop;
+    pendingDocumentRestoreRef.current = rememberedScrollTop > 0;
+
+    const node = contentWrapperRef.current;
+    if (!node) return;
+
+    if (node.scrollTop !== 0) {
+      isRestoringScrollRef.current = true;
+      node.scrollTop = 0;
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          isRestoringScrollRef.current = false;
+        });
+      } else {
+        isRestoringScrollRef.current = false;
+      }
+    }
+
+    if (pendingDocumentRestoreRef.current) scheduleRestoreEditorScrollPosition();
+  }, [documentId, scheduleRestoreEditorScrollPosition]);
+
+  // Document content arrives asynchronously (SWR); the pane itself doesn't
+  // resize when the content grows, so watch the content box to know when the
+  // remembered offset becomes reachable.
+  useEffect(() => {
+    const node = editorContentRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      if (pendingDocumentRestoreRef.current) scheduleRestoreEditorScrollPosition();
+    });
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [scheduleRestoreEditorScrollPosition]);
 
   const notifyEditorLayoutChange = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -274,6 +333,27 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
 
+  // ArrowUp / Backspace from the top of the body into the title, and a click
+  // below the last block to keep writing.
+  usePageBodyInteractions(editor, editorContentRef);
+
+  // A click on the column's blank space (page margins, below the body). Only
+  // clicks that land on a layout wrapper of the content count: anything inside
+  // it — the title, banners, the line comment marker, likes, comments — is a
+  // control of its own and must keep its focus.
+  const handleBlankAreaClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!editable) return;
+
+      const content = editorContentRef.current;
+      const target = event.target;
+      if (!content || !(target instanceof Node) || !target.contains(content)) return;
+
+      focusEditorAtBlankPoint(editor, event);
+    },
+    [editable, editor],
+  );
+
   const headerSlot = header === undefined ? <Header /> : header;
 
   const editorPane = (
@@ -298,47 +378,82 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
         width={'100%'}
         onScroll={handleEditorScroll}
       >
-        <WideScreenContainer
-          wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
-          onChange={notifyEditorLayoutChange}
-          onClick={() => {
-            if (!editable) return;
-
-            editor?.focus();
-          }}
-        >
-          <Flexbox className={overrideStyles.editorContent} flex={1} style={editorContentStyle}>
-            <TitleSection />
-            <PageMetaBar />
-            {/* Surfaces local heartbeat health (unstable/lost) for the holder.
-                Suppressed when LockedAlert is showing — see LockStatusBanner. */}
-            <LockStatusBanner />
-            {/* Prominent in-body notice when another member holds the lock; the
-                compact status badge lives in the Header (EditingIndicator). */}
-            <LockedAlert />
-            <EditorCanvas askCopilotTarget={askCopilotTarget} />
-            {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
-            {documentId && <DocumentComments documentId={documentId} />}
+        {isHtmlPage ? (
+          // An artifact is a finished, self-styled page: it gets the pane's full
+          // width instead of the reading column, and no editable title above it
+          // (the header carries the title; the HTML has its own heading).
+          <Flexbox flex={1} gap={24} ref={editorContentRef} style={styles.artifactContent}>
+            <HtmlPageBody />
+            <WideScreenContainer>
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </WideScreenContainer>
           </Flexbox>
-        </WideScreenContainer>
+        ) : (
+          <WideScreenContainer
+            wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
+            onChange={notifyEditorLayoutChange}
+            onClick={handleBlankAreaClick}
+          >
+            <Flexbox
+              flex={1}
+              ref={editorContentRef}
+              style={styles.editorContent}
+              {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
+            >
+              <TitleSection />
+              <PageMetaBar />
+              {/* Surfaces local heartbeat health (unstable/lost) for the holder.
+                  Suppressed when LockedAlert is showing — see LockStatusBanner. */}
+              <LockStatusBanner />
+              {/* Prominent in-body notice when another member holds the lock; the
+                  compact status badge lives in the Header (EditingIndicator). */}
+              <LockedAlert />
+              {/* Plan page-size limit: refused-save notice and near-limit warning. */}
+              <CharLimitBanner sticky documentId={documentId} />
+              <CollabBlockedBanner />
+              <EditorCanvas askCopilotTarget={askCopilotTarget} />
+              <BlockCommentMarker hostRef={editorContentRef} />
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </Flexbox>
+          </WideScreenContainer>
+        )}
       </Flexbox>
+      {!isHtmlPage && (
+        <TableOfContents contentRef={editorContentRef} scrollRef={contentWrapperRef} />
+      )}
       {documentId && <DiffAllToolbar documentId={documentId} editor={editor} />}
     </Flexbox>
   );
 
+  // Comment state is hosted above every surface that reads it: the header's
+  // toggle, the list below the body and the panel beside it share one set of
+  // caches, and the panel's cards follow the body pane's scroll.
+  const withComments = (node: ReactNode) => (
+    <DocumentCommentsProvider
+      documentId={documentId}
+      paneRef={contentWrapperRef}
+      panelAvailable={showRightPanel}
+    >
+      {node}
+    </DocumentCommentsProvider>
+  );
+
   if (fullWidthHeader) {
-    return (
+    return withComments(
       <Flexbox height={'100%'} style={{ backgroundColor: cssVar.colorBgContainer }} width={'100%'}>
         {headerSlot}
         <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
           {editorPane}
+          {showRightPanel && <DocumentCommentsPanel />}
           {showRightPanel && <RightPanel />}
         </Flexbox>
-      </Flexbox>
+      </Flexbox>,
     );
   }
 
-  return (
+  return withComments(
     <Flexbox
       horizontal
       height={'100%'}
@@ -346,8 +461,9 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
       width={'100%'}
     >
       {editorPane}
+      {showRightPanel && <DocumentCommentsPanel />}
       {showRightPanel && <RightPanel />}
-    </Flexbox>
+    </Flexbox>,
   );
 });
 
@@ -374,11 +490,19 @@ export const PageEditor: FC<PageEditorProps> = ({
   syncPageAgentActiveState,
 }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const deletePage = usePageStore((s) => s.deletePage);
+  const collabEnabled = usePageCollabEnabled();
+  // Known once the document loads; a SKILL.md then leaves the room path.
+  const collabEligible = usePageCollabEligible(pageId);
+  const [collabEpoch, setCollabEpoch] = useState(0);
+  const handleCollabReset = useCallback(() => setCollabEpoch((epoch) => epoch + 1), []);
 
   return (
     <PageAgentProvider pageId={pageId} syncActiveAgent={syncPageAgentActiveState}>
-      <EditorProvider>
+      {/* A collaboration binding lives for the editor kernel's lifetime, so each room gets a
+          fresh kernel, and a document that leaves the room path drops the binding. */}
+      <EditorProvider
+        key={collabEnabled ? `${pageId}:${collabEligible ? collabEpoch : 'stored'}` : undefined}
+      >
         <PageEditorProvider
           emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
@@ -386,11 +510,12 @@ export const PageEditor: FC<PageEditorProps> = ({
           pageId={pageId}
           title={title}
           onBack={onBack}
+          onCollabReset={collabEnabled ? handleCollabReset : undefined}
           onDocumentIdChange={onDocumentIdChange}
           onDelete={() => {
             if (!canEdit) return;
 
-            deletePage(pageId || '');
+            pageActions.deletePage(pageId || '');
           }}
           onEmojiChange={(emoji) => {
             if (!canEdit) return;

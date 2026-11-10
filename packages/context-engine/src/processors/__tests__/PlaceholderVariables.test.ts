@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { PipelineContext } from '../../types';
 import {
   buildContentPreview,
   formatPlaceholderValues,
@@ -8,6 +9,23 @@ import {
   PlaceholderVariablesProcessor,
   renderPlaceholderTemplate,
 } from '../PlaceholderVariables';
+
+const createContext = (messages: PipelineContext['messages']) => ({
+  initialState: {
+    messages: [],
+    model: 'gpt-4',
+    provider: 'openai',
+    systemRole: '',
+    tools: [],
+  },
+  messages,
+  metadata: {
+    model: 'gpt-4',
+    maxTokens: 4096,
+  },
+  isAborted: false,
+  executedProcessors: [],
+});
 
 describe('PlaceholderVariablesProcessor', () => {
   const mockVariableGenerators = {
@@ -218,77 +236,20 @@ describe('PlaceholderVariablesProcessor', () => {
         variableGenerators: mockVariableGenerators,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: 'Hello {{username}}, today is {{date}}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'Hello {{username}}, today is {{date}}',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       const result = await processor.process(context);
 
       expect(result.messages[0].content).toBe('Hello TestUser, today is 2023-12-25');
       expect(result.metadata.placeholderVariablesProcessed).toBe(1);
-    });
-
-    it('should handle processing errors gracefully', async () => {
-      const faultyGenerators = {
-        error: () => {
-          throw new Error('Generator error');
-        },
-        working: () => 'works',
-      };
-
-      const processor = new PlaceholderVariablesProcessor({
-        variableGenerators: faultyGenerators,
-      });
-
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
-        },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'This {{working}} but this {{error}} fails',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
-
-      // Should not throw, but continue processing
-      const result = await processor.process(context);
-      expect(result.messages).toHaveLength(1);
     });
 
     it('should isolate generator throws per message and not over-count', async () => {
@@ -303,37 +264,22 @@ describe('PlaceholderVariablesProcessor', () => {
         variableGenerators: faultyGenerators,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: 'bad',
+          role: 'user',
+          content: 'This {{working}} but this {{error}} fails',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: 'bad',
-            role: 'user',
-            content: 'This {{working}} but this {{error}} fails',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          {
-            id: 'good',
-            role: 'user',
-            content: 'Only {{working}} here',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
+        {
+          id: 'good',
+          role: 'user',
+          content: 'Only {{working}} here',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       const result = await processor.process(context);
 
@@ -352,30 +298,15 @@ describe('PlaceholderVariablesProcessor', () => {
         variableGenerators: undefined as unknown as Record<string, () => string>,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: 'Hello {{username}}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'Hello {{username}}',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       await expect(processor.process(context)).rejects.toThrow(
         /variableGenerators config is missing or invalid/,
@@ -387,30 +318,15 @@ describe('PlaceholderVariablesProcessor', () => {
         variableGenerators: null as unknown as Record<string, () => string>,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: 'Hello {{username}}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'Hello {{username}}',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       await expect(processor.process(context)).rejects.toThrow(
         /variableGenerators config is missing or invalid/,
@@ -423,30 +339,15 @@ describe('PlaceholderVariablesProcessor', () => {
         depth: 1,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: 'Nested: {{nested}}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'Nested: {{nested}}',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       const result = await processor.process(context);
 
@@ -458,30 +359,15 @@ describe('PlaceholderVariablesProcessor', () => {
         variableGenerators: mockVariableGenerators,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: 'No variables here',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'No variables here',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       const result = await processor.process(context);
 
@@ -494,30 +380,15 @@ describe('PlaceholderVariablesProcessor', () => {
       });
 
       const originalContent = 'Hello {{missing}}, see also {{alsoMissing}}';
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: originalContent,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: originalContent,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       const result = await processor.process(context);
 
@@ -537,30 +408,15 @@ describe('PlaceholderVariablesProcessor', () => {
         { type: 'text', text: 'Only {{missing}} here' },
         { type: 'image', image_url: 'https://example.com/x.png' },
       ];
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: arrayContent,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: arrayContent,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
+      ]);
 
       const result = await processor.process(context);
 
@@ -574,44 +430,29 @@ describe('PlaceholderVariablesProcessor', () => {
         variableGenerators: mockVariableGenerators,
       });
 
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
+      const context = createContext([
+        {
+          id: '1',
+          role: 'user',
+          content: 'No placeholders',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'No placeholders',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          {
-            id: '2',
-            role: 'user',
-            content: 'Hello {{username}}',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          {
-            id: '3',
-            role: 'user',
-            content: 'Only {{missing}}',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
+        {
+          id: '2',
+          role: 'user',
+          content: 'Hello {{username}}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
-        isAborted: false,
-        executedProcessors: [],
-      };
+        {
+          id: '3',
+          role: 'user',
+          content: 'Only {{missing}}',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ]);
 
       const result = await processor.process(context);
 

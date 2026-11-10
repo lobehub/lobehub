@@ -2,7 +2,13 @@ export interface ExecutionSnapshot {
   agentId?: string;
   completedAt?: number;
   completionReason?:
-    'done' | 'error' | 'interrupted' | 'max_steps' | 'cost_limit' | 'waiting_for_human';
+    | 'done'
+    | 'error'
+    | 'interrupted'
+    | 'max_steps'
+    | 'cost_limit'
+    | 'tool_call_repeat_limit'
+    | 'waiting_for_human';
   error?: { type: string; message: string };
   externalRetryCount?: number;
   model?: string;
@@ -13,6 +19,11 @@ export interface ExecutionSnapshot {
   steps: StepSnapshot[];
   topicId?: string;
   totalCost: number;
+  /**
+   * Provider-native subscription credits consumed by the whole operation
+   * (e.g. Qoder), for runs whose CLI bills in credits instead of tokens.
+   */
+  totalCredits?: number;
   totalSteps: number;
   totalTokens: number;
   traceId: string;
@@ -35,20 +46,35 @@ export interface StepSnapshot {
   };
   /**
    * Context Engine result snapshot for this step. Only present on steps where the CE ran
-   * (typically `call_llm`). Uses a delta format: only `input`/`output` fields that changed
-   * from the previous step are stored — resolve the full snapshot by walking backward
-   * through steps (same pattern as `messagesBaseline`/`messagesDelta`).
+   * (typically `call_llm`). `undefined` means the CE did not run (e.g., `call_tool` steps).
+   * Resolve it with `resolveContextEngineSteps` / `resolveCeSnapshot`, never by reading the
+   * fields directly.
    *
-   * - `undefined`        → CE did not run for this step (e.g., `call_tool` steps)
-   * - `{}`               → CE ran but both `input` and `output` are unchanged from before
-   * - `{ input }`        → input changed; `output` unchanged
-   * - `{ output }`       → output changed; `input` unchanged
-   * - `{ input, output}` → both changed (full snapshot, typical of the first CE event)
+   * Current recordings pool values: `inputRefs` maps each top-level input key to a ref, and
+   * `outputRef` names an output list node `{ base?: ref, refs: ref[] }` — the messages of
+   * the `base` node followed by `refs`. Every ref resolves through the `pool` of whichever
+   * step of the snapshot first recorded it, so resolution does not depend on step order.
+   * A long run re-sends nearly the same messages on every call; storing each message once
+   * and each step's list as an extension of an earlier one keeps the trace linear in the
+   * conversation instead of in steps × context size.
+   *
+   * Older recordings store full `input`/`output` values and omit a field that is unchanged
+   * from the closest earlier step that stored it (`{}` = nothing changed). `metadata`
+   * always uses this changed-fields form.
    */
   contextEngine?: {
     input?: unknown;
+    inputRefs?: Record<string, string>;
+    metadata?: unknown;
     output?: unknown;
+    outputRef?: string;
+    pool?: Record<string, unknown>;
   };
+  /**
+   * Provider-native subscription credits consumed by this step (e.g. Qoder),
+   * when the CLI bills in credits instead of reporting token counts.
+   */
+  credits?: number;
   events?: Array<{ type: string; [key: string]: unknown }>;
 
   executionTimeMs: number;

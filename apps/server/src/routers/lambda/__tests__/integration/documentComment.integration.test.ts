@@ -4,6 +4,8 @@ import {
   documentCommentMentions,
   documentComments,
   documents,
+  knowledgeBases,
+  resourcePermissions,
   workspaceMembers,
   workspaces,
 } from '@lobechat/database/schemas';
@@ -18,7 +20,11 @@ import { cleanupTestUser, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
 const notifyDocumentCommentActivity = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
+}));
 vi.mock('@/business/server/document-comment/notifyActivity', () => ({
   notifyDocumentCommentActivity,
 }));
@@ -144,6 +150,63 @@ describe('documentCommentRouter integration', () => {
       content: 'hello',
     });
     expect((await admin.delete({ id: created.comment.id })).mode).toBe('hard');
+  });
+
+  it('round-trips a selection anchor on a root and refuses an inconsistent or misplaced one', async () => {
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const selectionAnchor = {
+      end: 9,
+      prefix: 'the ',
+      quote: 'quick',
+      start: 4,
+      suffix: ' brown fox',
+    };
+
+    const created = await member.create({
+      clientId: 'anchored',
+      content: 'about this phrase',
+      documentId,
+      selectionAnchor,
+    });
+    expect(created.comment.selectionAnchor).toEqual(selectionAnchor);
+    expect((await member.listThreads({ documentId })).items[0].root.selectionAnchor).toEqual(
+      selectionAnchor,
+    );
+    // The document-wide anchor list is what paints body highlights; readers
+    // get it under the same view check as the thread list.
+    const viewer = documentCommentRouter.createCaller(context(viewerId, workspaceId));
+    expect(await viewer.listAnchors({ documentId })).toEqual({
+      items: [{ id: created.comment.id, selectionAnchor }],
+    });
+
+    // Offsets that disagree with the quote mean the client measured against
+    // different text, so the hint would mis-rank every re-location candidate.
+    await expect(
+      member.create({
+        clientId: 'bad-offsets',
+        content: 'no',
+        documentId,
+        selectionAnchor: { ...selectionAnchor, end: 40 },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    // A reply belongs to its thread's anchor and may never carry another.
+    await expect(
+      member.create({
+        clientId: 'anchored-reply',
+        content: 'no',
+        documentId,
+        parentCommentId: created.comment.id,
+        selectionAnchor,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    const plain = await member.create({
+      clientId: 'unanchored',
+      content: 'about the whole page',
+      documentId,
+    });
+    expect(plain.comment.selectionAnchor).toBeNull();
   });
 
   it('serves one comment by id with a live reply count for roots', async () => {
@@ -347,6 +410,57 @@ describe('documentCommentRouter integration', () => {
     await flushAfterResponse();
     expect(privateReply.comment.replyTo?.author.id).toBe(memberId);
     expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies only recipients who can browse the document knowledge base', async () => {
+    const [knowledgeBase] = await db
+      .insert(knowledgeBases)
+      .values({ name: 'Restricted content', userId: ownerId, visibility: 'public', workspaceId })
+      .returning();
+    await db.insert(resourcePermissions).values({
+      accessLevel: 'use',
+      resourceId: knowledgeBase.id,
+      resourceType: 'knowledgeBase',
+      workspaceId,
+    });
+    await db
+      .update(documents)
+      .set({ knowledgeBaseId: knowledgeBase.id })
+      .where(eq(documents.id, documentId));
+    const owner = documentCommentRouter.createCaller(context(ownerId, workspaceId));
+
+    await owner.create({
+      clientId: 'restricted-mentions',
+      content: 'Member and admin',
+      documentId,
+      editorData: mentionEditorData(memberId, adminId),
+    });
+    await flushAfterResponse();
+
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'mentioned', recipientUserId: adminId }),
+    );
+
+    await db.insert(resourcePermissions).values({
+      accessLevel: 'edit',
+      resourceId: knowledgeBase.id,
+      resourceType: 'knowledgeBase',
+      userId: memberId,
+      workspaceId,
+    });
+    await owner.create({
+      clientId: 'collaborator-mention',
+      content: 'Now a collaborator',
+      documentId,
+      editorData: mentionEditorData(memberId),
+    });
+    await flushAfterResponse();
+
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(2);
+    expect(notifyDocumentCommentActivity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'mentioned', recipientUserId: memberId }),
+    );
   });
 
   it('fans a reply out to the direct target and the other thread participants', async () => {

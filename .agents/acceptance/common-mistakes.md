@@ -30,7 +30,6 @@ the next free number of that prefix.
 - **L-E6** When the Task requires a durable document, create and pin the real artifact; evidence explains a verdict, it is not the deliverable.
 - **L-E9** Check the acceptance's status before ingest; new scoped work on an accepted acceptance goes to a new subject.
 - **L-E10** After any Agent assignment or Task edit, verify the persisted provider/model and the first completed message's metadata before judging quality.
-- **L-E11** Reconcile the evidence count in `result.json` against the ingest JSON; any `[WARN] evidence upload failed` is a failed publish — republish a fresh round.
 - **L-E13** Uncommitted work on a branch that owns a PR: decide provenance explicitly (open the real PR, or say in `report.md` there is none) and re-read `branch`/`commit` at publish time.
 - **L-E14** After an insertion affordance, continue the user's action in the same case and assert node order in persisted `editor_data`; send the payload through the same entry point.
 - **L-E15** A conversation-branch regression is verified by sending the next message through the real composer: DB row, parent on the active spine, render before and after cold reload.
@@ -38,7 +37,10 @@ the next free number of that prefix.
 - **L-E17** Direct-mention routing is verified with a real tool call and the full persisted tree; no owner assistant, `callAgent`, or synthetic target-user row.
 - **L-E19** Markdown evidence: one paragraph per physical line; newline only where it is content.
 - **L-E20** Build fixtures through the same composition the product uses; compare an entity page against a canary-created sibling before publishing it as evidence.
+- **L-E21** Evidence for "A is unaffected by B" must be able to tell A from B: distinct content and the target echoed in the request line.
 - **L-E21** Publish against production even when the subject exists only locally; a local ingest may supplement, never replace.
+- **L-E22** `requiredEvidence: text` is satisfied only by `.txt`/`.json`-style files; an `.md` file ingests as `markdown` and leaves the check `uncertain`.
+- **L-E23** Published evidence never shows a real person's private content (photos, faces, personal messages); rebuild the case on placeholder fixtures instead of the user's real page.
 
 **Product and interaction contracts**
 
@@ -62,6 +64,12 @@ the next free number of that prefix.
 - **L-S19** `plan[]` holds only what the user accepts or rejects, each id fulfilled by a case; a clean ingest prints `plan: N item(s)` with nothing after it.
 - **L-S20** Read the managed containers' host ports from `docker ps` and pass `DB_PORT`/`REDIS_PORT` to every `init-dev-env.sh` subcommand; `auth_failed` on migrate is a port mismatch.
 - **L-S21** In a worktree, invoke scripts by absolute path and prove the SPA's identity (Vite pid cwd, changed module from the Vite origin) before trusting any gate or evidence.
+- **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
+- **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
+- **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
+- **L-S25** `dev:static` 的 Electron 重启会清空 `dist/renderer`（renderer Vite dev server 启动即删 outDir）；`start`/`restart` 后必须重建 renderer 再驱动，否则页面只有 Internal Server Error。
+- **L-S26** 根 `.env` 起不来时不修它：开一个没有 `.env` 的 worktree，先按 L-S23 装依赖、L-S20 取端口、L-S9 建 per-run 库，再 `setup-db` → `migrate` → `seed-user` → `dev`。
+- **L-S27** A standalone `apps/cli` install relinks the shared `packages/*` it lists into its own store; before Web evidence in that worktree, rerun `pnpm install --force` at the root and restart the dev server.
 
 ## Entries
 
@@ -150,20 +158,6 @@ fallback.
 **Rule:** after every assignment or Task edit, verify the persisted
 provider/model and the first completed assistant message metadata; attach the
 runtime identity to the round.
-
-### L-E11 — Declaring an ingest done without reconciling its evidence count
-
-`since 2026-07-31` · `holds-while: ingest exits 0 after "[WARN] evidence upload failed, skipping <file>"`
-
-**Trap:** the success JSON shows an `acceptanceId` and a round index, the WARN
-above it is read as noise. One skipped half of a `comparison` pair renders alone
-— a lone `before` reads as "the fix never landed".
-
-**Rule:** count evidence items in `result.json` against the ingest JSON's
-`evidence` field; any WARN is a failed publish. Do not retro-attach with
-`acceptance run evidence upload` (no `comparison` metadata → unpaired). Publish
-a fresh round with the complete set and say in `report.md` that it republishes
-the same observations.
 
 ### L-E13 — Publishing uncommitted work onto the branch's unrelated PR
 
@@ -535,3 +529,144 @@ once and require its server call in the log. Before trusting any gate,
 `pwd`/`cd <worktree> &&` and confirm the NAME of the test you added appears in
 the runner output. Distinct from L-S7: that is a stale bundle from the right
 tree; this is a healthy bundle from the wrong tree.
+
+### L-E21 — Evidence that cannot distinguish the two things the case compares
+
+`since 2026-09-10` · `holds-while: a case asserts one artifact is unaffected by an operation on another`
+
+**Trap:** proving `--new` forks a separate site, the round published two sites
+whose pages were byte-identical (`contentHash` equal) and a request line that
+printed only the response, not the URL asked for. The artifact showed the
+expected string, so the case read as a pass — but curling the _new_ site would
+have printed exactly the same bytes. The claim rested on a hand-typed section
+header, not on anything in the output.
+
+**Rule:** when a case asserts "X still serves its own content" or any other
+independence between two objects, make the two distinguishable _before_
+capturing: different content per object, and each request echoing the URL or id
+it targeted. Ask of the artifact: if the wrong target had been requested, would
+this file look different? If not, the case proves nothing.
+
+### L-S22 — A per-account quota the round itself consumes, cleared for the wrong account
+
+`since 2026-09-10` · `holds-while: artifact deployments are capped per plan (Free = 3 active) and the CLI authenticates as a seeded runtime user`
+
+**Trap:** each publish leaves an active deployment, so the third run of a round
+fails with `ARTIFACT_DEPLOYMENT_CAPACITY_LIMIT_REACHED` — which reads as a
+regression in the code under test. The purge then ran against the smoke's
+default `user_artifact_e2e` and reported "active before: 0" while the CLI, which
+authenticates as the seeded runtime user, still held three.
+
+**Rule:** identify the account the surface actually authenticates as (for the CLI,
+the `user_id` on the seeded API key row) and clear the cap for _that_ id before
+and between rounds. A quota error mid-round is an environment fact until the
+account has been checked; do not debug it as product behaviour.
+
+### L-S23 — Substituting a symlink farm for an install in a fresh worktree
+
+`since 2026-09-18` · `holds-while: pnpm-workspace.yaml sets lockfile: false, and Turbopack resolves next/package.json from the workspace root it detects`
+
+**Trap:** a new worktree has no `node_modules`, and a farm of symlinks into a
+working checkout is quick and makes `vitest` and `tsrs` pass — so the tree looks
+ready. The dev server then dies on `Could not find the Next.js package
+(next/package.json)`, every route 500s, and the visible errors point elsewhere
+(`Failed to resolve import "anser"` from a package-level dependency the farm
+never linked). Falling back to `pnpm install` can fail outright: this repo
+commits no lockfile, so a fresh resolve hits whatever the registry holds today
+(seen: `No matching version found for @aws-sdk/token-providers@3.1134.0`).
+
+**Rule:** for anything that boots the app, copy a working checkout's
+`node_modules` — `cp -Rc` (APFS clonefile) takes \~100s and almost no disk for
+6.8 GB. Copy the per-package `node_modules` too (\~100 of them; the root tree
+alone leaves package-level deps unresolved), then symlink any workspace package
+the branch adds into `node_modules/@lobechat/`. The `@lobechat/*` links inside
+are relative and resolve to the worktree's own `packages/`, which is what keeps
+the code under test in the path. A farm is fine for unit tests only.
+
+### L-S24 — Waiting for a readiness code the server never returns
+
+`since 2026-09-18` · `holds-while: the dev script allocates a free port per run and the app redirects unauthenticated root requests`
+
+**Trap:** polling a remembered port (3010) for HTTP `200`. The script allocates a
+port per run and prints it (`🔁 Next server URL: http://localhost:<port>/`, plus
+a separate Vite port in the Debug Proxy line); and the app answers `/` with
+`302` to `/signin` until the surface is authenticated. Both mistakes read as
+"the server never came up" while it has been serving for minutes.
+
+**Rule:** take both URLs from the log, never from memory or a default. Probe with
+PROJECT.md's predicate as written — any code but `000` — and confirm health by
+following the redirect, not by demanding `200` at the root.
+
+### L-S25 — dev:static 重启后 dist/renderer 被清空
+
+`since 2026-09-20` · `holds-while: dev.mjs 的 renderer Vite dev server 在启动时删除 renderer outDir`
+
+**Trap:** `DESKTOP_RENDERER_STATIC=1 electron-dev.sh start|restart` 后立刻驱动页面，
+只看到 `Internal Server Error`（静态 handler 报 `ENOENT dist/renderer/apps/desktop/index.html`）。
+dev.mjs 每次启动都会拉起 renderer Vite dev server，而后者启动即清空
+`apps/desktop/dist/renderer`；静态产物是在启动序列里被删的，与是否使用静态模式无关。
+
+**Rule:** 每次 `start`/`restart` 之后、驱动之前，先 `cd apps/desktop && pnpm build:renderer`
+（约 25s）并确认 `dist/renderer/apps/desktop/index.html` 存在。同一个 dev.mjs 生命周期内
+的后续重启不会再次清空；改用 `restart` 而不是 `start` 时也按同一规则处理。
+
+### L-E22 — 用 .md 文件充当 text 证据
+
+`since 2026-10-21` · `holds-while: lh acceptance run ingest 按扩展名推断证据类型，.md → markdown`
+
+**Trap:** 计划项声明 `requiredEvidence: ["text"]`，唯一的文本证据是 `assets/*.md`。`ingest --dry-run`
+不报错，正式发布却返回 `publicationStatus: partial`，这些检查被记成 `uncertain`。原因是 `.md`
+被存成 `markdown` 类型，不算 `text`。
+
+**Rule:** 文本类执行记录用 `.txt` 或 `.json` 保存；必须用 Markdown 排版时，另附一份同内容的
+`.txt`。发布后用 `lh acceptance run result list --run <id> --json` 核对每项 verdict。已发布的轮次
+用 `lh acceptance run result submit --type text --file <x>.txt --verdict ...` 补交，不要新开一轮。
+
+### L-E23 — Capturing a real user's private content as evidence
+
+`since 2026-10-26` · `holds-while: always`
+
+**Trap:** the report reproduces a bug on the real page the user linked (a
+`/share/t/<id>` topic of their own). The screenshots show the conversation as is,
+including a family member's photo, and ingest publishes them.
+
+**Rule:** before capture, build the case on placeholder data: `lh topic import`
+of placeholder messages, `lh topic share` it, and unshare and delete it in
+teardown. When only the real page reproduces the case, redact faces, photos and
+personal text before ingest. Open every image before ingest; if a published
+round still leaks content, `lh acceptance run delete <runId> --yes` and republish.
+
+### L-S26 — 在坏掉的根 `.env` 上原地硬修
+
+`since 2026-10-23` · `holds-while: init-dev-env.sh 在根 .env 存在时直接退出，dev-server.md 只写了「有 .env 用现有配置」这一条分支`
+
+**Trap:** repo 根目录有 `.env`（Neon 口令已失效，或 `DATABASE_URL` 被指到本地库但 schema 落后、缺
+`agent_history_jobs`），于是走「有 `.env` 就用现有配置」这条分支：`bun run dev` 起来但登录 500，
+`setup-auth.sh` 又提示 `root .env exists; do not seed or modify this DB`。接下来会去改根 `.env`、改
+`node_modules` 里的依赖硬救 —— 那都是别人的本地配置，救回来也只是这一轮能跑，下一轮照旧。
+
+**Rule:** 根 `.env` 起不来就离开它：`git worktree add --detach /tmp/<slug> <ref-or-sha>` 开一棵没有
+根 `.env` 的树（`--detach`：正在检出的分支不能重复 checkout），再把这条路径走完整 —— 按 L-S23 复制
+一份可用的 `node_modules`（含各 package 自己的），按 L-S20 从 `docker ps` 取容器真实端口，按 L-S9
+在容器里建 per-run 库并导出 `DATABASE_URL`，然后 `init-dev-env.sh setup-db` → `migrate` →
+`seed-user` → `dev`（脚本一律用绝对路径，L-S21；端口从日志取，L-S24）。worktree 路径写进 report，
+teardown 时 `clean` 停服、删掉这个库、`git worktree remove` 移除这棵树。不要在被改坏的根 `.env` 上
+继续调试。
+
+### L-S27 — Taking Web evidence after a standalone `apps/cli` install
+
+`since 2026-10-25` · `holds-while: apps/cli/pnpm-workspace.yaml lists ../../packages/* as its own workspace projects`
+
+**Trap:** running `cd apps/cli && pnpm install` (PROJECT.md §6) in the worktree that also
+serves the Web surface. The CLI's workspace covers the shared packages, so the install
+rewrites their `packages/*/node_modules` links to point into `apps/cli/node_modules/.pnpm`.
+The server keeps working, but the SPA now loads a second React copy: routes fail with
+`The requested module '/apps/cli/node_modules/.pnpm/…' does not provide an export named
+'useSyncExternalStore'` and the page shows the error boundary, which reads like a broken
+build of the change under test.
+
+**Rule:** after a standalone CLI install, count the links that point into it
+(`find packages/*/node_modules -maxdepth 2 -type l -lname '*apps/cli/node_modules*'`).
+If any exist, run `pnpm install --force` at the root (a plain install reports "Already
+up to date" and leaves them), delete `node_modules/.vite`, and restart the dev server
+before capturing Web evidence.

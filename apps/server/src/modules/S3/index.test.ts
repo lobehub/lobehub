@@ -8,6 +8,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   paginateListParts,
   PutObjectCommand,
   S3Client,
@@ -38,7 +39,7 @@ vi.mock('@/envs/file', () => ({
 
 // Mock utilities
 vi.mock('@/utils/url', () => ({
-  inferContentTypeFromImageUrl: vi.fn((key: string) => {
+  inferContentTypeFromImageUrl: vi.fn(function (key: string) {
     if (key.endsWith('.jpg') || key.endsWith('.jpeg')) return 'image/jpeg';
     if (key.endsWith('.png')) return 'image/png';
     if (key.endsWith('.gif')) return 'image/gif';
@@ -55,9 +56,11 @@ describe('S3', () => {
 
     // Setup S3Client mock
     mockS3ClientSend = vi.fn();
-    (S3Client as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      send: mockS3ClientSend,
-    }));
+    (S3Client as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return {
+        send: mockS3ClientSend,
+      };
+    });
 
     // Setup getSignedUrl mock
     mockGetSignedUrl = vi.fn().mockResolvedValue('https://presigned-url.example.com');
@@ -133,6 +136,54 @@ describe('S3', () => {
       );
     });
   });
+
+  describe('internal endpoint', () => {
+    const createS3 = (internalEndpoint?: string) =>
+      new S3('test-access-key', 'test-secret-key', 'http://localhost:9000', {
+        bucket: 'test-bucket',
+        internalEndpoint,
+      });
+
+    beforeEach(() => {
+      (S3Client as unknown as ReturnType<typeof vi.fn>).mockImplementation(function (config: {
+        endpoint: string;
+      }) {
+        return { endpoint: config.endpoint, send: vi.fn().mockResolvedValue({}) };
+      });
+    });
+
+    it('sends server-side requests through the internal endpoint', async () => {
+      const s3 = createS3('http://rustfs:9000');
+
+      await s3.getFileMetadata('file.png');
+
+      const clients = (S3Client as unknown as ReturnType<typeof vi.fn>).mock.results.map(
+        (result) => result.value,
+      );
+      const internalClient = clients.find((client) => client.endpoint === 'http://rustfs:9000');
+      const publicClient = clients.find((client) => client.endpoint === 'http://localhost:9000');
+      expect(internalClient.send).toHaveBeenCalledTimes(1);
+      expect(publicClient.send).not.toHaveBeenCalled();
+    });
+
+    it('signs URLs for the public endpoint that browsers open', async () => {
+      const s3 = createS3('http://rustfs:9000');
+
+      await s3.createPreSignedUrl('file.png');
+      await s3.createPreSignedUrlForPreview('file.png');
+
+      for (const [client] of mockGetSignedUrl.mock.calls) {
+        expect(client.endpoint).toBe('http://localhost:9000');
+      }
+      expect(mockGetSignedUrl).toHaveBeenCalledTimes(2);
+    });
+
+    it('uses a single client when no internal endpoint is configured', () => {
+      createS3();
+
+      expect(S3Client).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('FileS3', () => {
@@ -144,9 +195,11 @@ describe('FileS3', () => {
 
     // Setup S3Client mock
     mockS3ClientSend = vi.fn();
-    (S3Client as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      send: mockS3ClientSend,
-    }));
+    (S3Client as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return {
+        send: mockS3ClientSend,
+      };
+    });
 
     // Setup getSignedUrl mock
     mockGetSignedUrl = vi.fn().mockResolvedValue('https://presigned-url.example.com');
@@ -217,6 +270,31 @@ describe('FileS3', () => {
     });
   });
 
+  describe('listFileKeys', () => {
+    it('lists one bounded page of keys under the prefix', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        Contents: [{ Key: 'downloads/2026-10-30/a' }, {}, { Key: 'downloads/2026-10-31/b' }],
+      });
+
+      await expect(s3.listFileKeys('downloads/', 50)).resolves.toEqual([
+        'downloads/2026-10-30/a',
+        'downloads/2026-10-31/b',
+      ]);
+      expect(ListObjectsV2Command).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        MaxKeys: 50,
+        Prefix: 'downloads/',
+      });
+    });
+
+    it('answers no keys for an empty prefix', async () => {
+      mockS3ClientSend.mockResolvedValue({});
+
+      await expect(new FileS3().listFileKeys('downloads/')).resolves.toEqual([]);
+    });
+  });
+
   describe('deleteFiles', () => {
     it('should delete multiple files with correct parameters', async () => {
       const s3 = new FileS3();
@@ -232,6 +310,20 @@ describe('FileS3', () => {
         },
       });
       expect(mockS3ClientSend).toHaveBeenCalled();
+    });
+
+    it('should split more than 1000 keys into multiple requests', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({});
+
+      const keys = Array.from({ length: 2001 }, (_, i) => `file${i}.txt`);
+      await s3.deleteFiles(keys);
+
+      expect(mockS3ClientSend).toHaveBeenCalledTimes(3);
+      const sizes = vi
+        .mocked(DeleteObjectsCommand)
+        .mock.calls.map(([input]) => input.Delete!.Objects!.length);
+      expect(sizes).toEqual([1000, 1000, 1]);
     });
 
     it('should handle empty array', async () => {
@@ -429,6 +521,21 @@ describe('FileS3', () => {
         headers: { 'x-amz-acl': 'public-read' },
         url: 'https://presigned-url.example.com',
       });
+    });
+
+    it('signs a private upload without the public-read ACL even when the bucket sets one', async () => {
+      const s3 = new FileS3();
+
+      const result = await s3.createPreSignedUpload('private-copy.zip', undefined, {
+        private: true,
+      });
+
+      expect(PutObjectCommand).toHaveBeenCalledWith({
+        ACL: undefined,
+        Bucket: 'test-bucket',
+        Key: 'private-copy.zip',
+      });
+      expect(result).toEqual({ headers: undefined, url: 'https://presigned-url.example.com' });
     });
   });
 

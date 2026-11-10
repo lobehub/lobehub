@@ -1,5 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface TaskItemSkeletonProps {

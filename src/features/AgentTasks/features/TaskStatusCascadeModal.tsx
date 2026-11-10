@@ -1,9 +1,18 @@
 'use client';
 
 import type { TaskStatus } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, ScrollArea, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  ScrollArea,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,10 +32,6 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-start: 8px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
-
-    > [role='presentation'] > [role='presentation'] {
-      gap: 0;
-    }
   `,
   row: css`
     padding-block: 6px;

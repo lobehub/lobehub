@@ -1,14 +1,18 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import type { VerifyEvidenceType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { TaskModel } from '@/database/models/task';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
+import { settledCarriedItemIds } from './carryForward';
+import { runEvidenceGaps } from './evidenceCoverage';
 import {
   recordHeterogeneousDeliverableEvidence,
   startEvidenceSubmission,
@@ -18,7 +22,7 @@ import { resolveVerifyModelConfig } from './modelConfig';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
-import { resolveTaskAcceptance } from './taskAcceptance';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-lifecycle');
 const MAX_TASK_DOCUMENT_CHARS = 80_000;
@@ -60,6 +64,112 @@ export const resolveVerificationDeliverable = async (
     .join('\n\n');
 };
 
+type VerifiedOperation = NonNullable<Awaited<ReturnType<AgentOperationModel['findById']>>>;
+
+/**
+ * Judge a run whose `verifying` lease the caller already holds, then settle it.
+ * Shared by the completion-time gate and the stuck-run sweep's re-drive, so both
+ * spawn verifiers and drive the task the same way.
+ */
+const judgeClaimedRun = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: {
+    deliverable: string;
+    goal: string;
+    operation: VerifiedOperation;
+    verifierAgentId?: string;
+  },
+  workspaceId?: string,
+): Promise<void> => {
+  const { goal, operation: op, verifierAgentId } = params;
+
+  const modelConfig = await resolveVerifyModelConfig(
+    db,
+    userId,
+    {
+      parentModel: op.model,
+      parentProvider: op.provider,
+      verifierAgentId,
+    },
+    workspaceId,
+  );
+  const resolvedDeliverable = await resolveVerificationDeliverable(
+    db,
+    userId,
+    params.deliverable,
+    op.taskId,
+    workspaceId,
+  );
+
+  const executor = new VerifyExecutorService(db, userId, workspaceId);
+  await executor.execute({
+    deliverable: resolvedDeliverable,
+    goal,
+    modelConfig,
+    operationId: op.id,
+    // `agent`-type checks run as the task-pinned verify agent (or the builtin
+    // one), which writes its verdict back via the submitVerifyResult tool.
+    runVerifierAgent: createVerifierAgentRunner({
+      db,
+      deliverable: resolvedDeliverable,
+      model: modelConfig.model,
+      provider: modelConfig.provider,
+      taskId: op.taskId,
+      topicId: op.topicId,
+      userId,
+      verifierAgentId,
+      workspaceId,
+    }),
+  });
+
+  // Settle the run: repair-aware tail, then (on terminal settle) report + drive
+  // the bound task. For inline (LLM/program) checks everything is resolved now;
+  // runs with async agent checks no-op here and re-enter the same finalizer from
+  // the verifier's writeback path (verifyResult runtime) — so the task is driven
+  // from exactly one place regardless of which path finished last.
+  await finalizeVerifyRun(
+    db,
+    userId,
+    op.id,
+    { report: { deliverable: resolvedDeliverable, goal, modelConfig } },
+    workspaceId,
+  );
+};
+
+/**
+ * Judge again a round whose first attempt claimed `verifying` and then died
+ * before any verifier started. The caller must already hold the `verifying`
+ * lease (the sweep claims it), so this skips the completion gate's claim and
+ * evidence phase: the builder's evidence is already on the round.
+ */
+export const redriveClaimedVerification = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: { deliverable: string; operationId: string },
+  workspaceId?: string,
+): Promise<void> => {
+  const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
+  if (!op) throw new Error(`Operation "${params.operationId}" not found`);
+
+  const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(op.id);
+  const acceptance = op.taskId
+    ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
+    : undefined;
+
+  await judgeClaimedRun(
+    db,
+    userId,
+    {
+      deliverable: params.deliverable,
+      goal: run?.goal ?? '',
+      operation: op,
+      verifierAgentId: acceptance?.config.verifierAgentId ?? undefined,
+    },
+    workspaceId,
+  );
+};
+
 export interface RunVerifyOnCompletionParams {
   /** The run's final output / artifacts, judged against the plan. */
   deliverable: string;
@@ -89,18 +199,45 @@ const executeVerifyLifecycle = async (
   throwOnError = false,
 ): Promise<void> => {
   try {
-    const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
+    const confirmedRun = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
       params.operationId,
     );
 
     // Opt-in gate: only runs with a confirmed plan.
-    if (!run?.plan?.length || !run.planConfirmedAt) return;
+    if (!confirmedRun?.plan?.length || !confirmedRun.planConfirmedAt) return;
 
     const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
     if (!op) {
       log('op %s missing, cannot run verify', params.operationId);
       return;
     }
+
+    // Resolved once here, before any of the branches below can return: it both
+    // binds this round to the Task's Acceptance (a builder that planned the round
+    // itself leaves it unattached) and pins which agent verifies. Non-task runs
+    // keep an undefined verifier → builtin fallback.
+    //
+    // A throw is left to the outer catch on purpose. Only a resolved "this Task has
+    // no Acceptance" may fall back to the builtin verifier; swallowing a transient
+    // failure here would hand a Task that pins its own verifier to a different one
+    // and settle it on that verdict.
+    const resolvedAcceptance = op.taskId
+      ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
+      : undefined;
+    // Attaching can fold this round into a draft round of the acceptance, which
+    // deletes the row we read above, so the rest of the lifecycle follows the row
+    // the attach settled on.
+    const run = resolvedAcceptance
+      ? await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: resolvedAcceptance.acceptance.id, run: confirmedRun },
+          workspaceId,
+        )
+      : confirmedRun;
+    // A fold merges both plans onto the surviving row; anything else keeps the plan
+    // the opt-in gate above already accepted.
+    const plan = run.plan?.length ? run.plan : confirmedRun.plan;
 
     // The builder now captures Acceptance evidence inside the main run. When it
     // covered the whole plan, the post-run evidence turn has nothing left to
@@ -116,25 +253,21 @@ const executeVerifyLifecycle = async (
       const inRunEvidence = await new VerifyEvidenceModel(db, userId, workspaceId).listByRun(
         run.id,
       );
-      const byCheckItem = new Map<string, Set<string>>();
+      const byCheckItem = new Map<string, { type: VerifyEvidenceType }[]>();
       for (const row of inRunEvidence) {
-        const types = byCheckItem.get(row.checkItemId) ?? new Set<string>();
-        types.add(row.type);
-        byCheckItem.set(row.checkItemId, types);
+        const rows = byCheckItem.get(row.checkItemId) ?? [];
+        rows.push(row);
+        byCheckItem.set(row.checkItemId, rows);
       }
 
-      const uncovered = run.plan.filter((item) => {
+      // A criterion that names the artifacts it needs is only covered once each
+      // declared run-evidence type is present — the same rule the structural
+      // gate applies, so the handoff never asks for what the gate ignores.
+      const uncovered = plan.filter((item) => {
         if (item.required === false) return false;
         const captured = byCheckItem.get(item.id);
-        if (!captured?.size) return true;
-
-        // A criterion that names the artifacts it needs is only covered once
-        // each declared type is present.
-        const declared = (item.verifierConfig as { requiredEvidence?: { type: string }[] })
-          ?.requiredEvidence;
-        return Array.isArray(declared)
-          ? declared.some((required) => !captured.has(required.type))
-          : false;
+        if (!captured?.length) return true;
+        return runEvidenceGaps(item.verifierConfig, captured).length > 0;
       });
 
       if (inRunEvidence.length > 0 && uncovered.length === 0) {
@@ -166,18 +299,26 @@ const executeVerifyLifecycle = async (
               db,
               deliverable: params.deliverable,
               operation: op,
-              plan: run.plan,
+              plan,
               userId,
               workspaceId,
             });
             evidenceSubmitted = true;
           } else {
+            // A repair round's carried checks already hold their evidence. Asking
+            // the evidence turn for them anyway would add fresh rows, which reopen
+            // and re-judge every carried check on the repair's own delta reply.
+            const [runResults, runEvidence] = await Promise.all([
+              new VerifyCheckResultModel(db, userId, workspaceId).listByRun(run.id),
+              new VerifyEvidenceModel(db, userId, workspaceId).listByRun(run.id),
+            ]);
+            const { settled } = settledCarriedItemIds(runResults, runEvidence);
             await startEvidenceSubmission({
               db,
               deliverable: params.deliverable,
               goal: params.goal,
               operation: op,
-              plan: run.plan,
+              plan: plan.filter((item) => !settled.has(item.id)),
               userId,
               workspaceId,
             });
@@ -206,69 +347,14 @@ const executeVerifyLifecycle = async (
       return;
     }
 
-    // Task-bound runs may pin which agent verifies through its Acceptance policy.
-    // Non-task runs leave it undefined → builtin fallback.
-    let verifierAgentId: string | undefined;
-    if (op.taskId) {
-      const resolvedAcceptance = await resolveTaskAcceptance(db, userId, op.taskId, workspaceId);
-      verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
-    }
-
-    const modelConfig = await resolveVerifyModelConfig(
+    await judgeClaimedRun(
       db,
       userId,
       {
-        parentModel: op.model,
-        parentProvider: op.provider,
-        verifierAgentId,
-      },
-      workspaceId,
-    );
-    const resolvedDeliverable = await resolveVerificationDeliverable(
-      db,
-      userId,
-      params.deliverable,
-      op.taskId,
-      workspaceId,
-    );
-    const verificationGoal = params.goal || run.goal || '';
-
-    const executor = new VerifyExecutorService(db, userId, workspaceId);
-    await executor.execute({
-      deliverable: resolvedDeliverable,
-      goal: verificationGoal,
-      modelConfig,
-      operationId: params.operationId,
-      // `agent`-type checks run as the task-pinned verify agent (or the builtin
-      // one), which writes its verdict back via the submitVerifyResult tool.
-      runVerifierAgent: createVerifierAgentRunner({
-        db,
-        deliverable: resolvedDeliverable,
-        model: modelConfig.model,
-        provider: modelConfig.provider,
-        taskId: op.taskId,
-        topicId: op.topicId,
-        userId,
-        verifierAgentId,
-        workspaceId,
-      }),
-    });
-
-    // Settle the run: repair-aware tail, then (on terminal settle) report + drive
-    // the bound task. For inline (LLM/program) checks everything is resolved now;
-    // runs with async agent checks no-op here and re-enter the same finalizer from
-    // the verifier's writeback path (verifyResult runtime) — so the task is driven
-    // from exactly one place regardless of which path finished last.
-    await finalizeVerifyRun(
-      db,
-      userId,
-      params.operationId,
-      {
-        report: {
-          deliverable: resolvedDeliverable,
-          goal: verificationGoal,
-          modelConfig,
-        },
+        deliverable: params.deliverable,
+        goal: params.goal || run.goal || '',
+        operation: op,
+        verifierAgentId: resolvedAcceptance?.config.verifierAgentId ?? undefined,
       },
       workspaceId,
     );
@@ -284,6 +370,19 @@ export const runVerifyOnCompletion = async (
   params: RunVerifyOnCompletionParams,
   workspaceId?: string,
 ): Promise<void> => executeVerifyLifecycle(db, userId, params, workspaceId, false);
+
+/**
+ * The completion gate as delivered by QStash (see `scheduleVerifyOnCompletion`).
+ * Unlike the in-band form it rethrows, so a gate that failed — or found its
+ * claim still held by an attempt that may have died — is redelivered instead of
+ * reported as done.
+ */
+export const runVerifyOnCompletionFromQueue = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: RunVerifyOnCompletionParams,
+  workspaceId?: string,
+): Promise<void> => executeVerifyLifecycle(db, userId, params, workspaceId, false, true);
 
 /** The only entry point allowed to advance a task run out of evidence collection. */
 export const runVerifyAfterEvidenceSubmission = async (

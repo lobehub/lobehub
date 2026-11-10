@@ -20,6 +20,7 @@ import type {
   MemoryExtractionAgent,
   TemplateProps,
 } from '../types';
+import { parseLenient } from '../utils/lenientParse';
 import { buildGenerateObjectSchema } from '../utils/zod';
 
 const serializeForSpan = (value: unknown, limit = 4000) => {
@@ -33,6 +34,32 @@ const serializeForSpan = (value: unknown, limit = 4000) => {
   } catch {
     return '[unserializable]';
   }
+};
+
+/**
+ * Validates an extractor's answer, repairing what models get slightly wrong (see
+ * {@link parseLenient}) and logging what was repaired, so new kinds of drift show up in the
+ * logs rather than as failed topics.
+ */
+export const parseModelOutput = <T>(
+  schema: z.ZodType<T, unknown>,
+  output: unknown,
+  agent: string,
+  model: string,
+): T => {
+  const { data, repairs } = parseLenient(schema, output);
+  if (repairs.length > 0) {
+    console.info(
+      JSON.stringify({
+        agent,
+        event: 'memory.output.repaired',
+        model,
+        repairs: repairs.slice(0, 20),
+        total: repairs.length,
+      }),
+    );
+  }
+  return data;
 };
 
 export interface BaseMemoryExtractorConfig {
@@ -164,6 +191,8 @@ export abstract class BaseMemoryExtractor<
                   ...(options?.parentMemoryTraceKey
                     ? { parent_memory_trace_key: options.parentMemoryTraceKey }
                     : {}),
+                  ...(options?.taskId ? { taskId: options.taskId } : {}),
+                  ...(options?.topicId ? { topicId: options.topicId } : {}),
                   trigger: RequestTrigger.Memory,
                 },
               });
@@ -183,7 +212,9 @@ export abstract class BaseMemoryExtractor<
               }
 
               const schema = this.getResultSchema();
-              const parsedResult = (schema ? schema.parse(result) : result) as TOutput;
+              const parsedResult = (
+                schema ? parseModelOutput(schema, result, this.agent, this.model) : result
+              ) as TOutput;
 
               span.setStatus({ code: SpanStatusCode.OK });
 

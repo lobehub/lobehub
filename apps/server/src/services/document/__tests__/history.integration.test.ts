@@ -90,17 +90,31 @@ const createValidEditorData = (text: string) => ({
   },
 });
 
+const tenOClockAutosave = (doc: {
+  id: string;
+}): Parameters<DocumentHistoryService['createHistory']>[0] => ({
+  documentId: doc.id,
+  editorData: { v: 1 },
+  saveSource: 'autosave',
+  savedAt: new Date('2026-04-01T10:00:00Z'),
+});
+
+const autosaveAtBase = (
+  doc: { id: string },
+  base: Date,
+): Parameters<DocumentHistoryService['createHistory']>[0] => ({
+  documentId: doc.id,
+  editorData: { v: 1 },
+  saveSource: 'autosave',
+  savedAt: base,
+});
+
 describe('DocumentHistoryService', () => {
   describe('createHistory & listDocumentHistory', () => {
     it('should create history entries and list them with head included', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-01T10:00:00Z'),
-      });
+      await historyService.createHistory(tenOClockAutosave(doc));
 
       await historyService.createHistory({
         documentId: doc.id,
@@ -125,12 +139,7 @@ describe('DocumentHistoryService', () => {
     it('should respect includeCurrent=false', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-01T10:00:00Z'),
-      });
+      await historyService.createHistory(tenOClockAutosave(doc));
 
       const result = await historyService.listDocumentHistory({
         documentId: doc.id,
@@ -215,8 +224,10 @@ describe('DocumentHistoryService', () => {
         });
       }
 
-      // Force document updatedAt to match the history savedAt
-      await documentModel.update(doc.id, { updatedAt: sharedDate });
+      await serverDB
+        .update(documents)
+        .set({ updatedAt: sharedDate })
+        .where(eq(documents.id, doc.id));
 
       const firstPage = await historyService.listDocumentHistory({
         documentId: doc.id,
@@ -289,12 +300,7 @@ describe('DocumentHistoryService', () => {
     it('should filter out entries older than historySince', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-01T10:00:00Z'),
-      });
+      await historyService.createHistory(tenOClockAutosave(doc));
 
       await historyService.createHistory({
         documentId: doc.id,
@@ -480,12 +486,7 @@ describe('DocumentHistoryService', () => {
     it('should overwrite the latest autosave row within the window', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: base,
-      });
+      await historyService.createHistory(autosaveAtBase(doc, base));
 
       await historyService.createHistory({
         documentId: doc.id,
@@ -531,12 +532,7 @@ describe('DocumentHistoryService', () => {
     it('should start a new window when a non-autosave version is the latest', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: base,
-      });
+      await historyService.createHistory(autosaveAtBase(doc, base));
 
       await historyService.createHistory({
         documentId: doc.id,
@@ -583,12 +579,7 @@ describe('DocumentHistoryService', () => {
     it('should insert a new row within the same window when breakAutosaveWindow is true', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: base,
-      });
+      await historyService.createHistory(autosaveAtBase(doc, base));
 
       await historyService.createHistory({
         breakAutosaveWindow: true,
@@ -610,12 +601,7 @@ describe('DocumentHistoryService', () => {
     it('should coalesce into the break row on the next autosave without the flag', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: base,
-      });
+      await historyService.createHistory(autosaveAtBase(doc, base));
 
       await historyService.createHistory({
         breakAutosaveWindow: true,
@@ -702,12 +688,7 @@ describe('DocumentHistoryService', () => {
     it('should throw when history item is older than historySince', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-01T10:00:00Z'),
-      });
+      await historyService.createHistory(tenOClockAutosave(doc));
 
       const [row] = await serverDB
         .select({ id: documentHistories.id })
@@ -725,12 +706,7 @@ describe('DocumentHistoryService', () => {
     it('should throw for a historyId belonging to another user', async () => {
       const doc = await createTestDocument('Hello');
 
-      await historyService.createHistory({
-        documentId: doc.id,
-        editorData: { v: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-01T10:00:00Z'),
-      });
+      await historyService.createHistory(tenOClockAutosave(doc));
 
       const [row] = await serverDB
         .select({ id: documentHistories.id })

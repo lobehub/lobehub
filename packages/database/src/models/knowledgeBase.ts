@@ -4,6 +4,7 @@ import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
 import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { FileModel } from './file';
 
@@ -112,7 +113,7 @@ export class KnowledgeBaseModel {
 
       await this.db
         .update(documents)
-        .set({ updatedAt: now, visibility: kb.visibility })
+        .set({ visibility: kb.visibility })
         .where(
           and(
             documentLink,
@@ -204,9 +205,11 @@ export class KnowledgeBaseModel {
     visibility?: 'private' | 'public';
   }) => {
     const ownershipWhere = this.ownership(options?.callerAgentVisibility);
-    const conditions = options?.visibility
-      ? and(ownershipWhere, eq(knowledgeBases.visibility, options.visibility))
-      : ownershipWhere;
+    const conditions = and(
+      ownershipWhere,
+      isUserKnowledgeBase(),
+      options?.visibility ? eq(knowledgeBases.visibility, options.visibility) : undefined,
+    );
 
     const data = await this.db
       .select({
@@ -267,6 +270,7 @@ export class KnowledgeBaseModel {
     // carry it into the spread at runtime, so widen the type to strip it by name.
     const {
       id: _id,
+      type: _type,
       userId: _userId,
       visibility: _visibility,
       workspaceId: _workspaceId,
@@ -345,6 +349,7 @@ export class KnowledgeBaseModel {
               inArray(files.id, linkedFileIds),
               eq(files.userId, this.userId),
               buildWorkspaceWhere(creatorScope, {
+                isDeleted: files.isDeleted,
                 userId: files.userId,
                 workspaceId: files.workspaceId,
               }),
@@ -359,12 +364,13 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ updatedAt: now, visibility })
+        .set({ visibility })
         .where(
           and(
             documentLink,
             eq(documents.userId, this.userId),
             buildWorkspaceWhere(creatorScope, {
+              isDeleted: documents.isDeleted,
               userId: documents.userId,
               workspaceId: documents.workspaceId,
             }),
@@ -499,7 +505,7 @@ export class KnowledgeBaseModel {
 
       await trx
         .update(documents)
-        .set({ ...ownershipUpdate, ...visibilityUpdate, updatedAt: now })
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(documentWhere);
 
       return { id };
@@ -725,7 +731,7 @@ export class KnowledgeBaseModel {
       const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile, {
         restrictToCreator: options?.restrictToCreator,
       });
-      deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
+      deletedFiles = result.map((f) => ({ id: f.id, url: f.url }));
     }
 
     await this.db.delete(knowledgeBases).where(and(eq(knowledgeBases.id, id), this.ownership()));
@@ -790,7 +796,7 @@ export class KnowledgeBaseModel {
       const result = await fileModel.deleteMany(fileIds, removeGlobalFile, {
         restrictToCreator: options?.restrictToCreator,
       });
-      deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
+      deletedFiles = result.map((f) => ({ id: f.id, url: f.url }));
     }
 
     await this.db.delete(knowledgeBases).where(kbWhere);

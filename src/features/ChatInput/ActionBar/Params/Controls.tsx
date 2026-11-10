@@ -4,21 +4,29 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Select, SliderWithInput, Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Flexbox,
+  Icon,
+  Segmented,
+  Select,
+  SliderWithInput,
+  Spin,
+  Switch,
+  TextArea,
+} from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PartialDeep } from 'type-fest';
 
 import InfoTooltip from '@/components/InfoTooltip';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import ModelSelect from '@/features/ModelSelect';
 import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { usePermission } from '@/hooks/usePermission';
@@ -30,6 +38,9 @@ import { systemAgentSelectors } from '@/store/user/selectors';
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useEffectiveAgentMode } from '../../hooks/useEffectiveAgentMode';
+import { useToggleAgentMode } from '../../hooks/useToggleAgentMode';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useParamsModelConfig } from './useParamsModelConfig';
 
@@ -58,320 +69,158 @@ interface SliderConfig {
   unlimitedInput?: boolean;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  advancedContent: css`
-    display: flex;
-    flex-direction: column;
+const styles = stylex.create({
+  advancedContent: { display: 'flex', flexDirection: 'column' },
+  sectionHeader: {
+    cursor: 'pointer',
+    width: 'calc(100% + 16px)',
+    marginInline: '-8px',
+    paddingBlock: '12px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderRadius: '10px',
+    fontFamily: 'inherit',
+    fontStyle: 'inherit',
+    fontVariant: 'inherit',
+    fontStretch: 'inherit',
+    fontFeatureSettings: 'inherit',
+    fontVariationSettings: 'inherit',
+    fontKerning: 'inherit',
+    fontOpticalSizing: 'inherit',
+    fontSizeAdjust: 'inherit',
+    lineHeight: 'inherit',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'color 0.2s ease',
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '1px' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  sectionHeaderLabel: {
+    color: {
+      default: cssVar.colorTextSecondary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+  },
+  body: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    display: 'flex',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    flexDirection: 'column',
+    minHeight: '0',
+    paddingBlockEnd: '4px',
+    paddingInline: '12px',
+  },
+  commonSection: { display: 'flex', flexDirection: 'column', paddingBlock: '0' },
+  divider: { height: '1px', backgroundColor: cssVar.colorSplit, backgroundImage: 'none' },
+  hint: { fontSize: '12px', lineHeight: '18px', color: cssVar.colorTextTertiary },
+  form: { margin: '0' },
+  formSidebar: { display: 'flex', flex: '1', width: '100%', height: '100%', minHeight: '0' },
+  header: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '16px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+    fontSize: '14px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
+  headerLoading: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    color: cssVar.colorTextTertiary,
+  },
+  headerTitle: {
+    overflow: 'hidden',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  label: {
+    userSelect: 'none',
+    minWidth: '0',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+  labelMain: { flexWrap: 'wrap', minWidth: '0' },
+  labelMuted: { color: cssVar.colorTextTertiary },
+  modelConfigSection: { paddingBlock: '12px' },
+  panel: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: 'min(384px, 100%)',
+    maxHeight: '50vh',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  sidebarPanel: {
+    width: '100%',
+    height: '100%',
+    maxHeight: 'none',
+    borderStyle: 'none',
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    boxShadow: 'none',
+  },
+  rowControl: { width: '100%' },
+  rowRoot: { paddingBlock: '12px' },
+  // Rows inside the advanced list are divided from the previous row; the first has no rule.
+  rowSeparated: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: { 'default': 'solid', ':first-child': 'none' },
+    borderBlockStartColor: cssVar.colorSplit,
+  },
+  tag: {
+    userSelect: 'none',
+    alignSelf: 'flex-start',
+    width: 'fit-content',
+    paddingBlock: '2px',
+    paddingInline: '7px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '10px',
+    fontWeight: 500,
+    lineHeight: 1.2,
+    color: cssVar.colorTextQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  tooltipContent: { display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '240px' },
+  slider: { width: '100%' },
+});
 
-    .control-row {
-      border-block-start: 1px solid ${cssVar.colorSplit};
-    }
-
-    .control-row:first-child {
-      border-block-start: none;
-    }
-  `,
-  sectionHeader: css`
-    cursor: pointer;
-
-    width: calc(100% + 16px);
-    margin-inline: -8px;
-    padding-block: 12px;
-    padding-inline: 8px;
-    border: none;
-    border-radius: 10px;
-
-    font: inherit;
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-    text-align: start;
-
-    background: transparent;
-
-    transition: color 0.2s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-
-    &:hover .section-header-label {
-      color: ${cssVar.colorText};
-    }
-
-    &:focus-visible {
-      outline: 1px solid ${cssVar.colorBorder};
-      outline-offset: 2px;
-    }
-  `,
-  body: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-
-    min-height: 0;
-    padding-block-end: 4px;
-    padding-inline: 12px;
-  `,
-  commonSection: css`
-    display: flex;
-    flex-direction: column;
-    padding-block: 0;
-  `,
-  divider: css`
-    height: 1px;
-    background: ${cssVar.colorSplit};
-  `,
-  hint: css`
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  form: css`
-    margin: 0;
-  `,
-  formSidebar: css`
-    display: flex;
-    flex: 1;
-
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 16px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-  headerLoading: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headerTitle: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  label: css`
-    user-select: none;
-
-    min-width: 0;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  labelMain: css`
-    flex-wrap: wrap;
-    min-width: 0;
-  `,
-  muted: css`
-    .control-label {
-      color: ${cssVar.colorTextTertiary};
-    }
-  `,
-  modelConfigSection: css`
-    padding-block: 12px;
-
-    .ant-form {
-      margin: 0;
-    }
-
-    .ant-form-item {
-      padding-block: 12px;
-    }
-
-    .ant-form-item-row {
-      gap: 10px;
-    }
-
-    .ant-form-item-label > label {
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 20px;
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-form-item-label > label div {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-form-item-label > label small,
-    .ant-form-item-label > label small *:not(a) {
-      font-size: 12px;
-      font-weight: 400;
-      line-height: 18px;
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    .ant-form-item:first-child {
-      padding-block-start: 0;
-    }
-
-    .ant-form-item:last-child {
-      padding-block-end: 0;
-    }
-
-    .ant-divider {
-      display: none;
-    }
-  `,
-  panel: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: min(384px, 100%);
-    max-height: 50vh;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-
-    .ant-switch {
-      min-width: 28px;
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    .ant-switch .ant-switch-handle::before {
-      background: ${cssVar.colorBgElevated};
-    }
-
-    .ant-switch.ant-switch-checked {
-      background: ${cssVar.colorText};
-    }
-
-    .ant-form-item {
-      margin: 0;
-    }
-  `,
-  sidebarPanel: css`
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border: none;
-    border-radius: 0;
-
-    background: transparent;
-    box-shadow: none;
-  `,
-  rowControl: css`
-    width: 100%;
-  `,
-  rowRoot: css`
-    padding-block: 12px;
-  `,
-  tag: css`
-    user-select: none;
-
-    align-self: flex-start;
-
-    width: fit-content;
-    padding-block: 2px;
-    padding-inline: 7px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    font-weight: 500;
-    line-height: 1.2;
-    color: ${cssVar.colorTextQuaternary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  tooltipContent: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-width: 240px;
-  `,
-  slider: css`
-    width: 100%;
-
-    .ant-slider {
-      margin-block: 0;
-      margin-inline: 0;
-    }
-
-    .ant-slider-rail {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    .ant-slider-track {
-      background: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-handle::after {
-      background: ${cssVar.colorBgElevated};
-      box-shadow: 0 0 0 2px ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-handle:hover::after,
-    .ant-slider-handle:focus::after,
-    .ant-slider-handle:active::after {
-      box-shadow: 0 0 0 3px ${cssVar.colorTextSecondary};
-    }
-
-    .ant-input-number,
-    .ant-input-number-affix-wrapper {
-      overflow: hidden;
-
-      height: 28px;
-      border: none;
-      border-radius: 10px;
-
-      color: ${cssVar.colorTextSecondary};
-
-      background: ${cssVar.colorFillTertiary};
-      box-shadow: none;
-    }
-
-    .ant-input-number:hover,
-    .ant-input-number-focused,
-    .ant-input-number-affix-wrapper:hover,
-    .ant-input-number-affix-wrapper-focused {
-      background: ${cssVar.colorFillSecondary};
-      box-shadow: none;
-    }
-
-    .ant-input-number-input {
-      height: 28px;
-      padding-inline: 6px;
-
-      font-size: 13px;
-      color: ${cssVar.colorTextSecondary};
-      text-align: center;
-    }
-  `,
-}));
-
-const PARAM_NAME_MAP: Record<ParamKey, (string | number)[]> = {
-  frequency_penalty: ['params', 'frequency_penalty'],
-  presence_penalty: ['params', 'presence_penalty'],
-  temperature: ['params', 'temperature'],
-  top_p: ['params', 'top_p'],
+const PARAM_NAME_MAP: Record<ParamKey, string> = {
+  frequency_penalty: 'params.frequency_penalty',
+  presence_penalty: 'params.presence_penalty',
+  temperature: 'params.temperature',
+  top_p: 'params.top_p',
 };
 
 const PARAM_DEFAULTS: Record<ParamKey, number> = {
@@ -436,20 +285,30 @@ const setStoredOpen = (storageKey: string, open: boolean) => {
 };
 
 interface ControlLabelProps {
+  muted?: boolean;
   tag?: string;
   title: string;
   tooltip?: string;
 }
 
-const ControlLabel = memo<ControlLabelProps>(({ title, tooltip, tag }) => (
-  <Flexbox align={'flex-start'} className={cx(styles.label, 'control-label')} gap={6}>
-    <Flexbox horizontal align={'center'} className={styles.labelMain} gap={6}>
+const ControlLabel = memo<ControlLabelProps>(({ muted, title, tooltip, tag }) => (
+  <Flexbox
+    align={'flex-start'}
+    className={stylex.props(styles.label, muted && styles.labelMuted).className}
+    gap={6}
+  >
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.labelMain).className}
+      gap={6}
+    >
       {title}
       {tooltip && (
         <InfoTooltip
           title={
-            <div className={styles.tooltipContent}>
-              {tag && <span className={styles.tag}>{tag}</span>}
+            <div {...stylex.props(styles.tooltipContent)}>
+              {tag && <span {...stylex.props(styles.tag)}>{tag}</span>}
               <span>{tooltip}</span>
             </div>
           }
@@ -463,18 +322,31 @@ interface ControlRowProps {
   action?: ReactNode;
   children?: ReactNode;
   muted?: boolean;
+  /** Draw a rule above the row (none above the first sibling). */
+  separated?: boolean;
   tag?: string;
   title: string;
   tooltip?: string;
 }
 
-const ControlRow = ({ action, children, muted, tag, title, tooltip }: ControlRowProps) => (
-  <Flexbox className={cx('control-row', styles.rowRoot, muted && styles.muted)} gap={10}>
+const ControlRow = ({
+  action,
+  children,
+  muted,
+  separated,
+  tag,
+  title,
+  tooltip,
+}: ControlRowProps) => (
+  <Flexbox
+    className={stylex.props(styles.rowRoot, separated && styles.rowSeparated).className}
+    gap={10}
+  >
     <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <ControlLabel tag={tag} title={title} tooltip={tooltip} />
+      <ControlLabel muted={muted} tag={tag} title={title} tooltip={tooltip} />
       {action}
     </Flexbox>
-    {children && <div className={styles.rowControl}>{children}</div>}
+    {children && <div {...stylex.props(styles.rowControl)}>{children}</div>}
   </Flexbox>
 );
 
@@ -485,9 +357,14 @@ interface SectionHeaderProps {
 }
 
 const SectionHeader = memo<SectionHeaderProps>(({ onToggle, open, title }) => (
-  <button aria-expanded={open} className={styles.sectionHeader} type="button" onClick={onToggle}>
+  <button
+    aria-expanded={open}
+    type="button"
+    {...stylex.props(styles.sectionHeader, stylex.defaultMarker())}
+    onClick={onToggle}
+  >
     <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <span className={cx(styles.label, 'section-header-label')}>{title}</span>
+      <span {...stylex.props(styles.label, styles.sectionHeaderLabel)}>{title}</span>
       <Icon icon={open ? ChevronUp : ChevronDown} size={18} />
     </Flexbox>
   </button>
@@ -512,7 +389,7 @@ const SliderField = ({
 }: SliderFieldProps) => (
   <SliderWithInput
     changeOnWheel
-    className={styles.slider}
+    className={stylex.props(styles.slider).className}
     controls={false}
     disabled={disabled}
     gap={10}
@@ -533,8 +410,12 @@ const SliderField = ({
 );
 
 const Controls = ({ variant = 'popover' }: ControlsProps) => {
-  const { t } = useTranslation(['setting', 'components']);
+  const { t } = useTranslation(['setting', 'components', 'chat']);
   const agentId = useAgentId();
+  const toggleAgentMode = useToggleAgentMode();
+  const { canUseResource } = useChatInputResourceAccess();
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+    useEffectiveAgentMode(agentId);
   const { updateAgentConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
   // Saving feedback belongs to this form. Keeping it here prevents a write from
@@ -561,31 +442,29 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     REASONING_PARAMS_SET.has(param),
   );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
-  const [form] = AntdForm.useForm();
+  const form = useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
   const [modelConfigOpen, setModelConfigOpen] = useState(() =>
     getStoredOpen(MODEL_CONFIG_OPEN_STORAGE_KEY),
   );
   const [, refreshFormValues] = useState(0);
 
-  const enableContextCompression = form.getFieldValue(['chatConfig', 'enableContextCompression']);
-  const enableMaxTokens = form.getFieldValue(['chatConfig', 'enableMaxTokens']);
-  const enableHistoryCount = form.getFieldValue(['chatConfig', 'enableHistoryCount']);
-  const historyCountValue = form.getFieldValue(['chatConfig', 'historyCount']);
-  const maxTokensValue = form.getFieldValue(['params', 'max_tokens']);
-  const inputTemplateValue = form.getFieldValue(['chatConfig', 'inputTemplate']);
-  const enableAutoScrollOnStreaming = form.getFieldValue([
-    'chatConfig',
-    'enableAutoScrollOnStreaming',
-  ]);
-  const enableStreaming = form.getFieldValue(['chatConfig', 'enableStreaming']);
-  const enableFollowUpChips = form.getFieldValue(['chatConfig', 'enableFollowUpChips']);
+  const enableContextCompression = form.getValue('chatConfig.enableContextCompression');
+  const enableMaxTokens = form.getValue('chatConfig.enableMaxTokens');
+  const enableHistoryCount = form.getValue('chatConfig.enableHistoryCount');
+  const historyCountValue = form.getValue('chatConfig.historyCount');
+  const maxTokensValue = form.getValue('params.max_tokens');
+  const inputTemplateValue = form.getValue('chatConfig.inputTemplate');
+  const enableAutoScrollOnStreaming = form.getValue('chatConfig.enableAutoScrollOnStreaming');
+  const enableStreaming = form.getValue('chatConfig.enableStreaming');
+  const enableStaleToolResultTrim = form.getValue('chatConfig.enableStaleToolResultTrim');
+  const enableFollowUpChips = form.getValue('chatConfig.enableFollowUpChips');
   const globalFollowUp = useUserStore(systemAgentSelectors.followUpAction, isEqual);
   const globalFollowUpReady =
     globalFollowUp.enabled === true && !!globalFollowUp.model && !!globalFollowUp.provider;
   const showFollowUpHint = !globalFollowUpReady && Boolean(enableFollowUpChips);
-  const enableReasoningEffort = form.getFieldValue(['chatConfig', 'enableReasoningEffort']);
-  const reasoningEffortValue = form.getFieldValue(['params', 'reasoning_effort']);
+  const enableReasoningEffort = form.getValue('chatConfig.enableReasoningEffort');
+  const reasoningEffortValue = form.getValue('params.reasoning_effort');
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};
 
   const historyCountFromStore = useAgentStore((s) =>
@@ -604,7 +483,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   });
 
   useEffect(() => {
-    form.setFieldsValue(config);
+    form.setValues(config);
 
     if (typeof temperature === 'number') lastValuesRef.current.temperature = temperature;
     if (typeof top_p === 'number') lastValuesRef.current.top_p = top_p;
@@ -622,9 +501,9 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     // Skip syncing when updating to avoid overwriting user's in-progress edits
     if (updating) return;
 
-    form.setFieldsValue({
+    form.setValues({
       chatConfig: {
-        ...form.getFieldValue('chatConfig'),
+        ...form.getValue('chatConfig'),
         enableHistoryCount: enableHistoryCountFromStore,
         historyCount: historyCountFromStore,
       },
@@ -632,10 +511,10 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     refreshFormValues((value) => value + 1);
   }, [form, enableHistoryCountFromStore, historyCountFromStore, updating]);
 
-  const temperatureValue = form.getFieldValue(PARAM_NAME_MAP.temperature);
-  const topPValue = form.getFieldValue(PARAM_NAME_MAP.top_p);
-  const presencePenaltyValue = form.getFieldValue(PARAM_NAME_MAP.presence_penalty);
-  const frequencyPenaltyValue = form.getFieldValue(PARAM_NAME_MAP.frequency_penalty);
+  const temperatureValue = form.getValue(PARAM_NAME_MAP.temperature);
+  const topPValue = form.getValue(PARAM_NAME_MAP.top_p);
+  const presencePenaltyValue = form.getValue(PARAM_NAME_MAP.presence_penalty);
+  const frequencyPenaltyValue = form.getValue(PARAM_NAME_MAP.frequency_penalty);
 
   const enabledMap: Record<ParamKey, boolean> = {
     frequency_penalty: typeof frequencyPenaltyValue === 'number',
@@ -704,24 +583,24 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
       let newValue: number | undefined;
 
       if (!enabled) {
-        const currentValue = form.getFieldValue(namePath);
+        const currentValue = form.getValue(namePath);
         if (typeof currentValue === 'number') {
           lastValuesRef.current[key] = currentValue;
         }
         newValue = undefined;
-        form.setFieldValue(namePath, undefined);
+        form.setValue(namePath, undefined);
       } else {
         const fallback = lastValuesRef.current[key];
         const nextValue = typeof fallback === 'number' ? fallback : PARAM_DEFAULTS[key];
         lastValuesRef.current[key] = nextValue;
         newValue = nextValue;
-        form.setFieldValue(namePath, nextValue);
+        form.setValue(namePath, nextValue);
       }
       refreshFormValues((value) => value + 1);
 
       // Save changes immediately - manually construct config object to ensure latest values are used
       setUpdating(true);
-      const currentValues = form.getFieldsValue(true) as PartialDeep<LobeAgentConfig>;
+      const currentValues = form.getValues() as PartialDeep<LobeAgentConfig>;
       const prevParams = (currentValues.params ?? {}) as Partial<
         Record<ParamKey, null | number | undefined>
       >;
@@ -768,19 +647,15 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   );
 
   const handleFieldChange = useCallback(
-    (namePath: (string | number)[], value: boolean | number | string) => {
+    (namePath: string, value: boolean | number | string) => {
       if (!canCreate) return;
-      form.setFieldValue(namePath, value);
-      if (
-        namePath[0] === 'params' &&
-        typeof namePath[1] === 'string' &&
-        namePath[1] in PARAM_NAME_MAP &&
-        typeof value === 'number'
-      ) {
-        lastValuesRef.current[namePath[1] as ParamKey] = value;
+      form.setValue(namePath, value);
+      const [scope, key] = namePath.split('.');
+      if (scope === 'params' && key in PARAM_NAME_MAP && typeof value === 'number') {
+        lastValuesRef.current[key as ParamKey] = value;
       }
       refreshFormValues((current) => current + 1);
-      handleValuesChange(form.getFieldsValue(true) as PartialDeep<LobeAgentConfig>);
+      handleValuesChange(form.getValues() as PartialDeep<LobeAgentConfig>);
     },
     [canCreate, form, handleValuesChange, refreshFormValues],
   );
@@ -838,18 +713,48 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   }, []);
 
   return (
-    <div className={cx(styles.form, variant === 'sidebar' && styles.formSidebar)}>
-      <div className={cx(styles.panel, variant === 'sidebar' && styles.sidebarPanel)}>
-        <div className={styles.header}>
-          <span className={styles.headerTitle}>{panelTitle}</span>
+    <div {...stylex.props(styles.form, variant === 'sidebar' && styles.formSidebar)}>
+      <div {...stylex.props(styles.panel, variant === 'sidebar' && styles.sidebarPanel)}>
+        <div {...stylex.props(styles.header)}>
+          <span {...stylex.props(styles.headerTitle)}>{panelTitle}</span>
           {updating && (
-            <div className={styles.headerLoading}>
-              <NeuralNetworkLoading size={18} />
+            <div {...stylex.props(styles.headerLoading)}>
+              <Spin size="small" />
             </div>
           )}
         </div>
-        <div className={styles.body}>
-          <div className={styles.commonSection}>
+        <div {...stylex.props(styles.body)}>
+          <div {...stylex.props(styles.commonSection)}>
+            <ControlRow
+              tag="agentMode"
+              title={t('settingModel.params.panel.chatMode')}
+              action={
+                <Segmented
+                  disabled={!canCreate || !canUseResource}
+                  size={'small'}
+                  value={currentMode}
+                  options={[
+                    {
+                      disabled: !canSelectAgentMode,
+                      label: t('chatMode.agent', { ns: 'chat' }),
+                      value: 'agent',
+                    },
+                    { label: t('chatMode.chat', { ns: 'chat' }), value: 'chat' },
+                  ]}
+                  onChange={(value) => {
+                    if (value === 'agent' && !canSelectAgentMode) return;
+                    void toggleAgentMode(value === 'agent');
+                  }}
+                />
+              }
+              tooltip={
+                isAgentModeUnavailable
+                  ? t('chatMode.agentUnsupported', { ns: 'chat' })
+                  : t(currentMode === 'agent' ? 'chatMode.agentDesc' : 'chatMode.chatDesc', {
+                      ns: 'chat',
+                    })
+              }
+            />
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}
@@ -860,7 +765,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   disabled={!canCreate}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableContextCompression'], checked);
+                    handleFieldChange('chatConfig.enableContextCompression', checked);
                   }}
                 />
               }
@@ -875,7 +780,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   disabled={!canCreate}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableHistoryCount'], checked);
+                    handleFieldChange('chatConfig.enableHistoryCount', checked);
                   }}
                 />
               }
@@ -890,11 +795,26 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   step={1}
                   value={typeof historyCountValue === 'number' ? historyCountValue : 0}
                   onChange={(value) => {
-                    handleFieldChange(['chatConfig', 'historyCount'], value);
+                    handleFieldChange('chatConfig.historyCount', value);
                   }}
                 />
               )}
             </ControlRow>
+            <ControlRow
+              tag="staleToolResultTrim"
+              title={t('settingChat.enableStaleToolResultTrim.title')}
+              tooltip={t('settingChat.enableStaleToolResultTrim.desc')}
+              action={
+                <Switch
+                  checked={enableStaleToolResultTrim !== false}
+                  disabled={!canCreate}
+                  size={'small'}
+                  onChange={(checked) => {
+                    handleFieldChange('chatConfig.enableStaleToolResultTrim', checked);
+                  }}
+                />
+              }
+            />
             <ControlRow
               tag="autoScroll"
               title={t('settingChat.enableAutoScrollOnStreaming.title')}
@@ -904,7 +824,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   checked={Boolean(enableAutoScrollOnStreaming)}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableAutoScrollOnStreaming'], checked);
+                    handleFieldChange('chatConfig.enableAutoScrollOnStreaming', checked);
                   }}
                 />
               }
@@ -918,7 +838,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   checked={enableStreaming !== false}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableStreaming'], checked);
+                    handleFieldChange('chatConfig.enableStreaming', checked);
                   }}
                 />
               }
@@ -932,13 +852,13 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   checked={Boolean(enableFollowUpChips)}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableFollowUpChips'], checked);
+                    handleFieldChange('chatConfig.enableFollowUpChips', checked);
                   }}
                 />
               }
             >
               {showFollowUpHint && (
-                <div className={styles.hint}>
+                <div {...stylex.props(styles.hint)}>
                   {t('settingChat.enableFollowUpChips.notConfiguredHint')}
                 </div>
               )}
@@ -952,7 +872,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 placeholder={t('settingChat.inputTemplate.placeholder')}
                 value={typeof inputTemplateValue === 'string' ? inputTemplateValue : ''}
                 onChange={(e) => {
-                  handleFieldChange(['chatConfig', 'inputTemplate'], e.target.value);
+                  handleFieldChange('chatConfig.inputTemplate', e.target.value);
                 }}
               />
             </ControlRow>
@@ -990,14 +910,14 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           </div>
           {hasModelConfig && (
             <>
-              <div className={styles.divider} />
+              <div {...stylex.props(styles.divider)} />
               <SectionHeader
                 open={modelConfigOpen}
                 title={t('ModelSwitchPanel.detail.config', { ns: 'components' })}
                 onToggle={handleModelConfigOpenChange}
               />
               {modelConfigOpen && (
-                <div className={styles.modelConfigSection}>
+                <div {...stylex.props(styles.modelConfigSection)}>
                   <ControlsForm
                     hideReasoningParams
                     disabled={!canCreate}
@@ -1011,20 +931,21 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           )}
           {!enableAgentMode && (
             <>
-              <div className={styles.divider} />
+              <div {...stylex.props(styles.divider)} />
               <SectionHeader
                 open={advancedOpen}
                 title={t('settingModel.params.panel.advanced')}
                 onToggle={handleAdvancedOpenChange}
               />
               {advancedOpen && (
-                <div className={styles.advancedContent}>
+                <div {...stylex.props(styles.advancedContent)}>
                   {PARAM_ORDER.filter((key) => !disabledParams?.includes(key)).map((key) => {
                     const meta = PARAM_CONFIG[key];
                     const enabled = enabledMap[key];
 
                     return (
                       <ControlRow
+                        separated
                         key={key}
                         muted={!enabled}
                         tag={meta.tag}
@@ -1044,7 +965,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                         {enabled && (
                           <SliderField
                             disabled={!canCreate}
-                            value={form.getFieldValue(PARAM_NAME_MAP[key])}
+                            value={form.getValue(PARAM_NAME_MAP[key])}
                             onChange={(value) => {
                               handleFieldChange(PARAM_NAME_MAP[key], value);
                             }}
@@ -1055,6 +976,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                     );
                   })}
                   <ControlRow
+                    separated
                     tag="max_tokens"
                     title={t('settingModel.params.panel.responseLength')}
                     tooltip={t('settingModel.maxTokens.desc')}
@@ -1065,9 +987,9 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                         size={'small'}
                         onChange={(checked) => {
                           if (checked && typeof maxTokensValue !== 'number') {
-                            form.setFieldValue(['params', 'max_tokens'], 4096);
+                            form.setValue('params.max_tokens', 4096);
                           }
-                          handleFieldChange(['chatConfig', 'enableMaxTokens'], checked);
+                          handleFieldChange('chatConfig.enableMaxTokens', checked);
                         }}
                       />
                     }
@@ -1082,13 +1004,14 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                         step={100}
                         value={typeof maxTokensValue === 'number' ? maxTokensValue : 4096}
                         onChange={(value) => {
-                          handleFieldChange(['params', 'max_tokens'], value);
+                          handleFieldChange('params.max_tokens', value);
                         }}
                       />
                     )}
                   </ControlRow>
                   {!hasReasoningExtendParams && (
                     <ControlRow
+                      separated
                       tag="reasoning_effort"
                       title={t('settingModel.reasoningEffort.title')}
                       tooltip={t('settingModel.reasoningEffort.desc')}
@@ -1098,9 +1021,9 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                           size={'small'}
                           onChange={(checked) => {
                             if (checked && typeof reasoningEffortValue !== 'string') {
-                              form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+                              form.setValue('params.reasoning_effort', 'medium');
                             }
-                            handleFieldChange(['chatConfig', 'enableReasoningEffort'], checked);
+                            handleFieldChange('chatConfig.enableReasoningEffort', checked);
                           }}
                         />
                       }
@@ -1126,7 +1049,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                               : 'medium'
                           }
                           onChange={(value) => {
-                            handleFieldChange(['params', 'reasoning_effort'], value);
+                            handleFieldChange('params.reasoning_effort', value);
                           }}
                         />
                       )}

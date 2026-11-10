@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImageOptions } from '../../core/openaiCompatible';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 
@@ -37,8 +37,11 @@ interface XAIImageRequest {
   model: string;
   n?: number;
   prompt: string;
+  /**
+   * Only supported by `grok-imagine-image-2.0`; xAI defaults to `medium` when omitted.
+   */
   quality?: 'low' | 'medium' | 'high';
-  resolution?: '1k' | '2k';
+  resolution?: '1k' | '1.5k' | '2k';
   response_format?: 'url' | 'b64_json';
   size?: string;
   style?: string;
@@ -82,6 +85,10 @@ export async function createXAIImage(
 
     if (params.resolution) {
       requestBody.resolution = params.resolution as XAIImageRequest['resolution'];
+    }
+
+    if (params.quality) {
+      requestBody.quality = params.quality as XAIImageRequest['quality'];
     }
 
     if (isImageEdit) {

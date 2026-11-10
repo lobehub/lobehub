@@ -21,13 +21,35 @@ describe('WebhookUserService', () => {
     id: 'user-123',
   };
 
+  const emptyNextAuthChain = () => ({
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    then: vi.fn().mockImplementation(function (cb) {
+      return cb([]);
+    }),
+    where: vi.fn().mockReturnThis(),
+  });
+
+  const existingUserNextAuthChain = () => ({
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    then: vi.fn().mockImplementation(function (cb) {
+      return cb([{ users: mockUser }]);
+    }),
+    where: vi.fn().mockReturnThis(),
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockUserModel = {
       updateUser: vi.fn(),
     };
-    (UserModel as any).mockImplementation(() => mockUserModel);
+    (UserModel as any).mockImplementation(function () {
+      return mockUserModel;
+    });
 
     const deleteChainMock = {
       where: vi.fn().mockResolvedValue(undefined),
@@ -85,13 +107,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // Setup chain mock for NextAuth query
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation((cb) => cb([{ users: mockUser }])),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = existingUserNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const updateData = { email: 'updated@example.com' };
@@ -111,19 +127,13 @@ describe('WebhookUserService', () => {
     });
 
     it('should warn and not update when user not found', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
 
       // Better Auth account not found
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account also not found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation((cb) => cb([])),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = emptyNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const result = await service.safeUpdateUser(
@@ -180,13 +190,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation((cb) => cb([{ users: mockUser }])),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = existingUserNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const result = await service.safeSignOutUser({
@@ -199,19 +203,13 @@ describe('WebhookUserService', () => {
     });
 
     it('should warn and not delete sessions when user not found', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
 
       // Better Auth account not found
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account also not found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation((cb) => cb([])),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = emptyNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const result = await service.safeSignOutUser({
@@ -257,7 +255,9 @@ describe('WebhookUserService', () => {
         from: vi.fn().mockReturnThis(),
         innerJoin: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation((cb) => cb([{ users: nextAuthUser }])),
+        then: vi.fn().mockImplementation(function (cb) {
+          return cb([{ users: nextAuthUser }]);
+        }),
         where: vi.fn().mockReturnThis(),
       };
       mockDb.select.mockReturnValue(chainMock);
@@ -269,19 +269,13 @@ describe('WebhookUserService', () => {
     });
 
     it('should return null when user not found in both tables', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(function () {});
 
       // Better Auth account not found
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account also not found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation((cb) => cb([])),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = emptyNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       await service.safeUpdateUser({ providerId: 'unknown', accountId: 'unknown' }, {});

@@ -1,5 +1,5 @@
 import type { FileUploadSessionStatus } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, lte, or, sum } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql, sum } from 'drizzle-orm';
 
 import type { FileUploadItem, NewFileUpload } from '../schemas';
 import { fileUploads } from '../schemas';
@@ -96,6 +96,30 @@ export class FileUploadModel {
       .select({ totalSize: sum(fileUploads.size) })
       .from(fileUploads)
       .where(and(this.ownership(), inArray(fileUploads.status, LIVE_STATUSES)));
+
+    return Number(row?.totalSize ?? 0);
+  };
+
+  /**
+   * Live reservation bytes under one storage-key prefix, for this user. The
+   * agent-share upload cap uses it: every visitor upload of a share lives
+   * under `files/<owner>/agent-share/<shareId>/`. `starts_with` rather than
+   * `LIKE` because ids in the prefix may contain `_`, a LIKE wildcard.
+   */
+  countLiveUsageUnderPrefix = async (
+    prefix: string,
+    transaction?: Transaction,
+  ): Promise<number> => {
+    const [row] = await (transaction ?? this.db)
+      .select({ totalSize: sum(fileUploads.size) })
+      .from(fileUploads)
+      .where(
+        and(
+          this.ownership(),
+          inArray(fileUploads.status, LIVE_STATUSES),
+          sql`starts_with(${fileUploads.pathname}, ${prefix})`,
+        ),
+      );
 
     return Number(row?.totalSize ?? 0);
   };

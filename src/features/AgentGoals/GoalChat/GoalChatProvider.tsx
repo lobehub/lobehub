@@ -1,18 +1,25 @@
 import type { ConversationContext } from '@lobechat/types';
 import type { ReactNode } from 'react';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
+import { PinnedTopicContext } from '@/features/ChatInput/InputEditor/ReferTopic/pinnedTopic';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface GoalChatProviderProps {
   /** The goal's responsible agent — the one the user asks about progress. */
   agentId: string;
   children: ReactNode;
   goalId: string;
+  /** Open a specific conversation when entering the panel (e.g. supervision). */
+  initialTopicId?: string;
+  /**
+   * The goal is bound to `initialTopicId`: nothing inside the panel may switch
+   * it to another topic (a topic reference opens in the portal instead).
+   */
+  pinned?: boolean;
 }
 
 /**
@@ -20,53 +27,56 @@ interface GoalChatProviderProps {
  * The context carries `viewedGoal`, which makes the send path inject the goal
  * progress overview into the request (see streamingExecutor).
  */
-export const GoalChatProvider = memo<GoalChatProviderProps>(({ agentId, children, goalId }) => {
-  const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
+export const GoalChatProvider = memo<GoalChatProviderProps>(
+  ({ agentId, children, goalId, initialTopicId, pinned }) => {
+    const [initialized, setInitialized] = useState(false);
+    const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
+    const activeTopicId = useChatStore((s) => s.activeTopicId);
 
-  useEffect(() => {
-    if (!agentId) return;
+    useEffect(() => {
+      if (!agentId) return;
 
-    if (useAgentStore.getState().activeAgentId !== agentId) {
-      setActiveAgentId(agentId);
-    }
+      if (useAgentStore.getState().activeAgentId !== agentId) {
+        setActiveAgentId(agentId);
+      }
 
-    const chatState = useChatStore.getState();
-    if (chatState.activeAgentId === agentId) return;
+      const chatState = useChatStore.getState();
+      if (chatState.activeAgentId === agentId && !initialTopicId) {
+        setInitialized(true);
+        return;
+      }
 
-    useChatStore.setState({ activeAgentId: agentId });
-    // Entering the goal page mid-way through another agent's conversation:
-    // start from a fresh topic rather than showing that unrelated thread.
-    void chatState.switchTopic(null, { skipRefreshMessage: true });
-  }, [agentId, setActiveAgentId]);
+      useChatStore.setState({ activeAgentId: agentId, activeGroupId: undefined });
+      // Explicit supervision targets win over whichever conversation was open.
+      // Ordinary entry into another agent starts a fresh topic.
+      void chatState.switchTopic(initialTopicId ?? null, {
+        skipRefreshMessage: true,
+        scope: 'main',
+      });
+      setInitialized(true);
+    }, [agentId, initialTopicId, setActiveAgentId]);
 
-  const context = useMemo<ConversationContext>(
-    () => ({
-      agentId,
-      topicId: activeTopicId,
-      viewedGoal: { goalId },
-    }),
-    [activeTopicId, agentId, goalId],
-  );
+    const context = useMemo<ConversationContext>(
+      () => ({
+        agentId,
+        topicId: activeTopicId,
+        viewedGoal: { goalId },
+      }),
+      [activeTopicId, agentId, goalId],
+    );
 
-  const chatKey = useMemo(() => messageMapKey(context), [context]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-  const operationState = useOperationState(context);
+    const operationState = useOperationState(context);
 
-  return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={(msgs, ctx, meta) => {
-        replaceMessages(msgs, { context: ctx, source: meta?.source });
-      }}
-    >
-      {children}
-    </ConversationProvider>
-  );
-});
+    if (!initialized) return null;
+
+    return (
+      <PinnedTopicContext value={pinned ? initialTopicId : undefined}>
+        <ConversationProvider context={context} operationState={operationState}>
+          {children}
+        </ConversationProvider>
+      </PinnedTopicContext>
+    );
+  },
+);
 
 GoalChatProvider.displayName = 'GoalChatProvider';

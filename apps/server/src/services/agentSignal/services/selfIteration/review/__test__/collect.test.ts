@@ -317,6 +317,55 @@ describe('nightlyReviewService', () => {
       expect(context.topics.at(-1)?.id).toBe('topic-29');
     });
 
+    /**
+     * At most 50 topics per user per night: the collector claims its ranked topics against the
+     * shared nightly quota and drops the ones it refuses.
+     */
+    it('feeds only the topics the nightly topic quota admits', async () => {
+      const claimTopics = vi.fn().mockResolvedValue({
+        admitted: ['topic-0', 'topic-1'],
+        reason: 'exhausted',
+      });
+      const deps = createDeps({
+        claimTopics,
+        listTopicActivity: vi.fn().mockResolvedValue(
+          Array.from({ length: 4 }, (_, index) => ({
+            id: `topic-${index}`,
+            messageCount: 10 - index,
+          })),
+        ),
+      });
+      const service = createSelfReviewContextService(deps);
+
+      const context = await service.collect({ ...REVIEW_INPUT, localDate: '2026-05-04' });
+
+      expect(claimTopics).toHaveBeenCalledWith({
+        localDate: '2026-05-04',
+        topicIds: ['topic-0', 'topic-1', 'topic-2', 'topic-3'],
+        userId: 'user-1',
+      });
+      expect(context.topics.map((topic) => topic.id)).toEqual(['topic-0', 'topic-1']);
+      expect(context.topicQuota).toEqual({
+        admittedTopicCount: 2,
+        reason: 'exhausted',
+        refusedTopicCount: 2,
+      });
+    });
+
+    it('does not claim topics without a review date', async () => {
+      const claimTopics = vi.fn();
+      const deps = createDeps({
+        claimTopics,
+        listTopicActivity: vi.fn().mockResolvedValue([{ id: 'topic-0', messageCount: 1 }]),
+      });
+
+      const context = await createSelfReviewContextService(deps).collect(REVIEW_INPUT);
+
+      expect(claimTopics).not.toHaveBeenCalled();
+      expect(context.topics).toHaveLength(1);
+      expect(context).not.toHaveProperty('topicQuota');
+    });
+
     it('keeps high-signal topics before huge ordinary topics', async () => {
       /**
        * @example

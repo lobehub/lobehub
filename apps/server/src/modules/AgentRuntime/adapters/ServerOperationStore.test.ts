@@ -11,7 +11,9 @@ const topicMock = {
 };
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => topicMock),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return topicMock;
+  }),
 }));
 
 const db = {} as LobeChatDatabase;
@@ -46,14 +48,6 @@ describe('ServerOperationStore', () => {
       expect(TopicModel).toHaveBeenCalledWith(db, 'user-1', undefined, undefined, {
         includeShareVisitor: true,
       });
-      expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
-    });
-
-    it('clears the mark when this operation owns it', async () => {
-      topicMock.findById.mockResolvedValue(markedWith('op-main'));
-
-      await createStore('op-main').clearRunningMark();
-
       expect(topicMock.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-main', 'unread');
     });
 

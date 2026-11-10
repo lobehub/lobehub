@@ -33,18 +33,26 @@ export default defineFixtures({
         ],
       },
     }),
-    readFile: single({
-      args: { path: '/workspace/src/routes/(main)/devtools/index.tsx' },
-      pluginState: {
-        content:
-          'export default function DevtoolsPage() {\n  return <div>Render preview</div>;\n}\n',
-        endLine: 3,
-        fullPath: '/workspace/src/routes/(main)/devtools/index.tsx',
-        path: 'src/routes/(main)/devtools/index.tsx',
-        startLine: 1,
-        totalLines: 3,
+    readFile: variants([
+      {
+        args: { path: '/tmp/capture.png' },
+        label: 'View screenshot image',
+        partialArgs: { path: '/tmp/capture.png' },
       },
-    }),
+      {
+        args: { path: '/workspace/src/routes/(main)/devtools/index.tsx' },
+        label: 'Read source file',
+        pluginState: {
+          content:
+            'export default function DevtoolsPage() {\n  return <div>Render preview</div>;\n}\n',
+          endLine: 3,
+          fullPath: '/workspace/src/routes/(main)/devtools/index.tsx',
+          path: 'src/routes/(main)/devtools/index.tsx',
+          startLine: 1,
+          totalLines: 3,
+        },
+      },
+    ]),
     runCommand: single({
       args: { command: 'bun run type-check' },
       content: 'Checked 1247 files in 2.3s\nNo type errors found.',

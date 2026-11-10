@@ -5,6 +5,7 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
+import { botWakeFields } from '../botWakeFields';
 import {
   allowFromField,
   displayToolCallsField,
@@ -12,8 +13,13 @@ import {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  processingMessageField,
+  reactionModeField,
+  replyPlacementField,
   watchKeywordsField,
 } from '../const';
+import { deviceAccessFields } from '../deviceAccess';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import {
   DISCORD_APPLICATION_ID_PATTERN,
@@ -65,6 +71,7 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       makeUserIdField('discord'),
+      ...deviceAccessFields,
       makeServerIdField('discord'),
       {
         key: 'charLimit',
@@ -79,9 +86,17 @@ export const schema: FieldSchema[] = [
         key: 'concurrency',
         default: 'queue',
         description: 'channel.concurrencyHint',
-        enum: ['queue', 'debounce'],
-        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
-        enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
+        enum: ['queue', 'burst', 'debounce'],
+        enumDescriptions: [
+          'channel.concurrencyQueueHint',
+          'channel.concurrencyBurstHint',
+          'channel.concurrencyDebounceHint',
+        ],
+        enumLabels: [
+          'channel.concurrencyQueue',
+          'channel.concurrencyBurst',
+          'channel.concurrencyDebounce',
+        ],
         label: 'channel.concurrency',
         type: 'string',
       },
@@ -93,7 +108,7 @@ export const schema: FieldSchema[] = [
         maximum: MAX_BOT_DEBOUNCE_MS,
         minimum: 100,
         type: 'number',
-        visibleWhen: { field: 'concurrency', value: 'debounce' },
+        visibleWhen: { field: 'concurrency', value: ['burst', 'debounce'] },
       },
       {
         key: 'showUsageStats',
@@ -102,7 +117,10 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      replyPlacementField,
       displayToolCallsField,
+      processingMessageField,
+      reactionModeField,
       {
         key: 'historyLimit',
         default: DEFAULT_BOT_HISTORY_LIMIT,
@@ -116,6 +134,8 @@ export const schema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
+      ...botWakeFields,
     ],
     type: 'object',
   },

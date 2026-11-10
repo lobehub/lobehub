@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
@@ -97,7 +98,12 @@ const USER_ROW = {
 const createDb = () => {
   const findFirst = vi.fn().mockResolvedValueOnce(ASSISTANT_ROW).mockResolvedValueOnce(USER_ROW);
   const findMany = vi.fn().mockResolvedValue(trajectoryRows);
-  return { db: { query: { messages: { findFirst, findMany } } } as never, findFirst, findMany };
+  const db = {
+    query: { messages: { findFirst, findMany } },
+    select: () => ({ from: () => ({ where: () => sql`select 1` }) }),
+  } as never;
+
+  return { db, findFirst, findMany };
 };
 
 const createContext = (applied = false): RuntimeProcessorContext =>
@@ -298,7 +304,7 @@ describe('completion skill synthesis end-to-end (emit -> handler, no operation-m
         messages,
         // Operation-level metadata only — no per-turn assistantMessageId, exactly
         // as a server execAgent turn persists it.
-        metadata: { agentId: 'agent_1', topicId: TOPIC_ID, userId: 'user_1' },
+        origin: { agentId: 'agent_1', topicId: TOPIC_ID, userId: 'user_1' },
         stepCount: 3,
         status: 'done',
       },

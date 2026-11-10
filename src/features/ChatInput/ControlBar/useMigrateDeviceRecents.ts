@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { useEffect } from 'react';
 
-import { useDeviceStore } from '@/store/device';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
 import { getRecentDirs, RECENT_DIRS_KEY } from './recentDirs';
@@ -21,11 +21,12 @@ let migrationStarted = false;
  */
 export const useMigrateDeviceRecents = (): void => {
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const isDevicesInit = useDeviceStore((s) => s.isDevicesInit);
+  // A persisted list holds stale `workingDirs`; merge only into a confirmed one.
+  const isDeviceListConfirmed = useDeviceStore(deviceSelectors.isDeviceListConfirmed);
   const migrate = useDeviceStore((s) => s.migrateLocalRecentsToDevice);
 
   useEffect(() => {
-    if (migrationStarted || !isDesktop || !currentDeviceId || !isDevicesInit) return;
+    if (migrationStarted || !isDesktop || !currentDeviceId || !isDeviceListConfirmed) return;
 
     const legacy = getRecentDirs();
     migrationStarted = true;
@@ -36,5 +37,5 @@ export const useMigrateDeviceRecents = (): void => {
       .catch(() => {
         // Persist failed — keep localStorage so the next reload retries.
       });
-  }, [currentDeviceId, isDevicesInit, migrate]);
+  }, [currentDeviceId, isDeviceListConfirmed, migrate]);
 };

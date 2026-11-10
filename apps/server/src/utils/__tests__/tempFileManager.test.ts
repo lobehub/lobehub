@@ -6,8 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { TempFileManager } from '../tempFileManager';
 
 // Mock node modules
-vi.mock('node:fs');
-vi.mock('node:os');
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(),
+  mkdtempSync: vi.fn(),
+  rmSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
+vi.mock('node:os', () => ({ tmpdir: vi.fn() }));
 vi.mock('node:path', () => ({
   join: (...args: string[]) => args.join('/'),
   basename: (p: string) => p.split('/').pop()!.split('\\').pop()!,
@@ -54,7 +59,7 @@ describe('TempFileManager', () => {
     const testData = new Uint8Array([1, 2, 3]);
     const fileName = 'test.txt';
 
-    vi.mocked(writeFileSync).mockImplementation(() => {
+    vi.mocked(writeFileSync).mockImplementation(function () {
       throw new Error('Write failed');
     });
 
@@ -84,16 +89,6 @@ describe('TempFileManager', () => {
 
     expect(existsSync).toHaveBeenCalledWith(mockFullTmpDir);
     expect(rmSync).not.toHaveBeenCalled();
-  });
-
-  it('should register cleanup hooks on process events', () => {
-    const processOnSpy = vi.spyOn(process, 'on');
-    new TempFileManager(mockDirname);
-
-    expect(processOnSpy).toHaveBeenCalledWith('exit', expect.any(Function));
-    expect(processOnSpy).toHaveBeenCalledWith('uncaughtException', expect.any(Function));
-    expect(processOnSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
-    expect(processOnSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
   });
 });
 

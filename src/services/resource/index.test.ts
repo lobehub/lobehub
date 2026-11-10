@@ -106,6 +106,79 @@ describe('resourceService.updateResource', () => {
   });
 });
 
+describe('resourceService.moveResource', () => {
+  it('moves a known document with a single request and composes the result locally', async () => {
+    mockUpdateDocument.mockResolvedValue({});
+    mockGetKnowledgeItem.mockReset();
+
+    const known = {
+      _optimistic: { isPending: true, retryCount: 0 },
+      fileType: 'custom/document',
+      id: 'docs_1',
+      name: 'Weekly',
+      parentId: 'folder-a',
+      slug: 'weekly',
+      sourceType: 'document',
+    } as any;
+
+    const result = await resourceService.moveResource('docs_1', 'folder-b', known);
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({ id: 'docs_1', parentId: 'folder-b' });
+    expect(mockGetKnowledgeItem).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ id: 'docs_1', parentId: 'folder-b', slug: 'weekly' });
+    expect(result).not.toHaveProperty('_optimistic');
+  });
+
+  it('moves a known raw file through fileService.updateFile', async () => {
+    mockUpdateFile.mockResolvedValue({});
+    mockGetKnowledgeItem.mockReset();
+
+    await resourceService.moveResource('file_1', null, {
+      fileType: 'text/plain',
+      id: 'file_1',
+      name: 'a.txt',
+      sourceType: 'file',
+    } as any);
+
+    expect(mockUpdateFile).toHaveBeenCalledWith('file_1', { parentId: null });
+    expect(mockUpdateDocument).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'file_1' }));
+    expect(mockGetKnowledgeItem).not.toHaveBeenCalled();
+  });
+
+  it('moves a file-backed page (docs_ id, sourceType file) through the document endpoint', async () => {
+    // The knowledge list addresses a file that backs a derived page by the
+    // page id while still reporting `sourceType: 'file'`; `file.updateFile`
+    // would answer "File not found" for that id.
+    mockUpdateDocument.mockClear();
+    mockUpdateFile.mockClear();
+    mockUpdateDocument.mockResolvedValue({});
+
+    await resourceService.moveResource('docs_backed', 'folder-b', {
+      fileId: 'file_9',
+      fileType: 'application/pdf',
+      id: 'docs_backed',
+      name: 'report.pdf',
+      sourceType: 'file',
+    } as any);
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({ id: 'docs_backed', parentId: 'folder-b' });
+    expect(mockUpdateFile).not.toHaveBeenCalled();
+  });
+
+  it('falls back to look-up → update → re-fetch without a known row', async () => {
+    mockGetKnowledgeItem
+      .mockResolvedValueOnce(createKnowledgeItem({ id: 'docs_2', sourceType: 'document' }))
+      .mockResolvedValueOnce(
+        createKnowledgeItem({ id: 'docs_2', parentId: 'folder-b', sourceType: 'document' }),
+      );
+
+    const result = await resourceService.moveResource('docs_2', 'folder-b');
+
+    expect(mockGetKnowledgeItem).toHaveBeenCalledTimes(2);
+    expect(result.parentId).toBe('folder-b');
+  });
+});
+
 describe('resourceService.queryResources', () => {
   it('defaults current list callers to metadata-only responses', async () => {
     mockGetKnowledgeItems.mockResolvedValue({ hasMore: false, items: [] });

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSpan, formatUsd, goalStatusKey, summarizeGoalBudget } from './goalPresentation';
+import {
+  formatSpan,
+  formatUsd,
+  goalManagerConversation,
+  goalStatusKey,
+  summarizeGoalBudget,
+} from './goalPresentation';
 
 describe('goalStatusKey', () => {
   it('maps every lifecycle state to a list-vocabulary key', () => {
@@ -64,5 +70,41 @@ describe('summarizeGoalBudget', () => {
       kind: 'cost',
       spent: 0,
     });
+  });
+});
+
+describe('goalManagerConversation', () => {
+  const consumedTurn = {
+    consumed: true,
+    snapshot: 'snapshot',
+    startedAt: '2026-09-09T00:00:00Z',
+    token: 'token',
+    topicId: 'persistent-topic',
+    turns: 6,
+  };
+
+  it('does not offer a empty conversation before the first planning run', () => {
+    expect(goalManagerConversation({ agentId: 'supervisor', config: null })).toBeUndefined();
+    expect(
+      goalManagerConversation({ agentId: 'supervisor', config: { manager: {} } }),
+    ).toBeUndefined();
+  });
+
+  it('keeps the goal agent conversation available after a planning turn is consumed', () => {
+    expect(
+      goalManagerConversation({
+        agentId: 'supervisor',
+        config: { manager: {}, managerState: consumedTurn, taskAgentId: 'executor' },
+      }),
+    ).toEqual({ agentId: 'supervisor', topicId: 'persistent-topic' });
+  });
+
+  it('offers nothing for a goal without an agent to own the conversation', () => {
+    expect(
+      goalManagerConversation({
+        agentId: null,
+        config: { manager: {}, managerState: consumedTurn },
+      }),
+    ).toBeUndefined();
   });
 });

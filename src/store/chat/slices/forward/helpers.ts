@@ -13,6 +13,14 @@ export const getForwardableMessages = (messages: UIChatMessage[]): UIChatMessage
         !!message.children?.some((child) => !!child.content?.trim())),
   );
 
+export const getForwardedMessageText = (message: UIChatMessage): string =>
+  message.role === 'assistantGroup'
+    ? message.children
+        ?.map((child) => child.content?.trim())
+        .filter(Boolean)
+        .join('\n\n') || ''
+    : message.content;
+
 const blockText = (label: string, body: string) => `**${label}**\n\n${body.trim()}`;
 
 export const buildForwardedContent = (
@@ -20,16 +28,9 @@ export const buildForwardedContent = (
   options: ForwardContentOptions,
 ): string => {
   const blocks = getForwardableMessages(messages).map((message) => {
-    const content =
-      message.role === 'assistantGroup'
-        ? message.children
-            ?.map((child) => child.content?.trim())
-            .filter(Boolean)
-            .join('\n\n') || ''
-        : message.content;
     const role = message.role === 'user' ? 'user' : 'assistant';
 
-    return blockText(options.roleLabel(role), content);
+    return blockText(options.roleLabel(role), getForwardedMessageText(message));
   });
 
   return [options.header, ...blocks].join('\n\n---\n\n');

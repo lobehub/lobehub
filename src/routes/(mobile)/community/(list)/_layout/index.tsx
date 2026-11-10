@@ -1,9 +1,9 @@
+import * as stylex from '@stylexjs/stylex';
 import { Outlet } from 'react-router';
-import { SWRConfig } from 'swr';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
-import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import Footer from '@/features/Setting/Footer';
+import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
 import { SCROLL_PARENT_ID } from '../../../../(main)/community/features/const';
 import Header from './Header';
@@ -13,16 +13,14 @@ const Layout = () => {
   return (
     <MobileContentLayout
       withNav
-      className={styles.mainContainer}
+      className={stylex.props(styles.mainContainer).className}
       gap={16}
       header={<Header />}
       id={SCROLL_PARENT_ID}
     >
-      <SWRConfig value={{ suspense: true }}>
-        <SuspenseRouteBoundary>
-          <Outlet />
-        </SuspenseRouteBoundary>
-      </SWRConfig>
+      <RouteSkeletonChromeProvider>
+        <Outlet />
+      </RouteSkeletonChromeProvider>
       <div />
       <Footer />
     </MobileContentLayout>

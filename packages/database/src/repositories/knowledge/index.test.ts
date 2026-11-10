@@ -3,6 +3,7 @@ import { FileSource, FilesTabs, ResourceSourceFilter } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { FileModel } from '../../models/file';
 import type { NewDocument, NewFile } from '../../schemas/file';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../../schemas/file';
 import { chunks, embeddings } from '../../schemas/rag';
@@ -110,31 +111,6 @@ describe('KnowledgeRepo', () => {
       await serverDB.insert(documents).values(testDocuments);
     });
 
-    it('should exclude documents with fileType="custom/document" from Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Should not include editor document (custom/document)
-      const editorDoc = results.find((item) => item.name === 'editor-doc.md');
-      expect(editorDoc).toBeUndefined();
-    });
-
-    it('should exclude documents with sourceType="file" from Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Should not include uploaded PDF document (sourceType='file')
-      const uploadedPdf = results.find((item) => item.name === 'uploaded-pdf.pdf');
-      expect(uploadedPdf).toBeUndefined();
-    });
-
-    it('should exclude document-table rows from Documents category (files only)', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Documents means uploaded document FILES; derived document rows stay out
-      expect(results.find((item) => item.name === 'api-pdf.pdf')).toBeUndefined();
-      expect(results.find((item) => item.name === 'web-doc.txt')).toBeUndefined();
-      expect(results.every((item) => item.sourceType === 'file')).toBe(true);
-    });
-
     it('should surface custom/* document rows under the Pages category', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Pages });
 
@@ -144,15 +120,6 @@ describe('KnowledgeRepo', () => {
       expect(webDoc?.sourceType).toBe('document');
       // uploaded files never surface under Pages
       expect(results.every((item) => item.sourceType === 'document')).toBe(true);
-    });
-
-    it('should include files from files table in Documents category', async () => {
-      const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
-
-      // Should include regular files
-      const regularFile = results.find((item) => item.name === 'regular-pdf-file.pdf');
-      expect(regularFile).toBeDefined();
-      expect(regularFile?.sourceType).toBe('file');
     });
 
     it('should exclude sourceType=file documents from All category', async () => {
@@ -180,14 +147,25 @@ describe('KnowledgeRepo', () => {
       expect(regularFile).toBeDefined();
     });
 
-    it('should keep the Documents category free of document-table rows', async () => {
+    it('keeps Documents limited to uploaded files', async () => {
       const results = await knowledgeRepo.query({ category: FilesTabs.Documents });
+
+      // Documents means uploaded document FILES; derived document rows stay out
+      const editorDoc = results.find((item) => item.name === 'editor-doc.md');
+      expect(editorDoc).toBeUndefined();
+      const uploadedPdf = results.find((item) => item.name === 'uploaded-pdf.pdf');
+      expect(uploadedPdf).toBeUndefined();
+      expect(results.find((item) => item.name === 'api-pdf.pdf')).toBeUndefined();
+      expect(results.find((item) => item.name === 'web-doc.txt')).toBeUndefined();
 
       const documentTypeItems = results.filter((item) => item.sourceType === 'document');
       expect(documentTypeItems).toHaveLength(0);
+      expect(results.every((item) => item.sourceType === 'file')).toBe(true);
 
       // the uploaded pdf file from the files table is still there
-      expect(results.find((item) => item.name === 'regular-pdf-file.pdf')).toBeDefined();
+      const regularFile = results.find((item) => item.name === 'regular-pdf-file.pdf');
+      expect(regularFile).toBeDefined();
+      expect(regularFile?.sourceType).toBe('file');
     });
   });
 
@@ -1357,7 +1335,7 @@ describe('KnowledgeRepo', () => {
     });
   });
 
-  describe('acceptance evidence hiding', () => {
+  describe('non-library file hiding', () => {
     beforeEach(async () => {
       await serverDB.insert(files).values([
         {
@@ -1375,6 +1353,15 @@ describe('KnowledgeRepo', () => {
           size: 100,
           source: FileSource.Acceptance,
           url: 'evidence-url',
+          userId,
+        },
+        {
+          id: 'agent-share-file',
+          fileType: 'text/plain',
+          metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+          name: 'visitor.txt',
+          size: 100,
+          url: 'visitor-url',
           userId,
         },
         {
@@ -1396,18 +1383,133 @@ describe('KnowledgeRepo', () => {
       expect(ids).toContain('library-file');
       expect(ids).toContain('generated-file');
       expect(ids).not.toContain('evidence-file');
+      expect(ids).not.toContain('agent-share-file');
     });
 
     it('should hide acceptance evidence from recent items', async () => {
       const result = await knowledgeRepo.queryRecent(50, 'file');
 
       expect(result.map((item) => item.fileId)).not.toContain('evidence-file');
+      expect(result.map((item) => item.fileId)).not.toContain('agent-share-file');
     });
 
     it('should still resolve acceptance evidence by id', async () => {
       const result = await knowledgeRepo.findById('evidence-file', 'file');
 
       expect(result?.name).toBe('payload-execution.txt');
+    });
+
+    it('should not resolve an agent-share file through the ordinary resource API', async () => {
+      await expect(knowledgeRepo.findById('agent-share-file', 'file')).resolves.toBeUndefined();
+    });
+  });
+
+  /** @example Agent uploads are shared attachments without becoming library entries. */
+  describe('agent-document uploads', () => {
+    const workspaceId = 'agent-upload-workspace';
+    const agentFileId = 'agent-upload-file';
+    const libraryFileId = 'regular-upload-file';
+    const knowledgeBaseId = 'agent-upload-kb';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Agent upload workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(knowledgeBases).values({
+        id: knowledgeBaseId,
+        name: 'Reference library',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(files).values([
+        {
+          id: agentFileId,
+          fileType: 'application/pdf',
+          name: 'agent-brief.pdf',
+          size: 100,
+          source: FileSource.AgentDocument,
+          url: 'files/agent-brief.pdf',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+        {
+          id: libraryFileId,
+          fileType: 'application/pdf',
+          name: 'library-brief.pdf',
+          size: 100,
+          url: 'files/library-brief.pdf',
+          userId,
+          visibility: 'public',
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(documents).values({
+        fileId: agentFileId,
+        fileType: 'application/pdf',
+        filename: 'agent-brief.pdf',
+        source: 'files/agent-brief.pdf',
+        sourceType: 'file',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        userId,
+        visibility: 'public',
+        workspaceId,
+      });
+    });
+
+    /** @example A shared agent PDF stays out of Resources, including filtered and recent lists. */
+    it('hides agent uploads while retaining ordinary files with the same MIME type', async () => {
+      // ROOT CAUSE:
+      // Making backing uploads public fixes previews but exposes them in resource lists
+      // unless their origin is excluded. Filtering MIME types would also hide ordinary PDFs.
+      // Reuse the hidden-source predicate for every list instead of changing the file type.
+      const repo = new KnowledgeRepo(serverDB, otherUserId, workspaceId);
+      const resources = await repo.query({ category: FilesTabs.Documents });
+      const uploads = await repo.query({ sourceFilter: ResourceSourceFilter.Uploaded });
+      const recent = await repo.queryRecent(50, 'file');
+      const directList = await new FileModel(serverDB, otherUserId, workspaceId).query({});
+
+      /** @example Each list includes the ordinary PDF and excludes the agent's PDF. */
+      expect([resources, uploads, recent].map((rows) => rows.map((row) => row.fileId))).toEqual([
+        [libraryFileId],
+        [libraryFileId],
+        [libraryFileId],
+      ]);
+      /** @example File-model lists apply the same exclusion as the Resources repository. */
+      expect(directList.map((row) => row.id)).toEqual([libraryFileId]);
+    });
+
+    /** @example A knowledge-base listing cannot reintroduce an agent-only attachment. */
+    it('excludes agent uploads from knowledge-base listings', async () => {
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: agentFileId, knowledgeBaseId, userId },
+        { fileId: libraryFileId, knowledgeBaseId, userId },
+      ]);
+      const repo = new KnowledgeRepo(serverDB, otherUserId, workspaceId);
+
+      /** @example Only the ordinary resource is listed, even when both have a KB relation. */
+      expect((await repo.query({ knowledgeBaseId })).map((row) => row.fileId)).toEqual([
+        libraryFileId,
+      ]);
+    });
+
+    /** @example Hidden-from-library files remain directly readable inside their workspace. */
+    it('allows a second workspace user to read the file without exposing it in personal mode', async () => {
+      const workspaceFiles = new FileModel(serverDB, otherUserId, workspaceId);
+      const personalFiles = new FileModel(serverDB, otherUserId);
+
+      /** @example Another member can fetch metadata for the agent file preview. */
+      expect(await workspaceFiles.findById(agentFileId)).toMatchObject({
+        id: agentFileId,
+        source: FileSource.AgentDocument,
+        visibility: 'public',
+      });
+      /** @example Public workspace visibility does not remove workspace isolation. */
+      expect(await personalFiles.findById(agentFileId)).toBeUndefined();
     });
   });
 

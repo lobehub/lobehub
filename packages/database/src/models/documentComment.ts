@@ -1,10 +1,28 @@
-import type { DocumentCommentJson } from '@lobechat/types';
-import { and, asc, count, eq, getTableColumns, gt, inArray, isNull, or, sql } from 'drizzle-orm';
+import type {
+  DocumentCommentAnchorItem,
+  DocumentCommentJson,
+  DocumentCommentSelectionAnchor,
+} from '@lobechat/types';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  getTableColumns,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { DocumentCommentItem } from '../schemas/documentComment';
 import { documentCommentMentions, documentComments } from '../schemas/documentComment';
 import { documents } from '../schemas/file';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
+import { nonNull } from './utils/rows';
 
 export const DOCUMENT_COMMENT_WORKSPACE_REQUIRED =
   'Document comments are workspace-scoped; a workspaceId is required';
@@ -36,6 +54,8 @@ export interface CreateDocumentCommentParams {
   /** Validated active Workspace members parsed from editorData by the router. */
   mentionedUserIds?: string[];
   parentCommentId?: string;
+  /** Body anchor for a root comment; ignored for replies, which share the thread's anchor. */
+  selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
 export interface CreateDocumentCommentResult {
@@ -76,6 +96,12 @@ export interface UpdateDocumentCommentResult {
 }
 
 export interface ListDocumentCommentThreadsParams {
+  /**
+   * Restrict to roots with (`true`) or without (`false`) a selection anchor.
+   * Anchored threads render beside the text, document-level ones below it, so
+   * each surface pages its own subset instead of filtering a mixed list.
+   */
+  anchored?: boolean;
   cursor?: string;
   documentId: string;
   limit?: number;
@@ -110,7 +136,7 @@ export class DocumentCommentModel {
       const [document] = await tx
         .select({ id: documents.id, userId: documents.userId, workspaceId: documents.workspaceId })
         .from(documents)
-        .where(eq(documents.id, params.documentId))
+        .where(and(eq(documents.id, params.documentId), notTrashed(documents.isDeleted)))
         .limit(1)
         .for('update');
 
@@ -180,6 +206,10 @@ export class DocumentCommentModel {
           editorData: params.editorData,
           parentCommentId,
           replyToCommentId,
+          // The thread's anchor lives on its root row (enforced by
+          // `document_comments_reply_has_no_anchor`), so a reply drops any
+          // anchor the caller sent instead of failing the insert.
+          selectionAnchor: parentCommentId ? null : params.selectionAnchor,
           workspaceId,
         })
         .onConflictDoNothing({
@@ -413,12 +443,14 @@ export class DocumentCommentModel {
 
   async listThreads(params: ListDocumentCommentThreadsParams) {
     const workspaceId = this.requireWorkspaceId();
-    const { cursor, documentId, limit = 20 } = params;
+    const { anchored, cursor, documentId, limit = 20 } = params;
     const conditions = [
       eq(documentComments.documentId, documentId),
       eq(documentComments.workspaceId, workspaceId),
       isNull(documentComments.parentCommentId),
     ];
+    if (anchored === true) conditions.push(isNotNull(documentComments.selectionAnchor));
+    if (anchored === false) conditions.push(isNull(documentComments.selectionAnchor));
     const decodedCursor = decodeCursor(cursor);
     if (decodedCursor) {
       const createdAt = sql`${decodedCursor.createdAt}::timestamptz`;
@@ -453,9 +485,11 @@ export class DocumentCommentModel {
           )
           .groupBy(documentComments.parentCommentId)
       : [];
+    // inArray(parent_comment_id, rootIds) never matches a NULL parent.
     const countByRoot = new Map(
-      replyCounts.flatMap(({ parentCommentId, total }) =>
-        parentCommentId ? [[parentCommentId, total] as const] : [],
+      replyCounts.map(
+        ({ parentCommentId, total }) =>
+          [nonNull(parentCommentId, 'document_comments.parent_comment_id'), total] as const,
       ),
     );
 
@@ -465,6 +499,33 @@ export class DocumentCommentModel {
         ? encodeCursor(pageRows.at(-1)!.cursorCreatedAt, pageRows.at(-1)!.id)
         : null,
     };
+  }
+
+  /**
+   * Every anchored root of a document, oldest-first, unpaginated. Anchors are
+   * small and bounded (see the router's quote cap), and a document has far
+   * fewer anchored threads than comments, so one round trip is cheaper than
+   * paging the full thread list just to paint highlights. Tombstoned roots
+   * keep their anchor while replies remain, matching `listThreads`.
+   */
+  async listAnchors(documentId: string): Promise<DocumentCommentAnchorItem[]> {
+    const workspaceId = this.requireWorkspaceId();
+    const rows = await this.db
+      .select({ id: documentComments.id, selectionAnchor: documentComments.selectionAnchor })
+      .from(documentComments)
+      .where(
+        and(
+          eq(documentComments.documentId, documentId),
+          eq(documentComments.workspaceId, workspaceId),
+          isNull(documentComments.parentCommentId),
+          isNotNull(documentComments.selectionAnchor),
+        ),
+      )
+      .orderBy(asc(documentComments.createdAt), asc(documentComments.id));
+
+    return rows.flatMap(({ id, selectionAnchor }) =>
+      selectionAnchor ? [{ id, selectionAnchor }] : [],
+    );
   }
 
   async listReplies(params: ListDocumentCommentRepliesParams) {

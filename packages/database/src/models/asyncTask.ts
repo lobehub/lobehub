@@ -63,6 +63,57 @@ export class AsyncTaskModel {
     });
   };
 
+  /**
+   * Atomically claims the right to finalize a video task (store the asset, charge, notify).
+   *
+   * Webhook retries (the handler answers 503 while the provider file is still processing) and the
+   * background polling fallback can both reach completion for the same task. The claim is a single
+   * compare-and-set UPDATE — still active AND no `completionClaimedAt` yet — so exactly one caller
+   * wins; do not split it into a read followed by a write, or completion may run twice.
+   * @returns `true` when this caller owns the completion, `false` when it was already claimed or finalized
+   */
+  static claimVideoCompletion = async (
+    db: LobeChatDatabase,
+    taskId: string,
+    completionEventId?: string,
+  ) => {
+    const claimedAt = new Date().toISOString();
+    const metadataWithClaim = sql`
+      jsonb_set(
+        COALESCE(${asyncTasks.metadata}, '{}'::jsonb),
+        '{completionClaimedAt}',
+        to_jsonb(${claimedAt}::text),
+        true
+      )
+    `;
+
+    const [claimed] = await db
+      .update(asyncTasks)
+      .set({
+        metadata: completionEventId
+          ? sql`
+              jsonb_set(
+                ${metadataWithClaim},
+                '{completionEventId}',
+                to_jsonb(${completionEventId}::text),
+                true
+              )
+            `
+          : metadataWithClaim,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          sql`NOT (COALESCE(${asyncTasks.metadata}, '{}'::jsonb) ? 'completionClaimedAt')`,
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+
+    return Boolean(claimed);
+  };
+
   update(taskId: string, value: Partial<AsyncTaskSelectItem>) {
     return this.db
       .update(asyncTasks)

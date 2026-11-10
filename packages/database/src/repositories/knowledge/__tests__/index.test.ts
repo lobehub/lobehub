@@ -1520,5 +1520,90 @@ describe('KnowledgeRepo', () => {
       // an unexpected error caused by hidden clauses.
       await expect(knowledgeRepo.query({ visibility: 'private' })).resolves.toBeDefined();
     });
+
+    it('should not hand out a page id another member cannot open', async () => {
+      // A workspace-public file whose derived document stayed creator-private:
+      // the file legitimately lists for every member, but the page behind it is
+      // only readable by its creator. Surfacing that page id makes the library
+      // show an entry that 404s on click.
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-vis', userId, name: 'Vis KB' });
+      await serverDB.insert(files).values({
+        id: 'vis-file-shared',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        name: 'shared.md',
+        fileType: 'text/markdown',
+        size: 10,
+        url: 'https://example.com/shared.md',
+      });
+      await serverDB.insert(documents).values({
+        id: 'vis-doc-hidden',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'private',
+        fileId: 'vis-file-shared',
+        title: 'Hidden Page',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        sourceType: 'file',
+        source: 'https://example.com/shared.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        knowledgeBaseId: 'kb-vis',
+        fileId: 'vis-file-shared',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.query({ knowledgeBaseId: 'kb-vis' });
+
+      const row = result.find((item) => item.fileId === 'vis-file-shared');
+      expect(row).toBeDefined();
+      expect(row?.documentId).toBeFalsy();
+      // The row now addresses the file it really is, so opening it lands on the
+      // file preview instead of a page the caller is not allowed to read.
+      expect(row?.id).toBe('vis-file-shared');
+    });
+
+    it('should still carry the page id when the caller can open it', async () => {
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-vis-ok', userId, name: 'Vis KB OK' });
+      await serverDB.insert(files).values({
+        id: 'vis-file-open',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        name: 'open.md',
+        fileType: 'text/markdown',
+        size: 10,
+        url: 'https://example.com/open.md',
+      });
+      await serverDB.insert(documents).values({
+        id: 'vis-doc-open',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        fileId: 'vis-file-open',
+        title: 'Open Page',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        sourceType: 'file',
+        source: 'https://example.com/open.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        knowledgeBaseId: 'kb-vis-ok',
+        fileId: 'vis-file-open',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.query({ knowledgeBaseId: 'kb-vis-ok' });
+
+      const row = result.find((item) => item.fileId === 'vis-file-open');
+      expect(row?.documentId).toBe('vis-doc-open');
+      expect(row?.id).toBe('vis-doc-open');
+    });
   });
 });

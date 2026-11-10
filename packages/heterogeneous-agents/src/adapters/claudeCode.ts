@@ -37,6 +37,11 @@
  */
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
+import {
+  classifyCliQuotaMessage,
+  CLI_SERVER_THROTTLE_PATTERNS,
+  CLI_USER_RATE_LIMIT_PATTERNS,
+} from '../errors/cliQuota';
 import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
@@ -53,6 +58,7 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+import { ClaudeCodeTaskSignals } from './claudeCodeTaskSignals';
 
 /**
  * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
@@ -254,55 +260,6 @@ export interface ClaudeCompatibleAdapterProfile {
   errorSubtypeMessages: Record<string, string>;
   ignoreDuplicateInit: boolean;
 }
-
-/**
- * Genuinely user-side limit wording. Used only as the text fallback for
- * batch CLI / sandbox runs that don't emit a structured `rate_limit_event`
- * (so {@link isUserQuotaRateLimit} can't fire). The ambiguous bare
- * `rate limit` / `rate limited` substring is deliberately NOT here — it also
- * appears in Anthropic's transient server throttle, so leaning on it would
- * reintroduce the very misclassification this set exists to avoid.
- */
-/**
- * Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
- * /usage-credits to continue or switch models with /model.` It renders the
- * same guide as a plan window, but waiting for a reset never clears it.
- */
-const CLI_CREDIT_LIMIT_PATTERNS = [
-  /you'?ve reached your .{0,40}\blimit\b/i,
-  /\/usage-credits\b/i,
-] as const;
-
-const CLI_USER_RATE_LIMIT_PATTERNS = [
-  /you'?ve hit your limit/i,
-  // CC names the window in the wording it actually ships — `You've hit your
-  // session limit · resets 6:30pm (Asia/Shanghai)` and `You've hit your weekly
-  // limit · resets Jul 3 at 1pm`. Without these the bare `you've hit your
-  // limit` pattern misses every real message, leaving the 429 to fall through
-  // to the overloaded (retry) guide.
-  /you'?ve hit your \S+ limit/i,
-  ...CLI_CREDIT_LIMIT_PATTERNS,
-  /usage limit reached/i,
-  /\blimit reached\b/i,
-  // Gateways/proxies in front of the API localize the same quota rejection,
-  // e.g. `API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，
-  // 2026-06-19 22:00:00 后可继续使用。…]`. English-only patterns classified
-  // these as a transient overload and told the user to just retry.
-  /使用上限/,
-] as const;
-
-/**
- * Anthropic's server-side transient throttle. CC surfaces this as a 429 with
- * a message that explicitly disclaims the user's plan limit ("not your usage
- * limit") — e.g. `API Error: Server is temporarily limiting requests (not your
- * usage limit) · Rate limited`. It clears on its own in moments, so it must be
- * classified as `overloaded` (retry UX), NOT `rate_limit` (which renders a
- * misleading "usage limit reached" reset-time guide).
- */
-const CLI_SERVER_THROTTLE_PATTERNS = [
-  /not your usage limit/i,
-  /server is temporarily limiting requests/i,
-] as const;
 
 /**
  * Transport-level failures: the connection dropped, stalled, or timed out
@@ -744,6 +701,17 @@ const isAbortedResult = (raw: any): boolean =>
   !getCliResultMessage(raw?.result) &&
   !getCliResultErrors(raw);
 
+/**
+ * A `result` that closes CC's own task-notification pass without running a
+ * single turn. A notification pass that DID run a turn (`num_turns > 0`) carries
+ * real output and stays a normal result.
+ */
+const isEmptyTaskNotificationResult = (raw: any): boolean =>
+  raw?.origin?.kind === 'task-notification' &&
+  raw.num_turns === 0 &&
+  !raw.is_error &&
+  !getCliResultMessage(raw.result);
+
 const buildAbortedRuntimeEndData = (raw: any): Record<string, unknown> => ({
   kind: 'aborted' satisfies HeteroErrorKind,
   reason: 'interrupted',
@@ -918,11 +886,9 @@ const getRateLimitTerminalError = (
 
   // A credit/balance limit shares the `rate_limit` guide but not its remedy:
   // waiting for a reset never clears it, so it is a distinct taxonomy kind.
-  const kind: HeteroErrorKind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) =>
-    pattern.test(rawMessage),
-  )
-    ? 'credit_limit'
-    : 'usage_limit';
+  // A `rate_limit_info`-only rejection (no quota wording in the text) is a
+  // plan window by definition — that structured event only ever reports one.
+  const kind: HeteroErrorKind = classifyCliQuotaMessage(rawMessage)?.kind ?? 'usage_limit';
 
   return {
     agentType,
@@ -1061,6 +1027,13 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   private readonly profile: ClaudeCompatibleAdapterProfile;
   sessionId?: string;
   private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
+  /**
+   * What the resumed session had already spent before this run (from its
+   * transcript's last `cost-state`). CC restores that tally on `--resume`, so
+   * its `result.total_cost_usd` is session-cumulative; subtracting this makes
+   * the emitted `costUsd` this run's own spend.
+   */
+  private sessionCostBaseline?: number;
 
   /** Pending tool_use ids awaiting their tool_result */
   private pendingToolCalls = new Set<string>();
@@ -1208,25 +1181,8 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * not the main-agent signal detector.
    */
   private mainToolNamesById = new Map<string, string>();
-  /**
-   * Active CC tasks (long-running tools registered via `system task_started`).
-   * Keyed by `task_id`, carries the originating `tool_use_id`, the resolved
-   * tool name, and a counter incremented for each signal callback turn
-   * the adapter attributes to this task.
-   *
-   * A task lives from `task_started` until `task_notification` /
-   * `task_completed`. While alive, any `message_start` that opens a turn
-   * WITHOUT a preceding `user` event is a signal callback and gets tagged.
-   */
-  private activeTasks = new Map<
-    string,
-    {
-      callbackCount: number;
-      shouldSignalCompletion: boolean;
-      sourceToolName: string;
-      toolUseId: string;
-    }
-  >();
+  /** CC's long-running task lifecycle and the signal lineage it stamps on turns. */
+  private readonly taskSignals: ClaudeCodeTaskSignals;
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
    * opened (`message_start` not yet fired). Carries the "this next turn
@@ -1235,8 +1191,8 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * resulting assistant turn.
    *
    * Reset to `false` once a `message_start` consumes it. After that, any
-   * further `message_start` that opens while {@link activeTasks} is
-   * non-empty is treated as a signal callback (CC re-invoked the LLM
+   * further `message_start` is asked of {@link taskSignals} — a turn opened
+   * while a task is alive is a signal callback (CC re-invoked the LLM
    * because a long-running tool pushed an update).
    */
   private hasUnhandledUserInput = false;
@@ -1244,25 +1200,42 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * {@link ExternalSignalContext} to attach to the NEXT `stream_start(newStep)`.
    *
    * Armed by `message_start` when {@link hasUnhandledUserInput} is false
-   * AND {@link activeTasks} is non-empty — i.e. CC opened a new turn
-   * without fresh user input while a long-running tool is alive. Cleared
-   * on the next `tool_use` (LLM is back on the main chain).
+   * and {@link taskSignals} attributes the turn to a task — i.e. CC opened a
+   * new turn without fresh user input. Cleared on the next `tool_use` (LLM is
+   * back on the main chain).
    */
   private pendingExternalSignal: ExternalSignalContext | undefined;
+
   /**
-   * Source-tool lineage of the most recently completed long-running task,
-   * waiting to be stamped on the post-task summary turn with
-   * `type: 'task-completion'`.
-   *
-   * Armed when `system task_notification` ends an active task; consumed
-   * by the NEXT `message_start` that takes the natural-turn branch
-   * (no other active task triggering a callback). Cleared on `result`
-   * so it never leaks across LLM runs.
-   *
-   * Lets the renderer keep the summary inside the same AssistantGroup as
-   * the preceding callbacks instead of letting it spawn a separate group.
+   * Map a raw per-turn usage object (from `message_delta.usage` in partial
+   * mode, or `assistant.message.usage` in batch mode) into the normalized
+   * `UsageData` shape. Subclasses override to surface provider-specific
+   * consumption signals the token-only base mapping drops — e.g. Qoder zeroes
+   * the token fields and bills in `credits`, so the base mapping alone would
+   * return undefined and emit no usage event at all.
    */
-  private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
+  protected extractUsage(
+    raw:
+      | {
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+          input_tokens?: number;
+          output_tokens?: number;
+        }
+      | null
+      | undefined,
+  ): UsageData | undefined {
+    return toUsageData(raw);
+  }
+
+  /**
+   * Map the terminal `result` event into its session-total `UsageData`.
+   * Takes the whole raw event because session-level consumption is not
+   * always nested under `usage` (Qoder puts credits on `total_credits`).
+   */
+  protected extractResultUsage(raw: any): UsageData | undefined {
+    return toUsageData(raw?.usage);
+  }
 
   constructor(
     options: ClaudeCodeAdapterOptions = {},
@@ -1270,6 +1243,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   ) {
     this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
     this.profile = profile;
+    this.taskSignals = new ClaudeCodeTaskSignals(this.options.signalBackgroundTaskCompletion);
   }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
@@ -1293,6 +1267,12 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       }
       case 'result': {
         return this.handleResult(raw);
+      }
+      case 'session_configured': {
+        if (typeof raw.initialSessionCostUsd === 'number') {
+          this.sessionCostBaseline = raw.initialSessionCostUsd;
+        }
+        return [];
       }
       default: {
         return [];
@@ -1319,49 +1299,19 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       return [this.makeEvent('stream_retry', getApiRetryData(raw, this.profile.agentType))];
     }
 
-    // CC's long-running task lifecycle (Monitor, etc., ).
-    // `task_started` registers a task that may fire callback turns;
-    // `task_notification` (terminal) drops it. While a task is alive,
-    // any new turn without preceding user input is treated as a signal
-    // callback in `openMainMessage`.
+    // CC's long-running task lifecycle (Monitor, etc.) — see ClaudeCodeTaskSignals.
     if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
       const toolUseId: string = raw.tool_use_id;
-      const toolInput = this.mainToolInputsById.get(toolUseId);
-      const shouldSignalCompletion =
-        this.options.signalBackgroundTaskCompletion && toolInput?.run_in_background === true;
-      this.activeTasks.set(raw.task_id, {
-        callbackCount: 0,
-        shouldSignalCompletion,
-        sourceToolName: this.mainToolNamesById.get(toolUseId) ?? 'unknown',
+      this.taskSignals.start(
+        raw.task_id,
         toolUseId,
-      });
+        this.mainToolNamesById.get(toolUseId) ?? 'unknown',
+        this.mainToolInputsById.get(toolUseId),
+      );
       return [];
     }
     if (raw.subtype === 'task_notification' && raw.task_id) {
-      // Capture lineage BEFORE deleting so the next natural turn (the
-      // post-task summary, after CC re-invokes the LLM with a synthesized
-      // task-ended notification) can be tagged with `task-completion`.
-      // Last-task-wins if multiple tasks end before a summary fires — in
-      // practice CC summarizes once per LLM call.
-      //
-      // Gate on `callbackCount > 0`: only a task that actually fired out-of-band
-      // callback turns while alive is a genuine long-running task whose ending
-      // produces a post-task summary (the summary "keeps it inside the same
-      // AssistantGroup as the preceding callbacks" — so there must BE preceding
-      // callbacks). A task that fires `task_started` and `task_notification`
-      // back-to-back with no intervening callback turn was an inline synchronous
-      // tool that CC merely tracked as a task (e.g. a slow `git commit` running a
-      // lint-staged hook); its `tool_result` is consumed by the next turn in the
-      // normal main chain. Tagging that turn `task-completion` mis-anchors it and
-      // drops it from the rendered chain — so leave it untagged.
-      const ending = this.activeTasks.get(raw.task_id);
-      if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
-        this.pendingTaskCompletion = {
-          sourceToolCallId: ending.toolUseId,
-          sourceToolName: ending.sourceToolName,
-        };
-      }
-      this.activeTasks.delete(raw.task_id);
+      this.taskSignals.end(raw.task_id);
       return [];
     }
     // `task_updated` is a status patch (status: 'completed' fires
@@ -1573,7 +1523,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     // partial mode (`sawStreamEvent`) `message_delta` owns this — skip here to
     // avoid double-counting the stale snapshot.
     if (!this.sawStreamEvent) {
-      const usage = toUsageData(raw.message?.usage);
+      const usage = this.extractUsage(raw.message?.usage);
       if (usage) {
         events.push(
           this.makeEvent('step_complete', {
@@ -1757,7 +1707,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       ),
     );
 
-    const usage = toUsageData(raw.message?.usage);
+    const usage = this.extractUsage(raw.message?.usage);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
@@ -1862,6 +1812,14 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * not main-agent-scoped).
    */
   private handleUser(raw: any): HeterogeneousAgentEvent[] {
+    // A replayed user message (`--replay-user-messages`) is host input to the live session: its
+    // turn answers the user (even after a task notification); its uuid names the delivery taken.
+    if (raw.isReplay && !raw.parent_tool_use_id) {
+      this.hasUnhandledUserInput = true;
+      if (typeof raw.uuid !== 'string' || !raw.uuid) return [];
+      return [this.makeEvent('step_complete', { phase: 'user_message', uuid: raw.uuid })];
+    }
+
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
@@ -1890,6 +1848,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       // signal pipeline.
       if (!subagentCtx) {
         this.hasUnhandledUserInput = true;
+        this.taskSignals.noteToolResult(toolCallId);
       }
 
       // `Read` on images yields `{type: 'image', source: {...}}` blocks. We
@@ -2095,17 +2054,37 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     return synthesizeTaskPluginState(this.claudeCodeTasks);
   }
 
+  /**
+   * This run's spend out of CC's session-cumulative `total_cost_usd`. A total
+   * below the baseline means CC did not restore the tally (the transcript's
+   * cost-state was not the one it resumed from), so the total stands alone.
+   */
+  private toRunCost(sessionTotal: unknown): number | undefined {
+    if (typeof sessionTotal !== 'number') return undefined;
+    const baseline = this.sessionCostBaseline;
+    return baseline !== undefined && baseline <= sessionTotal
+      ? sessionTotal - baseline
+      : sessionTotal;
+  }
+
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
+    // Resuming a session whose previous run left background tasks behind makes
+    // CC first report them as orphaned (`task_notification` ×N), then close that
+    // bookkeeping pass with an empty zero-turn `result` BEFORE the user's turn
+    // even starts. Treating it as terminal ends the operation with no content
+    // and drops the real turn that follows — the reply stays a `...` shell.
+    if (isEmptyTaskNotificationResult(raw)) return [];
+
     // Emit authoritative grand-total usage from CC's result event. The
     // executor currently ignores this phase (it persists per-turn via
     // turn_metadata), but we still emit it so other consumers — cost
     // displays, logs — can read the normalized total.
     const events: HeterogeneousAgentEvent[] = [];
-    const usage = toUsageData(raw.usage);
+    const usage = this.extractResultUsage(raw);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
-          costUsd: raw.total_cost_usd,
+          costUsd: this.toRunCost(raw.total_cost_usd),
           phase: 'result_usage',
           usage,
         }),
@@ -2159,13 +2138,13 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     this.lastApiErrorText = undefined;
     this.streamedTextByMessageId.clear();
     this.streamedThinkingByMessageId.clear();
-    // Drop any unconsumed task-completion lineage so the next LLM run
-    // doesn't inherit it (e.g. a follow-up user turn would otherwise
-    // wrongly inherit the previous run's task-completion tag).
-    this.pendingTaskCompletion = undefined;
+    // Drop any unconsumed task-completion lineage so the next LLM run doesn't
+    // inherit it; the next turn follows no tool_result of this one either.
+    this.taskSignals.clearPendingCompletion();
+    this.hasUnhandledUserInput = false;
 
     const shouldEmitVisibleOutputEnd =
-      this.options.runtimeEndStrategy === 'on-result' || this.activeTasks.size === 0;
+      this.options.runtimeEndStrategy === 'on-result' || !this.taskSignals.hasActiveTasks;
 
     return [
       ...events,
@@ -2231,7 +2210,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
         // every `assistant` event, so `handleAssistant` deliberately skips the
         // emission and lets this branch own it. `message_delta.usage` carries
         // the full final usage (input + cache + final output_tokens).
-        const usage = toUsageData(event.usage);
+        const usage = this.extractUsage(event.usage);
         if (!usage) return [];
         return [
           this.makeEvent('step_complete', {
@@ -2298,7 +2277,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       // turn opened while a task is active) would see a stale `true` and skip
       // its external-signal tag.
       this.hasUnhandledUserInput = false;
-      this.pendingExternalSignal = undefined;
+      this.pendingExternalSignal = this.taskSignals.openTurn(true);
       // Reusing the tool turn's message.id as the newStep id would make the
       // reducer treat this as a REPLAY and drop it (it ignores a `newStep` whose
       // id === currentMainMessageId). For any tool turn opened by a prior
@@ -2341,42 +2320,11 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     this.currentMessageId = messageId;
     this.currentTurnHadToolUse = false;
     this.stepIndex++;
-    // Signal-callback detection (): if this turn opened
-    // WITHOUT a preceding `user` event AND a long-running task is
-    // still active, the LLM was re-invoked by the task pushing an
-    // update — tag the resulting assistant turn accordingly. Otherwise
-    // it's a natural continuation (tool_result follow-up or
-    // user-initiated turn).
-    if (!this.hasUnhandledUserInput && this.activeTasks.size > 0) {
-      // Pick the most recently registered active task. Multi-task
-      // concurrency isn't expected in real Monitor flows but the Map
-      // preserves insertion order so this still gives deterministic
-      // behavior if it ever happens.
-      const lastTaskKey = [...this.activeTasks.keys()].at(-1)!;
-      const task = this.activeTasks.get(lastTaskKey)!;
-      task.callbackCount += 1;
-      this.pendingExternalSignal = {
-        sequence: task.callbackCount,
-        sourceToolCallId: task.toolUseId,
-        sourceToolName: task.sourceToolName,
-        type: 'tool-stdout',
-      };
-    } else if (this.pendingTaskCompletion) {
-      // Natural turn that follows a `task_notification` — this is the
-      // post-task summary. Tag it with the source-tool lineage so the
-      // collector keeps it inside the same AssistantGroup as the
-      // preceding callbacks (rendered after the SignalCallbacks block).
-      this.pendingExternalSignal = {
-        sourceToolCallId: this.pendingTaskCompletion.sourceToolCallId,
-        sourceToolName: this.pendingTaskCompletion.sourceToolName,
-        type: 'task-completion',
-      };
-      this.pendingTaskCompletion = undefined;
-    } else {
-      // Natural turn boundary — clear any stale signal so the new
-      // assistant joins the main chain.
-      this.pendingExternalSignal = undefined;
-    }
+    // Signal-callback detection: a turn opened WITHOUT a preceding `user` event
+    // was re-invoked by a long-running task — tag it with that task's lineage.
+    // Otherwise it's a natural continuation (tool_result follow-up or
+    // user-initiated turn) and joins the main chain.
+    this.pendingExternalSignal = this.taskSignals.openTurn(this.hasUnhandledUserInput);
     this.hasUnhandledUserInput = false;
 
     return [
@@ -2434,12 +2382,3 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
 }
 
 export class ClaudeCodeAdapter extends ClaudeCompatibleStreamAdapter {}
-
-export class ClaudeCodeSdkAdapter extends ClaudeCodeAdapter {
-  constructor() {
-    super({
-      runtimeEndStrategy: 'on-transport-close',
-      signalBackgroundTaskCompletion: true,
-    });
-  }
-}

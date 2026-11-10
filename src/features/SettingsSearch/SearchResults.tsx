@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
+import { Flexbox, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,11 +13,7 @@ import { isModifierClick } from '@/utils/navigation';
 import { useSettingsSearchAnalytics } from './analytics';
 import type { SettingsSearchResult } from './useSettingsSearch';
 
-const styles = createStaticStyles(({ css }) => ({
-  match: css`
-    color: ${cssVar.colorPrimary};
-  `,
-}));
+const styles = stylex.create({ match: { color: cssVar.colorPrimary } });
 
 const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) => {
   const index = text.toLowerCase().indexOf(query.toLowerCase());
@@ -27,7 +22,7 @@ const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) =
   return (
     <>
       {text.slice(0, index)}
-      <span className={styles.match}>{text.slice(index, index + query.length)}</span>
+      <span {...stylex.props(styles.match)}>{text.slice(index, index + query.length)}</span>
       {text.slice(index + query.length)}
     </>
   );
@@ -58,7 +53,7 @@ const SearchResults = memo<SearchResultsProps>(({ isIndexing, query, results }) 
         {isIndexing ? (
           // A zero-result answer is not authoritative while the pinyin dict is
           // still loading — show a spinner instead of a false empty state.
-          <Icon spin color={cssVar.colorTextSecondary} icon={Loader2Icon} />
+          <Spin size="small" style={{ color: cssVar.colorTextSecondary }} />
         ) : (
           <Text fontSize={12} type={'secondary'}>
             {t('settingsSearch.empty', { keyword })}

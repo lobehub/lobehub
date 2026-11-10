@@ -164,6 +164,8 @@ export class LobeReplicateAI implements LobeRuntimeAI {
             const { ssrfSafeFetch } = await import('@lobechat/ssrf-safe-fetch');
             const imageResponse = await ssrfSafeFetch(imageUrl);
             if (!imageResponse.ok) {
+              // The error body is never read; release its connection now rather than at GC.
+              await imageResponse.body?.cancel().catch(() => {});
               throw new Error(
                 `Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`,
               );

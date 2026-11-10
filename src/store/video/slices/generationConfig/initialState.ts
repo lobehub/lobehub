@@ -1,12 +1,14 @@
 /* eslint-disable perfectionist/sort-interfaces */
+import { ModelProvider } from 'model-bank/modelProvider';
 import {
   extractVideoDefaultValues,
-  ModelProvider,
   PRESET_VIDEO_ASPECT_RATIOS,
   PRESET_VIDEO_RESOLUTIONS,
   type RuntimeVideoGenParams,
   type VideoModelParamsSchema,
-} from 'model-bank';
+} from 'model-bank/standardParameters';
+
+import type { VideoImageInputMode, VideoImageInputs } from './imageInputMode';
 
 export const DEFAULT_AI_VIDEO_PROVIDER = ModelProvider.LobeHub;
 export const DEFAULT_AI_VIDEO_MODEL = 'dreamina-seedance-2-0-260128';
@@ -57,6 +59,17 @@ export interface VideoGenerationConfigState {
   uploadingImagePreviews: string[];
 
   /**
+   * Whether uploaded images act as start/end frames or references, for models that accept both.
+   * Ignored by models without both `imageUrl` and `imageUrls`.
+   */
+  imageInputMode: VideoImageInputMode;
+  /**
+   * Images of the inactive mode, restored when the user switches back so toggling never discards
+   * uploads. Only the active mode's images live in `parameters` and get submitted.
+   */
+  stashedImageInputs: Partial<Record<VideoImageInputMode, VideoImageInputs>>;
+
+  /**
    * Marks whether the configuration has been initialized (including restoration from memory)
    */
   isInit: boolean;
@@ -71,5 +84,7 @@ export const initialGenerationConfigState: VideoGenerationConfigState = {
   parameters: DEFAULT_VIDEO_GENERATION_PARAMETERS,
   parametersSchema: seedance20Params,
   uploadingImagePreviews: [],
+  imageInputMode: 'frames',
+  stashedImageInputs: {},
   isInit: false,
 };

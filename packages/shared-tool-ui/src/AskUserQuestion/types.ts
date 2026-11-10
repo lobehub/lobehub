@@ -24,6 +24,11 @@ export interface AskUserQuestionOption {
  * is 2-4 entries, `multiSelect` is opt-in.
  */
 export interface AskUserQuestionItem {
+  /**
+   * Why the question matters — shown under it. Tool calls do not send one;
+   * hosts that ask their own questions (goal / task clarification) do.
+   */
+  description?: string;
   header: string;
   multiSelect?: boolean;
   options: AskUserQuestionOption[];

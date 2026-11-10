@@ -1,8 +1,15 @@
 import type { SearchQuery } from '@lobechat/types';
-// eslint-disable-next-line no-restricted-imports -- Base Select does not support multiple selection yet.
-import { Block, Flexbox, SearchBar as Search, Select, Tooltip } from '@lobehub/ui';
-import { CheckboxGroup, Segmented, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Block,
+  CheckboxGroup,
+  Flexbox,
+  SearchBar as Search,
+  Segmented,
+  Select,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,12 +22,7 @@ import { CATEGORY_ICON_MAP, ENGINE_ICON_MAP } from '../../const';
 import { CategoryAvatar } from './CategoryAvatar';
 import { EngineAvatar } from './EngineAvatar';
 
-const styles = createStaticStyles(({ css }) => ({
-  textHeader: css`
-    flex: none;
-    width: 120px;
-  `,
-}));
+const styles = stylex.create({ textHeader: { flex: 'none', width: '120px' } });
 
 interface SearchBarProps {
   aiSummary?: boolean;
@@ -118,7 +120,7 @@ const SearchBar = memo<SearchBarProps>(
             />
           ) : (
             <Flexbox horizontal align={'flex-start'} gap={8}>
-              <Text className={styles.textHeader} type={'secondary'}>
+              <Text className={stylex.props(styles.textHeader).className} type={'secondary'}>
                 {t('search.searchEngine.title')}
               </Text>
               <CheckboxGroup
@@ -167,7 +169,7 @@ const SearchBar = memo<SearchBarProps>(
             />
           ) : (
             <Flexbox horizontal align="flex-start" gap={8}>
-              <Text className={styles.textHeader} type={'secondary'}>
+              <Text className={stylex.props(styles.textHeader).className} type={'secondary'}>
                 {t('search.searchCategory.title')}
               </Text>
               <CheckboxGroup
@@ -187,7 +189,7 @@ const SearchBar = memo<SearchBarProps>(
           )}
 
           <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-            <Text className={styles.textHeader} type={'secondary'}>
+            <Text className={stylex.props(styles.textHeader).className} type={'secondary'}>
               {t('search.searchTimeRange.title')}
             </Text>
             <Segmented

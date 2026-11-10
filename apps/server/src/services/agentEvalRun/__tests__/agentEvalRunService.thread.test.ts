@@ -12,9 +12,11 @@ import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { cleanupDB, serverDB, userId } from './_setup';
 
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 beforeEach(cleanupDB);
@@ -338,10 +340,10 @@ describe('AgentEvalRunService', () => {
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
       const rt = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
 
-      // pass@k: thread 1 passed
-      expect(rt?.evalResult?.passAtK).toBe(true);
-      // pass^k: not all passed (thread 2 errored)
-      expect(rt?.evalResult?.passAllK).toBe(false);
+      // An infrastructure failure leaves the complete attempt sample ungraded.
+      expect(rt?.status).toBe('error');
+      expect(rt?.evalResult?.passAtK).toBeUndefined();
+      expect(rt?.evalResult?.passAllK).toBeUndefined();
 
       // Primary fields should be AVERAGES (total / k)
       expect(rt?.evalResult?.cost).toBeCloseTo(0.0075); // 0.015 / 2

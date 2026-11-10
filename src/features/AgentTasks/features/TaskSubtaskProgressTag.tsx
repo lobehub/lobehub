@@ -1,9 +1,6 @@
 import type { TaskDetailSubtask, TaskSubtaskProgress } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import type { DropdownMenuProps } from '@lobehub/ui/base-ui';
-import { DropdownMenu, Text, toast } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
-import { cssVar } from 'antd-style';
+import type { DropdownMenuProps } from '@lobehub/ui';
+import { Block, cssVar, DropdownMenu, Flexbox, Progress, Text, toast } from '@lobehub/ui';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +43,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
     return list;
   }
 
-  const taskMap = new Map(nodes.map((item) => [item.identifier, item]));
+  const taskMap = new Map(nodes.map((item) => [item.id!, item]));
   const depthMemo = new Map<string, number>();
 
   const getDepth = (identifier: string, stack: Set<string>): number => {
@@ -56,7 +53,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
     if (stack.has(identifier)) return 0;
 
     const node = taskMap.get(identifier);
-    const parentIdentifier = node?.blockedBy;
+    const parentIdentifier = node?.blockedById;
     if (!node || !parentIdentifier || !taskMap.has(parentIdentifier)) {
       depthMemo.set(identifier, 0);
       return 0;
@@ -71,7 +68,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
   };
 
   return nodes.map((task) => ({
-    depth: getDepth(task.identifier, new Set<string>()),
+    depth: getDepth(task.id!, new Set<string>()),
     task,
   }));
 };
@@ -79,7 +76,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
 interface TaskSubtaskProgressTagProps {
   currentIdentifier?: string;
   onRequestSubtasks?: () => Promise<TaskDetailSubtask[]>;
-  onSubtaskClick?: (identifier: string, assigneeAgentId?: string) => void;
+  onSubtaskClick?: (identifier: string, assigneeAgentId?: string, name?: string) => void;
   progress?: TaskSubtaskProgress;
   subtasks?: TaskDetailSubtask[];
 }
@@ -132,7 +129,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       const itemStatus = toTaskStatus(subtask.task.status);
 
       return {
-        key: subtask.task.identifier,
+        key: subtask.task.id!,
         label: (
           <Flexbox horizontal align="center" gap={8}>
             {subtask.depth > 0 && <div style={{ flex: 'none', width: subtask.depth * 16 }} />}
@@ -143,7 +140,11 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           </Flexbox>
         ),
         onClick: () =>
-          onSubtaskClick?.(subtask.task.identifier, subtask.task.assignee?.id ?? undefined),
+          onSubtaskClick?.(
+            subtask.task.identifier,
+            subtask.task.assignee?.id ?? undefined,
+            subtask.task.name ?? undefined,
+          ),
       };
     }) as DropdownMenuProps['items'];
 
@@ -153,12 +154,16 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       async (event: MouseEvent<HTMLElement>) => {
         event.stopPropagation();
 
+        // Only the lazy path owns open state; static menus leave toggling to
+        // the dropdown trigger so a click never fights its own open.
+        if (!onRequestSubtasks) return;
+
         if (open) {
           setOpen(false);
           return;
         }
 
-        if (!onRequestSubtasks || requesting) return;
+        if (requesting) return;
 
         setRequesting(true);
         try {
@@ -201,6 +206,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
         style={{
           borderRadius: 24,
           cursor: hasDropdown || onRequestSubtasks ? 'pointer' : undefined,
+          flex: 'none',
         }}
         onClick={hasDropdown || onRequestSubtasks ? handleTagClick : undefined}
         onContextMenu={onRequestSubtasks ? handleTagClick : undefined}
@@ -212,7 +218,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           strokeColor={cssVar.colorSuccess}
           type={'circle'}
         />
-        <Text fontSize={12} type={'secondary'}>
+        <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
           {data.text}
         </Text>
       </Block>
@@ -224,7 +230,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       <DropdownMenu
         items={navigationItems}
         open={open}
-        trigger={'both'}
+        trigger={'click'}
         onOpenChange={handleOpenChange}
       >
         {tag}

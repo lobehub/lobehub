@@ -43,10 +43,9 @@ export interface PlanRuntimeService {
     topicId?: string,
   ) => Promise<PlanDocument>;
   /**
-   * Silently update the plan document's metadata (used for todos sync).
-   * Should NOT trigger UI refresh on the client.
+   * Update plan metadata (todos sync), forwarding its topic for client cache refresh.
    */
-  updatePlanMetadata: (id: string, metadata: Record<string, any>) => Promise<void>;
+  updatePlanMetadata: (id: string, metadata: Record<string, any>, topicId: string) => Promise<void>;
 }
 
 export interface PlanRuntimeContext {
@@ -121,7 +120,7 @@ export class PlanExecutionRuntime {
     try {
       const plan = await this.service.findPlanByTopic(topicId);
       if (!plan) return;
-      await this.service.updatePlanMetadata(plan.id, { ...plan.metadata, todos });
+      await this.service.updatePlanMetadata(plan.id, { ...plan.metadata, todos }, topicId);
     } catch (error) {
       console.warn('Failed to sync todos to plan:', error);
     }

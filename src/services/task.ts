@@ -1,12 +1,20 @@
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
 import type {
   CheckpointConfig,
   TaskAutomationMode,
   TaskInstructionSynthesis,
   TaskIntentAnalysis,
+  TaskListFilter,
   TaskStatus,
 } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { buildLlmExecutorDeclaration, oneShotRelay } from '@/services/llmRelay';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors } from '@/store/user/selectors';
+
+/** The `goal` system agent's provider: task intent runs on it server-side. */
+const goalModelProvider = () => systemAgentSelectors.goal(useUserStore.getState()).provider;
 
 class TaskService {
   // ── Queries ──
@@ -15,11 +23,25 @@ class TaskService {
 
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
 
+  /**
+   * Read a task from a workspace other than the active one. Task identifiers
+   * are only unique within a workspace, so the read is pinned to the owning
+   * workspace instead of resolving against the active scope.
+   */
+  getDetailInWorkspace = async (id: string, workspaceId: string) =>
+    createWorkspaceLambdaClient(workspaceId).task.detail.query({ id });
+
   list = async (params: {
     /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */
     after?: { at: Date | string; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
+    /** Keep completed / canceled tasks only when closed within this window. */
+    completedWithin?: TaskCompletedWindow;
+    /** The Tasks page filter, applied server-side before paging. */
+    filter?: TaskListFilter;
+    /** Archived tasks are left out unless this is set. */
+    includeArchived?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
@@ -36,16 +58,23 @@ class TaskService {
   groupList = async (params: {
     assigneeAgentId?: string;
     automated?: boolean;
+    completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
-    groupBy?: 'assignee' | 'member' | 'priority';
+    filter?: TaskListFilter;
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority';
     groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;
       statuses: string[];
     }>;
+    includeArchived?: boolean;
+    /** The label group whose labels are the columns when `groupBy` is 'label'. */
+    labelGroupId?: string;
     parentTaskId?: string | null;
     projectId?: string;
+    /** "My tasks" narrowing: assigned to the caller, or created by them. */
+    scope?: 'assigned' | 'created';
     visibility?: 'private' | 'public';
   }) =>
     lambdaClient.task.groupList.query({
@@ -76,23 +105,30 @@ class TaskService {
   /**
    * Read a composer draft and report what it means. A mutation on the wire
    * (it spends a model call), but it creates nothing — the caller decides
-   * whether to act on the reading.
+   * whether to act on the reading. A `goal` model only this device reaches is
+   * relayed back to this tab (one-shot relay).
    */
   analyzeIntent = async (params: {
     context?: string;
     instruction: string;
-  }): Promise<TaskIntentAnalysis> => lambdaClient.task.analyzeIntent.mutate(params);
+  }): Promise<TaskIntentAnalysis> =>
+    oneShotRelay.run(goalModelProvider(), (relay) =>
+      lambdaClient.task.analyzeIntent.mutate(params, withLlmRelay(relay)),
+    );
 
   /**
    * Rewrite the confirmed draft into the brief that gets executed, with the
    * user's answers folded in. Also a mutation on the wire, and also creates
-   * nothing.
+   * nothing. Relayed like `analyzeIntent`.
    */
   synthesizeInstruction = async (params: {
     answers: { answer: string; question: string }[];
     context?: string;
     instruction: string;
-  }): Promise<TaskInstructionSynthesis> => lambdaClient.task.synthesizeInstruction.mutate(params);
+  }): Promise<TaskInstructionSynthesis> =>
+    oneShotRelay.run(goalModelProvider(), (relay) =>
+      lambdaClient.task.synthesizeInstruction.mutate(params, withLlmRelay(relay)),
+    );
 
   create = async (params: {
     assigneeAgentId?: string;
@@ -102,9 +138,9 @@ class TaskService {
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
-    /** Bind a goal entity (`goals` row) to the created task. */
-    identifierPrefix?: string;
     instruction: string;
+    /** Labels attached on creation; validated before the task is written. */
+    labelIds?: string[];
     name?: string;
     parentTaskId?: string;
     priority?: number;
@@ -114,17 +150,28 @@ class TaskService {
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.create.mutate(params);
 
-  updateVisibility = async (id: string, visibility: 'private' | 'public') =>
-    lambdaClient.task.updateVisibility.mutate({ id, visibility });
+  updateVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+    options?: { takeOwnership?: boolean },
+  ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
 
   update = async (
     id: string,
     data: {
+      /**
+       * The agent making this change when the task tool runs in the browser
+       * (client-first runtime). Attribution only — the server verifies the
+       * caller can use that agent before recording it.
+       */
+      actorAgentId?: string;
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       // Automation mode; null = no automation
       automationMode?: TaskAutomationMode | null;
       config?: Record<string, unknown>;
+      /** Deep-merged into `config` server-side under the row lock (vs. `config`, which replaces). */
+      configPatch?: Record<string, unknown>;
       context?: Record<string, unknown>;
       description?: string;
       editorData?: unknown;
@@ -143,18 +190,63 @@ class TaskService {
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
+  // ── Batch (list multi-select) ──
+  // One request per action for the whole selection; the server answers with a
+  // per-task outcome (`updated` / `skipped` / `failed`).
+
+  batchUpdate = async (params: {
+    assigneeAgentId?: string | null;
+    assigneeUserId?: string | null;
+    ids: string[];
+    priority?: number;
+  }) => lambdaClient.task.batchUpdate.mutate(params);
+
+  batchUpdateStatus = async (
+    ids: string[],
+    status: 'backlog' | 'canceled' | 'completed' | 'paused',
+  ) => lambdaClient.task.batchUpdateStatus.mutate({ ids, status });
+
+  batchArchive = async (ids: string[], archived: boolean) =>
+    lambdaClient.task.batchArchive.mutate({ archived, ids });
+
+  batchDelete = async (ids: string[]) => lambdaClient.task.batchDelete.mutate({ ids });
+
+  /** Undo of a batch status / field / archive change (the `reverts` it returned). */
+  batchRevert = async (
+    reverts: Parameters<typeof lambdaClient.task.batchRevert.mutate>[0]['reverts'],
+  ) => lambdaClient.task.batchRevert.mutate({ reverts });
+
+  /** Undo of a batch delete: restore the tasks from the recycle bin. */
+  batchRestoreDeleted = async (ids: string[]) =>
+    lambdaClient.task.batchRestoreDeleted.mutate({ ids });
+
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
+
+  archive = async (id: string, archived: boolean) =>
+    lambdaClient.task.archive.mutate({ archived, id });
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 
-  updateStatus = async (id: string, status: TaskStatus, error?: string) =>
-    lambdaClient.task.updateStatus.mutate({ error, id, status });
+  updateStatus = async (
+    id: string,
+    status: TaskStatus,
+    error?: string,
+    options?: { actorAgentId?: string },
+  ) =>
+    lambdaClient.task.updateStatus.mutate({
+      actorAgentId: options?.actorAgentId,
+      error,
+      id,
+      status,
+    });
 
   updateStatusCascade = async (id: string, status: 'canceled' | 'completed') =>
     lambdaClient.task.updateStatusCascade.mutate({ id, status });
 
-  run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
-    lambdaClient.task.run.mutate({ id, ...params });
+  run = async (
+    id: string,
+    params?: { continueTopicId?: string; model?: string; prompt?: string; provider?: string },
+  ) => lambdaClient.task.run.mutate({ id, ...params });
 
   previewSubtaskLayers = async (id: string) => lambdaClient.task.previewSubtaskLayers.query({ id });
 
@@ -207,8 +299,16 @@ class TaskService {
     ...args: Parameters<typeof lambdaClient.task.updateVerifyConfig.mutate>
   ) => lambdaClient.task.updateVerifyConfig.mutate(...args);
 
+  /**
+   * Judge the task's output against its rubrics. The server picks the judge
+   * model (the task's own judge, else the topic model), so any device provider
+   * this tab runs is reason to stand by as its executor.
+   */
   runReview = async (id: string, params?: { content?: string; topicId?: string }) =>
-    lambdaClient.task.runReview.mutate({ id, ...params });
+    oneShotRelay.run(
+      () => buildLlmExecutorDeclaration()?.providers ?? [],
+      (relay) => lambdaClient.task.runReview.mutate({ id, ...params }, withLlmRelay(relay)),
+    );
 
   pinDocument = async (taskId: string, documentId: string, pinnedBy?: string) =>
     lambdaClient.task.pinDocument.mutate({ documentId, pinnedBy, taskId });

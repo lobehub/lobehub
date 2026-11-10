@@ -42,7 +42,7 @@ describe('sendFeishuAttachments', () => {
       },
     ]);
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.uploadImage).toHaveBeenCalledWith(expect.any(Buffer), 'foo.png');
     expect(api.sendMessageWithMsgType).toHaveBeenCalledWith(
       'oc_chat',
@@ -106,8 +106,11 @@ describe('sendFeishuAttachments', () => {
       { data: Buffer.from('b').toString('base64'), name: 'b.png', type: 'image' },
     ]);
 
-    expect(n).toBe(1);
+    expect(n.delivered).toBe(1);
     expect(api.sendMessageWithMsgType).toHaveBeenCalledTimes(1);
+    expect(n.failures).toEqual([
+      { detail: '429', name: 'a.png', reason: 'upload-failed', type: 'image' },
+    ]);
   });
 
   it('returns 0 when no attachments resolve', async () => {
@@ -117,7 +120,15 @@ describe('sendFeishuAttachments', () => {
       { type: 'image' } as any, // no data, no fetchUrl
     ]);
 
-    expect(n).toBe(0);
+    expect(n.delivered).toBe(0);
+    expect(n.failures).toEqual([
+      {
+        detail: 'attachment carries neither data nor fetchUrl',
+        name: undefined,
+        reason: 'source-unavailable',
+        type: 'image',
+      },
+    ]);
     expect(api.uploadImage).not.toHaveBeenCalled();
     expect(api.sendMessageWithMsgType).not.toHaveBeenCalled();
   });

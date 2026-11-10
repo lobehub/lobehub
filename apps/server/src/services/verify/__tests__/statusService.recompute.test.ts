@@ -16,19 +16,25 @@ vi.mock('../goalLoop', () => ({
   syncGoalToolState: vi.fn(),
 }));
 vi.mock('../acceptanceService', () => ({
-  AcceptanceService: vi.fn(() => ({
-    recomputeStatus: acceptanceRecomputeStatus,
-  })),
+  AcceptanceService: vi.fn(function () {
+    return {
+      recomputeStatus: acceptanceRecomputeStatus,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    findByOperation: runFindByOperation,
-    updateStatus: runUpdateStatus,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      findByOperation: runFindByOperation,
+      updateStatus: runUpdateStatus,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({ listByRun: resultListByRun })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRun: resultListByRun };
+  }),
 }));
 
 const db = {} as any;
@@ -100,6 +106,39 @@ describe('VerifyStatusService.recompute — errored rollup', () => {
     const status = await new VerifyStatusService(db, 'u1').recompute('op-1');
 
     expect(status).toBe('verifying');
+  });
+
+  it('a required check waived by an upheld dispute no longer gates the round', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }, { id: 'c2' }]));
+    resultListByRun.mockResolvedValue([
+      { checkItemId: 'c1', status: 'passed', verdict: 'passed' },
+      {
+        checkItemId: 'c2',
+        metadata: {
+          dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' },
+        },
+        status: 'failed',
+        verdict: 'failed',
+      },
+    ]);
+
+    expect(await new VerifyStatusService(db, 'u1').recompute('op-1')).toBe('passed');
+  });
+
+  it('an overruled dispute leaves the failed check gating the round', async () => {
+    runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }]));
+    resultListByRun.mockResolvedValue([
+      {
+        checkItemId: 'c1',
+        metadata: {
+          dispute: { arbitration: { outcome: 'overruled' }, kind: 'invalid_criterion' },
+        },
+        status: 'failed',
+        verdict: 'failed',
+      },
+    ]);
+
+    expect(await new VerifyStatusService(db, 'u1').recompute('op-1')).toBe('failed');
   });
 
   it('all passing required checks still roll up to `passed`', async () => {

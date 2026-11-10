@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImageOptions } from '../../core/openaiCompatible';
 import type { CreateImagePayload } from '../../types/image';
 import { createVolcengineImage } from './createImage';
 
@@ -11,11 +11,13 @@ vi.mock('debug', () => ({
 
 const mockGenerate = vi.fn();
 vi.mock('openai', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    images: {
-      generate: mockGenerate,
-    },
-  })),
+  default: vi.fn(function () {
+    return {
+      images: {
+        generate: mockGenerate,
+      },
+    };
+  }),
 }));
 
 describe('createVolcengineImage', () => {

@@ -1,5 +1,5 @@
-import { toast } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { toast } from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
+import { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
@@ -20,6 +21,13 @@ import {
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
+
+// Better Auth returns FORBIDDEN for several sign-in rejections (banned user,
+// access denied). Only the dedicated EMAIL_NOT_VERIFIED code means the account
+// is valid but needs to verify its address, so only that one goes to
+// /verify-email; every other 403 stays on the password field as an error.
+const isEmailNotVerifiedError = (error?: unknown) =>
+  (error as { code?: string } | null | undefined)?.code === 'EMAIL_NOT_VERIFIED';
 
 type Step = 'email' | 'password' | 'emailSent';
 
@@ -52,7 +60,19 @@ export const useSignIn = () => {
   const enableBusinessFeatures = useAuthServerConfigStore(
     (s) => s.serverConfig.enableBusinessFeatures || false,
   );
-  const [form] = Form.useForm<SignInFormValues>();
+  const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
+  const form = useForm<SignInFormValues>({
+    initialValues: { email: '', password: '' },
+    onSubmit: (values) => {
+      if (step === 'password') {
+        void handleSignIn(values);
+        return;
+      }
+      continueWithAgreement(() => {
+        void handleCheckUser(values);
+      });
+    },
+  });
   const [loading, setLoading] = useState(false);
   // Locks the email-dispatch actions (magic link / password reset / resend) so a
   // slow network can't be double-clicked into multiple emails.
@@ -79,7 +99,7 @@ export const useSignIn = () => {
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
-    if (emailParam) form.setFieldValue('email', emailParam);
+    if (emailParam) form.setValue('email', emailParam);
   }, [searchParams, form]);
 
   const handleSendMagicLink = async (targetEmail?: string): Promise<boolean> => {
@@ -88,9 +108,8 @@ export const useSignIn = () => {
       const emailValue =
         targetEmail ||
         (await form
-          .validateFields(['email'])
-          .then((v) => v.email as string)
-          .catch(() => null));
+          .validate(['email'])
+          .then(({ valid }) => (valid ? form.getValue('email') : null)));
       if (!emailValue) return false;
 
       setSending(true);
@@ -115,10 +134,8 @@ export const useSignIn = () => {
       setStep('emailSent');
       return true;
     } catch (error) {
-      if (!(error as any)?.errorFields) {
-        console.error('Magic link error:', error);
-        toast.error(t('betterAuth.signin.magicLinkError'));
-      }
+      console.error('Magic link error:', error);
+      toast.error(t('betterAuth.signin.magicLinkError'));
       return false;
     } finally {
       setSending(false);
@@ -228,7 +245,7 @@ export const useSignIn = () => {
         {
           onError: (ctx) => {
             console.error('Sign in error:', ctx.error);
-            if (ctx.error.status === 403) {
+            if (isEmailNotVerifiedError(ctx.error)) {
               navigate(
                 `/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
               );
@@ -241,16 +258,11 @@ export const useSignIn = () => {
         },
       );
 
-      if (result.error && result.error.status !== 403) {
+      if (result.error && !isEmailNotVerifiedError(result.error)) {
         // Wrong password is the most common sign-in failure. Keep the error
         // pinned inline on the field (persistent, with retry context) rather
         // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).
-        form.setFields([
-          {
-            errors: [result.error.message || t('betterAuth.signin.error')],
-            name: 'password',
-          },
-        ]);
+        form.setErrors({ password: result.error.message || t('betterAuth.signin.error') });
       }
     } catch (error) {
       console.error('Sign in error:', error);
@@ -322,11 +334,11 @@ export const useSignIn = () => {
     // Drop the previous account's password + any inline error. The form
     // instance is shared across steps and defaults to preserve, so without this
     // the next email's password step remounts pre-filled with the stale value.
-    form.resetFields(['password']);
+    form.reset({ ...form.getValues(), password: '' });
   };
 
   const handleGoToSignup = () => {
-    const currentEmail = form.getFieldValue('email');
+    const currentEmail = form.getValue('email');
     const callbackUrl = searchParams.get('callbackUrl') || '/';
     const params = new URLSearchParams();
     if (currentEmail) params.set('email', currentEmail);
@@ -399,6 +411,8 @@ export const useSignIn = () => {
     : resolvedProviders;
 
   return {
+    agreementChecked,
+    continueWithAgreement,
     disableEmailPassword,
     email,
     form,
@@ -418,6 +432,7 @@ export const useSignIn = () => {
     sessionExpired,
     sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
+    setAgreementChecked,
     socialLoading,
     step,
   };

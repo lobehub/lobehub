@@ -37,6 +37,7 @@ export const MESSENGER_PUSH_PLATFORMS = [
   'slack',
   'discord',
   'wechat',
+  'linq',
 ] as const satisfies readonly MessengerPlatform[];
 
 export type MessengerPushPlatform = (typeof MESSENGER_PUSH_PLATFORMS)[number];

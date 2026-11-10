@@ -1,12 +1,14 @@
+import { useTheme } from '@lobehub/ui';
 import { Billboard, Html, OrbitControls, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useTheme } from 'antd-style';
 import { memo, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import { type QueryTagsResult } from '@/database/models/userMemory';
 import UserAvatar from '@/features/User/UserAvatar';
+
+import { retainActiveConnections } from './retainActiveConnections';
 
 // Configuration constants
 const CONFIG = {
@@ -267,7 +269,8 @@ const ConnectionLine = memo<ConnectionLineProps>(
   },
 );
 
-const CenterAvatar = () => {
+// Connection animation updates must not rerender the DOM avatar mounted through Html.
+const CenterAvatar = memo(() => {
   return (
     <Html
       center
@@ -280,7 +283,7 @@ const CenterAvatar = () => {
       <UserAvatar shape={'circle'} size={80} />
     </Html>
   );
-};
+});
 
 interface CloudProps {
   radius?: number;
@@ -411,7 +414,7 @@ const Cloud = memo<CloudProps>(({ tags, radius = 20 }) => {
 
       setConnections((prev) => {
         // Filter out expired connections
-        const active = prev.filter((conn) => time - conn.birthTime < conn.duration);
+        const active = retainActiveConnections(prev, time);
 
         // If there are not enough connections, randomly add new ones
         const needed = connectionCount - active.length;

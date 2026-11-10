@@ -1,6 +1,6 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
-import type { AiModelReasoningConfig, ExtendParamsType } from 'model-bank';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
+import type { AiModelReasoningConfig, ExtendParamsType } from 'model-bank/aiModel';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 
 import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
 
@@ -344,6 +344,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
 
   if (modelExtendParams.includes('grok4_6ReasoningEffort') && chatConfig.grok4_6ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.grok4_6ReasoningEffort;
+  }
+
+  if (modelExtendParams.includes('grok4_7ReasoningEffort') && chatConfig.grok4_7ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.grok4_7ReasoningEffort;
   }
 
   if (modelExtendParams.includes('hy3ReasoningEffort') && chatConfig.hy3ReasoningEffort) {

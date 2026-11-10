@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreateVideoOptions } from '../../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../../core/openaiCompatible';
 import type { CreateVideoPayload } from '../../../types/video';
 import { createVolcengineVideo } from './createVideo';
 
@@ -40,18 +40,7 @@ describe('createVolcengineVideo', () => {
 
       const result = await createVolcengineVideo(payload, options);
 
-      expect(result).toEqual({ inferenceId: 'task-abc-123', useWebhook: true });
-    });
-
-    it('should return useWebhook: true to indicate webhook-based async flow', async () => {
-      mockFetch.mockResolvedValue({
-        json: () => Promise.resolve({ id: 'task-webhook' }),
-        ok: true,
-      });
-
-      const result = await createVolcengineVideo(payload, options);
-
-      expect((result as any).useWebhook).toBe(true);
+      expect(result).toEqual({ inferenceId: 'task-abc-123' });
     });
 
     it('should send minimal body with only prompt', async () => {

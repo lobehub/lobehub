@@ -12,7 +12,7 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useTaskStore } from '@/store/task';
 
 import { resolveTaskHandoffTopic } from './taskHandoff';
 
@@ -49,8 +49,13 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>((props) => {
     scopeAgentId: preferredAgentId,
   }));
 
-  const detailMatch = useMatch('/task/:taskId');
-  const resolvedViewedTaskId = viewedTaskId || detailMatch?.params.taskId;
+  // `:slug?` is the readable title tail the detail route appends; it never
+  // participates in resolution, so the match must tolerate it being absent.
+  const detailMatch = useMatch('/task/:taskId/:slug?');
+  const viewedTaskRef = viewedTaskId || detailMatch?.params.taskId;
+  const resolvedViewedTaskId = useTaskStore((s) =>
+    viewedTaskRef ? s.taskRefIndex?.[viewedTaskRef] : undefined,
+  );
 
   const scopedSelectedAgentId =
     scopedSelection.scopeAgentId === preferredAgentId
@@ -116,24 +121,13 @@ export const TaskAgentProvider = memo<TaskAgentProviderProps>((props) => {
     [activeTopicId, inboxAgentId, resolvedViewedTaskId, selectedAgentId],
   );
 
-  const chatKey = useMemo(() => messageMapKey(context), [context]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const operationState = useOperationState(context);
 
   if (!taskAgentId) return <ConversationSegmentSkeleton />;
 
   return (
     <TaskAgentSelectionContext value={selectTaskAgent}>
-      <ConversationProvider
-        context={context}
-        hasInitMessages={!!messages}
-        messages={messages}
-        operationState={operationState}
-        onMessagesChange={(msgs, ctx, meta) => {
-          replaceMessages(msgs, { context: ctx, source: meta?.source });
-        }}
-      >
+      <ConversationProvider context={context} operationState={operationState}>
         {children}
       </ConversationProvider>
     </TaskAgentSelectionContext>

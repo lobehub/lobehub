@@ -1,13 +1,15 @@
 'use client';
 
-import { type UIChatMessage } from '@lobechat/types';
-import { ActionIcon, FloatingSheet, type FloatingSheetProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  FloatingSheet,
+  type FloatingSheetProps,
+} from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SWRConfig } from 'swr';
 
 import {
   type ActionsBarConfig,
@@ -15,7 +17,7 @@ import {
   ConversationProvider,
 } from '@/features/Conversation';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
-import { type ConversationContext, type MessagesChangeMeta } from '@/features/Conversation/types';
+import { type ConversationContext } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import CopilotToolbar from '@/features/PageEditor/Copilot/Toolbar';
 import { PageAgentPanelOverrideProvider } from '@/features/PageEditor/RightPanel/OverrideContext';
@@ -23,7 +25,6 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useActionsBarConfig } from '@/routes/(main)/agent/features/Conversation/useActionsBarConfig';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ChatBody from './ChatBody';
@@ -106,6 +107,8 @@ export interface FloatingChatPanelProps {
   maxHeight?: number;
   minHeight?: number;
   mode?: 'embedded' | 'overlay';
+  /** Embedded mode only: collapse the hosting side panel from the toolbar. */
+  onCollapse?: () => void;
   onOpenChange?: (open: boolean) => void;
   onSnapPointChange?: (point: number) => void;
   open?: boolean;
@@ -131,7 +134,7 @@ export interface FloatingChatPanelProps {
  *
  * Single instance per page (see `./guard.ts`).
  */
-const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
+const FloatingChatPanel = memo<FloatingChatPanelProps>(
   ({
     agentId,
     topicId,
@@ -141,6 +144,7 @@ const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
     hooks,
     defaultOpen = false,
     mode = 'overlay',
+    onCollapse,
 
     width = '100%',
 
@@ -167,21 +171,6 @@ const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
     );
 
     const chatKey = useMemo(() => messageMapKey(context), [context]);
-
-    // ConversationProvider runs an isolated message store per panel — read the
-    // shared chat store's `dbMessagesMap` for this key and wire the standard
-    // `messages` / `onMessagesChange` sync pattern (mirrors `ConversationArea`
-    // in the main agent route). Without this loop the lifecycle's
-    // `chatStore.replaceMessages` after a send wouldn't propagate back into
-    // the panel's local message slice and the UI would stay empty.
-    const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-    const replaceMessages = useChatStore((s) => s.replaceMessages);
-    const handleMessagesChange = useCallback(
-      (next: UIChatMessage[], ctx: ConversationContext, meta?: MessagesChangeMeta) => {
-        replaceMessages(next, { context: ctx, source: meta?.source });
-      },
-      [replaceMessages],
-    );
 
     const operationState = useOperationState(context);
     const defaultActionsBar = useActionsBarConfig();
@@ -272,11 +261,8 @@ const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
       <ConversationProvider
         actionsBar={resolvedActionsBar}
         context={context}
-        hasInitMessages={!!messages}
         hooks={mergedHooks}
-        messages={messages}
         operationState={operationState}
-        onMessagesChange={handleMessagesChange}
       >
         <div
           className={`${styles.panel} ${isEmbedded ? styles.panelEmbedded : ''}`}
@@ -287,7 +273,11 @@ const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
           {isEmbedded ? (
             <>
               <PageAgentPanelOverrideProvider defaultExpand>
-                <CopilotToolbar topicId={activeTopicId} onTopicChange={setEmbeddedTopicId} />
+                <CopilotToolbar
+                  topicId={activeTopicId}
+                  onCollapse={onCollapse}
+                  onTopicChange={setEmbeddedTopicId}
+                />
               </PageAgentPanelOverrideProvider>
               <ChatBody />
               <InputRow isCollapsed={false} showExpandBar={false} onExpand={expand} />
@@ -305,22 +295,6 @@ const FloatingChatPanelInner = memo<FloatingChatPanelProps>(
     );
   },
 );
-
-FloatingChatPanelInner.displayName = 'FloatingChatPanelInner';
-
-/**
- * The panel's loading model is `messagesInit` gating inside ChatList — it was
- * never designed for SWR suspense mode. Hosts that render under a
- * `SWRConfig {suspense: true}` layout (e.g. the agent-doc page) would otherwise
- * suspend the whole panel on any conversation-adjacent hook, and a fetcher that
- * legitimately resolves `undefined` (SWR suspense never settles on undefined
- * data) turns that into a permanent skeleton with an infinite refetch loop.
- */
-const FloatingChatPanel = memo<FloatingChatPanelProps>((props) => (
-  <SWRConfig value={{ suspense: false }}>
-    <FloatingChatPanelInner {...props} />
-  </SWRConfig>
-));
 
 FloatingChatPanel.displayName = 'FloatingChatPanel';
 

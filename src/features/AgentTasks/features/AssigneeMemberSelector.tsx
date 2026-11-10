@@ -1,7 +1,5 @@
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Popover, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
-import Avatar from '@/components/Avatar';
+import UserAvatar from '@/components/UserAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { usePermission } from '@/hooks/usePermission';
@@ -19,11 +17,11 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { hasWorkspaceMemberDirectory } from '../shared/memberAssigneeMode';
+import { partitionSelfMember } from './assigneeMemberOptions';
 
 interface AssigneeMemberSelectorProps {
   children: ReactNode;
   currentUserId?: string | null;
-  disabled?: boolean;
   fullWidth?: boolean;
   onChange?: (userId: string | null) => void;
   taskCreatorId?: string | null;
@@ -71,6 +69,9 @@ const memberName = (member: WorkspaceMemberRow) =>
   member.user?.email?.trim() ||
   member.userId;
 
+const toMemberOption = (member: WorkspaceMemberRow) =>
+  ({ key: `member:${member.userId}`, kind: 'member', member }) as const;
+
 const matchesSearch = (member: WorkspaceMemberRow, query: string) =>
   [member.user?.fullName, member.user?.username, member.user?.email].some((label) =>
     (label ?? '').toLowerCase().includes(query),
@@ -85,11 +86,15 @@ const triggerStyle: CSSProperties = {
   minWidth: 0,
 };
 
+// `display: contents` keeps the disabled wrapper out of layout, so the trigger
+// lays out exactly as when enabled (e.g. a full-width property row stays
+// left-aligned instead of shrinking and being centered).
+const blockedContentStyle: CSSProperties = { display: 'contents', pointerEvents: 'none' };
+
 const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
   ({
     children,
     currentUserId,
-    disabled,
     fullWidth,
     onChange,
     taskCreatorId,
@@ -130,14 +135,19 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     );
     const unassignedLabel = t('taskList.unassigned');
     const showUnassigned = !query || unassignedLabel.toLowerCase().includes(query);
+    // Self sits right under "Unassigned" and out of the workspace member group,
+    // so assigning a task to yourself never means scanning the directory.
+    const { others: otherMembers, self: selfMember } = useMemo(
+      () => partitionSelfMember(filteredMembers, selfUserId),
+      [filteredMembers, selfUserId],
+    );
     const flatOptions = useMemo<MemberOption[]>(
       () => [
         ...(showUnassigned ? [{ key: 'unassigned', kind: 'unassigned' } as const] : []),
-        ...filteredMembers.map(
-          (member) => ({ key: `member:${member.userId}`, kind: 'member', member }) as const,
-        ),
+        ...(selfMember ? [toMemberOption(selfMember)] : []),
+        ...otherMembers.map((member) => toMemberOption(member)),
       ],
-      [filteredMembers, showUnassigned],
+      [otherMembers, selfMember, showUnassigned],
     );
     const optionIndexByKey = useMemo(
       () => new Map(flatOptions.map((option, index) => [option.key, index])),
@@ -155,7 +165,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     }, [optionIndexByKey, query, selectedKey]);
 
     const handleMemberChange = useCallback(
-      (userId: string | null) => {
+      (userId: string | null, member?: WorkspaceMemberRow) => {
         if (!canEditTask || userId === (currentUserId ?? null)) return;
         setKey((value) => value + 1);
         setSearch('');
@@ -163,14 +173,32 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
           onChange(userId);
           return;
         }
-        if (taskIdentifier) void updateTask(taskIdentifier, { assigneeUserId: userId });
+        if (taskIdentifier)
+          void updateTask(
+            taskIdentifier,
+            { assigneeUserId: userId },
+            // Member metadata lives in a business-layer hook the store must not
+            // reach for, so the picker hands over what it already has.
+            {
+              optimisticAssignee: member
+                ? {
+                    avatar: member.user?.avatar ?? null,
+                    id: member.userId,
+                    name: member.user?.fullName ?? null,
+                    type: 'user',
+                  }
+                : undefined,
+            },
+          );
       },
       [canEditTask, currentUserId, onChange, taskIdentifier, updateTask],
     );
 
     const handleSelect = useCallback(
       (option: MemberOption) =>
-        handleMemberChange(option.kind === 'member' ? option.member.userId : null),
+        option.kind === 'member'
+          ? handleMemberChange(option.member.userId, option.member)
+          : handleMemberChange(null),
       [handleMemberChange],
     );
 
@@ -215,8 +243,8 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
             title={member ? memberName(member) : unassignedLabel}
             icon={
               member ? (
-                <Avatar
-                  avatar={member.user?.avatar || undefined}
+                <UserAvatar
+                  avatar={member.user?.avatar}
                   name={memberName(member)}
                   shape={'circle'}
                   size={22}
@@ -231,15 +259,18 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
       );
     };
 
-    const blocked = disabled || !canEditTask;
+    // Only permission blocks this picker. The member assignee is the person who
+    // owns the outcome, not the executor, so a running task can still change
+    // hands — unlike the agent assignee, which stays locked while a run is live.
+    const blocked = !canEditTask;
     const currentTriggerStyle = fullWidth ? { ...triggerStyle, width: '100%' } : triggerStyle;
     const trigger = blocked ? (
-      <Tooltip title={disabled ? t('taskDetail.reassignDisabled') : reason}>
+      <Tooltip title={reason}>
         <div
           style={{ ...currentTriggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
           onClick={(event) => event.stopPropagation()}
         >
-          <span style={{ pointerEvents: 'none' }}>{children}</span>
+          <span style={blockedContentStyle}>{children}</span>
         </div>
       </Tooltip>
     ) : (
@@ -283,14 +314,13 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
                 style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
               >
                 {showUnassigned && renderOption({ key: 'unassigned', kind: 'unassigned' })}
-                {filteredMembers.length > 0 && (
+                {selfMember && renderOption(toMemberOption(selfMember))}
+                {otherMembers.length > 0 && (
                   <div className={styles.sectionHeader}>
-                    {t('taskList.assigneeSelector.memberGroup')}
+                    {t('taskList.assigneeSelector.workspaceMemberGroup')}
                   </div>
                 )}
-                {filteredMembers.map((member) =>
-                  renderOption({ key: `member:${member.userId}`, kind: 'member', member }),
-                )}
+                {otherMembers.map((member) => renderOption(toMemberOption(member)))}
               </Flexbox>
             )}
           </Flexbox>
