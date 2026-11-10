@@ -161,14 +161,6 @@ export const topicKeys = {
   ),
 };
 
-// ---- acceptance comment -------------------------------------------------
-export const acceptanceCommentKeys = {
-  list: def('acceptanceComment:list', (acceptanceId: string) => [
-    'acceptanceComment:list',
-    acceptanceId,
-  ]),
-};
-
 // ---- acceptance collaboration -------------------------------------------
 export const acceptanceCollaborationKeys = {
   conversation: def('acceptanceCollaboration:conversation', (acceptanceId: string) => [
@@ -670,59 +662,11 @@ export const expertiseKeys = {
   rules: def('expertise:rules', () => ['expertise:rules']),
 };
 
-/** The Acceptance list narrowing as key parts — mirrors `AcceptanceListQuery`. */
-interface AcceptanceListKeyQuery {
-  filter?: string;
-  projectId?: string | null;
-  scope?: string;
-  source?: string;
-}
-
-const acceptanceListKeyParts = ({ filter, projectId, scope, source }: AcceptanceListKeyQuery) => [
-  filter ?? '',
-  // `null` (no project) and `undefined` (any project) are different reads.
-  projectId === null ? '~none' : (projectId ?? ''),
-  scope ?? '',
-  source ?? '',
-];
-
 export const verifyKeys = {
-  /** Statuses for a known subject set. Ids are sorted+joined so the key is order-free. */
-  acceptanceStatuses: def(
-    'verify:acceptanceStatuses',
-    (subjectType: string, subjectIds: string[]) => [
-      'verify:acceptanceStatuses',
-      subjectType,
-      [...subjectIds].sort().join(','),
-    ],
-  ),
-  /**
-   * One scroll page of the list panel. Keyed by workspace + the status split +
-   * the cursor.
-   */
   acceptancePurgePreview: def('verify:acceptancePurgePreview', (acceptanceId: string) => [
     'verify:acceptancePurgePreview',
     acceptanceId,
   ]),
-  acceptancePage: def(
-    'verify:acceptancePage',
-    (workspaceId: string | undefined, query: AcceptanceListKeyQuery, cursor?: string) => [
-      'verify:acceptancePage',
-      workspaceId ?? '',
-      ...acceptanceListKeyParts(query),
-      cursor ?? '',
-    ],
-  ),
-  /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
-  acceptances: def(
-    'verify:acceptances',
-    (limit?: number, q?: string, query: AcceptanceListKeyQuery = {}) => [
-      'verify:acceptances',
-      String(limit ?? ''),
-      q ?? '',
-      ...acceptanceListKeyParts(query),
-    ],
-  ),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
@@ -745,15 +689,6 @@ export const verifyKeys = {
   rubrics: def('verify:rubrics', () => ['verify:rubrics']),
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
-
-/**
- * Match every cached Acceptance list read — the flat window's filter / limit /
- * search variants AND every loaded page of the panel's scroll feed. A write has
- * no idea how deep the panel has scrolled, so it invalidates the whole family.
- */
-export const isAcceptanceListKey = (key: unknown): boolean =>
-  Array.isArray(key) &&
-  (key[0] === verifyKeys.acceptances.root || key[0] === verifyKeys.acceptancePage.root);
 
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
@@ -1084,7 +1019,6 @@ export const swrKeys = {
   tool: toolKeys,
   topic: topicKeys,
   acceptanceCollaboration: acceptanceCollaborationKeys,
-  acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,
   topicAction: topicActionKeys,
