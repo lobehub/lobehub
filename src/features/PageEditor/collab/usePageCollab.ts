@@ -12,7 +12,7 @@ import { registerPageCollab } from '@/store/document/collabRegistry';
 import { pageActions } from '@/store/page';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { usePageEditorStore, useStoreApi } from '../store';
 import { getPresenceColor, type PresenceAwarenessData } from './presence';
@@ -42,7 +42,10 @@ const readGatewayUrl = () => {
     : undefined;
 };
 
-export const usePageCollabEnabled = () => !!readGatewayUrl();
+export const usePageCollabEnabled = () => {
+  const labEnabled = useUserStore(labPreferSelectors.enablePageCollab);
+  return labEnabled && !!readGatewayUrl();
+};
 
 /**
  * Whether this document edits through a room. Only workspace pages do: a

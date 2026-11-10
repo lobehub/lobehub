@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDocumentStore } from '@/store/document';
+import { useUserStore } from '@/store/user';
 
 import { usePageCollabEligible } from './usePageCollab';
 
@@ -13,6 +14,11 @@ vi.mock('@/store/serverConfig', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   getServerConfigStoreState: () => ({ serverConfig: serverConfig.value }),
 }));
+
+const setPageCollabLab = (enablePageCollab: boolean) =>
+  useUserStore.setState((s) => ({
+    preference: { ...s.preference, lab: { ...s.preference.lab, enablePageCollab } },
+  }));
 
 const loadDocument = (workspaceId: string | null) =>
   useDocumentStore.setState({
@@ -27,6 +33,14 @@ describe('usePageCollabEligible', () => {
       enableWorkspacePageCollab: true,
     };
     useDocumentStore.setState({ documentDetailMap: {}, documents: {} });
+    setPageCollabLab(true);
+  });
+
+  it('keeps a workspace page out of rooms until the user turns on the lab', () => {
+    setPageCollabLab(false);
+    loadDocument('ws_1');
+
+    expect(renderHook(() => usePageCollabEligible('doc_1')).result.current).toBe(false);
   });
 
   it('puts a workspace page in a room', () => {
