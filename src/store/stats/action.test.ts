@@ -117,10 +117,10 @@ describe('stats replicas', () => {
     renderHook(() => statsActions.useFetchHeatmap('tokens'), { wrapper });
 
     await waitFor(() => expect(statsSelectors.heatmap('tokens')(read())).toEqual([]));
-    expect(statsSelectors.isHeatmapConfirmed('tokens')(read())).toBe(false);
+    expect(statsSelectors.settledHeatmap('tokens')(read())).toBeUndefined();
 
     await act(async () => network.resolve([]));
-    await waitFor(() => expect(statsSelectors.isHeatmapConfirmed('tokens')(read())).toBe(true));
+    await waitFor(() => expect(statsSelectors.settledHeatmap('tokens')(read())).toEqual([]));
   });
 
   it('keeps a restored empty ranking unsettled until the server confirms it', async () => {
@@ -241,6 +241,33 @@ describe('stats replicas', () => {
     vi.useRealTimers();
   });
 
+  it('surfaces the error when a restored empty usage table fails to refresh', async () => {
+    await usageLogsResource.storage!.set(
+      { queryKey: usageLogsResource.storageKey('2026-01'), scope },
+      { data: [], updatedAt: 1 },
+    );
+    vi.spyOn(usageService, 'findByMonth').mockRejectedValue(new Error('offline'));
+
+    const { result } = renderHook(() => statsActions.useFetchUsageLogs('2026-01'), { wrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // Unsettled data + an error: the table's AsyncBoundary renders the error and Retry.
+    expect(statsSelectors.settledUsageLogs('2026-01')(read())).toBeUndefined();
+  });
+
+  it('surfaces the error when a restored empty heatmap fails to refresh', async () => {
+    await statsHeatmapResource.storage!.set(
+      { queryKey: statsHeatmapResource.storageKey('messages'), scope },
+      { data: [], updatedAt: 1 },
+    );
+    vi.spyOn(messageService, 'getHeatmaps').mockRejectedValue(new Error('offline'));
+
+    const { result } = renderHook(() => statsActions.useFetchHeatmap('messages'), { wrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(statsSelectors.settledHeatmap('messages')(read())).toBeUndefined();
+  });
+
   it('reads a restored empty usage table as unconfirmed until the server answers', async () => {
     await usageLogsResource.storage!.set(
       { queryKey: usageLogsResource.storageKey('2026-01'), scope },
@@ -252,10 +279,10 @@ describe('stats replicas', () => {
     renderHook(() => statsActions.useFetchUsageLogs('2026-01'), { wrapper });
 
     await waitFor(() => expect(statsSelectors.usageLogs('2026-01')(read())).toEqual([]));
-    expect(statsSelectors.isUsageLogsConfirmed('2026-01')(read())).toBe(false);
+    expect(statsSelectors.settledUsageLogs('2026-01')(read())).toBeUndefined();
 
     await act(async () => network.resolve([]));
-    await waitFor(() => expect(statsSelectors.isUsageLogsConfirmed('2026-01')(read())).toBe(true));
+    await waitFor(() => expect(statsSelectors.settledUsageLogs('2026-01')(read())).toEqual([]));
   });
 
   it('seeds the stats page from storage before any card mounts', async () => {
@@ -278,7 +305,7 @@ describe('stats replicas', () => {
     expect(statsSelectors.total('agents')(read())).toEqual({ count: 14, prevCount: 1 });
     expect(statsSelectors.heatmap('tokens')(read())).toEqual(cells(3));
     expect(statsSelectors.usageByDay()(read())).toEqual([{ day: 'stored' }]);
-    expect(statsSelectors.isHeatmapConfirmed('tokens')(read())).toBe(false);
+    expect(statsSelectors.settledHeatmap('tokens')(read())).toEqual(cells(3));
   });
 
   it("drops the previous identity's numbers on reset", async () => {

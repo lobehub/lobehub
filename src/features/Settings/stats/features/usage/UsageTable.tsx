@@ -4,6 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import InlineTable from '@/components/InlineTable';
 import { ProviderIcon } from '@/components/LobeIcons';
 import SpendType, { type SpendTypeValue } from '@/components/SpendType';
@@ -46,11 +47,11 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   // namespace, so the two tables stay worded alike.
   const { t: tSpend } = useTranslation('spend');
 
-  statsActions.useFetchUsageLogs(dateStrings);
-  const data = useStatsStore(statsSelectors.usageLogs(dateStrings));
-  // A restored empty month predates any usage since; wait for the server.
-  const isConfirmed = useStatsStore(statsSelectors.isUsageLogsConfirmed(dateStrings));
-  const isLoading = !data || (data.length === 0 && !isConfirmed);
+  const { error, revalidate } = statsActions.useFetchUsageLogs(dateStrings);
+  // A restored empty month stays unsettled until the server confirms it, so a
+  // failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledUsageLogs(dateStrings));
+  const isLoading = !data;
 
   // Page and page size move together — the size picker keeps the first visible
   // row in view, so it recalculates the page as well. One update, one
@@ -162,7 +163,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   ];
 
   return (
-    <>
+    <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => revalidate()}>
       <InlineTable
         columns={columns}
         dataSource={pageData}
@@ -191,7 +192,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
           }
         />
       )}
-    </>
+    </AsyncBoundary>
   );
 });
 

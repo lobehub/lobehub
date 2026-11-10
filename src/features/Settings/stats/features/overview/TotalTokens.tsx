@@ -23,7 +23,8 @@ const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
 
   const { error, revalidate } = statsActions.useFetchHeatmap(HeatmapType.Tokens);
-  const data = useStatsStore(statsSelectors.heatmap(HeatmapType.Tokens));
+  // A restored empty series is not a confident zero until the server confirms it.
+  const data = useStatsStore(statsSelectors.settledHeatmap(HeatmapType.Tokens));
 
   const { count, prevCount } = useMemo(() => {
     if (!data?.length) return { count: 0, prevCount: 0 };

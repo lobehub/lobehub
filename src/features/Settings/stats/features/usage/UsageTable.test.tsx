@@ -36,8 +36,8 @@ const rows = Array.from({ length: 12 }, (_, index) => ({
 }));
 
 vi.mock('@/store/stats', () => ({
-  statsActions: { useFetchUsageLogs: vi.fn() },
-  statsSelectors: { isUsageLogsConfirmed: () => () => true, usageLogs: () => () => rows },
+  statsActions: { useFetchUsageLogs: () => ({ error: undefined, revalidate: vi.fn() }) },
+  statsSelectors: { settledUsageLogs: () => () => rows },
   useStatsStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 

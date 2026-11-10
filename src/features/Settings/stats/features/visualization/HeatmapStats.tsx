@@ -28,9 +28,8 @@ const HeatmapStats = memo(() => {
   const { t } = useTranslation('auth');
 
   statsActions.useFetchHeatmap(HeatmapType.Tokens);
-  const data = useStatsStore(statsSelectors.heatmap(HeatmapType.Tokens));
-  const isConfirmed = useStatsStore(statsSelectors.isHeatmapConfirmed(HeatmapType.Tokens));
-  const loading = !data || (data.length === 0 && !isConfirmed);
+  const data = useStatsStore(statsSelectors.settledHeatmap(HeatmapType.Tokens));
+  const loading = !data;
 
   statsActions.useFetchMaxTaskDuration();
   const maxTaskDuration = useStatsStore(statsSelectors.maxTaskDuration);

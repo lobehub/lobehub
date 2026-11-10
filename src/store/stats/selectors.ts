@@ -36,14 +36,17 @@ const heatmap =
     s.heatmapMap[kind];
 
 /**
- * A restored heatmap may be an empty snapshot from before the user's first
- * message; it only reads as "no activity" once this session's server answer
- * says so.
+ * The heatmap once it can be shown as is: a restored empty year may predate the
+ * user's first message, so it stays `undefined` (loading, or the fetch error)
+ * until this session's server answer confirms it.
  */
-const isHeatmapConfirmed =
+const settledHeatmap =
   (kind: StatsHeatmapKind) =>
-  (s: StatsState): boolean =>
-    s.heatmapReplica.entries[kind]?.source === 'server';
+  (s: StatsState): StatsHeatmap | undefined => {
+    const data = s.heatmapMap[kind];
+    if (!data || data.length > 0) return data;
+    return s.heatmapReplica.entries[kind]?.source === 'server' ? data : undefined;
+  };
 
 const rank =
   <K extends StatsRankKind>(kind: K) =>
@@ -78,11 +81,15 @@ const usageLogs =
   (s: StatsState): UsageLogs | undefined =>
     s.usageLogsMap[usageMonthKey(month)];
 
-/** A restored empty table is not "no usage this month" until the server confirms it. */
-const isUsageLogsConfirmed =
+/** Same as `settledHeatmap`: a restored empty month is not "no usage" until the server says so. */
+const settledUsageLogs =
   (month?: string) =>
-  (s: StatsState): boolean =>
-    s.usageLogsReplica.entries[usageMonthKey(month)]?.source === 'server';
+  (s: StatsState): UsageLogs | undefined => {
+    const key = usageMonthKey(month);
+    const data = s.usageLogsMap[key];
+    if (!data || data.length > 0) return data;
+    return s.usageLogsReplica.entries[key]?.source === 'server' ? data : undefined;
+  };
 
 const agentUsage =
   (params: AgentUsageParams | null) =>
@@ -93,11 +100,11 @@ export const statsSelectors = {
   agentUsage,
   count,
   heatmap,
-  isHeatmapConfirmed,
-  isUsageLogsConfirmed,
   maxTaskDuration,
   rank,
+  settledHeatmap,
   settledRank,
+  settledUsageLogs,
   registration,
   total,
   usageByDay,
