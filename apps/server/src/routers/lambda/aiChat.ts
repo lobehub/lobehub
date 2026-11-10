@@ -31,6 +31,7 @@ import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { assertCanUseConversationTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
+import { toRuntimeErrorCause } from '@/server/routers/lambda/_helpers/runtimeErrorCause';
 import { resolveAgentReference } from '@/server/services/agent/resolveReference';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -105,18 +106,8 @@ const createRuntimeTRPCError = (
   if (runtimeStatus) {
     if (options?.silentHandlerLog && runtimeStatus < 500) markSilentTRPCErrorLog(error);
 
-    // The lambda errorFormatter forwards `cause.data` to the client as
-    // `errorData`. Expose the runtime payload there so callers such as the
-    // input-completion alert can read structured details (e.g. which budget
-    // rule blocked), the same payload the chat error card receives.
-    const record = toRecord(error);
-    const cause =
-      record && !(error instanceof Error) && !('data' in record)
-        ? { ...record, data: record }
-        : error;
-
     return new TRPCError({
-      cause,
+      cause: toRuntimeErrorCause(error),
       code: getTRPCErrorCodeFromStatus(runtimeStatus),
       message:
         typeof errorType === 'string'
