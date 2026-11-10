@@ -81,6 +81,6 @@ export const repositorySelection = (
     ? {
         ...(workspace && { drive: published ? 'public' : 'personal' }),
         environmentId: environment.id,
-        workingDirectory: projectCheckoutDirectory(projectId, environment.name),
+        workingDirectory: projectCheckoutDirectory(projectId, environment),
       }
     : { environmentId: environment.id };

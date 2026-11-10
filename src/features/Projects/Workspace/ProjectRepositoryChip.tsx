@@ -20,6 +20,8 @@ interface ProjectRepositoryChipProps {
   compact?: boolean;
   disabled?: boolean;
   projectId: string;
+  /** Repositories added here are published: the agent is workspace-public and applies nothing else. */
+  publish?: boolean;
   state: ReturnType<typeof useProjectRepository>;
 }
 
@@ -33,12 +35,13 @@ const ProjectRepositoryChip = ({
   compact,
   disabled,
   projectId,
+  publish,
   state,
 }: ProjectRepositoryChipProps) => {
   const { t } = useTranslation('project');
   const { loaded, repositories, repository, setPickedId } = state;
 
-  const addRepository = () => openAddRepositoryModal({ onAdded: setPickedId, projectId });
+  const addRepository = () => openAddRepositoryModal({ onAdded: setPickedId, projectId, publish });
 
   if (!loaded) return null;
 

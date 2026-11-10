@@ -637,6 +637,7 @@ export const setupTurn = async (
       const fallbackTitleSource = markdownToTxt(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
       const metadataWithSnapshot = await withProjectSandbox(deps, {
+        agentId: resolvedAgentId,
         hasDirectory: !!projectDirectory,
         metadata: metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined,
         projectId: turnProjectId,

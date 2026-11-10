@@ -67,12 +67,14 @@ export const resolveTurnProjectId = async (
 export const withProjectSandbox = async (
   deps: TurnProjectDeps,
   input: {
+    /** The agent the run is for; its visibility decides which repositories it may apply. */
+    agentId?: string;
     hasDirectory: boolean;
     metadata: ChatTopicMetadata | undefined;
     projectId: string | undefined;
   },
 ): Promise<ChatTopicMetadata | undefined> => {
-  const { hasDirectory, metadata, projectId } = input;
+  const { agentId, hasDirectory, metadata, projectId } = input;
   if (!projectId || hasDirectory) return metadata;
   if (
     metadata?.sandboxEnvironmentId ||
@@ -81,7 +83,7 @@ export const withProjectSandbox = async (
   )
     return metadata;
 
-  const sandbox = await resolveProjectTopicSandbox({ ...deps, projectId });
+  const sandbox = await resolveProjectTopicSandbox({ ...deps, agentId, projectId });
   if (Object.keys(sandbox).length === 0) return metadata;
 
   return { ...metadata, ...sandbox };

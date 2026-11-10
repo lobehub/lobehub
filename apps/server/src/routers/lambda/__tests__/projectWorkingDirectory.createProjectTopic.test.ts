@@ -93,6 +93,7 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
 
     expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
       expect.objectContaining({
+        agentId: 'coordinator',
         environmentId: 'env-repo',
         projectId: 'project-1',
         workspaceId: 'ws-1',

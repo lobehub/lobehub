@@ -86,7 +86,10 @@ describe('repositorySelection', () => {
   it("keeps a project conversation in the project's checkout of the repository", () => {
     expect(
       repositorySelection(repo, { projectId: 'proj_1', published: false, workspace: false }),
-    ).toEqual({ environmentId: 'env-repo', workingDirectory: 'projects/proj_1/agent-mail' });
+    ).toEqual({
+      environmentId: 'env-repo',
+      workingDirectory: 'projects/proj_1/agent-mail-env-repo',
+    });
   });
 
   it('puts a private checkout on the personal drive and a published one on the public drive', () => {

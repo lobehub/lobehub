@@ -3,12 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   findEnvironmentById: vi.fn(),
+  getAgentVisibility: vi.fn(),
   listEnvironments: vi.fn(),
 }));
 
 vi.mock('@/database/models/project', () => ({
   ProjectModel: vi.fn(function () {
     return { listEnvironments: mocks.listEnvironments };
+  }),
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(function () {
+    return { getAgentVisibility: mocks.getAgentVisibility };
   }),
 }));
 
@@ -39,12 +46,13 @@ describe('resolveProjectTopicSandbox', () => {
   beforeEach(() => {
     mocks.listEnvironments.mockReset().mockResolvedValue([repository]);
     mocks.findEnvironmentById.mockReset().mockResolvedValue(repository);
+    mocks.getAgentVisibility.mockReset().mockResolvedValue('private');
   });
 
   it("works in the project's repository, checked out in the project's folder", async () => {
     await expect(resolve()).resolves.toEqual({
       sandboxEnvironmentId: 'env-repo',
-      sandboxWorkingDirectory: 'projects/proj_1/agent-mail',
+      sandboxWorkingDirectory: 'projects/proj_1/agent-mail-env-repo',
     });
   });
 
@@ -80,7 +88,31 @@ describe('resolveProjectTopicSandbox', () => {
 
     await expect(resolve({ environmentId: 'env-other' })).resolves.toEqual({
       sandboxEnvironmentId: 'env-other',
-      sandboxWorkingDirectory: 'projects/proj_1/lobe-tts',
+      sandboxWorkingDirectory: 'projects/proj_1/lobe-tts-env-othe',
+    });
+  });
+
+  // A workspace-public agent applies published environments only; picking a
+  // private one would show a repository the run then never clones.
+  it('never gives a workspace-public agent a private repository', async () => {
+    mocks.getAgentVisibility.mockResolvedValue('public');
+
+    await expect(resolve({ agentId: 'agt-shared', workspaceId: 'ws-1' })).resolves.toEqual({});
+    await expect(
+      resolve({ agentId: 'agt-shared', environmentId: 'env-repo', workspaceId: 'ws-1' }),
+    ).resolves.toEqual({});
+    expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
+  });
+
+  it('gives a workspace-public agent the published repository', async () => {
+    const published = { ...repository, id: 'env-pub', visibility: 'public' };
+    mocks.getAgentVisibility.mockResolvedValue('public');
+    mocks.listEnvironments.mockResolvedValue([repository, published]);
+    mocks.findEnvironmentById.mockResolvedValue(published);
+
+    await expect(resolve({ agentId: 'agt-shared', workspaceId: 'ws-1' })).resolves.toMatchObject({
+      sandboxDrive: 'public',
+      sandboxEnvironmentId: 'env-pub',
     });
   });
 

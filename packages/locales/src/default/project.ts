@@ -308,6 +308,8 @@ export default {
   'overview.context.repository.addAction': 'Add',
   'overview.context.repository.addTitle': 'Add a repository to this project',
   'overview.context.repository.attachFailed': "Couldn't add the repository to this project",
+  'overview.context.repository.publishHint':
+    'This agent is shared with the workspace and only uses published environments, so the repository is added as one that workspace members can see.',
   'overview.context.repository.tooltip':
     'New conversations work in this repository, cloned before the first command.',
   'overview.context.settings': 'Repositories and environments',

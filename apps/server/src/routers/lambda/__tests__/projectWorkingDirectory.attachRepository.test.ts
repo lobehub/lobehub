@@ -66,6 +66,7 @@ describe('projectWorkingDirectory.attachRepository', () => {
       defaultBranch: undefined,
       name: 'lobehub/lobe-tts',
       repositoryUrl: 'https://github.com/lobehub/lobe-tts',
+      visibility: undefined,
     });
     expect(mocks.attachEnvironment).toHaveBeenCalledWith('project-1', 'env-repo');
     expect(result.data).toEqual({ id: 'env-repo', name: 'lobehub/lobe-tts' });
@@ -76,5 +77,16 @@ describe('projectWorkingDirectory.attachRepository', () => {
 
     await expect(caller().attachRepository(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mocks.ensureForRepository).not.toHaveBeenCalled();
+  });
+
+  // A workspace-public agent applies published environments only.
+  it('publishes the environment when asked to', async () => {
+    mocks.findManageableById.mockResolvedValue({ id: 'project-1' });
+
+    await caller().attachRepository({ ...input, visibility: 'public' });
+
+    expect(mocks.ensureForRepository).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: 'public' }),
+    );
   });
 });

@@ -112,13 +112,14 @@ describe('withProjectSandbox', () => {
   it("puts a new project conversation in the project's checkout", async () => {
     await expect(
       withProjectSandbox(deps, {
+        agentId: 'agt-1',
         hasDirectory: false,
         metadata: { reasoningConfig: { effort: 'high' } } as never,
         projectId: 'proj-1',
       }),
     ).resolves.toEqual({ reasoningConfig: { effort: 'high' }, ...sandbox });
     expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: 'proj-1', userId: 'user-1' }),
+      expect.objectContaining({ agentId: 'agt-1', projectId: 'proj-1', userId: 'user-1' }),
     );
   });
 

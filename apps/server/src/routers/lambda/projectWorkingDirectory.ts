@@ -153,6 +153,7 @@ export const projectWorkingDirectoryRouter = router({
         // A project with a repository works in it from the first message: the
         // topic is written before any run, so no later pick would reach it.
         resolveProjectTopicSandbox({
+          agentId: input.agentId,
           db: ctx.serverDB,
           environmentId: input.environmentId,
           projectId: input.projectId,
@@ -201,9 +202,11 @@ export const projectWorkingDirectoryRouter = router({
           name: z.string().trim().min(1).max(255),
           url: z.string().min(1).max(2048),
         }),
+        /** `public` for a workspace-public agent, which applies published environments only. */
+        visibility: z.enum(['private', 'public']).optional(),
       }),
     )
-    .mutation(async ({ ctx, input: { projectId, repository } }) => {
+    .mutation(async ({ ctx, input: { projectId, repository, visibility } }) => {
       // Checked before the environment is made, so a refusal leaves nothing behind.
       if (!(await ctx.projectModel.findManageableById(projectId)))
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found or access denied' });
@@ -211,6 +214,7 @@ export const projectWorkingDirectoryRouter = router({
         defaultBranch: repository.defaultBranch,
         name: repository.name,
         repositoryUrl: repository.url,
+        visibility,
       });
       await ctx.projectModel.attachEnvironment(projectId, environment.id);
       return { data: environment, success: true };

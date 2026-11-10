@@ -9,14 +9,21 @@ const toSegment = (value: string) =>
 
 /**
  * A project's checkout of one repository on the drive: one folder per project
- * and repository, shared by every conversation in the project, so work done in
+ * and environment, shared by every conversation in the project, so work done in
  * one is there for the next — the way a local clone is.
  *
- * Keyed by the project's id rather than its slug: a renamed project must keep
- * its checkout, not start a fresh clone beside the old one.
+ * Keyed by the project's id rather than its slug, so a renamed project keeps its
+ * checkout. Named after the repository for whoever browses the drive, with the
+ * environment's id after it: two repositories of one name (`orgA/api`,
+ * `orgB/api`) must not share a folder, or the second would run against the
+ * first one's checkout — a filled folder is never initialized again.
  */
-export const projectCheckoutDirectory = (projectId: string, repositoryName: string) => {
-  const repository = toSegment(repositoryName.split('/').pop() ?? '') || 'repository';
+export const projectCheckoutDirectory = (
+  projectId: string,
+  environment: { id: string; name: string },
+) => {
+  const repository = toSegment(environment.name.split('/').pop() ?? '') || 'repository';
+  const id = toSegment(environment.id).slice(0, 8);
 
-  return `${PROJECT_DRIVE_ROOT}/${toSegment(projectId)}/${repository}`;
+  return `${PROJECT_DRIVE_ROOT}/${toSegment(projectId)}/${id ? `${repository}-${id}` : repository}`;
 };

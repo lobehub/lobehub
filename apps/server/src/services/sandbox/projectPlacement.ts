@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatTopicMetadata } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { ProjectModel } from '@/database/models/project';
 
@@ -14,6 +15,8 @@ export type ProjectTopicSandbox = Pick<
 >;
 
 export interface ProjectTopicSandboxInput {
+  /** The agent the conversation runs; a workspace-public one applies published environments only. */
+  agentId?: string;
   db: LobeChatDatabase;
   /** A repository the composer picked; must be one linked to the project. */
   environmentId?: string;
@@ -40,10 +43,16 @@ const hasGitSource = (configuration: { sources?: { kind?: string }[] } | null | 
  * A private repository goes on the member's personal drive: the public drive
  * is every member's, and the checkout can hold its owner's credentials.
  *
+ * A workspace-public agent runs on its caller's session and applies published
+ * environments only (see `resolveInitialization`), so for one a private
+ * repository is never picked: it would be shown as the conversation's
+ * repository and then never cloned.
+ *
  * Never throws; a project with no repository starts where any conversation
  * does.
  */
 export const resolveProjectTopicSandbox = async ({
+  agentId,
   db,
   environmentId,
   projectId,
@@ -52,21 +61,25 @@ export const resolveProjectTopicSandbox = async ({
 }: ProjectTopicSandboxInput): Promise<ProjectTopicSandbox> => {
   try {
     const linked = await new ProjectModel(db, userId, workspaceId).listEnvironments(projectId);
-    const picked = environmentId
-      ? linked.find((item) => item.id === environmentId)
-      : linked.find((item) => hasGitSource(item.configuration));
+    const sharedAgent =
+      !!workspaceId &&
+      !!agentId &&
+      (await new AgentModel(db, userId, workspaceId).getAgentVisibility(agentId)) === 'public';
+    const usable = linked.filter(
+      (item) => hasGitSource(item.configuration) && (!sharedAgent || item.visibility === 'public'),
+    );
+    const picked = environmentId ? usable.find((item) => item.id === environmentId) : usable[0];
     if (!picked) return {};
 
     const environment = await new EnvironmentModel(db, userId, workspaceId).findById(picked.id);
     if (!environment) return {};
-    if (!hasGitSource(environment.configuration)) return { sandboxEnvironmentId: environment.id };
 
     const drive: SandboxDrive = environment.visibility === 'public' ? 'public' : 'personal';
 
     return {
       ...(workspaceId && { sandboxDrive: drive }),
       sandboxEnvironmentId: environment.id,
-      sandboxWorkingDirectory: projectCheckoutDirectory(projectId, environment.name),
+      sandboxWorkingDirectory: projectCheckoutDirectory(projectId, environment),
     };
   } catch (error) {
     log('Failed to resolve the sandbox for a topic in project %s: %O', projectId, error);

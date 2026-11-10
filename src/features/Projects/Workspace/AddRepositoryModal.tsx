@@ -24,6 +24,11 @@ import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 interface AddRepositoryContentProps {
   onAdded: (environmentId: string) => void;
   projectId: string;
+  /**
+   * Add it as a published environment: the composer's agent is workspace-public
+   * and applies nothing else, so a private one would be linked and never used.
+   */
+  publish?: boolean;
 }
 
 /**
@@ -32,7 +37,7 @@ interface AddRepositoryContentProps {
  * dialog works whether or not GitHub is connected. The environment that checks
  * it out is the caller's own, reused when they already have one for it.
  */
-const AddRepositoryContent = ({ onAdded, projectId }: AddRepositoryContentProps) => {
+const AddRepositoryContent = ({ onAdded, projectId, publish }: AddRepositoryContentProps) => {
   const { t } = useTranslation(['project', 'common']);
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
@@ -51,6 +56,7 @@ const AddRepositoryContent = ({ onAdded, projectId }: AddRepositoryContentProps)
       const environment = await attachRepository({
         projectId,
         repository: { defaultBranch, name: repository.fullName, url: repository.url },
+        ...(publish && { visibility: 'public' as const }),
       });
       close();
       onAdded(environment.id);
@@ -98,6 +104,11 @@ const AddRepositoryContent = ({ onAdded, projectId }: AddRepositoryContentProps)
             </Text>
           )}
         </Flexbox>
+        {publish && (
+          <Text fontSize={12} type={'secondary'}>
+            {t('overview.context.repository.publishHint')}
+          </Text>
+        )}
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

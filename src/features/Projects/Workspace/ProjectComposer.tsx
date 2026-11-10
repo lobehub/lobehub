@@ -8,6 +8,7 @@ import { PlusIcon, SettingsIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useUploadFiles } from '@/components/DragUploadZone';
 import {
   type ActionKeys,
@@ -143,7 +144,12 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   // A pick that left the project (disabled or removed) falls back to the main agent.
   const agentId =
     agents.find((agent) => agent.id === pickedAgentId)?.id ?? project.coordinatorAgentId;
-  const repositoryState = useProjectRepository(project.id);
+  const workspaceId = useActiveWorkspaceId();
+  // A workspace-public agent applies published environments only.
+  const sharedAgent = useAgentStore(
+    (s) => !!workspaceId && s.agentMap[agentId]?.visibility === 'public',
+  );
+  const repositoryState = useProjectRepository(project.id, sharedAgent);
   const canManageProject = useCanManageProject();
   // A task is not started in a conversation, so it has no repository to pick.
   const environmentId = mode === 'chat' ? repositoryState.repository?.id : undefined;
@@ -222,6 +228,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
                 compact={compact}
                 disabled={sending}
                 projectId={project.id}
+                publish={sharedAgent}
                 state={repositoryState}
               />
             )}
