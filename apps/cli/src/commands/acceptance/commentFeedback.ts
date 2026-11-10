@@ -26,7 +26,12 @@ export const collectCommentFeedback = (
     const check = root.checkItemId ? checksById.get(root.checkItemId) : undefined;
     const annotation =
       root.evidenceId && root.rect
-        ? { comment: item.content, evidenceId: root.evidenceId, rect: root.rect }
+        ? {
+            comment: item.content,
+            evidenceId: root.evidenceId,
+            rect: root.rect,
+            ...(root.time ? { time: root.time } : {}),
+          }
         : undefined;
     const page = root.source
       ? {

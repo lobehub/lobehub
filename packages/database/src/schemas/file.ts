@@ -318,6 +318,14 @@ export type FileUploadItem = typeof fileUploads.$inferSelect;
 /** Knowledge-base visibility — shared by column def and insert schema. */
 export const KNOWLEDGE_BASE_VISIBILITY = ['private', 'public'] as const;
 
+/**
+ * `knowledge_bases.type` values marking a library dedicated to one owner (an
+ * agent's or project's own space). A NULL type is an ordinary user library.
+ * Owned libraries are reached through their owner, never through library lists.
+ */
+export const DEDICATED_KNOWLEDGE_BASE_TYPES = ['agent', 'project'] as const;
+export type DedicatedKnowledgeBaseType = (typeof DEDICATED_KNOWLEDGE_BASE_TYPES)[number];
+
 export const knowledgeBases = pgTable(
   'knowledge_bases',
   {

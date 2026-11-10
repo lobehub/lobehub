@@ -46,4 +46,22 @@ describe('TaskWorkingDirectoryChip', () => {
 
     expect(screen.getByText('/repos/notification-center')).toBeInTheDocument();
   });
+
+  // An unset directory is the machine's default folder, not a blank: the trigger
+  // names it and the list checks it, even before it is one of the recents.
+  it('shows and checks the fallback folder when the task picks none', () => {
+    render(
+      <TaskWorkingDirectoryChip
+        deviceId="device-1"
+        fallback={{ path: '/repos/default-home' }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /\/repos\/default-home/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getAllByText('default-home').length).toBeGreaterThan(1);
+  });
 });

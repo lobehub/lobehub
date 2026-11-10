@@ -69,6 +69,7 @@ describe('resolveTrayNavigationSnapshot', () => {
         recent({
           agentId: 'agent-1',
           id: 'task-1',
+          taskIdentifier: 'T-3',
           routePath: '/agent/agent-1/task/task-1',
           slugTitle: 'Ship it',
           title: 'Ship it',
@@ -84,7 +85,7 @@ describe('resolveTrayNavigationSnapshot', () => {
       {
         subtitle: 'Researcher',
         title: 'Ship it',
-        url: '/acme/agent/agent-1/task/task-1/ship-it',
+        url: '/acme/agent/agent-1/task/T-3/ship-it',
       },
     ]);
   });

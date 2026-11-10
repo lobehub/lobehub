@@ -1,5 +1,7 @@
 import debug from 'debug';
 
+import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
+import { settleAgentRunFee } from '@/business/server/agent-run/runFee';
 import {
   AgentOperationModel,
   type RecordOperationStartParams,
@@ -10,6 +12,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import {
   instantiateVerifyPlanOnStart,
+  releaseUndeliveredRound,
   runVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
@@ -32,6 +35,7 @@ import type {
   CompletionLifecycleDeps,
   OperationCompletionInput,
   SignalEvent,
+  TopicRunSettledHandler,
 } from './types';
 
 export { CriticalAgentInterventionPersistenceError } from './intervention';
@@ -42,7 +46,11 @@ export {
   normalizeCompletionMessages,
 } from './messageContent';
 export { isAgentShareRun } from './signals';
-export type { CompleteOperationOptions, OperationCompletionInput } from './types';
+export type {
+  CompleteOperationOptions,
+  OperationCompletionInput,
+  TopicRunSettledHandler,
+} from './types';
 
 const log = debug('lobe-server:completion-lifecycle');
 
@@ -54,6 +62,10 @@ const log = debug('lobe-server:completion-lifecycle');
  * file-Work registration) must cover the capped reasons too — gating them on
  * `reason === 'done'` alone silently drops capped runs' artifacts.
  */
+/** Terminal reasons after which the topic's agent may be woken again. */
+const isTopicRunSettledReason = (reason: string) =>
+  reason !== 'interrupted' && reason !== 'waiting_for_human' && reason !== 'waiting_for_async_tool';
+
 export const isSuccessLikeCompletionReason = (reason: string): boolean =>
   reason === 'done' ||
   reason === 'max_steps' ||
@@ -70,6 +82,9 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
  * no-fallback webhook failures are rethrown after terminal persistence so a
  * queue execution can retry the control-flow handoff.
  */
+/** Above the p99 of planning a task run (41 s in production). */
+const VERIFY_PLAN_DISPATCH_WAIT_MS = 45_000;
+
 export class CompletionLifecycle {
   private readonly messageModel: MessageModel;
   private readonly agentOperationModel: AgentOperationModel;
@@ -81,6 +96,7 @@ export class CompletionLifecycle {
    * (instantiation is fire-and-forget at start and may not have settled yet).
    */
   private readonly verifyPlanInstantiations = new Map<string, Promise<void>>();
+  private readonly onTopicRunSettled?: TopicRunSettledHandler;
 
   constructor(
     private readonly serverDB: LobeChatDatabase,
@@ -93,10 +109,13 @@ export class CompletionLifecycle {
        * creator's identity.
        */
       includeShareVisitor?: boolean;
+      /** See {@link TopicRunSettledHandler}. */
+      onTopicRunSettled?: TopicRunSettledHandler;
     },
   ) {
     this.workspaceId = workspaceId;
     this.includeShareVisitor = options?.includeShareVisitor ?? false;
+    this.onTopicRunSettled = options?.onTopicRunSettled;
     this.messageModel = new MessageModel(serverDB, userId, workspaceId, undefined, {
       includeShareVisitor: this.includeShareVisitor,
     });
@@ -160,6 +179,32 @@ export class CompletionLifecycle {
     }
 
     return persisted;
+  }
+
+  /**
+   * Wait, within a bound, for the verify plan {@link recordStart} began. A
+   * dispatched run keeps working on another machine while this request ends, so
+   * work left in flight here can be dropped with the function. Waiting also
+   * means the builder can read its criteria from its first command.
+   *
+   * The bound only keeps a slow plan call from holding the dispatch: past it the
+   * run starts anyway and the finish path still creates the plan.
+   */
+  async waitForVerifyPlan(
+    operationId: string,
+    timeoutMs = VERIFY_PLAN_DISPATCH_WAIT_MS,
+  ): Promise<void> {
+    const instantiation = this.verifyPlanInstantiations.get(operationId);
+    if (!instantiation) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      instantiation,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+    clearTimeout(timer);
   }
 
   /**
@@ -260,6 +305,7 @@ export class CompletionLifecycle {
       model: input.model ?? undefined,
       provider: input.provider ?? undefined,
       stepCount: input.stepCount ?? null,
+      llmCalls: input.llmCalls ?? undefined,
       usage: input.usage ?? undefined,
     };
   }
@@ -348,6 +394,24 @@ export class CompletionLifecycle {
 
       if (isAsyncToolPark) return;
 
+      // The run tree no longer works, so its concurrency slot frees now rather
+      // than when the lease lapses. A run parked on a human decision frees it
+      // too; its continuation takes a slot of its own.
+      await releaseAgentRunSlot(runOrigin.userId || this.userId, operationId);
+
+      // Charge or give back the per-run fee the run held at admission. A run
+      // parked on a human decision settles here too: its continuation is part
+      // of the same run and holds no fee of its own. A billing failure must
+      // not cost the user their completion hooks.
+      await settleAgentRunFee({
+        durationMs: event.duration,
+        operationId,
+        reason,
+        userId: runOrigin.userId || this.userId,
+      }).catch((error) => {
+        console.error('[CompletionLifecycle] settleAgentRunFee failed', { error, operationId });
+      });
+
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate
       // `messageModel.update` path. When the two diverge (state entry empty
@@ -406,6 +470,21 @@ export class CompletionLifecycle {
         );
       }
 
+      const settledTopicId = typeof runOrigin.topicId === 'string' ? runOrigin.topicId : undefined;
+      if (
+        this.onTopicRunSettled &&
+        settledTopicId &&
+        isTopicRunSettledReason(reason) &&
+        !runOrigin.lineage?.parentOperationId &&
+        runOrigin.lineage?.isSubAgent !== true &&
+        runOrigin.lineage?.orchestrationRole !== 'member' &&
+        !runOrigin.signal &&
+        !isAgentShareRun(state)
+      ) {
+        const onTopicRunSettled = this.onTopicRunSettled;
+        after(() => onTopicRunSettled({ operationId, topicId: settledTopicId }));
+      }
+
       // Delivery checker: on a successful completion, run the confirmed verify
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
       // without an opted-in plan is a no-op, and failures never affect the run.
@@ -454,12 +533,12 @@ export class CompletionLifecycle {
 
       if (reason === 'error' || reason === 'interrupted') {
         after(async () => {
-          await settleFailedRepair(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            operationId,
-            this.workspaceId,
-          );
+          const userId = runOrigin.userId || this.userId;
+          await settleFailedRepair(this.serverDB, userId, operationId, this.workspaceId);
+          // A task run that failed before delivering leaves the round opened at
+          // its start with nothing to verify. When planning is still under way,
+          // `instantiateVerifyPlanOnStart` releases the round once it lands.
+          await releaseUndeliveredRound(this.serverDB, userId, operationId, this.workspaceId);
         });
       }
 

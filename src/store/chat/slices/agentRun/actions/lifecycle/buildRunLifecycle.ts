@@ -9,7 +9,10 @@ import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/disp
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
-import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
+import {
+  notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed,
+} from '@/store/chat/utils/desktopNotification';
 import {
   hasCompletedAssistantText,
   isAudioOnlyFirstUserMessage,
@@ -19,7 +22,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { OperationStatus } from '../../../operation/types';
-import { AI_RUNTIME_OPERATION_TYPES } from '../../../operation/types';
+import { AI_RUNTIME_OPERATION_TYPES, isClientHeldQueuedMessage } from '../../../operation/types';
 import { topicSelectors } from '../../../topic/selectors';
 import { scheduleQueuedFollowUp } from './queuedFollowUp';
 import type {
@@ -33,6 +36,27 @@ import type {
 } from './types';
 
 const log = debug('lobe-store:run-lifecycle');
+
+const MAX_NOTIFIED_SERVER_OPERATIONS = 200;
+const notifiedServerOperationIds = new Set<string>();
+
+/**
+ * Claim the single desktop notification of a server run. One server run can
+ * reach this renderer through several local operations: a hetero run's in-stream
+ * end arrives before heteroFinish clears the topic marker, so a reconnect can
+ * attach and see that run end again. Local-only runs have no server id to claim.
+ */
+const claimServerRunNotification = (serverOperationId: string | undefined): boolean => {
+  if (!serverOperationId) return true;
+  if (notifiedServerOperationIds.has(serverOperationId)) return false;
+
+  notifiedServerOperationIds.add(serverOperationId);
+  if (notifiedServerOperationIds.size > MAX_NOTIFIED_SERVER_OPERATIONS) {
+    const [oldest] = notifiedServerOperationIds;
+    notifiedServerOperationIds.delete(oldest);
+  }
+  return true;
+};
 
 /**
  * Normalize the runtime/operation status into the cross-runtime
@@ -281,8 +305,19 @@ export const buildRunLifecycle = (
     },
     afterRunComplete: async (event: RunCompleteEvent) => {
       if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
-      if (adapter.runScope === 'sub_agent' || resolveTerminalDisposition(event) !== 'success')
+      if (adapter.runScope === 'sub_agent') return;
+
+      const serverOperationId = get().operations[event.operationId]?.metadata.serverOperationId;
+      const disposition = resolveTerminalDisposition(event);
+      if (disposition === 'failed' && event.notification) {
+        if (!claimServerRunNotification(serverOperationId)) return;
+        await notifyDesktopAgentFailed(get, {
+          context: { agentId, groupId, topicId, workspaceSlug },
+          error: event.notification.error,
+        });
         return;
+      }
+      if (disposition !== 'success') return;
 
       // A voice-only first message cannot be summarized at the post-persist seam:
       // its content is empty and the assistant row is still a loading placeholder.
@@ -299,6 +334,7 @@ export const buildRunLifecycle = (
       // completion — the parent run is still going, so it must not fire a
       // "generation finished" notification / badge. See RunScope.
       if (!isDesktop) return;
+      if (!claimServerRunNotification(serverOperationId)) return;
 
       const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
@@ -443,7 +479,8 @@ export const buildRunLifecycle = (
       if (
         disposition === 'success' &&
         adapter.runScope !== 'sub_agent' &&
-        (get().queuedMessages?.[contextKey]?.length ?? 0) > 0
+        // The server delivers the follow-ups it holds itself.
+        get().queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage)
       ) {
         completeSuccess();
         emitComplete(operationId, runtimeStatus);
@@ -472,7 +509,12 @@ export const buildRunLifecycle = (
           // must be moved to terminal here. The client is exempt: its cancel
           // path already set the op to `cancelled` out of band, and
           // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          if (adapter.runtimeType !== 'client') {
+            get().completeOperation(operationId);
+            // A stop from elsewhere settles as `completed`; nothing drains the
+            // queue now, so the input must not wait for that hand-off.
+            get().updateOperationMetadata(operationId, { endedWithoutCompletion: true });
+          }
           break;
         }
         // `undefined`: unrecognized terminal status — fall through untouched.

@@ -9,6 +9,13 @@ import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
 
+const createDefaultTopicMap = () => ({
+  [topicMapKey({ agentId: 'a1' })]: {
+    items: [{ id: 't1', title: 'defaultTitle' }],
+    total: 1,
+  },
+});
+
 const agentSignalBridgeMock = vi.hoisted(() => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -19,10 +26,12 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 
 const desktopNotificationMock = vi.hoisted(() => ({
   notifyDesktopAgentCompleted: vi.fn().mockResolvedValue(undefined),
+  notifyDesktopAgentFailed: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopAgentCompleted: desktopNotificationMock.notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed: desktopNotificationMock.notifyDesktopAgentFailed,
 }));
 
 // Force the desktop branch of afterRunComplete on (isDesktop is false in the
@@ -67,6 +76,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
+    updateOperationMetadata: vi.fn(),
     updateTopicStatus: vi.fn(async () => {}),
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
@@ -135,12 +145,7 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     store.drainQueuedMessages = vi.fn(() => [{ content: 'follow up', id: 'q1' } as any]);
     store.queuedMessages = { [messageMapKey(CONTEXT)]: [{ content: 'follow up', id: 'q1' }] };
     store.messagesMap = { [messageMapKey(CONTEXT)]: messages } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     const { requeued } = await lifecycle('client', get).completeRun(
       completeEvent('client', { runtimeStatus: 'done' }),
@@ -176,6 +181,10 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     // gateway/hetero reach completeRun with the op still `running`, so cancelled
     // must move it to terminal here. No markUnread, no failOperation, no signal.
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
+    // Settled as `completed`, yet nothing drains its queue: say so.
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith(OP, {
+      endedWithoutCompletion: true,
+    });
     expect(store.markTopicUnread).not.toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
     expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
@@ -328,7 +337,7 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('keeps the queue in place until the steered send takes it', async () => {
+  it('keeps the queue in place until the drained send takes it', async () => {
     vi.useFakeTimers();
     try {
       const { get, store } = makeStore();
@@ -358,7 +367,9 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
       expect(sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           message: 'queued',
-          metadata: expect.objectContaining({ scope: 'x', steer: true }),
+          // A drained follow-up opens a fresh turn: its metadata keeps what
+          // was queued, unmarked.
+          metadata: { scope: 'x' },
         }),
       );
     } finally {
@@ -376,6 +387,96 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
       ),
     ).resolves.toBeUndefined();
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.afterRunComplete — failed run notification', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const error = { message: 'boom', type: 'AgentRuntimeError' };
+
+  it('announces a failed run with its error instead of a completion', async () => {
+    const { get } = makeStore();
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification: { error }, status: 'failed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).toHaveBeenCalledWith(get, {
+      context: { agentId: 'a1', groupId: undefined, topicId: 't1', workspaceSlug: 'team' },
+      error,
+    });
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('stays silent for a failed run the transport did not ask to announce', async () => {
+    const { get } = makeStore();
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'error' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).not.toHaveBeenCalled();
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.afterRunComplete — one notification per server operation', () => {
+  const RECONNECT_OP = 'op-reconnect';
+
+  // A hetero run's in-stream end reaches the primary handler before heteroFinish
+  // clears the marker, so a reconnect can attach under a new local operation and
+  // see the same server run end again.
+  const makeAttachedStore = (serverOperationId: string) => {
+    const { get, store } = makeStore();
+    const operations = store.operations as Record<string, any>;
+    operations[OP].metadata = { serverOperationId };
+    operations[RECONNECT_OP] = { ...operations[OP], id: RECONNECT_OP };
+    return get;
+  };
+
+  beforeEach(() => {
+    desktopNotificationMock.notifyDesktopAgentCompleted.mockClear();
+    desktopNotificationMock.notifyDesktopAgentFailed.mockClear();
+  });
+
+  it('announces a completion once when a reconnect handler ends the same server run', async () => {
+    const get = makeAttachedStore('server-op-completed');
+    const notification = { content: 'done' };
+
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'completed' }),
+    );
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, operationId: RECONNECT_OP, status: 'completed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces a failure once when a reconnect handler ends the same server run', async () => {
+    const get = makeAttachedStore('server-op-failed');
+    const notification = { error: { message: 'boom' } as any };
+
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'failed' }),
+    );
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, operationId: RECONNECT_OP, status: 'failed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it('still announces each distinct server run', async () => {
+    const notification = { content: 'done' };
+
+    await lifecycle('gateway', makeAttachedStore('server-op-first')).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'completed' }),
+    );
+    await lifecycle('gateway', makeAttachedStore('server-op-second')).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'completed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -454,12 +555,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     } as any;
     const messages = [voiceMessage, thisTurnAssistant];
     store.messagesMap = { [KEY]: messages } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     await lifecycle('client', get).afterRunComplete(
       completeEvent('client', { runtimeStatus: 'done' }),
@@ -492,12 +588,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
       },
     ];
     store.messagesMap = { [KEY]: messages } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     await lifecycle('client', get).afterRunComplete(
       completeEvent('client', { runtimeStatus: 'done' }),
@@ -523,12 +614,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
           { ...thisTurnAssistant, content: 'Partial reply' },
         ],
       } as any;
-      store.topicDataMap = {
-        [topicMapKey({ agentId: 'a1' })]: {
-          items: [{ id: 't1', title: 'defaultTitle' }],
-          total: 1,
-        },
-      } as any;
+      store.topicDataMap = createDefaultTopicMap() as any;
 
       await lifecycle('client', get).afterRunComplete(completeEvent('client', { runtimeStatus }));
 
@@ -542,12 +628,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     store.messagesMap = {
       [KEY]: [{ content: 'hello', id: 'u1', role: 'user' }, thisTurnAssistant],
     } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     await lifecycle('client', get).afterRunComplete(
       completeEvent('client', { runtimeStatus: 'done' }),

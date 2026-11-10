@@ -21,6 +21,7 @@ const setup = (sourceAccepts: boolean) => {
       calls.push('read-executor');
       return sourceExecutor;
     }),
+    getOperationEditingGroupId: vi.fn(async () => undefined),
   };
   const deps = {
     agentRuntimeService,
@@ -46,14 +47,16 @@ const setup = (sourceAccepts: boolean) => {
       approvalClaim: {},
       approvalSourceToolMessageIds: [],
       autoStart: true,
-      discovery: {
-        credentialFactsPromise: Promise.resolve(undefined),
-        modelMediaCapabilities: {},
-        toolsResult: { enabledToolIds: [] },
+      init: {
+        discovery: {
+          credentialFactsPromise: Promise.resolve(undefined),
+          modelMediaCapabilities: {},
+          toolsResult: { enabledToolIds: [] },
+        },
+        initialContext: {},
+        prep: { allMessages: [], deviceSystemInfo: {} },
       },
-      initialContext: {},
       operationId: 'op-new',
-      prep: { allMessages: [], deviceSystemInfo: {} },
       updateAbortedAssistantMessage: vi.fn(),
       userInterventionConfig: { approvalMode: 'manual' },
       ...extra,
@@ -71,6 +74,16 @@ describe('startOperation › member_runtime_end declaration', () => {
       expect.objectContaining({ acceptsMemberRuntimeEnd: true }),
     );
     expect(agentRuntimeService.acceptsMemberRuntimeEnd).not.toHaveBeenCalled();
+  });
+
+  it('forwards the resumed LLM baseline to the new operation', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(false);
+
+    await startOperation(deps, ctx, input({ initialLlmCalls: 3, initialStepCount: 7 }));
+
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ initialLlmCalls: 3, initialStepCount: 7 }),
+    );
   });
 
   // The v2 approval endpoint starts the continuation server-side, without the

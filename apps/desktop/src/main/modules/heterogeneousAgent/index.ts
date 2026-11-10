@@ -4,6 +4,7 @@ import { ampDriver } from './drivers/amp';
 import { claudeCodeDriver } from './drivers/claudeCode';
 import { codeBuddyDriver } from './drivers/codeBuddy';
 import { codexDriver } from './drivers/codex';
+import { copilotDriver } from './drivers/copilot';
 import { cursorDriver } from './drivers/cursor';
 import { devinDriver } from './drivers/devin';
 import { droidDriver } from './drivers/droid';
@@ -20,6 +21,7 @@ const heterogeneousAgentDrivers = {
   'claude-code': claudeCodeDriver,
   'codebuddy': codeBuddyDriver,
   'codex': codexDriver,
+  'copilot': copilotDriver,
   'cursor': cursorDriver,
   'droid': droidDriver,
   'devin': devinDriver,

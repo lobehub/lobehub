@@ -8,7 +8,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormSliderWithInput } from '@/components/FormInput';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { ImageSettingsSkeleton } from '@/components/Skeleton/Settings/tabs/ServiceModel';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { MAX_DEFAULT_IMAGE_NUM, MIN_DEFAULT_IMAGE_NUM } from '@/const/settings';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -39,8 +39,8 @@ const ImageSettings = memo(() => {
   });
 
   if (!isUserStateInit) {
-    // One filled group holding the default image count slider.
-    return <SettingsSectionSkeleton groups={[{ rows: 1, titleWidth: 136 }]} />;
+    // Same group the service-model tab skeleton draws below the model cards.
+    return <ImageSettingsSkeleton />;
   }
 
   const items: FormGroupItem<UserImageConfig>[] = [

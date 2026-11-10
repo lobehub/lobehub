@@ -57,31 +57,13 @@ export async function finishOperation(
     await deps.recordInterventionLifecycleCompletion(operationId, stepResult.newState, stepIndex);
   }
 
-  // Park-time self-check: sub-agents are dispatched mid-step, so a
-  // fast child can complete BEFORE this op's parked state/row were
-  // persisted — its resume attempt then no-ops against the status
-  // guard and nothing retries. Now that both the Redis state and the
-  // `agent_operations` row (via dispatchHooks → persistCompletion)
-  // say `waiting_for_async_tool`, re-run the barrier once to recover
-  // any resume that raced the park.
-  if (stepResult.newState.status === 'waiting_for_async_tool') {
-    try {
-      await deps.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
-    } catch (selfCheckError) {
-      log(
-        '[%s][%d] Park-time async-tool self-check failed (non-fatal): %O',
-        operationId,
-        stepIndex,
-        selfCheckError,
-      );
-    }
-  }
-
   // Finalize tracing snapshot. The error catch below uses the same
   // recorder so propagated failures still write the canonical S3
   // snapshot instead of orphaning the partial ().
   // A client park is no trace boundary: keep the partial so the resumed
   // steps extend the same trajectory and the real end finalizes it whole.
+  // Human/async waits expose a readable snapshot and retain the partial. Write
+  // both before the async-tool self-check can resume this id in another invocation.
   const newStateError = stepResult.newState.error;
   if (reason === 'waiting_for_client') {
     await deps.traceRecorder.flushPartial();
@@ -108,6 +90,27 @@ export async function finishOperation(
       state: stepResult.newState,
     });
   logToolCallPc(operationId, stepIndex, 'post.trace_finalized', () => ({ reason }));
+
+  // Park-time self-check: sub-agents are dispatched mid-step, so a
+  // fast child can complete BEFORE this op's parked state/row were
+  // persisted — its resume attempt then no-ops against the status
+  // guard and nothing retries. Now that both the Redis state and the
+  // `agent_operations` row (via dispatchHooks → persistCompletion)
+  // say `waiting_for_async_tool`, re-run the barrier once to recover
+  // any resume that raced the park. The trace is already durable; do not write
+  // it after the barrier can hand execution to another invocation.
+  if (stepResult.newState.status === 'waiting_for_async_tool') {
+    try {
+      await deps.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+    } catch (selfCheckError) {
+      log(
+        '[%s][%d] Park-time async-tool self-check failed (non-fatal): %O',
+        operationId,
+        stepIndex,
+        selfCheckError,
+      );
+    }
+  }
 
   // Follow-ups the user queued behind this run start as the next turn right
   // here, instead of after the client hears the run ended and sends them

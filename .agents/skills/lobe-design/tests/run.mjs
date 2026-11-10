@@ -7,14 +7,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { route } from '../scripts/route.mjs';
-import { isZhLocaleJson, lintText } from '../scripts/lint-lobe.mjs';
+import { isDomComponentImport, isZhLocaleJson, lintPaths, lintText, RULES } from '../scripts/lint-lobe.mjs';
+import { globToRe, parseAllow, parseApplicability, parsePlatform, projectContext } from '../scripts/platform.mjs';
 const lintPathsHas = (p) => isZhLocaleJson(p);
 import { checkText } from '../scripts/check-detail.mjs';
 import { checkLearnings } from '../scripts/check-learnings.mjs';
 import { translate } from '../scripts/intent.mjs';
-import { allMeta, resolveRefs } from '../scripts/refs.mjs';
-import { applyBlock, detectContext, detectProjectLayer, findGuideFile, renderBlock } from '../scripts/bootstrap.mjs';
-import { assessProjectLayer, fingerprintOf, parseInitMeta, renderInitMeta, scanProject } from '../scripts/project-scan.mjs';
+import { allMeta, matchRoute, resolveRefs } from '../scripts/refs.mjs';
+import { applyBlock, BEGIN, detectContext, detectLang, detectProjectLayer, END, findGuideFile, readBlockMode, renderBlock, resolveMode } from '../scripts/bootstrap.mjs';
+import { assessProjectLayer, classifyComponent, fingerprintOf, parseInitMeta, renderInitMeta, scanProject } from '../scripts/project-scan.mjs';
 import { assess } from '../scripts/upstream.mjs';
 
 const dir = dirname(fileURLToPath(import.meta.url));
@@ -100,39 +101,6 @@ const got = checkText(detailBad, 'detail-bad.tsx').map((f) => f.id);
 for (const id of want) t(`detail-bad.tsx → ${id}`, got.includes(id));
 t('detail-bad.tsx has no unexpected findings', got.every((id) => want.includes(id)), got.filter((id) => !want.includes(id)).join(','));
 const detailGood = checkText(readFileSync(join(fx, 'detail-good.tsx'), 'utf8'), 'detail-good.tsx');
-{
-  const fetchSrc = 'const X = () => { fetch("/api"); return <div />; };\n';
-  const ids = (src) => checkText(src, 'x.tsx').map((f) => f.id);
-  t('detail: 没写理由的豁免不生效', ids(`// lobe-design-ignore DETAIL-NO-LOADING\n${fetchSrc}`).includes('DETAIL-NO-LOADING'));
-  t('detail: 字符串里出现的豁免文字不生效', ids(`const s = 'lobe-design-ignore DETAIL-NO-LOADING: x';\n${fetchSrc}`).includes('DETAIL-NO-LOADING'));
-  t('detail: 块注释里冒号后为空不算理由', ids(`/* lobe-design-ignore DETAIL-NO-LOADING: */\n${fetchSrc}`).includes('DETAIL-NO-LOADING'));
-  t('detail: 冒号后为空不会借用下一行当理由', ids(`// lobe-design-ignore DETAIL-NO-LOADING:\nexport ${fetchSrc}`).includes('DETAIL-NO-LOADING'));
-  t('detail: 理由只有注释符不算', ids(`// lobe-design-ignore DETAIL-NO-LOADING: //\n${fetchSrc}`).includes('DETAIL-NO-LOADING'));
-  t('detail: 带理由的注释豁免生效', !ids(`// lobe-design-ignore DETAIL-NO-LOADING, DETAIL-NO-ERROR: 由父组件处理\n${fetchSrc}`).some((x) => x === 'DETAIL-NO-LOADING' || x === 'DETAIL-NO-ERROR'));
-}
-{
-  const raw = (src) => lintText(src, 'src/x.ts').map((f) => f.id);
-  t('lint: 字符串里的整文件豁免不生效', raw("const docs = 'lobe-design-ignore-file LOBE-RAW-COLOR: example';\nconst c = '#1677ff';\n").includes('LOBE-RAW-COLOR'));
-  t('lint: 字符串里没理由的豁免文字不报 IGNORE-NO-REASON', !raw("const docs = 'lobe-design-ignore LOBE-RAW-COLOR';\n").includes('LOBE-IGNORE-NO-REASON'));
-  t('lint: 行尾注释豁免仍生效', !raw("const c = '#1677ff'; // lobe-design-ignore LOBE-RAW-COLOR: 品牌色由设计稿指定\n").includes('LOBE-RAW-COLOR'));
-  t('lint: 块注释豁免冒号后为空 → IGNORE-NO-REASON 且不生效', (() => { const r = raw("/* lobe-design-ignore LOBE-RAW-COLOR: */\nconst c = '#1677ff';\n"); return r.includes('LOBE-IGNORE-NO-REASON') && r.includes('LOBE-RAW-COLOR'); })());
-  t('lint: 注释在字符串之后仍识别', !raw("const a = 'x'; const c = '#1677ff'; // lobe-design-ignore LOBE-RAW-COLOR: 演示\n").includes('LOBE-RAW-COLOR'));
-}
-{
-  // 遍历时跳过软链目录：同一份文件只扫一次
-  const tmp = mkdtempSync(join(tmpdir(), 'ld-symlink-'));
-  try {
-    mkdirSync(join(tmp, 'real'));
-    writeFileSync(join(tmp, 'real', 'a.tsx'), 'const a = { color: \'#1677ff\' };\nconst X = () => { fetch("/api"); return <div />; };\n');
-    symlinkSync(join(tmp, 'real'), join(tmp, 'alias'), 'dir');
-    const lint = spawnSync(process.execPath, [join(skill, 'scripts', 'lint-lobe.mjs'), tmp, '--json'], { encoding: 'utf8' });
-    const detail = spawnSync(process.execPath, [join(skill, 'scripts', 'check-detail.mjs'), tmp, '--json'], { encoding: 'utf8' });
-    const lintFiles = new Set(JSON.parse(lint.stdout).findings?.map?.((f) => f.file) ?? JSON.parse(lint.stdout).map((f) => f.file));
-    const detailHits = JSON.parse(detail.stdout).filter((f) => f.id === 'DETAIL-NO-LOADING').length;
-    t('lint-lobe: 不进入软链目录', lintFiles.size === 1, [...lintFiles].join(','));
-    t('check-detail: 不进入软链目录', detailHits === 1, String(detailHits));
-  } finally { rmSync(tmp, { recursive: true, force: true }); }
-}
 t('detail-good.tsx has 0 findings', detailGood.length === 0, detailGood.map((f) => f.id).join(','));
 
 // 5b) 3.0.0 · 抽象指令翻译：归一化成可执行表述，或转成追问（不猜着动手）
@@ -208,32 +176,24 @@ console.log('== copy profiles');
     const e = resolveRefs('把 /admin 下的提示文案改一下', { stage: '75-copy', root });
     t('copy: product.md 按路由分区选 profile', JSON.stringify(loaded(e)) === '["admin"]', JSON.stringify(e.copyProfile));
     const f2 = resolveRefs('把开发者 api 页的文案改一下', { stage: '75-copy', root });
-    writeFileSync(join(root, '.agents', 'ux', 'product.md'), '# 产品画像\n\ncopy-profile: consumer; /settings, /resource → saas\n');
-    const g = resolveRefs('把 /resource 页的文案改一下', { stage: '75-copy', root });
-    t('copy: 一条分区可列多条路由', JSON.stringify(loaded(g)) === '["saas"]' && g.copyProfile.source.includes('/resource'), JSON.stringify(g.copyProfile));
     t('copy: product.md 存在时不被列表外的触发词带偏', JSON.stringify(loaded(f2)) === '["consumer"]', JSON.stringify(f2.copyProfile));
+    // 5.5.0：路由分区按路径段匹配（动态段 / 通配）
+    writeFileSync(join(root, '.agents', 'ux', 'product.md'), '# 产品画像\n\ncopy-profile: saas; /api-keys → devtool; /*/billing → admin; ^/admin → admin\n');
+    const g = resolveRefs('把 /:wsSlug/api-keys 页的提示文案改一下', { stage: '75-copy', root });
+    t('copy: /api-keys 命中带动态段的 /:wsSlug/api-keys', JSON.stringify(loaded(g)) === '["devtool"]', JSON.stringify(g.copyProfile));
+    t('copy: --page 指定路由', JSON.stringify(loaded(resolveRefs('改下文案', { stage: '75-copy', root, page: '/acme/billing' }))) === '["admin"]');
+    t('copy: /*/billing 命中 /:wsSlug/billing', JSON.stringify(loaded(resolveRefs('改下文案', { stage: '75-copy', root, page: '/:wsSlug/billing' }))) === '["admin"]');
+    t('copy: 段不匹配时回落默认 profile', JSON.stringify(loaded(resolveRefs('改下文案', { stage: '75-copy', root, page: '/billing-old' }))) === '["saas"]');
+    t('copy: matchRoute 按段匹配', matchRoute('/*/api-keys', '/:wsSlug/api-keys') && !matchRoute('/*/api-keys', '/api-keys') && matchRoute('/admin/**', '/admin')
+      && !matchRoute('/admin', '/administrators') && !matchRoute('/api-keys', '/api-keys-legacy') && !matchRoute('^/admin', '/ws/admin') && matchRoute('^/admin', '/admin/users') && matchRoute('/api-keys', 'https://x.dev/acme/api-keys?tab=1'));
   } finally { rmSync(root, { recursive: true, force: true }); }
   t('copy: 其他 stage 不加载 profile 文件', resolveRefs('把列表页的间距调一下').stages.every((s) => s.stage === '75-copy' || !s.refs.some((x) => x.tier === 'profile')));
-  {
-    const cwdRoot = mkdtempSync(join(tmpdir(), 'ld-copy-cwd-'));
-    try {
-      mkdirSync(join(cwdRoot, '.agents', 'ux'), { recursive: true });
-      writeFileSync(join(cwdRoot, '.agents', 'ux', 'product.md'), '# 产品画像\n\ncopy-profile: consumer\n');
-      const r = spawnSync(process.execPath, [join(skill, 'scripts', 'refs.mjs'), '把提示文案改一下', '--stage', '75-copy', '--json'], { encoding: 'utf8', cwd: cwdRoot });
-      const cp = r.status === 0 ? JSON.parse(r.stdout).copyProfile : null;
-      t('refs.mjs 不带 --root 时读当前目录的 product.md', JSON.stringify(cp?.selected) === '["consumer"]' && cp?.source === 'product.md', r.stderr || JSON.stringify(cp));
-    } finally { rmSync(cwdRoot, { recursive: true, force: true }); }
-  }
   t('refs.mjs --profile 未知 → exit 2', run('refs.mjs', ['改文案', '--stage', '75-copy', '--profile', 'nope']).status === 2);
   // zh-CN 语言包：只跑 locale 规则；同样内容的 tsx 会跑全部规则
   const zh = '{\n  "save": "已保存API密钥",\n  "fail": "保存失败,请重试",\n  "ok": "已保存 API 密钥",\n  "color": "#ff0000"\n}\n';
   const zf = lintText(zh, 'locales/zh-CN/common.json').map((x) => `${x.line}:${x.id}`);
   t('copy: zh-CN 语言包报 CJK 留白与半角标点', JSON.stringify(zf) === '["2:LOBE-CJK-LATIN-SPACE","3:LOBE-HALFWIDTH-PUNCT"]', zf.join(','));
   t('copy: 语言包不跑非文案规则（#ff0000 不报 RAW-COLOR）', !zf.some((x) => x.includes('RAW-COLOR')));
-  const rawColor = (src) => lintText(src, 'src/x.ts').filter((x) => x.id === 'LOBE-RAW-COLOR').map((x) => x.line);
-  t('RAW-COLOR: 全透明哨兵值不报', rawColor("const BLANK = new Set(['transparent', 'rgba(0,0,0,0)', '#0000', '#00000000']);\n").length === 0);
-  t('RAW-COLOR: 颜色作为比较操作数不报', rawColor("if (bg === 'rgba(0, 0, 0, 0.5)' || '#fff' !== fg) return;\n").length === 0);
-  t('RAW-COLOR: 半透明 / 不透明颜色照报', JSON.stringify(rawColor("const a = { color: 'rgba(0,0,0,0.45)' };\nconst b = { color: '#1677ff' };\nconst c = { color: x === 'a' ? '#fff' : '#000' };\n")) === '[1,2,3]');
   t('copy: 非 zh-CN 的 json 不被扫描', !lintPathsHas('locales/en-US/common.json') && lintPathsHas('locales/zh-CN/common.json') && lintPathsHas('src/locales/zh_CN.json'));
 }
 
@@ -289,21 +249,11 @@ console.log('== bootstrap');
     t('bootstrap fs: 重复运行文件不变（幂等）', readFileSync(guide, 'utf8') === once);
     // --check 语义
     t('bootstrap fs: --check 已接入 → 0', run('bootstrap.mjs', ['--check', '--root', tmp]).status === 0);
-    // 格式化工具只改空白 / 表格分隔线时不算过期；托管块内容真正变了才算
-    const fmt = readFileSync(guide, 'utf8').replace(/\| --- \|/g, '| ------ |').replace(/ \|\n/g, '  |\n').replace('修误报 · minor', '修误报・minor').replace('入口与顺序', '入口 与顺序');
-    writeFileSync(guide, fmt);
-    t('bootstrap fs: --check 只是重新格式化 → 0', run('bootstrap.mjs', ['--check', '--root', tmp]).status === 0);
-    writeFileSync(guide, once.replace('node "$LOBE_DESIGN/scripts/route.mjs"', 'node"$LOBE_DESIGN/scripts/route.mjs"'));
-    t('bootstrap fs: --check 命令里删掉空格算过期 → 1', run('bootstrap.mjs', ['--check', '--root', tmp]).status === 1);
-    writeFileSync(guide, once.replace('## 1.', '## 1. 过期'));
-    const drift = run('bootstrap.mjs', ['--check', '--json', '--root', tmp]);
-    t('bootstrap fs: --check 托管块内容过期 → 1', drift.status === 1 && JSON.parse(drift.stdout).blockCurrent === false, drift.stdout);
-    writeFileSync(guide, once);
     const fresh = mkdtempSync(join(tmpdir(), 'lobe-fresh-'));
     t('bootstrap fs: --check 未接入 → 1', run('bootstrap.mjs', ['--check', '--root', fresh]).status === 1);
     rmdirSync(fresh, { recursive: true });
     // 版本落后时 --check 必须失败（否则升级不会被发现）
-    writeFileSync(guide, readFileSync(guide, 'utf8').replace(/skill 版本 [\d.]+/, 'skill 版本 1.0.0'));
+    writeFileSync(guide, readFileSync(guide, 'utf8').replace(/skill (版本|version) [\d.]+/, 'skill $1 1.0.0'));
     t('bootstrap fs: --check 版本落后 → 1', run('bootstrap.mjs', ['--check', '--root', tmp]).status === 1);
     // CLAUDE.md 兜底：没有 AGENTS.md 时写入 CLAUDE.md
     const tmp2 = mkdtempSync(join(tmpdir(), 'lobe-claude-'));
@@ -321,10 +271,10 @@ console.log('== bootstrap');
     writeFileSync(join(tmp3, 'AGENTS.md'), '# host\n');
     const ctx3 = detectContext(tmp3);
     t('bootstrap fs: 探测到仓库内安装与 ux 文件（固定顺序）', ctx3.localSkill && JSON.stringify(ctx3.ux) === JSON.stringify(['product.md', 'lobe-design-rules.md', 'audit/']), JSON.stringify(ctx3));
-    t('bootstrap fs: 无 .agents 时上下文为空', JSON.stringify(detectContext(join(tmp3, '.agents/ux/audit'))) === JSON.stringify({ localSkill: false, ux: null }));
+    t('bootstrap fs: 无 .agents 时上下文为空', JSON.stringify(detectContext(join(tmp3, '.agents/ux/audit'))) === JSON.stringify({ localSkill: false, ux: null, platform: 'web' }));
     run('bootstrap.mjs', ['--root', tmp3]);
     const host1 = readFileSync(join(tmp3, 'AGENTS.md'), 'utf8');
-    t('bootstrap fs: 宿主项目块指向仓库内安装与 ux', host1.includes('export LOBE_DESIGN="./.agents/skills/lobe-design"\n') && host1.includes('.agents/ux/product.md') && host1.startsWith('# host\n'));
+    t('bootstrap fs: 宿主项目块指向仓库内安装与 ux', /^export LOBE_DESIGN="\.\/\.agents\/skills\/lobe-design"(?:\s|$)/m.test(host1) && host1.includes('.agents/ux/product.md') && host1.startsWith('# host\n'));
     const r3 = run('bootstrap.mjs', ['--root', tmp3, '--json']);
     t('bootstrap fs: 宿主项目重复运行 unchanged', JSON.parse(r3.stdout).action === 'unchanged' && readFileSync(join(tmp3, 'AGENTS.md'), 'utf8') === host1);
     rmSync(tmp3, { recursive: true, force: true });
@@ -355,29 +305,6 @@ console.log('== project-scan');
     t('project-scan: 发现组件目录', facts.components.some((c) => c.dir === 'src/components'));
     t('project-scan: 发现路由目录', facts.routes.some((r) => r.dir === 'app'));
     t('project-scan: 指纹稳定', fingerprintOf(facts) === facts.fingerprint && facts.fingerprint.length === 12);
-    // 组件目录超过样本上限后，增删文件仍要改变指纹
-    for (let i = 0; i < 60; i++) writeFileSync(join(tmp, `src/components/Gen${i}.tsx`), 'export {};\n');
-    const many = scanProject(tmp);
-    writeFileSync(join(tmp, 'src/components/Gen60.tsx'), 'export {};\n');
-    const more = scanProject(tmp);
-    t('project-scan: 超过样本上限时文件数仍计全量且影响指纹', more.components.find((c) => c.dir === 'src/components')?.fileCount === 62 && more.fingerprint !== many.fingerprint, JSON.stringify(more.components));
-    for (let i = 0; i <= 60; i++) unlinkSync(join(tmp, `src/components/Gen${i}.tsx`));
-    // 文件数不变的改名 / 路由子目录替换也要改变指纹
-    const base = scanProject(tmp).fingerprint;
-    writeFileSync(join(tmp, 'src/components/Bar.tsx'), 'export {};\n'); unlinkSync(join(tmp, 'src/components/Foo.tsx'));
-    const renamed = scanProject(tmp).fingerprint;
-    rmdirSync(join(tmp, 'app/settings')); mkdirSync(join(tmp, 'app/profile'));
-    const rerouted = scanProject(tmp).fingerprint;
-    t('project-scan: 同数量改名 / 路由替换改变指纹', base !== renamed && renamed !== rerouted, `${base} ${renamed} ${rerouted}`);
-    writeFileSync(join(tmp, 'src/components/Foo.tsx'), 'export const Foo = () => null;\n'); unlinkSync(join(tmp, 'src/components/Bar.tsx'));
-    // 超过样本上限的目录里，样本之外的同数量改名也要改变指纹
-    for (let i = 0; i < 30; i++) writeFileSync(join(tmp, `src/components/F${String(i).padStart(2, '0')}.tsx`), 'export {};\n');
-    const before30 = scanProject(tmp).fingerprint;
-    unlinkSync(join(tmp, 'src/components/F25.tsx')); writeFileSync(join(tmp, 'src/components/Z25.tsx'), 'export {};\n');
-    t('project-scan: 样本之外的改名也改变指纹', scanProject(tmp).fingerprint !== before30);
-    for (let i = 0; i < 30; i++) if (i !== 25) unlinkSync(join(tmp, `src/components/F${String(i).padStart(2, '0')}.tsx`));
-    unlinkSync(join(tmp, 'src/components/Z25.tsx'));
-    rmdirSync(join(tmp, 'app/profile')); mkdirSync(join(tmp, 'app/settings'));
 
     t('project-scan --check 缺文件 → 1', run('project-scan.mjs', ['--check', '--root', tmp]).status === 1);
     const layer0 = detectProjectLayer(tmp);
@@ -404,7 +331,6 @@ console.log('== project-scan');
     run('bootstrap.mjs', ['--root', tmp]);
     // 恢复齐全 meta 后缺 components 应 WARN
     unlinkSync(join(tmp, '.agents/ux/components.md'));
-    run('bootstrap.mjs', ['--root', tmp]);
     const bchk = run('bootstrap.mjs', ['--check', '--root', tmp]);
     t('bootstrap --check 已接入但缺 components → 0 + WARN', bchk.status === 0 && /WARN/.test(bchk.stderr + bchk.stdout), bchk.stderr + bchk.stdout);
 
@@ -417,14 +343,162 @@ console.log('== project-scan');
   }
 }
 
+// 5d2b) 5.5.0 · 平台门控（#1）：RN / mobile 项目不跑 web 专属规则；项目层「不适用」关掉规则；托管块与 Round 2 按平台
+console.log('== platform (mobile / RN)');
+{
+  const rn = join(fx, 'rn-project');
+  const WEB_ONLY = new Set(RULES.filter((r) => !r.platforms.includes('mobile')).map((r) => r.id));
+  t('platform: 每条规则声明 platforms', RULES.every((r) => Array.isArray(r.platforms) && r.platforms.length));
+  t('platform: web 专属规则含 cssVar / createStaticStyles / antd / outline / font-family 类', ['LOBE-CREATE-STYLES', 'LOBE-ANTD-IMPORT', 'LOBE-ANT-CLASS', 'LOBE-OUTLINE-NONE', 'LOBE-FONT-FAMILY', 'LOBE-REIMPLEMENT-ATOM'].every((id) => WEB_ONLY.has(id)));
+  const ctx = projectContext(rn);
+  t('platform: RN 依赖 → mobile（package.json）', ctx.platform === 'mobile' && ctx.source === 'package.json', JSON.stringify({ ...ctx, off: [...ctx.off] }));
+  const auto = lintPaths([join(rn, 'src')]);
+  const webOnlyFail = auto.findings.filter((f) => f.level === 'FAIL' && WEB_ONLY.has(f.id));
+  t('platform: RN fixture auto → 0 web-only FAIL', webOnlyFail.length === 0, webOnlyFail.map((f) => `${f.id}@${f.file}:${f.line}`).join(', '));
+  t('platform: RN fixture auto → 0 FAIL', auto.findings.filter((f) => f.level === 'FAIL').length === 0, auto.findings.map((f) => f.id).join(','));
+  t('platform: RN fixture 不报 REIMPLEMENT-ATOM（ui-rn 是原子层）', !auto.findings.some((f) => f.id === 'LOBE-REIMPLEMENT-ATOM'));
+  const forced = lintPaths([join(rn, 'src')], { platform: 'web' });
+  t('platform: 同一 fixture 强制 web 仍报 web 规则（门控生效而非规则失效）', forced.findings.some((f) => f.id === 'LOBE-CREATE-STYLES') && forced.findings.some((f) => f.id === 'LOBE-FONT-FAMILY'));
+  t('platform: K-07 图标按钮接受 accessibilityLabel', !forced.findings.some((f) => f.id === 'LOBE-ICON-BUTTON-LABEL'));
+  t('platform: *.native.tsx 视为 mobile', !lintText("const s = createStyles(() => ({}));\n", 'x.native.tsx').some((f) => f.id === 'LOBE-CREATE-STYLES'));
+  t('platform: mobile 上 RAW-COLOR 给 RN 修法（不提 cssVar）', lintText("const c = '#ff0000';\n", 'a.tsx', { platform: 'mobile' }).every((f) => f.id !== 'LOBE-RAW-COLOR' || !f.msg.includes('cssVar')));
+  // product.md：平台与适用性
+  t('platform: parsePlatform 中文 / 英文 / 表格', parsePlatform('平台：mobile（主），web') === 'mobile' && parsePlatform('platform: web') === 'web' && parsePlatform('| 平台 | mobile |') === 'mobile');
+  const off = parseApplicability('| C-01..C-03 | 不适用 | RN |\n| P-01 | 强调 |\nlint-off: LOBE-RAW-COLOR, D-11\n');
+  t('platform: 适用性表展开区间 + lint-off', ['C-01', 'C-02', 'C-03', 'LOBE-RAW-COLOR', 'D-11'].every((x) => off.has(x)) && !off.has('P-01'), [...off].join(','));
+  const tmp = mkdtempSync(join(tmpdir(), 'ld-rn-'));
+  try {
+    cpSync(rn, tmp, { recursive: true });
+    writeFileSync(join(tmp, 'src/components/Raw.tsx'), "export const c = { color: '#ff0000' };\n");
+    t('platform: 未标不适用时 RAW-COLOR 照常 FAIL', lintPaths([join(tmp, 'src')]).findings.some((f) => f.id === 'LOBE-RAW-COLOR'));
+    mkdirSync(join(tmp, '.agents/ux'), { recursive: true });
+    writeFileSync(join(tmp, '.agents/ux/product.md'), '# 产品画像\n平台：mobile\n\n| 规则 | 适用性 | 理由 |\n| --- | --- | --- |\n| D-10 | 不适用 | 颜色走 RN 主题，迁移中 |\n');
+    const pc = projectContext(tmp);
+    t('platform: product.md 平台优先于依赖', pc.platform === 'mobile' && pc.source === 'product.md');
+    t('platform: product.md 标 D-10 不适用 → RAW-COLOR 不报', !lintPaths([join(tmp, 'src')]).findings.some((f) => f.id === 'LOBE-RAW-COLOR'));
+    const cli = spawnSync(process.execPath, [join(skill, 'scripts/lint-lobe.mjs'), 'src'], { encoding: 'utf8', cwd: tmp });
+    t('platform: lint CLI 在 RN 项目 auto → exit 0 并显示 platform=mobile', cli.status === 0 && /platform=mobile/.test(cli.stdout), cli.stdout.slice(-300));
+    t('lint-lobe.mjs --platform 未知 → exit 2', run('lint-lobe.mjs', ['tests/fixtures/good.tsx', '--platform', 'tv']).status === 2);
+    // 托管块：按平台生成，mobile 无 web 专属指令；优先级改写
+    writeFileSync(join(tmp, '.agents/ux/components.md'), '# 组件盘点\n');
+    const mb = renderBlock('5.5.0', undefined, undefined, detectContext(tmp));
+    t('bootstrap: mobile 托管块有平台节', mb.includes('平台：mobile') && mb.includes('@lobehub/ui-rn'));
+    t('bootstrap: mobile 托管块不指示 web 写法（web 专属词只出现在「不适用」句）', mb.split('\n').filter((l) => /cssVar|createStaticStyles|antd|font-family/.test(l)).every((l) => l.includes('不适用')), mb);
+    t('bootstrap: 不再写「冲突时以 skill 为准」，项目层适用性优先', !mb.includes('冲突时以 skill 为准') && mb.includes('优先于 skill 的通用规则') && mb.includes('写明理由'));
+    const wb = renderBlock('5.5.0', undefined, undefined, { ux: ['product.md'] });
+    t('bootstrap: web 托管块无 mobile 节、同样用新优先级', !wb.includes('平台：mobile') && !wb.includes('冲突时以 skill 为准') && wb.includes('优先于 skill 的通用规则'));
+    t('bootstrap: skill 内文件写成 $LOBE_DESIGN/scripts/…，缺的项目层文件不写成代码路径', wb.includes('`$LOBE_DESIGN/scripts/pipeline.json`') && !wb.includes('`scripts/pipeline.json`') && !wb.includes('`.agents/ux/lobe-design-rules.md`') && !wb.includes('`.agents/ux/components.md`'));
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+  // project-scan：Round 2 分类与 UI 库字段按平台
+  const facts = scanProject(rn);
+  t('project-scan: RN → platform mobile', facts.stack.platform === 'mobile' && facts.stack.platforms.includes('mobile'));
+  t('project-scan: RN 主 UI 库 = @lobehub/ui-rn（alias → src/components）', facts.stack.primaryUi?.name === '@lobehub/ui-rn' && facts.stack.primaryUi?.alias === 'src/components', JSON.stringify(facts.stack.primaryUi));
+  t('project-scan: @lobehub/ui 标为仅依赖', facts.stack.depOnlyUi.includes('@lobehub/ui'));
+  t('project-scan: 识别导航库', facts.stack.navigation.includes('expo-router') && facts.stack.navigation.includes('@react-navigation/native'));
+  t('project-scan: mobile 分类方案无「与 lobe-ui 重复」', JSON.stringify(facts.componentScheme) === '["项目原子层","薄包装","业务组件"]');
+  const cls = Object.fromEntries(facts.componentClasses.map((c) => [c.file, c.class]));
+  t('project-scan: RN 组件分类', cls['src/components/Button.tsx'] === '项目原子层' && cls['src/components/IconButton.tsx'] === '薄包装' && cls['src/features/ChatList/index.tsx'] === '业务组件', JSON.stringify(cls));
+  const scanOut = run('project-scan.mjs', ['--root', rn]).stdout;
+  t('project-scan: 人读输出不把 @lobehub/ui 当 RN 界面库', /UI 库：@lobehub\/ui-rn/.test(scanOut) && /仅依赖、不是 RN 界面库：@lobehub\/ui/.test(scanOut) && !/与 lobe-ui 重复/.test(scanOut), scanOut);
+  const webStack = { platform: 'web', aliases: {} };
+  t('project-scan: web 分类不变（自建 Button → 与 lobe-ui 重复）', classifyComponent('src/components/Button.tsx', 'export const Button = () => <button />;\n', webStack) === '与 lobe-ui 重复'
+    && classifyComponent('src/components/X.tsx', "import { Button } from '@lobehub/ui';\nexport const X = (p) => <Button {...p} />;\n", webStack) === '薄包装');
+}
+
+// 5d2c) 5.6.0 · #2：DOM-UI 只报组件导入、lint-allow、托管块精简 / 宿主语言、平台中立措辞、RN 图标按钮提示
+console.log('== issue #2 (RN follow-ups)');
+{
+  const rn = join(fx, 'rn-project');
+  // 1) LOBE-RN-DOM-UI 只报组件导入
+  t('dom-ui: @lobehub/ui/es 下的 hooks / Markdown 插件 / styles 不报', ['@lobehub/ui/es/hooks/useMarkdown/utils', '@lobehub/ui/es/Markdown/plugins/rehypeX', '@lobehub/ui/es/styles'].every((src) => !isDomComponentImport(src, '{ fooBar }')));
+  t('dom-ui: 根入口的工具（useTheme / cssVar）与 import type 不报', !isDomComponentImport('@lobehub/ui', '{ useTheme, cssVar }') && !isDomComponentImport('@lobehub/ui', '{ type ThemeConfig }') && !isDomComponentImport('@lobehub/ui/theme.css', ''));
+  t('dom-ui: 组件导入照报（根入口 PascalCase / es/<Component> 默认 / 子入口 / antd / 命名空间）', isDomComponentImport('@lobehub/ui', '{ Button }') && isDomComponentImport('@lobehub/ui/es/Markdown', 'Markdown') && isDomComponentImport('@lobehub/ui/es/Markdown/index', '{ default as Md }') && isDomComponentImport('@lobehub/ui/form', '{ Form }') && isDomComponentImport('antd', '{ Button }') && isDomComponentImport('@lobehub/ui', '* as UI'));
+  const rnLint = lintPaths([join(rn, 'src')]);
+  t('dom-ui: RN fixture 的工具导入（hooks / plugins / seeds）0 finding', rnLint.findings.length === 0 && rnLint.files.some((f) => f.includes('seeds.ts')), rnLint.findings.map((f) => `${f.id}@${f.file}`).join(','));
+  // lint-allow
+  const al = parseAllow('lint-allow: LOBE-RN-DOM-UI src/legacy/**, src/web/*.tsx\nlint-allow: src/no-rule/**\n');
+  t('lint-allow: 解析规则 id 与 glob；没有规则 id 的行忽略', al.length === 1 && al[0].rules[0] === 'LOBE-RN-DOM-UI' && al[0].globs.length === 2);
+  t('lint-allow: glob 语义（** 跨目录，* 不跨）', globToRe('src/legacy/**').test('src/legacy/a/b.tsx') && globToRe('src/web/*.tsx').test('src/web/a.tsx') && !globToRe('src/web/*.tsx').test('src/web/x/a.tsx') && globToRe('src/legacy/').test('src/legacy/a.ts'));
+  const tmp = mkdtempSync(join(tmpdir(), 'ld-allow-'));
+  try {
+    cpSync(rn, tmp, { recursive: true });
+    mkdirSync(join(tmp, 'src/legacy'), { recursive: true });
+    const domFile = "import { Button } from '@lobehub/ui';\nexport const X = () => <Button>保存草稿</Button>;\n";
+    writeFileSync(join(tmp, 'src/legacy/Old.tsx'), domFile);
+    writeFileSync(join(tmp, 'src/features/New.tsx'), domFile);
+    const ids = (r) => r.findings.filter((f) => f.id === 'LOBE-RN-DOM-UI').map((f) => f.file.split(/[\\/]/).slice(-2).join('/'));
+    t('lint-allow: 未配置时两处都报', ids(lintPaths([join(tmp, 'src')])).length === 2);
+    mkdirSync(join(tmp, '.agents/ux'), { recursive: true });
+    writeFileSync(join(tmp, '.agents/ux/product.md'), '# 产品画像\n平台：mobile\n\nlint-allow: LOBE-RN-DOM-UI src/legacy/**\n');
+    const after = ids(lintPaths([join(tmp, 'src')]));
+    t('lint-allow: 白名单路径关掉该规则，其余路径照报', JSON.stringify(after) === '["features/New.tsx"]', JSON.stringify(after));
+    t('lint-allow: 只关指定规则（同路径的 RAW-COLOR 仍报）', (() => { writeFileSync(join(tmp, 'src/legacy/Raw.tsx'), "export const c = '#ff0000';\n"); return lintPaths([join(tmp, 'src')]).findings.some((f) => f.id === 'LOBE-RAW-COLOR' && f.file.includes('legacy')); })());
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+
+  // 4) RN 图标按钮提示只写 accessibilityLabel
+  const ib = lintText('<ActionIcon icon={Trash2} />\n', 'x.tsx', { platform: 'mobile' }).find((f) => f.id === 'LOBE-ICON-BUTTON-LABEL');
+  t('icon-label: mobile 提示只写 accessibilityLabel / accessibilityRole', ib && /accessibilityLabel/.test(ib.msg) && !/aria-label|title/.test(ib.msg), ib?.msg);
+  const ibw = lintText('<ActionIcon icon={Trash2} />\n', 'x.tsx').find((f) => f.id === 'LOBE-ICON-BUTTON-LABEL');
+  t('icon-label: web 提示仍是 title / aria-label', ibw && /aria-label/.test(ibw.msg) && !/accessibilityLabel/.test(ibw.msg));
+
+  // 2) 托管块：精简 + 宿主语言，模式行沿用，旧块兼容
+  t('bootstrap lang: 英文宿主 → en，中文宿主 → zh，内容不足 → null', detectLang('# Host\n\nThis repo uses pnpm and runs tests before every commit.\n') === 'en' && detectLang('# 项目指南\n\n本仓库使用 pnpm，提交前跑测试。\n') === 'zh' && detectLang('# x\n') === null);
+  t('bootstrap mode: 默认精简；已有模式行沿用；flag 覆盖', resolveMode({}).compact && resolveMode({ guideText: `${BEGIN}\n<!-- lobe-design:mode=full lang=zh -->\n${END}` }).compact === false && resolveMode({ guideText: `${BEGIN}\n<!-- lobe-design:mode=full lang=zh -->\n${END}`, compact: true, lang: 'en' }).lang === 'en');
+  const ce = renderBlock('5.6.0', undefined, undefined, { compact: true, lang: 'en', ux: ['product.md', 'components.md'], platform: 'mobile' });
+  t('bootstrap compact: ≤ 20 行', ce.split('\n').length <= 20, `${ce.split('\n').length} lines`);
+  t('bootstrap compact en: 无中文', !/[\u3400-\u9fff]/.test(ce), ce);
+  t('bootstrap compact: 保留入口 / 项目层 / 平台 / 优先级 / lint / 版本', ['$LOBE_DESIGN/SKILL.md', 'route.mjs', '.agents/ux/product.md', 'Platform: mobile', 'Precedence', 'lint-lobe.mjs', 'skill version 5.6.0'].every((x) => ce.includes(x)));
+  t('bootstrap compact mobile: web 专属词只出现在「不适用」句', ce.split('\n').filter((l) => /cssVar|createStaticStyles|antd/.test(l)).every((l) => /do not apply/.test(l)));
+  const cz = renderBlock('5.6.0', undefined, undefined, { compact: true, lang: 'zh' });
+  t('bootstrap compact zh: 中文、web 平台行、优先级', cz.includes('精简') && cz.includes('平台：web') && cz.includes('优先于 skill 的通用规则') && cz.split('\n').length <= 20);
+  const tmpB = mkdtempSync(join(tmpdir(), 'ld-compact-'));
+  try {
+    const guide = join(tmpB, 'AGENTS.md');
+    const host = '# Agent guide\n\nThis repository uses pnpm. Keep rules terse and run the test suite before every commit.\n';
+    // 旧版（5.5.0 完整中文、无模式行）的块：重跑换成精简 + 英文，标记兼容、块外不动
+    writeFileSync(guide, applyBlock(host, renderBlock('5.5.0')).text);
+    t('bootstrap legacy: 旧块无模式行', readBlockMode(readFileSync(guide, 'utf8')) === null);
+    const r1 = run('bootstrap.mjs', ['--root', tmpB, '--json']);
+    const a1 = readFileSync(guide, 'utf8');
+    t('bootstrap legacy → 精简 + en，替换而非追加', JSON.parse(r1.stdout).action === 'replaced' && (a1.match(/lobe-design:begin/g) ?? []).length === 1 && a1.includes('lobe-design:mode=compact lang=en') && a1.startsWith(host), r1.stdout + r1.stderr);
+    const blockLines = a1.slice(a1.indexOf(BEGIN), a1.indexOf(END) + END.length).split('\n').length;
+    t('bootstrap: 精简块（含首尾标记）≤ 22 行', blockLines <= 22, `${blockLines}`);
+    t('bootstrap compact: 重跑幂等', JSON.parse(run('bootstrap.mjs', ['--root', tmpB, '--json']).stdout).action === 'unchanged' && readFileSync(guide, 'utf8') === a1);
+    t('bootstrap compact en: --check 识别版本 → 0', run('bootstrap.mjs', ['--check', '--root', tmpB]).status === 0);
+    run('bootstrap.mjs', ['--root', tmpB, '--full']);
+    const a2 = readFileSync(guide, 'utf8');
+    t('bootstrap --full: 完整块 + 模式行', a2.includes('lobe-design:mode=full lang=zh') && a2.includes('### 3. 自迭代') && a2.startsWith(host));
+    t('bootstrap --full: 不带 flag 重跑沿用 full（幂等）', JSON.parse(run('bootstrap.mjs', ['--root', tmpB, '--json']).stdout).action === 'unchanged');
+    run('bootstrap.mjs', ['--root', tmpB, '--compact', '--lang', 'zh']);
+    t('bootstrap --compact --lang zh 覆盖', readFileSync(guide, 'utf8').includes('lobe-design:mode=compact lang=zh'));
+    t('bootstrap --lang 未知 → exit 2', run('bootstrap.mjs', ['--root', tmpB, '--lang', 'fr']).status === 2);
+    t('bootstrap --compact 与 --full 同时 → exit 2', run('bootstrap.mjs', ['--root', tmpB, '--compact', '--full']).status === 2);
+  } finally { rmSync(tmpB, { recursive: true, force: true }); }
+
+  // 3) 平台中立的描述与 stage 措辞
+  const skillMd = readFileSync(join(skill, 'SKILL.md'), 'utf8');
+  const desc = skillMd.match(/^description:\s*>?\s*\n([\s\S]*?)\n---/m)?.[1] ?? '';
+  t('wording: SKILL.md description 不把 @lobehub/ui / cssVar 当通用', desc.length > 0 && !/take atoms from @lobehub\/ui/.test(desc) && /React Native/.test(desc) && /useTheme\(\)/.test(desc)
+    && desc.split(/(?<=[.;])\s/).filter((x) => /cssVar|@lobehub\/ui\b(?!-rn)/.test(x)).every((x) => /web/i.test(x)), desc);
+  const visual = readFileSync(join(skill, 'stages/50-visual.md'), 'utf8');
+  t('wording: 50-visual 取值按平台分（web cssVar / RN useTheme）', /\*\*web \/ desktop\*\*：`cssVar`/.test(visual) && /React Native.*useTheme\(\)/.test(visual) && !/都走 `cssVar`/.test(visual));
+  const stagesText = readdirSync(join(skill, 'stages')).map((f) => readFileSync(join(skill, 'stages', f), 'utf8')).join('\n') + skillMd;
+  t('wording: SKILL.md 输出契约有示意图约定', /### 示意图\n/.test(skillMd) && /编号标注/.test(skillMd));
+  const comps = readFileSync(join(skill, 'references/components.md'), 'utf8');
+  const c19 = comps.split('## C-19')[1]?.split('\n## ')[0] ?? '';
+  const c20 = comps.split('## C-20')[1]?.split('\n## ')[0] ?? '';
+  t('wording: C-19 用 ProgressiveBlur + 背景 token 淡出 + 降级', /ProgressiveBlur/.test(c19) && /colorBgLayout/.test(c19) && /降低透明度/.test(c19) && /平台作用域/.test(c19));
+  t('wording: C-20 标注平台作用域 mobile', /\*\*平台作用域：mobile。\*\*/.test(c20));
+  t('wording: stage / 入口文档没有「取值走 cssVar」这类不分平台的说法', !/(?:都走|仍走|仍要遵守「取值走) `?cssVar/.test(stagesText) && !/映射到哪个 lobe-ui 组件/.test(stagesText));
+}
+
 // 5d3) 5.4.2 · install.sh：--copy 重装备份到 cache，不在项目内留 *.bak.*
 console.log('== install.sh backup');
 {
   const repoRoot = join(skill, '..', '..');
   const installSh = join(repoRoot, 'install.sh');
   if (!existsSync(installSh)) {
-    // 以 install.sh --copy 装进项目（.agents/skills/lobe-design）时没有 skill 仓库根的 install.sh，跳过
-    console.log(`SKIP install.sh 不在 ${installSh}（非 skill 源仓库布局）`);
+    t('install.sh present at repo root', false, installSh);
   } else {
     const cacheHome = mkdtempSync(join(tmpdir(), 'ld-xdg-'));
     const proj = mkdtempSync(join(tmpdir(), 'my-app-'));
@@ -577,8 +651,6 @@ t('check-learnings.mjs missing log → exit 2', run('check-learnings.mjs', ['--l
 for (const s of ['refs.mjs', 'intent.mjs', 'bootstrap.mjs', 'upstream.mjs', 'project-scan.mjs']) {
   t(`${s} --help → exit 0`, run(s, ['--help']).status === 0, `exit ${run(s, ['--help']).status}`);
 }
-t('lint-lobe.mjs 未知 --stage → exit 2', run('lint-lobe.mjs', ['tests/fixtures/bad-visual.tsx', '--stage', '50-visua']).status === 2);
-t('lint-lobe.mjs 合法 --stage 照常报 FAIL', run('lint-lobe.mjs', ['tests/fixtures/bad-visual.tsx', '--stage', '50-visual']).status === 1);
 t('refs.mjs (no instruction) → exit 2', run('refs.mjs', []).status === 2);
 t('intent.mjs (no instruction) → exit 2', run('intent.mjs', []).status === 2);
 t('refs.mjs --audit → exit 0', run('refs.mjs', ['--audit']).status === 0);

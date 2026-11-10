@@ -1,6 +1,6 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import { REQUEST_OPERATION_ID_HEADER, REQUEST_TRIGGER_HEADER } from '@lobechat/const';
 import { createMediaFileRef } from '@lobechat/const/mediaRef';
 import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';
@@ -1803,7 +1803,11 @@ describe('ChatService', () => {
         request({ channel: 'llmcall:user-1:abcdefgh', headers: {} }),
       );
       const relayedError = {
-        error: { message: "model 'gpt-oss:20b' not found", name: 'ResponseError', status_code: 404 },
+        error: {
+          message: "model 'gpt-oss:20b' not found",
+          name: 'ResponseError',
+          status_code: 404,
+        },
         errorType: 'OllamaBizError',
         provider: 'ollama',
       };
@@ -1871,24 +1875,17 @@ describe('ChatService', () => {
       );
     });
 
-    it('should send request trigger as a header without adding it to the model payload', async () => {
-      const params: Partial<ChatStreamPayload> = {
-        messages: [],
-        model: 'test-model',
-      };
+    it('should send request trigger and operation id as headers, not in the model payload', async () => {
+      const params: Partial<ChatStreamPayload> = { messages: [], model: 'test-model' };
 
       await chatService.getChatCompletion(params, {
         metadata: { trigger: RequestTrigger.MultimodalAnalysis },
+        operationId: 'op_client_1',
       });
 
-      expect(mockFetchSSE).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            [REQUEST_TRIGGER_HEADER]: RequestTrigger.MultimodalAnalysis,
-          }),
-        }),
-      );
+      const { headers } = mockFetchSSE.mock.calls[0][1];
+      expect(headers[REQUEST_OPERATION_ID_HEADER]).toBe('op_client_1');
+      expect(headers[REQUEST_TRIGGER_HEADER]).toBe(RequestTrigger.MultimodalAnalysis);
 
       const payload = JSON.parse(mockFetchSSE.mock.calls[0][1].body);
       expect(payload).not.toHaveProperty('requestTrigger');

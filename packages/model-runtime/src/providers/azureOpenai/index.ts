@@ -5,6 +5,10 @@ import { AzureOpenAI } from 'openai';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import {
+  applyImageOutputParams,
+  resolveImageOutputMimeType,
+} from '../../core/openaiCompatibleFactory/imageOutputParams';
 import { refineErrorCode } from '../../errors';
 import type {
   ASROptions,
@@ -303,6 +307,8 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
       if (userInput.size === 'auto') delete userInput.size;
 
+      applyImageOutputParams(userInput, { isImageEdit });
+
       // gpt-image-2 rejects input_fidelity because it is always high fidelity by default.
       // Keep the parameter limited to the gpt-image-1 family, matching OpenAI-compatible runtime.
       const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
@@ -343,7 +349,11 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       }
 
       if (imageData.b64_json) {
-        return { imageUrl: `data:image/png;base64,${imageData.b64_json}` };
+        const mimeType = resolveImageOutputMimeType(
+          result.output_format,
+          azureImageOptions.output_format,
+        );
+        return { imageUrl: `data:${mimeType};base64,${imageData.b64_json}` };
       }
 
       if (imageData.url) {

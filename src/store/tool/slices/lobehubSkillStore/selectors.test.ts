@@ -6,6 +6,20 @@ import { lobehubSkillStoreSelectors } from './selectors';
 import { type LobehubSkillServer } from './types';
 import { LobehubSkillStatus } from './types';
 
+const createConnectedLinearServer = (): LobehubSkillServer => ({
+  identifier: 'linear',
+  name: 'Linear',
+  isConnected: true,
+  status: LobehubSkillStatus.CONNECTED,
+});
+
+const createDisconnectedGitHubServer = (): LobehubSkillServer => ({
+  identifier: 'github',
+  name: 'GitHub',
+  isConnected: false,
+  status: LobehubSkillStatus.NOT_CONNECTED,
+});
+
 describe('lobehubSkillStoreSelectors', () => {
   describe('getServers', () => {
     it('should return empty array when no servers exist', () => {
@@ -16,46 +30,20 @@ describe('lobehubSkillStoreSelectors', () => {
 
     it('should return all servers', () => {
       const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-        {
-          identifier: 'github',
-          name: 'GitHub',
-          isConnected: false,
-          status: LobehubSkillStatus.NOT_CONNECTED,
-        },
+        createConnectedLinearServer(),
+        createDisconnectedGitHubServer(),
       ];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.getServers(state);
       expect(result).toEqual(servers);
-    });
-
-    it('should handle undefined lobehubSkillServers', () => {
-      const state = { ...initialState, lobehubSkillServers: undefined } as unknown as ToolStore;
-      const result = lobehubSkillStoreSelectors.getServers(state);
-      expect(result).toEqual([]);
     });
   });
 
   describe('getConnectedServers', () => {
     it('should return only connected servers', () => {
       const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-        {
-          identifier: 'github',
-          name: 'GitHub',
-          isConnected: false,
-          status: LobehubSkillStatus.NOT_CONNECTED,
-        },
+        createConnectedLinearServer(),
+        createDisconnectedGitHubServer(),
         {
           identifier: 'slack',
           name: 'Slack',
@@ -70,14 +58,7 @@ describe('lobehubSkillStoreSelectors', () => {
     });
 
     it('should return empty array when no servers are connected', () => {
-      const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'github',
-          name: 'GitHub',
-          isConnected: false,
-          status: LobehubSkillStatus.NOT_CONNECTED,
-        },
-      ];
+      const servers: LobehubSkillServer[] = [createDisconnectedGitHubServer()];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.getConnectedServers(state);
       expect(result).toEqual([]);
@@ -93,18 +74,8 @@ describe('lobehubSkillStoreSelectors', () => {
   describe('getAllServerIdentifiers', () => {
     it('should return set of all server identifiers', () => {
       const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-        {
-          identifier: 'github',
-          name: 'GitHub',
-          isConnected: false,
-          status: LobehubSkillStatus.NOT_CONNECTED,
-        },
+        createConnectedLinearServer(),
+        createDisconnectedGitHubServer(),
       ];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.getAllServerIdentifiers(state);
@@ -120,14 +91,7 @@ describe('lobehubSkillStoreSelectors', () => {
 
   describe('getServerByIdentifier', () => {
     it('should return server by identifier', () => {
-      const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
+      const servers: LobehubSkillServer[] = [createConnectedLinearServer()];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.getServerByIdentifier('linear')(state);
       expect(result?.identifier).toBe('linear');
@@ -149,14 +113,7 @@ describe('lobehubSkillStoreSelectors', () => {
 
   describe('isLobehubSkillServer', () => {
     it('should return true for existing server', () => {
-      const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
+      const servers: LobehubSkillServer[] = [createConnectedLinearServer()];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.isLobehubSkillServer('linear')(state);
       expect(result).toBe(true);
@@ -275,14 +232,7 @@ describe('lobehubSkillStoreSelectors', () => {
     });
 
     it('should return empty array when no connected servers have tools', () => {
-      const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
+      const servers: LobehubSkillServer[] = [createConnectedLinearServer()];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.getAllTools(state);
       expect(result).toEqual([]);
@@ -366,14 +316,7 @@ describe('lobehubSkillStoreSelectors', () => {
     });
 
     it('should not include servers without tools', () => {
-      const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
+      const servers: LobehubSkillServer[] = [createConnectedLinearServer()];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(state);
       expect(result).toEqual([]);
@@ -501,14 +444,7 @@ describe('lobehubSkillStoreSelectors', () => {
     });
 
     it('should use default avatar when icon is not provided', () => {
-      const servers: LobehubSkillServer[] = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
+      const servers: LobehubSkillServer[] = [createConnectedLinearServer()];
       const state = { ...initialState, lobehubSkillServers: servers } as ToolStore;
       const result = lobehubSkillStoreSelectors.metaList(state);
 

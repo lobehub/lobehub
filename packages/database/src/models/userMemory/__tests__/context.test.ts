@@ -1,8 +1,8 @@
+import type { UserMemoryContextInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryContext } from '../../../schemas';
 import { userMemories, userMemoriesContexts, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryContextModel } from '../context';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryContextModel', () => {
   describe('create', () => {
     it('should create a new context', async () => {
-      const contextData: Omit<NewUserMemoryContext, 'userId'> = {
+      const contextData: Omit<UserMemoryContextInsert, 'userId'> = {
         title: 'Test Context',
         description: 'Test context description',
         type: 'work',
@@ -78,17 +78,13 @@ describe('UserMemoryContextModel', () => {
       ]);
     });
 
-    it('should return contexts for current user only', async () => {
+    it('returns current user contexts newest first', async () => {
       const result = await contextModel.query();
 
       expect(result).toHaveLength(2);
       expect(result.every((c) => c.userId === userId)).toBe(true);
-    });
 
-    it('should order by createdAt desc', async () => {
-      const result = await contextModel.query();
-
-      expect(result[0].id).toBe('context-2'); // Most recent first
+      expect(result[0].id).toBe('context-2');
       expect(result[1].id).toBe('context-1');
     });
 
@@ -97,13 +93,6 @@ describe('UserMemoryContextModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('context-2');
-    });
-
-    it('should not return other users contexts', async () => {
-      const result = await contextModel.query();
-
-      const otherContext = result.find((c) => c.id === 'other-context');
-      expect(otherContext).toBeUndefined();
     });
 
     it('hides contexts with only trashed parents but keeps one with a live parent', async () => {
@@ -134,6 +123,34 @@ describe('UserMemoryContextModel', () => {
 
       expect(result.some(({ id }) => id === 'context-with-only-trashed-parent')).toBe(false);
       expect(result.some(({ id }) => id === 'context-with-live-parent')).toBe(true);
+    });
+
+    it('judges a context by its single parent once it has one', async () => {
+      await serverDB.insert(userMemories).values([
+        {
+          deletedAt: new Date(),
+          id: 'trashed-single-parent',
+          isDeleted: true,
+          lastAccessedAt: new Date(),
+          userId,
+        },
+        { id: 'live-single-parent', lastAccessedAt: new Date(), userId },
+      ]);
+      await serverDB.insert(userMemoriesContexts).values([
+        {
+          id: 'context-with-trashed-single-parent',
+          userId,
+          // The legacy list still names a live parent; the single parent wins.
+          userMemoryId: 'trashed-single-parent',
+          userMemoryIds: ['live-single-parent'],
+        },
+        { id: 'context-with-live-single-parent', userId, userMemoryId: 'live-single-parent' },
+      ]);
+
+      const result = await contextModel.query();
+
+      expect(result.some(({ id }) => id === 'context-with-trashed-single-parent')).toBe(false);
+      expect(result.some(({ id }) => id === 'context-with-live-single-parent')).toBe(true);
     });
   });
 

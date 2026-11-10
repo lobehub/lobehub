@@ -33,6 +33,8 @@ const AcceptanceCheckOwnerToolbar = () => {
    * never offers an action that is guaranteed to answer `NOT_FOUND`.
    */
   if (!data?.isOwner) return null;
+  const subjectType = data.subject.type;
+  if (subjectType === 'site') return null;
 
   const standing = data.acceptance.config?.checklist ?? [];
   const predictableCount = data.checks.filter(
@@ -40,7 +42,7 @@ const AcceptanceCheckOwnerToolbar = () => {
   ).length;
 
   const saveStanding = async (checklist: typeof standing) => {
-    await verifyService.saveAcceptanceChecklist(data.subject.type, data.subject.id, checklist);
+    await verifyService.saveAcceptanceChecklist(subjectType, data.subject.id, checklist);
     await mutate();
     void globalMutate(isAcceptanceListKey);
     toast.success(t('acceptance.checkCreate.saved'));

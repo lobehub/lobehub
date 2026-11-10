@@ -25,9 +25,19 @@ const CONTENT_CLASS_NAME = 'nav-item-content';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
+    /* Width the title fades out under: one small action icon (24px) plus spacing.
+       Each extra icon adds its 24px plus the 2px gap. The focus guards and the
+       aria-owns portal marker an open menu inserts beside its trigger are not
+       icons, so they are not counted. */
+    --nav-item-actions-inset: 28px;
+
     user-select: none;
     overflow: hidden;
     min-width: 32px;
+
+    &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns]))) {
+      --nav-item-actions-inset: 54px;
+    }
 
     /* focus-visible, not focus-within: closing a dropdown hands focus back to its
        trigger, which would pin the actions open after the pointer has left. */
@@ -44,8 +54,8 @@ const styles = createStaticStyles(({ css }) => ({
       .${CONTENT_CLASS_NAME} {
         mask-image: linear-gradient(
           to right,
-          #000 calc(100% - 56px),
-          transparent calc(100% - 28px)
+          #000 calc(100% - var(--nav-item-actions-inset) - 28px),
+          transparent calc(100% - var(--nav-item-actions-inset))
         );
       }
     }
@@ -66,6 +76,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface NavItemSlots {
+  /** Stacked under the leading icon, e.g. a short status label on a two-line row. */
+  iconBelow?: ReactNode;
   iconPostfix?: ReactNode;
   titlePrefix?: ReactNode;
 }
@@ -148,7 +160,7 @@ const NavItem = memo<NavItemProps>(
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
-    const { titlePrefix, iconPostfix } = slots || {};
+    const { titlePrefix, iconBelow, iconPostfix } = slots || {};
     // Link props for cmd+click support
     const linkProps = href
       ? {
@@ -167,6 +179,24 @@ const NavItem = memo<NavItemProps>(
             ...style,
           }
         : undefined;
+
+    const iconNode = icon && (
+      <Center
+        flex={'none'}
+        // With a description the row is two lines tall; align the leading icon
+        // to the title's first line (match its line-height) instead of letting
+        // it center across both lines, which drops it into the gap.
+        height={description ? 22 : 28}
+        style={description ? { alignSelf: 'flex-start' } : undefined}
+        width={28}
+      >
+        {loading ? (
+          <Spin size={iconSize} variant="network" />
+        ) : (
+          <Icon color={iconColor} icon={icon} size={iconSize} />
+        )}
+      </Center>
+    );
 
     const Content = (
       <Block
@@ -194,22 +224,21 @@ const NavItem = memo<NavItemProps>(
         onFocus={handleFocus}
         onPointerEnter={handlePointerEnter}
       >
-        {icon && (
-          <Center
+        {iconNode && iconBelow ? (
+          <Flexbox
+            align={'center'}
             flex={'none'}
-            // With a description the row is two lines tall; align the leading icon
-            // to the title's first line (match its line-height) instead of letting
-            // it center across both lines, which drops it into the gap.
-            height={description ? 22 : 28}
+            gap={2}
             style={description ? { alignSelf: 'flex-start' } : undefined}
+            // Keep the icon column width so the title does not shift; a wider
+            // label overflows evenly into the gaps around it.
             width={28}
           >
-            {loading ? (
-              <Spin size={iconSize} variant="network" />
-            ) : (
-              <Icon color={iconColor} icon={icon} size={iconSize} />
-            )}
-          </Center>
+            {iconNode}
+            {iconBelow}
+          </Flexbox>
+        ) : (
+          iconNode
         )}
 
         {iconPostfix}

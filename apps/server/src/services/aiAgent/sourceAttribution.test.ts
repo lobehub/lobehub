@@ -1,7 +1,12 @@
 import type { AgentOperationStatus } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveAgentSenderFromOperation } from './sourceAttribution';
+import {
+  AgentRelayHopLimitError,
+  assertAgentRelayHop,
+  MAX_AGENT_RELAY_HOPS,
+  resolveAgentSenderFromOperation,
+} from './sourceAttribution';
 
 const CALLER = 'user-1';
 
@@ -30,6 +35,8 @@ const buildDeps = (overrides?: {
     | null
     | undefined
     | { agentId?: null | string; title?: null | string; workspaceId?: null | string };
+  /** Hop of the newest user message on the sending conversation; rejects to simulate a failed read. */
+  triggerHop?: Error | number;
   workspaceId?: string;
 }) => ({
   destinationAgentId: 'agt-destination',
@@ -51,6 +58,10 @@ const buildDeps = (overrides?: {
         { status: 'running', ...overrides.operation },
   ),
   findTopic: vi.fn().mockResolvedValue(overrides?.topic === undefined ? null : overrides.topic),
+  findTriggerHop:
+    overrides?.triggerHop instanceof Error
+      ? vi.fn().mockRejectedValue(overrides.triggerHop)
+      : vi.fn().mockResolvedValue(overrides?.triggerHop),
   userId: CALLER,
   workspaceId: overrides?.workspaceId,
 });
@@ -327,6 +338,7 @@ describe('resolveAgentSenderFromOperation', () => {
 
     await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
       agentId: 'agt-coco',
+      hop: 1,
       avatar: '🐶',
       name: 'Coco',
       title: 'Product Assistant',
@@ -351,6 +363,7 @@ describe('resolveAgentSenderFromOperation', () => {
 
     await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
       agentId: 'agt-child',
+      hop: 1,
       avatar: '🤖',
       name: 'Release Bot',
       title: 'Release Bot',
@@ -369,6 +382,7 @@ describe('resolveAgentSenderFromOperation', () => {
 
     await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
       agentId: 'agt-coco',
+      hop: 1,
       topicAgentId: 'agt-coco',
       topicId: 'tpc-source',
       topicTitle: 'Source',
@@ -384,9 +398,73 @@ describe('resolveAgentSenderFromOperation', () => {
 
     await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
       agentId: 'agt-coco',
+      hop: 1,
       topicAgentId: 'agt-coco',
       topicId: 'tpc-source',
       topicTitle: 'Source',
+    });
+  });
+
+  describe('relay hops', () => {
+    const operation = { agentId: 'agt-coco', topicId: 'tpc-source', userId: CALLER };
+    const topic = { agentId: 'agt-coco', title: 'Source' };
+
+    it('counts one hop when a person started the sending turn', async () => {
+      const deps = buildDeps({ operation, topic });
+
+      await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+        hop: 1,
+      });
+    });
+
+    it('counts one more than the agent message that started the sending turn', async () => {
+      const deps = buildDeps({
+        operation: { ...operation, threadId: 'thd-1' },
+        topic,
+        triggerHop: 2,
+      });
+
+      await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+        hop: 3,
+      });
+      // Read on the conversation the sending turn runs in.
+      expect(deps.findTriggerHop).toHaveBeenCalledWith({
+        threadId: 'thd-1',
+        topicId: 'tpc-source',
+      });
+    });
+
+    it('still counts on a source whose origin is hidden from the destination', async () => {
+      const deps = buildDeps({
+        agentVisibility: { 'agt-coco': 'private', 'agt-destination': 'public' },
+        operation: { ...operation, workspaceId: 'ws-1' },
+        topic: { ...topic, workspaceId: 'ws-1' },
+        triggerHop: 4,
+        workspaceId: 'ws-1',
+      });
+
+      const sender = await resolveAgentSenderFromOperation('op-1', deps);
+
+      expect(sender?.topicId).toBeUndefined();
+      expect(sender?.hop).toBe(5);
+    });
+
+    it('starts over at one when the trigger cannot be read', async () => {
+      const deps = buildDeps({ operation, topic, triggerHop: new Error('db down') });
+
+      await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+        hop: 1,
+      });
+    });
+
+    it('refuses a send past the bound, and nothing up to it', () => {
+      expect(() => assertAgentRelayHop(undefined)).not.toThrow();
+      expect(() =>
+        assertAgentRelayHop({ agentId: 'agt-coco', hop: MAX_AGENT_RELAY_HOPS }),
+      ).not.toThrow();
+      expect(() =>
+        assertAgentRelayHop({ agentId: 'agt-coco', hop: MAX_AGENT_RELAY_HOPS + 1 }),
+      ).toThrow(AgentRelayHopLimitError);
     });
   });
 });

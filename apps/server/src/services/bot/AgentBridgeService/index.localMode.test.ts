@@ -150,6 +150,7 @@ const mention = async (
   await service.handleMention(thread, createMessage(), {
     agentId: 'agent-1',
     botContext: { platformThreadId: THREAD_ID } as any,
+    botSettings: { processingMessage: true },
     client,
     replyLocale: 'en-US',
     ...overrides,
@@ -371,6 +372,73 @@ describe('AgentBridgeService local mode', () => {
     });
   });
 
+  describe('with the processing message off (the default)', () => {
+    const noPlaceholder = { botSettings: {} };
+
+    it('posts the stopped notice on reason=interrupted', async () => {
+      runHooks({ onComplete: { reason: 'interrupted' } });
+      const { edit, thread } = createThread();
+
+      await mention(thread, noPlaceholder);
+
+      expect(edit).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post).toHaveBeenCalledWith({ markdown: renderStopped(undefined, 'en-US') });
+    });
+
+    it('posts the startup error when execAgent fails without a terminal report', async () => {
+      mockExecAgent.mockResolvedValue(okResult({ error: 'DEVICE_NOT_FOUND', success: false }));
+      const { edit, thread } = createThread();
+
+      await mention(thread, noPlaceholder);
+
+      expect(edit).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post).toHaveBeenCalledWith({
+        markdown: renderThrownAgentError('DEVICE_NOT_FOUND', 'op-1', 'en-US'),
+      });
+    });
+
+    it('posts nothing extra when the terminal lifecycle already reported the failure', async () => {
+      mockExecAgent.mockResolvedValue(
+        okResult({ error: 'DEVICE_NOT_FOUND', success: false, terminalReported: true }),
+      );
+      const { thread } = createThread();
+
+      await mention(thread, noPlaceholder);
+
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('posts the stopped notice when startup is aborted', async () => {
+      const abortError = new Error('Execution stopped before startup.');
+      abortError.name = 'AbortError';
+      mockExecAgent.mockRejectedValue(abortError);
+      const { edit, thread } = createThread();
+
+      await mention(thread, noPlaceholder);
+
+      expect(edit).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith({
+        markdown: renderStopped('Execution stopped before startup.', 'en-US'),
+      });
+    });
+
+    it('posts a generic startup rejection as its own message', async () => {
+      const error = new Error('network down');
+      mockExecAgent.mockRejectedValue(error);
+      const { edit, thread } = createThread();
+
+      await mention(thread, noPlaceholder);
+
+      expect(edit).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(thread.post).toHaveBeenCalledWith({
+        markdown: renderThrownAgentError(error, undefined, 'en-US'),
+      });
+    });
+  });
+
   it('interrupts the operation once known when /stop arrived during startup', async () => {
     mockExecAgent.mockImplementation(async () => {
       AgentBridgeService.requestStop(THREAD_ID);
@@ -383,6 +451,7 @@ describe('AgentBridgeService local mode', () => {
     const pending = service.handleMention(thread, createMessage(), {
       agentId: 'agent-1',
       botContext: { platformThreadId: THREAD_ID } as any,
+      botSettings: { processingMessage: true },
       client: createClient().client,
     });
     await vi.waitFor(() => expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' }));

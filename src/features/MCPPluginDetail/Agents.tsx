@@ -23,6 +23,8 @@ interface AgentsProps {
   inModal?: boolean;
 }
 
+const FooterSpacer = () => <div style={{ height: 16 }} />;
+
 const Agents = memo<AgentsProps>(({ inModal }) => {
   const { t } = useTranslation('discover');
   const { identifier } = useDetailContext();
@@ -111,7 +113,7 @@ const Agents = memo<AgentsProps>(({ inModal }) => {
       style={inModal ? { height: '50vh', width: '100%' } : { width: '100%' }}
       useWindowScroll={!inModal}
       components={{
-        Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+        Footer: isLoading ? VirtuosoLoading : FooterSpacer,
       }}
     />
   );

@@ -2,6 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayHttpClient } from './http';
 
+const createAgentRunInput = (): Parameters<GatewayHttpClient['dispatchAgentRun']>[0] => ({
+  agentType: 'claude-code',
+  assistantMessageId: 'asst-1',
+  jwt: 'jwt',
+  operationId: 'op-1',
+  prompt: 'run',
+  topicId: 'tpc-1',
+  userId: 'user-1',
+});
+
+const createSuccessfulToolResponse = () => ({
+  json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+  ok: true,
+});
+
 describe('GatewayHttpClient', () => {
   let client: GatewayHttpClient;
 
@@ -418,10 +433,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional deviceId and timeout', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const signal = AbortSignal.abort();
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
@@ -449,10 +461,7 @@ describe('GatewayHttpClient', () => {
       // answers 503 DEVICE_OFFLINE. Aborting earlier turned every offline
       // device into "timed out, the work may still be running".
       const GATEWAY_RECOVERY_WINDOW_MS = 45_000;
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
 
       await client.executeToolCall(
@@ -464,10 +473,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('never pads a call past the agent function window', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
 
       await client.executeToolCall(
@@ -479,10 +485,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional operationId', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
 
       await client.executeToolCall(
         { operationId: 'op-1', userId: 'user-1' },
@@ -495,10 +498,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const signal = AbortSignal.abort();
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
@@ -522,15 +522,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ success: true });
       expect(fetch).toHaveBeenCalledWith(
@@ -547,15 +539,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ success: true });
     });
@@ -569,15 +553,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'spawn failed', success: false });
     });
@@ -588,15 +564,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
@@ -608,15 +576,7 @@ describe('GatewayHttpClient', () => {
         text: vi.fn().mockResolvedValue('DEVICE_OFFLINE'),
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
@@ -776,10 +736,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional deviceId and timeout', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
 
       await client.executeMessageApi(
         { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },

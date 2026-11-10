@@ -22,21 +22,17 @@ import {
   SquareTerminalIcon,
   XIcon,
 } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
-import { canHostTerminal, deviceSelectors, useDeviceStore } from '@/store/device';
-import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
 import SplitView from './SplitView';
 import type { TerminalTab } from './store';
 import { useChatTerminalStore } from './store';
 import { buildTargetOptions, LOCAL_TARGET } from './targetOptions';
+import { useTerminalTarget } from './useTerminalTarget';
 
 const EMPTY_TABS: TerminalTab[] = [];
 
@@ -97,18 +93,10 @@ const Content = memo(() => {
 
   const topicId = useChatStore((s) => s.activeTopicId);
   const agentId = useChatStore((s) => s.activeAgentId);
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentId
-      ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s)
-      : undefined,
-  );
   const toggleTerminalPanel = useGlobalStore((s) => s.toggleTerminalPanel);
 
   // Tabs are bound to the topic: sessions created here only show for this topic.
   const topicKey = topicId || (agentId ? `agent:${agentId}` : 'global');
-  const cwd = topicWorkingDirectory || agentWorkingDirectory || undefined;
 
   const tabs = useChatTerminalStore((s) => s.tabsByTopic[topicKey]) ?? EMPTY_TABS;
   const activeTabId = useChatTerminalStore((s) => s.activeTabIds[topicKey]);
@@ -122,35 +110,22 @@ const Content = memo(() => {
   const closePane = useChatTerminalStore((s) => s.closePane);
   const setActivePane = useChatTerminalStore((s) => s.setActivePane);
   const setPaneFlex = useChatTerminalStore((s) => s.setPaneFlex);
-  const targetDeviceId = useChatTerminalStore((s) => s.deviceByTopic[topicKey]);
-  const setTerminalDevice = useChatTerminalStore((s) => s.setTerminalDevice);
 
-  const devices = useDeviceStore(deviceSelectors.deviceList);
-  // Only devices that can actually open a shell. An offline row, or one whose
-  // live connections are all desktop ones, answers a terminal RPC with a
-  // refusal — offering it would fail the session the moment it is claimed.
-  const targets = useMemo(() => devices.filter(canHostTerminal), [devices]);
-  // Desktop can always run a shell here; the web build needs a device.
-  const canSpawn = isDesktop || !!targetDeviceId;
+  const { canSpawn, cwd, selectTarget, targetDeviceId, targets } = useTerminalTarget(
+    topicKey,
+    agentId || undefined,
+  );
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs.at(-1);
 
   const prevTabCountRef = useRef(0);
-
-  // The web build has no local shell, so a topic must name a device before the
-  // first terminal can open. Claim the first usable one until the user picks
-  // another.
-  useEffect(() => {
-    if (isDesktop || targetDeviceId || targets.length === 0) return;
-    setTerminalDevice(topicKey, targets[0].deviceId);
-  }, [targets, setTerminalDevice, targetDeviceId, topicKey]);
 
   // Open a first shell automatically when this topic has none yet and we know
   // where it would run. Runs on open / topic switch / target arrival only — NOT
   // on tab-count changes, so closing the last tab doesn't respawn a shell.
   useEffect(() => {
     prevTabCountRef.current = tabs.length;
-    if (tabs.length === 0 && canSpawn) void createTab(topicKey, cwd);
+    if (tabs.length === 0 && canSpawn) void createTab(topicKey, cwd, targetDeviceId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicKey, canSpawn]);
 
@@ -176,15 +151,6 @@ const Content = memo(() => {
       onClick: () => closeOtherTabs(topicKey, tabId),
     },
   ];
-
-  /**
-   * Point the topic at another machine. Existing shells keep running where they
-   * started, so open one — otherwise picking a device looks like it did nothing.
-   */
-  const selectTarget = (next: string) => {
-    setTerminalDevice(topicKey, next === LOCAL_TARGET ? undefined : next);
-    void createTab(topicKey, cwd);
-  };
 
   const targetOptions = buildTargetOptions(
     targets,
@@ -228,7 +194,7 @@ const Content = memo(() => {
           loading={creating}
           size={'small'}
           title={t('terminalPanel.newTab')}
-          onClick={() => createTab(topicKey, cwd)}
+          onClick={() => createTab(topicKey, cwd, targetDeviceId)}
         />
         <Flexbox flex={1} />
         <Select
@@ -244,7 +210,7 @@ const Content = memo(() => {
           icon={SquareSplitHorizontalIcon}
           size={'small'}
           title={t('terminalPanel.split')}
-          onClick={() => activeTab && splitPane(topicKey, activeTab.id, cwd)}
+          onClick={() => activeTab && splitPane(topicKey, activeTab.id, cwd, targetDeviceId)}
         />
         <ActionIcon
           icon={XIcon}
@@ -265,7 +231,7 @@ const Content = memo(() => {
         ) : createError ? (
           <Flexbox align={'center'} flex={1} gap={8} height={'100%'} justify={'center'}>
             <Text type={'secondary'}>{t('terminalPanel.createFailed')}</Text>
-            <Button size={'small'} onClick={() => createTab(topicKey, cwd)}>
+            <Button onClick={() => createTab(topicKey, cwd, targetDeviceId)}>
               {t('retry', { ns: 'common' })}
             </Button>
           </Flexbox>

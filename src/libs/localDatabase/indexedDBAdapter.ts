@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 import {
   INDEXED_DB_NAME,
   INDEXED_DB_RECORD_STORE,
@@ -52,7 +54,7 @@ const openDatabase = (onVersionChange: () => void): Promise<IDBDatabase> =>
 
     request.onblocked = () => {
       settled = true;
-      reject(new Error('IndexedDB upgrade was blocked by another LobeHub tab'));
+      reject(new Error(`IndexedDB upgrade was blocked by another ${BRANDING_NAME} tab`));
     };
     request.onerror = () => {
       settled = true;

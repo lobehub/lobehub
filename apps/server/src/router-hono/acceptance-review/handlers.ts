@@ -1,4 +1,7 @@
-import { createReviewCommentSchema, reviewDecisionSchema } from '@lobechat/types';
+import {
+  acceptanceReviewDecisionSchema,
+  createAcceptanceReviewCommentSchema,
+} from '@lobechat/types';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
@@ -56,6 +59,9 @@ export const getSession = async (c: ReviewContext) => {
     },
     can,
     expiresAt: new Date(c.get('expiresAt') * 1000).toISOString(),
+    project: c.get('project'),
+    role: c.get('role') ?? undefined,
+    site: c.get('site'),
     user: {
       avatar: profile?.avatar ?? undefined,
       id: userId,
@@ -70,7 +76,7 @@ export const listComments = async (c: ReviewContext) => {
 };
 
 export const createComment = async (c: ReviewContext) => {
-  const body = await parseBody(c, createReviewCommentSchema);
+  const body = await parseBody(c, createAcceptanceReviewCommentSchema);
   if (body.error) return body.error;
   const input = body.data;
   const { acceptance, can } = c.get('access');
@@ -129,11 +135,12 @@ export const deleteComment = async (c: ReviewContext) => {
 };
 
 export const decide = async (c: ReviewContext) => {
-  const body = await parseBody(c, reviewDecisionSchema);
+  const body = await parseBody(c, acceptanceReviewDecisionSchema);
   if (body.error) return body.error;
   const { note, verdict } = body.data;
   const { acceptance, can } = c.get('access');
-  if (!can.decide) return reviewError(c, 403, 'FORBIDDEN', 'Not allowed to decide this acceptance');
+  if (!(verdict === 'accept' ? can.decide : can.reject))
+    return reviewError(c, 403, 'FORBIDDEN', 'Not allowed to decide this acceptance');
 
   const open = verdict === 'accept' ? ['delivered'] : ['delivered', 'errored'];
   if (!open.includes(acceptance.status))

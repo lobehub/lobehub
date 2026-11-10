@@ -83,7 +83,13 @@ export const goalListKey = (params: GoalListParams): string => {
 };
 
 /** Every tab of one scope, for a refresh that has to cover them all. */
-export const GOAL_LIST_FILTERS: GoalListFilter[] = ['all', 'review', 'running', 'achieved'];
+export const GOAL_LIST_FILTERS: GoalListFilter[] = [
+  'all',
+  'review',
+  'running',
+  'achieved',
+  'archived',
+];
 
 /** One scope's goal list, one entry per tab (`goalListByAgentId`). */
 export const goalListResource = defineReplica<GoalListParams, GoalListValue, GoalListResponse>({
@@ -125,6 +131,18 @@ export const goalGraphResource = defineReplica<string, GoalGraphSnapshot>({
 export const goalMetricSeriesResource = defineReplica<string, MetricSeriesWithPoints[]>({
   key: (goalId) => goalId,
   name: 'goalMetricSeries',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * Goals created from one conversation, keyed by topic id. Bounded: every topic
+ * the user ever opened would otherwise keep its own persisted row.
+ */
+export const topicGoalListResource = defineReplica<string, GoalListValue, GoalListResponse>({
+  key: (topicId) => topicId,
+  name: 'topicGoalList',
+  persist: { maxEntries: 50 },
   storage: 'indexedDB',
   version: 1,
 });

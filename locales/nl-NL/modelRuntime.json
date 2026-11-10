@@ -1,6 +1,6 @@
 {
   "AccountDeactivated": "Uw account is gedeactiveerd of geschorst. Dit kan te maken hebben met beleid, beveiliging of een accountcontrole. Neem contact op met de ondersteuning van de provider voor hulp.",
-  "AgentRuntimeError": "Fout bij de uitvoering van het Lobe-taalmodel. Los het probleem op of probeer het opnieuw op basis van de onderstaande informatie.",
+  "AgentRuntimeError": "Er is iets misgegaan bij het genereren van het antwoord. Vouw de details hieronder uit om de oorzaak te bekijken, of probeer het opnieuw.",
   "CapabilityNotSupported": "Sorry, dit model ondersteunt de gevraagde functionaliteit niet (zoals visuele invoer of het aanroepen van tools). Schakel over naar een model dat dit wel ondersteunt.",
   "ClientLlmExecutorLost": "Het apparaat dat {{provider}} uitvoert voor dit gesprek reageerde niet meer voordat het antwoord was voltooid — het kan zijn gesloten, vernieuwd of losgekoppeld. Houd het LobeHub-venster open en probeer het opnieuw.",
   "ClientLlmExecutorUnavailable": "{{provider}} kan alleen worden bereikt vanaf je eigen apparaat, maar geen open LobeHub-venster heeft het verzoek opgepikt. Open LobeHub op het apparaat waar {{provider}} draait en probeer het opnieuw.",
@@ -32,7 +32,7 @@
   "LobeHubModelDeprecated": "Het geselecteerde model is niet langer beschikbaar. Vraag de bot- of agenteigenaar om een beschikbaar model te selecteren en probeer het opnieuw.",
   "LocationNotSupportError": "Het spijt ons, uw huidige locatie ondersteunt deze modelservice niet. Dit kan te maken hebben met regionale beperkingen of de onbeschikbaarheid van de service. Controleer of de huidige locatie het gebruik van deze service ondersteunt, of probeer een andere locatie.",
   "ModelEmptyCompletion": "De modelprovider heeft een lege reactie teruggestuurd. Zelfs zonder zichtbare inhoud kunnen er kosten verbonden zijn aan dit verzoek. U kunt het opnieuw proberen of van model wisselen en het opnieuw proberen.",
-  "ModelEmptyCompletionWithCost": "De modelprovider heeft een lege reactie gegeven. Dit verzoek kostte {{credits}} credits. Opnieuw proberen kan vergelijkbare kosten met zich meebrengen, of u kunt van model wisselen.",
+  "ModelEmptyCompletionWithCost": "De modelprovider heeft een leeg antwoord geretourneerd. Dit verzoek kostte ${{credits}}. Opnieuw proberen kan vergelijkbare kosten met zich meebrengen, of u kunt van model wisselen.",
   "ModelNotFound": "Sorry, het gevraagde model kon niet worden gevonden. Het bestaat mogelijk niet of u heeft mogelijk niet de benodigde toegangsrechten. Probeer het opnieuw na het wijzigen van de API-sleutel of het aanpassen van uw toegangsrechten.",
   "ModelRefusal": "Het model weigerde deze aanvraag te beantwoorden. Probeer het opnieuw te formuleren of kies een ander model.",
   "NoAvailableChannel": "Sorry, de proxy of router heeft geen beschikbaar kanaal voor het gevraagde model. Schakel de kanaal-/sleutelconfiguratie om of probeer het later opnieuw.",

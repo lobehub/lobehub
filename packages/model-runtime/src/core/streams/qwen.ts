@@ -20,8 +20,8 @@ import {
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   generateToolCallId,
-  setOpenAIChatCompletionUsageMissingDiagnostics,
 } from './protocol';
+import { setOpenAIChatCompletionUsageMissingDiagnostics } from './usageMissingDiagnostics';
 
 export const transformQwenStream = (
   chunk: OpenAI.ChatCompletionChunk,

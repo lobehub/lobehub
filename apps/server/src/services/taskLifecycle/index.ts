@@ -33,8 +33,10 @@ import {
   notifyScheduledTaskFailed,
 } from '@/business/server/task/notifyScheduledTaskResult';
 import { notifyTaskRunFailed } from '@/business/server/task/notifyTaskRunFailed';
+import { onTaskRunCompleted } from '@/business/server/task/onTaskRunCompleted';
 import { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
+import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -47,6 +49,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
 
+import { RUN_REPORT_LOOKBACK, selectEarlierRunReport } from './runReport';
 import {
   isTrivialAssistantContent,
   selectBriefPriority,
@@ -102,6 +105,7 @@ export interface TopicCompleteParams {
 export class TaskLifecycleService {
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
+  private messageModel: MessageModel;
   private systemAgentService: SystemAgentService;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
@@ -117,6 +121,7 @@ export class TaskLifecycleService {
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.briefModel = new BriefModel(db, userId, workspaceId);
+    this.messageModel = new MessageModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
     this.systemAgentService = new SystemAgentService(db, userId, workspaceId);
   }
@@ -139,6 +144,21 @@ export class TaskLifecycleService {
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
 
+    // A run a follow-up in the same conversation superseded no longer owns the
+    // Task: the follow-up took its run row over and settles it when it ends. A
+    // late report from the old run (its success arriving after the interrupt,
+    // or an error from tearing it down) must not settle the row or move the Task
+    // under the run that is still going.
+    if (topicId && (await this.isSupersededReport(topicId, params.operationId))) {
+      log(
+        'onTopicComplete: op=%s was superseded on topic=%s — ignoring its %s',
+        params.operationId,
+        topicId,
+        reason,
+      );
+      return;
+    }
+
     await this.taskModel.updateHeartbeat(taskId);
 
     const currentTask = await this.taskModel.findById(taskId);
@@ -152,26 +172,31 @@ export class TaskLifecycleService {
 
     if (reason === 'done') {
       // 1. Update topic status
-      if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'completed');
+      if (topicId && !(await this.settleRunRow(taskId, topicId, params.operationId, 'completed')))
+        return;
 
       // 2. Generate handoff summary + topic title (best-effort LLM synthesis).
+      //    It also says which output the run delivered: its earlier report when
+      //    the last message is only a trailing remark after it.
+      let runOutput = lastAssistantContent;
       if (topicId && lastAssistantContent) {
-        await this.generateHandoff(
-          taskId,
-          taskIdentifier,
-          topicId,
-          lastAssistantContent,
-          currentTask,
-        );
+        runOutput =
+          (await this.generateHandoff(
+            taskId,
+            taskIdentifier,
+            topicId,
+            lastAssistantContent,
+            currentTask,
+          )) ?? lastAssistantContent;
       }
 
-      // 2b. Persist the raw last message as the run card's result.
+      // 2b. Persist the run's output as the run card's result.
       //     Done independently of (and after) generateHandoff via a jsonb_set
       //     patch, so `handoff.content` is written even when the summary LLM in
       //     step 2 throws — otherwise a completed run would show no result.
-      if (topicId && lastAssistantContent) {
+      if (topicId && runOutput) {
         try {
-          await this.taskTopicModel.updateHandoffContent(taskId, topicId, lastAssistantContent);
+          await this.taskTopicModel.updateHandoffContent(taskId, topicId, runOutput);
         } catch (e) {
           console.warn('[TaskLifecycle] persisting run last message failed:', e);
         }
@@ -212,6 +237,19 @@ export class TaskLifecycleService {
           reason,
           currentTask,
         );
+      }
+
+      // A follow-up may have reopened this run while the handoff and brief
+      // above were being written (the row was settled, so it reopens rather
+      // than takes over). The Task is then the follow-up's to settle: moving it
+      // now would pause or complete it under a run that is still going.
+      if (topicId && (await this.isSupersededReport(topicId, params.operationId))) {
+        log(
+          'onTopicComplete: op=%s was followed up on topic=%s mid-settle — leaving the Task to it',
+          params.operationId,
+          topicId,
+        );
+        return;
       }
 
       // 5. Default post-tick transition.
@@ -258,7 +296,7 @@ export class TaskLifecycleService {
         const completionRequestedByCurrentOperation =
           (
             currentTask.context as {
-              completion?: { requestedByOperationId?: string };
+              completion?: { requestedByOperationId?: string | null };
             } | null
           )?.completion?.requestedByOperationId === params.operationId;
 
@@ -280,7 +318,14 @@ export class TaskLifecycleService {
           await this.recordAutomationRecovery(currentTask);
           await this.taskModel.updateStatus(taskId, 'scheduled', { error: null });
         } else if (!verifyBound && completionRequestedByCurrentOperation) {
-          await this.completeTask(currentTask);
+          // The request is consumed with the status write: a rejected acceptance
+          // delivery can withdraw it while the handoff / brief above runs, and
+          // then the run ends as an undelivered one, paused for review.
+          const completed = await this.completeTask(currentTask, params.operationId);
+          if (!completed)
+            await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'paused', {
+              error: null,
+            });
         } else if (!verifyBound && params.runTrigger === 'goal' && !currentTask.parentTaskId) {
           await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
             completedAt: new Date(),
@@ -324,13 +369,40 @@ export class TaskLifecycleService {
           ),
         );
       }
+
+      // 7. Run-completed follow-up through the `@/business` slot (default impl
+      //    is a no-op), after the post-run transition above. Awaited so it
+      //    finishes inside this callback, which in production is a queued
+      //    workflow request; a failure is logged and never fails the lifecycle.
+      try {
+        await onTaskRunCompleted({
+          agentId: currentTask?.assigneeAgentId ?? undefined,
+          lastAssistantContent,
+          operationId: params.operationId,
+          taskId,
+          taskIdentifier,
+          topicId,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      } catch (error) {
+        console.error(
+          '[TaskLifecycle] run-completed follow-up failed for task=%s (non-fatal):',
+          taskIdentifier,
+          error,
+        );
+      }
     } else if (reason === 'error') {
-      if (topicId)
-        await this.taskTopicModel.updateStatus(
+      if (
+        topicId &&
+        !(await this.settleRunRow(
           taskId,
           topicId,
+          params.operationId,
           resolveFailedRunStatus(errorMessage),
-        );
+        ))
+      )
+        return;
 
       const errorText = errorMessage || 'Unknown error';
 
@@ -489,6 +561,45 @@ export class TaskLifecycleService {
   }
 
   /**
+   * Write the run row's terminal status for this report, unless a newer
+   * operation took the row over — checked inside the write, so a takeover that
+   * lands after the early {@link isSupersededReport} check still wins.
+   *
+   * @returns `false` when the report was superseded and the lifecycle must stop.
+   */
+  private async settleRunRow(
+    taskId: string,
+    topicId: string,
+    operationId: string,
+    status: string,
+  ): Promise<boolean> {
+    const written = await this.taskTopicModel.updateStatus(taskId, topicId, status, {
+      reportedOperationId: operationId,
+    });
+    // Nothing written: either there is no row to keep honest (the runner has
+    // not recorded this run yet), or a newer run owns it.
+    if (written !== false) return true;
+    if (!(await this.isSupersededReport(topicId, operationId))) return true;
+
+    log('onTopicComplete: op=%s lost topic=%s to a follow-up mid-settle', operationId, topicId);
+    return false;
+  }
+
+  /**
+   * Whether this report comes from a run that a newer operation has already
+   * taken the run row over from. Fails open: a lookup failure keeps the
+   * lifecycle's previous behaviour rather than dropping a real completion.
+   */
+  private async isSupersededReport(topicId: string, operationId: string): Promise<boolean> {
+    try {
+      return await this.taskTopicModel.isSupersededOperation(topicId, operationId);
+    } catch (error) {
+      log('superseded-run check failed for op=%s (non-fatal): %O', operationId, error);
+      return false;
+    }
+  }
+
+  /**
    * Settle a successful task and advance its dependency graph.
    *
    * This mirrors the completion side effects of TaskService.updateStatus
@@ -496,24 +607,26 @@ export class TaskLifecycleService {
    * lifecycle service). The dynamic import keeps that module cycle out of
    * initialization while preserving the runner's single cascade implementation.
    */
-  private async completeTask(task: TaskItem): Promise<void> {
-    const completedTask = await this.taskModel.updateStatusIfCurrent(
-      task.id,
-      'running',
-      'completed',
-      {
-        completedAt: new Date(),
-        error: null,
-      },
-    );
+  /**
+   * @param requestedByOperationId completes only while this run's deferred
+   * completion request still holds, consuming it in the same write.
+   * @returns whether this call completed the task.
+   */
+  private async completeTask(task: TaskItem, requestedByOperationId?: string): Promise<boolean> {
+    const completedTask = requestedByOperationId
+      ? await this.taskModel.completeIfCompletionRequested(task.id, requestedByOperationId)
+      : await this.taskModel.updateStatusIfCurrent(task.id, 'running', 'completed', {
+          completedAt: new Date(),
+          error: null,
+        });
     if (!completedTask) {
-      log('task=%s no longer running — skipping completion cascade', task.identifier);
-      return;
+      log('task=%s not completed — no longer running or request withdrawn', task.identifier);
+      return false;
     }
 
     if (completedTask.parentTaskId) {
       const parentTask = await this.taskModel.findById(completedTask.parentTaskId);
-      if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
+      if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task)) {
         await this.taskModel.updateStatus(parentTask.id, 'paused');
       }
     }
@@ -522,6 +635,7 @@ export class TaskLifecycleService {
     await new TaskRunnerService(this.db, this.userId, this.workspaceId).cascadeOnCompletion(
       task.id,
     );
+    return true;
   }
 
   /**
@@ -728,6 +842,10 @@ export class TaskLifecycleService {
   /**
    * Generate handoff summary and update topic title via LLM.
    * Writes to task_topics handoff fields + updates topic title.
+   *
+   * Returns the run's earlier report when the model judged the last message to
+   * be only a trailing remark after it, so the caller persists the report as
+   * the run's output. Returns undefined otherwise, or when synthesis failed.
    */
   private async generateHandoff(
     taskId: string,
@@ -735,14 +853,16 @@ export class TaskLifecycleService {
     topicId: string,
     lastAssistantContent: string,
     currentTask: any,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     try {
-      const [{ model, provider }, responseLanguage] = await Promise.all([
+      const [{ model, provider }, responseLanguage, earlierReport] = await Promise.all([
         (this.systemAgentService as any).getTaskModelConfig('topic'),
         this.systemAgentService.getUserLocale(),
+        this.findEarlierRunReport(topicId, lastAssistantContent),
       ]);
 
       const payload = chainTaskTopicHandoff({
+        earlierReport,
         lastAssistantContent,
         responseLanguage,
         taskInstruction: currentTask?.instruction || '',
@@ -771,7 +891,8 @@ export class TaskLifecycleService {
         },
       );
 
-      const handoff = result as {
+      const { finalIsTrailingRemark, ...handoff } = result as {
+        finalIsTrailingRemark?: boolean;
         keyFindings?: string[];
         nextAction?: string;
         summary?: string;
@@ -789,8 +910,29 @@ export class TaskLifecycleService {
       await this.taskTopicModel.updateHandoff(taskId, topicId, handoff);
 
       log('handoff generated for topic %s: title=%s', topicId, handoff.title);
+      if (earlierReport && finalIsTrailingRemark) return earlierReport;
     } catch (e) {
       console.warn('[TaskLifecycle] handoff generation failed:', e);
+    }
+  }
+
+  /**
+   * The run's earlier report, a candidate for its real output when its last
+   * message may only be a trailing remark. Best-effort: a failed read leaves
+   * the handoff to the last message alone.
+   */
+  private async findEarlierRunReport(
+    topicId: string,
+    lastAssistantContent: string,
+  ): Promise<string | undefined> {
+    try {
+      const replies = await this.messageModel.listLatestTurnAssistantContents({
+        limit: RUN_REPORT_LOOKBACK,
+        topicId,
+      });
+      return selectEarlierRunReport(replies, lastAssistantContent);
+    } catch (e) {
+      log('earlier run report lookup failed for topic %s (non-fatal): %O', topicId, e);
     }
   }
 

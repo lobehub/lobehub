@@ -1,4 +1,5 @@
 import type { AgentRuntime, AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
@@ -38,6 +39,7 @@ export type StepPresentation = ReturnType<typeof buildStepPresentation>['present
 export async function runAndReconcileStep(
   deps: StepRunStepDeps,
   {
+    assertOwnership,
     currentContext,
     currentState,
     forcedFinishState,
@@ -45,7 +47,13 @@ export async function runAndReconcileStep(
     resumedClientLlmWait,
     runtime,
     stepIndex,
-  }: PreparedStepInput & { operationId: string; runtime: AgentRuntime; stepIndex: number },
+  }: PreparedStepInput & {
+    /** Throws once this attempt no longer owns the operation; absent when commits are not fenced. */
+    assertOwnership?: () => Promise<void>;
+    operationId: string;
+    runtime: AgentRuntime;
+    stepIndex: number;
+  },
 ): Promise<{ startAt: number; stepResult: StepRunResult }> {
   // Execute step (skipped when force-finishing a parked supervisor op).
   const startAt = Date.now();
@@ -56,6 +64,10 @@ export async function runAndReconcileStep(
   let stepResult = forcedFinishState
     ? { events: [], newState: forcedFinishState, nextContext: undefined }
     : await runtime.step(currentState, currentContext);
+
+  // The LLM call is where a step can outlive its lock. Check before anything
+  // below writes on the step's behalf (the client park saves state).
+  await assertOwnership?.();
 
   // Inner runtime.step() catches model-runtime exceptions and stuffs the
   // raw error into newState.error without re-throwing — so the outer
@@ -144,6 +156,7 @@ export async function runAndReconcileStep(
 export async function saveAndPublishStep(
   deps: StepRunStepDeps,
   {
+    assertOwnership,
     gatewayMessagePatchEnabled,
     operationId,
     startAt,
@@ -151,6 +164,8 @@ export async function saveAndPublishStep(
     stepResult,
     stepStartUiMessages,
   }: {
+    /** Throws once this attempt no longer owns the operation; absent when commits are not fenced. */
+    assertOwnership?: () => Promise<void>;
     gatewayMessagePatchEnabled: boolean;
     operationId: string;
     startAt: number;
@@ -232,7 +247,10 @@ export async function saveAndPublishStep(
     log('[%s][%d] Credentials changed in-run; dropped the snapshot', operationId, stepIndex);
   }
 
-  // Save state, coordinator will handle event sending automatically
+  // Save state, coordinator will handle event sending automatically. This is
+  // the commit: a redelivery of this step is skipped as already done once it
+  // lands, so only the lock owner may write it.
+  await assertOwnership?.();
   await deps.coordinator.saveStepResult(operationId, {
     ...stepResult,
     executionTime: Date.now() - startAt,
@@ -252,6 +270,7 @@ export async function saveAndPublishStep(
       ...(stepResult.newState.host?.includeFinalState === true && {
         finalState: stepResult.newState,
       }),
+      llmCalls: getLlmCallCount(stepResult.newState),
       nextStepScheduled,
       stepIndex,
     },

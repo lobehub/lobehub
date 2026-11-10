@@ -8,7 +8,7 @@ export type TaskDetailDispatch =
 
 const containsSubtaskInTree = (subtasks: TaskDetailSubtask[], id: string): boolean => {
   for (const subtask of subtasks) {
-    if (subtask.identifier === id) return true;
+    if (subtask.id === id) return true;
     if (subtask.children && containsSubtaskInTree(subtask.children, id)) return true;
   }
   return false;
@@ -36,7 +36,8 @@ const patchSubtaskInTree = (
   value: Partial<TaskDetailData>,
 ): boolean => {
   for (const subtask of subtasks) {
-    if (subtask.identifier === id) {
+    if (subtask.id === id) {
+      if (value.status !== undefined) subtask.status = value.status;
       if (value.name !== undefined) subtask.name = value.name;
       if (value.priority !== undefined) subtask.priority = value.priority;
       if (value.userId !== undefined) subtask.assigneeUserId = value.userId;
@@ -68,7 +69,7 @@ export const taskDetailReducer = (
   switch (payload.type) {
     case 'setTaskDetail': {
       return produce(state, (draft) => {
-        draft[payload.id] = payload.value;
+        if (payload.value.id) draft[payload.value.id] = payload.value;
       });
     }
 

@@ -34,11 +34,12 @@ const mockMessageUpdate = vi.fn();
 const mockMessageCreate = vi.fn();
 const mockExecAgent = vi.fn();
 const mockOpFindById = vi.fn();
+const mockOpTouchRunning = vi.fn();
 const mockInstantiateVerifyPlan = vi.fn();
 
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
-    return { findById: mockOpFindById };
+    return { findById: mockOpFindById, touchRunning: mockOpTouchRunning };
   }),
 }));
 // Partial mock: keep the real runVerifyOnCompletion (CompletionLifecycle's gate
@@ -140,6 +141,7 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     // Default: a non-task op so the plan-instantiation guard no-ops unless a
     // test opts into a task-bound op.
     mockOpFindById.mockResolvedValue({ parentOperationId: null, taskId: null });
+    mockOpTouchRunning.mockResolvedValue(true);
     mockInstantiateVerifyPlan.mockResolvedValue(undefined);
   });
 
@@ -560,5 +562,27 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
       childOperationId,
       expect.objectContaining({ type: 'notify_update' }),
     );
+  });
+
+  it('refreshes the run lease on a nonterminal remote progress callback', async () => {
+    await createCaller().notify({
+      content: 'progress',
+      operationId: OP,
+      role: 'assistant',
+      topicId: TOPIC,
+    });
+
+    // The stale-operation sweep retires a stateless run whose lease went silent
+    // for the hetero window; a remote provider never calls `heteroIngest`, so
+    // this path is the only thing keeping an active remote run's lease fresh.
+    expect(mockOpTouchRunning).toHaveBeenCalledWith(OP);
+    expect(mockOpTouchRunning).toHaveBeenCalledTimes(1);
+    expect(mockMessageUpdate).toHaveBeenCalledWith(FINAL_MSG_ID, { content: 'progress' });
+  });
+
+  it('does not touch the lease on a terminal signal', async () => {
+    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+
+    expect(mockOpTouchRunning).not.toHaveBeenCalled();
   });
 });

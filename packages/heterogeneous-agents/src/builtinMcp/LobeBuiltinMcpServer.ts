@@ -3,9 +3,8 @@ import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
+import { isInitializeRequest, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 import type { InterventionAnswer } from '../askUser/AskUserBridge';
@@ -36,38 +35,14 @@ const askUserQuestionShape = z.object({
   question: z.string(),
 });
 
-const askUserInputShape: z.ZodRawShape = {
+const askUserInputShape = z.object({
   questions: z.array(askUserQuestionShape).min(1).max(4),
-};
+});
 
 /** Tool description seen by the model. Kept terse — full schema lives in `inputSchema`. */
 const ASK_USER_TOOL_DESCRIPTION =
   'Ask the user one or more clarifying questions with multiple-choice options. ' +
   "Use this whenever the user's intent is ambiguous and you need them to pick.";
-
-interface AskUserToolExtra {
-  _meta?: Record<string, unknown>;
-  sendNotification?: (notification: {
-    method: 'notifications/progress';
-    params: {
-      message: string;
-      progress: number;
-      progressToken: number | string;
-      total: number;
-    };
-  }) => Promise<void>;
-  sessionId?: string;
-}
-
-type AskUserToolRegistrar = (
-  name: string,
-  config: {
-    description: string;
-    inputSchema: typeof askUserInputShape;
-    title: string;
-  },
-  cb: (args: unknown, extra: AskUserToolExtra) => Promise<unknown>,
-) => void;
 
 export interface StartedServer {
   /** Effective listen port (auto-assigned when constructed with port=0). */
@@ -127,7 +102,7 @@ interface RegisteredOperation {
 
 interface SessionEntry {
   mcp: McpServer;
-  transport: StreamableHTTPServerTransport;
+  transport: NodeStreamableHTTPServerTransport;
 }
 
 /**
@@ -147,7 +122,7 @@ interface SessionEntry {
  * ## Per-session transport
  *
  * Each MCP `initialize` from a new CC subprocess gets its own
- * `StreamableHTTPServerTransport` + `McpServer` pair. The SDK's transport
+ * `NodeStreamableHTTPServerTransport` + `McpServer` pair. The SDK's transport
  * stores `_initialized=true` and a `sessionId` per instance, so reusing a
  * single transport across sequential ops makes the second `initialize` fail
  * with `Invalid Request: Server already initialized`. Subsequent requests
@@ -163,7 +138,7 @@ export class LobeBuiltinMcpServer {
    * MCP session id → operationId. Populated when a CC initialize POST
    * arrives at `/mcp?op=<opId>`; the URL's `op` is captured via
    * `AsyncLocalStorage`, the SDK's `onsessioninitialized` hook reads it
-   * at session-create time, and tool handler lookups use `extra.sessionId`.
+   * at session-create time, and tool handler lookups use `ctx.sessionId`.
    */
   private readonly sessionIdToOpId = new Map<string, string>();
   /** Per-request op id, populated for the duration of `handleRequest`. */
@@ -334,7 +309,7 @@ export class LobeBuiltinMcpServer {
   private async resolveTransport(
     req: http.IncomingMessage,
     body: unknown,
-  ): Promise<StreamableHTTPServerTransport | undefined> {
+  ): Promise<NodeStreamableHTTPServerTransport | undefined> {
     const sessionId = (req.headers['mcp-session-id'] as string | undefined) ?? undefined;
     if (sessionId) {
       const entry = this.sessionTransports.get(sessionId);
@@ -352,12 +327,12 @@ export class LobeBuiltinMcpServer {
   }
 
   /**
-   * Build a fresh `StreamableHTTPServerTransport` + `McpServer` pair for a
+   * Build a fresh `NodeStreamableHTTPServerTransport` + `McpServer` pair for a
    * new MCP session. The pair is registered into `sessionTransports` from
    * the `onsessioninitialized` callback, so every subsequent request
    * tagged with that sessionId routes back here without reconstruction.
    */
-  private createSessionTransport(): StreamableHTTPServerTransport {
+  private createSessionTransport(): NodeStreamableHTTPServerTransport {
     const mcp = new McpServer(
       { name: ASK_USER_MCP_SERVER_NAME, version: '1.0.0' },
       { capabilities: { tools: {} } },
@@ -365,7 +340,7 @@ export class LobeBuiltinMcpServer {
     this.registerAskUserTool(mcp);
     for (const tool of this.options.extraTools ?? []) this.registerExtraTool(mcp, tool);
 
-    const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
+    const transport: NodeStreamableHTTPServerTransport = new NodeStreamableHTTPServerTransport({
       onsessionclosed: (sessionId: string) => {
         this.sessionTransports.delete(sessionId);
         this.sessionIdToOpId.delete(sessionId);
@@ -388,24 +363,18 @@ export class LobeBuiltinMcpServer {
 
   /**
    * Mount a producer-supplied tool with the same op routing as ask-user:
-   * `extra.sessionId` → `sessionIdToOpId` → handler(operationId, args).
+   * `ctx.sessionId` → `sessionIdToOpId` → handler(operationId, args).
    */
   private registerExtraTool(mcp: McpServer, tool: McpExtraTool) {
-    const registerTool = mcp.registerTool.bind(mcp) as (
-      name: string,
-      config: { description: string; inputSchema: z.ZodRawShape; title: string },
-      cb: (args: unknown, extra: AskUserToolExtra) => Promise<unknown>,
-    ) => void;
-
-    registerTool(
+    mcp.registerTool(
       tool.name,
       {
         description: tool.description,
-        inputSchema: tool.inputSchema,
+        inputSchema: z.object(tool.inputSchema),
         title: tool.title ?? tool.name,
       },
-      async (args, extra) => {
-        const sessionId = extra.sessionId;
+      async (args, ctx) => {
+        const sessionId = ctx.sessionId;
         const operationId = sessionId ? this.sessionIdToOpId.get(sessionId) : undefined;
         if (!operationId) {
           return errorResult(
@@ -413,7 +382,7 @@ export class LobeBuiltinMcpServer {
           );
         }
         try {
-          return await tool.handler(operationId, (args ?? {}) as Record<string, unknown>);
+          return { ...(await tool.handler(operationId, args)) };
         } catch (error) {
           return errorResult(String((error as Error)?.message ?? error));
         }
@@ -422,17 +391,15 @@ export class LobeBuiltinMcpServer {
   }
 
   private registerAskUserTool(mcp: McpServer) {
-    const registerTool = mcp.registerTool.bind(mcp) as AskUserToolRegistrar;
-
-    registerTool(
+    mcp.registerTool(
       ASK_USER_TOOL_NAME,
       {
         description: ASK_USER_TOOL_DESCRIPTION,
         inputSchema: askUserInputShape,
         title: 'Ask User Question',
       },
-      async (args, extra) => {
-        const sessionId = extra.sessionId;
+      async (args, ctx) => {
+        const sessionId = ctx.sessionId;
         const operationId = sessionId ? this.sessionIdToOpId.get(sessionId) : undefined;
         if (!operationId) {
           return errorResult(
@@ -446,8 +413,8 @@ export class LobeBuiltinMcpServer {
           );
         }
 
-        const ccToolUseId = extra._meta?.['claudecode/toolUseId'];
-        const rawProgressToken = extra._meta?.progressToken;
+        const ccToolUseId = ctx.mcpReq._meta?.['claudecode/toolUseId'];
+        const rawProgressToken = ctx.mcpReq._meta?.progressToken;
         const progressToken =
           typeof rawProgressToken === 'string' || typeof rawProgressToken === 'number'
             ? rawProgressToken
@@ -463,10 +430,10 @@ export class LobeBuiltinMcpServer {
         // Empirically required for >~5min — we cap at 5min anyway, but
         // tick from the start so even 4-minute pendings get periodic life.
         const onProgress =
-          progressToken !== undefined && extra?.sendNotification
+          progressToken !== undefined && ctx.mcpReq.notify
             ? async (elapsedMs: number, totalMs: number) => {
                 try {
-                  await extra.sendNotification!({
+                  await ctx.mcpReq.notify({
                     method: 'notifications/progress',
                     params: {
                       message: `Waiting for user (${Math.round(elapsedMs / 1000)}s)`,

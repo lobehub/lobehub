@@ -170,6 +170,31 @@ describe('buildClaudePanelSnapshot — folding in a live sample', () => {
     expect(snap.weekly).toMatchObject({ usedPercent: 9 }); // live 07:00 beats persisted 06:00
   });
 
+  it('drops a persisted session the live sample no longer reports (Max upgraded to Ultra)', () => {
+    // Persisted while the account was on Max; that window ended hours before
+    // the live Ultra sample, which reports no 5-hour limit at all.
+    const afterSessionReset = sessionReset + 60 * 60_000;
+    const ultraLive: ClaudeCodeQuotaSnapshot = {
+      ...live,
+      readings: [
+        liveReading({
+          capturedAt: afterSessionReset,
+          limitType: 'weekly_all',
+          resetsAt: reset,
+          utilization: 9,
+        }),
+      ],
+      scopedWeekly: null,
+      session: null,
+      updatedAt: afterSessionReset,
+    };
+
+    const snap = buildClaudePanelSnapshot(account, readings, ultraLive, afterSessionReset);
+
+    expect(snap.session).toBeNull();
+    expect(snap.weekly).toMatchObject({ usedPercent: 9 });
+  });
+
   it('fills a limit the account has no reading for from the sample', () => {
     const snap = buildClaudePanelSnapshot(account, [readings[1]], live, now);
 

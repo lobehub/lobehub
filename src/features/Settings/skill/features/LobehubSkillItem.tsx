@@ -5,7 +5,6 @@ import {
   Avatar,
   Button,
   Button as LobeButton,
-  Center,
   confirmModal,
   cssVar,
   DropdownMenu,
@@ -13,17 +12,22 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
-import { CircleCheck, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import * as stylex from '@stylexjs/stylex';
+import { MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import { createLobehubSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
+import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 import { type LobehubSkillServer } from '@/store/tool/slices/lobehubSkillStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { toConnectorActionError } from '@/utils/connectorActionError';
 
+import { renderConnectorRowDescription } from './ConnectorRowFeedback';
+import { isSettledByConnection } from './connectorRowState';
+import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
@@ -40,6 +44,7 @@ interface LobehubSkillItemProps {
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
   ({ provider, server, isSelected, onSelect, onDelete }) => {
     const { t } = useTranslation('setting');
+    const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
     const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
     const [isConnecting, setIsConnecting] = useState(false);
@@ -53,6 +58,19 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
     const revokeConnect = useToolStore((s) => s.revokeLobehubSkill);
     const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+    const setActionError = useToolStore((s) => s.setLobehubSkillError);
+    const actionError = useToolStore(lobehubSkillStoreSelectors.getServerError(provider.id));
+
+    // The OAuth window is gone and the provider is still not connected: keep the
+    // reason on the row, the user may not have noticed the popup failed.
+    const reportIfNotConnected = useCallback(() => {
+      const latest = lobehubSkillStoreSelectors.getServerByIdentifier(provider.id)(
+        useToolStore.getState(),
+      );
+      if (latest?.status !== LobehubSkillStatus.CONNECTED) {
+        setActionError(provider.id, { action: 'connect', code: 'AUTH_INCOMPLETE' });
+      }
+    }, [provider.id, setActionError]);
 
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
@@ -100,8 +118,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           pollIntervalRef.current = null;
         }
         setIsWaitingAuth(false);
+        reportIfNotConnected();
       }, POLL_TIMEOUT_MS);
-    }, [checkStatus, provider.id]);
+    }, [checkStatus, provider.id, reportIfNotConnected]);
 
     const startWindowMonitor = useCallback(
       (oauthWindow: Window) => {
@@ -115,6 +134,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
               oauthWindowRef.current = null;
               await checkStatus(provider.id);
               setIsWaitingAuth(false);
+              reportIfNotConnected();
             }
           } catch {
             console.info(
@@ -128,7 +148,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           }
         }, 500);
       },
-      [checkStatus, provider.id, startFallbackPolling],
+      [checkStatus, provider.id, reportIfNotConnected, startFallbackPolling],
     );
 
     const openOAuthWindow = useCallback(
@@ -169,6 +189,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       if (server?.isConnected) return;
 
       setIsConnecting(true);
+      setActionError(provider.id, undefined);
       try {
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
         const redirectUri = window.location.protocol.startsWith('http')
@@ -178,6 +199,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         openOAuthWindow(authorizeUrl);
       } catch (error) {
         console.error('[LobehubSkill] Failed to get authorize URL:', error);
+        setActionError(provider.id, toConnectorActionError('connect', error));
       } finally {
         setIsConnecting(false);
       }
@@ -212,7 +234,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const renderStatus = () => {
       if (!server) {
         return (
-          <span className={styles.disconnected}>
+          <span {...stylex.props(styles.disconnected)}>
             {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -221,17 +243,17 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       switch (server.status) {
         case LobehubSkillStatus.CONNECTED: {
           return (
-            <span className={styles.connected}>
+            <span {...stylex.props(styles.connected)}>
               {t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
             </span>
           );
         }
         case LobehubSkillStatus.ERROR: {
-          return <span className={styles.error}>{t('tools.lobehubSkill.error')}</span>;
+          return <span {...stylex.props(styles.error)}>{t('tools.lobehubSkill.error')}</span>;
         }
         default: {
           return (
-            <span className={styles.disconnected}>
+            <span {...stylex.props(styles.disconnected)}>
               {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
             </span>
           );
@@ -284,6 +306,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     };
 
     const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
+    const description = renderConnectorRowDescription({ error: actionError, name: provider.label });
+
+    // Becoming connected settles an earlier connect failure; a failed disconnect
+    // leaves the row connected on purpose, so its reason stays.
+    const hasStaleConnectError = isSettledByConnection(isConnected, actionError);
+    useEffect(() => {
+      if (hasStaleConnectError) setActionError(provider.id, undefined);
+    }, [hasStaleConnectError, provider.id, setActionError]);
 
     // Compact connect/status control for the left-list (NavItem) row. Mirrors the
     // ChatInput skills dropdown UX: connected → green check; otherwise a Connect
@@ -295,20 +325,18 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       }
       if (isConnected) {
         return (
-          <Tooltip title={t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}>
-            <Center width={20}>
-              <Icon icon={CircleCheck} size={16} style={{ color: cssVar.colorSuccess }} />
-            </Center>
-          </Tooltip>
+          <ConnectedStatus
+            label={t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
+          />
         );
       }
       return (
         <Tooltip title={!canCreate ? createReason : editReason}>
           <Button
             disabled={!canCreate || !canEdit}
-            icon={<Icon icon={SquareArrowOutUpRight} />}
+            icon={isPage ? undefined : <Icon icon={SquareArrowOutUpRight} />}
             size="small"
-            type="text"
+            type={isPage ? 'default' : 'text'}
             onClick={handleConnect}
           >
             {t('tools.lobehubSkill.connect')}
@@ -320,12 +348,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     if (onSelect) {
       const renderNavIcon = () => {
         const { icon, label } = provider;
-        if (typeof icon === 'string') return <Avatar alt={label} avatar={icon} size={18} />;
-        return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+        if (typeof icon === 'string')
+          return <Avatar alt={label} avatar={icon} size={isPage ? 20 : 18} />;
+        return <Icon fill={cssVar.colorText} icon={icon} size={isPage ? 20 : 18} />;
       };
       return (
-        <NavItem
+        <SkillListRow
           active={isSelected}
+          description={description}
           extra={renderNavExtra()}
           icon={renderNavIcon}
           title={provider.label}
@@ -333,6 +363,9 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           // Only connected connectors open the detail panel. When disconnected,
           // the row is inert and the only affordance is the inline Connect button —
           // otherwise clicking opens a blank detail panel that reads as a bug.
+          summary={t(`tools.lobehubSkill.providers.${provider.id}.description`, {
+            defaultValue: provider.description,
+          })}
           onClick={isConnected ? onSelect : undefined}
         />
       );
@@ -342,7 +375,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -363,10 +396,10 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
                 : () => createLobehubSkillDetailModal({ identifier: provider.id })
             }
           >
-            <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
               {renderIcon()}
             </div>
-            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
               {provider.label}
             </span>
           </Flexbox>

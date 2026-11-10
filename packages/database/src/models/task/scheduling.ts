@@ -1,10 +1,12 @@
 import type { AgentOperationStatus, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import { IN_FLIGHT_OPERATION_STATUS_LIST } from '@lobechat/types';
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 
 import type { AgentOperationError } from '../../schemas/agentOperations';
 import { agentOperations } from '../../schemas/agentOperations';
 import { tasks, taskTopics } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 
 /**
  * Operation outcomes the orphaned-run reconciliation settles.
@@ -46,6 +48,8 @@ export const getScheduledTasks = async (db: LobeChatDatabase): Promise<TaskItem[
       and(
         eq(tasks.automationMode, 'schedule'),
         isNotNull(tasks.schedulePattern),
+        // A task in the recycle bin keeps its status; its schedule must not fire.
+        notTrashed(tasks.isDeleted),
         notInArray(tasks.status, ['canceled', 'completed', 'failed', 'paused', 'running']),
       ),
     );
@@ -91,6 +95,7 @@ export const findStuckTasks = async (db: LobeChatDatabase): Promise<TaskItem[]> 
     .where(
       and(
         eq(tasks.status, 'running'),
+        notTrashed(tasks.isDeleted),
         isNotNull(tasks.lastHeartbeatAt),
         isNotNull(tasks.heartbeatTimeout),
         sql`${tasks.lastHeartbeatAt} < now() - make_interval(secs => ${tasks.heartbeatTimeout})`,
@@ -161,4 +166,69 @@ export const findOrphanedRunningTopics = async (
       .orderBy(sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt})`)
       .limit(limit)
   );
+};
+
+/** One `running` Task run left behind by an interrupted operation — see the finder. */
+export interface InterruptedRunningTopic {
+  operationId: string;
+  taskId: string;
+  taskIdentifier: string;
+  topicId: string;
+  userId: string;
+  workspaceId: string | null;
+}
+
+/**
+ * Running Task runs whose operation was interrupted and that nothing took over.
+ *
+ * An interrupt is not an outcome: the run's hook does not settle the row, on
+ * purpose, because the run that interrupted it — a follow-up the user sent in
+ * the same conversation — normally takes the row over and settles it when it
+ * ends. When nothing took it over (the follow-up could not, or the run was
+ * stopped some other way and nobody settled the row), the Task reads as
+ * `running` forever. {@link findOrphanedRunningTopics} deliberately leaves
+ * `interrupted` out, because converging it as a failure would mislabel it.
+ *
+ * A row is only returned when *no* operation on its topic is still in flight:
+ * a conversation that is still going is a Task that is still continuing, even
+ * when the row has not been handed to the run that is doing the work.
+ */
+export const findInterruptedRunningTopics = async (
+  db: LobeChatDatabase,
+  options: { limit?: number; staleBefore: Date },
+): Promise<InterruptedRunningTopic[]> => {
+  const { limit = 200, staleBefore } = options;
+
+  return db
+    .select({
+      operationId: agentOperations.id,
+      taskId: tasks.id,
+      taskIdentifier: tasks.identifier,
+      topicId: sql<string>`${taskTopics.topicId}`,
+      userId: tasks.createdByUserId,
+      workspaceId: tasks.workspaceId,
+    })
+    .from(taskTopics)
+    .innerJoin(agentOperations, eq(taskTopics.operationId, agentOperations.id))
+    .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))
+    .where(
+      and(
+        eq(taskTopics.status, 'running'),
+        eq(tasks.status, 'running'),
+        isNotNull(taskTopics.topicId),
+        isNull(agentOperations.parentOperationId),
+        eq(agentOperations.status, 'interrupted'),
+        sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt}) < ${staleBefore}`,
+        sql`not exists (
+          select 1 from ${agentOperations} as live
+          where live.topic_id = ${taskTopics.topicId}
+            and live.status in (${sql.join(
+              IN_FLIGHT_OPERATION_STATUS_LIST.map((status) => sql`${status}`),
+              sql`, `,
+            )})
+        )`,
+      ),
+    )
+    .orderBy(sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt})`)
+    .limit(limit);
 };

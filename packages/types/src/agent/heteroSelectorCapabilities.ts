@@ -2,10 +2,13 @@ import {
   getAnyCliFlagValue,
   getCliConfigValue,
   getCliFlagValue,
+  hasAnyCliFlag,
+  hasCliConfigKey,
+  hasCliFlag,
   stripCliConfigKey,
   stripCliFlags,
 } from './heteroCliArgs';
-import type { LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -90,41 +93,36 @@ export type QoderReasoningEffort = (typeof QODER_REASONING_EFFORT_LEVELS)[number
 
 export const QODER_REASONING_EFFORT_FLAG = '--reasoning-effort';
 
+/**
+ * GitHub Copilot CLI reasoning-effort levels, mirrored 1:1 with the CLI's
+ * `--reasoning-effort <level>` flag and ACP `reasoning_effort` config option.
+ */
+const COPILOT_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type CopilotReasoningEffort = (typeof COPILOT_REASONING_EFFORT_LEVELS)[number];
+
+export const COPILOT_REASONING_EFFORT_FLAG = '--reasoning-effort';
+
 export type HeterogeneousReasoningEffortLevel =
   | ClaudeCodeReasoningEffort
   | CodexReasoningEffort
+  | CopilotReasoningEffort
   | GrokBuildReasoningEffort
   | QoderReasoningEffort;
 
 export type HeterogeneousReasoningEffort =
   HeterogeneousReasoningEffortLevel | HeterogeneousAgentDefaultSelection;
 
-/**
- * Codex speed modes, mirrored to the CLI config key `service_tier`.
- *
- * `fast` maps to the Fast service tier (request value `priority`): ~1.5x
- * faster inference at a higher credit-consumption rate. Requires ChatGPT
- * sign-in; the Codex CLI silently omits the tier for unsupported models, so
- * passing it is always safe.
- */
-export type CodexSpeedMode = 'fast';
+/** Explicit Codex speed selections; normal sends the standard service tier. */
+export type CodexSpeedMode = 'normal' | 'fast' | 'ultrafast';
 
 export type HeterogeneousSpeedMode = CodexSpeedMode | HeterogeneousAgentDefaultSelection;
 
 export const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
-/**
- * Codex models whose catalog exposes the Fast (`priority`) service tier.
- * Sourced from the model catalog embedded in codex-cli.
- */
-const CODEX_FAST_SPEED_MODELS = [
-  'gpt-5.6',
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-  'gpt-5.5',
-  'gpt-5.4',
-] as const;
+/** Default is a selector sentinel; Normal explicitly requests standard processing. */
+export const toCodexServiceTier = (speed: string): string =>
+  speed === 'normal' ? 'default' : speed;
 
 /**
  * `service_tier` values the Codex CLI resolves to the Fast tier
@@ -156,6 +154,11 @@ export const isGrokBuildReasoningEffort = (
 export const isQoderReasoningEffort = (value: string | undefined): value is QoderReasoningEffort =>
   !!value && QODER_REASONING_EFFORT_LEVELS.includes(value as QoderReasoningEffort);
 
+export const isCopilotReasoningEffort = (
+  value: string | undefined,
+): value is CopilotReasoningEffort =>
+  !!value && COPILOT_REASONING_EFFORT_LEVELS.includes(value as CopilotReasoningEffort);
+
 export const isCodexFastServiceTier = (value: string | undefined): boolean =>
   !!value &&
   CODEX_FAST_SERVICE_TIER_VALUES.includes(value as (typeof CODEX_FAST_SERVICE_TIER_VALUES)[number]);
@@ -184,15 +187,6 @@ export const getCodexReasoningEffortLevels = (model: string): readonly CodexReas
 
   return CODEX_COMMON_REASONING_EFFORT_LEVELS;
 };
-
-/**
- * Whether the Fast speed toggle applies to a selector model value. `default`
- * counts as supported so the CLI remains free to resolve its own model; an
- * unsupported resolved model simply ignores the tier.
- */
-export const codexModelSupportsFastSpeed = (model: string): boolean =>
-  model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION ||
-  CODEX_FAST_SPEED_MODELS.includes(model as (typeof CODEX_FAST_SPEED_MODELS)[number]);
 
 export interface HeteroSelectionSource {
   args?: string[];
@@ -256,6 +250,12 @@ export const resolveCodexSpeedMode = (
     getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) ?? source?.speed
   )?.trim();
 
+  if (
+    tier === 'default' &&
+    getCliConfigValue(source?.args, CODEX_SERVICE_TIER_CONFIG_KEY) !== undefined
+  )
+    return 'normal';
+  if (tier === 'normal' || tier === 'ultrafast') return tier;
   return isCodexFastServiceTier(tier) ? 'fast' : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
@@ -275,6 +275,15 @@ const resolveQoderReasoningEffort = (
     getCliFlagValue(source?.args, QODER_REASONING_EFFORT_FLAG) ?? source?.effort
   )?.trim();
   return isQoderReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+const resolveCopilotReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): CopilotReasoningEffort | HeterogeneousAgentDefaultSelection => {
+  const effort = (
+    getCliFlagValue(source?.args, COPILOT_REASONING_EFFORT_FLAG) ?? source?.effort
+  )?.trim();
+  return isCopilotReasoningEffort(effort) ? effort : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 /**
@@ -324,7 +333,6 @@ export interface HeteroSelectorEffortCapability {
 export interface HeteroSelectorSpeedCapability {
   encodings: readonly HeteroCliEncoding[];
   resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousSpeedMode;
-  supported: (model: string) => boolean;
 }
 
 export interface HeteroSelectorModeCapability {
@@ -397,7 +405,18 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     speed: {
       encodings: [{ key: CODEX_SERVICE_TIER_CONFIG_KEY, kind: 'config' }],
       resolve: resolveCodexSpeedMode,
-      supported: codexModelSupportsFastSpeed,
+    },
+  },
+  'copilot': {
+    effort: {
+      encodings: [{ flags: [COPILOT_REASONING_EFFORT_FLAG], kind: 'flag' }],
+      levels: () => COPILOT_REASONING_EFFORT_LEVELS,
+      resolve: resolveCopilotReasoningEffort,
+    },
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
     },
   },
   'cursor': {
@@ -539,4 +558,436 @@ export const applyHeteroSelection = (
   if (cleared) patch.args = args;
 
   return patch;
+};
+
+export type HeterogeneousCatalogAgentType = {
+  [
+    K in keyof typeof HETERO_SELECTOR_CAPABILITIES
+  ]: (typeof HETERO_SELECTOR_CAPABILITIES)[K] extends {
+    model: { source: 'catalog' };
+  }
+    ? K
+    : never;
+}[keyof typeof HETERO_SELECTOR_CAPABILITIES];
+
+export interface HeteroSpawnSelectionProvider extends HeteroSelectionSource {
+  type: HeterogeneousAgentType;
+}
+
+const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
+
+const modelFlagsOf = (
+  type: 'codex' | 'copilot' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
+): readonly string[] =>
+  HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
+    encoding.kind === 'flag' ? encoding.flags : [],
+  );
+
+const COPILOT_MODEL_FLAGS = modelFlagsOf('copilot');
+const CURSOR_MODEL_FLAGS = ['--model'] as const;
+const GROK_BUILD_MODEL_FLAGS = modelFlagsOf('grok-build');
+const KIMI_CODE_MODEL_FLAGS = modelFlagsOf('kimi-code');
+const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
+const PI_MODEL_FLAGS = modelFlagsOf('pi');
+const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
+
+const getExplicitAmpAgentMode = (
+  source: HeteroSelectionSource | null | undefined,
+): AmpAgentMode | undefined => {
+  const mode = source?.mode?.trim();
+  return isAmpAgentMode(mode) ? mode : undefined;
+};
+
+const getExplicitClaudeCodeModel = (
+  source: HeteroSelectionSource | null | undefined,
+): string | undefined => {
+  const model = source?.model?.trim();
+  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
+};
+
+const getExplicitClaudeCodeReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): ClaudeCodeReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isClaudeCodeReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitCodexModel = (
+  source: HeteroSelectionSource | null | undefined,
+): string | undefined => {
+  const model = source?.model?.trim();
+  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
+};
+
+const getExplicitCodexReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): CodexReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitCopilotReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): CopilotReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isCopilotReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitGrokBuildReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitQoderReasoningEffort = (
+  source: HeteroSelectionSource | null | undefined,
+): QoderReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isQoderReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitCodexSpeedMode = (
+  source: HeteroSelectionSource | null | undefined,
+): CodexSpeedMode | undefined => {
+  const speed = source?.speed?.trim();
+  if (speed === 'normal' || speed === 'ultrafast') return speed;
+  return isCodexFastServiceTier(speed) ? 'fast' : undefined;
+};
+
+/**
+ * Resolve the effective native CLI args for a heterogeneous spawn.
+ */
+export const buildHeteroSpawnArgs = (
+  provider: HeteroSpawnSelectionProvider | undefined | null,
+): string[] | undefined => {
+  if (!provider) return undefined;
+  if (
+    provider.type !== 'amp' &&
+    provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
+    provider.type !== 'codex' &&
+    provider.type !== 'copilot' &&
+    provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
+    provider.type !== 'grok-build' &&
+    provider.type !== 'kimi-code' &&
+    provider.type !== 'opencode' &&
+    provider.type !== 'pi' &&
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
+  ) {
+    return provider.args;
+  }
+
+  const baseArgs = provider.args ?? [];
+  const extraArgs: string[] = [];
+
+  if (provider.type === 'amp') {
+    const mode = getExplicitAmpAgentMode(provider);
+    if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
+  }
+
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+    const model = getExplicitClaudeCodeModel(provider);
+    if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+  }
+
+  if (provider.type === 'codex') {
+    const model = getExplicitCodexModel(provider);
+    if (
+      model &&
+      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
+      !hasCliConfigKey(baseArgs, 'model')
+    ) {
+      extraArgs.push('--model', model);
+    }
+
+    const effort = getExplicitCodexReasoningEffort(provider);
+    if (effort && !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)) {
+      extraArgs.push('-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${effort}"`);
+    }
+
+    const speed = getExplicitCodexSpeedMode(provider);
+    if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
+      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${toCodexServiceTier(speed)}"`);
+    }
+  }
+
+  if (provider.type === 'copilot') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, COPILOT_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitCopilotReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, COPILOT_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(COPILOT_REASONING_EFFORT_FLAG, effort);
+    }
+  }
+
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      extraArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'opencode') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'cursor' || provider.type === 'devin') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, KIMI_CODE_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'pi') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'qoder') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
+    }
+  }
+
+  if (extraArgs.length === 0) return provider.args;
+  return [...baseArgs, ...extraArgs];
+};
+
+/**
+ * Resolve args for the `lh hetero exec` wrapper.
+ */
+export const buildHeteroExecArgs = (
+  provider: HeteroSpawnSelectionProvider | undefined | null,
+): string[] | undefined => {
+  if (!provider) return undefined;
+  if (
+    provider.type !== 'amp' &&
+    provider.type !== 'claude-code' &&
+    provider.type !== 'codebuddy' &&
+    provider.type !== 'codex' &&
+    provider.type !== 'copilot' &&
+    provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
+    provider.type !== 'grok-build' &&
+    provider.type !== 'kimi-code' &&
+    provider.type !== 'opencode' &&
+    provider.type !== 'pi' &&
+    provider.type !== 'qoder' &&
+    provider.type !== 'trae'
+  ) {
+    return provider.args;
+  }
+
+  const baseArgs = provider.args ?? [];
+  const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
+  const selectorArgs: string[] = [];
+
+  if (provider.type === 'amp') {
+    const mode = getExplicitAmpAgentMode(provider);
+    if (mode && !hasCliFlag(baseArgs, '--mode')) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--mode`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${mode}`,
+      );
+    }
+  }
+
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+    const model = getExplicitClaudeCodeModel(provider);
+    if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
+  }
+
+  if (provider.type === 'codex') {
+    const model = getExplicitCodexModel(provider);
+    if (
+      model &&
+      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
+      !hasCliConfigKey(baseArgs, 'model')
+    ) {
+      selectorArgs.push('--model', model);
+    }
+
+    const effort = getExplicitCodexReasoningEffort(provider);
+    if (
+      effort &&
+      !hasCliFlag(baseArgs, '--effort') &&
+      !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)
+    ) {
+      selectorArgs.push('--effort', effort);
+    }
+
+    const speed = getExplicitCodexSpeedMode(provider);
+    if (
+      speed &&
+      !hasCliFlag(baseArgs, '--speed') &&
+      !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)
+    ) {
+      selectorArgs.push('--speed', speed);
+    }
+  }
+
+  if (provider.type === 'copilot') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, COPILOT_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+    const effort = getExplicitCopilotReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, COPILOT_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--model`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${model}`,
+      );
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--effort`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${effort}`,
+      );
+    }
+  }
+
+  if (provider.type === 'opencode') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'cursor' || provider.type === 'devin') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'kimi-code') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, KIMI_CODE_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'pi') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  if (provider.type === 'qoder') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
+    ) {
+      selectorArgs.push('--model', model);
+    }
+    const effort = getExplicitQoderReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
+      selectorArgs.push('--effort', effort);
+    }
+  }
+
+  if (provider.type === 'droid' || provider.type === 'trae') {
+    const model = provider.model?.trim();
+    if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
+      selectorArgs.push('--model', model);
+    }
+  }
+
+  const args = [...wrapperArgs, ...selectorArgs];
+  return args.length > 0 ? args : undefined;
 };

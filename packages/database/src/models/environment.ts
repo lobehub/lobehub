@@ -6,6 +6,7 @@ import type { EnvironmentItem, NewEnvironment } from '../schemas';
 import { environments, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { nonNull } from './utils/rows';
 
 export interface EnvironmentCreator {
   avatar: string | null;
@@ -218,6 +219,48 @@ export class EnvironmentModel {
     return row;
   }
 
+  /**
+   * The caller's enabled environment that checks out `repositoryUrl`, or a new
+   * `code` environment for it. Reused rather than duplicated so projects made
+   * from the same repository share one definition and its built instances.
+   * Only the caller's own rows match: a colleague's published environment is
+   * theirs to edit, so a project must not silently depend on it.
+   *
+   * A new one is named after the repository; when that name is already taken by
+   * another of the caller's environments, a numeric suffix keeps the
+   * `(user, scope, name)` unique indexes satisfied.
+   */
+  async ensureForRepository(input: {
+    defaultBranch?: string;
+    name: string;
+    repositoryUrl: string;
+  }): Promise<EnvironmentItem> {
+    const url = normalizeProjectRepository(input.repositoryUrl);
+    const [existing] = await this.db
+      .select()
+      .from(environments)
+      .where(
+        and(
+          this.ownership(),
+          eq(environments.enabled, true),
+          sql`${environments.configuration} -> 'sources' @> ${JSON.stringify([{ kind: 'git', url }])}::jsonb`,
+        ),
+      )
+      .orderBy(asc(environments.createdAt))
+      .limit(1);
+    if (existing) return existing;
+
+    const baseName = input.name.trim();
+    let name = baseName;
+    for (let suffix = 2; await this.findByName(name); suffix++) name = `${baseName} (${suffix})`;
+
+    const ref = input.defaultBranch?.trim();
+    return this.create({
+      configuration: { kind: 'code', sources: [{ kind: 'git', url, ...(ref ? { ref } : {}) }] },
+      name,
+    });
+  }
+
   private ownership = () => environmentOwnership(this.userId, this.workspaceId);
 
   private visible = () => environmentVisibility(this.userId, this.workspaceId);
@@ -282,16 +325,14 @@ export class EnvironmentModel {
 
     return rows.map(({ creatorAvatar, creatorFullName, creatorId, creatorUsername, ...row }) => ({
       ...row,
-      // The id is what says a creator was found; a deleted account leaves the
-      // join empty and the row keeps its place in the listing with no creator.
-      creator: creatorId
-        ? {
-            avatar: creatorAvatar,
-            fullName: creatorFullName,
-            id: creatorId,
-            username: creatorUsername,
-          }
-        : null,
+      // environments.user_id is NOT NULL with an on-delete-restrict FK to
+      // users, so the left join always finds the creator.
+      creator: {
+        avatar: creatorAvatar,
+        fullName: creatorFullName,
+        id: nonNull(creatorId, 'the environment creator (users.id)'),
+        username: creatorUsername,
+      },
     }));
   };
 

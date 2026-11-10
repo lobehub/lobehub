@@ -1,11 +1,11 @@
 import useSWR from 'swr';
 
-import { sandboxStorageService } from '@/services/sandboxStorage';
+import { environmentService } from '@/services/environment';
 
 /** Keeps request failure distinct from a successful empty repository listing. */
 export const useGithubRepositories = () => {
   const swr = useSWR('sandbox-github-repositories', () =>
-    sandboxStorageService.listGithubRepositories(),
+    environmentService.listGithubRepositories(),
   );
   const state = swr.error
     ? 'error'

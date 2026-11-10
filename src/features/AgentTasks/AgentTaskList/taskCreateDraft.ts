@@ -5,8 +5,10 @@
  */
 export interface TaskCreateDraft {
   assigneeAgentId?: string;
-  assigneeUserId?: string;
+  assigneeUserId?: string | null;
   execution?: unknown;
+  /** Picked labels, by id; resolved against the scope's registry on restore. */
+  labelIds?: unknown;
   markdown?: string;
   priority?: number;
   visibility?: 'private' | 'public';

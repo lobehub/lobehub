@@ -1,16 +1,50 @@
-import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import {
+  TASK_COMPLETED_WINDOW_MS,
+  TASK_COMPLETED_WINDOWS,
+  TASK_STATUSES,
+  type TaskCompletedWindow,
+} from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 import { t } from 'i18next';
 
+import { getTaskStoreState } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-export type TaskGroupBy = 'assignee' | 'automationMode' | 'member' | 'none' | 'priority' | 'status';
+/** Grouping by one label group: one group per label of that group, plus "no label". */
+export type TaskLabelGroupBy = `label:${string}`;
+export type TaskGroupBy =
+  'assignee' | 'automationMode' | 'member' | 'none' | 'priority' | 'status' | TaskLabelGroupBy;
+
+const TASK_LABEL_GROUP_BY_PREFIX = 'label:';
+
+export const toTaskLabelGroupBy = (labelGroupId: string): TaskLabelGroupBy =>
+  `${TASK_LABEL_GROUP_BY_PREFIX}${labelGroupId}`;
+
+export const isTaskLabelGroupBy = (groupBy: string | undefined): groupBy is TaskLabelGroupBy =>
+  !!groupBy &&
+  groupBy.startsWith(TASK_LABEL_GROUP_BY_PREFIX) &&
+  groupBy.length > TASK_LABEL_GROUP_BY_PREFIX.length;
+
+/** The label group a `label:<groupId>` grouping groups by. */
+export const getTaskLabelGroupId = (groupBy: string | undefined): string | undefined =>
+  isTaskLabelGroupBy(groupBy) ? groupBy.slice(TASK_LABEL_GROUP_BY_PREFIX.length) : undefined;
 export type TaskOrderBy = 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
 export type TaskOrderDirection = 'asc' | 'desc';
+/**
+ * Which completed and canceled tasks a list keeps: all of them, none, or only
+ * those closed within a look-back window.
+ */
+export type TaskCompletedFilter = 'all' | 'none' | TaskCompletedWindow;
+
+export const TASK_COMPLETED_FILTERS: readonly TaskCompletedFilter[] = [
+  'all',
+  ...TASK_COMPLETED_WINDOWS,
+  'none',
+];
 
 export interface TaskListViewOptions {
+  completedTasks: TaskCompletedFilter;
   groupBy: TaskGroupBy;
-  hideCompleted: boolean;
   /** Indent a shown sub-task under its parent instead of listing it as a peer. */
   nestedSubTasks: boolean;
   orderBy: TaskOrderBy;
@@ -29,19 +63,43 @@ export const HIDDEN_WHEN_COMPLETED_STATUSES: ReadonlyArray<NonNullable<TaskGroup
 ];
 
 /**
- * Server-side counterpart of `hideCompleted`: the statuses a paginated list
- * has to request so the cut happens before `limit` / `offset` instead of on
- * the fetched page (which could otherwise come back empty while older
- * unfinished tasks exist). `undefined` means no status narrowing.
+ * Server-side counterpart of `completedTasks: 'none'`: the statuses a
+ * paginated list has to request so the cut happens before `limit` / `offset`
+ * instead of on the fetched page (which could otherwise come back empty while
+ * older unfinished tasks exist). `undefined` means no status narrowing.
  */
 export const getVisibleTaskStatuses = (
-  options: Pick<TaskListViewOptions, 'hideCompleted'>,
+  options: Pick<TaskListViewOptions, 'completedTasks'>,
 ): TaskStatus[] | undefined =>
-  options.hideCompleted
+  options.completedTasks === 'none'
     ? TASK_STATUSES.filter((status) => !HIDDEN_COMPLETED_STATUS_SET.has(status))
     : undefined;
 
+/** Server-side counterpart of a windowed `completedTasks`, sent as `completedWithin`. */
+export const getCompletedWithin = (
+  options: Pick<TaskListViewOptions, 'completedTasks'>,
+): TaskCompletedWindow | undefined =>
+  options.completedTasks === 'all' || options.completedTasks === 'none'
+    ? undefined
+    : options.completedTasks;
+
 const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
+
+/**
+ * Client-side `completedTasks` cut for a list fetched in full. Mirrors the
+ * server's `closedAfter`: a closed task without `completedAt` (a canceled one)
+ * is dated by `updatedAt`.
+ */
+export const isTaskHiddenByCompletedFilter = (
+  task: Pick<TaskListItem, 'completedAt' | 'status' | 'updatedAt'>,
+  completedTasks: TaskCompletedFilter,
+  now = Date.now(),
+): boolean => {
+  if (completedTasks === 'all' || !HIDDEN_COMPLETED_STATUS_SET.has(task.status)) return false;
+  if (completedTasks === 'none') return true;
+  const closedAt = toTime(task.completedAt) || toTime(task.updatedAt);
+  return closedAt < now - TASK_COMPLETED_WINDOW_MS[completedTasks];
+};
 
 export interface TaskGroupMeta {
   assigneeId?: string;
@@ -50,13 +108,19 @@ export interface TaskGroupMeta {
   groupBy: TaskGroupBy;
   key: string;
   label: string;
+  /** Label color of a label group (`groupBy` is `label:<groupId>`). */
+  labelColor?: string | null;
+  /** The label of a label group; null is the "no label" group. */
+  labelId?: string | null;
+  /** Registry position of a label group, for ordering. */
+  labelRank?: number;
   priority?: number;
   status?: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 }
 
 export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
+  completedTasks: 'none',
   groupBy: 'status',
-  hideCompleted: true,
   // Nesting is the default *shape* for sub-tasks, but sub-tasks stay hidden
   // until asked for: a parent already carries its progress (`3/8`), so listing
   // its children as peers only pads the list with rows the parent stands for.
@@ -86,24 +150,93 @@ const TASK_ORDER_BY_SET = new Set<TaskOrderBy>([
   'updatedAt',
 ]);
 const TASK_ORDER_DIRECTION_SET = new Set<TaskOrderDirection>(['asc', 'desc']);
+const TASK_COMPLETED_FILTER_SET = new Set<TaskCompletedFilter>(TASK_COMPLETED_FILTERS);
+
+/** View options as persisted, possibly by a release that only had `hideCompleted`. */
+export type StoredTaskListViewOptions = Partial<TaskListViewOptions> & {
+  /** Replaced by `completedTasks`: `true` → 'none', `false` → 'all'. */
+  hideCompleted?: boolean;
+};
+
+const normalizeCompletedTasks = (next: StoredTaskListViewOptions): TaskCompletedFilter => {
+  if (TASK_COMPLETED_FILTER_SET.has(next.completedTasks as TaskCompletedFilter)) {
+    return next.completedTasks as TaskCompletedFilter;
+  }
+  if (typeof next.hideCompleted === 'boolean') return next.hideCompleted ? 'none' : 'all';
+  return DEFAULT_TASK_LIST_VIEW_OPTIONS.completedTasks;
+};
+
+/**
+ * The shape to persist. Keeps writing the legacy `hideCompleted` beside
+ * `completedTasks` so a build that predates the select (e.g. after a
+ * rollback) still follows the latest choice; a windowed choice reads as
+ * "shown" there, the closest it can express.
+ */
+export const toStoredTaskListViewOptions = <T extends Pick<TaskListViewOptions, 'completedTasks'>>(
+  options: T,
+): T & { hideCompleted: boolean } => ({
+  ...options,
+  hideCompleted: options.completedTasks === 'none',
+});
+
+/**
+ * A `label:<groupId>` grouping persists in view options, so it outlives the
+ * label group it points at. Once the registry has loaded, fall back to the
+ * default for a grouping whose group is gone — otherwise every board request
+ * would keep asking the server to group by a deleted group. Before the
+ * registry loads (`labelGroupIds` undefined) the choice is kept as-is.
+ */
+export const dropMissingLabelGroupings = <
+  T extends Pick<TaskListViewOptions, 'groupBy' | 'subGroupBy'>,
+>(
+  options: T,
+  labelGroupIds: ReadonlySet<string> | undefined,
+): T => {
+  if (!labelGroupIds) return options;
+  const isMissing = (groupBy: TaskGroupBy) => {
+    const groupId = getTaskLabelGroupId(groupBy);
+    return !!groupId && !labelGroupIds.has(groupId);
+  };
+  const groupByMissing = isMissing(options.groupBy);
+  const subGroupByMissing = isMissing(options.subGroupBy);
+  if (!groupByMissing && !subGroupByMissing) return options;
+  return {
+    ...options,
+    groupBy: groupByMissing ? DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy : options.groupBy,
+    subGroupBy: subGroupByMissing ? DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy : options.subGroupBy,
+  };
+};
+
+/**
+ * A grouping the list can render, or `fallback`. `label:<groupId>` is
+ * open-ended; whether its group still exists is settled upstream by
+ * {@link dropMissingLabelGroupings}.
+ */
+export const normalizeTaskGroupBy = (
+  value: TaskGroupBy | string | undefined,
+  fallback: TaskGroupBy,
+): TaskGroupBy => {
+  if (!value) return fallback;
+  if (isTaskLabelGroupBy(value)) return value;
+  return TASK_GROUP_BY_SET.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
+};
 
 export const normalizeTaskListViewOptions = (
-  value?: Partial<TaskListViewOptions> | null,
+  value?: StoredTaskListViewOptions | null,
 ): TaskListViewOptions => {
   const next = value ?? {};
-  const groupBy = TASK_GROUP_BY_SET.has(next.groupBy as TaskGroupBy)
-    ? (next.groupBy as TaskGroupBy)
+  const isKnownGroupBy = (value: unknown): value is TaskGroupBy =>
+    TASK_GROUP_BY_SET.has(value as TaskGroupBy) || isTaskLabelGroupBy(value as string);
+  const groupBy = isKnownGroupBy(next.groupBy)
+    ? next.groupBy
     : DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy;
-  const subGroupBy = TASK_GROUP_BY_SET.has(next.subGroupBy as TaskGroupBy)
-    ? (next.subGroupBy as TaskGroupBy)
+  const subGroupBy = isKnownGroupBy(next.subGroupBy)
+    ? next.subGroupBy
     : DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy;
 
   return {
+    completedTasks: normalizeCompletedTasks(next),
     groupBy,
-    hideCompleted:
-      typeof next.hideCompleted === 'boolean'
-        ? next.hideCompleted
-        : DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted,
     nestedSubTasks:
       typeof next.nestedSubTasks === 'boolean'
         ? next.nestedSubTasks
@@ -199,6 +332,38 @@ export const getTaskMemberGroupMeta = (userId: string | null | undefined): TaskG
   };
 };
 
+/**
+ * Group meta of one label column in a `label:<groupId>` grouping. Name and
+ * color come from the registry (an empty column has no task to read them
+ * from), falling back to the task's own label ref.
+ */
+export const getTaskLabelGroupMeta = (
+  groupBy: TaskLabelGroupBy,
+  labelId: string | null | undefined,
+  fallback?: { color?: string | null; name: string },
+): TaskGroupMeta => {
+  if (!labelId) {
+    return {
+      groupBy,
+      key: 'label:none',
+      label: t('taskLabel.noLabel', { ns: 'chat' }),
+      labelId: null,
+      labelRank: Number.MAX_SAFE_INTEGER,
+    };
+  }
+  const registry = getTaskStoreState().taskLabels;
+  const index = registry.findIndex((label) => label.id === labelId);
+  const entry = index === -1 ? undefined : registry[index];
+  return {
+    groupBy,
+    key: `label:${labelId}`,
+    label: entry?.name ?? fallback?.name ?? labelId,
+    labelColor: entry?.color ?? fallback?.color,
+    labelId,
+    labelRank: index === -1 ? Number.MAX_SAFE_INTEGER - 1 : index,
+  };
+};
+
 const getTaskAssigneeSortValue = (task: TaskListItem) => task.assigneeAgentId ?? '';
 
 export const getTaskPriorityGroupMeta = (
@@ -290,6 +455,11 @@ export const compareTaskItems = (
 };
 
 export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): TaskGroupMeta => {
+  if (isTaskLabelGroupBy(groupBy)) {
+    const groupId = getTaskLabelGroupId(groupBy);
+    const label = task.labels?.find((item) => item.parentId === groupId);
+    return getTaskLabelGroupMeta(groupBy, label?.id, label);
+  }
   switch (groupBy) {
     case 'assignee': {
       return getTaskAssigneeGroupMeta(task.assigneeAgentId);
@@ -339,6 +509,7 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
 };
 
 const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
+  if (isTaskLabelGroupBy(groupBy)) return group.labelRank ?? Number.MAX_SAFE_INTEGER;
   switch (groupBy) {
     case 'automationMode': {
       return group.automationMode === 'schedule' ? 0 : 1;

@@ -35,6 +35,14 @@ export type GoalStatus =
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
 
+/**
+ * Who in a team workspace can see a goal. Mirrors agent / task visibility:
+ * 'public' goals are visible to every member, 'private' ones only to their
+ * creator. Personal-mode goals are implicitly private and ignore it.
+ */
+export const GOAL_VISIBILITIES = ['private', 'public'] as const;
+export type GoalVisibility = (typeof GOAL_VISIBILITIES)[number];
+
 /** Automatic recovery policy for Goal Graph Tasks. */
 export interface GoalRecoveryPolicy {
   /** Maximum execution attempts for one Task before escalating to a decision gate. */
@@ -535,6 +543,8 @@ export type GoalCreateConfig = Omit<
  */
 export interface GoalItem {
   agentId: string | null;
+  /** Set when the user archives the goal; archived goals are hidden from lists by default. */
+  archivedAt?: Date | null;
   completedAt: Date | null;
   config: GoalConfig | null;
   createdAt: Date;
@@ -553,6 +563,8 @@ export interface GoalItem {
   title: string;
   updatedAt: Date;
   userId: string;
+  /** Who in the workspace sees the goal; see {@link GoalVisibility}. */
+  visibility: GoalVisibility;
   workspaceId: string | null;
 }
 
@@ -785,6 +797,13 @@ export interface GoalGraphSnapshot {
   events: GoalGraphEvent[];
   goal: GoalItem;
   nodes: GoalGraphNode[];
+  /**
+   * When the coordinator retries each active task node a usage window refused
+   * (the reset plus its safety margin). Such a Task is held `paused` with no
+   * running run, so it has no heartbeat — without this the client reads the
+   * wait as lost.
+   */
+  quotaRetryAt?: Record<string, Date>;
   /**
    * The wrap-up report: whether it is being written, done or failed, and the
    * newest submitted version. Absent until the Goal-level acceptance has ended

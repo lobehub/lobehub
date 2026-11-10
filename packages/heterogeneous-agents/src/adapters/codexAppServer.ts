@@ -1,5 +1,6 @@
 import { formatPatch, structuredPatch } from 'diff';
 
+import type { InterventionAnswer } from '../askUser';
 import type {
   AgentMessageDeltaNotification,
   CodexErrorInfo,
@@ -402,6 +403,32 @@ export class CodexAppServerAdapter {
 
   get cumulativeUsage(): UsageData | undefined {
     return this.latestCumulativeUsage ?? this.lastCumulativeUsage;
+  }
+
+  startUserInput(toolCallId: string, args: unknown): HeterogeneousAgentEvent[] {
+    const payload: ToolCallPayload = {
+      apiName: 'askUserQuestion',
+      arguments: JSON.stringify(args),
+      id: toolCallId,
+      identifier: CODEX_IDENTIFIER,
+      type: 'default',
+    };
+    this.hasToolActivity = true;
+    this.pendingTools.set(toolCallId, payload);
+    return this.startLateTool(payload);
+  }
+
+  completeUserInput(toolCallId: string, answer: InterventionAnswer): HeterogeneousAgentEvent[] {
+    if (!this.pendingTools.delete(toolCallId)) return [];
+    return [
+      this.makeEvent('tool_result', {
+        content: JSON.stringify(answer.cancelled ? { cancelled: true } : (answer.result ?? {})),
+        isError: false,
+        pluginState: answer.cancelled ? undefined : { askUserAnswers: answer.result },
+        toolCallId,
+      } satisfies ToolResultData),
+      this.makeEvent('tool_end', { isSuccess: true, toolCallId }),
+    ];
   }
 
   configureModel(model: string): HeterogeneousAgentEvent[] {

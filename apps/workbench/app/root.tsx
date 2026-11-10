@@ -1,3 +1,5 @@
+import '@/styles/stylex.css';
+
 import { BRANDING_NAME } from '@lobechat/business-const';
 import type { PropsWithChildren } from 'react';
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router';

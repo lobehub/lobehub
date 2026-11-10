@@ -46,13 +46,7 @@ vi.mock('@/store/global/selectors', () => ({
   },
 }));
 
-const translations: Record<string, string> = {
-  'ModelSwitchPanel.detail.pricing.credits.input': 'Input {{amount}} credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.millionTokens': 'credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.output': 'Output {{amount}} credits/M tokens',
-  'ModelSwitchPanel.detail.pricing.credits.perImage': '~ {{amount}} credits / image',
-  'ModelSwitchPanel.detail.pricing.credits.perVideo': '~ {{amount}} credits / video',
-};
+const translations: Record<string, string> = {};
 
 const t = ((key: string, options?: Record<string, string>) => {
   const template = translations[key] ?? options?.defaultValue ?? key;
@@ -101,6 +95,20 @@ const unitPricing = {
   ],
 } as Pricing;
 
+const subCentPricing = {
+  currency: 'USD',
+  units: [
+    { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+    { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+    { name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' },
+  ],
+} as Pricing;
+
+const emptyLookupPricing = {
+  currency: 'USD',
+  units: [{ lookup: { prices: {} }, name: 'imageGeneration', strategy: 'lookup', unit: 'image' }],
+} as Pricing;
+
 const createEnabledList = (
   provider: string,
   pricing: Pricing,
@@ -146,7 +154,7 @@ describe('useModelDetailPanel', () => {
     useBusinessModelPricingMock.mockReturnValue(({ pricing }: { pricing?: Pricing }) => pricing);
   });
 
-  it('applies business pricing before formatting LobeHub credit prices', () => {
+  it('applies business pricing before formatting LobeHub USD prices', () => {
     useBusinessModelPricingMock.mockReturnValue(
       ({ pricing, model, provider }: { model?: string; pricing?: Pricing; provider?: string }) =>
         provider === 'lobehub' && model === 'test-model' ? discountedPricing : pricing,
@@ -154,15 +162,14 @@ describe('useModelDetailPanel', () => {
 
     const { result } = renderModelDetailPanelHook();
 
-    expect(result.current.isCreditPricing).toBe(true);
-    expect(result.current.formatPrice?.input).toEqual({ current: '2.5M', original: '5M' });
-    expect(result.current.formatPrice?.output).toEqual({ current: '12.5M', original: '25M' });
+    expect(result.current.formatPrice?.input).toEqual({ current: '2.50', original: '5.00' });
+    expect(result.current.formatPrice?.output).toEqual({ current: '12.50', original: '25.00' });
     expect(result.current.formatPrice?.cachedInput).toEqual({
-      current: '0.3M',
-      original: '1M',
+      current: '0.30',
+      original: '1.00',
     });
     expect(result.current.hasCachedInputPricing).toBe(true);
-    expect(result.current.getUnitPriceSuffix('millionTokens')).toBe(' credits/M tokens');
+    expect(result.current.getUnitPriceSuffix('millionTokens')).toBe('/M tokens');
   });
 
   it('formats original unit prices for tiered and lookup units', () => {
@@ -171,13 +178,58 @@ describe('useModelDetailPanel', () => {
     });
 
     expect(result.current.formatUnitPrice(unitPricing.units[0])).toEqual({
-      current: '20.0K',
-      original: '50.0K',
+      current: '0.02',
+      original: '0.05',
     });
     expect(result.current.formatUnitPrice(unitPricing.units[1])).toEqual({
-      current: '300.0K',
-      original: '500.0K',
+      current: '0.30',
+      original: '0.50',
     });
+  });
+
+  it('shows the prices read side by side with the same decimals', () => {
+    const { result } = renderModelDetailPanelHook({
+      enabledList: createEnabledList('lobehub', subCentPricing),
+    });
+
+    // `$0.075` and `$0.30` would put their decimal points apart in one column
+    expect(result.current.formatPrice?.input.current).toBe('0.075');
+    expect(result.current.formatPrice?.output.current).toBe('0.300');
+  });
+
+  it('pads unit rows only against rows priced in the same unit', () => {
+    const { result } = renderModelDetailPanelHook({
+      enabledList: createEnabledList('lobehub', subCentPricing),
+    });
+    const [input, output, image] = subCentPricing.units;
+
+    expect(result.current.formatUnitPrice(input).current).toBe('0.075');
+    expect(result.current.formatUnitPrice(output).current).toBe('0.300');
+    // A per-image rate is a different unit: it keeps its own two decimals
+    expect(result.current.formatUnitPrice(image).current).toBe('0.04');
+  });
+
+  it('reads an empty price table as -- rather than a lone dash', () => {
+    const { result } = renderModelDetailPanelHook({
+      enabledList: createEnabledList('lobehub', emptyLookupPricing),
+    });
+
+    expect(result.current.formatUnitPrice(emptyLookupPricing.units[0]).current).toBe('--');
+  });
+
+  it('localizes the unit suffix and falls back to English when a locale lacks it', () => {
+    const { result } = renderModelDetailPanelHook();
+
+    expect(result.current.getUnitPriceSuffix('millionTokens')).toBe('/M tokens');
+
+    translations['ModelSwitchPanel.detail.pricing.suffix.millionTokens'] = '/百万 token';
+    try {
+      const localized = renderModelDetailPanelHook();
+
+      expect(localized.result.current.getUnitPriceSuffix('millionTokens')).toBe('/百万 token');
+    } finally {
+      delete translations['ModelSwitchPanel.detail.pricing.suffix.millionTokens'];
+    }
   });
 
   it('uses the enabled model list hook when no list is provided', () => {

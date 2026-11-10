@@ -1,0 +1,135 @@
+---
+title: 在 LobeHub 中使用 magpie
+description: 学习如何配置 magpie 网关，并根据 magpie 的部署方式选择合适的请求模式。
+tags:
+  - LobeHub
+  - magpie
+  - 模型网关
+  - 路由组
+---
+
+# 在 LobeHub 中使用 magpie
+
+[magpie](https://usemagpie.ai) 是一个模型网关。你在其中接入的订阅、密钥、本地模型与路由组，都由同一个入口提供服务，模型统一以 `provider/model` 的形式暴露。
+
+本文档将指导你如何在 LobeHub 中使用 magpie：
+
+<Steps>
+  ### 步骤一：安装并启动 magpie
+
+  前往 [magpie 官网](https://usemagpie.ai) 下载桌面版，或使用 Docker 部署：
+
+  ```bash
+  docker run -d --name magpie \
+    --network host \
+    -e MAGPIE_ADDR=127.0.0.1:3425 \
+    -v magpie-config:/config \
+    ghcr.io/yetone/magpie:latest
+  ```
+
+  magpie 网关默认监听 `127.0.0.1:3425`。
+
+  ### 步骤二：添加上游服务商
+
+  在 magpie 界面中添加你要使用的服务商，或通过命令行：
+
+  ```bash
+  magpie provider add deepseek sk-...
+  ```
+
+  添加完成后可以查看可用模型：
+
+  ```bash
+  magpie models
+  ```
+
+  ### 步骤三：创建网关密钥
+
+  从其他进程调用 magpie 时需要网关密钥：
+
+  ```bash
+  magpie gateway-key add "LobeHub"
+  ```
+
+  记下输出的 `sk-magpie-key-...`，下一步会用到。密钥完整值保存在 `~/.config/magpie/caller-keys.json`，列表命令只显示掩码。
+
+  ### 步骤四：在 LobeHub 中配置
+
+  打开 **应用设置 → AI 服务商**，找到 `magpie`：
+
+  - **API Key** 填入上一步创建的网关密钥
+  - **API 代理地址** 填入 magpie 的地址，例如 `http://127.0.0.1:3425/v1`
+  - 点击 **获取模型列表**，LobeHub 会读取 magpie 提供的模型
+  - 启用需要的模型
+
+  <Callout type={'info'}>
+    magpie 返回的模型 id 形如 `provider/model`（例如 `deepseek/deepseek-chat`）。路由组有两种 id：自建组是 `group/<id>`，magpie 自动发现的是 `auto/<model>`，两者都会显示路由标记。
+  </Callout>
+</Steps>
+
+## 请求从哪里发出
+
+LobeHub 把模型请求送到 magpie，有两条路径。走哪条不取决于某个开关，而取决于 magpie 本身能不能被发起方访问到。
+
+### 浏览器直接请求
+
+服务商设置里的 **使用客户端请求模式** 打开后，模型请求从浏览器发出。
+
+这条路只在一种情况下成立：**magpie 与浏览器在同一台机器上，并且是直接运行的**。此时 magpie 收到的连接来自 `127.0.0.1`，它的跨域处理才会生效。
+
+### 服务端请求
+
+服务端请求时，凭据留在服务端，浏览器不参与模型调用，因此不受跨域限制。magpie 只需要能被 LobeHub 的服务端访问到。
+
+### 为什么浏览器直连的要求这么窄
+
+magpie 要求每个调用方携带一个已启用的网关密钥。浏览器发出的预检请求按规范不带密钥，所以 magpie 会先拒绝它，请求到不了跨域处理这一步。
+
+magpie 只对来自 `127.0.0.1` 的连接跳过这道密钥要求。下面这些情况，连接来源都不是 `127.0.0.1`，浏览器直连一律不可用：
+
+- Docker 的端口映射，来源被改写成网桥地址
+- 局域网访问，来源是对方的局域网地址
+- 远程或公网访问，来源是对方的公网地址
+
+`MAGPIE_TRUST_PROXY=1` 不改变这个判断，它只影响转发头的处理。`--network host` 加 `127.0.0.1` 能让来源保持 loopback，但这等于 magpie 直接跑在宿主机网络上。
+
+### 怎么选
+
+| magpie 运行位置                   | 客户端请求模式 | 实际可达的配置                    |
+| ----------------------------- | ------- | -------------------------- |
+| 与浏览器同一台机器，直接运行                | 可用      | `http://127.0.0.1:3425/v1` |
+| 同一台机器，Docker 端口映射             | 不可用     |                            |
+| 同一台机器，Docker `--network host` | 可用      | `http://127.0.0.1:3425/v1` |
+| 局域网内另一台机器                     | 不可用     | 服务端可达时，可以使用服务端请求           |
+| 远程或公网                         | 不可用     | 服务端可达时，可以使用服务端请求           |
+
+<Callout type={'warning'}>
+  在 `app.lobehub.com` 这类托管服务上，LobeHub 的服务端连不到用户的 `127.0.0.1`。因此 magpie 跑在用户本机时，只能靠客户端请求模式；magpie 跑在别处时，需要一个 LobeHub 服务端能访问到的地址。
+
+  自部署时如果希望 magpie 的请求一律从服务端发出，设置环境变量 `MAGPIE_PROXY_URL`，客户端请求模式的默认值会随之关闭。
+</Callout>
+
+### 开启客户端请求模式的完整条件
+
+1. magpie 与本机浏览器同机，且直接运行（非 Docker 端口映射，非局域网，非远程）
+2. 服务商设置里打开 **使用客户端请求模式**
+3. magpie 的 **网络与共享 → 允许调用 magpie 的网页** 里加入 LobeHub 的地址，例如 `http://localhost:3000`
+4. **API Key** 填入 `magpie gateway-key add` 生成的完整网关密钥
+
+第 3 条不可省略：即使连接来自本机，白名单页面也需要密钥，且只有列入白名单的来源才能读到跨域响应头。
+
+## 常见问题
+
+**模型列表拉取失败，控制台提示跨域被拦截**
+
+magpie 没有返回跨域响应头。确认 magpie 与浏览器同机、通过 `127.0.0.1` 访问，并把 LobeHub 地址加入允许列表；否则改用服务端请求，地址填 LobeHub 服务端能访问到的那个。
+
+**提示需要网关密钥**
+
+magpie 要求每个调用方携带一个已启用的网关密钥。确认 API Key 字段填的是 `magpie gateway-key add` 生成的完整密钥。
+
+**对话请求返回 401**
+
+密钥未启用或填错。用 `magpie gateway-key list` 查看状态，完整密钥在 `~/.config/magpie/caller-keys.json`。
+
+至此你已经可以在 LobeHub 中使用 magpie 的模型进行对话了。

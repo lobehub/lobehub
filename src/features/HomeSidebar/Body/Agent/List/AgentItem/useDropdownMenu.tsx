@@ -35,6 +35,7 @@ import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalPr
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentService } from '@/services/agent';
@@ -68,6 +69,12 @@ interface UseAgentDropdownMenuParams {
   name?: string | null;
   openCreateGroupModal: () => void;
   pinned: boolean;
+  /**
+   * Offer "Remove from sidebar". Off for lists that ignore the sidebar
+   * visibility preference (the `im_layout` Messages list), where it would
+   * change nothing visible. Defaults to on.
+   */
+  sidebarVisibilityEnabled?: boolean;
   slug?: string | null;
   title: string;
   userId?: string | null;
@@ -84,6 +91,7 @@ export const useAgentDropdownMenu = ({
   name,
   openCreateGroupModal,
   pinned,
+  sidebarVisibilityEnabled = true,
   slug,
   title,
   userId,
@@ -141,7 +149,8 @@ export const useAgentDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
-  const isShownInSidebar = isSidebarItemVisible({ id, slug, type: 'agent', userId });
+  const isShownInSidebar =
+    sidebarVisibilityEnabled && isSidebarItemVisible({ id, slug, type: 'agent', userId });
   const isPrivate = visibility === 'private';
   const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
   const showPublishAction = Boolean(activeWorkspaceId) && isPrivate;
@@ -187,6 +196,8 @@ export const useAgentDropdownMenu = ({
     { avatar, backgroundColor, title },
     { userId, visibility },
   );
+
+  const copyAgentIdItem = useCopyAgentIdMenuItem(id);
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -239,6 +250,7 @@ export const useAgentDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
+        ...(copyAgentIdItem ? [copyAgentIdItem] : []),
         ...(canConfigure || canCreate || canEdit ? [{ type: 'divider' as const }] : []),
         ...(canConfigure
           ? [
@@ -609,6 +621,7 @@ export const useAgentDropdownMenu = ({
       labelsEnabled,
       openCreateLabelModal,
       openAgentInNewWindow,
+      copyAgentIdItem,
       sessionCustomGroups,
       group,
       isDefault,

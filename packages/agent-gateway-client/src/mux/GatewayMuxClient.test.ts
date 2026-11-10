@@ -3,6 +3,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayMuxClient } from './GatewayMuxClient';
 import type { GatewayMuxClientOptions, MuxServerMessage } from './types';
 
+const memberEnd = (reason: string): MuxServerMessage => ({
+  event: {
+    data: { reason },
+    operationId: 'op-member',
+    stepIndex: 0,
+    timestamp: 1,
+    type: 'agent_runtime_end',
+  } as any,
+  id: '1',
+  operationId: 'op-1',
+  type: 'agent_event',
+});
+
+const createResumeComplete = (status: 'running' | 'completed'): MuxServerMessage => ({
+  gap: false,
+  operationId: 'op-1',
+  status,
+  type: 'resume_complete',
+});
+
+const createErrorStatusChange = (): MuxServerMessage => ({
+  id: '2',
+  operationId: 'op-1',
+  status: 'error',
+  type: 'status_change',
+});
+
 // ─── Mock WebSocket ───
 
 class MockWebSocket {
@@ -391,12 +418,7 @@ describe('GatewayMuxClient', () => {
       // replay
       ws.simulateMessage(agentEvent('op-1', '1'));
       ws.simulateMessage(agentEvent('op-1', '2'));
-      ws.simulateMessage({
-        gap: false,
-        operationId: 'op-1',
-        status: 'running',
-        type: 'resume_complete',
-      });
+      ws.simulateMessage(createResumeComplete('running'));
       // live, including a duplicate that raced the resubscribe
       ws.simulateMessage(agentEvent('op-1', '3'));
       ws.simulateMessage(agentEvent('op-1', '2'));
@@ -683,25 +705,9 @@ describe('GatewayMuxClient', () => {
       const onComplete = vi.fn();
       sub.on('session_complete', onComplete);
 
-      ws.simulateMessage({
-        event: {
-          data: { reason: 'done' },
-          operationId: 'op-member',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        } as any,
-        id: '1',
-        operationId: 'op-1',
-        type: 'agent_event',
-      });
+      ws.simulateMessage(memberEnd('done'));
       ws.simulateMessage(agentEvent('op-1', '2', 'step_start'));
-      ws.simulateMessage({
-        gap: false,
-        operationId: 'op-1',
-        status: 'completed',
-        type: 'resume_complete',
-      });
+      ws.simulateMessage(createResumeComplete('completed'));
 
       expect(onComplete).not.toHaveBeenCalled();
       expect(sub.active).toBe(true);
@@ -726,18 +732,7 @@ describe('GatewayMuxClient', () => {
       const onComplete = vi.fn();
       sub.on('session_complete', onComplete);
 
-      ws.simulateMessage({
-        event: {
-          data: { reason: 'done' },
-          operationId: 'op-member',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        } as any,
-        id: '1',
-        operationId: 'op-1',
-        type: 'agent_event',
-      });
+      ws.simulateMessage(memberEnd('done'));
       ws.simulateMessage({
         gap: true,
         operationId: 'op-1',
@@ -755,36 +750,15 @@ describe('GatewayMuxClient', () => {
       const onComplete = vi.fn();
       sub.on('session_complete', onComplete);
 
-      ws.simulateMessage({
-        gap: false,
-        operationId: 'op-1',
-        status: 'running',
-        type: 'resume_complete',
-      });
-      ws.simulateMessage({
-        event: {
-          data: { reason: 'done' },
-          operationId: 'op-member',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        } as any,
-        id: '1',
-        operationId: 'op-1',
-        type: 'agent_event',
-      });
+      ws.simulateMessage(createResumeComplete('running'));
+      ws.simulateMessage(memberEnd('done'));
 
       ws.simulateClose();
       await vi.advanceTimersByTimeAsync(500);
       const ws2 = await settle();
       ws2.simulateMessage(READY);
       // Hibernated DO: empty replay, authoritative `completed`.
-      ws2.simulateMessage({
-        gap: false,
-        operationId: 'op-1',
-        status: 'completed',
-        type: 'resume_complete',
-      });
+      ws2.simulateMessage(createResumeComplete('completed'));
 
       expect(onComplete).toHaveBeenCalledWith({ source: 'resume_status', status: 'completed' });
     });
@@ -792,19 +766,6 @@ describe('GatewayMuxClient', () => {
     // Codex P1 on #20102 (round 2): the member terminal was acknowledged before
     // the socket dropped, so the resubscribe replays only its sequenced echo.
     describe('carries an owed echo across a reconnect (G-02)', () => {
-      const memberEnd = (reason: string): MuxServerMessage => ({
-        event: {
-          data: { reason },
-          operationId: 'op-member',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        } as any,
-        id: '1',
-        operationId: 'op-1',
-        type: 'agent_event',
-      });
-
       const reconnectAfterMemberEnd = async (reason: string) => {
         const { mux } = createMux();
         const sub = mux.subscribe('op-1');
@@ -824,12 +785,7 @@ describe('GatewayMuxClient', () => {
         const { onComplete, sub, ws2 } = await reconnectAfterMemberEnd('done');
 
         ws2.simulateMessage({ id: '2', operationId: 'op-1', type: 'session_complete' } as any);
-        ws2.simulateMessage({
-          gap: false,
-          operationId: 'op-1',
-          status: 'completed',
-          type: 'resume_complete',
-        });
+        ws2.simulateMessage(createResumeComplete('completed'));
 
         expect(onComplete).not.toHaveBeenCalled();
         expect(sub.active).toBe(true);
@@ -842,12 +798,7 @@ describe('GatewayMuxClient', () => {
       it('reads a replayed terminal status_change echo as the member end', async () => {
         const { onComplete, sub, ws2 } = await reconnectAfterMemberEnd('error');
 
-        ws2.simulateMessage({
-          id: '2',
-          operationId: 'op-1',
-          status: 'error',
-          type: 'status_change',
-        });
+        ws2.simulateMessage(createErrorStatusChange());
         ws2.simulateMessage({
           gap: false,
           operationId: 'op-1',
@@ -862,19 +813,9 @@ describe('GatewayMuxClient', () => {
       it('stops owing an echo the replay did not deliver', async () => {
         const { onComplete, ws2 } = await reconnectAfterMemberEnd('error');
 
-        ws2.simulateMessage({
-          gap: false,
-          operationId: 'op-1',
-          status: 'running',
-          type: 'resume_complete',
-        });
+        ws2.simulateMessage(createResumeComplete('running'));
         // A later watchdog error is the supervisor's genuine end.
-        ws2.simulateMessage({
-          id: '2',
-          operationId: 'op-1',
-          status: 'error',
-          type: 'status_change',
-        });
+        ws2.simulateMessage(createErrorStatusChange());
 
         expect(onComplete).toHaveBeenCalledWith({ source: 'status_change', status: 'error' });
       });
@@ -909,20 +850,6 @@ describe('GatewayMuxClient', () => {
     // its status — only that one may be owed, or the leftover swallows the
     // supervisor's own end.
     describe('owes only the v2 echo the member status produces (G-02)', () => {
-      const memberEnd = (reason: string) =>
-        ({
-          event: {
-            data: { reason },
-            operationId: 'op-member',
-            stepIndex: 0,
-            timestamp: 1,
-            type: 'agent_runtime_end',
-          } as any,
-          id: '1',
-          operationId: 'op-1',
-          type: 'agent_event',
-        }) as MuxServerMessage;
-
       it('interrupted member, then the supervisor completes via session_complete', async () => {
         const { mux } = createMux();
         const ws = await connectAndReady(mux);
@@ -973,12 +900,7 @@ describe('GatewayMuxClient', () => {
         sub.on('session_complete', onComplete);
 
         ws.simulateMessage(memberEnd('error'));
-        ws.simulateMessage({
-          id: '2',
-          operationId: 'op-1',
-          status: 'error',
-          type: 'status_change',
-        });
+        ws.simulateMessage(createErrorStatusChange());
         expect(onComplete).not.toHaveBeenCalled();
 
         ws.simulateMessage({
@@ -1427,29 +1349,25 @@ describe('GatewayMuxClient', () => {
       expect(mockWsInstances).toHaveLength(4);
     });
 
-    it('does not spend the budget on a healthy socket that drops', async () => {
+    it('recovers a previously healthy socket after more than the initial dial budget', async () => {
       const { mux } = createMux();
       const onUnavailable = vi.fn();
       mux.on('unavailable', onUnavailable);
-      mux.subscribe('op-1');
-
-      // A working connection that later drops is a network event, not evidence
-      // that this deployment cannot serve v2.
+      const sub = mux.subscribe('op-1');
       let ws = await connectAndReady(mux);
-      ws.simulateClose(1006);
-      await vi.advanceTimersByTimeAsync(500);
-      ws = await settle();
-      ws.simulateClose(1006);
-      await vi.advanceTimersByTimeAsync(1000);
-      ws = await settle();
-      ws.simulateClose(1006);
-      expect(onUnavailable).not.toHaveBeenCalled();
 
-      // Three dials that never reached `ready` do spend it.
-      await vi.advanceTimersByTimeAsync(2000);
-      ws = await settle();
-      ws.simulateClose(1006);
-      expect(onUnavailable).toHaveBeenCalledOnce();
+      // A restart can outlast three dials; v2 support was already established.
+      for (const delay of [500, 1000, 2000, 4000, 8000]) {
+        ws.simulateClose(1006);
+        await vi.advanceTimersByTimeAsync(delay);
+        ws = await settle();
+      }
+      expect(onUnavailable).not.toHaveBeenCalled();
+      expect(mux.isUnavailable).toBe(false);
+      ws.simulateMessage(READY);
+      expect(mux.status).toBe('connected');
+      expect(sub.active).toBe(true);
+      expect(ws.ofType('subscribe')).toHaveLength(1);
     });
 
     it('counts token failures that follow a healthy socket', async () => {

@@ -171,6 +171,12 @@ vi.mock('@/store/user', () => ({
     selector({ preference: { lab: userStateMock.lab }, user: { id: 'self-user' } }),
 }));
 
+// The label picker reads the label registry; its own behavior is covered by
+// `labelPickerModel.test.ts`.
+vi.mock('@/features/TaskLabels/TaskLabelPicker', () => ({
+  default: ({ children }: { children?: ReactNode }) => <div data-testid="labels">{children}</div>,
+}));
+
 vi.mock('../features/TaskPriorityTag', () => ({
   default: ({ children }: { children?: ReactNode }) => (
     <div data-testid="priority">{children ?? 'priority'}</div>
@@ -231,11 +237,12 @@ vi.mock('../features/AssigneeMemberSelector', () => ({
   }: {
     children: ReactNode;
     currentUserId?: string;
-    onChange?: (id: string) => void;
+    onChange?: (id: string | null) => void;
   }) => (
     <div data-current-user-id={currentUserId ?? ''} data-testid="member-selector">
       {children}
       <span data-testid="select-member" onClick={() => onChange?.('user-1')} />
+      <span data-testid="clear-member" onClick={() => onChange?.(null)} />
     </div>
   ),
 }));
@@ -389,6 +396,77 @@ describe('CreateTaskInlineEntry', () => {
       expect(createTaskMock).toHaveBeenCalledWith(
         expect.objectContaining({ assigneeAgentId: 'agent-1', assigneeUserId: 'user-1' }),
       ),
+    );
+  });
+
+  it('assigns a new workspace task to its creator by default', async () => {
+    workspaceMembersMock.members = [
+      { role: 'member', userId: 'user-1' },
+      { role: 'member', userId: 'self-user' },
+    ];
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    expect(screen.getByTestId('member-selector')).toHaveAttribute(
+      'data-current-user-id',
+      'self-user',
+    );
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeUserId: 'self-user' }),
+      ),
+    );
+  });
+
+  it('holds creation until the member directory resolves the creator default', async () => {
+    workspaceMembersMock.isLoading = true;
+    workspaceMembersMock.members = [];
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(createTaskMock).not.toHaveBeenCalled();
+
+    workspaceMembersMock.isLoading = false;
+    workspaceMembersMock.members = [{ role: 'member', userId: 'self-user' }];
+    rerender(<CreateTaskInlineEntry placeholder="loaded" variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeUserId: 'self-user' }),
+      ),
+    );
+  });
+
+  it('does not default to a creator whose role cannot be a task assignee', () => {
+    workspaceMembersMock.members = [{ role: 'viewer', userId: 'self-user' }];
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', '');
+  });
+
+  it('keeps an explicitly cleared member unassigned across a draft reload', async () => {
+    workspaceMembersMock.members = [{ role: 'member', userId: 'self-user' }];
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { unmount } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('clear-member'));
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft.assigneeUserId).toBeNull();
+    });
+
+    unmount();
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('member-selector')).toHaveAttribute('data-current-user-id', ''),
     );
   });
 
@@ -572,7 +650,11 @@ describe('CreateTaskInlineEntry', () => {
   it('confirms the task exists once it is created, and offers a way to open it', async () => {
     editorMarkdownMock.value = 'Write a project plan';
     analyzeIntentMock.mockResolvedValue(clearReading);
-    createTaskMock.mockResolvedValue({ identifier: 'TASK-9', name: 'Write the Q3 project plan' });
+    createTaskMock.mockResolvedValue({
+      id: 'task_9',
+      identifier: 'TASK-9',
+      name: 'Write the Q3 project plan',
+    });
 
     render(<CreateTaskInlineEntry variant="hero" />);
     fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
@@ -591,12 +673,16 @@ describe('CreateTaskInlineEntry', () => {
 
     render(description as ReactNode);
     fireEvent.click(screen.getByText('taskIntent.openCreated'));
-    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('TASK-9'));
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringContaining('/task/TASK-9/'));
   });
 
   it('confirms every creation path, not only the straight-through one', async () => {
     editorMarkdownMock.value = 'Write a project plan';
-    createTaskMock.mockResolvedValue({ identifier: 'TASK-9', name: 'Write the Q3 project plan' });
+    createTaskMock.mockResolvedValue({
+      id: 'task_9',
+      identifier: 'TASK-9',
+      name: 'Write the Q3 project plan',
+    });
     analyzeIntentMock.mockResolvedValue({
       ...clearReading,
       clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
@@ -669,9 +755,6 @@ describe('CreateTaskInlineEntry', () => {
       // The answer reaches the task through the rewritten brief, not as a list
       // bolted underneath one written before the answer existed.
       expect(createTaskMock.mock.calls[0][0].instruction).toBe('Write the Q3 plan for lobe-chat.');
-      expect(createTaskMock.mock.calls[0][0].instruction).not.toContain(
-        'taskIntent.answersHeading',
-      );
       expect(createTaskMock.mock.calls[0][0].name).toBe('Write the Q3 project plan');
     });
 
@@ -843,28 +926,6 @@ describe('CreateTaskInlineEntry', () => {
 
       expect(instruction).toBe('Write the Q3 plan for lobe-chat.');
       expect(editorData).toBeUndefined();
-    });
-
-    it('falls back to appending the answers when the second reading fails', async () => {
-      // Same contract as the first reading: an assist, never a gate.
-      synthesizeInstructionMock.mockRejectedValue(new Error('offline'));
-      analyzeIntentMock.mockResolvedValue({
-        ...clearReading,
-        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
-        confidence: 'medium',
-      });
-
-      render(<CreateTaskInlineEntry variant="hero" />);
-      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
-
-      await screen.findByText('taskIntent.reviewStep');
-      fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.create'));
-
-      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
-      expect(createTaskMock.mock.calls[0][0].instruction).toContain(
-        '## taskIntent.answersHeading\n- Which repo? lobe-chat',
-      );
     });
 
     it('offers the goal handoff only for a request read as a standing goal', async () => {

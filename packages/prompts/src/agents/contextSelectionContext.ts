@@ -1,6 +1,6 @@
 import type { ContextSelection } from '@lobechat/types';
 
-import { escapeXmlAttr } from '../prompts/search/xmlEscape';
+import { escapeXmlAttr, escapeXmlContent } from '../prompts/search/xmlEscape';
 
 const formatLineRange = (selection: ContextSelection): string => {
   const range = selection.lineRange;
@@ -27,7 +27,14 @@ const formatSelectionAttributes = (selection: ContextSelection): string => {
 };
 
 const getSelectionBody = (selection: ContextSelection): string => {
-  if (selection.source === 'page') return selection.xml || selection.content;
+  if (selection.source === 'page' && selection.xml) {
+    if (!selection.content || selection.content === selection.xml) return selection.xml;
+
+    return `<selected_text>${escapeXmlContent(selection.content)}</selected_text>
+<containing_blocks>
+${selection.xml}
+</containing_blocks>`;
+  }
 
   return selection.content;
 };

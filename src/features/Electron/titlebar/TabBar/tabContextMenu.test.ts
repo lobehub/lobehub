@@ -43,13 +43,10 @@ describe('tab context menu ownership', () => {
 });
 
 describe('close entries', () => {
-  it('lets a lone tab close itself while the bulk closes have nothing to reach', () => {
-    const items = build(0, 1);
+  it('leaves the whole close group out for a lone tab', () => {
+    const keys = build(0, 1).map((item) => (item && 'key' in item ? item.key : item?.type));
 
-    expect(isDisabled(items, 'closeCurrentTab')).toBe(false);
-    expect(isDisabled(items, 'closeOtherTabs')).toBe(true);
-    expect(isDisabled(items, 'closeLeftTabs')).toBe(true);
-    expect(isDisabled(items, 'closeRightTabs')).toBe(true);
+    expect(keys).toEqual(['togglePin', 'openInSplitView']);
   });
 });
 

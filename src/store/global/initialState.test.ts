@@ -40,6 +40,31 @@ describe('createInitialSystemStatus', () => {
     expect(status.workingSidebarWidth).toBe(480);
   });
 
+  /** @example A cold reload seeded the unfiltered topic page before the async status restore. */
+  it('restores the per-agent only-mine topic filter before the route loader reads it', () => {
+    seed({ topicOnlyMineByAgent: { agt_a: true, agt_b: false } });
+
+    expect(createInitialSystemStatus().topicOnlyMineByAgent).toEqual({ agt_a: true, agt_b: false });
+  });
+
+  it('drops a malformed persisted only-mine filter', () => {
+    seed({ topicOnlyMineByAgent: { agt_a: 'yes', agt_b: true } });
+    expect(createInitialSystemStatus().topicOnlyMineByAgent).toEqual({ agt_b: true });
+
+    seed({ topicOnlyMineByAgent: ['agt_a'] });
+    expect(createInitialSystemStatus().topicOnlyMineByAgent).toBeUndefined();
+  });
+
+  it('opens Home in one column for a browser without a stored rail choice', () => {
+    expect(createInitialSystemStatus().showHomeRail).toBe(false);
+  });
+
+  it('keeps the rail open for browsers that already stored it', () => {
+    seed({ showHomeRail: true });
+
+    expect(createInitialSystemStatus().showHomeRail).toBe(true);
+  });
+
   it('falls back to defaults when nothing is persisted', () => {
     const status = createInitialSystemStatus();
 

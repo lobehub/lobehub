@@ -116,15 +116,13 @@ export class MessageToolMutations extends MessageScope {
               : mergedMetadata;
           }
 
-          if (Object.keys(messageUpdateData).length > 0) {
-            const [updated] = await trx
-              .update(messages)
-              .set(messageUpdateData)
-              .where(and(eq(messages.id, id), this.ownership()))
-              .returning({ id: messages.id });
+          const [updated] = await trx
+            .update(messages)
+            .set(messageUpdateData)
+            .where(and(eq(messages.id, id), this.ownership()))
+            .returning({ id: messages.id });
 
-            matchedRow = !!updated;
-          }
+          matchedRow = !!updated;
         }
 
         // Update messagePlugins table (pluginState, pluginError)

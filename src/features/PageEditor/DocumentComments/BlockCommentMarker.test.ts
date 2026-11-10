@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blockAt, inMarkerBridge, lineAt } from './BlockCommentMarker';
+import { blockAt, inMarkerBridge, lineAt, scrollsUnderMarker } from './BlockCommentMarker';
 
 const rect = (partial: Partial<DOMRect>): DOMRect =>
   ({ bottom: 0, left: 0, right: 0, top: 0, ...partial }) as DOMRect;
@@ -101,5 +101,31 @@ describe('blockAt', () => {
   it('returns null outside the body', () => {
     expect(blockAt(body, document.body)).toBeNull();
     expect(blockAt(body, null)).toBeNull();
+  });
+});
+
+describe('scrollsUnderMarker', () => {
+  /** A table block as the editor renders it: block > scroll wrapper > table. */
+  const mountTable = (scrollWidth: number, clientWidth: number) => {
+    const block = document.createElement('div');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'lobe-editor-table-scroll-wrapper';
+    wrapper.append(document.createElement('table'));
+    block.append(wrapper);
+    Object.defineProperty(wrapper, 'scrollWidth', { value: scrollWidth });
+    Object.defineProperty(wrapper, 'clientWidth', { value: clientWidth });
+    return block;
+  };
+
+  it('flags a table wider than the column, which scrolls under the marker', () => {
+    expect(scrollsUnderMarker(mountTable(900, 600))).toBe(true);
+  });
+
+  it('keeps the marker for a table that fits the column', () => {
+    expect(scrollsUnderMarker(mountTable(600, 600))).toBe(false);
+  });
+
+  it('keeps the marker for a block without a table', () => {
+    expect(scrollsUnderMarker(document.createElement('p'))).toBe(false);
   });
 });

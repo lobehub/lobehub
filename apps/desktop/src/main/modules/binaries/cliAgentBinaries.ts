@@ -88,6 +88,14 @@ export const codexBinary: BinarySpec = {
   priority: 2,
 };
 
+/** GitHub Copilot CLI @see https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli */
+export const copilotBinary: BinarySpec = {
+  description: 'GitHub Copilot - GitHub official agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('copilot', 'copilot'),
+  name: 'copilot',
+  priority: 3,
+};
+
 /** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
 export const cursorBinary: BinarySpec = {
   description: 'Cursor - Cursor agentic coding CLI',
@@ -221,6 +229,7 @@ export const heterogeneousCliAgentBinaries = {
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
+  'copilot': copilotBinary,
   'cursor': cursorBinary,
   'droid': droidBinary,
   'devin': devinBinary,

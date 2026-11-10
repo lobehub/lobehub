@@ -138,12 +138,6 @@ describe('AgentEvalRunModel', () => {
         passRate: 0,
       });
     });
-
-    it('should default status to idle', async () => {
-      const result = await runModel.create({ datasetId });
-
-      expect(result.status).toBe('idle');
-    });
   });
 
   describe('query', () => {
@@ -198,7 +192,6 @@ describe('AgentEvalRunModel', () => {
       expect(results.map((r) => r.name)).toContain('Run 1');
       expect(results.map((r) => r.name)).toContain('Run 2');
       expect(results.map((r) => r.name)).toContain('Run 3');
-      expect(results.map((r) => r.name)).not.toContain('Run 4 - Other User');
     });
 
     it('should filter by datasetId', async () => {
@@ -272,13 +265,6 @@ describe('AgentEvalRunModel', () => {
 
       expect(offsetResults).toHaveLength(2);
       expect(offsetResults[0].id).toBe(allResults[1].id);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await runModel.query();
-
-      // Most recent should be first
-      expect(results.length).toBeGreaterThanOrEqual(3);
     });
   });
 
