@@ -32,6 +32,7 @@ vi.mock('@/services/goal', () => ({
   goalService: {
     advance: vi.fn(),
     archive: vi.fn(),
+    close: vi.fn(),
     delete: vi.fn(),
     getGraph: vi.fn(),
     list: vi.fn(),
@@ -440,6 +441,29 @@ describe('GoalAction', () => {
     expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it('reports a close that landed as done even when the refresh after it fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(goalService.close).mockResolvedValueOnce(undefined as never);
+    vi.mocked(mutate).mockRejectedValueOnce(new Error('offline'));
+
+    await expect(useGoalStore.getState().closeGoal('goal-1', 'achieved')).resolves.toBeUndefined();
+
+    expect(goalService.close).toHaveBeenCalledWith('goal-1', 'achieved');
+    expect(mutate).toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  // The server pauses the goal before it refuses, so the graph is re-read anyway.
+  it('still refreshes the goal when the server refuses to close it', async () => {
+    const refused = new Error('not closed');
+    vi.mocked(goalService.close).mockRejectedValueOnce(refused);
+
+    await expect(useGoalStore.getState().closeGoal('goal-1', 'achieved')).rejects.toBe(refused);
+
+    expect(mutate).toHaveBeenCalled();
   });
 
   it('relays the provider the goal actually plans on when advancing it', async () => {

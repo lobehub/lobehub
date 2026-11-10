@@ -343,6 +343,26 @@ describe('GoalService', () => {
       expect(goal?.config?.managerState?.consumed).toBe(true);
     });
 
+    // A straggling dispatch can record its run between the first lookup and the
+    // locked re-check; that run is interrupted, not settled as never started.
+    it('interrupts a run recorded while the stranded turn was being settled', async () => {
+      const { goalId, service } = await strandedGoal(
+        'late-run',
+        new Date(Date.now() - 2 * 60 * 60_000),
+      );
+      vi.spyOn(AgentOperationModel.prototype, 'findByTopicSourceMessage')
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce({ id: 'op-late', status: 'running' } as never);
+      const interrupt = vi
+        .spyOn(AiAgentService.prototype, 'interruptTask')
+        .mockResolvedValue({ success: true } as never);
+
+      expect((await service.close(goalId, 'achieved')).status).toBe('achieved');
+      expect(interrupt).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-late' }));
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
+
     it('deletes a goal whose timed-out main Agent turn never wrote a run', async () => {
       const { goalId, service } = await strandedGoal(
         'stranded-delete',

@@ -159,10 +159,13 @@ export class GoalManagerService {
   stop = async (graph: GoalGraphSnapshot, options?: { ownerConfirmsExit?: boolean }) => {
     const state = graph.goal.config?.managerState;
     if (!state || state.consumed) return;
-    const operations = new AgentOperationModel(this.db, this.userId, this.workspaceId);
-    const op = state.operationId
-      ? await operations.findById(state.operationId)
-      : await operations.findByTopicSourceMessage(state.topicId, `msg_goal_manager_${state.token}`);
+    const findRun = (db: LobeChatDatabase, receipt: GoalManagerState) => {
+      const operations = new AgentOperationModel(db, this.userId, this.workspaceId);
+      return receipt.operationId
+        ? operations.findById(receipt.operationId)
+        : operations.findByTopicSourceMessage(receipt.topicId, `msg_goal_manager_${receipt.token}`);
+    };
+    let op = await findRun(this.db, state);
     if (
       !op &&
       options?.ownerConfirmsExit &&
@@ -170,19 +173,26 @@ export class GoalManagerService {
       !state.adopted &&
       Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS
     ) {
-      await this.db.transaction(async (db) => {
+      // Decide again under the goal row lock the dispatch records its
+      // operation id under: a straggling `execAgent` may have written its run
+      // since the read above, and that run must be interrupted, not settled.
+      const settled = await this.db.transaction(async (db) => {
         const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(
           graph.goal.id,
         );
         const current = fresh?.config?.managerState;
-        if (current?.token !== state.token || current.consumed) return;
+        if (current?.token !== state.token || current.consumed) return { done: true as const };
+        const run = await findRun(db, current);
+        if (run || current.operationId || current.adopted) return { done: false as const, run };
         await saveManagerState(db, graph.goal.id, { ...current, consumed: true });
         console.warn('[goal:manager] owner settled a main Agent turn that never wrote a run', {
           goalId: graph.goal.id,
           token: state.token,
         });
+        return { done: true as const };
       });
-      return;
+      if (settled.done) return;
+      op = settled.run;
     }
     if (!op)
       throw new TRPCError({
