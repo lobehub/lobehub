@@ -108,6 +108,29 @@ describe('useRules', () => {
     await waitFor(() => expect(result.current.isConfirmed).toBe(true));
   });
 
+  it('keeps a restored empty sheet unsettled, so the page shows loading and then the error', async () => {
+    services.listRules.mockResolvedValueOnce({ backlogRounds: 0, groups: [] });
+    const { useRules } = await boot();
+    const warm = renderHook(() => useRules(), { wrapper });
+    await waitFor(() => expect(warm.result.current.isConfirmed).toBe(true));
+    warm.unmount();
+
+    let fail!: (error: unknown) => void;
+    services.listRules.mockImplementation(() => new Promise((_, reject) => (fail = reject)));
+    const { useRules: reloaded } = await boot();
+    const { result } = renderHook(() => reloaded(), { wrapper });
+
+    await waitFor(() => expect(result.current.data?.groups).toEqual([]));
+    expect(result.current.settled).toBeUndefined();
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => fail(new Error('offline')));
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // Nothing settled + an error: the boundary renders the error with Retry, not an empty sheet.
+    expect(result.current.settled).toBeUndefined();
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it('keeps the restored sheet when the background refresh fails', async () => {
     services.listRules.mockResolvedValueOnce(sheet(['Kept rule']));
     const { useRules } = await boot();

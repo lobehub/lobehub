@@ -57,7 +57,7 @@ import { useJudgeDirections } from './useJudgeDirections';
 const MemoryRules = () => {
   const { t } = useTranslation('memory');
   const { enabled, ready } = useSelfLearningSurface();
-  const { data, error, isConfirmed, isLoading } = useRules(enabled);
+  const { data, error, isConfirmed, isLoading, settled } = useRules(enabled);
   const [selectedId, setSelectedId] = useState<string>();
   const [titleEditing, setTitleEditing] = useState(false);
   const [mergeFrom, setMergeFrom] = useState<string>();
@@ -419,7 +419,7 @@ const MemoryRules = () => {
             )}
 
             <AsyncBoundary
-              data={data}
+              data={settled}
               error={error}
               errorVariant={'page'}
               isEmpty={isEmpty}

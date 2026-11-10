@@ -9,12 +9,16 @@ export const useRules = (enabled = true) => {
   const { error, revalidate } = expertiseActions.useFetchRules(enabled);
   const data = useExpertiseStore(expertiseSelectors.rules);
   const isConfirmed = useExpertiseStore(expertiseSelectors.isRulesConfirmed);
+  // What the page may treat as settled: a restored sheet with no groups is last session's copy,
+  // not "you have no rules", so it stays loading (or shows the error) until the server answers.
+  const settled = isConfirmed || !!data?.groups.length ? data : undefined;
   return {
     data,
     error,
     isConfirmed,
-    isLoading: enabled && data === undefined && !error,
+    isLoading: enabled && settled === undefined && !error,
     revalidate,
+    settled,
   };
 };
 
