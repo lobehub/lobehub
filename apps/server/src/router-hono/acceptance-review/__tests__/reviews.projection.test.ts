@@ -5,6 +5,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import {
   acceptances,
   files,
+  tasks,
   verifyCheckResults,
   verifyEvidence,
   verifyRuns,
@@ -338,15 +339,27 @@ describe('a submitted review with a delivery', () => {
     expect(discussion.items).toEqual([]);
   });
 
-  it('does not report a send-back as done when no Agent could be started', async () => {
+  it('refuses to send back a round the Agent is still working on', async () => {
+    const taskId = randomUUID();
+    await serverDB.insert(tasks).values({
+      createdByUserId: memberId,
+      id: taskId,
+      identifier: 'T-REVIEW',
+      instruction: 'review round',
+      seq: 1,
+      status: 'running',
+    });
+    await new AcceptanceReviewModel(serverDB).linkDelivery(reviewId, { taskId });
     await serverDB
       .update(acceptances)
-      .set({ projectId: null })
+      .set({ status: 'verifying' })
       .where(eq(acceptances.id, deliveryId));
+
     const response = await siteCall(memberId, `/reviews/${reviewId}/send-back`, {
       json: { note: 'Button still grey' },
       method: 'POST',
     });
+
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: 'INVALID_STATE' } });
   });

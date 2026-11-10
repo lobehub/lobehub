@@ -12,6 +12,8 @@ import { createTaskExecutionRouter } from '@/server/routers/lambda/task/executio
 import { AcceptanceService } from '@/server/services/verify';
 import { createEvidenceFileResolver } from '@/server/services/verify/evidenceFiles';
 
+import { projectReview } from './projection';
+
 export interface ReviewActor {
   userId: string;
   workspaceId: string | null;
@@ -144,4 +146,63 @@ export const submitReviewRound = async (
       .catch((revertError) => console.error('[acceptance-review] revert failed', revertError));
     throw error;
   }
+};
+
+const runTask = async (actor: ReviewActor, taskId: string, prompt?: string) => {
+  const ctx = { userId: actor.userId, workspaceId: actor.workspaceId } as never;
+  const result = await createTaskExecutionRouter(() => Promise.resolve())
+    .createCaller(ctx)
+    .run({ id: taskId, prompt });
+  if (!result.operationId) throw new Error('The task run did not start');
+  return { operationId: result.operationId, taskId };
+};
+
+export const buildSendBackPrompt = (
+  marks: Pick<AcceptanceReviewMarkRow, 'content' | 'id' | 'seq'>[],
+  note?: string,
+) =>
+  [
+    `The reviewer sent this review round back. Rework only these ${marks.length} marks; the other marks are accepted and must stay as they are.`,
+    note ? `Reviewer's note:\n${note}` : '',
+    `Marks to rework (JSON):\n${JSON.stringify(
+      marks.map((mark) => ({ checkItemId: mark.id, comment: mark.content, seq: mark.seq })),
+      null,
+      2,
+    )}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+export const sendReviewRoundBack = async (
+  db: LobeChatDatabase,
+  actor: ReviewActor,
+  reviewId: string,
+  input: { note?: string },
+) => {
+  const model = new AcceptanceReviewModel(db);
+  const review = await model.findById(reviewId);
+  if (!review || review.status !== 'submitted' || !review.taskId)
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Review round not found' });
+  const marks = await model.listMarks(reviewId);
+  const projection = await projectReview(db, review, marks);
+  if (projection.phase !== 'delivered')
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'The Agent has not delivered this round yet',
+    });
+
+  const open = marks.filter((mark) => projection.results.get(mark.id)?.human !== 'pass');
+  const flagged = open.filter((mark) => {
+    const result = projection.results.get(mark.id);
+    return result?.human === 'not_fixed' || result?.agent?.verdict !== 'pass';
+  });
+  const rework = flagged.length ? flagged : open;
+  if (!rework.length)
+    throw new TRPCError({ code: 'CONFLICT', message: 'Every mark in this round has passed' });
+
+  return runTask(
+    { userId: actor.userId, workspaceId: review.workspaceId },
+    review.taskId,
+    buildSendBackPrompt(rework, input.note),
+  );
 };

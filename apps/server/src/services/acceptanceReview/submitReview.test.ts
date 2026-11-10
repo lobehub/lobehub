@@ -9,6 +9,7 @@ import {
   agents,
   projects,
   tasks,
+  taskTopics,
   topics,
   verifyCheckResults,
   verifyRuns,
@@ -24,7 +25,7 @@ import {
 } from '@/server/routers/lambda/__tests__/integration/setup';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify/planInstantiation';
 
-import { submitReviewRound } from './submitReview';
+import { sendReviewRoundBack, submitReviewRound } from './submitReview';
 
 let serverDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: () => serverDB }));
@@ -236,5 +237,79 @@ describe('submitReviewRound', () => {
       .where(eq(verifyRuns.operationId, retryOperationId));
     expect(retry.plan?.map((item) => item.id)).toEqual([rejected.id]);
     expect(retry.acceptanceId).toBe(deliveryAcceptanceId);
+  });
+
+  it('sends a delivered round back by re-running the same Task on the marks still not fixed', async () => {
+    const { deliveryAcceptanceId, operationId, taskId } = await submit();
+    await instantiateVerifyPlanOnStart(serverDB, userId, { operationId, taskId });
+    const [first] = await serverDB
+      .select()
+      .from(verifyRuns)
+      .where(eq(verifyRuns.operationId, operationId));
+    const [accepted, rejected] = await new AcceptanceReviewModel(serverDB).listMarks(reviewId);
+    await serverDB.insert(verifyCheckResults).values([
+      {
+        checkItemId: accepted.id,
+        status: 'passed' as const,
+        userDecision: 'accepted' as const,
+        userId,
+        verdict: 'passed' as const,
+        verifierType: 'agent' as const,
+        verifyRunId: first.id,
+      },
+      {
+        checkItemId: rejected.id,
+        status: 'failed' as const,
+        userDecision: 'rejected' as const,
+        userId,
+        verdict: 'failed' as const,
+        verifierType: 'agent' as const,
+        verifyRunId: first.id,
+      },
+    ]);
+    await serverDB.update(verifyRuns).set({ status: 'failed' }).where(eq(verifyRuns.id, first.id));
+    await serverDB
+      .update(acceptances)
+      .set({ status: 'delivered' })
+      .where(eq(acceptances.id, deliveryAcceptanceId));
+    await serverDB.update(tasks).set({ status: 'completed' }).where(eq(tasks.id, taskId));
+    await serverDB
+      .update(taskTopics)
+      .set({ status: 'completed' })
+      .where(eq(taskTopics.taskId, taskId));
+
+    const result = await sendReviewRoundBack(serverDB, { userId, workspaceId: null }, reviewId, {
+      note: 'Still looks disabled on hover',
+    });
+
+    expect(result.taskId).toBe(taskId);
+    expect(await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId))).toHaveLength(
+      1,
+    );
+    const handoff = JSON.stringify(execAgent.mock.calls.at(-1)?.[0]);
+    expect(handoff).toContain('Still looks disabled on hover');
+    const rework = handoff.slice(handoff.indexOf('Marks to rework'));
+    const reworkList = rework.slice(0, rework.indexOf(']'));
+    expect(reworkList).toContain(rejected.id);
+    expect(reworkList).not.toContain(accepted.id);
+
+    await instantiateVerifyPlanOnStart(serverDB, userId, {
+      operationId: result.operationId,
+      taskId,
+    });
+    const [retry] = await serverDB
+      .select()
+      .from(verifyRuns)
+      .where(eq(verifyRuns.operationId, result.operationId));
+    expect(retry.plan?.map((item) => item.id)).toEqual([rejected.id]);
+    expect(retry.acceptanceId).toBe(deliveryAcceptanceId);
+  });
+
+  it('refuses to send back a round the Agent has not delivered yet', async () => {
+    await submit();
+
+    await expect(
+      sendReviewRoundBack(serverDB, { userId, workspaceId: null }, reviewId, {}),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 });

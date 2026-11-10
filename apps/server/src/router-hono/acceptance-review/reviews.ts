@@ -15,7 +15,10 @@ import { ProjectModel } from '@/database/models/project';
 import type { AcceptanceReviewRow } from '@/database/schemas';
 import { acceptanceRouter } from '@/server/routers/lambda/acceptance';
 import { projectReview } from '@/server/services/acceptanceReview/projection';
-import { submitReviewRound } from '@/server/services/acceptanceReview/submitReview';
+import {
+  sendReviewRoundBack,
+  submitReviewRound,
+} from '@/server/services/acceptanceReview/submitReview';
 import { FileService } from '@/server/services/file';
 
 import type { ReviewEnv } from './auth';
@@ -338,20 +341,15 @@ export const sendReviewBack = async (c: ReviewContext) => {
   const body = await parseBody(c, acceptanceReviewDecisionSchema.pick({ note: true }));
   if (body.error) return body.error;
   const found = await submittedReview(c);
-  if (!found || found.row.status !== 'submitted' || !found.row.deliveryAcceptanceId)
-    return notFound(c);
-  const rejected = await acceptanceCaller(c).reject({
-    comment: body.data.note,
-    id: found.row.deliveryAcceptanceId,
-  });
-  if (!rejected.repairDispatch.dispatched)
-    return reviewError(
-      c,
-      409,
-      'INVALID_STATE',
-      `The Agent could not be started (${rejected.repairDispatch.reason})`,
-    );
-  return c.json(await describeReview(c, found.scope, found.row, { withMarks: true }));
+  if (!found || found.row.status !== 'submitted') return notFound(c);
+  await sendReviewRoundBack(
+    c.get('db'),
+    { userId: c.get('userId'), workspaceId: found.row.workspaceId },
+    found.row.id,
+    { note: body.data.note },
+  );
+  const row = await reviews(c).findById(found.row.id);
+  return c.json(await describeReview(c, found.scope, row ?? found.row, { withMarks: true }));
 };
 
 const replyMark = async (c: ReviewContext) => {
