@@ -246,7 +246,7 @@ describe('spawnHeteroAgentRun', () => {
   });
 
   // The value arrives from another machine and lands in a process environment.
-  it('drops an entrypoint that is not a plain name', async () => {
+  it('clears the entrypoint instead of passing on one that is not a plain name', async () => {
     vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined);
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
@@ -260,7 +260,39 @@ describe('spawnHeteroAgentRun', () => {
     await ackPromise;
 
     const [, , opts] = spawnMock.mock.calls[0];
-    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBe('');
+  });
+
+  // An empty value reaches `lh hetero exec`, which removes the variable at spawn.
+  it('clears an inherited entrypoint when the agent turned the setting off', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'inherited');
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'claude-code',
+      claudeCodeEntrypoint: '',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBe('');
+    expect(opts.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBeUndefined();
+  });
+
+  it('leaves an inherited entrypoint alone when the agent never set one', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'inherited');
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, agentType: 'claude-code' });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBe('inherited');
   });
 
   it('appends --resume when resuming a session', () => {

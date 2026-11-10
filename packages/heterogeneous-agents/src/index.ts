@@ -17,6 +17,7 @@ export {
   CLAUDE_CODE_ENTRYPOINT_ENV,
   DEFAULT_CLAUDE_CODE_ENTRYPOINT,
   normalizeClaudeCodeEntrypoint,
+  resolveDispatchedClaudeCodeEntrypoint,
 } from './claudeCodeEntrypoint';
 export type {
   HeterogeneousAgentCliError,

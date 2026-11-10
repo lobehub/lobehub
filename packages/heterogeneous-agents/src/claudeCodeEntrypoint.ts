@@ -15,13 +15,28 @@ export const normalizeClaudeCodeEntrypoint = (value: unknown): string | undefine
 };
 
 /**
- * Spawn env for a Claude Code run that reports its own entrypoint. Headless
- * Claude Code reports `sdk-cli`; under any other entrypoint it spends an extra
- * model request naming a terminal title nothing reads, so that is turned off.
+ * What a dispatched run carries for the agent's setting: the name, an empty
+ * string when the agent turned it off (so the receiving host clears one it
+ * inherited), or `undefined` when the agent never set it.
+ */
+export const resolveDispatchedClaudeCodeEntrypoint = (
+  agentEnv: Readonly<Record<string, string>> | undefined,
+): string | undefined => {
+  const value = agentEnv?.[CLAUDE_CODE_ENTRYPOINT_ENV];
+  return value === undefined ? undefined : (normalizeClaudeCodeEntrypoint(value) ?? '');
+};
+
+/**
+ * Env a host adds for a dispatched Claude Code run. A name is reported as the
+ * entrypoint; headless Claude Code reports `sdk-cli`, and under any other
+ * entrypoint it spends an extra model request naming a terminal title nothing
+ * reads, so that is turned off. Any other string clears the variable: it is
+ * set empty here and removed where the CLI is spawned.
  */
 export const buildClaudeCodeEntrypointEnv = (value: unknown): Record<string, string> => {
+  if (typeof value !== 'string') return {};
   const entrypoint = normalizeClaudeCodeEntrypoint(value);
-  if (!entrypoint) return {};
+  if (!entrypoint) return { [CLAUDE_CODE_ENTRYPOINT_ENV]: '' };
   return { CLAUDE_CODE_DISABLE_TERMINAL_TITLE: '1', [CLAUDE_CODE_ENTRYPOINT_ENV]: entrypoint };
 };
 

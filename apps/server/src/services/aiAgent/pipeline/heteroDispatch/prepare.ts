@@ -2,10 +2,9 @@ import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-
 import { LOADING_FLAT } from '@lobechat/const';
 import {
   appendAttachedFilesToPrompt,
-  CLAUDE_CODE_ENTRYPOINT_ENV,
   collectHeteroAttachedFiles,
   isLocalHeterogeneousType,
-  normalizeClaudeCodeEntrypoint,
+  resolveDispatchedClaudeCodeEntrypoint,
 } from '@lobechat/heterogeneous-agents';
 import {
   CHANNEL_INSTRUCTIONS,
@@ -286,7 +285,7 @@ export const prepareHeteroRun = async (
     // variables on a member's device.
     claudeCodeEntrypoint:
       heteroType === 'claude-code' && heterogeneousProvider?.type === heteroType
-        ? normalizeClaudeCodeEntrypoint(heterogeneousProvider.env?.[CLAUDE_CODE_ENTRYPOINT_ENV])
+        ? resolveDispatchedClaudeCodeEntrypoint(heterogeneousProvider.env)
         : undefined,
     githubToken,
     imageList: heteroImageList,

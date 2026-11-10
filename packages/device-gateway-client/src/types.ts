@@ -273,7 +273,9 @@ export interface AgentRunRequestMessage {
   /**
    * Entrypoint name the agent asked Claude Code to report instead of its
    * headless default. The device validates it and sets it on the spawned CLI.
-   * Optional — omitted unless the agent turned it on; an older device ignores it.
+   * An empty string means the agent turned the setting off, so the device
+   * clears an entrypoint it inherited. Optional — omitted when the agent never
+   * set it; an older device ignores it.
    */
   claudeCodeEntrypoint?: string;
   cwd?: string;

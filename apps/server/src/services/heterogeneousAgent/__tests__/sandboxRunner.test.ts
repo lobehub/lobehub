@@ -203,4 +203,20 @@ describe('spawnHeteroSandbox', () => {
 
     expect(mockCallTool.mock.calls[0][1].command).not.toContain('CLAUDE_CODE_ENTRYPOINT');
   });
+
+  it('clears the entrypoint when the agent turned the setting off', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      claudeCodeEntrypoint: '',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(mockCallTool.mock.calls[0][1].command).toContain("CLAUDE_CODE_ENTRYPOINT=''");
+  });
 });
