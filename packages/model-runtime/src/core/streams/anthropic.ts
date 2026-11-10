@@ -5,6 +5,11 @@ import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
 import type { ChatStreamCallbacks } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { convertAnthropicUsage } from '../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from './events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -14,9 +19,7 @@ import type {
 } from './protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
   createFirstErrorHandleTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
 } from './protocol';
@@ -344,7 +347,8 @@ export const AnthropicStream = (
        * connection mid-response without either; without this flag the truncated output was
        * treated as a normal completion, so half-written tool arguments got executed.
        */
-      createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
+      createModelEventTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
     )
-    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }));
+    .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+    .pipeThrough(createSSEEncoder());
 };

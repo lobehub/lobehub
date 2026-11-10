@@ -925,6 +925,19 @@ describe('ModelRuntime', () => {
         );
       });
 
+      it('fires onEmbeddingsFinal when the provider reports no usage', async () => {
+        const onEmbeddingsFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onEmbeddingsFinal });
+        mockRuntimeAI.embeddings.mockResolvedValue([[0.1]]);
+
+        await runtime.embeddings({ input: 'hi', model: 'emb' });
+
+        expect(onEmbeddingsFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), routeAttempt: undefined, usage: undefined },
+          expect.anything(),
+        );
+      });
+
       it('passes the route attempt to onTranscribeFinal', async () => {
         const onTranscribeFinal = vi.fn();
         const { runtime, mockRuntimeAI } = createMockRuntime({ onTranscribeFinal });
