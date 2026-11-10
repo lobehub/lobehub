@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createReadableStream } from '../utils';
-import { OpenAIResponsesStream } from './responsesStream';
+import { createReadableStream } from '../../streams/utils';
+import { OpenAIResponsesStream } from './stream';
 
 describe('Responses custom tool streaming', () => {
   it('keeps interleaved custom/function deltas attached to their own calls', async () => {

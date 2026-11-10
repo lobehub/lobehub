@@ -4,27 +4,27 @@ import type { Stream } from 'openai/streaming';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
-import { convertOpenAIResponseUsage } from '../../usageConverters';
 import {
   createEventCallbacksTransformer,
   createModelEventTransformer,
   createSSEEncoder,
-} from '../events';
+} from '../../streams/events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
   StreamToolCallChunkData,
-} from '../protocol';
+} from '../../streams/protocol';
 import {
   convertIterableToStream,
   createFirstErrorHandleTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
-} from '../protocol';
-import { recordProviderReportedCost } from '../providerReportedCost';
-import type { OpenAIStreamOptions } from './openai';
+} from '../../streams/protocol';
+import { recordProviderReportedCost } from '../../streams/providerReportedCost';
+import { convertOpenAIResponseUsage } from '../../usageConverters';
+import type { OpenAIStreamOptions } from '../openaiChatCompletions/stream';
 
 const toResponsesError = (error: { code?: string | null; message?: string | null }) =>
   ({

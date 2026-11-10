@@ -938,6 +938,20 @@ describe('ModelRuntime', () => {
         );
       });
 
+      it('returns embeddings when onEmbeddingsFinal throws', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onEmbeddingsFinal = vi.fn().mockRejectedValue(new Error('billing down'));
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onEmbeddingsFinal });
+        mockRuntimeAI.embeddings.mockResolvedValue([[0.1]]);
+
+        await expect(runtime.embeddings({ input: 'hi', model: 'emb' })).resolves.toEqual([[0.1]]);
+        expect(consoleError).toHaveBeenCalledWith(
+          '[ModelRuntime] onEmbeddingsFinal hook error:',
+          expect.any(Error),
+        );
+        consoleError.mockRestore();
+      });
+
       it('passes the route attempt to onTranscribeFinal', async () => {
         const onTranscribeFinal = vi.fn();
         const { runtime, mockRuntimeAI } = createMockRuntime({ onTranscribeFinal });
