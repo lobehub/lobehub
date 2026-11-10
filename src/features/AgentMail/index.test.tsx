@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
   deleteMailDrafts: vi.fn(),
+  emptyMailTrash: vi.fn(),
   getMailConversation: vi.fn(),
   getMailAccountCounts: vi.fn(),
   list: vi.fn(),
@@ -492,6 +493,25 @@ describe('AgentMail list', () => {
       actions: [{ label: 'identity.mailbox.retry' }],
       title: 'identity.mailbox.failed.markRead',
     });
+  });
+
+  it('closes an open trashed mail once the trash is emptied', async () => {
+    service.listMail.mockResolvedValue([row('msg_t', 'Trashed one', { trashedAt: new Date() })]);
+    service.emptyMailTrash.mockResolvedValue({ count: 1, failed: 0, hasMore: false });
+    service.getMailConversation.mockImplementation(async ({ id }: { id: string }) => [mail(id)]);
+    page('/agent/agt_1/mail/msg_t?folder=trash');
+
+    expect(await screen.findByText('Full body of msg_t')).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'identity.mailbox.emptyTrash.confirm' }),
+    );
+    const [{ content }] = ui.createModal.mock.calls.at(-1) as unknown as [
+      { content: React.ReactElement<{ onConfirm: () => void }> },
+    ];
+    content.props.onConfirm();
+
+    await waitFor(() => expect(screen.queryByText('Full body of msg_t')).not.toBeInTheDocument());
+    expect(service.emptyMailTrash).toHaveBeenCalledWith('acc_a');
   });
 
   it('lists the view named in the URL', async () => {

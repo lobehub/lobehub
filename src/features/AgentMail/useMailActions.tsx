@@ -427,6 +427,9 @@ export const useMailActions = ({
         if (failed > 0) {
           toast.error({ title: t('identity.mailbox.emptyTrash.partial', { count, failed }) });
         } else {
+          // Everything in the trash is gone, so an open trashed mail closes with it.
+          // After a partial failure the open one may be a survivor, so it stays.
+          onRemoved(items.map((item) => item.id));
           toast.success({ title: t('identity.mailbox.emptyTrash.done') });
         }
         await refresh().catch(() => undefined);
