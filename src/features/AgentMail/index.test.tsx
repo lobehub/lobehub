@@ -238,6 +238,9 @@ describe('AgentMail', () => {
   it('switches the list, the count and the open message to the chosen mailbox', async () => {
     page('/agent/agt_1/mail/msg_a');
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    // Opening reads msg_a, and that write refreshes the counts once it lands.
+    await waitFor(() => expect(useMailWritesStore.getState().writes).toEqual([]));
+    service.getMailAccountCounts.mockClear();
 
     fireEvent.click(await screen.findByText(/menu:b@lobe.id/));
 
@@ -245,8 +248,7 @@ describe('AgentMail', () => {
     expect(screen.queryByText('preview of For A')).not.toBeInTheDocument();
     expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument();
     // One request answers every address, so switching asks for nothing new.
-    expect(service.getMailAccountCounts).toHaveBeenCalledTimes(1);
-    expect(service.getMailAccountCounts).toHaveBeenCalledWith(['acc_a', 'acc_b']);
+    expect(service.getMailAccountCounts).not.toHaveBeenCalled();
   });
 
   it('restores the mailbox of a message opened straight from its URL', async () => {
@@ -266,10 +268,41 @@ describe('AgentMail', () => {
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
     await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] }));
     expect(service.markMailRead).toHaveBeenCalledTimes(1);
-    // The list and count load after the mark, so neither shows it as unread.
-    expect(service.markMailRead.mock.invocationCallOrder[0]).toBeLessThan(
-      service.listMail.mock.invocationCallOrder[0],
+  });
+
+  it('opens the older unread mails of a conversation reached by its link', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mail('msg_old', { isUnread: true, text: 'Old unread body' }),
+      mail('msg_mid', { isUnread: false, text: 'Middle read body' }),
+      mail('msg_a', { isUnread: false }),
+    ]);
+    page('/agent/agt_1/mail/msg_a');
+
+    // Read by the pane, after it decided what opens, so the unread mail is open too.
+    expect(await screen.findByText('Old unread body')).toBeInTheDocument();
+    expect(screen.queryByText('Middle read body', { selector: 'iframe *' })).toBeNull();
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_old'] }));
+    expect(service.markMailRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the pane afresh when the same mail is opened in another view', async () => {
+    service.getMailConversation.mockImplementation(async ({ folder }: { folder?: string }) =>
+      folder === 'trash'
+        ? [mail('msg_t', { isUnread: false, text: 'Trashed body' })]
+        : [mail('msg_a', { isUnread: false })],
     );
+    page();
+    // Opened from its row, so the mailbox is pinned and the page does not reload it.
+    fireEvent.click(await screen.findByRole('button', { name: 'msg_a@x.com — For A' }));
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('tab', { name: /identity.mailbox.folder.trash/ }));
+
+    // The newest mail of the trash's set opens, instead of everything staying collapsed.
+    await waitFor(() =>
+      expect(screen.getByTestId('mail-item')).toHaveAttribute('data-mail-id', 'msg_t'),
+    );
+    expect(screen.getByTestId('mail-summary')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('opens a link saved with the inbox item id and marks the mail itself read', async () => {

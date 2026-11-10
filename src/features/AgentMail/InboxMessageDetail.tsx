@@ -84,8 +84,8 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     }, [Boolean(expanded)]);
 
     // One open is one read, so marking unread here does not bounce straight back.
-    // Opening from the list or by stepping reads here; a link opened cold is read
-    // before the page loads (`useMailbox`). A read-only viewer reads nothing.
+    // The only place opening marks mail read, from a list row, a step or a link.
+    // A read-only viewer reads nothing.
     useEffect(() => {
       if (!mails || mails.length === 0 || openedRef.current || !readArmed || disabled) return;
       openedRef.current = true;

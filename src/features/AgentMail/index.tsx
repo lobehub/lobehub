@@ -67,7 +67,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const query = searchParams.get('q')?.trim() ?? '';
   const folder = query ? undefined : mailFolderOf(view);
   const composeId = searchParams.get('compose') ?? undefined;
-  const mailbox = useMailbox(agentId, messageId, folder, disabled);
+  const mailbox = useMailbox(agentId, messageId, folder);
   const openable = useOpenableChannel();
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
@@ -213,9 +213,10 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   if (unavailable) return null;
 
-  // Waits for the URL open to settle, so its read-mark lands before the detail reads.
+  // Waits for the URL open to settle, so the pane starts from the read it seeded.
+  // Keyed by view too: Inbox and Trash hold different mails of one conversation.
   const detail = messageId && mailbox.data && (
-    <InboxMessageDetail {...detailProps} id={messageId} key={messageId} />
+    <InboxMessageDetail {...detailProps} id={messageId} key={`${folder}:${messageId}`} />
   );
 
   const mailboxCard = (
