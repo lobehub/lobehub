@@ -34,7 +34,6 @@ import {
   type UsageLogs,
   usageLogsResource,
   usageMonthKey,
-  usageMonthParam,
 } from './projection';
 import { useStatsStore } from './store';
 
@@ -182,7 +181,7 @@ export class StatsActionImpl {
     });
     this.#usageByDay = createReplicaSlice(usageByDayResource, {
       actionPrefix: 'usageByDay',
-      fetcher: (month) => usageService.findAndGroupByDay(usageMonthParam(month)),
+      fetcher: (month) => usageService.findAndGroupByDay(month),
       get,
       set,
       stateKey: 'usageByDayReplica',
@@ -190,7 +189,7 @@ export class StatsActionImpl {
     });
     this.#usageLogs = createReplicaSlice(usageLogsResource, {
       actionPrefix: 'usageLogs',
-      fetcher: (month) => usageService.findByMonth(usageMonthParam(month)),
+      fetcher: (month) => usageService.findByMonth(month),
       get,
       set,
       stateKey: 'usageLogsReplica',

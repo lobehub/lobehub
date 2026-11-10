@@ -16,10 +16,10 @@ export const TopicsRank = memo(() => {
   const [open, setOpen] = useState(false);
   const { t } = useTranslation('auth');
   const { error, revalidate } = statsActions.useFetchRank('models');
-  const data = useStatsStore(statsSelectors.rank('models'));
-  // A restored empty ranking predates any activity since; wait for the server.
-  const isConfirmed = useStatsStore(statsSelectors.isRankConfirmed('models'));
-  const loading = !data || (data.length === 0 && !isConfirmed);
+  // A restored empty ranking stays unsettled until the server confirms it, so
+  // a failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledRank('models'));
+  const loading = !data;
 
   const showExtra = Boolean(data && data?.length > 5);
 

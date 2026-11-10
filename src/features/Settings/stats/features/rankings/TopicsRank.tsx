@@ -23,10 +23,10 @@ export const TopicsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { error, revalidate } = statsActions.useFetchRank('topics');
-  const data = useStatsStore(statsSelectors.rank('topics'));
-  // A restored empty ranking predates any activity since; wait for the server.
-  const isConfirmed = useStatsStore(statsSelectors.isRankConfirmed('topics'));
-  const loading = !data || (data.length === 0 && !isConfirmed);
+  // A restored empty ranking stays unsettled until the server confirms it, so
+  // a failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledRank('topics'));
+  const loading = !data;
 
   const showExtra = Boolean(data && data?.length > 5);
 

@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import dayjs from 'dayjs';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
@@ -80,6 +81,7 @@ describe('stats replicas', () => {
 
   afterEach(async () => {
     cleanup();
+    vi.useRealTimers();
     for (const resource of resources) {
       await resource.storage!.remove({ queryKey: REPLICA_INDEX_KEY, scope });
     }
@@ -121,7 +123,7 @@ describe('stats replicas', () => {
     await waitFor(() => expect(statsSelectors.isHeatmapConfirmed('tokens')(read())).toBe(true));
   });
 
-  it('reads a restored empty ranking as unconfirmed until the server answers', async () => {
+  it('keeps a restored empty ranking unsettled until the server confirms it', async () => {
     await statsRankResource.storage!.set(
       { queryKey: statsRankResource.storageKey('topics'), scope },
       { data: [], updatedAt: 1 },
@@ -132,10 +134,37 @@ describe('stats replicas', () => {
     renderHook(() => statsActions.useFetchRank('topics'), { wrapper });
 
     await waitFor(() => expect(statsSelectors.rank('topics')(read())).toEqual([]));
-    expect(statsSelectors.isRankConfirmed('topics')(read())).toBe(false);
+    expect(statsSelectors.settledRank('topics')(read())).toBeUndefined();
 
     await act(async () => network.resolve([]));
-    await waitFor(() => expect(statsSelectors.isRankConfirmed('topics')(read())).toBe(true));
+    await waitFor(() => expect(statsSelectors.settledRank('topics')(read())).toEqual([]));
+  });
+
+  it('surfaces the error when a restored empty ranking fails to refresh', async () => {
+    await statsRankResource.storage!.set(
+      { queryKey: statsRankResource.storageKey('models'), scope },
+      { data: [], updatedAt: 1 },
+    );
+    vi.spyOn(messageService, 'rankModels').mockRejectedValue(new Error('offline'));
+
+    const { result } = renderHook(() => statsActions.useFetchRank('models'), { wrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // Unsettled data + an error: the card's AsyncBoundary renders the error and Retry.
+    expect(statsSelectors.settledRank('models')(read())).toBeUndefined();
+  });
+
+  it('settles a restored non-empty ranking at once', async () => {
+    const stored = [{ count: 3, id: 'gpt', name: 'gpt' }];
+    await statsRankResource.storage!.set(
+      { queryKey: statsRankResource.storageKey('models'), scope },
+      { data: stored as never, updatedAt: 1 },
+    );
+    vi.spyOn(messageService, 'rankModels').mockReturnValue(new Promise(() => {}));
+
+    renderHook(() => statsActions.useFetchRank('models'), { wrapper });
+
+    await waitFor(() => expect(statsSelectors.settledRank('models')(read())).toEqual(stored));
   });
 
   it('answers every card that reads the token heatmap with one request', async () => {
@@ -171,14 +200,16 @@ describe('stats replicas', () => {
   it('reads each picked month under its own entry', async () => {
     const spy = vi
       .spyOn(usageService, 'findAndGroupByDay')
-      .mockImplementation(async (mo) => [{ day: mo ?? 'now' }] as never);
+      .mockImplementation(async (mo) => [{ day: mo }] as never);
+    const thisMonth = dayjs().format('YYYY-MM');
 
     const { rerender } = renderHook(
       ({ month }: { month?: string }) => statsActions.useFetchUsageByDay(month),
       { initialProps: {} as { month?: string }, wrapper },
     );
-    await waitFor(() => expect(statsSelectors.usageByDay()(read())).toEqual([{ day: 'now' }]));
-    expect(spy).toHaveBeenLastCalledWith(undefined);
+    await waitFor(() => expect(statsSelectors.usageByDay()(read())).toEqual([{ day: thisMonth }]));
+    // No picked month reads this calendar month by name.
+    expect(spy).toHaveBeenLastCalledWith(thisMonth);
 
     rerender({ month: '2026-01' });
     await waitFor(() =>
@@ -186,7 +217,28 @@ describe('stats replicas', () => {
     );
     expect(spy).toHaveBeenLastCalledWith('2026-01');
     // The current month's copy is still there to switch back to.
-    expect(statsSelectors.usageByDay()(read())).toEqual([{ day: 'now' }]);
+    expect(statsSelectors.usageByDay()(read())).toEqual([{ day: thisMonth }]);
+  });
+
+  it("does not paint last month's usage under a new month", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 1, 3));
+    await usageByDayResource.storage!.set(
+      { queryKey: usageByDayResource.storageKey('2026-01'), scope },
+      { data: [{ day: 'january' }] as never, updatedAt: 1 },
+    );
+    const network = deferred<never[]>();
+    const spy = vi.spyOn(usageService, 'findAndGroupByDay').mockReturnValue(network.promise);
+
+    const { result } = renderHook(() => statsActions.useFetchUsageByDay(), { wrapper });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(statsSelectors.usageByDay()(read())).toBeUndefined();
+    expect(spy).toHaveBeenCalledWith('2026-02');
+
+    await act(async () => network.resolve([{ day: 'february' }] as never));
+    await waitFor(() => expect(statsSelectors.usageByDay()(read())).toEqual([{ day: 'february' }]));
+    vi.useRealTimers();
   });
 
   it('reads a restored empty usage table as unconfirmed until the server answers', async () => {
@@ -216,7 +268,7 @@ describe('stats replicas', () => {
       { data: cells(3), updatedAt: 1 },
     );
     await usageByDayResource.storage!.set(
-      { queryKey: usageByDayResource.storageKey('current'), scope },
+      { queryKey: usageByDayResource.storageKey(dayjs().format('YYYY-MM')), scope },
       { data: [{ day: 'stored' }] as never, updatedAt: 1 },
     );
 

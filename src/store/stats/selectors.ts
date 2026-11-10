@@ -50,11 +50,18 @@ const rank =
   (s: StatsState): StatsRankMap[K] | undefined =>
     s.rankMap[kind] as StatsRankMap[K] | undefined;
 
-/** Same as `isHeatmapConfirmed`: an empty restored ranking is not an empty state yet. */
-const isRankConfirmed =
-  (kind: StatsRankKind) =>
-  (s: StatsState): boolean =>
-    s.rankReplica.entries[kind]?.source === 'server';
+/**
+ * The ranking once it can be shown as is: a restored empty ranking predates any
+ * activity since, so it stays `undefined` (loading, or the fetch error) until
+ * this session's server answer confirms it.
+ */
+const settledRank =
+  <K extends StatsRankKind>(kind: K) =>
+  (s: StatsState): StatsRankMap[K] | undefined => {
+    const data = rank(kind)(s);
+    if (!data || data.length > 0) return data;
+    return s.rankReplica.entries[kind]?.source === 'server' ? data : undefined;
+  };
 
 const registration = (s: StatsState): StatsRegistration | undefined =>
   s.registrationMap[SINGLE_KEY];
@@ -87,10 +94,10 @@ export const statsSelectors = {
   count,
   heatmap,
   isHeatmapConfirmed,
-  isRankConfirmed,
   isUsageLogsConfirmed,
   maxTaskDuration,
   rank,
+  settledRank,
   registration,
   total,
   usageByDay,

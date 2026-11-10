@@ -1,5 +1,6 @@
 import type { AgentRankItem, ModelRankItem, TopicRankItem } from '@lobechat/types';
 import type { HeatmapsProps } from '@lobehub/charts';
+import dayjs from 'dayjs';
 
 import { defineReplica } from '@/libs/replica';
 import type { usageService } from '@/services/usage';
@@ -102,15 +103,12 @@ export const statsMaxTaskDurationResource = defineReplica<typeof SINGLE_KEY, num
   version: 1,
 });
 
-/** The month key of the server's default read (the current month). */
-export const CURRENT_MONTH_KEY = 'current';
-
-/** Month key: `YYYY-MM`, or `CURRENT_MONTH_KEY` when no month is picked. */
-export const usageMonthKey = (month?: string): string => month || CURRENT_MONTH_KEY;
-
-/** The `mo` argument the usage endpoints take for a month key. */
-export const usageMonthParam = (key: string): string | undefined =>
-  key === CURRENT_MONTH_KEY ? undefined : key;
+/**
+ * Month key (`YYYY-MM`). No picked month means this calendar month, read by
+ * its own key: a fixed "current" key would paint last month's persisted usage
+ * under this month's picker after a month rolls over.
+ */
+export const usageMonthKey = (month?: string): string => month || dayjs().format('YYYY-MM');
 
 /** Daily usage of one month — the usage cards and trend chart. */
 export const usageByDayResource = defineReplica<string, UsageByDay>({
