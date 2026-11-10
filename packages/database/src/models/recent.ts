@@ -14,6 +14,8 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
+import { notTrashed } from '../utils/softDelete';
+import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
@@ -32,6 +34,7 @@ export interface RecentDbItem {
   slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
+  taskIdentifier?: string | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
@@ -43,6 +46,7 @@ export interface RecentDbItem {
 // legacy `task_manager` trigger from the previous Task Manager panel.
 // System-trigger topics live in their own surfaces and would clutter Recent.
 const SYSTEM_TOPIC_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
   'cron',
   'eval',
   'task_manager',
@@ -57,6 +61,7 @@ const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as c
 
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
+const TOPIC_ARCHIVED_STATUSES: ChatTopicStatus[] = ['completed', 'archived'];
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
 
 // A shared feed answers "what is the workspace working on", so a conversation
@@ -102,15 +107,25 @@ export class RecentModel {
      * where every row is the owner's already.
      */
     sharedOnly?: boolean,
+    // "Archive" in the UI writes `status: 'completed'`; off by default so Home keeps listing them.
+    excludeArchived?: boolean,
   ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
+    const excludedTopicStatuses = excludeArchived
+      ? [...TOPIC_INBOX_STATUSES, ...TOPIC_ARCHIVED_STATUSES]
+      : TOPIC_INBOX_STATUSES;
     const requestedTypes = types ? new Set(types) : undefined;
 
     // `tasks` uses `createdByUserId` instead of `userId`, so apply the
     // workspace-aware predicate inline.
-    const taskScopeWhere = this.workspaceId
-      ? eq(tasks.workspaceId, this.workspaceId)
-      : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
+    // Hand-built (it bypasses `buildWorkspaceWhere`), so the recycle-bin
+    // filter the other arms get from that funnel is added here explicitly.
+    const taskScopeWhere = and(
+      this.workspaceId
+        ? eq(tasks.workspaceId, this.workspaceId)
+        : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId)),
+      notTrashed(tasks.isDeleted),
+    );
 
     // Workspace rows are shared across members; `mineOnly` narrows a workspace
     // feed back to the viewer's own items. A no-op in personal mode, where the
@@ -125,6 +140,7 @@ export class RecentModel {
           ? topics.description
           : sql<string | null>`NULL`.as('description'),
         id: topics.id,
+        taskIdentifier: sql<string | null>`NULL`.as('task_identifier'),
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
@@ -164,7 +180,7 @@ export class RecentModel {
                 ),
               ),
               or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
-              or(isNull(topics.status), not(inArray(topics.status, TOPIC_INBOX_STATUSES))),
+              or(isNull(topics.status), not(inArray(topics.status, excludedTopicStatuses))),
             ),
       );
 
@@ -172,6 +188,7 @@ export class RecentModel {
       .select({
         description: sql<string | null>`NULL`.as('description'),
         id: documents.id,
+        taskIdentifier: sql<string | null>`NULL`.as('task_identifier'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
@@ -202,6 +219,7 @@ export class RecentModel {
       .select({
         description: sql<string | null>`NULL`.as('description'),
         id: tasks.id,
+        taskIdentifier: sql<string | null>`${tasks.identifier}`.as('task_identifier'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
@@ -247,12 +265,14 @@ export class RecentModel {
             ? `${preview.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
             : preview,
         metadata: row.metadata ?? undefined,
+        taskIdentifier: row.taskIdentifier,
         routeGroupId: row.routeGroupId,
         routeId: row.routeId,
         slugTitle: row.slugTitle,
         status: row.status,
         title: row.title,
         type: row.type,
+        // Fallback for a driver or decoder that stops handing timestamps back as Date.
         updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
         userId: row.userId,
       };

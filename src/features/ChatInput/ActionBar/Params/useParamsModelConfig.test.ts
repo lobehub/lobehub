@@ -22,22 +22,33 @@ const testState = vi.hoisted(() => ({
     modelConfigs: {} as Record<string, ModelConfig>,
   },
   chat: {
-    topicModel: undefined as ModelSelection | undefined,
+    activeTopicId: undefined as string | undefined,
+    topicModels: {} as Record<string, ModelSelection>,
   },
+  /** `undefined`: the host publishes no topic; `null`: its conversation has none. */
+  composerTopicId: undefined as string | null | undefined,
 }));
 
 vi.mock('../../hooks/useAgentModelSelection', () => ({
   useAgentModelSelection: () => testState.agentSelection,
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: <T>(selector: (state: typeof testState.chat) => T) => selector(testState.chat),
+vi.mock('../../store', () => ({
+  useChatInputStore: (selector: (state: object) => unknown) =>
+    selector({ topicId: testState.composerTopicId }),
 }));
 
-vi.mock('@/store/chat/slices/topic/selectors', () => ({
-  topicSelectors: {
-    activeTopicModel: (state: typeof testState.chat) => state.topicModel,
-  },
+// Store boundary: the real topic selectors run against this state.
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: object) => unknown) =>
+    selector({
+      activeTopicId: testState.chat.activeTopicId,
+      topicDataMap: {},
+      useFetchTopicDetail: () => {},
+      topicDetailMap: Object.fromEntries(
+        Object.entries(testState.chat.topicModels).map(([id, pin]) => [id, { id, ...pin }]),
+      ),
+    }),
 }));
 
 vi.mock('@/store/aiInfra', () => ({
@@ -56,7 +67,9 @@ describe('useParamsModelConfig', () => {
       model: 'agent-model',
       provider: 'agent-provider',
     };
-    testState.chat.topicModel = undefined;
+    testState.chat.activeTopicId = undefined;
+    testState.chat.topicModels = {};
+    testState.composerTopicId = undefined;
     testState.ai.modelConfigs = {
       'agent-provider:agent-model': {
         disabledParams: ['temperature'],
@@ -69,9 +82,9 @@ describe('useParamsModelConfig', () => {
   });
 
   it('uses the active topic model for parameter capabilities', () => {
-    testState.chat.topicModel = {
-      model: 'topic-model',
-      provider: 'topic-provider',
+    testState.chat.activeTopicId = 'topic-1';
+    testState.chat.topicModels = {
+      'topic-1': { model: 'topic-model', provider: 'topic-provider' },
     };
 
     const { result } = renderHook(() => useParamsModelConfig('agent-1'));
@@ -93,5 +106,19 @@ describe('useParamsModelConfig', () => {
       model: 'agent-model',
       provider: 'agent-provider',
     });
+  });
+
+  // A page copilot embedded beside a chat runs with `topicId: null` while the
+  // outer chat's topic is still the global active one.
+  it('ignores the global active topic pin when the composer conversation has no topic', () => {
+    testState.chat.activeTopicId = 'topic-1';
+    testState.chat.topicModels = {
+      'topic-1': { model: 'topic-model', provider: 'topic-provider' },
+    };
+    testState.composerTopicId = null;
+
+    const { result } = renderHook(() => useParamsModelConfig('agent-1'));
+
+    expect(result.current).toMatchObject({ model: 'agent-model', provider: 'agent-provider' });
   });
 });

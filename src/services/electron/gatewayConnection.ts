@@ -24,6 +24,14 @@ class GatewayConnectionService {
   getDeviceInfo = async () => {
     return ensureElectronIpc().gatewayConnection.getDeviceInfo();
   };
+
+  getStableDeviceId = async () => {
+    return ensureElectronIpc().gatewayConnection.getStableDeviceId();
+  };
+
+  getWorkspaceDeviceId = async (workspaceId: string) => {
+    return ensureElectronIpc().gatewayConnection.getWorkspaceDeviceId({ workspaceId });
+  };
 }
 
 export const gatewayConnectionService = new GatewayConnectionService();

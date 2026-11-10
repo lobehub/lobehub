@@ -259,7 +259,6 @@ describe('ScmControlService — wake', () => {
         resourceId: row.id,
         url: baseRow.url,
       },
-      steer: false,
       trigger: 'scm',
       userInterventionConfig: { approvalMode: 'headless' },
     });
@@ -273,7 +272,7 @@ describe('ScmControlService — wake', () => {
     expect(after?.metadata.lastWake?.reason).toBe('ci_failed');
   });
 
-  it('steers instead of starting a new turn when the conversation is running', async () => {
+  it('wakes a turn of its own — unmarked — when the conversation is running', async () => {
     const topic = await createTopic();
     await serverDB
       .update(topics)
@@ -291,7 +290,9 @@ describe('ScmControlService — wake', () => {
       kind: 'review_changes_requested',
       row,
     });
-    expect(mocks.execAgent.mock.calls[0][0]).toMatchObject({ steer: true });
+    // The wake waits for the running turn to hand back, then starts a turn of
+    // its own — it did not steer that run, so its user message is not marked.
+    expect(mocks.execAgent.mock.calls[0][0].steer).toBeUndefined();
     expect(mocks.execAgent.mock.calls[0][0].prompt).toContain('requested changes');
   });
 

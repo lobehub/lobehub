@@ -1,6 +1,19 @@
-import { lambdaClient } from '@/libs/trpc/client';
+import type {
+  DeviceBoundAgentItem,
+  DeviceEnroller,
+  DeviceRunningSummary,
+  DeviceScope,
+} from '@lobechat/types';
+
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
+import { type TopicListItem } from '@/services/topic';
 
 type DeviceClient = typeof lambdaClient.device;
+
+/** A running topic on a device, with the member who started it. */
+export interface DeviceRunningTopic extends TopicListItem {
+  user: DeviceEnroller | null;
+}
 
 /**
  * Single chokepoint for the `device` TRPC router. Components, hooks and stores
@@ -14,7 +27,37 @@ class DeviceService {
 
   /** Update user-editable device fields (defaultCwd / friendlyName / workingDirs). */
   updateDevice(input: Parameters<DeviceClient['updateDevice']['mutate']>[0]) {
-    return lambdaClient.device.updateDevice.mutate(input);
+    // Personal devices remain editable while the UI has an active workspace.
+    return createWorkspaceLambdaClient(null).device.updateDevice.mutate(input);
+  }
+
+  /**
+   * Ask a managed cloud device to start. Resolves when the request is
+   * accepted, not when the device is online. Routed by the device's own
+   * scope, like the other per-device writes.
+   */
+  wakeManagedDevice({ deviceId, scope }: { deviceId: string; scope: DeviceScope }) {
+    const client = scope === 'personal' ? createWorkspaceLambdaClient(null) : lambdaClient;
+    return client.device.wakeManagedDevice.mutate({ deviceId });
+  }
+
+  /** Update user-editable fields of a workspace-enrolled device (workspace-scoped write). */
+  updateWorkspaceDevice(input: Parameters<DeviceClient['updateWorkspaceDevice']['mutate']>[0]) {
+    return lambdaClient.device.updateWorkspaceDevice.mutate(input);
+  }
+
+  /** Add (or move to the front) one recent working dir on a workspace device. */
+  addWorkspaceDeviceWorkingDir(
+    input: Parameters<DeviceClient['addWorkspaceDeviceWorkingDir']['mutate']>[0],
+  ) {
+    return lambdaClient.device.addWorkspaceDeviceWorkingDir.mutate(input);
+  }
+
+  /** Remove one recent working dir from a workspace device. */
+  removeWorkspaceDeviceWorkingDir(
+    input: Parameters<DeviceClient['removeWorkspaceDeviceWorkingDir']['mutate']>[0],
+  ) {
+    return lambdaClient.device.removeWorkspaceDeviceWorkingDir.mutate(input);
   }
 
   /**
@@ -31,6 +74,11 @@ class DeviceService {
     return lambdaClient.device.browseDirectory.query(input);
   }
 
+  /** Create a folder inside the directory a remote folder picker is browsing. */
+  createDirectory(input: Parameters<DeviceClient['createDirectory']['mutate']>[0]) {
+    return lambdaClient.device.createDirectory.mutate(input);
+  }
+
   /** Probe whether an agent platform (openclaw / hermes) is available on a device. */
   checkCapability(input: Parameters<DeviceClient['checkCapability']['query']>[0]) {
     return lambdaClient.device.checkCapability.query(input);
@@ -44,6 +92,29 @@ class DeviceService {
   /** Scan a device for every known heterogeneous agent type in one pass. */
   scanAgents(input: Parameters<DeviceClient['scanAgents']['query']>[0]) {
     return lambdaClient.device.scanAgents.query(input);
+  }
+
+  /** Topics running on a device right now, and the agents routed to it. */
+  getDeviceActivity(
+    input: Parameters<DeviceClient['getDeviceActivity']['query']>[0],
+  ): Promise<{ agents: DeviceBoundAgentItem[]; runningTopics: DeviceRunningTopic[] }> {
+    // Same row shape `topicService.queryTopics` serves; its DB-side type differs
+    // only in how timestamps are declared.
+    return lambdaClient.device.getDeviceActivity.query(input) as any;
+  }
+
+  /**
+   * The device each agent runs on for the caller, resolved server-side in one
+   * read. Agents that route to no device (sandbox, none, auto, unbound) are
+   * absent from the result.
+   */
+  getAgentDeviceBindings(agentIds: string[]): Promise<Record<string, string>> {
+    return lambdaClient.device.getAgentDeviceBindings.query({ agentIds });
+  }
+
+  /** Running-topic count and the members behind it, for every device in the list. */
+  getRunningSummary(): Promise<DeviceRunningSummary[]> {
+    return lambdaClient.device.getRunningSummary.query();
   }
 
   /** Live tunnel links, optionally narrowed to one device. */
@@ -67,6 +138,11 @@ class DeviceService {
   /** Ports the device is listening on; `null` when it can't answer. */
   listListeningPorts(input: Parameters<DeviceClient['listListeningPorts']['query']>[0]) {
     return lambdaClient.device.listListeningPorts.query(input);
+  }
+
+  /** The device's reported paths and runtime info (home, desktop, shell, ...). */
+  getDeviceSystemInfo(input: Parameters<DeviceClient['getDeviceSystemInfo']['query']>[0]) {
+    return lambdaClient.device.getDeviceSystemInfo.query(input);
   }
 
   /** Where the device's desktop app update stands; never starts a check. */
@@ -125,8 +201,8 @@ class DeviceService {
   }
 
   /** The device's recent CPU / memory / load history, bucketed for charting. */
-  getMetricSeries(deviceId: string) {
-    return lambdaClient.deviceMetric.getSeries.query({ deviceId });
+  getMetricSeries(deviceId: string, scope?: DeviceScope) {
+    return lambdaClient.deviceMetric.getSeries.query({ deviceId, scope });
   }
 
   /** Revoke a link. */

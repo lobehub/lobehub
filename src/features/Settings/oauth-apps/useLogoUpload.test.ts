@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   uploadWithProgress: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: mocks.toastError } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: mocks.toastError } }));
 
 vi.mock('@/store/file', () => ({
   useFileStore: (selector: (s: unknown) => unknown) =>
@@ -34,7 +34,6 @@ describe('useLogoUpload', () => {
     });
 
     expect(url).toBe('https://files.lobehub.com/logo.png');
-    expect(url?.startsWith('data:')).toBe(false);
   });
 
   it('turns a storage path into an absolute URL the provider accepts', async () => {

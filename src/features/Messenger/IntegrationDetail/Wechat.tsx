@@ -1,8 +1,17 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Button, QRCode, Spin, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Alert,
+  Block,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  QRCode,
+  Spin,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { ExternalLinkIcon, InfoIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -253,7 +262,8 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant="block" onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'wechat'} />;
 
   const link = data.links[0];
   const installation = data.installations[0];

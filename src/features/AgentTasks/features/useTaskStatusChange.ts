@@ -2,7 +2,7 @@
 
 import { UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

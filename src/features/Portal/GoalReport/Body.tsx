@@ -1,6 +1,4 @@
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Markdown, Skeleton, Tag, Text } from '@lobehub/ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -134,6 +132,7 @@ export const ChapterBody = memo(() => {
       </Text>
       {map.graph.nodes.length > 0 && (
         <Graph
+          initialShowMainline
           bridges={map.bridges}
           graph={map.graph}
           highlightedIds={highlightedIds}

@@ -5,6 +5,7 @@ import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgent
 import {
   applyTopicDeviceBinding,
   getTopicBoundDeviceId,
+  isTopicDeviceUnknown,
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
@@ -26,12 +27,23 @@ export interface UseEffectiveAgencyConfigResult {
   /** Whether this caller may open the execution-target selector. */
   canSelectExecutionTarget: boolean;
   /**
+   * The caller's own per-agent execution target applies instead of the shared
+   * default: a member's pick under the member-selection policy, or a manager's
+   * this-machine pick (always kept per user). Ignores the topic binding.
+   */
+  executionTargetOverridden: boolean;
+  /**
    * The workspace preference fetch is still in flight. Until it settles, a
    * workspace agent's `agencyConfig` may reflect only the shared row — callers
    * that act on `boundDeviceId` / `executionTarget` (device guards, defaults)
    * should wait instead of acting on a value that may flip.
    */
   isPreferenceLoading: boolean;
+  /**
+   * The conversation holds a cwd but no recorded machine, so `agencyConfig`
+   * fell back to the agent default — which may not be where that cwd lives.
+   */
+  topicDeviceUnknown: boolean;
   /**
    * The effective config still comes from the workspace-shared fallback because
    * this member has not explicitly selected an execution target. Callers must
@@ -103,6 +115,14 @@ export const useEffectiveAgencyConfig = (
     visibility: agent?.visibility,
     workspaceId: agent?.workspaceId,
   });
+  // Mirrors `resolveAgentAgencyConfig`: a fixed policy shelves a member's
+  // override, while managers and private-agent owners keep theirs.
+  const executionTargetOverridden =
+    !!agent?.workspaceId &&
+    override?.executionTarget !== undefined &&
+    !(
+      usesWorkspaceMemberSelection && sharedAgencyConfig?.executionTargetSelectionPolicy === 'fixed'
+    );
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const bindingTopicId = topicId === undefined ? activeTopicId : topicId;
   const topicDeviceId = useChatStore((s) =>
@@ -117,6 +137,13 @@ export const useEffectiveAgencyConfig = (
     (s) =>
       !!bindingTopicId &&
       !!topicSelectors.getTopicById(bindingTopicId)(s)?.projectWorkingDirectoryId,
+  );
+  const topicDeviceUnknown = useChatStore((s) =>
+    isTopicDeviceUnknown(
+      bindingTopicId ? topicSelectors.getTopicById(bindingTopicId)(s) : undefined,
+      agentId,
+      agentAgencyConfig,
+    ),
   );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
@@ -140,7 +167,9 @@ export const useEffectiveAgencyConfig = (
       !isProjectDirectoryTopic &&
       !isPreferenceLoading &&
       agencyConfig?.executionTargetSelectionPolicy !== 'fixed',
+    executionTargetOverridden,
     isPreferenceLoading,
+    topicDeviceUnknown,
     workspaceScoped,
   };
 };

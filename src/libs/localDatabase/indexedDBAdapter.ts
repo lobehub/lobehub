@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 import {
   INDEXED_DB_NAME,
   INDEXED_DB_RECORD_STORE,
@@ -7,6 +9,7 @@ import {
 import type {
   LocalDatabaseAdapter,
   LocalDatabaseBatchOperation,
+  LocalDatabaseCollectionInfo,
   LocalDatabaseEntry,
 } from './types';
 
@@ -19,6 +22,11 @@ const COLLECTION_SEPARATOR = '\u0000';
 
 const collectionPrefix = (collection: string) => `${collection}${COLLECTION_SEPARATOR}`;
 const storageKey = (collection: string, key: string) => `${collectionPrefix(collection)}${key}`;
+const collectionFromStorageKey = (key: IDBValidKey): string | undefined => {
+  if (typeof key !== 'string') return undefined;
+  const separatorIndex = key.indexOf(COLLECTION_SEPARATOR);
+  return separatorIndex < 0 ? undefined : key.slice(0, separatorIndex);
+};
 const storageRange = (collection: string, prefix: string) => {
   const lowerBound = storageKey(collection, prefix);
   return IDBKeyRange.bound(lowerBound, `${lowerBound}\uFFFF`);
@@ -46,7 +54,7 @@ const openDatabase = (onVersionChange: () => void): Promise<IDBDatabase> =>
 
     request.onblocked = () => {
       settled = true;
-      reject(new Error('IndexedDB upgrade was blocked by another LobeHub tab'));
+      reject(new Error(`IndexedDB upgrade was blocked by another ${BRANDING_NAME} tab`));
     };
     request.onerror = () => {
       settled = true;
@@ -170,6 +178,21 @@ export const createIndexedDBLocalDatabaseAdapter = (): LocalDatabaseAdapter => {
 
     initialize: async (): Promise<void> => {
       await getDatabase();
+    },
+
+    listCollections: async (): Promise<LocalDatabaseCollectionInfo[]> => {
+      const keys = await runTransaction<IDBValidKey[]>('readonly', (store) => store.getAllKeys());
+      const counts = new Map<string, number>();
+
+      for (const key of keys) {
+        const collection = collectionFromStorageKey(key);
+        if (collection === undefined) continue;
+        counts.set(collection, (counts.get(collection) ?? 0) + 1);
+      }
+
+      return [...counts.entries()]
+        .map(([name, entryCount]) => ({ entryCount, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
 
     set: async (collection: string, key: string, value: unknown): Promise<void> => {

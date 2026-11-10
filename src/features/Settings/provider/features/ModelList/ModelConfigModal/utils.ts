@@ -1,4 +1,4 @@
-import type { FormValues } from '@lobehub/ui/base-ui/form';
+import type { FormValues } from '@lobehub/ui/form';
 import type { UpdateAiModelParams } from 'model-bank';
 
 const EDITABLE_ABILITIES = [

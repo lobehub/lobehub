@@ -7,18 +7,13 @@ interface AddSession {
   type: 'addSession';
 }
 
-interface RemoveSession {
-  id: string;
-  type: 'removeSession';
-}
-
 interface UpdateSession {
   id: string;
   type: 'updateSession';
   value: Partial<LobeSession>;
 }
 
-export type SessionDispatch = AddSession | RemoveSession | UpdateSession;
+export type SessionDispatch = AddSession | UpdateSession;
 
 export const sessionsReducer = (state: LobeSessions, payload: SessionDispatch): LobeSessions => {
   switch (payload.type) {
@@ -30,15 +25,6 @@ export const sessionsReducer = (state: LobeSessions, payload: SessionDispatch): 
         // TODO: Migrate Date type in the future to remove this ignore
         // @ts-ignore
         draft.unshift({ ...session, createdAt: new Date(), updatedAt: new Date() });
-      });
-    }
-
-    case 'removeSession': {
-      return produce(state, (draftState) => {
-        const index = draftState.findIndex((item) => item.id === payload.id);
-        if (index !== -1) {
-          draftState.splice(index, 1);
-        }
       });
     }
 

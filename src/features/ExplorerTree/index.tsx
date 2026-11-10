@@ -19,6 +19,7 @@ export type {
   ExplorerTreeMoveEvent,
   ExplorerTreeNameCheck,
   ExplorerTreeNode,
+  ExplorerTreeNodeComparator,
   ExplorerTreeProps,
   ExplorerTreeRowDecorationCtx,
 } from './types';

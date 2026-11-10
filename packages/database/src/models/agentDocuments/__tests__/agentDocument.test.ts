@@ -788,25 +788,6 @@ describe('AgentDocumentModel', () => {
       ]);
     });
 
-    it('should copy into a new record and keep policy/template metadata', async () => {
-      const created = await agentDocumentModel.create(agentId, 'copy-source.md', 'copy me', {
-        loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
-        loadRules: { maxTokens: 200, priority: 3 },
-        metadata: { description: 'source desc', domain: 'A' },
-        templateId: 'claw',
-      });
-
-      const copied = await agentDocumentModel.copy(created.id, 'Copied Title');
-
-      expect(copied).toBeDefined();
-      expect(copied?.id).not.toBe(created.id);
-      expect(copied?.documentId).not.toBe(created.documentId);
-      expect(copied?.filename).toBe('Copied Title');
-      expect(copied?.templateId).toBe('claw');
-      expect(copied?.policy?.context?.maxTokens).toBe(200);
-      expect(copied?.metadata).toMatchObject({ description: 'source desc', domain: 'A' });
-    });
-
     it('should preserve policyLoad when copying a document', async () => {
       const created = await agentDocumentModel.create(agentId, 'always-doc.md', 'content', {
         policyLoad: PolicyLoad.ALWAYS,
@@ -816,6 +797,10 @@ describe('AgentDocumentModel', () => {
 
       expect(copied?.policyLoad).toBe(PolicyLoad.ALWAYS);
     });
+
+    // Copy scenarios (incl. the T-775 empty-parse-shell regression) moved to
+    // the focused `agentDocument.copy.test.ts` per the source-layout 800-line
+    // rule (Codex P2 on #20914).
   });
 
   describe('convertAgentDocumentToSkillIndex and updateDocumentIdentity', () => {

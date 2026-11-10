@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const sectionStyles = createStaticStyles(({ css, cssVar }) => ({
   count: css`

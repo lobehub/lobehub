@@ -1,14 +1,16 @@
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
   Input,
   Pagination,
   Table,
   type TableColumn,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -373,7 +375,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
         </div>
         <div className={styles.table}>
           <Table
-            classNames={{ header: styles.tableHeader }}
+            classNames={{ header: { cell: styles.tableHeader } }}
             columns={columns}
             dataSource={testCases}
             pagination={false}

@@ -1,7 +1,7 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useMemo } from 'react';

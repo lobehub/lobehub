@@ -250,6 +250,20 @@ describe('working tree status / files / patches', () => {
     expect(files.deleted).toEqual([]);
   });
 
+  it('distinguishes a failed git status from a clean tree when asked', async () => {
+    const notRepo = await mkdtemp(path.join(tmpdir(), 'lfs-not-git-'));
+    cleanup.push(notRepo);
+
+    // Default callers keep the tolerant fallback.
+    await expect(getGitWorkingTreeFiles(notRepo)).resolves.toEqual({
+      added: [],
+      deleted: [],
+      modified: [],
+    });
+    // Persisting callers must see the failure instead of a false-clean tree.
+    await expect(getGitWorkingTreeFiles(notRepo, { throwOnError: true })).rejects.toThrow();
+  });
+
   it('getGitWorkingTreePatches returns per-file patches ordered added → modified', async () => {
     const { patches } = await getGitWorkingTreePatches(repo);
     const byPath = Object.fromEntries(patches.map((p) => [p.filePath, p]));

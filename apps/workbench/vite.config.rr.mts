@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { cloudflare } from '@cloudflare/vite-plugin';
-import { lobeStaticCssPlugin } from '@lobehub/ui/static-css/vite';
 import { reactRouter } from '@react-router/dev/vite';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -11,10 +10,10 @@ import { viteMarkdownImport } from '../../plugins/vite/markdownImport';
 import { viteNodeModuleStub } from '../../plugins/vite/nodeModuleStub';
 import { vitePlatformResolve } from '../../plugins/vite/platformResolve';
 import { sharedRendererDefine } from '../../plugins/vite/sharedRendererConfig';
+import { stylexPlugin, stylexTokenModules } from '../../plugins/vite/stylex';
 import { shikiCdnUrl } from './app/stubs/shikiCdn';
 import { isShikiSource } from './app/stubs/shikiSource';
 import { reportStubSurfaceGaps } from './app/stubs/surface';
-import { antdStaticCssOptions, themeVarsCssOptions } from './staticCssOptions.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -262,41 +261,6 @@ const buildInputsManifest = (): Plugin => ({
   },
 });
 
-const staticCssDevServe = (): Plugin => {
-  const cache = new Map<string, string>();
-  const serve = async (kind: 'antd' | 'themeVars') => {
-    if (!cache.has(kind)) {
-      const { buildAntdStaticCss, buildThemeVarsCss } = await import('@lobehub/ui/static-css');
-      cache.set(
-        kind,
-        kind === 'antd'
-          ? buildAntdStaticCss(antdStaticCssOptions).css
-          : buildThemeVarsCss(themeVarsCssOptions).css,
-      );
-    }
-    return cache.get(kind)!;
-  };
-
-  return {
-    apply: 'serve',
-    configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        const url = req.url ?? '';
-        const kind = /^\/assets\/antd-[a-f0-9]+\.css/.test(url)
-          ? ('antd' as const)
-          : /^\/assets\/theme-vars-[a-f0-9]+\.css/.test(url)
-            ? ('themeVars' as const)
-            : undefined;
-        if (!kind) return next();
-        res.setHeader('Content-Type', 'text/css; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.end(await serve(kind));
-      });
-    },
-    name: 'workbench-static-css-dev-serve',
-  };
-};
-
 const backendProxy = Object.fromEntries(
   ['/api', '/oidc', '/trpc', '/webapi'].map((prefix) => [
     prefix,
@@ -310,7 +274,7 @@ export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/',
   environments: {
     client: { define },
-    ssr: { define: ssrDefine },
+    ssr: { define: ssrDefine, optimizeDeps: { exclude: [...stylexTokenModules] } },
   },
   plugins: [
     process.env.WORKBENCH_CHUNK_REPORT ? ssrChunkReport() : undefined,
@@ -328,13 +292,19 @@ export default defineConfig({
     viteNodeModuleStub(),
     vitePlatformResolve('mobile'),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    lobeStaticCssPlugin({ antd: antdStaticCssOptions, themeVars: themeVarsCssOptions }),
-    staticCssDevServe(),
+    // Both environments render StyleX components; the client build emits the CSS.
+    stylexPlugin(),
     reactRouter(),
     ...lobeIconImports(),
   ],
   optimizeDeps: {
-    exclude: ['shiki', '@shikijs/core', '@shikijs/stream', '@shikijs/transformers'],
+    exclude: [
+      'shiki',
+      '@shikijs/core',
+      '@shikijs/stream',
+      '@shikijs/transformers',
+      ...stylexTokenModules,
+    ],
   },
   resolve: {
     tsconfigPaths: true,

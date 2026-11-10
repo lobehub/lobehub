@@ -1,3 +1,4 @@
+import { NEWS_BRIEF_TYPES } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { type SWRResponse } from 'swr';
 
@@ -111,8 +112,8 @@ export class BriefListActionImpl {
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
-    const goal = this.#get().briefListMap[BRIEF_LIST_KEY]?.find((brief) => brief.id === id)
-      ?.metadata?.goal;
+    const target = this.#get().briefListMap[BRIEF_LIST_KEY]?.find((brief) => brief.id === id);
+    const goal = target?.metadata?.goal;
     await this.#briefs.optimistic(
       id,
       (brief) => ({
@@ -122,6 +123,11 @@ export class BriefListActionImpl {
       }),
       () => briefService.resolve(id, { action, comment }),
     );
+    // An urgent news brief is answered from "Needs you", and the day digest it
+    // returns to holds its own unresolved copy — refresh it so the handled brief
+    // does not come back there as unread once it leaves the unresolved feed.
+    if (target && NEWS_BRIEF_TYPES.includes(target.type))
+      void mutate((key) => Array.isArray(key) && key[0] === briefKeys.news.root);
     // A goal brief answered the goal itself: the island and the goal views
     // asking the same question have to drop it too.
     if (goal)

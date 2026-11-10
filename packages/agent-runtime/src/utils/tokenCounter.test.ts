@@ -54,7 +54,7 @@ describe('tokenCounter', () => {
   });
 
   describe('shouldCompress', () => {
-    // Regression: LOBE-14165. Attachments are previewed instead of triggering
+    // Regression: Attachments are previewed instead of triggering
     // compression, which would drop their content from older messages.
     it('previews older attachments instead of compressing for attachment text', () => {
       const paper = 'Salt gland development in Limonium bicolor. '.repeat(2000);

@@ -13,6 +13,12 @@ export interface VideoEditingDraftSnapshot {
 }
 
 export interface CreateVideoState {
+  /**
+   * Prompt the last submit was rejected for by content moderation. The prompt
+   * input shows an inline notice while its value still equals this prompt, so
+   * editing the prompt dismisses it.
+   */
+  blockedPrompt?: string;
   editingDraftSnapshot?: VideoEditingDraftSnapshot;
   editingGenerationId?: string;
   isCreating: boolean;
@@ -20,6 +26,7 @@ export interface CreateVideoState {
 }
 
 export const initialCreateVideoState: CreateVideoState = {
+  blockedPrompt: undefined,
   editingDraftSnapshot: undefined,
   editingGenerationId: undefined,
   isCreating: false,

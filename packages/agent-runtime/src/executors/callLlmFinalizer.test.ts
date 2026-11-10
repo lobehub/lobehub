@@ -20,6 +20,7 @@ const createMessageTransport = (): MessageTransport => ({
   deleteMessage: vi.fn(),
   findById: vi.fn(),
   findToolMessageIdByToolCallId: vi.fn(),
+  getToolMessage: vi.fn(),
   query: vi.fn(),
   update: vi.fn().mockResolvedValue(undefined),
   updatePluginState: vi.fn(),
@@ -675,6 +676,22 @@ describe('callLlmFinalizer', () => {
     expect(result.newState.messages.at(-1)).toMatchObject({ id: 'assistant-1' });
     expect(consoleError).toHaveBeenCalledWith('[call_llm] Failed to update message:', error);
     consoleError.mockRestore();
+  });
+
+  it('counts provider attempts even when a successful response omits usage', async () => {
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      attempts: 2,
+      events: [],
+      host: createHost(),
+      model: 'gpt-4',
+      output: createOutput({ usage: undefined }),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(result.newState.usage.llm.apiCalls).toBe(2);
   });
 
   it('does not publish early visible output end when the host disables it', async () => {

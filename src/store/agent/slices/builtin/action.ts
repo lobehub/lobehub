@@ -99,8 +99,14 @@ export class BuiltinAgentSliceActionImpl {
     this.#get = get;
     this.#builtin = createReplicaSlice(builtinAgentResource, {
       actionPrefix: 'builtinAgent',
+      // Every confirmed builtin re-seeds `agentMap`, whichever path fetched it
+      // (the mount-time sync or `refreshBuiltinAgent`). Only for the active
+      // scope: a response of a previous identity never reaches it.
+      effects: { onApplied: (item) => this.#seedAgentMap(item) },
       fetcher: fetchBuiltinAgent,
       get,
+      // A row without an id cannot be resolved by slug: keep what is cached.
+      prepareHead: (item) => (item?.id ? item : undefined),
       set,
       stateKey: 'builtinAgentReplica',
       view: builtinAgentLens,
@@ -147,17 +153,13 @@ export class BuiltinAgentSliceActionImpl {
    *
    * Imperative by design: unlike the mount-time `useInitBuiltinAgent` sync, it
    * does not depend on a mounted subscriber, so the create-Agent / create-Page
-   * flows can ensure a slug resolves on demand.
-   *
-   * The scope is captured before the await: when the identity changes while the
-   * request is in flight, the late response is not written into the new scope,
-   * matching the guard the swap-era code applied with `scope === getCacheScope()`.
+   * flows can ensure a slug resolves on demand. It runs after edits, so it
+   * never reuses a request already in flight (`fresh`): that one may hold the
+   * pre-edit value. The replica drops a response that lands after an identity
+   * switch, a removal or a clear.
    */
   refreshBuiltinAgent = async (slug: string): Promise<void> => {
-    const scope = cacheScope.get();
-    const data = await fetchBuiltinAgent({ slug });
-    if (!data?.id) return;
-    this.internal_replaceBuiltinAgent(slug, data, scope);
+    await this.#builtin.fetch({ slug }, { fresh: true });
   };
 
   useInitBuiltinAgent = (

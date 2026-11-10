@@ -1,5 +1,4 @@
-import { Flexbox, Highlighter, Snippet } from '@lobehub/ui';
-import { Steps, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter, Snippet, Steps, Tabs } from '@lobehub/ui';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 

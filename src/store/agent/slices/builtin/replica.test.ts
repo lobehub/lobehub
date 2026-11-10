@@ -231,6 +231,32 @@ describe('builtin agent replica', () => {
     ).toBeUndefined();
   });
 
+  it('does not let a sync request from before an edit overwrite the post-edit refresh', async () => {
+    const answers: ((value: any) => void)[] = [];
+    vi.mocked(agentService.getBuiltinAgent).mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+
+    // The mounted sync asks first, then an edit refreshes the builtin.
+    renderHook(() => useAgentStore.getState().useInitBuiltinAgent('inbox', { isLogin: true }), {
+      wrapper,
+    });
+    await waitFor(() => expect(answers).toHaveLength(1));
+    const refresh = useAgentStore.getState().refreshBuiltinAgent('inbox');
+    // The refresh never reuses the pre-edit request.
+    expect(answers).toHaveLength(2);
+
+    await act(async () => {
+      answers[1](builtin('inbox-1', { name: 'Edited chief' }));
+      await refresh;
+    });
+    // The pre-edit read answers last.
+    await act(async () => answers[0](builtin('inbox-1', { name: 'Old chief' })));
+
+    expect(useAgentStore.getState().builtinAgentMap.inbox).toMatchObject({ name: 'Edited chief' });
+    expect(useAgentStore.getState().agentMap['inbox-1']).toMatchObject({ name: 'Edited chief' });
+  });
+
   it('confirms a meta-edit response on the builtin without a network round-trip', () => {
     act(() => {
       useAgentStore.setState({

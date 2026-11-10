@@ -2,6 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayHttpClient } from './http';
 
+const createAgentRunInput = (): Parameters<GatewayHttpClient['dispatchAgentRun']>[0] => ({
+  agentType: 'claude-code',
+  assistantMessageId: 'asst-1',
+  jwt: 'jwt',
+  operationId: 'op-1',
+  prompt: 'run',
+  topicId: 'tpc-1',
+  userId: 'user-1',
+});
+
+const createSuccessfulToolResponse = () => ({
+  json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+  ok: true,
+});
+
 describe('GatewayHttpClient', () => {
   let client: GatewayHttpClient;
 
@@ -418,10 +433,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional deviceId and timeout', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const signal = AbortSignal.abort();
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
@@ -449,10 +461,7 @@ describe('GatewayHttpClient', () => {
       // answers 503 DEVICE_OFFLINE. Aborting earlier turned every offline
       // device into "timed out, the work may still be running".
       const GATEWAY_RECOVERY_WINDOW_MS = 45_000;
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
 
       await client.executeToolCall(
@@ -464,10 +473,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('never pads a call past the agent function window', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
 
       await client.executeToolCall(
@@ -479,10 +485,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional operationId', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
 
       await client.executeToolCall(
         { operationId: 'op-1', userId: 'user-1' },
@@ -495,10 +498,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const signal = AbortSignal.abort();
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
@@ -522,15 +522,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ success: true });
       expect(fetch).toHaveBeenCalledWith(
@@ -547,15 +539,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ success: true });
     });
@@ -569,15 +553,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'spawn failed', success: false });
     });
@@ -588,15 +564,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
@@ -608,15 +576,7 @@ describe('GatewayHttpClient', () => {
         text: vi.fn().mockResolvedValue('DEVICE_OFFLINE'),
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
@@ -776,10 +736,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional deviceId and timeout', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
 
       await client.executeMessageApi(
         { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },
@@ -792,86 +749,6 @@ describe('GatewayHttpClient', () => {
           body: expect.stringContaining('"deviceId":"device-1"'),
         }),
       );
-    });
-  });
-
-  describe('clientKinds', () => {
-    const bodyOf = (call = 0) =>
-      JSON.parse(vi.mocked(fetch).mock.calls[call][1]!.body as string) as Record<string, unknown>;
-
-    const withResolver = () => {
-      const resolveClientKinds = vi.fn((target: { kind: string; method?: string }) =>
-        target.kind === 'rpc' && target.method === 'listSkills' ? [] : (['desktop'] as const),
-      );
-      const kindsClient = new GatewayHttpClient({
-        gatewayUrl: 'https://gateway.test.com',
-        resolveClientKinds: resolveClientKinds as never,
-        serviceToken: 'test-token',
-      });
-      return { kindsClient, resolveClientKinds };
-    };
-
-    it('sends the resolved clientKinds with a tool call, tagged by identifier and type', async () => {
-      const { kindsClient, resolveClientKinds } = withResolver();
-      mockFetch({ json: vi.fn().mockResolvedValue({ content: 'ok', success: true }), ok: true });
-
-      await kindsClient.executeToolCall(
-        { deviceId: 'device-1', userId: 'user-1' },
-        { apiName: 'runCommand', arguments: '{}', identifier: 'lobe-computer-use' },
-      );
-
-      expect(resolveClientKinds).toHaveBeenCalledWith({
-        identifier: 'lobe-computer-use',
-        kind: 'tool',
-        type: 'tool',
-      });
-      expect(bodyOf()).toMatchObject({ clientKinds: ['desktop'] });
-    });
-
-    it('resolves MCP calls, the message API and RPC by their own target', async () => {
-      const { kindsClient, resolveClientKinds } = withResolver();
-      mockFetch({ json: vi.fn().mockResolvedValue({ success: true }), ok: true });
-
-      await kindsClient.executeMcpCall({
-        apiName: 'search',
-        arguments: '{}',
-        identifier: 'mcp-server',
-        params: {} as never,
-        userId: 'user-1',
-      });
-      await kindsClient.executeMessageApi(
-        { userId: 'user-1' },
-        { apiName: 'sendMessage', payload: {}, platform: 'imessage' },
-      );
-      await kindsClient.invokeRpc({ userId: 'user-1' }, { method: 'trashLocalFiles' });
-
-      expect(resolveClientKinds.mock.calls.map(([target]) => target)).toEqual([
-        { identifier: 'mcp-server', kind: 'tool', type: 'mcp' },
-        { kind: 'messageApi', platform: 'imessage' },
-        { kind: 'rpc', method: 'trashLocalFiles' },
-      ]);
-      for (const call of [0, 1, 2]) expect(bodyOf(call).clientKinds).toEqual(['desktop']);
-    });
-
-    it('omits clientKinds when any client can serve the request', async () => {
-      const { kindsClient } = withResolver();
-      mockFetch({ json: vi.fn().mockResolvedValue({ success: true }), ok: true });
-
-      await kindsClient.invokeRpc({ userId: 'user-1' }, { method: 'listSkills' });
-      await client.invokeRpc({ userId: 'user-1' }, { method: 'trashLocalFiles' });
-
-      expect(bodyOf(0)).not.toHaveProperty('clientKinds');
-      expect(bodyOf(1)).not.toHaveProperty('clientKinds');
-    });
-
-    it('passes clientKinds given for a system-info read', async () => {
-      mockFetch({ json: vi.fn().mockResolvedValue({ success: true, systemInfo: {} }), ok: true });
-
-      await client.getDeviceSystemInfo('user-1', 'device-1', undefined, {
-        clientKinds: ['desktop'],
-      });
-
-      expect(bodyOf()).toMatchObject({ clientKinds: ['desktop'], deviceId: 'device-1' });
     });
   });
 

@@ -1,6 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import MessageVideo from '@/components/MessageVideo';
 import { type ChatVideoItem } from '@/types/index';
 
 interface VideoFileListViewerProps {
@@ -11,18 +12,7 @@ const VideoFileListViewer = memo<VideoFileListViewerProps>(({ items }) => {
   return (
     <Flexbox gap={8}>
       {items.map((item) => (
-        <video
-          controls
-          key={item.id}
-          style={{
-            borderRadius: 8,
-            maxHeight: 400,
-            maxWidth: '100%',
-          }}
-        >
-          <source src={item.url} />
-          {item.alt}
-        </video>
+        <MessageVideo key={item.id} maxHeight={400} src={item.url} />
       ))}
     </Flexbox>
   );

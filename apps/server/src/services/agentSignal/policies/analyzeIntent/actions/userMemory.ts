@@ -14,8 +14,10 @@ import {
 import { RequestTrigger, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
+import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   InMemoryAgentStateManager,
@@ -73,8 +75,11 @@ export interface UserMemoryActionHandlerOptions {
     sourceMessageId?: string;
     topicId?: string;
   }) => Promise<MemoryAgentActionResult>;
+  messageModel?: Pick<MessageModel, 'create'>;
   pluginModel?: Pick<PluginModel, 'query'>;
+  threadModel?: Pick<ThreadModel, 'create'>;
   userId: string;
+  userModel?: Pick<UserModel, 'getUserSettings'>;
   workspaceId?: string;
 }
 
@@ -127,9 +132,12 @@ export const buildUserMemoryActionAgentSignalMarker = ({
   ...(triggerMessageId ? { triggerMessageId } : {}),
 });
 
-const createInitialContext = (operationId: string): AgentRuntimeContext => {
+const createInitialContext = (
+  operationId: string,
+  parentMessageId?: string,
+): AgentRuntimeContext => {
   return {
-    payload: { message: [] },
+    payload: { message: [], ...(parentMessageId ? { parentMessageId } : {}) },
     phase: 'user_input',
     session: {
       messageCount: 1,
@@ -204,6 +212,25 @@ export const runMemoryActionAgent = async (
   const agentConfig = await agentService.getAgentConfig(input.agentId);
   const memoryLanguage = input.memoryLanguage ?? 'English';
 
+  // Same precedence as chat (`AiAgentService.execAgent`): the agent-level memory
+  // switch wins, otherwise the user-level setting. A user who turned memory off
+  // must not get memories written in the background either.
+  const agentMemoryEnabled = agentConfig?.chatConfig?.memory?.enabled;
+  let memoryEnabled = agentMemoryEnabled;
+  if (memoryEnabled === undefined) {
+    const userModel = options.userModel ?? new UserModel(options.db, options.userId);
+    const settings = await userModel.getUserSettings();
+    const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+    memoryEnabled = memorySettings?.enabled !== false;
+  }
+
+  if (!memoryEnabled) {
+    return {
+      detail: 'Memory is disabled for this agent or user.',
+      status: 'skipped',
+    };
+  }
+
   if (!agentConfig?.model || !agentConfig?.provider) {
     return {
       detail: 'Missing runnable agent config for memory action.',
@@ -255,7 +282,6 @@ export const runMemoryActionAgent = async (
 
   const manifestMap = toolsEngine.getEnabledPluginManifests([MemoryIdentifier]);
   const operationId = `agent-signal-memory-${nanoid()}`;
-  const initialContext = createInitialContext(operationId);
   // Lazy-loaded on purpose: `AgentRuntimeService` pulls the model-runtime core
   // (eagerly touches server-only env at module init). This policy action sits on
   // the light agentSignal request path imported by aiAgent, so a static import
@@ -269,7 +295,8 @@ export const runMemoryActionAgent = async (
   let threadId: string | undefined;
   if (input.topicId && input.sourceMessageId) {
     try {
-      const threadModel = new ThreadModel(options.db, options.userId, options.workspaceId);
+      const threadModel =
+        options.threadModel ?? new ThreadModel(options.db, options.userId, options.workspaceId);
       const thread = await threadModel.create({
         agentId: input.agentId,
         metadata: { operationId },
@@ -284,15 +311,34 @@ export const runMemoryActionAgent = async (
     }
   }
 
+  // Persist the writer prompt as the thread's user message. The runtime
+  // rebuilds `state.messages` from the DB after a tool step, so an in-memory-only
+  // seed would vanish and the next LLM call would start with an assistant
+  // message — which strict providers reject ("messages parameter is illegal")
+  // and every model would continue without its instructions or evidence.
+  const seedContent = createAgentSignalMemoryWriterPrompt({ ...input, memoryLanguage });
+  let seedMessage: { content: string; id?: string; role: 'user' } = {
+    content: seedContent,
+    role: 'user',
+  };
+  if (threadId && input.topicId) {
+    const messageModel =
+      options.messageModel ?? new MessageModel(options.db, options.userId, options.workspaceId);
+    const seedRow = await messageModel.create({
+      agentId: input.agentId,
+      content: seedContent,
+      role: 'user',
+      threadId,
+      topicId: input.topicId,
+    });
+    seedMessage = { ...seedMessage, id: seedRow.id };
+  }
+  const initialContext = createInitialContext(operationId, seedMessage.id);
+
   const createParams = {
     agentConfig: memoryRuntimeAgentConfig,
     initialContext,
-    initialMessages: [
-      {
-        content: createAgentSignalMemoryWriterPrompt({ ...input, memoryLanguage }),
-        role: 'user',
-      },
-    ],
+    initialMessages: [seedMessage],
     modelRuntimeConfig: {
       model: agentConfig.model,
       provider: agentConfig.provider,

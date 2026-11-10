@@ -1,8 +1,7 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
@@ -13,7 +12,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { AppUpdateAction, AppUpdateHint, useDeviceAppUpdate } from './AppUpdate';
 import { getChannelKind, getChannelVersion } from './channelKind';
 import { CliUpdate } from './CliUpdate';
-import FieldLabel from './FieldLabel';
+import { getIdleConnectionStatus } from './connectionCount';
 import PresenceDot from './PresenceDot';
 
 interface ConnectionCardProps {
@@ -57,6 +56,7 @@ interface ConnectionsProps {
 
 /**
  * The device's live connections, one card per client with the version it runs.
+ * Unlabelled — the host card carries the heading.
  * The desktop app's card also carries its remote update — confirmed only once
  * the device reconnects on the new version.
  */
@@ -81,7 +81,17 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
   // A restart drops the desktop app offline; keep following it in place of
   // its card until it reconnects.
   const restartInFlight =
-    !hasDesktopChannel && update.view.kind !== 'loading' && update.view.kind !== 'unavailable';
+    !device.onlineUnknown &&
+    !hasDesktopChannel &&
+    update.view.kind !== 'loading' &&
+    update.view.kind !== 'unavailable';
+
+  // A persisted row has no channels until the server answers: that is "checking",
+  // not "offline".
+  const idleStatus =
+    getIdleConnectionStatus(device) === 'checking'
+      ? t('devices.status.checking')
+      : t('devices.status.offline');
 
   const plainStatus = (text: string) => (
     <Text ellipsis fontSize={12} type={'secondary'}>
@@ -103,7 +113,6 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
 
   return (
     <Flexbox gap={8}>
-      <FieldLabel>{t('devices.detail.connections')}</FieldLabel>
       {channels.map((channel, index) => {
         const key = `${channel.connectedAt}-${index}`;
         const label = channel.channel ?? t('devices.channel.unknown');
@@ -142,7 +151,7 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
                   ? t('devices.channel.connected', {
                       time: dayjs(channels[kinds.indexOf('cli')].connectedAt).fromNow(),
                     })
-                  : t('devices.status.offline'),
+                  : idleStatus,
               )}
             />
           )}
@@ -152,9 +161,11 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
       {channels.length === 0 &&
         !restartInFlight &&
         plainStatus(
-          `${t('devices.status.offline')} · ${t('devices.lastSeen', {
-            time: dayjs(device.lastSeen).fromNow(),
-          })}`,
+          device.onlineUnknown
+            ? idleStatus
+            : `${idleStatus} · ${t('devices.lastSeen', {
+                time: dayjs(device.lastSeen).fromNow(),
+              })}`,
         )}
     </Flexbox>
   );

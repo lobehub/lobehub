@@ -18,6 +18,16 @@ export interface EnvironmentResourceRequirements {
   memoryGiB?: number;
 }
 
+/**
+ * What an environment is for. New environments are `code` — checking out a
+ * repository and running setup — since a folder someone hands files to is a
+ * folder on the drive, not an environment. `files` is what the previous
+ * release stored for such an environment; rows keep it and an edit sends it
+ * back, so it stays a value the type admits. Presentation only: it never
+ * reaches the execution plane.
+ */
+export type EnvironmentKind = 'code' | 'files';
+
 /** Portable definition, shared by device, sandbox and cluster instances. No credentials. */
 export interface EnvironmentConfiguration {
   bootstrapCommand?: string;
@@ -49,6 +59,12 @@ export interface EnvironmentConfiguration {
    */
   internetAccess?: boolean;
   /**
+   * Stored at creation; absent on environments made before there was one.
+   * Stored with the rest of the definition but stripped from every copy sent
+   * to the execution plane, so adding it changes no build's digest.
+   */
+  kind?: EnvironmentKind;
+  /**
    * Run every time work resumes in an instance, after whatever was built is
    * restored — refreshing a checkout, reapplying a migration.
    *
@@ -63,7 +79,12 @@ export interface EnvironmentConfiguration {
   sources?: EnvironmentSource[];
 }
 
-/** Remote hosts connected through lh are devices too. Clusters are controlled through rc. */
+/**
+ * Remote hosts connected through lh are devices too. A cluster instance runs
+ * on infrastructure a cluster provider manages; a managed cloud device is one
+ * (`provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1`, `providerScope`: region,
+ * `providerResourceId`: managed device id — see `../managedDevice`).
+ */
 export type EnvironmentInstanceKind = 'device' | 'sandbox' | 'cluster';
 
 export type EnvironmentInstanceStatus = 'pending' | 'ready' | 'stopped' | 'error';
@@ -90,3 +111,18 @@ export interface EnvironmentInstanceConfiguration {
  * form at creation, visible, and removable.
  */
 export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as const;
+
+/**
+ * A definition as the execution plane receives it: without the fields that are
+ * only the product's own (today, {@link EnvironmentConfiguration.kind}). The
+ * execution plane digests what it is sent to decide which build a snapshot
+ * belongs to, so a presentation field passed through would mark every
+ * existing instance as built from a different specification.
+ */
+export const toExecutionConfiguration = (
+  configuration: EnvironmentConfiguration,
+): EnvironmentConfiguration => {
+  const { kind: _kind, ...rest } = configuration;
+
+  return rest;
+};

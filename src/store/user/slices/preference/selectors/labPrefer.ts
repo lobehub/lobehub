@@ -7,6 +7,7 @@ export const labPreferSelectors = {
     s.preference.lab?.enableAgentGraphConfig ??
     DEFAULT_PREFERENCE.lab?.enableAgentGraphConfig ??
     false,
+  enableAgentIdentity: (s: UserState): boolean => s.preference.lab?.enableAgentIdentity ?? false,
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
@@ -18,16 +19,11 @@ export const labPreferSelectors = {
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
-  enableIntegrations: (s: UserState): boolean => s.preference.lab?.enableIntegrations ?? false,
-  enableInputMarkdown: (s: UserState): boolean =>
-    s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab?.enableInputMarkdown ?? true,
   enableMessageTextSelectionActions: (s: UserState): boolean =>
     s.preference.lab?.enableMessageTextSelectionActions ??
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
-  enablePersistentSandbox: (s: UserState): boolean =>
-    s.preference.lab?.enablePersistentSandbox ?? false,
   enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
   // `updateLab` writes both keys, but older clients only write the legacy
@@ -35,4 +31,5 @@ export const labPreferSelectors = {
   enableGoals: (s: UserState): boolean =>
     s.preference.lab?.enableTopicAcceptance ?? s.preference.lab?.enableGoals ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
+  enableTopicBugReport: (s: UserState): boolean => s.preference.lab?.enableTopicBugReport ?? false,
 };

@@ -1,9 +1,7 @@
 import { generateWorktreeBranchName } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import useSWR from 'swr';
 
-import { deviceKeys } from '@/libs/swr/keys';
-import { gitService } from '@/services/git';
+import { useFetchGitBranches } from '@/store/device';
 
 export interface WorktreeBranchSeed {
   /** Whether the branch list has settled. No name may be drawn before this. */
@@ -23,22 +21,21 @@ export interface WorktreeBranchSeed {
  * and a name drawn from a list that is still in flight reads as "no branches",
  * handing out a ref git is guaranteed to refuse (`cannot lock ref
  * 'refs/heads/wt/…': 'refs/heads/wt' exists`). The modal snapshots the name when
- * it opens, so a late result could never repair that. Shares the branch
- * switcher's SWR key, which means a branch dropdown opened earlier has the list
- * cached and the name is ready immediately.
+ * it opens, so a late result could never repair that. For the same reason the
+ * list persisted from an earlier session does not count as settled: it may miss
+ * a branch made since. Shares the branch switcher's replica, so a dropdown
+ * opened earlier this session has the list confirmed and the name is ready
+ * immediately.
  */
 export const useWorktreeBranchSeed = (
   deviceId: string | undefined,
   path: string,
 ): WorktreeBranchSeed => {
-  const { data: branches, isLoading } = useSWR(
-    deviceKeys.gitBranches(deviceId ?? 'local', path),
-    () => gitService.listGitBranches({ deviceId, path }),
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-  );
+  const { data: branches, error, isConfirmed } = useFetchGitBranches(deviceId, path);
 
   const excludeBranches = useMemo(() => branches?.map((branch) => branch.name) ?? [], [branches]);
-  const isReady = !isLoading;
+  // A failed read still settles (git refuses a colliding name at create time).
+  const isReady = isConfirmed || !!error;
 
   const [name, setName] = useState<string>();
 

@@ -18,7 +18,13 @@ const log = debug('lobe-server:agent-runtime:llm-relay:site');
 
 export type LlmExecutionSite =
   | { site: 'server' }
-  | { preferredClientId: string; runtimeProvider: string; site: 'client' }
+  | {
+      /** Channel to dispatch on when the executor listens on another run's; see `AgentRunLlmExecutor`. */
+      channelOperationId?: string;
+      preferredClientId: string;
+      runtimeProvider: string;
+      site: 'client';
+    }
   | { reason: ClientLlmUnavailableReason; site: 'unavailable' };
 
 export interface ResolveLlmExecutionSiteParams {
@@ -42,8 +48,9 @@ export interface ResolveProviderRelayParams {
  * Whether calls to `provider` must run on the user's device, i.e. be relayed:
  * the relay is on for the user, the provider is not platform-owned, and the
  * shared `fetchOnClient` rule — the one the client store applies, on the
- * user's config with this deployment's override (desktop, `OLLAMA_PROXY_URL`)
- * as the default — sends it to the device. `undefined` keeps it on the server.
+ * user's config with this deployment's override (desktop, `OLLAMA_PROXY_URL`,
+ * `MAGPIE_PROXY_URL`) as the default — sends it to the device. `undefined` keeps
+ * it on the server.
  */
 export const resolveProviderRelay = async ({
   db,
@@ -105,6 +112,7 @@ export const resolveLlmExecutionSite = async ({
   if (!canExecute) return { reason: 'no_executor', site: 'unavailable' };
 
   return {
+    ...(executor.channelOperationId && { channelOperationId: executor.channelOperationId }),
     preferredClientId: executor.clientId,
     runtimeProvider: relay.runtimeProvider,
     site: 'client',

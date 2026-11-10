@@ -5,11 +5,13 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { TaskModel } from '@/database/models/task';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
+import { settledCarriedItemIds } from './carryForward';
 import { runEvidenceGaps } from './evidenceCoverage';
 import {
   recordHeterogeneousDeliverableEvidence,
@@ -197,12 +199,20 @@ const executeVerifyLifecycle = async (
             });
             evidenceSubmitted = true;
           } else {
+            // A repair round's carried checks already hold their evidence. Asking
+            // the evidence turn for them anyway would add fresh rows, which reopen
+            // and re-judge every carried check on the repair's own delta reply.
+            const [runResults, runEvidence] = await Promise.all([
+              new VerifyCheckResultModel(db, userId, workspaceId).listByRun(run.id),
+              new VerifyEvidenceModel(db, userId, workspaceId).listByRun(run.id),
+            ]);
+            const { settled } = settledCarriedItemIds(runResults, runEvidence);
             await startEvidenceSubmission({
               db,
               deliverable: params.deliverable,
               goal: params.goal,
               operation: op,
-              plan,
+              plan: plan.filter((item) => !settled.has(item.id)),
               userId,
               workspaceId,
             });

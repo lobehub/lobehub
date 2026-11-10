@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo, useLayoutEffect, useRef } from 'react';
 
 import type { CellModel, CellStyle, SheetModel } from './model';

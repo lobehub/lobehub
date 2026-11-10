@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Icon } from '@lobehub/ui';
 import { BriefcaseIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +59,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton />;
+  if (data.isInitialLoading) return <IntegrationDetailSkeleton platform={'slack'} />;
 
   const { installations, links, tenantNameByTenantId } = data;
   const hasInstallations = installations.length > 0;

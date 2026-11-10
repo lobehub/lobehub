@@ -11,6 +11,15 @@ describe('describeError', () => {
     );
   });
 
+  it.each([
+    ['FOLDER_NOT_EMPTY', 'environments.files.folderNotEmpty'],
+    ['INSTANCE_READ_ONLY', 'environments.files.readOnly'],
+    ['PATH_NOT_FOUND', 'environments.files.notFound'],
+    ['DUPLICATE_INSTANCE_DIRECTORY', 'environments.files.folderTaken'],
+  ])('turns the drive refusal %s into its sentence rather than the code', (code, key) => {
+    expect(describeError(new Error(code), t, 'fallback')).toBe(`<${key}>`);
+  });
+
   it('turns a path the server confined to the instance into the same line', () => {
     expect(describeError(new Error('PATH_OUTSIDE_INSTANCE'), t, 'fallback')).toBe(
       '<environments.files.invalidPath>',

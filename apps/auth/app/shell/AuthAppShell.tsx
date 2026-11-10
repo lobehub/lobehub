@@ -1,4 +1,4 @@
-import { ModalHost } from '@lobehub/ui/base-ui';
+import { ModalHost } from '@lobehub/ui';
 import { memo, type PropsWithChildren } from 'react';
 
 import BusinessAuthProvider from '@/business/client/BusinessAuthProvider';

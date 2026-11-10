@@ -9,6 +9,12 @@ export interface AgentSignalSelfIterationPromptInput {
   context: unknown;
   /** Runtime mode that controls review-specific policy text. */
   mode: 'feedback' | 'reflection' | 'review';
+  /**
+   * Locale the owning user reads LobeHub in (e.g. `zh-CN`). User-visible
+   * output — proposals, skills, ideas — must be written in it; omitted when
+   * the language could not be resolved.
+   */
+  responseLanguage?: string;
   /** Stable source id used for tracing and idempotency. */
   sourceId: string;
   /** Stable user id owning the reviewed agent. */
@@ -74,6 +80,13 @@ export const createAgentSignalSelfIterationToolSystemRole = (
     ? 'Use resource read tools before writes when evidence is incomplete. Use getEvidenceDigest for topic/message/tool_call/agent_document evidenceRefs. Use readSelfReviewProposal only with proposal keys from proposalActivity.active or listSelfReviewProposals, never with evidence ids. Treat write tool results as the source of truth.'
     : 'Use resource read tools before writes when evidence is incomplete. Direct-apply only safe user-level memory or bounded skill updates. Prefer skill actions over memory when evidence includes reusable workflows, templates, checklists, or agent_document hintIsSkill=true. Record approval-gated or unsupported reflection output with recordSelfFeedbackIntent, and record non-actionable thoughts with recordReflectionIdea.';
 
+const createOutputLanguageInstruction = (responseLanguage: string) =>
+  [
+    `Write every user-visible field in the user's language (${responseLanguage}), whatever language the evidence is in:`,
+    'proposal titles, summaries and rationales; skill title, description and bodyMarkdown; refined systemRole text; ideas and feedback intents.',
+    'Keep identifiers unchanged: skill name slugs, tool names, ids, code, commands and quoted evidence.',
+  ].join(' ');
+
 const createNightlyReviewPromptXml = (input: AgentSignalSelfIterationPromptInput) =>
   toXml(
     u('root', [
@@ -114,6 +127,9 @@ const createNightlyReviewPromptXml = (input: AgentSignalSelfIterationPromptInput
             'If a rule says `createSelfReviewProposal`, do not stop with only explanatory text. If required fields are missing, use read tools once to gather them; only skip when evidence remains insufficient after reading.',
           ].join('\n'),
         ),
+        ...(input.responseLanguage
+          ? [x('output_language', createOutputLanguageInstruction(input.responseLanguage))]
+          : []),
         x('review_window', `Review window: ${input.window.start} to ${input.window.end}`),
         x('nightly_review_context_json', JSON.stringify(input.context)),
       ),
@@ -144,6 +160,9 @@ export const createAgentSignalSelfIterationPrompt = (
     `Source id: ${input.sourceId}`,
     `Mode: ${input.mode}`,
     `Evidence window: ${input.window.start} to ${input.window.end}`,
+    ...(input.responseLanguage
+      ? [`Output language: ${createOutputLanguageInstruction(input.responseLanguage)}`]
+      : []),
     'Self-iteration context JSON:',
     JSON.stringify(input.context),
   ].join('\n');

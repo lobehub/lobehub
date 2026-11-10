@@ -133,6 +133,46 @@ describe('Computer Use helper packaging', () => {
     ).toThrow(/expected 0.0.33/);
   });
 
+  it('retries stapler validate when the ticket lookup loses its network connection', () => {
+    const appPath = '/x/LobeHub Computer Use.app';
+    const base = createExecute();
+    let staplerCalls = 0;
+    const execute = vi.fn((command, args) => {
+      if (command === 'xcrun' && ++staplerCalls < 3) {
+        return { status: 68, stderr: 'The network connection was lost.', stdout: '' };
+      }
+      return base(command, args);
+    });
+    const sleep = vi.fn();
+    const logger = { warn: vi.fn() };
+
+    verifyComputerUseHelper(appPath, { execute, logger, sleep, version: '0.0.33' });
+
+    expect(staplerCalls).toBe(3);
+    expect(sleep.mock.calls).toEqual([[5000], [15_000]]);
+    expect(logger.warn.mock.calls.map(([message]) => message)).toEqual([
+      expect.stringMatching(/attempt 1\/3\), retrying in 5s: .*exited with 68/),
+      expect.stringMatching(/attempt 2\/3\), retrying in 15s: .*exited with 68/),
+    ]);
+  });
+
+  it('fails when stapler validate keeps failing', () => {
+    const base = createExecute();
+    const execute = vi.fn((command, args) =>
+      command === 'xcrun'
+        ? { status: 68, stderr: 'The network connection was lost.', stdout: '' }
+        : base(command, args),
+    );
+    const sleep = vi.fn();
+    const logger = { warn: vi.fn() };
+
+    expect(() =>
+      verifyComputerUseHelper('/x/LobeHub Computer Use.app', { execute, logger, sleep }),
+    ).toThrow(/stapler validate .* exited with 68/);
+    expect(execute.mock.calls.filter(([command]) => command === 'xcrun')).toHaveLength(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
   it('copies the verified helper into Contents/Library/Helpers with ditto', async () => {
     const execute = createExecute();
     const appPath = path.join(cacheDir, 'LobeHub.app');

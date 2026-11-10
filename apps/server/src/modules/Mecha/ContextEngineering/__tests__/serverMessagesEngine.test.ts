@@ -109,10 +109,12 @@ describe('serverMessagesEngine', () => {
         planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
         provider: 'openai',
       });
-      const userContent = result.find((message) => message.role === 'user')?.content;
+      const userMessages = result.filter((message) => message.role === 'user');
 
-      expect(userContent).toContain('<todo_context>');
-      expect(userContent).toContain('Keep server context in sync');
+      expect(userMessages).toHaveLength(2);
+      expect(userMessages[0].content).toBe('Hello');
+      expect(userMessages[1].content).toContain('<todo_context>');
+      expect(userMessages[1].content).toContain('Keep server context in sync');
     });
 
     it('does not inject an empty TODO state', async () => {
@@ -144,8 +146,12 @@ describe('serverMessagesEngine', () => {
         provider: 'openai',
       });
 
-      expect(serverResult.find((message) => message.role === 'user')?.content).toBe(
-        clientResult.messages.find((message) => message.role === 'user')?.content,
+      expect(
+        serverResult.filter((message) => message.role === 'user').map(({ content }) => content),
+      ).toEqual(
+        clientResult.messages
+          .filter((message) => message.role === 'user')
+          .map(({ content }) => content),
       );
     });
   });
@@ -767,27 +773,6 @@ describe('serverMessagesEngine', () => {
 
       expect(result).toBeDefined();
     });
-
-    it('should inject Page Editor context when provided', async () => {
-      const messages = createBasicMessages();
-
-      const { messages: result } = await serverMessagesEngine({
-        messages,
-        model: 'gpt-4',
-        pageContentContext: {
-          markdown: '# Test Document\n\nPage content',
-          metadata: {
-            charCount: 30,
-            lineCount: 3,
-            title: 'Test Document',
-          },
-          xml: '<doc><h1 id="1">Test Document</h1><p id="2">Page content</p></doc>',
-        },
-        provider: 'openai',
-      });
-
-      expect(result).toBeDefined();
-    });
   });
 
   describe('input template', () => {
@@ -998,11 +983,6 @@ describe('serverMessagesEngine', () => {
         },
         messages,
         model: 'gpt-4',
-        pageContentContext: {
-          markdown: '# Doc',
-          metadata: { charCount: 5, lineCount: 1, title: 'Doc' },
-          xml: '<doc><h1 id="1">Doc</h1></doc>',
-        },
         provider: 'openai',
       });
 

@@ -1,3 +1,3 @@
-import type { FormFieldProps } from '@lobehub/ui/base-ui/form';
+import type { FormFieldProps } from '@lobehub/ui/form';
 
 export const useTransferAgentsFormItem = (): FormFieldProps[] | null => null;

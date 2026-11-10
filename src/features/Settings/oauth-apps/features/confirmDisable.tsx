@@ -1,4 +1,4 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import { t } from 'i18next';
 
 /**

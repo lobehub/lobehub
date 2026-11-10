@@ -13,11 +13,16 @@ export {
 } from './mux/createOperationClient';
 export { GatewayMuxClient } from './mux/GatewayMuxClient';
 export type {
+  DocumentChannel,
+  DocumentChannelHandler,
   GatewayMuxClientEvents,
   GatewayMuxClientOptions,
   GatewayMuxStatus,
   MuxAgentEventMessage,
   MuxClientMessage,
+  MuxDocAwarenessEntry,
+  MuxDocClientMessage,
+  MuxDocServerMessage,
   MuxErrorMessage,
   MuxHeartbeatAckMessage,
   MuxHeartbeatMessage,
@@ -49,11 +54,13 @@ export {
   CLIENT_PROTOCOL_VERSION,
   isLlmRelayChannelId,
   isOwnLlmRelayChannelId,
+  isScopedLlmRelayChannelId,
   LLM_RELAY_CAPABILITY,
   LLM_RELAY_CHANNEL_HEADER,
   LLM_RELAY_CHANNEL_PREFIX,
   LLM_RELAY_CLIENT_ID_HEADER,
   LLM_RELAY_LEASE_HEADER,
+  llmRelayChannelScope,
 } from './protocol';
 export { isSessionTerminalEvent } from './terminalEvent';
 export type {
@@ -84,6 +91,7 @@ export type {
   StreamChunkData,
   StreamChunkType,
   StreamStartData,
+  StreamStartParentMessage,
   SubAgentProgressData,
   TerminalSessionStatus,
   ToolEndData,

@@ -1,7 +1,7 @@
 name = "ui-no-decorative-chrome"
 builtInAgent = "basic-structured"
 instruction = """
-You are reviewing one React component file from LobeHub's web client (styles through antd-style `createStaticStyles` with `cssVar.*` tokens, layout with `Flexbox` / `Block` from @lobehub/ui).
+You are reviewing one React component file from LobeHub's web client (styles through `@lobehub/ui` `createStaticStyles` with `cssVar.*` tokens, layout with `Flexbox` / `Block` from @lobehub/ui).
 
 Team rule, distilled from the product owner's review rejections: structure comes from spacing and alignment, not from boxes. Quotes: "不需要有底色", "这个不应该有 border 吧？", "默认不用把底色加亮，就用透明底", "不要画框", "顶上加标题也不好看", "这些 title 感觉没有必要加粗", "不要这根线", "现在的问题是这块抱着 border 的没有任何必要", "我想把这个 header 头做轻量一些，不要加这个底色和 divider 线分割", "这个容器外面的 border 有点粗了，喧宾夺主", "去掉包裹容器", "为什么这里内部有一段无意义的 padding".
 

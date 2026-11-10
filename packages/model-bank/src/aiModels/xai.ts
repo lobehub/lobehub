@@ -16,6 +16,7 @@ const xaiChatModels: AIChatModelCard[] = [
     displayName: 'Grok 4.7',
     enabled: true,
     id: 'grok-4.7',
+    isOfficial: true,
     /** @see https://docs.x.ai/developers/models/grok-4.7 */
     pricing: {
       units: [
@@ -72,6 +73,7 @@ const xaiChatModels: AIChatModelCard[] = [
     displayName: 'Grok 4.6',
     enabled: true,
     id: 'grok-4.6',
+    isOfficial: true,
     /** @see https://docs.x.ai/developers/models/grok-4.6 */
     pricing: {
       units: [
@@ -130,11 +132,36 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.5',
     id: 'grok-4.5',
+    isOfficial: true,
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.3, upTo: 199_999 },
+            { rate: 0.6, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 199_999 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 6, upTo: 199_999 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-07-08',
@@ -158,6 +185,7 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.3',
     id: 'grok-4.3',
+    isOfficial: true,
     knowledgeCutoff: '2025-12',
     pricing: {
       units: [
@@ -356,6 +384,71 @@ const xaiChatModels: AIChatModelCard[] = [
 ];
 
 const xaiImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'Generate images from text prompts, edit existing images with up to 5 reference images, or iteratively refine images through multi-turn conversations, with selectable quality.',
+    displayName: 'Grok Imagine Image 2.0',
+    enabled: true,
+    id: 'grok-imagine-image-2.0',
+    isOfficial: true,
+    parameters: {
+      aspectRatio: {
+        default: 'auto',
+        enum: [
+          'auto',
+          '1:1',
+          '3:4',
+          '4:3',
+          '9:16',
+          '16:9',
+          '2:3',
+          '3:2',
+          '9:19.5',
+          '19.5:9',
+          '9:20',
+          '20:9',
+          '1:2',
+          '2:1',
+          '21:9',
+          '5:2',
+        ],
+      },
+      imageUrls: { default: [], maxCount: 5 },
+      prompt: {
+        default: '',
+      },
+      // The API also accepts `auto` (the default), which serves `low` for generation and `medium`
+      // for editing; the card pins `low` so the lookup key is always defined.
+      quality: {
+        default: 'low',
+        enum: ['low', 'medium'],
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
+    },
+    pricing: {
+      units: [
+        {
+          // Output price per image by `${quality}_${resolution}`. xAI also lists 1.5K tiers
+          // ($0.05 low, $0.07 medium) but its resolution parameter only accepts 1k and 2k.
+          // https://docs.x.ai/developers/pricing
+          lookup: {
+            prices: { low_1k: 0.04, low_2k: 0.06, medium_1k: 0.06, medium_2k: 0.08 },
+            pricingParams: ['quality', 'resolution'],
+          },
+          name: 'imageGeneration',
+          strategy: 'lookup',
+          unit: 'image',
+        },
+        // Every reference image sent with a request is billed.
+        { name: 'imageInput', rate: 0.01, strategy: 'fixed', unit: 'image' },
+      ],
+    },
+    releasedAt: '2026-08-08',
+    type: 'image',
+  },
   {
     description:
       'Generate images from text prompts, edit existing images with natural language, or iteratively refine images through multi-turn conversations.',

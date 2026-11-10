@@ -1,10 +1,16 @@
 'use client';
 
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { Center, Flexbox, Icon, lobeStaticStylish } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  lobeStaticStylish,
+} from '@lobehub/ui';
 import { useSize } from 'ahooks';
-import { createStaticStyles, cx } from 'antd-style';
 import { ArrowRightIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import Marquee from 'react-fast-marquee';
@@ -65,7 +71,7 @@ const CloudBanner = memo<{ mobile?: boolean }>(({ mobile }) => {
       <b>{t('alert.cloud.title', { name: LOBE_CHAT_CLOUD })}:</b>
       <span>
         {t(mobile ? 'alert.cloud.descOnMobile' : 'alert.cloud.desc', {
-          credit: new Intl.NumberFormat('en-US').format(500_000),
+          credit: new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(0.5),
           name: LOBE_CHAT_CLOUD,
         })}
       </span>

@@ -10,9 +10,8 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Input, TextArea } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormInstance } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Input, TextArea } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormInstance } from '@lobehub/ui/form';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

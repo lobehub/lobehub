@@ -1,0 +1,1004 @@
+{
+  "version": "5.8.0",
+  "$comment": "Single source of truth for routing (route.mjs), progressive disclosure (refs.mjs) and isolation checks (check-structure.mjs). Edit here first, then the matching stage file.",
+  "stageOrder": [
+    "00-brief",
+    "05-init",
+    "10-decode",
+    "20-direction",
+    "30-structure",
+    "40-flow",
+    "50-visual",
+    "60-system",
+    "70-detail",
+    "75-copy",
+    "80-review"
+  ],
+  "stages": {
+    "00-brief": {
+      "title": "业务理解",
+      "file": "stages/00-brief.md",
+      "question": "这一页给谁、为了哪个决定或任务而存在",
+      "loads": [
+        "references/admin-archetypes.md",
+        "references/models.md"
+      ],
+      "allowedRuleIds": [
+        "P",
+        "M-01",
+        "M-04"
+      ],
+      "keywords": [
+        "业务",
+        "用户是谁",
+        "目标用户",
+        "这页是干什么",
+        "这页是做什么",
+        "该放什么",
+        "先放什么",
+        "主任务",
+        "从业务出发",
+        "信息优先级",
+        "使用场景"
+      ]
+    },
+    "05-init": {
+      "title": "项目接入与初始化",
+      "file": "stages/05-init.md",
+      "question": "这个项目的指南、产品画像与组件盘点写在哪、有没有写；装完/升级后两轮自迭代是否完成",
+      "loads": [
+        "references/init.md"
+      ],
+      "allowedRuleIds": [
+        "I"
+      ],
+      "keywords": [
+        "初始化",
+        "接入",
+        "agents.md",
+        "agents md",
+        "项目指南",
+        "建立指南",
+        "写入规则",
+        "自迭代",
+        "沉淀规则",
+        "回写规则",
+        "配置这个项目",
+        "产品画像",
+        "组件盘点",
+        "项目画像",
+        "升级后刷新",
+        "升级后初始化",
+        "project-scan",
+        "适用性",
+        "自我迭代"
+      ]
+    },
+    "10-decode": {
+      "title": "截图解析",
+      "file": "stages/10-decode.md",
+      "question": "这张图里有什么结构、什么取值，各自映射到哪个 token / 组件",
+      "loads": [
+        "references/design.md"
+      ],
+      "allowedRuleIds": [
+        "D-02",
+        "D-04",
+        "D-05",
+        "D-11"
+      ],
+      "keywords": [
+        "截图",
+        "还原",
+        "照着",
+        "设计稿",
+        "figma",
+        "参考图",
+        "像素级",
+        "1:1",
+        "对照稿"
+      ]
+    },
+    "20-direction": {
+      "title": "视觉方向与审美",
+      "file": "stages/20-direction.md",
+      "question": "这一页靠什么被记住：方向、字阶、配色比例、构图、签名动作",
+      "loads": [
+        "references/aesthetics.md",
+        "references/craft.md",
+        "references/models.md"
+      ],
+      "allowedRuleIds": [
+        "A",
+        "K-01",
+        "K-04",
+        "K-09",
+        "M-05"
+      ],
+      "keywords": [
+        "视觉方向",
+        "风格",
+        "调性",
+        "品牌感",
+        "惊艳",
+        "氛围",
+        "首屏",
+        "hero",
+        "主视觉",
+        "高级感",
+        "设计感",
+        "没有记忆点",
+        "太普通",
+        "像模板"
+      ]
+    },
+    "30-structure": {
+      "title": "结构与组件",
+      "file": "stages/30-structure.md",
+      "question": "是不是用对的 lobe-ui 零件、按对的骨架搭起来",
+      "loads": [
+        "references/components.md",
+        "references/ecosystem.md",
+        "references/design.md",
+        "references/craft.md"
+      ],
+      "allowedRuleIds": [
+        "C",
+        "E-01",
+        "E-03",
+        "E-04",
+        "E-05",
+        "E-06",
+        "D-01",
+        "D-06",
+        "D-07",
+        "K-10",
+        "D-11",
+        "C-11"
+      ],
+      "keywords": [
+        "组件",
+        "base-ui",
+        "antd",
+        "迁移",
+        "骨架",
+        "外壳",
+        "布局结构",
+        "导入",
+        "provider",
+        "createstyles",
+        "图表用哪个",
+        "徽标",
+        "换成",
+        "用哪个组件",
+        "pro-components"
+      ]
+    },
+    "40-flow": {
+      "title": "信息架构、交互与文案",
+      "file": "stages/40-flow.md",
+      "question": "用户能不能看懂、走完主路径，页面顺序是否服务关键决定",
+      "loads": [
+        "references/admin-archetypes.md",
+        "references/copy.md",
+        "references/models.md"
+      ],
+      "allowedRuleIds": [
+        "P",
+        "W-01",
+        "W-02",
+        "W-03",
+        "W-07",
+        "M-01",
+        "M-06",
+        "M-08"
+      ],
+      "keywords": [
+        "交互",
+        "流程",
+        "主路径",
+        "信息架构",
+        "层级不清",
+        "层级",
+        "按钮文字",
+        "标题",
+        "说明文字",
+        "确认框",
+        "步骤",
+        "向导",
+        "简化",
+        "太复杂",
+        "精简",
+        "操作路径",
+        "跳转",
+        "工作流",
+        "表单流程",
+        "去掉多余"
+      ]
+    },
+    "50-visual": {
+      "title": "视觉取值打磨",
+      "file": "stages/50-visual.md",
+      "question": "在结构和流程已定的前提下，取值是否像一套系统、有没有 AI 味",
+      "loads": [
+        "references/design.md",
+        "references/craft.md",
+        "references/aesthetics.md",
+        "references/ecosystem.md",
+        "references/models.md"
+      ],
+      "allowedRuleIds": [
+        "D-01",
+        "D-02",
+        "D-03",
+        "D-04",
+        "D-05",
+        "D-06",
+        "D-08",
+        "D-10",
+        "D-11",
+        "K-01",
+        "K-02",
+        "K-03",
+        "K-04",
+        "K-06",
+        "K-08",
+        "K-11",
+        "K-09",
+        "A",
+        "E-02",
+        "M-02",
+        "M-08"
+      ],
+      "keywords": [
+        "间距",
+        "对齐",
+        "颜色",
+        "配色",
+        "字号",
+        "字重",
+        "排版",
+        "密度",
+        "暗色",
+        "阴影",
+        "圆角",
+        "动效",
+        "动画",
+        "ai 味",
+        "ai味",
+        "好看",
+        "精致",
+        "视觉细节",
+        "太花",
+        "太素",
+        "留白",
+        "色值",
+        "视觉"
+      ]
+    },
+    "60-system": {
+      "title": "设计系统统一",
+      "file": "stages/60-system.md",
+      "question": "多个界面之间的 token、组件语法、模式是否收敛到同一套",
+      "loads": [
+        "references/design.md",
+        "references/components.md",
+        "references/models.md"
+      ],
+      "allowedRuleIds": [
+        "D-01",
+        "D-02",
+        "D-03",
+        "D-10",
+        "D-11",
+        "C-03",
+        "M-02",
+        "C-11"
+      ],
+      "keywords": [
+        "设计系统",
+        "统一",
+        "不一致",
+        "token",
+        "收敛",
+        "规范化",
+        "normalize",
+        "组件库",
+        "全站风格",
+        "各页面风格",
+        "漂移"
+      ]
+    },
+    "70-detail": {
+      "title": "体验细节加固",
+      "file": "stages/70-detail.md",
+      "question": "在非理想状态、极端输入、键盘与窄屏下，界面是否依然成立",
+      "loads": [
+        "references/detail-checklist.md",
+        "references/craft.md",
+        "references/copy.md",
+        "references/design.md",
+        "references/models.md"
+      ],
+      "allowedRuleIds": [
+        "K-05",
+        "K-07",
+        "W-04",
+        "W-05",
+        "W-06",
+        "D-09",
+        "X",
+        "M-03",
+        "M-07"
+      ],
+      "keywords": [
+        "空态",
+        "空状态",
+        "加载",
+        "loading",
+        "报错",
+        "错误态",
+        "错误提示",
+        "空态文案",
+        "禁用",
+        "边界",
+        "长文本",
+        "溢出",
+        "可访问",
+        "a11y",
+        "无障碍",
+        "键盘",
+        "焦点",
+        "响应式",
+        "移动端",
+        "适配",
+        "窄屏",
+        "反馈",
+        "toast",
+        "极端",
+        "国际化",
+        "i18n",
+        "无权限",
+        "超时",
+        "重试"
+      ]
+    },
+    "75-copy": {
+      "title": "界面文案",
+      "file": "stages/75-copy.md",
+      "question": "界面上的每一句话，是否按本产品的文案 profile 写得准确、一致、可扫读，中文排版是否正确",
+      "loads": [
+        "references/copy-core.md",
+        "references/copy.md",
+        "references/copy-consumer.md",
+        "references/copy-saas.md",
+        "references/copy-admin.md",
+        "references/copy-devtool.md"
+      ],
+      "allowedRuleIds": [
+        "T",
+        "W-01",
+        "W-02",
+        "W-03",
+        "W-04",
+        "W-05",
+        "W-06"
+      ],
+      "keywords": [
+        "文案",
+        "措辞",
+        "用词",
+        "语气",
+        "口吻",
+        "人称",
+        "称呼",
+        "提示语",
+        "提示文案",
+        "微文案",
+        "文案优化",
+        "改文案",
+        "copywriting",
+        "ux writing",
+        "中英文空格",
+        "中英文之间",
+        "盘古之白",
+        "全角",
+        "半角",
+        "标点",
+        "错别字",
+        "翻译腔",
+        "术语不统一",
+        "本地化文案",
+        "toast 文案",
+        "tooltip 文案"
+      ]
+    },
+    "80-review": {
+      "title": "上线前审查",
+      "file": "stages/80-review.md",
+      "question": "这一版能不能放行；不能的话最该先改的两三件事回哪个 stage",
+      "loads": [
+        "references/evaluator.md",
+        "references/admin-archetypes.md"
+      ],
+      "allowedRuleIds": [
+        "*"
+      ],
+      "keywords": [
+        "审查",
+        "审一下",
+        "验收",
+        "打分",
+        "能不能上线",
+        "上线前",
+        "放行",
+        "audit",
+        "review",
+        "评审",
+        "critique",
+        "检查一遍",
+        "体检"
+      ]
+    }
+  },
+  "ruleOwners": {
+    "$comment": "Longest prefix wins. Used when the instruction names a rule id (C/D/K/E/P/A/W/X/M/T) or a lint/detail id (LOBE-*/DETAIL-*, owner = the rule's `stage` in lint-lobe.mjs / 70-detail). Named ids are authoritative: keyword hits are then only reported, not routed.",
+    "C": "30-structure",
+    "E": "30-structure",
+    "E-02": "50-visual",
+    "D": "50-visual",
+    "D-09": "70-detail",
+    "K": "50-visual",
+    "K-05": "70-detail",
+    "K-07": "70-detail",
+    "K-10": "30-structure",
+    "P": "40-flow",
+    "A": "50-visual",
+    "W": "40-flow",
+    "W-04": "70-detail",
+    "W-05": "70-detail",
+    "W-06": "70-detail",
+    "X": "70-detail",
+    "T": "75-copy",
+    "M-01": "00-brief",
+    "M-04": "00-brief",
+    "M-05": "20-direction",
+    "M-02": "50-visual",
+    "M-03": "70-detail",
+    "M-07": "70-detail",
+    "M-06": "40-flow",
+    "M-08": "40-flow",
+    "M": "40-flow"
+  },
+  "scenarioPriority": [
+    "bootstrap",
+    "screenshot-restore",
+    "pre-launch",
+    "system-unify",
+    "launch-visual",
+    "operate-build",
+    "product-polish"
+  ],
+  "scenarios": {
+    "bootstrap": {
+      "title": "项目接入 / 初始化",
+      "examples": "把项目接上 lobe-design、建立或更新 AGENTS.md、产品画像与组件盘点、升级后刷新项目层",
+      "signals": [
+        "初始化",
+        "接入",
+        "bootstrap",
+        "agents.md",
+        "agents md",
+        "项目指南",
+        "建立指南",
+        "写入规则",
+        "沉淀规则",
+        "配置这个项目",
+        "项目接入",
+        "产品画像",
+        "组件盘点",
+        "升级后刷新",
+        "升级后初始化",
+        "项目画像"
+      ],
+      "briefMode": "project",
+      "pipeline": [
+        [
+          "00-brief",
+          "项目级简报：这是什么项目、谁在用、要沉淀什么"
+        ],
+        [
+          "05-init",
+          "写入 AGENTS.md 托管块 + Round 1 产品画像 + Round 2 组件盘点（幂等）"
+        ],
+        [
+          "@selfcheck",
+          "node scripts/bootstrap.mjs --check && node scripts/project-scan.mjs --check"
+        ]
+      ],
+      "note": "写文件前必须先给用户看要写入的内容；已有内容一律保留；项目层落在 .agents/ux/，不改应用代码。"
+    },
+    "launch-visual": {
+      "title": "0→1 视觉型页面",
+      "examples": "落地页、官网首页、作品集、活动页、产品发布页",
+      "signals": [
+        "落地页",
+        "官网",
+        "首页",
+        "landing",
+        "作品集",
+        "portfolio",
+        "活动页",
+        "品牌页",
+        "宣传页",
+        "发布页",
+        "营销页",
+        "介绍页",
+        "单页"
+      ],
+      "briefMode": "subject",
+      "pipeline": [
+        [
+          "00-brief",
+          "主体清单 + 论证"
+        ],
+        [
+          "20-direction",
+          "定方向"
+        ],
+        [
+          "30-structure",
+          "落骨架"
+        ],
+        [
+          "50-visual",
+          "取值打磨"
+        ],
+        [
+          "70-detail",
+          "响应式 + 状态"
+        ],
+        [
+          "80-review",
+          "critique 模式"
+        ]
+      ],
+      "note": "已有视觉页（官网 / 落地页）只带打磨信号、没有新建信号时，降为 product-polish（不重定方向），80 按页面类型用 critique 模式。"
+    },
+    "product-polish": {
+      "title": "已有产品迭代打磨",
+      "examples": "已有页面的 refine / 体验优化 / 改版",
+      "signals": [
+        "打磨",
+        "polish",
+        "refine",
+        "体验优化",
+        "改版",
+        "精修",
+        "更好用",
+        "更好看",
+        "过一遍",
+        "优化",
+        "提升体验"
+      ],
+      "briefMode": "compressed",
+      "pipeline": [
+        [
+          "00-brief",
+          "简报压缩为一段"
+        ],
+        [
+          "40-flow",
+          "层级与主路径，含 simplify"
+        ],
+        [
+          "50-visual",
+          "取值打磨"
+        ],
+        [
+          "70-detail",
+          "状态与边界"
+        ],
+        [
+          "75-copy",
+          "按文案 profile 打磨措辞与中文排版"
+        ],
+        [
+          "80-review",
+          "放行"
+        ]
+      ],
+      "note": "不默认跑 30：已有产品打磨不重审架构；只有其他 stage 记了遗留→30 时才插入。"
+    },
+    "operate-build": {
+      "title": "后台 / 看板 / 表单 / 工作流（新建或重做）",
+      "examples": "控制台列表页、监控看板、审批流、配置表单、计费页",
+      "signals": [
+        "后台",
+        "看板",
+        "dashboard",
+        "控制台",
+        "console",
+        "admin",
+        "表单",
+        "工作流",
+        "审批",
+        "列表页",
+        "详情页",
+        "设置页",
+        "管理页",
+        "监控",
+        "计费",
+        "用量",
+        "会话",
+        "对话",
+        "聊天",
+        "消息流",
+        "chat",
+        "conversation",
+        "会话页",
+        "对话页"
+      ],
+      "buildSignals": [
+        "新建",
+        "做一个",
+        "搭一个",
+        "从零",
+        "从 0",
+        "0 到 1",
+        "重做",
+        "重构",
+        "设计一个",
+        "实现一个",
+        "加一个页面",
+        "build",
+        "重新设计",
+        "重新做",
+        "开发一个"
+      ],
+      "briefMode": "archetype",
+      "pipeline": [
+        [
+          "00-brief",
+          "按后台原型出完整简报"
+        ],
+        [
+          "40-flow",
+          "规划模式：L1–L6"
+        ],
+        [
+          "30-structure",
+          "按原型与 L2 搭骨架"
+        ],
+        [
+          "50-visual",
+          "取值打磨"
+        ],
+        [
+          "70-detail",
+          "按 L5 补齐状态与边界"
+        ],
+        [
+          "75-copy",
+          "按 product.md 的文案 profile 统一措辞与中文排版"
+        ],
+        [
+          "80-review",
+          "放行"
+        ]
+      ]
+    },
+    "system-unify": {
+      "title": "设计系统统一",
+      "examples": "多页面风格不一、token 漂移、组件写法收敛",
+      "signals": [
+        "设计系统",
+        "统一",
+        "不一致",
+        "token",
+        "收敛",
+        "规范化",
+        "normalize",
+        "组件库",
+        "全站风格",
+        "各页面风格",
+        "漂移"
+      ],
+      "briefMode": "scope",
+      "pipeline": [
+        [
+          "00-brief",
+          "范围与基准页"
+        ],
+        [
+          "60-system",
+          "漂移盘点与裁定"
+        ],
+        [
+          "30-structure",
+          "只处理 60 派发的组件收敛"
+        ],
+        [
+          "50-visual",
+          "只处理 60 派发的取值收敛"
+        ],
+        [
+          "80-review",
+          "一致性复核"
+        ]
+      ]
+    },
+    "screenshot-restore": {
+      "title": "截图 / 设计稿还原",
+      "examples": "照着截图做、还原设计稿、参考竞品图",
+      "signals": [
+        "截图",
+        "还原",
+        "设计稿",
+        "figma",
+        "照着",
+        "参考图",
+        "对照稿",
+        "像素级"
+      ],
+      "briefMode": "reverse",
+      "pipeline": [
+        [
+          "00-brief",
+          "从截图反推任务与层级"
+        ],
+        [
+          "10-decode",
+          "结构清单 + 取值→token 映射"
+        ],
+        [
+          "30-structure",
+          "按清单搭骨架"
+        ],
+        [
+          "50-visual",
+          "按映射取值"
+        ],
+        [
+          "70-detail",
+          "补截图里没有的状态与窄屏"
+        ],
+        [
+          "80-review",
+          "对照模式"
+        ]
+      ]
+    },
+    "pre-launch": {
+      "title": "上线前审查",
+      "examples": "能不能上线、发布前体检、验收打分",
+      "signals": [
+        "上线前",
+        "能不能上线",
+        "发布前",
+        "验收",
+        "audit",
+        "审查",
+        "放行",
+        "体检",
+        "能不能发"
+      ],
+      "briefMode": "reuse",
+      "pipeline": [
+        [
+          "00-brief",
+          "复用已有简报，没有就一段话"
+        ],
+        [
+          "80-review",
+          "audit 模式：只记录不修"
+        ],
+        [
+          "@backflow",
+          "按回流表跳到对应 stage，最多 3 条"
+        ],
+        [
+          "80-review",
+          "确认轮，最多一轮"
+        ]
+      ]
+    }
+  },
+  "anchorStages": {
+    "$comment": "If the only concern hit is the scenario's anchor stage, treat the instruction as macro for that scenario.",
+    "screenshot-restore": "10-decode",
+    "pre-launch": "80-review",
+    "system-unify": "60-system",
+    "launch-visual": "20-direction",
+    "bootstrap": "05-init"
+  },
+  "macroSignals": [
+    "整体",
+    "全面",
+    "全站",
+    "重构",
+    "重做",
+    "从零",
+    "从 0",
+    "0 到 1",
+    "完整",
+    "端到端",
+    "一整套",
+    "redesign",
+    "重新设计"
+  ],
+  "liteBriefStages": [
+    "20-direction",
+    "40-flow",
+    "50-visual",
+    "70-detail",
+    "75-copy",
+    "80-review"
+  ],
+  "ambiguousSuggestions": [
+    "整体打磨（product-polish）：00 → 40 → 50 → 70 → 75 → 80",
+    "上线前体检（pre-launch）：80 audit，只出问题清单",
+    "只看视觉细节：00 lite → 50",
+    "只改文案：00 lite → 75（按 product.md 的文案 profile）"
+  ],
+  "intentSignals": [
+    {
+      "phrases": [
+        "体验不好",
+        "体验差",
+        "不好用",
+        "难用",
+        "不顺手",
+        "很别扭",
+        "用起来费劲",
+        "不够顺"
+      ],
+      "executable": "把「不好用」还原成一次具体的失败：<角色> 在 <哪一步> 想 <做什么>，但 <卡在哪>；期望看到 <可见结果>",
+      "stages": [
+        "40-flow"
+      ],
+      "measures": [
+        "完成主任务要几步",
+        "哪些地方需要额外解释才能继续",
+        "在哪一步失败或放弃"
+      ]
+    },
+    {
+      "phrases": [
+        "丑",
+        "难看",
+        "不好看",
+        "不太好看"
+      ],
+      "executable": "把「丑」落到可控的取值上：先指出是 <层级 | 留白 | 字阶 | 配色比例> 里的哪一项不合格，再给期望值",
+      "stages": [
+        "50-visual"
+      ],
+      "measures": [
+        "区块间距 vs 组内间距",
+        "字阶档数与相邻比值",
+        "强调色出现的处数"
+      ]
+    },
+    {
+      "phrases": [
+        "太乱",
+        "有点乱",
+        "乱糟糟",
+        "很乱"
+      ],
+      "executable": "把「乱」说成分组失败：哪几块被看成了一组、哪几块本该分开；先改间距与对齐，再考虑加边框",
+      "stages": [
+        "40-flow"
+      ],
+      "measures": [
+        "信息层级排序",
+        "分组信号（间距/对齐/表面）"
+      ]
+    },
+    {
+      "phrases": [
+        "看不清",
+        "看不清楚",
+        "看不见"
+      ],
+      "executable": "把「看不清」定位到具体元素与外观：<元素> 在 <明/暗> 下与背景的对比度是多少，期望达到 AA",
+      "stages": [
+        "50-visual"
+      ],
+      "measures": [
+        "正文 4.5:1 / 大字与组件 3:1",
+        "是否只靠颜色表达状态"
+      ]
+    },
+    {
+      "phrases": [
+        "找不到",
+        "不知道点哪",
+        "不知道从哪"
+      ],
+      "executable": "把「找不到」写成路径缺口：用户想 <做什么>，却在 <哪一层> 找不到入口；期望入口出现在 <哪个位置>",
+      "stages": [
+        "40-flow"
+      ],
+      "measures": [
+        "入口在第几屏",
+        "主路径是否有死胡同"
+      ]
+    },
+    {
+      "phrases": [
+        "太慢",
+        "很卡",
+        "卡顿",
+        "加载很久"
+      ],
+      "executable": "把「慢」写成可观察的状态缺失：<动作> 超过 300ms 时有没有加载态、超过 10s 有没有超时与重试",
+      "stages": [
+        "70-detail"
+      ],
+      "measures": [
+        "加载态分档（300ms / 2s / 10s）",
+        "是否有重试入口",
+        "刷新失败是否保留数据"
+      ]
+    },
+    {
+      "phrases": [
+        "有点土",
+        "很土",
+        "老气",
+        "过时"
+      ],
+      "executable": "把「过时」指到具体来源：<配色 | 字阶 | 圆角 | 阴影 | 图标风格> 哪一项像上一代，期望改成什么",
+      "stages": [
+        "50-visual"
+      ],
+      "measures": [
+        "配色比例与灰阶来源",
+        "圆角与阴影档位",
+        "图标是否统一"
+      ]
+    },
+    {
+      "phrases": [
+        "有点问题",
+        "有点奇怪",
+        "感觉不对",
+        "说不上来",
+        "哪里怪怪的",
+        "看着别扭"
+      ],
+      "ask": "具体是哪个页面、哪个状态？你期望看到什么，实际看到什么？"
+    }
+  ],
+  "modelSignals": {
+    "$comment": "模型的口语说法 → 规则 id。第 1 步按「点名编号」解析（优先于关键词），归属唯一由 ruleOwners 决定。",
+    "双钻": "M-01",
+    "双钻模型": "M-01",
+    "问题定义": "M-01",
+    "方案发散": "M-01",
+    "格式塔": "M-02",
+    "格式塔原理": "M-02",
+    "接近性": "M-02",
+    "相似性": "M-02",
+    "共同区域": "M-02",
+    "尼尔森": "M-03",
+    "启发式": "M-03",
+    "十大启发式": "M-03",
+    "可用性诊断": "M-03",
+    "kano": "M-04",
+    "卡诺": "M-04",
+    "峰终": "M-05",
+    "峰终定律": "M-05",
+    "记忆点": "M-05",
+    "福格": "M-06",
+    "福格行为模型": "M-06",
+    "行为模型": "M-06",
+    "旅程地图": "M-07",
+    "用户旅程": "M-07",
+    "认知负荷": "M-08",
+    "hick": "M-08",
+    "米勒": "M-08"
+  }
+}

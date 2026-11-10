@@ -1,7 +1,14 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
-import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  toast,
+} from '@lobehub/ui';
 import {
   AlertTriangle,
   ArrowRight,

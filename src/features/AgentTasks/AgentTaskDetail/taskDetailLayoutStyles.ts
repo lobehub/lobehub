@@ -1,4 +1,4 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 export const TASK_DETAIL_SIDEBAR_MIN_WIDTH = 720;
 

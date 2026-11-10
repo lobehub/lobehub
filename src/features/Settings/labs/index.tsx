@@ -1,17 +1,18 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Alert, Skeleton, Switch, Tag } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Alert, Flexbox, Switch, Tag, Tooltip } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { LabsFormSkeleton } from '@/components/Skeleton/Settings/tabs/Labs';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
@@ -43,7 +44,21 @@ const LabsForm = memo(() => {
   const labChecked = useUserStore((s) =>
     LAB_FEATURES.map(({ flag }) => labPreferSelectors[flag](s)),
   );
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
   const form = useForm();
+
+  // Cross-surface experiments. Platform-specific ones (Electron main-process
+  // features) live in the Desktop group; workspace experiments only show to
+  // users with workspace access. Everything else is General.
+  const generalItems = LAB_FEATURES.filter(
+    (feature) => !feature.desktopOnly && !feature.workspaceOnly,
+  );
+  const workspaceItems = enableWorkspace
+    ? LAB_FEATURES.filter((feature) => feature.workspaceOnly)
+    : [];
+  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
+  // in-app browser (renderer-retained Electron webviews).
+  const desktopItems = LAB_FEATURES.filter((feature) => feature.desktopOnly);
 
   if (!isUserStateInit) {
     // A failed user-state init must show error + Retry, not a permanent skeleton
@@ -55,14 +70,15 @@ const LabsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton.Text rows={5} />;
+    // Only the form waits for user state; the alert above it is already settled.
+    return <LabsFormSkeleton />;
   }
 
   const checkedByFlag = Object.fromEntries(
     LAB_FEATURES.map(({ flag }, index) => [flag, labChecked[index]]),
   );
 
-  const toFormItem = ({ flag, i18nKey, stage }: LabFeatureItem): FormFieldProps => ({
+  const toFormItem = ({ flag, i18nKey, noteI18nKey, stage }: LabFeatureItem): FormFieldProps => ({
     children: (
       <Switch
         checked={checkedByFlag[flag]}
@@ -70,7 +86,14 @@ const LabsForm = memo(() => {
         onChange={(next: boolean) => updateLab({ [flag]: next })}
       />
     ),
-    desc: tLabs(`features.${i18nKey}.desc`),
+    desc: noteI18nKey ? (
+      <Flexbox>
+        <span>{tLabs(`features.${i18nKey}.desc`)}</span>
+        <span>{tLabs(`features.${noteI18nKey}.note`)}</span>
+      </Flexbox>
+    ) : (
+      tLabs(`features.${i18nKey}.desc`)
+    ),
     label: (
       <SettingsSearchAnchor id={`labs-${flag}`}>
         <Flexbox horizontal align={'center'} gap={8}>
@@ -82,19 +105,19 @@ const LabsForm = memo(() => {
     minWidth: undefined,
   });
 
-  // Cross-surface experiments. Platform-specific ones (Electron main-process
-  // features) live in the Desktop group below; everything else is General.
-  const generalItems = LAB_FEATURES.filter((feature) => !feature.desktopOnly);
-  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
-  // in-app browser (renderer-retained Electron webviews).
-  const desktopItems = LAB_FEATURES.filter((feature) => feature.desktopOnly);
-
   const items: FormGroupItem[] = [
     {
       children: generalItems.map((item) => toFormItem(item)),
       title: tLabs('group.general'),
     },
   ];
+
+  if (workspaceItems.length > 0) {
+    items.push({
+      children: workspaceItems.map((item) => toFormItem(item)),
+      title: tLabs('group.workspace'),
+    });
+  }
 
   // The Desktop group only renders in the Electron shell — all its experiments
   // are main-process features that do not exist on web.

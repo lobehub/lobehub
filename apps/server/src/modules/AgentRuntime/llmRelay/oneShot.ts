@@ -1,4 +1,5 @@
 import type { LlmRelayDeadlines } from '@lobechat/agent-gateway-client';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type {
   ChatMethodOptions,
   ChatStreamPayload,
@@ -113,7 +114,7 @@ class OneShotRelayRuntime implements RequestModelRuntime {
 const noClientRequestError = (provider: string) =>
   createClientLlmExecutorUnavailableError(provider, 'no_executor', {
     context: 'no_client_request',
-    message: `${provider} runs on the user's device, and no open LobeHub tab is attached to this request to run it.`,
+    message: `${provider} runs on the user's device, and no open ${BRANDING_NAME} tab is attached to this request to run it.`,
   });
 
 export interface InitModelRuntimeForRequestOptions {

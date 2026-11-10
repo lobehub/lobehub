@@ -35,6 +35,7 @@ describe('useNotificationAgentMeta', () => {
     expect(result.current).toEqual({
       avatar: 'https://cdn.example/cron-bot.png',
       backgroundColor: '#abcdef',
+      id: 'agt_1',
       title: 'Cron Bot',
     });
   });
@@ -49,15 +50,16 @@ describe('useNotificationAgentMeta', () => {
       }),
     );
 
-    expect(result.current).toEqual(liveMeta);
+    expect(result.current).toEqual({ ...liveMeta, id: 'agt_1' });
   });
 
-  it('falls back to the default avatar when the snapshot has none', () => {
+  it('leaves the avatar empty when the snapshot has none (generated avatar)', () => {
     const { result } = renderHook(() =>
       useNotificationAgentMeta('/task/tsk_1', { agent: { id: 'agt_1' } }),
     );
 
-    expect(result.current?.avatar).toBeTruthy();
+    expect(result.current?.avatar).toBeUndefined();
+    expect(result.current?.id).toBe('agt_1');
   });
 
   it('still resolves the agent from an /agent/:id actionUrl without a snapshot', () => {

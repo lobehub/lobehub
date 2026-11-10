@@ -401,6 +401,49 @@ describe.each(CASES)('$name list replica', (list) => {
     expect(ids(await stored())).toEqual(['b']);
   });
 
+  it('applies a delete confirmed after an account switch to the account that asked', async () => {
+    serve(() => ['a', 'b']);
+    const first = renderHook(() => useFetch(), { wrapper });
+    await waitFor(async () => expect(ids(await stored())).toEqual(['a', 'b']));
+    const deletingUser = rowScope;
+
+    let finishDelete!: () => void;
+    vi.spyOn(memoryCRUDService, list.deleteMethod).mockImplementation(
+      () => new Promise((resolve) => (finishDelete = () => resolve(undefined))) as never,
+    );
+    let deleting!: Promise<void>;
+    act(() => {
+      deleting = remove('a');
+    });
+    await waitFor(() => expect(finishDelete).toBeTypeOf('function'));
+    first.unmount();
+
+    // The account switches while the server deletes; the new one shows its own 'a'.
+    useScope(`${list.name}-user-${randomUUID()}:personal`);
+    serve(() => ['a', 'c']);
+    renderHook(() => useFetch(), { wrapper });
+    await waitFor(() => expect(ids(view())).toEqual(['a', 'c']));
+    await waitFor(async () => expect(ids(await stored())).toEqual(['a', 'c']));
+
+    await act(async () => {
+      finishDelete();
+      await deleting;
+    });
+
+    // The asking account's persisted rows lose the row...
+    await waitFor(async () =>
+      expect(
+        ids(
+          (await list.resource.storage.get({ queryKey: storageKey(), scope: deletingUser }))
+            ?.data as ListData,
+        ),
+      ).toEqual(['b']),
+    );
+    // ...while the account on screen keeps its own list.
+    expect(ids(view())).toEqual(['a', 'c']);
+    expect(ids(await stored())).toEqual(['a', 'c']);
+  });
+
   it('removes a row optimistically and rolls it back when the server rejects', async () => {
     serve(() => ['a', 'b']);
     renderHook(() => useFetch(), { wrapper });

@@ -1,14 +1,14 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip } from '@lobehub/ui';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { RAIL_WIDTH } from '@/features/NavRail/const';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
@@ -41,7 +41,11 @@ const navPanelSelector = (s: GlobalState) => {
 };
 
 const useNavPanelWidth = () => {
-  return useGlobalStore(navPanelSelector);
+  const width = useGlobalStore(navPanelSelector);
+  // Under `im_layout` the list column starts after the icon rail, so the
+  // titlebar spans both.
+  const imLayout = useImLayout();
+  return imLayout && width > 0 ? width + RAIL_WIDTH : width;
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -53,6 +57,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   root: css`
     transition: width 0.2s ${cssVar.motionEaseOut};
+
+    &[data-resizing] {
+      transition: none;
+    }
 
     @media (prefers-reduced-motion: reduce) {
       transition: none;
@@ -70,6 +78,7 @@ const NavigationBar = memo(() => {
   const activeRecentScope = useElectronStore((state) => state.activeRecentScope);
 
   const leftPanelWidth = useNavPanelWidth();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
 
   useWatchBroadcast('windowFullscreenChanged', ({ isFullScreen }) => {
     if (isMac) setIsWindowFullScreen(isFullScreen);
@@ -142,6 +151,7 @@ const NavigationBar = memo(() => {
       horizontal
       align="center"
       className={styles.root}
+      data-resizing={navPanelResizing || undefined}
       data-width={leftPanelWidth}
       gap={8}
       justify={isMac || isWindows ? 'space-between' : 'end'}

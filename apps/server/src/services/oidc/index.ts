@@ -33,6 +33,11 @@ export class OIDCService {
     return new OIDCService(provider);
   }
 
+  async findAuthorizationCodeResource(code: string) {
+    const authorizationCode = await this.provider.AuthorizationCode.find(code);
+    return authorizationCode?.resource;
+  }
+
   async getInteractionDetails(uid: string) {
     const { req, res } = await createContextForInteractionDetails(uid);
     return this.provider.interactionDetails(req, res);

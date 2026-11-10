@@ -16,6 +16,29 @@ const currentTopicThreads = (s: ChatStoreState) => {
   return s.threadMaps[s.activeTopicId] || [];
 };
 
+/**
+ * Whether the active topic's thread list has a value to render — hydrated from
+ * the local copy or fetched. With no active topic there is nothing to wait for.
+ */
+const isCurrentTopicThreadsLoaded = (s: ChatStoreState): boolean =>
+  !s.activeTopicId || s.threadMaps[s.activeTopicId] !== undefined;
+
+/**
+ * The Portal's thread is missing from a list that was only restored from the
+ * local copy. The snapshot may predate the thread, so this is still loading —
+ * not "no such thread" — until the server answers.
+ */
+const isPortalThreadPending = (s: ChatStoreState): boolean => {
+  const topicId = s.activeTopicId;
+  if (!topicId || !s.portalThreadId) return false;
+
+  const threads = s.threadMaps[topicId];
+  if (threads === undefined) return true;
+  if (threads.some((thread) => thread.id === s.portalThreadId)) return false;
+
+  return s.threadListReplica?.entries[topicId]?.source === 'storage';
+};
+
 const currentPortalThread = (s: ChatStoreState): ThreadItem | undefined => {
   if (!s.portalThreadId) return undefined;
 
@@ -199,6 +222,8 @@ export const threadSelectors = {
   getThreadsByTopic,
   hasThreadBySourceMsgId,
   isActiveThreadSubagent,
+  isCurrentTopicThreadsLoaded,
+  isPortalThreadPending,
   portalAIChats,
   portalAIChatsWithHistoryConfig,
   portalDisplayChatsString,

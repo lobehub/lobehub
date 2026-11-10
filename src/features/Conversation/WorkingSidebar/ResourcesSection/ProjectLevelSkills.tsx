@@ -1,9 +1,10 @@
 import type React from 'react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   type SkillListItem,
   SkillSection,
   SkillsList,
@@ -28,14 +29,21 @@ interface ProjectLevelSkillsProps {
    * collapsed to a single visible source and wants the list rendered flat.
    */
   hideHeader?: boolean;
+  /** Only render skills matching this query. */
+  searchQuery?: string;
   workingDirectory: string;
 }
 
 const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
-  ({ deviceId, hideHeader, workingDirectory }) => {
+  ({ deviceId, hideHeader, searchQuery = '', workingDirectory }) => {
     const { t } = useTranslation('chat');
     const { error, getRowActions, mutate, onOpenFile, onOpenSkill, projectItems } =
       useProjectSkills(workingDirectory, deviceId);
+
+    const items = useMemo(
+      () => filterSkillItems(projectItems, searchQuery),
+      [projectItems, searchQuery],
+    );
 
     // A failed scan must surface an error + Retry, not silently vanish (ux Read
     // §1.1). Only genuinely-empty (no error) keeps the "hide the section" behavior.
@@ -52,10 +60,12 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
       );
     }
 
+    if (items.length === 0) return null;
+
     const list = (
       <SkillsList
         getRowActions={getRowActions}
-        items={projectItems}
+        items={items}
         onOpenFile={onOpenFile}
         onOpenSkill={onOpenSkill}
         onSkillDragStart={handleSkillDragStart}
@@ -67,7 +77,7 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
     return (
       <SkillSection
         sectionHeader={{
-          count: projectItems.length,
+          count: items.length,
           title: t('workingPanel.skills.section.project'),
         }}
       >

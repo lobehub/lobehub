@@ -29,6 +29,12 @@ import {
   BrowserManifest,
   BrowserRenders,
 } from '@lobechat/builtin-tool-browser/client';
+import { CanvasInspectors, CanvasManifest } from '@lobechat/builtin-tool-canvas/client';
+import {
+  ChannelInspectors,
+  ChannelManifest,
+  ChannelRenders,
+} from '@lobechat/builtin-tool-channel/client';
 import {
   ClaudeCodeApiName,
   ClaudeCodeIdentifier,
@@ -50,6 +56,7 @@ import {
   DashboardInterventions,
   DashboardManifest,
   DashboardRenders,
+  LegacyDashboardIdentifier,
 } from '@lobechat/builtin-tool-dashboard/client';
 import {
   GoalInspectors,
@@ -58,6 +65,7 @@ import {
   GoalRenders,
   GoalSupervisorInspectors,
   GoalSupervisorManifest,
+  LegacyGoalIdentifier,
 } from '@lobechat/builtin-tool-goal/client';
 import {
   GroupAgentBuilderInspectors,
@@ -202,6 +210,7 @@ import { registerBuiltinRenders } from './renders';
 import { registerBuiltinStreamings } from './streamings';
 import { TwitterIdentifier, TwitterInspectors } from './twitter';
 
+const COPILOT_IDENTIFIER = 'copilot';
 const DROID_IDENTIFIER = 'droid';
 const DEVIN_IDENTIFIER = 'devin';
 const QODER_IDENTIFIER = 'qoder';
@@ -261,10 +270,15 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [ChannelManifest.identifier]: ChannelRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
     [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
+    [COPILOT_IDENTIFIER]: {
+      execute: RunCommandRender as BuiltinRender,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
     },
@@ -280,6 +294,8 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
     [GoalManifest.identifier]: GoalRenders as Record<string, BuiltinRender>,
+    // Goal tool calls persisted before the rename to `builtin-goal`.
+    [LegacyGoalIdentifier]: GoalRenders as Record<string, BuiltinRender>,
     [ImageGenerationManifest.identifier]: ImageGenerationRenders as Record<string, BuiltinRender>,
     [VideoGenerationManifest.identifier]: VideoGenerationRenders as Record<string, BuiltinRender>,
     [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
@@ -294,16 +310,22 @@ export const registerBuiltinToolSurfaces = (): void => {
     [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
     [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
     [DashboardManifest.identifier]: DashboardRenders as Record<string, BuiltinRender>,
+    // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
+    [LegacyDashboardIdentifier]: DashboardRenders as Record<string, BuiltinRender>,
     [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
     [UserInteractionIdentifier]: UserInteractionRenders as Record<string, BuiltinRender>,
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
     [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
     [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
-    [OPENCODE_IDENTIFIER]: heterogeneousCliRenders,
+    [OPENCODE_IDENTIFIER]: {
+      ...heterogeneousCliRenders,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [PI_IDENTIFIER]: heterogeneousCliRenders,
     [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
       ...CodexRenders,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
       command_execution: RunCommandRender as BuiltinRender,
     },
     [GithubIdentifier]: GithubRenders,
@@ -311,6 +333,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [ChannelManifest.identifier]: ChannelInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.
     // New manifests and execution routes only advertise lobe-computer-use.
@@ -325,6 +348,12 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
+    [COPILOT_IDENTIFIER]: {
+      execute: createRunCommandInspector(
+        'builtins.lobe-local-system.apiName.runCommand',
+      ) as BuiltinInspector,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
     },
@@ -343,6 +372,8 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [GoalManifest.identifier]: GoalInspectors as Record<string, BuiltinInspector>,
+    // Goal tool calls persisted before the rename to `builtin-goal`.
+    [LegacyGoalIdentifier]: GoalInspectors as Record<string, BuiltinInspector>,
     [GoalSupervisorManifest.identifier]: GoalSupervisorInspectors,
     [ImageGenerationManifest.identifier]: ImageGenerationInspectors as Record<
       string,
@@ -367,15 +398,24 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+    [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
+    // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
+    [LegacyDashboardIdentifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
-    [OPENCODE_IDENTIFIER]: heterogeneousCliInspectors,
+    [OPENCODE_IDENTIFIER]: {
+      ...heterogeneousCliInspectors,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
     [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
-    'codex': CodexInspectors,
+    'codex': {
+      ...CodexInspectors,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
     [TwitterIdentifier]: TwitterInspectors,
@@ -422,6 +462,14 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    codex: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
+    [COPILOT_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]:
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
@@ -431,6 +479,10 @@ export const registerBuiltinToolSurfaces = (): void => {
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
     },
     [QODER_IDENTIFIER]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    [OPENCODE_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [CredsIdentifier]: CredsInterventions as Record<string, BuiltinIntervention>,
     [CloudSandboxManifest.identifier]: CloudSandboxInterventions as Record<
       string,
@@ -441,11 +493,15 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [GoalManifest.identifier]: GoalInterventions as Record<string, BuiltinIntervention>,
+    // Goal tool calls persisted before the rename to `builtin-goal`.
+    [LegacyGoalIdentifier]: GoalInterventions as Record<string, BuiltinIntervention>,
     [LobeAgentManifest.identifier]: LobeAgentInterventions as Record<string, BuiltinIntervention>,
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,
     [MessageManifest.identifier]: MessageInterventions as Record<string, BuiltinIntervention>,
     [DashboardManifest.identifier]: DashboardInterventions as Record<string, BuiltinIntervention>,
+    // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
+    [LegacyDashboardIdentifier]: DashboardInterventions as Record<string, BuiltinIntervention>,
     [TaskManifest.identifier]: TaskInterventions as Record<string, BuiltinIntervention>,
     [UserInteractionIdentifier]: UserInteractionInterventions as Record<
       string,

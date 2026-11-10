@@ -5,6 +5,7 @@ import debug from 'debug';
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useConversationStoreApi } from './store';
@@ -15,7 +16,6 @@ import {
   type ConversationContext,
   type ConversationHooks,
   createComposerTarget,
-  type MessagesChangeMeta,
   type OperationState,
 } from './types';
 
@@ -28,49 +28,27 @@ export interface StoreUpdaterProps {
   actionsBar?: ActionsBarConfig;
   composerTarget?: ComposerTarget;
   context: ConversationContext;
-  /**
-   * Whether external messages have been initialized
-   */
-  hasInitMessages?: boolean;
   hooks?: ConversationHooks;
   /**
-   * External messages to sync into the store
+   * A static transcript, held by the store instead of the chat store bucket
    */
   messages?: UIChatMessage[];
-  /**
-   * Callback when messages are fetched or changed internally
-   */
-  onMessagesChange?: (
-    messages: UIChatMessage[],
-    context: ConversationContext,
-    meta?: MessagesChangeMeta,
-  ) => void;
   /**
    * External operation state (from ChatStore)
    */
   operationState?: OperationState;
   /**
-   * Skip internal message fetching (when external messages are provided)
+   * Do not sync the transcript
    */
   skipFetch?: boolean;
 }
 
 const StoreUpdater = memo<StoreUpdaterProps>(
-  ({
-    actionsBar,
-    composerTarget,
-    context,
-    hasInitMessages,
-    hooks,
-    messages,
-    onMessagesChange,
-    operationState,
-    skipFetch,
-  }) => {
+  ({ actionsBar, composerTarget, context, hooks, messages, operationState, skipFetch }) => {
     const storeApi = useConversationStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
-    const prevMessagesRef = useRef<UIChatMessage[] | undefined>(undefined);
     const contextKey = messageMapKey(context);
+    const isStatic = !!messages;
     const resolvedComposerTarget = useMemo(
       () => composerTarget ?? createComposerTarget(contextKey),
       [composerTarget, contextKey],
@@ -80,71 +58,54 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('composerTarget', resolvedComposerTarget);
     useStoreUpdater('context', context);
     useStoreUpdater('hooks', hooks!);
-    useStoreUpdater('onMessagesChange', onMessagesChange);
     useStoreUpdater('operationState', operationState!);
-    useStoreUpdater('skipFetch', skipFetch!);
-
-    // When external messages are provided, mark as initialized
-    useStoreUpdater('messagesInit', skipFetch ? true : (hasInitMessages ?? false));
 
     // Reset store state before paint when context changes.
     // useLayoutEffect fires after commit but before browser paint, and React processes
     // store updates triggered here synchronously — so subscribers re-render before paint.
     const prevContextKeyRef = useRef(contextKey);
     useLayoutEffect(() => {
-      if (prevContextKeyRef.current !== contextKey) {
-        prevContextKeyRef.current = contextKey;
-        prevMessagesRef.current = undefined;
+      if (prevContextKeyRef.current === contextKey) return;
+      prevContextKeyRef.current = contextKey;
 
-        // Update context first so replaceMessages uses the correct context
-        // when calling onMessagesChange (otherwise writes to the old topic key)
-        storeApi.setState({
-          ...createEphemeralResetState(),
-          // The store shows one conversation: the previous one's replica
-          // bookkeeping must not describe the next one's rows.
-          messageReplica: { entries: {}, scope: storeApi.getState().messageReplica.scope },
-          context,
-          dbMessages: messages ?? [],
-          displayMessages: [],
-          messagesInit: false,
-        });
-
-        // If messages are already available, sync them immediately.
-        // skipOnMessagesChange: this is external → internal sync; echoing back
-        // through onMessagesChange would re-write the SWR cache with the (possibly
-        // partial) bucket and discard an in-flight switch-time revalidation.
-        if (messages) {
-          storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
-          storeApi.setState({ messagesInit: true });
-        }
-      }
+      storeApi.setState({
+        ...createEphemeralResetState(),
+        context,
+        dbMessages: [],
+        displayMessages: [],
+        // A static transcript is always loaded; a chat bucket says so itself.
+        messagesInit: isStatic,
+      });
+      // The mirror below re-reads the next bucket in this same pre-paint pass.
+      if (messages) storeApi.getState().replaceMessages(messages);
     }, [contextKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Sync external messages into store
+    // Mirror the chat store bucket: every write to it — a fetch, a stream
+    // chunk, an edit from any surface — reaches this store synchronously.
+    useLayoutEffect(() => {
+      // Set here, not by a post-paint updater: the mirror reads them below.
+      storeApi.setState({
+        skipFetch: isStatic || !!skipFetch,
+        transcriptSource: isStatic ? 'static' : 'chat',
+      });
+      if (isStatic) return;
+      const bucket = contextKey;
+      const sync = () => storeApi.getState().internal_syncChatTranscript();
+      sync();
+      return useChatStore.subscribe((state, prev) => {
+        if (
+          state.dbMessagesMap[bucket] !== prev.dbMessagesMap[bucket] ||
+          state.messagesMap[bucket] !== prev.messagesMap[bucket]
+        )
+          sync();
+      });
+    }, [contextKey, isStatic, skipFetch, storeApi]);
+
+    // A static transcript follows its prop.
     useEffect(() => {
-      if (messages) {
-        const prevMessages = prevMessagesRef.current;
-        const prevCount = prevMessages?.length ?? 0;
-        const newCount = messages.length;
-        const isSameReference = prevMessages === messages;
-        const storeMessages = storeApi.getState().dbMessages;
-
-        log(
-          '[StoreUpdater] messages effect | contextKey=%s | prevCount=%d | newCount=%d | sameRef=%s | storeCount=%d | messageIds=%o',
-          contextKey,
-          prevCount,
-          newCount,
-          isSameReference,
-          storeMessages.length,
-          messages.slice(0, 5).map((m) => m.id),
-        );
-
-        prevMessagesRef.current = messages;
-        // External → internal sync: never echo back through onMessagesChange
-        // (would poison the SWR cache with the possibly-partial bucket and
-        // discard an in-flight revalidation — see DataAction.replaceMessages).
-        storeApi.getState().replaceMessages(messages, { skipOnMessagesChange: true });
-      }
+      if (!messages) return;
+      log('[StoreUpdater] static messages | contextKey=%s | count=%d', contextKey, messages.length);
+      storeApi.getState().replaceMessages(messages);
     }, [messages, storeApi, contextKey]);
 
     return null;

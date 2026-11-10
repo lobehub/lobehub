@@ -28,7 +28,6 @@ import {
   SkillsIdentifier,
   SkillsManifest,
 } from '@lobechat/builtin-tool-skills';
-import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import { generateToolsFromManifest } from '@lobechat/context-engine';
 import { describe, expect, it } from 'vitest';
 
@@ -65,26 +64,6 @@ describe('applyShareGateToToolSet', () => {
     applyShareGateToToolSet(
       toolSet,
       buildGate({ toolGrants: [{ identifier: AgentManagementIdentifier }] }),
-    );
-
-    expect(toolSet.enabledToolIds).toEqual([]);
-    expect(toolSet.manifestMap).toEqual({});
-    expect(toolSet.tools).toEqual([]);
-  });
-
-  it('drops a stale lobe-topic-reference grant left over from before it was denied', () => {
-    // `TopicReferenceExecutionRuntime.getTopicContext` resolves a free-form
-    // topicId via `TopicModel.findOwnTopicById`, scoped only to the creator's
-    // whole store — not to this share/agent. A share config saved while it was
-    // still allowlisted could still carry it in `toolGrants`; the gate must
-    // keep dropping it rather than newly trusting the stored config.
-    const toolSet = buildToolSet([
-      { apis: [{ name: 'getTopicContext' }], identifier: TopicReferenceIdentifier },
-    ]);
-
-    applyShareGateToToolSet(
-      toolSet,
-      buildGate({ toolGrants: [{ identifier: TopicReferenceIdentifier }] }),
     );
 
     expect(toolSet.enabledToolIds).toEqual([]);

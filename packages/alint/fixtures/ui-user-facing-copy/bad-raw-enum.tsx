@@ -1,6 +1,6 @@
 // Fixture: an activity row printing the raw event kind and a hard-coded label.
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface ActivityRowProps {

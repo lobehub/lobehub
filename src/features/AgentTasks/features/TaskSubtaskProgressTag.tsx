@@ -1,8 +1,6 @@
 import type { TaskDetailSubtask, TaskSubtaskProgress } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import type { DropdownMenuProps } from '@lobehub/ui/base-ui';
-import { DropdownMenu, Progress, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import type { DropdownMenuProps } from '@lobehub/ui';
+import { Block, cssVar, DropdownMenu, Flexbox, Progress, Text, toast } from '@lobehub/ui';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,7 +43,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
     return list;
   }
 
-  const taskMap = new Map(nodes.map((item) => [item.identifier, item]));
+  const taskMap = new Map(nodes.map((item) => [item.id!, item]));
   const depthMemo = new Map<string, number>();
 
   const getDepth = (identifier: string, stack: Set<string>): number => {
@@ -55,7 +53,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
     if (stack.has(identifier)) return 0;
 
     const node = taskMap.get(identifier);
-    const parentIdentifier = node?.blockedBy;
+    const parentIdentifier = node?.blockedById;
     if (!node || !parentIdentifier || !taskMap.has(parentIdentifier)) {
       depthMemo.set(identifier, 0);
       return 0;
@@ -70,7 +68,7 @@ const flattenSubtasks = (nodes: TaskDetailSubtask[]) => {
   };
 
   return nodes.map((task) => ({
-    depth: getDepth(task.identifier, new Set<string>()),
+    depth: getDepth(task.id!, new Set<string>()),
     task,
   }));
 };
@@ -131,7 +129,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
       const itemStatus = toTaskStatus(subtask.task.status);
 
       return {
-        key: subtask.task.identifier,
+        key: subtask.task.id!,
         label: (
           <Flexbox horizontal align="center" gap={8}>
             {subtask.depth > 0 && <div style={{ flex: 'none', width: subtask.depth * 16 }} />}
@@ -208,6 +206,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
         style={{
           borderRadius: 24,
           cursor: hasDropdown || onRequestSubtasks ? 'pointer' : undefined,
+          flex: 'none',
         }}
         onClick={hasDropdown || onRequestSubtasks ? handleTagClick : undefined}
         onContextMenu={onRequestSubtasks ? handleTagClick : undefined}
@@ -219,7 +218,7 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
           strokeColor={cssVar.colorSuccess}
           type={'circle'}
         />
-        <Text fontSize={12} type={'secondary'}>
+        <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type={'secondary'}>
           {data.text}
         </Text>
       </Block>

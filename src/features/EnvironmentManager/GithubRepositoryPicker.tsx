@@ -1,16 +1,14 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { ArrowRightIcon, LockIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { sandboxStorageService } from '@/services/sandboxStorage';
+
+import { useGithubRepositories } from './useGithubRepositories';
 
 const styles = createStaticStyles(({ css }) => ({
   field: css`
@@ -110,9 +108,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
     navigate('/settings/credential');
   };
 
-  const { data, isLoading } = useSWR('sandbox-github-repositories', () =>
-    sandboxStorageService.listGithubRepositories(),
-  );
+  const { data, isLoading, isValidating, retry, state } = useGithubRepositories();
 
   // Memoised, not a bare `??` fallback: a fresh `[]` on every render would
   // make both lists below recompute every time, which is exactly what they are
@@ -131,35 +127,50 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
     [owner, repositories],
   );
 
-  // Both of these are the same kind of answer — "there is nothing to pick from
-  // yet, and here is what to do about it" — so they share one shape. An empty
-  // list on a live connection usually means the connection cannot see the
-  // organization the person is thinking of, which is fixed in the same place.
   const guide =
-    data?.connected === false
-      ? { action: 'connect', text: t('environments.github.notConnected') }
-      : !isLoading && repositories.length === 0
-        ? { action: 'review', text: t('environments.github.noRepositories') }
-        : undefined;
+    state === 'error'
+      ? {
+          action: 'retry',
+          text: t(
+            repositories.length > 0
+              ? 'environments.github.refreshFailed'
+              : 'environments.github.loadFailed',
+          ),
+        }
+      : state === 'disconnected'
+        ? { action: 'connect', text: t('environments.github.notConnected') }
+        : state === 'empty'
+          ? { action: 'review', text: t('environments.github.noRepositories') }
+          : undefined;
 
-  if (guide)
+  const guideContent = guide && (
+    <div className={styles.guide} role={state === 'error' ? 'alert' : undefined}>
+      <span className={styles.guideText}>{guide.text}</span>
+      <Button
+        loading={guide.action === 'retry' && isValidating}
+        size={'small'}
+        onClick={guide.action === 'retry' ? () => void retry() : connectGithub}
+      >
+        {guide.action === 'retry'
+          ? t('retry', { ns: 'common' })
+          : t(
+              guide.action === 'connect'
+                ? 'environments.github.connect'
+                : 'environments.github.reviewAccess',
+            )}
+        {guide.action !== 'retry' && <Icon icon={ArrowRightIcon} size={12} />}
+      </Button>
+    </div>
+  );
+
+  if (guide && (state !== 'error' || repositories.length === 0))
     return (
       <Flexbox gap={6}>
         <Flexbox horizontal align={'center'} gap={6}>
           <Github size={13} />
           <span className={styles.label}>{t('environments.github.label')}</span>
         </Flexbox>
-        <div className={styles.guide}>
-          <span className={styles.guideText}>{guide.text}</span>
-          <Button size={'small'} onClick={connectGithub}>
-            {t(
-              guide.action === 'connect'
-                ? 'environments.github.connect'
-                : 'environments.github.reviewAccess',
-            )}
-            <Icon icon={ArrowRightIcon} size={12} />
-          </Button>
-        </div>
+        {guideContent}
       </Flexbox>
     );
 
@@ -173,6 +184,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
         </Text>
       </Flexbox>
 
+      {guideContent}
       <Flexbox horizontal gap={8}>
         <div className={styles.field}>
           <Text fontSize={11} type={'secondary'}>

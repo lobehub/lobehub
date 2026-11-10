@@ -7,6 +7,8 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import { useTopicId } from '../hooks/useTopicId';
+
 /**
  * Which workspace controls sit next to the device switcher, in order:
  *
@@ -102,7 +104,8 @@ export const useWorkspaceSurface = (
   alwaysShowWorkspace = false,
 ): WorkspaceSurface[] => {
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const topicId = useTopicId();
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
 
   return resolveWorkspaceSurface({

@@ -40,7 +40,7 @@ describe('planAttachmentPreviews', () => {
     expect(plan.previewFileIds.size).toBe(0);
   });
 
-  // Regression: LOBE-14165. Attachment text must not push the request over the
+  // Regression: Attachment text must not push the request over the
   // compression threshold, because compression drops older attachments.
   it('inlines the newest attachments and previews older ones within the threshold', () => {
     const messages = [

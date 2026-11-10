@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, ImageSelect } from '@lobehub/ui';
-import { Select, Skeleton, Tabs } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -10,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { CommonSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Appearance';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
@@ -46,7 +46,7 @@ const Common = memo(() => {
     switchLocale(value);
   };
 
-  if (!(isStatusInit && isUserStateInit)) return <Skeleton.Text rows={5} />;
+  if (!(isStatusInit && isUserStateInit)) return <CommonSectionSkeleton />;
 
   const themeFormGroup: FormGroupItem<UserGeneralConfig> = {
     children: [

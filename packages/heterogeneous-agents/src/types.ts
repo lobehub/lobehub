@@ -56,6 +56,8 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /** Native Codex turn boundary, stable across tool-separated assistant steps. */
+  codexTurnId?: string;
   /**
    * External-trigger context for the step opened by this stream_start.
    * Set when the new step was opened in response to a repeated tool
@@ -248,10 +250,14 @@ export interface HeterogeneousToolResultImage {
   data?: string;
   /** File record id after upload to the file store. */
   fileId?: string;
+  /** Intrinsic height in pixels, read from the image header at upload time. */
+  height?: number;
   /** IANA media type, e.g. `image/png`. */
   mediaType: string;
   /** Remote URL after upload. */
   url?: string;
+  /** Intrinsic width in pixels, read from the image header at upload time. */
+  width?: number;
 }
 
 /** Data shape for tool_result events (ACP-specific) */
@@ -325,6 +331,8 @@ export interface UsageData {
  * Data shape for `step_complete` events. `phase` disambiguates the subtype:
  *   - `turn_metadata`: per-turn snapshot of model + provider + usage (once per LLM call)
  *   - `result_usage`: authoritative grand total at the end of a session
+ *   - `user_message`: Claude Code picked up a user message delivered into the
+ *     live session (`--replay-user-messages`); `uuid` is the one it was sent with
  */
 export interface StepCompleteData {
   /**
@@ -335,7 +343,7 @@ export interface StepCompleteData {
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
-  phase: 'turn_metadata' | 'result_usage';
+  phase: 'turn_metadata' | 'result_usage' | 'user_message';
   /**
    * Provider identifier for this turn — the CLI / adapter name (e.g.
    * `claude-code`, `codex`), not the underlying LLM vendor. CLI-wrapped agents
@@ -344,6 +352,8 @@ export interface StepCompleteData {
    */
   provider?: string;
   usage?: UsageData;
+  /** The replayed message's uuid (only on `user_message`). */
+  uuid?: string;
 }
 
 export interface HeterogeneousRateLimitInfo {

@@ -28,6 +28,7 @@ import {
   type AgentSkillListItem,
   agentSkillListResource,
 } from './projection';
+import { agentSkillsSelectors } from './selectors';
 
 /** The skills list has a single entry; its params carry no filter. */
 const LIST_PARAMS = {} as Record<string, never>;
@@ -57,12 +58,14 @@ export const createAgentSkillsSlice = (set: Setter, get: () => ToolStore, _api?:
 
 export class AgentSkillsActionImpl {
   readonly #detail;
+  readonly #get: () => ToolStore;
   readonly #list;
   /** One skill lives in the list row and in every loaded detail entry. */
   readonly #skill;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
+    this.#get = get;
     this.#list = createReplicaSlice(agentSkillListResource, {
       actionPrefix: 'agentSkillList',
       entity: agentSkillListEntity,
@@ -100,19 +103,18 @@ export class AgentSkillsActionImpl {
   #isCurrentScope = (scope: string): boolean => this.#list.resource.scope.get() === scope;
 
   /**
-   * Fetch the list and write it straight into the replica. `refreshAgentSkills`
-   * is also called from flows where the list hook is not mounted (installing a
+   * Fetch the list and settle it into the replica. `refreshAgentSkills` is
+   * also called from flows where the list hook is not mounted (installing a
    * suggested skill from the create-agent modal), and it must populate the
    * store regardless, so this does not just revalidate the SWR entry.
    *
-   * The scope is captured before the request and passed to `replace`, so a
-   * response that resolves after an identity switch is dropped instead of being
-   * written (and persisted) into the next scope's partition.
+   * It runs after mutations, so it never joins a request already in flight
+   * (`fresh`): that one may hold the pre-mutation list. The replica drops a
+   * response that resolves after an identity switch instead of writing (and
+   * persisting) it into the next scope's partition.
    */
   #refreshList = async (): Promise<void> => {
-    const scope = this.#captureScope();
-    const response = await agentSkillService.list();
-    this.#list.replace(LIST_PARAMS, response, scope);
+    await this.#list.fetch(LIST_PARAMS, { fresh: true });
   };
 
   createAgentSkill = async (
@@ -161,6 +163,19 @@ export class AgentSkillsActionImpl {
     const result = await agentSkillService.importFromZip(params);
     await this.#refreshList();
     return result;
+  };
+
+  /**
+   * Make sure the installed skills list is in the store, for callers that need
+   * it while no list view is mounted (assembling a chat request right after a
+   * page load). A list the server has confirmed is not requested again, while
+   * one hydrated from the persisted copy is: it can miss a skill installed on
+   * another device. A request in flight is joined. Rejects when the fetch fails; callers decide whether that is
+   * fatal.
+   */
+  ensureAgentSkillsLoaded = async (): Promise<void> => {
+    if (agentSkillsSelectors.isAgentSkillListSynced(this.#get())) return;
+    await this.#list.fetch(LIST_PARAMS);
   };
 
   refreshAgentSkills = async (): Promise<void> => {

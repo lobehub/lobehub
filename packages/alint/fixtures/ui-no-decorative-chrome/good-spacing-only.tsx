@@ -1,6 +1,6 @@
 // Fixture: structure from spacing; the only boundary is on an input.
 import { Flexbox } from '@lobehub/ui';
-import { Input } from '@lobehub/ui/base-ui';
+import { Input } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 

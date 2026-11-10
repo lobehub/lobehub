@@ -159,6 +159,77 @@ describe('activatorRuntime', () => {
     });
   });
 
+  describe('activateTools — wire-name resolution', () => {
+    // Production vent: the model requested `lobe-web-browsing____search` — the
+    // wire name from `tools[]` — while the manifest map is keyed by the plugin
+    // identifier. Activation must resolve it instead of a bare "Not found"
+    // that the model then retried until it vented.
+    const webBrowsingManifest = {
+      api: [
+        { name: 'search', parameters: {} },
+        { name: 'crawlSinglePage', parameters: {} },
+      ],
+      identifier: 'lobe-web-browsing',
+      meta: { title: 'Web Browsing' },
+      type: 'builtin',
+    } as never;
+
+    it('activates a tool requested by its wire name (identifier____apiName)', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: ['lobe-web-browsing____search'],
+      });
+
+      expect(result.content).toContain('Successfully activated tools: lobe-web-browsing.search');
+      expect(result.state?.notFound).toEqual([]);
+    }, 20_000);
+
+    it('activates a tool requested by a wire name with an MD5-compressed api segment', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: ['lobe-web-browsing____MD5HASH_abc123def456'],
+      });
+
+      expect(result.content).toContain('Successfully activated tools: lobe-web-browsing.search');
+      expect(result.state?.notFound).toEqual([]);
+    }, 20_000);
+
+    it('activates a tool whose wire name carries an MD5-compressed identifier segment via the discoverable list', async () => {
+      // Codex P2 on PR #20791: a hashed identifier segment cannot be probed
+      // against the identifier-keyed `toolManifestMap`; the runtime must use
+      // the host's discoverable list and match hashed wire-name variants
+      // locally (mirror of `ToolNameResolver.generate`).
+      const { Md5 } = await import('ts-md5');
+      const wireHash = (segment: string) =>
+        `MD5HASH_${Md5.hashStr(segment).toString().slice(0, 12)}`;
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: [`${wireHash('lobe-web-browsing')}____${wireHash('search')}`],
+      });
+
+      expect(result.content).toContain('Successfully activated tools: lobe-web-browsing.search');
+      expect(result.state?.notFound).toEqual([]);
+    }, 20_000);
+  });
+
   describe('Agent Share visitor runs', () => {
     const userSkill = {
       content: '# User skill',
@@ -248,5 +319,66 @@ describe('activatorRuntime', () => {
       ]);
       expect(result.state?.notFound).toEqual(['lobe-agent-management']);
     });
+  });
+
+  describe('activateTools — installed-but-not-pinned plugins', () => {
+    // The run's discovery pool is what feeds `toolManifestMap`; an installed
+    // plugin the agent never pinned must be resolvable from it even though it
+    // is absent from `enabledToolIds`.
+    const mcpManifest = {
+      api: [{ description: 'Send a message to a Feishu chat', name: 'sendMessage' }],
+      identifier: 'tituwork-feishu-mcp',
+      meta: { title: 'Feishu MCP' },
+      type: 'mcp',
+    };
+
+    it('activates a plugin the run only discovered, and reports the APIs it unlocked', async () => {
+      const { resolveDiscoveryPool } = await import('@lobechat/mecha');
+      const pool = resolveDiscoveryPool({
+        builtinTools: [],
+        enabledManifests: new Map(),
+        executionTarget: 'none',
+        installedManifests: [mcpManifest as never],
+      });
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: pool.manifestMap,
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['tituwork-feishu-mcp'] });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain(
+        'Successfully activated tools: tituwork-feishu-mcp.sendMessage',
+      );
+      expect(result.state.notFound).toEqual([]);
+    }, 20_000);
+
+    it('still answers "Not found" for a plugin the run disabled', async () => {
+      const { resolveDiscoveryPool } = await import('@lobechat/mecha');
+      const pool = resolveDiscoveryPool({
+        builtinTools: [],
+        disabledPluginIds: [mcpManifest.identifier],
+        enabledManifests: new Map(),
+        executionTarget: 'none',
+        installedManifests: [mcpManifest as never],
+      });
+      expect(pool.manifestMap).toEqual({});
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: pool.manifestMap,
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['tituwork-feishu-mcp'] });
+
+      expect(result.content).toContain('Not found: tituwork-feishu-mcp');
+      expect(result.content).not.toContain('Successfully activated');
+    }, 20_000);
   });
 });

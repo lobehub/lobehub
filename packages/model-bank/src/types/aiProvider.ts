@@ -351,6 +351,12 @@ export interface AiProviderDetailItem {
    * the default model that used for connection check
    */
   checkModel?: string;
+  /**
+   * provider-level behaviour switches persisted on `ai_providers.config`
+   * (e.g. `enableResponseApi`). The detail query already selects the column,
+   * the field was missing from this type.
+   */
+  config?: AiProviderConfig;
   description?: string;
   enabled: boolean;
   fetchOnClient?: boolean;

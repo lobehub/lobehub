@@ -171,14 +171,31 @@ export const activatorRuntime: ServerRuntimeRegistration = {
               description: a.description,
               name: a.name,
             })),
+            // Passed through for wire-name matching: non-builtin types
+            // (`mcp`, `standalone`) append a `____<type>` segment to the
+            // offered wire name, so resolving a copied name needs it.
             identifier: manifest.identifier,
             name: manifest.meta?.title ?? manifest.identifier,
             systemRole: manifest.systemRole,
+            type: manifest.type,
           });
         }
 
         return results;
       },
+      // Full discoverable list, for inverting `MD5HASH_…` wire-name segments
+      // and resolving bare API names: neither can be probed against the
+      // identifier-keyed map, so the runtime hashes every discoverable
+      // identifier locally and matches the generated wire-name variants. Same
+      // scoping as `getToolManifests` — the map only holds discoverable tools.
+      listToolManifests: async (): Promise<ToolManifestInfo[]> =>
+        Object.values(context.toolManifestMap ?? {}).map((manifest) => ({
+          apiDescriptions: manifest.api.map((a) => ({ description: a.description, name: a.name })),
+          identifier: manifest.identifier,
+          name: manifest.meta?.title ?? manifest.identifier,
+          systemRole: manifest.systemRole,
+          type: manifest.type,
+        })),
       markActivated: (identifiers: string[]) => {
         for (const id of identifiers) {
           if (!activatedIds.includes(id)) {

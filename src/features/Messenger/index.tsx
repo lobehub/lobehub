@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -10,7 +8,10 @@ import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
-import { MessengerPlatformDetailSkeleton } from '@/components/Skeleton/Settings/MessengerDetail';
+import {
+  MessengerListGridSkeleton,
+  MessengerPlatformDetailSkeleton,
+} from '@/components/Skeleton/Settings/MessengerDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
@@ -150,7 +151,7 @@ const MessengerSettings = memo(() => {
               errorVariant={'block'}
               isEmpty={platforms.length === 0}
               isLoading={platformsSWR.isLoading}
-              loading={<Skeleton.Text rows={3} />}
+              loading={<MessengerListGridSkeleton />}
               empty={
                 <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
               }

@@ -65,6 +65,42 @@ describe('GoalModel', () => {
     });
   });
 
+  describe('update', () => {
+    it('keeps the batch recipe the coordinator revised when a stale config is saved', async () => {
+      const goal = await goalModel.create({
+        config: { rollout: { canarySize: 3, trigger: 'canary' } },
+        title: 'Batch',
+      });
+      // A budget editor reads the goal before the break revises the recipe…
+      const stale = (await goalModel.findById(goal.id))!.config!;
+      await goalModel.updateRolloutPolicy(goal.id, {
+        ...stale.rollout,
+        spec: { recipeOutline: 'v1\n\n### v2\nfix', repeatable: true },
+      });
+      // …and saves after it, with a new canary size of its own.
+      await goalModel.update(goal.id, {
+        config: { ...stale, rollout: { ...stale.rollout, canarySize: 4 }, maxConcurrentTasks: 2 },
+      });
+
+      const config = (await goalModel.findById(goal.id))!.config!;
+      expect(config.rollout?.spec?.recipeOutline).toBe('v1\n\n### v2\nfix');
+      expect(config.rollout?.canarySize).toBe(4);
+      expect(config.maxConcurrentTasks).toBe(2);
+    });
+
+    it('keeps the rollout policy when an edit leaves it out', async () => {
+      const goal = await goalModel.create({
+        config: { rollout: { canarySize: 3, trigger: 'canary' } },
+        title: 'Batch',
+      });
+      await goalModel.update(goal.id, { config: { maxConcurrentTasks: 2 } });
+      expect((await goalModel.findById(goal.id))!.config?.rollout).toMatchObject({
+        canarySize: 3,
+        trigger: 'canary',
+      });
+    });
+  });
+
   describe('create', () => {
     it('creates a goal with defaults', async () => {
       const result = await goalModel.create({

@@ -27,6 +27,7 @@ describe('getPortalViewMinWidth', () => {
       PortalViewType.Goal,
       PortalViewType.GoalMetric,
       PortalViewType.GoalNode,
+      PortalViewType.GoalNorthStar,
       PortalViewType.TaskDetail,
       PortalViewType.TaskResult,
       PortalViewType.Thread,

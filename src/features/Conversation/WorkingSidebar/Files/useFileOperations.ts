@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { basename, dirname, join, relative } from 'pathe';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

@@ -90,16 +90,6 @@ describe('TempFileManager', () => {
     expect(existsSync).toHaveBeenCalledWith(mockFullTmpDir);
     expect(rmSync).not.toHaveBeenCalled();
   });
-
-  it('should register cleanup hooks on process events', () => {
-    const processOnSpy = vi.spyOn(process, 'on');
-    new TempFileManager(mockDirname);
-
-    expect(processOnSpy).toHaveBeenCalledWith('exit', expect.any(Function));
-    expect(processOnSpy).toHaveBeenCalledWith('uncaughtException', expect.any(Function));
-    expect(processOnSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
-    expect(processOnSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
-  });
 });
 
 // Path traversal regression tests

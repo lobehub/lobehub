@@ -13,6 +13,7 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   ChatTopicBotContext,
   EvalToolForwardingConfig,
@@ -465,6 +466,8 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /** Assistant row the run streams into, stored on `state.origin.assistantMessageId`. */
+    assistantMessageId?: string;
     /**
      * Client IP of the originating request. Spread onto `state.principal.audit.clientIp`
      * so downstream LLM-call metadata can carry it for auditing and spend
@@ -484,6 +487,8 @@ export interface OperationCreationParams {
      * callSubAgent child (which shares `isSubAgent: true`).
      */
     orchestrationRole?: 'supervisor' | 'member';
+    /** Project the run belongs to, stored on `state.origin.projectId`. */
+    projectId?: string;
     scope?: string | null;
     /** Conversation/session locator used to rebuild an authenticated Review route. */
     sessionId?: string;
@@ -568,6 +573,8 @@ export interface OperationCreationParams {
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
   initialContext: AgentRuntimeContext;
+  /** Initial LLM-call count offset for resumed operations (accumulated from previous runs) */
+  initialLlmCalls?: number;
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
@@ -585,7 +592,8 @@ export interface OperationCreationParams {
   /**
    * The client that started this run can execute relayed LLM attempts
    * (`llm_execute`). Stored on `state.host.llmExecutor`; a sub-agent run
-   * inherits its parent's when it declares none.
+   * inherits its parent's when it declares none, relaying on the parent's
+   * channel (`channelOperationId`).
    */
   llmExecutor?: AgentRunLlmExecutor;
   maxSteps?: number;
@@ -607,12 +615,23 @@ export interface OperationCreationParams {
    */
   parentOperationId?: string;
   /**
+   * Create the operation without its init: the step-0 worker runs it from this
+   * request. The init's own fields (`toolSet`, `initialMessages`, …) are then
+   * ignored and `initialContext` is only the placeholder step 0 is queued with.
+   */
+  pendingInitRequest?: AgentRunInitRequest;
+  /**
    * A project's root instruction files, collected once during operation prep.
    * Run context for the context engine to inject — see `expertise`.
    */
   projectInstructions?: ProjectInstructionFile[];
   queueRetries?: number;
   queueRetryDelay?: string;
+  /**
+   * `operationId` names an idle row a durable dispatcher reserved for this exact run. Start
+   * must initialize that reservation or fail; it never inserts a fresh row.
+   */
+  reservedOperation?: boolean;
   /** Search route resolved once before the operation starts. */
   searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */

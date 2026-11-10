@@ -1,3 +1,4 @@
+import { VERIFICATION_OUT_OF_CREDITS_ERROR } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import { classifyGoalFailure, parseQuotaResetAt } from './failureClass';
@@ -26,6 +27,7 @@ describe('classifyGoalFailure', () => {
     'The device connection service hit an error while starting this run. Nothing started on the device. This is usually temporary — try again in a moment.',
     'fetch failed: ECONNRESET',
     'RateLimitExceeded',
+    'ProviderStreamInterrupted',
   ])('reads %s as transient', (error) => {
     expect(classifyGoalFailure(error).class).toBe('transient');
   });
@@ -53,6 +55,8 @@ describe('classifyGoalFailure', () => {
     ],
     ['GATEWAY_NOT_CONFIGURED', 'gateway'],
     ['InvalidProviderAPIKey', 'credentials'],
+    // The verifier's credit refusal has no retry branch; the setup gate owns it.
+    [VERIFICATION_OUT_OF_CREDITS_ERROR, 'credentials'],
   ])('reads %s as a setup problem (%s)', (error, kind) => {
     expect(classifyGoalFailure(error)).toMatchObject({ class: 'environment', problem: { kind } });
   });

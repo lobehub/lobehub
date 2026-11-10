@@ -1,9 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { ActionIcon, cx, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ChevronDown, Plus } from 'lucide-react';
 import { useMotionValue, useSpring } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -17,6 +15,7 @@ import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
@@ -25,6 +24,7 @@ import { useResolvedTabs } from './hooks/useResolvedTabs';
 import { useStripWidth } from './hooks/useStripWidth';
 import { useTabDrag } from './hooks/useTabDrag';
 import { TAB_SPRING } from './motion';
+import { resolveCloseShortcut } from './resolveCloseShortcut';
 import { resolveTabScope } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
@@ -46,6 +46,7 @@ const TabBar = () => {
   const { allowed: canCreate, reason } = usePermission('create_content');
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
   const splitView = useElectronStore((s) => s.splitView);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const switchTab = useElectronStore((s) => s.switchTab);
@@ -106,9 +107,10 @@ const TabBar = () => {
   // their final geometry rather than spring in from nothing like a tab the user opened.
   const hasPopulated = useRef(false);
   const settleInstantly = !hasPopulated.current;
+  const followInstantly = settleInstantly || navPanelResizing;
 
   useEffect(() => {
-    if (settleInstantly) {
+    if (followInstantly) {
       targetTotal.jump(total);
       springTotal.jump(total);
       targetDividerX.jump(dividerX);
@@ -128,7 +130,7 @@ const TabBar = () => {
     springDividerX,
     tabs.length,
     stripWidth,
-    settleInstantly,
+    followInstantly,
   ]);
 
   const newTabUrl = useMemo(() => {
@@ -207,11 +209,11 @@ const TabBar = () => {
   );
 
   useWatchBroadcast('closeCurrentTabOrWindow', () => {
-    if (tabs.length > 1 && activeTabId) {
-      handleClose(activeTabId);
-    } else {
-      void electronSystemService.closeWindow();
-    }
+    const state = useElectronStore.getState();
+    const action = resolveCloseShortcut(state.tabs, state.activeTabId, state.activeTabScope);
+
+    if (action.type === 'closeTab') handleClose(action.id);
+    else void electronSystemService.closeWindow();
   });
 
   const handleNewTab = useCallback(
@@ -247,11 +249,14 @@ const TabBar = () => {
   // row would visibly widen from compact to full once the measurement lands.
   const measured = stripWidth > 0;
 
+  // The strip is flex: 1, so it owns the empty titlebar space after the last tab. It
+  // declares the drag region itself instead of relying on the TitleBar's — only the tabs
+  // and controls inside opt out with nodrag.
   return (
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={cx(electronStylish.draggable, styles.container)}
       gap={TAB_GAP}
       ref={stripRef}
       onPointerEnter={captureVisibleTabPreviews}
@@ -273,6 +278,7 @@ const TabBar = () => {
                   enterWidth={settleInstantly ? placement.width : 0}
                   enterX={settleInstantly ? placement.x : previousTotal.current}
                   index={tabIds.indexOf(placement.id)}
+                  instant={navPanelResizing}
                   isActive={placement.id === activeTabId}
                   item={tab}
                   key={placement.id}

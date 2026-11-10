@@ -14,29 +14,13 @@ export type InstalledPluginsParams = Record<string, never>;
 export const INSTALLED_PLUGINS_PARAMS: InstalledPluginsParams = {};
 
 /**
- * One installed-plugins response, tagged with the order its request started
- * in. The sync hook and the imperative refresh fetch independently, so a
- * response may settle after a newer one (or after a mutation): the tag lets
- * the slice drop it instead of painting — and persisting — an older list.
- */
-export interface InstalledPluginsResponse {
-  plugins: LobeTool[];
-  /** Start order of the request, shared by every fetch path. */
-  seq: number;
-}
-
-/**
  * Installed plugins (`user_installed_plugins`): read by the skill settings page,
  * the chat input tool picker, the agent profile and the MCP detail pages, and
  * written by install / uninstall / settings updates. A local-first replica
  * paints the persisted display projection on the first frame and lets the
  * network confirm the full records in the background.
  */
-export const installedPluginsResource = defineReplica<
-  InstalledPluginsParams,
-  LobeTool[],
-  InstalledPluginsResponse
->({
+export const installedPluginsResource = defineReplica<InstalledPluginsParams, LobeTool[]>({
   key: () => INSTALLED_PLUGINS_KEY,
   name: 'installedPlugins',
   storage: 'indexedDB',

@@ -119,10 +119,12 @@ export class BaseActionImpl {
   /** PersonaHeader confirmation deletes the persona through memoryCRUDService, then refreshes its replica. */
   deletePersona = async (): Promise<void> => {
     const { memoryCRUDService } = await import('@/services/userMemory');
+    // The account whose persona is deleted (see `refreshPersona`).
+    const user = userMemoryIdentityScope.get();
     await memoryCRUDService.deletePersona();
     // The persona is a replica view now: drop it locally and re-read server
     // truth (null) so the section disappears without waiting for the network.
-    await this.#get().refreshPersona();
+    await this.#get().refreshPersona(user);
   };
 
   /**

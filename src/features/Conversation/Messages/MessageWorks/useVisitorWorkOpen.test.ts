@@ -19,7 +19,9 @@ vi.mock('@/features/Work/ShareVisitorDocumentModal', () => ({
   createShareVisitorDocumentModal: vi.fn(),
 }));
 
-const fileWork = (fileUrl: string) =>
+vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.lobehub.com' }));
+
+const fileWork = (fileUrl?: string) =>
   ({
     event: { metadata: { fileId: 'file_1', filePath: '/hello_world.pptx', fileUrl } },
     id: 'wk_1',
@@ -48,11 +50,27 @@ describe('useVisitorWorkOpen', () => {
     windowOpen.mockRestore();
   });
 
-  it('does not open a preview for a non-http(s) file URL', () => {
+  it('previews from the /f/:id proxy instead of a non-http(s) file URL', () => {
     const { result } = renderHook(() => useVisitorWorkOpen());
 
     result.current(fileWork('javascript:alert(1)'));
 
-    expect(openFilePreview).not.toHaveBeenCalled();
+    expect(openFilePreview).toHaveBeenCalledWith({
+      fileId: 'file_1',
+      source: { name: 'hello_world.pptx', url: 'https://app.lobehub.com/f/file_1' },
+    });
+  });
+
+  // Regression: a file Work carrying only `fileId` (no persisted
+  // URL) used to return early, so clicking its card did nothing.
+  it('previews a file Work without a persisted URL from the /f/:id proxy', () => {
+    const { result } = renderHook(() => useVisitorWorkOpen());
+
+    result.current(fileWork());
+
+    expect(openFilePreview).toHaveBeenCalledWith({
+      fileId: 'file_1',
+      source: { name: 'hello_world.pptx', url: 'https://app.lobehub.com/f/file_1' },
+    });
   });
 });

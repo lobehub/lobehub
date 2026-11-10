@@ -1,7 +1,10 @@
 'use client';
 
-import { Markdown } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- rendered Markdown paragraphs get no className
+  createStaticStyles,
+  Markdown,
+} from '@lobehub/ui';
 import { GithubProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
@@ -14,15 +17,11 @@ import { KeyVaultsConfigKey, LLMProviderApiTokenKey } from '../../const';
 import { type ProviderItem } from '../../type';
 import ProviderDetail from '../default';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const fallback = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     p {
       color: ${cssVar.colorTextDescription} !important;
     }
-  `,
-  tip: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
   `,
 }));
 
@@ -46,7 +45,7 @@ const useProviderCard = (): ProviderItem => {
           />
         ),
         desc: (
-          <Markdown className={styles.markdown} fontSize={12} variant={'chat'}>
+          <Markdown className={fallback.markdown} fontSize={12} variant={'chat'}>
             {t('github.personalAccessToken.desc')}
           </Markdown>
         ),

@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { BrushIcon, CheckIcon, SquareIcon, Trash2Icon, Undo2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';

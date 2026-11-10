@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -462,6 +463,26 @@ describe('chatDockSlice', () => {
         { agentId: 'agt_1', type: PortalViewType.AgentDetail },
       ]);
       expect(result.current.showPortal).toBe(true);
+    });
+  });
+
+  describe('openMemoryDetail', () => {
+    it('should push MemoryDetail view and expose it through the selector', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openMemoryDetail({ id: 'preference-1', layer: LayersEnum.Preference });
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { id: 'preference-1', layer: LayersEnum.Preference, type: PortalViewType.MemoryDetail },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.memoryDetailView(result.current)).toEqual({
+        id: 'preference-1',
+        layer: LayersEnum.Preference,
+        type: PortalViewType.MemoryDetail,
+      });
     });
   });
 

@@ -42,9 +42,10 @@ describe('Codex app-server payload builders', () => {
     ).toEqual({
       approvalPolicy: 'never',
       config: {
-        model_provider: 'openai',
-        model_reasoning_effort: 'high',
-        service_tier: 'fast',
+        'features.default_mode_request_user_input': true,
+        'model_provider': 'openai',
+        'model_reasoning_effort': 'high',
+        'service_tier': 'fast',
       },
       cwd: '/workspace/nested',
       ephemeral: true,

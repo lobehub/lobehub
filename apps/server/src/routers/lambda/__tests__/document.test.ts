@@ -527,3 +527,47 @@ describe('documentRouter updateDocument mention notifications', () => {
     expect(mocks.notifyDocumentMention).not.toHaveBeenCalled();
   });
 });
+
+describe('documentRouter getFolderBreadcrumb', () => {
+  const caller = () =>
+    documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Folder URLs moved from `/<folderSlug>` to `folder/<folderId>`, so the chain
+  // must resolve from an id as well as from a legacy slug.
+  it('resolves the chain from a folder id', async () => {
+    mocks.findBySlug.mockResolvedValue(undefined);
+    mocks.findById.mockImplementation(async (id: string) =>
+      id === 'docs_child'
+        ? { id: 'docs_child', parentId: 'docs_root', slug: 'child', title: 'Child' }
+        : { id: 'docs_root', parentId: null, slug: 'root', title: 'Root' },
+    );
+
+    await expect(caller().getFolderBreadcrumb({ slug: 'docs_child' })).resolves.toEqual([
+      { id: 'docs_root', name: 'Root', slug: 'root' },
+      { id: 'docs_child', name: 'Child', slug: 'child' },
+    ]);
+  });
+
+  it('still resolves a legacy slug', async () => {
+    mocks.findBySlug.mockResolvedValue({
+      id: 'docs_root',
+      parentId: null,
+      slug: 'root',
+      title: 'Root',
+    });
+
+    await expect(caller().getFolderBreadcrumb({ slug: 'root' })).resolves.toEqual([
+      { id: 'docs_root', name: 'Root', slug: 'root' },
+    ]);
+    expect(mocks.findById).not.toHaveBeenCalled();
+  });
+});

@@ -33,7 +33,11 @@ export interface FileListItem {
   fileId?: string | null;
   fileType: string;
   finishEmbedding: boolean;
+  /** Whether any document or file sits under this row, so a page can expand like a folder. */
+  hasChildren?: boolean;
   id: string;
+  /** Knowledge bases the row is filed into. */
+  knowledgeBaseIds?: string[];
   /**
    * Metadata (for notes/documents)
    */
@@ -87,6 +91,8 @@ const MAX_RESOURCE_LIST_PAGE_SIZE = 100;
 
 export const QueryFileListSchema = z.object({
   category: z.string().optional(),
+  /** Keep pages out of the listing: the drive lists uploaded files and their folders. */
+  filesOnly: z.boolean().optional(),
   /** Return a bounded server-generated plain-text preview for preview surfaces. */
   includeContentPreview: z.boolean().optional(),
   knowledgeBaseId: z.string().optional(),
@@ -115,6 +121,7 @@ export type QueryFileListSchemaType = z.infer<typeof QueryFileListSchema>;
 
 export interface QueryFileListParams {
   category?: string;
+  filesOnly?: boolean;
   includeContentPreview?: boolean;
   knowledgeBaseId?: string;
   limit?: number;

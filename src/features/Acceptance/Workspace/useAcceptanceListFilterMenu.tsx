@@ -1,7 +1,7 @@
 'use client';
 
+import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
 import { Check, FolderClosed, Group, Waypoints } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -171,12 +171,15 @@ export const useAcceptanceListFilterMenu = ({
         ['time', t('acceptance.workspace.groups.byTime')],
         ['none', t('acceptance.workspace.groups.byNone')],
       ] as const
-    ).map(([key, label]) => ({
-      icon: checkIcon(groupMode === key),
-      key,
-      label,
-      onClick: () => setGroupMode(key),
-    })),
+    )
+      // Inside a project page the project is the page itself.
+      .filter(([key]) => !hostProjectId || key !== 'project')
+      .map(([key, label]) => ({
+        icon: checkIcon(groupMode === key),
+        key,
+        label,
+        onClick: () => setGroupMode(key),
+      })),
     icon: <Icon icon={Group} />,
     key: 'group-mode',
     label: t('acceptance.workspace.groups.mode'),

@@ -32,7 +32,7 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   system-only tools whose every API WRITES agent-document rows under the
   creator's account. No write grant exists to honor.
 
-- `lobe-task` / `lobe-goal`: `TaskModel`/`taskRouter` are scoped only by
+- `lobe-task` / `builtin-goal`: `TaskModel`/`taskRouter` are scoped only by
   `userId`/`workspaceId` — the CREATOR's. Every mutating and single-task-read
   API takes a model-supplied identifier resolved with no topic/conversation
   check, letting a visitor read, edit, delete, reschedule or RUN (spending
@@ -62,19 +62,6 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   tools operating on the creator's group-agent collection and membership,
   with no share-run scoping designed in — same risk class as
   `lobe-agent-management`.
-
-- `lobe-topic-reference`: `topicReferenceRuntime.getTopicContext`
-  (`apps/server/src/services/toolExecution/serverRuntimes/topicReference.ts`)
-  resolves a free-form model-supplied `topicId` via
-  `TopicModel.findOwnTopicById`, scoped only to the creator's `userId` — not
-  to this share or agent — letting a visitor's model read the summary or
-  recent messages of ANY other topic the creator owns by guessing/enumerating
-  ids. `DATA_TOOL_ACCESS_RULES` has no entry for it (it isn't a
-  memory/knowledge-base/agent-documents style store), so nothing narrows the
-  allowlist grant. The automatic `<refer_topic>` injection path
-  (`serverCallLlmContextBuilder.ts`) is separately share-scoped via
-  `isTopicVisibleToRun` and is unaffected by this denial — only the
-  model-invokable tool-call path is unsafe.
 
 Denied for lack of positive safety evidence (no confirmed exploit was
 required to withhold access — the point of default-deny is that an unproven
@@ -127,7 +114,11 @@ absence of a known exploit.
   `agentShareVisitor` runs (`serverRuntimes/cloudSandbox.ts`), and
   `lobe-creds` stays denied above so nothing ever writes `~/.creds/env`
   into that session either. No creator credential or JWT is therefore
-  reachable from inside a visitor's sandbox command.
+  reachable from inside a visitor's sandbox command. The kept manifest's
+  `systemRole` also gets `shareVisitorSystemPrompt` appended
+  (`applyShareGateToCloudSandbox` in `toolSet.ts`), so the model knows `lh`
+  is refused before it plans a flow the agent prompt or a skill routes
+  through the CLI.
 
 - `lobe-activator`: widens the run's tool surface at runtime, so it is
   allowed only because every source it reads is already the gated set.
@@ -165,7 +156,7 @@ absence of a known exploit.
   4. Activations restored from history. `operationPrep` re-derives them into
      `activatableToolIds` (`apps/server/src/services/aiAgent/pipeline/operationPrep.ts:535`) before the share
      gate prunes that list, and `AgentRuntimeService` restores only ids still
-     in it (`apps/server/src/services/agentRuntime/AgentRuntimeService.ts:1350`).
+     in it (`apps/server/src/services/agentRuntime/AgentRuntimeService/createOperation.ts:182`).
   5. Its skill fallback. `activateTools` retries a non-tool id as a skill
      name. That lookup re-checks `shareConfig.skillGrants` on every source it
      opens (`apps/server/src/services/toolExecution/serverRuntimes/activator.ts:97`), the same rule the

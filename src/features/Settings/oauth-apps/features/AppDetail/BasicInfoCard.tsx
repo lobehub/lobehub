@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Input, TextArea } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
+import { Button, Flexbox, Input, TextArea } from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,19 +1,7 @@
-/**
- * Tests for heterogeneousAgentExecutor DB persistence layer.
- *
- * Verifies the critical path: CC stream events → messageService DB writes.
- * Covers:
- *   - Tool 3-phase persistence (pre-register → create → backfill)
- *   - Tool result content updates
- *   - Multi-step assistant message creation with correct parentId chain
- *   - Content/reasoning/model/usage final writes
- *   - Sync snapshot + reset to prevent cross-step content contamination
- */
+/** CLI stream → tool persistence, turn chaining and final snapshot regression tests. */
 
 import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
-import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
-import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type { ChatTopicMetadata, HeterogeneousProviderConfig } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,9 +12,37 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
-import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../transports/hetero/heterogeneousAgentExecutor';
 import { resolveHeteroResume } from '../transports/hetero/heteroResume';
+import {
+  ccAssistant,
+  ccInit,
+  ccMessageDelta,
+  ccMessageStart,
+  ccResult,
+  ccSubagentSpawnResult,
+  ccSubagentText,
+  ccSubagentToolResult,
+  ccSubagentToolUse,
+  ccText,
+  ccThinking,
+  ccToolResult,
+  ccToolUse,
+  codexAgentMessage,
+  codexCommandCompleted,
+  codexCommandStarted,
+  codexSessionConfigured,
+  codexThreadStarted,
+  codexTodo,
+  codexTurnCompleted,
+  codexTurnStarted,
+  createMockStore,
+  defaultContext,
+  defaultParams,
+  flush,
+  flushFakeTimers,
+  setupIpcCapture,
+} from './heterogeneousAgentExecutor.testUtils';
 
 // ─── Mocks ───
 
@@ -39,7 +55,7 @@ const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
 const mockToastInfo = vi.fn();
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { info: (...args: unknown[]) => mockToastInfo(...args) },
 }));
@@ -102,10 +118,6 @@ vi.mock('@/services/agentQuota', () => ({
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
 vi.mock('../transports/gateway/gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
-  // Faithful re-impl (the real one is unmocked to keep the import cycle out of
-  // this test): only 'interrupted' / 'waiting_for_async_tool' are non-clean.
-  isCompletedRuntimeEnd: (reason?: string | null) =>
-    reason !== 'interrupted' && reason !== 'waiting_for_async_tool',
 }));
 
 // isDesktop — defaults to `false` (matching the real test env / __ELECTRON__
@@ -143,388 +155,6 @@ vi.mock('@/services/electron/completionSound', () => ({
   },
 }));
 
-// ─── Helpers ───
-
-function setupIpcCapture() {
-  // Mock window.electron.ipcRenderer
-  const listeners = new Map<string, (...args: any[]) => void>();
-  (globalThis as any).window = {
-    electron: {
-      ipcRenderer: {
-        on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
-          listeners.set(channel, handler);
-          return () => {
-            if (listeners.get(channel) === handler) listeners.delete(channel);
-          };
-        }),
-        // A separately bridged callback does not preserve the listener proxy identity.
-        removeListener: vi.fn(),
-      },
-    },
-  };
-
-  /**
-   * Per-IPC-session adapter — mimics the desktop main pipeline:
-   *   raw stdout JSON → adapter.adapt() → AgentStreamEvent → broadcast.
-   * Test fixtures still feed raw CC/Codex events, so the existing ~2.8k lines
-   * of stream-shape tests stay intact while the renderer's input boundary
-   * becomes the new `heteroAgentEvent` channel.
-   */
-  const adapters = new Map<string, AgentEventAdapter>();
-  /**
-   * IPC-session → agent type. Defaults to `claude-code` so tests that don't
-   * explicitly register codex still work; the multi-session resume test (and
-   * any codex-only suite) registers explicitly via `setAgentType`.
-   */
-  const sessionAgentType = new Map<string, string>();
-
-  const getAdapter = (sessionId: string) => {
-    if (!adapters.has(sessionId)) {
-      adapters.set(sessionId, createAdapter(sessionAgentType.get(sessionId) ?? 'claude-code'));
-    }
-    return adapters.get(sessionId)!;
-  };
-
-  return {
-    getListeners: () => listeners,
-    /** Register the agent type for an IPC session before emitting raw events. */
-    setAgentType: (sessionId: string, type: string) => {
-      sessionAgentType.set(sessionId, type);
-    },
-    /**
-     * Look up the underlying adapter for an IPC session — used by the
-     * `getSessionInfo` mock to mirror what main's `AgentStreamPipeline.sessionId`
-     * returns to the renderer's post-prompt session-id sync.
-     */
-    getAdapterSessionId: (sessionId: string) => adapters.get(sessionId)?.sessionId,
-    /**
-     * Simulate the desktop main's per-stdout-line forwarding: feed `raw`
-     * through the session's adapter, then broadcast each resulting
-     * `AgentStreamEvent` over the `heteroAgentEvent` channel.
-     */
-    emitRawLine: (sessionId: string, raw: any) => {
-      const handler = listeners.get('heteroAgentEvent');
-      const adapter = getAdapter(sessionId);
-      for (const event of adapter.adapt(raw)) {
-        handler?.(null, {
-          event: {
-            data: event.data,
-            operationId: defaultParams.operationId,
-            stepIndex: event.stepIndex,
-            timestamp: event.timestamp,
-            type: event.type,
-          },
-          sessionId,
-        });
-      }
-    },
-    /** Emit an already-adapted AgentStreamEvent, matching main-process bridge events. */
-    emitStreamEvent: (sessionId: string, event: Record<string, unknown>) => {
-      const handler = listeners.get('heteroAgentEvent');
-      handler?.(null, {
-        event: {
-          operationId: defaultParams.operationId,
-          stepIndex: 0,
-          timestamp: Date.now(),
-          ...event,
-        },
-        sessionId,
-      });
-    },
-    /** Simulate session completion */
-    emitComplete: (sessionId: string) => {
-      const handler = listeners.get('heteroAgentSessionComplete');
-      handler?.(null, { sessionId });
-    },
-    /** Simulate session error */
-    emitError: (sessionId: string, error: Record<string, unknown> | string) => {
-      const handler = listeners.get('heteroAgentSessionError');
-      handler?.(null, { error, sessionId });
-    },
-  };
-}
-
-function createMockStore(overrides: Record<string, any> = {}) {
-  // Hand out a fresh AbortController + monotonically increasing sub-op id
-  // for each subagent run, mirroring `startOperation`'s contract just
-  // enough that the executor can build dispatchers + completion calls.
-  let subOpCounter = 0;
-  const store = {
-    associateMessageWithOperation: vi.fn(),
-    completeOperation: vi.fn(),
-    dbMessagesMap: {},
-    drainQueuedMessages: vi.fn(() => []),
-    internal_dispatchMessage: vi.fn(),
-    internal_toggleToolCallingStreaming: vi.fn(),
-    markTopicUnread: vi.fn(),
-    messagesMap: {},
-    operations: {
-      'op-1': {
-        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
-        metadata: { startTime: 0 },
-      },
-    } as Record<string, any>,
-    refreshMessages: vi.fn(async () => {}),
-    refreshThreads: vi.fn(async () => {}),
-    replaceMessages: vi.fn(),
-    sendMessage: vi.fn(async () => {}),
-    startOperation: vi.fn(() => {
-      subOpCounter += 1;
-      return {
-        abortController: new AbortController(),
-        operationId: `sub-op-${subOpCounter}`,
-      };
-    }),
-    topicDataMap: {},
-    updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  } as any;
-
-  if (!store.updateOperationMetadata) {
-    store.updateOperationMetadata = vi.fn((operationId: string, metadata: Record<string, any>) => {
-      const operation = store.operations[operationId];
-      if (!operation) return;
-      operation.metadata = {
-        ...operation.metadata,
-        ...metadata,
-      };
-    });
-  }
-
-  return store;
-}
-
-const defaultContext = {
-  agentId: 'agent-1',
-  scope: 'main' as const,
-  topicId: 'topic-1',
-};
-
-const defaultParams: HeterogeneousAgentExecutorParams = {
-  assistantMessageId: 'ast-initial',
-  context: defaultContext,
-  heterogeneousProvider: { command: 'claude', type: 'claude-code' as const },
-  message: 'test prompt',
-  operationId: 'op-1',
-};
-
-/** Flush async queues */
-const flush = async () => {
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setTimeout(r, 10));
-  }
-};
-
-const flushFakeTimers = async () => {
-  for (let i = 0; i < 10; i++) {
-    await vi.advanceTimersByTimeAsync(10);
-  }
-  await Promise.resolve();
-};
-
-// ─── CC stream-json event factories ───
-
-const ccInit = (sessionId = 'cc-sess-1') => ({
-  model: 'claude-sonnet-4-6',
-  session_id: sessionId,
-  subtype: 'init',
-  type: 'system',
-});
-
-const ccAssistant = (msgId: string, content: any[], extra?: { model?: string; usage?: any }) => ({
-  message: {
-    content,
-    id: msgId,
-    model: extra?.model || 'claude-sonnet-4-6',
-    role: 'assistant',
-    usage: extra?.usage,
-  },
-  type: 'assistant',
-});
-
-const ccToolUse = (msgId: string, toolId: string, name: string, input: any = {}) =>
-  ccAssistant(msgId, [{ id: toolId, input, name, type: 'tool_use' }]);
-
-/**
- * CC subagent assistant event — carries `parent_tool_use_id` pointing back at
- * the outer `Task` tool_use. The adapter routes these through its subagent
- * handler which stamps `parentToolCallId` onto each tool payload.
- */
-const ccSubagentToolUse = (
-  msgId: string,
-  parentToolUseId: string,
-  toolId: string,
-  name: string,
-  input: any = {},
-) => ({
-  message: {
-    content: [{ id: toolId, input, name, type: 'tool_use' }],
-    id: msgId,
-    role: 'assistant',
-  },
-  parent_tool_use_id: parentToolUseId,
-  type: 'assistant',
-});
-
-/** Subagent assistant event with text content (closing summary-style turn). */
-const ccSubagentText = (msgId: string, parentToolUseId: string, text: string) => ({
-  message: {
-    content: [{ text, type: 'text' }],
-    id: msgId,
-    role: 'assistant',
-  },
-  parent_tool_use_id: parentToolUseId,
-  type: 'assistant',
-});
-
-/** The main-agent tool_result for a spawn tool_use (end of a subagent run). */
-const ccSubagentSpawnResult = (spawnToolUseId: string, finalText: string) => ({
-  message: {
-    content: [{ content: finalText, tool_use_id: spawnToolUseId, type: 'tool_result' }],
-    role: 'user',
-  },
-  type: 'user',
-});
-
-/**
- * Subagent INNER tool_result: a user event tagged with `parent_tool_use_id`,
- * which the adapter routes through its subagent path so the emitted
- * `tool_result` + `tool_end` events both carry the `subagent` peer field.
- */
-const ccSubagentToolResult = (
-  toolUseId: string,
-  parentToolUseId: string,
-  content: string,
-  isError = false,
-) => ({
-  message: {
-    content: [{ content, is_error: isError, tool_use_id: toolUseId, type: 'tool_result' }],
-    role: 'user',
-  },
-  parent_tool_use_id: parentToolUseId,
-  type: 'user',
-});
-
-const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
-
-const ccThinking = (msgId: string, thinking: string) =>
-  ccAssistant(msgId, [{ thinking, type: 'thinking' }]);
-
-const ccToolResult = (toolUseId: string, content: string, isError = false) => ({
-  message: {
-    content: [{ content, is_error: isError, tool_use_id: toolUseId, type: 'tool_result' }],
-    role: 'user',
-  },
-  type: 'user',
-});
-
-const ccResult = (isError = false, result = 'done') => ({
-  is_error: isError,
-  result,
-  type: 'result',
-});
-
-/**
- * `stream_event: message_start` — primes adapter's in-flight message.id so a
- * following `message_delta` (which has no message.id of its own) can attach
- * its authoritative usage to the correct turn.
- */
-const ccMessageStart = (msgId: string, model = 'claude-sonnet-4-6') => ({
-  event: { message: { id: msgId, model }, type: 'message_start' },
-  type: 'stream_event',
-});
-
-/**
- * `stream_event: message_delta` — the authoritative per-turn usage under
- * `--include-partial-messages` (CC's `assistant` events only echo a stale
- * message_start snapshot, so turn_metadata is driven off this event).
- */
-const ccMessageDelta = (usage: {
-  cache_creation_input_tokens?: number;
-  cache_read_input_tokens?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-}) => ({
-  event: { type: 'message_delta', usage },
-  type: 'stream_event',
-});
-
-// ─── Codex JSONL event factories ───
-
-const codexThreadStarted = (threadId = 'codex-thread-1') => ({
-  thread_id: threadId,
-  type: 'thread.started',
-});
-
-const codexSessionConfigured = (model = 'gpt-5.5') => ({
-  model,
-  type: 'session_configured',
-});
-
-const codexTurnStarted = () => ({
-  type: 'turn.started',
-});
-
-const codexAgentMessage = (id: string, text: string) => ({
-  item: {
-    id,
-    text,
-    type: 'agent_message',
-  },
-  type: 'item.completed',
-});
-
-const codexCommandStarted = (id: string, command: string) => ({
-  item: {
-    aggregated_output: '',
-    command,
-    exit_code: null,
-    id,
-    status: 'in_progress',
-    type: 'command_execution',
-  },
-  type: 'item.started',
-});
-
-const codexCommandCompleted = (id: string, command: string, aggregatedOutput: string) => ({
-  item: {
-    aggregated_output: aggregatedOutput,
-    command,
-    exit_code: 0,
-    id,
-    status: 'completed',
-    type: 'command_execution',
-  },
-  type: 'item.completed',
-});
-
-const codexTodo = (
-  lifecycle: 'item.completed' | 'item.started' | 'item.updated',
-  completed: number,
-) => ({
-  item: {
-    id: 'todo-1',
-    items: [
-      { completed: completed >= 1, text: 'Inspect' },
-      { completed: completed >= 2, text: 'Implement' },
-      { completed: completed >= 3, text: 'Verify' },
-    ],
-    status: lifecycle === 'item.completed' ? 'completed' : 'in_progress',
-    type: 'todo_list',
-  },
-  type: lifecycle,
-});
-
-const codexTurnCompleted = (usage?: {
-  cached_input_tokens?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-  reasoning_output_tokens?: number;
-}) => ({
-  ...(usage ? { usage } : {}),
-  type: 'turn.completed',
-});
-
 // ─── Tests ───
 
 describe('heterogeneousAgentExecutor DB persistence', () => {
@@ -535,9 +165,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockGetNotificationSoundFile.mockResolvedValue(undefined);
     mockPlayCompletionSound.mockResolvedValue(undefined);
     ipc = setupIpcCapture();
-    // Register the IPC session's agent type from the params the executor
-    // hands to startSession, so the helper picks the right adapter when the
-    // test starts emitting raw events.
+    // The producer adapter follows the runtime selected by the executor.
     mockStartSession.mockImplementation(async (params: any) => {
       ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
       return {
@@ -548,13 +176,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
     mockCancelSession.mockResolvedValue(undefined);
-    // Mirror the desktop main: `getSessionInfo` returns whatever the producer
-    // pipeline's adapter has extracted from the JSONL stream so far. Tests
-    // that never emit an init / thread.started event get `agentSessionId:
-    // undefined`, matching pre-Phase-0 behavior where the renderer-side
-    // adapter never observed one either. The renderer service hands the raw
-    // sessionId string straight to the mock — it's the underlying IPC handler
-    // that wraps `{ sessionId }`, and that's stubbed here.
+    // Return only the native session id observed by the producer adapter.
     mockGetSessionInfo.mockImplementation(async (sessionId: string) => ({
       agentSessionId: ipc.getAdapterSessionId(sessionId),
     }));
@@ -679,6 +301,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   it.each([
     { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: '/custom/dsh', type: 'deepseek-harness' },
+      expectedOperations: ['op-1', 'op-2'],
+    },
     { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
     {
       provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
@@ -701,24 +327,29 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
               }),
           ],
           {
-            params: { heterogeneousProvider: provider, operationId },
+            params: { heterogeneousProvider: provider, operationId, workspaceId: 'ws-1' },
             store: createMockStore({ topicDataMap: {} }),
           },
         );
       }
 
-      const environments = mockStartSession.mock.calls.map(([params]) => params.env);
-      expect(environments).toEqual(
-        expectedOperations.map((operationId) => ({
-          LOBEHUB_AGENT_ID: 'agent-1',
-          ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
-          LOBEHUB_TOPIC_ID: 'topic-1',
-        })),
+      const launches = mockStartSession.mock.calls.map(([params]) => params);
+      expect(launches).toEqual(
+        expectedOperations.map((operationId) =>
+          expect.objectContaining({
+            agentType: provider.type,
+            command: provider.command,
+            env: {
+              LOBEHUB_AGENT_ID: 'agent-1',
+              ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+              LOBEHUB_TOPIC_ID: 'topic-1',
+              LOBEHUB_WORKSPACE_ID: 'ws-1',
+            }, // captured workspace, not live navigation
+          }),
+        ),
       );
-      expect(mockSendPrompt.mock.calls.map(([params]) => params.operationId)).toEqual([
-        'op-1',
-        'op-2',
-      ]);
+      const sent = mockSendPrompt.mock.calls.map(([p]) => [p.operationId, p.workspaceId]);
+      expect(sent.flat()).toEqual(['op-1', 'ws-1', 'op-2', 'ws-1']);
     },
   );
 
@@ -1107,91 +738,97 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
     });
 
-    it('replays an early AskUserQuestion intervention after the batched tool row exists', async () => {
-      const optimisticUpdateMessagePlugin = vi.fn(async () => {});
-      const updateTopicStatus = vi.fn(async () => {});
-      const store = createMockStore({
-        optimisticUpdateMessagePlugin,
-        updateTopicStatus,
-      });
-      const get = vi.fn(() => store);
-
-      let resolveSendPrompt!: () => void;
-      mockSendPrompt.mockReturnValue(
-        new Promise<void>((resolve) => {
-          resolveSendPrompt = resolve;
-        }),
-      );
-
-      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
-      await flush();
-
-      ipc.emitRawLine('ipc-sess-1', ccInit());
-      ipc.emitStreamEvent('ipc-sess-1', {
-        data: {
-          apiName: 'askUserQuestion',
-          arguments: JSON.stringify({
-            questions: [
-              {
-                header: 'Scope',
-                options: [
-                  { description: 'Keep it narrow', label: 'Small' },
-                  { description: 'Do all of it', label: 'All' },
-                ],
-                question: 'How much should I do?',
-              },
-            ],
+    it.each([false, true])(
+      'keeps question ownership and closes its upstream tool (subagent=%s)',
+      async (subagent) => {
+        const optimisticUpdateMessagePlugin = vi.fn(async () => {});
+        const store = createMockStore({
+          optimisticUpdateMessagePlugin,
+          updateTopicStatus: vi.fn(),
+        });
+        let resolveSendPrompt!: () => void;
+        mockSendPrompt.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolveSendPrompt = resolve;
           }),
-          deadline: Date.now() + 300_000,
-          identifier: 'claude-code',
-          toolCallId: 'toolu_ask',
-        },
-        type: 'agent_intervention_request',
-      });
-      await flush();
-
-      expect(optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
-
-      ipc.emitRawLine(
-        'ipc-sess-1',
-        ccToolUse('msg_ask', 'toolu_ask', 'mcp__lobe_cc__ask_user_question', {
+        );
+        const executorPromise = executeHeterogeneousAgent(() => store, defaultParams);
+        await flush();
+        ipc.emitRawLine('ipc-sess-1', ccInit());
+        const args = {
           questions: [
             {
               header: 'Scope',
-              options: [
-                { description: 'Keep it narrow', label: 'Small' },
-                { description: 'Do all of it', label: 'All' },
-              ],
+              options: [{ label: 'Small' }, { label: 'All' }],
               question: 'How much should I do?',
             },
           ],
-        }),
-      );
-      await flush();
-
-      const toolCreateIndex = mockCreateMessage.mock.calls.findIndex(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'toolu_ask',
-      );
-      expect(toolCreateIndex).toBeGreaterThanOrEqual(0);
-      expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        mockCreateMessage.mock.calls[toolCreateIndex][0].id,
-        { intervention: { status: 'pending' } },
-        { operationId: 'op-1' },
-      );
-      expect(mockCreateMessage.mock.invocationCallOrder[toolCreateIndex]).toBeLessThan(
-        optimisticUpdateMessagePlugin.mock.invocationCallOrder[0],
-      );
-      expect(updateTopicStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
-      );
-
-      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
-      ipc.emitRawLine('ipc-sess-1', ccResult());
-      ipc.emitComplete('ipc-sess-1');
-      await flush();
-      resolveSendPrompt();
-      await executorPromise;
-    });
+        };
+        const child = { parentToolCallId: 'task-parent', subagentMessageId: 'child-turn' };
+        if (subagent) {
+          ipc.emitStreamEvent('ipc-sess-1', {
+            data: {
+              chunkType: 'tools_calling',
+              subagent: child,
+              toolsCalling: [
+                {
+                  apiName: 'askUserQuestion',
+                  arguments: JSON.stringify(args),
+                  id: 'toolu_ask',
+                  identifier: 'claude-code',
+                  type: 'default',
+                },
+              ],
+            },
+            type: 'stream_chunk',
+          });
+          await flush();
+        }
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: {
+            apiName: 'askUserQuestion',
+            arguments: JSON.stringify(args),
+            deadline: Date.now() + 300_000,
+            identifier: 'claude-code',
+            toolCallId: 'toolu_ask',
+          },
+          type: 'agent_intervention_request',
+        });
+        await flush();
+        const tools = mockCreateMessage.mock.calls.filter(
+          ([m]: any) => m.role === 'tool' && m.tool_call_id === 'toolu_ask',
+        );
+        expect(tools).toHaveLength(1);
+        const toolRow = tools[0][0];
+        const expectedContext = subagent
+          ? {
+              context: { ...defaultContext, scope: 'thread', threadId: toolRow.threadId },
+              operationId: 'op-1',
+            }
+          : { operationId: 'op-1' };
+        expect(subagent ? toolRow.threadId : !toolRow.threadId).toBeTruthy();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+          toolRow.id,
+          { intervention: { status: 'pending' } },
+          expectedContext,
+        );
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: { content: 'done', ...(subagent && { subagent: child }), toolCallId: 'toolu_ask' },
+          type: 'tool_result',
+        });
+        await flush();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenLastCalledWith(
+          toolRow.id,
+          { intervention: expect.objectContaining({ status: 'aborted' }) },
+          expectedContext,
+        );
+        ipc.emitRawLine('ipc-sess-1', ccResult());
+        ipc.emitComplete('ipc-sess-1');
+        await flush();
+        resolveSendPrompt();
+        await executorPromise;
+      },
+    );
   });
 
   // ────────────────────────────────────────────────────
@@ -1803,6 +1440,27 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       severity: 'warning',
     };
 
+    const createExpectedAuthError = (rawAuthError: string) => ({
+      ...authMetadata,
+      body: expect.objectContaining({
+        agentType: 'claude-code',
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        stderr: rawAuthError,
+      }),
+      message:
+        'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+      type: 'AgentRuntimeError',
+    });
+
+    const createExpectedAuthErrorUpdate = (rawAuthError: string) => ({
+      id: 'ast-initial',
+      type: 'updateMessage',
+      value: {
+        content: '',
+        error: createExpectedAuthError(rawAuthError),
+      },
+    });
+
     it('preserves structured quota fields for a flattened local CLI error', async () => {
       const store = createMockStore();
       mockSendPrompt.mockRejectedValueOnce({
@@ -1893,38 +1551,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          ...authMetadata,
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              ...authMetadata,
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -1946,38 +1577,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          ...authMetadata,
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              ...authMetadata,
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -2016,38 +1620,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          ...authMetadata,
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              ...authMetadata,
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -2219,6 +1796,24 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(outcome).toBeUndefined();
     });
 
+    // regression: non-image attachments were dropped on the way to the CLI.
+    it('should append non-image attachments to the prompt as download links', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        attachedFiles: [
+          { fileType: 'text/markdown', name: 'svg.md', size: 2048, url: 'https://signed/svg.md' },
+        ],
+      });
+
+      const { prompt } = mockSendPrompt.mock.calls[0][0];
+      expect(prompt).toMatch(/^test prompt\n\n<attached_files>/);
+      expect(prompt).toContain('- svg.md (text/markdown, 2.0 KB): https://signed/svg.md');
+    });
+
     it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -2276,6 +1871,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(resumedSystemContext).toBe('Follow the agent rules.');
       expect(resumedSystemContext).not.toContain('## Workspace');
       expect(resumedSystemContext).not.toContain('/Users/me/repo');
+    });
+
+    describe('edited topic replay', () => {
+      // Copied ancestry of an edited Codex topic: a tool round, then the edited prompt
+      // and this run's placeholder. The projected tool row cannot be restored here.
+      const editedRows = [
+        { content: 'Original question', id: 'u0', role: 'user' },
+        { content: '', id: 'a0', parentId: 'u0', role: 'assistant', tools: [{ id: 'call-1' }] },
+        { content: '', id: 't0', parentId: 'a0', payloadOmitted: true, role: 'tool' },
+        { content: 'Original answer', id: 'a1', parentId: 't0', role: 'assistant' },
+        { content: 'test prompt', id: 'u1', parentId: 'a1', role: 'user' },
+        { content: '...', id: 'ast-initial', parentId: 'u1', role: 'assistant' },
+      ];
+      const storeWith = (metadata: Record<string, unknown>) =>
+        createMockStore({
+          dbMessagesMap: { 'main_agent-1_topic-1': editedRows },
+          topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata }] } },
+        });
+      const codexParams = {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      };
+
+      it('replays the copied ancestry when an edited topic starts without a native session', async () => {
+        // ROOT CAUSE:
+        // The edited topic copies history into the database but has no native
+        // session, so the local CLI started blank and lost the conversation.
+        const store = storeWith({ editedFrom: { messageId: 'u-source', topicId: 'source' } });
+
+        await executeHeterogeneousAgent(
+          vi.fn(() => store),
+          codexParams,
+        );
+
+        expect(mockSendPrompt.mock.calls[0][0].systemContext).toBe(
+          [
+            '<previous_conversation>',
+            '<user>\nOriginal question\n</user>',
+            '<assistant>\nOriginal answer\n</assistant>',
+            '</previous_conversation>',
+          ].join('\n'),
+        );
+      });
+
+      it('does not replay once the edited topic has its own native session', async () => {
+        const store = storeWith({ editedFrom: { messageId: 'u-source', topicId: 'source' } });
+
+        await executeHeterogeneousAgent(
+          vi.fn(() => store),
+          { ...codexParams, resumeSessionId: 'codex-thread-1' },
+        );
+
+        expect(mockSendPrompt.mock.calls[0][0].systemContext).toBeUndefined();
+      });
+
+      it.each([
+        ['codex', codexParams],
+        ['claude-code', defaultParams],
+      ])(
+        'leaves an ordinary fresh %s session without replay, even with an unrestorable tool row',
+        async (_type, params) => {
+          // A fresh session in an ordinary topic (new topic, cwd-change reset) keeps
+          // canary behavior: no history replay, no tool-payload restore, no throw.
+          const store = storeWith({});
+
+          await executeHeterogeneousAgent(
+            vi.fn(() => store),
+            params,
+          );
+
+          expect(mockSendPrompt).toHaveBeenCalledTimes(1);
+          expect(mockSendPrompt.mock.calls[0][0].systemContext).toBeUndefined();
+        },
+      );
     });
 
     it('should forward context selections as heterogeneous system context', async () => {
@@ -2694,11 +2363,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
-    // The session now lives on this machine, so the topic is pinned here —
-    // otherwise a legacy unbound topic follows whatever the agent default
-    // becomes and its next turn cannot resume.
+    // The session lives here, so the topic is pinned even before the store has this desktop's id.
     it('pins the topic to this machine when it persists the session id', async () => {
-      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } as any });
+      const resolveDeviceId = vi
+        .spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId')
+        .mockResolvedValue('this-desktop');
       const store = createMockStore({
         topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: {} }] } },
       });
@@ -2718,7 +2387,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           heteroSessionId: 'cc-session-here',
         }),
       );
-      useElectronStore.setState({ gatewayDeviceInfo: undefined });
+      resolveDeviceId.mockRestore();
     });
 
     it.each(['claude-code', 'codex'] as const)(
@@ -5912,18 +5581,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();
     });
 
-    // ── 4. error terminal → no notification, no drain (the onError branch) ──
-    it('an error terminal fires NO completion notification and NO queue drain', async () => {
-      desktopFlag.value = true; // even on desktop, the error terminal must stay silent
+    // ── 4. error terminal → failure notification, no drain (the onError branch) ──
+    it('an error terminal fires a FAILURE notification and NO queue drain', async () => {
+      desktopFlag.value = true;
       const store = createMockStore({
         drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
       });
 
       await runToError(store);
 
-      // No completion signal on the error path (onComplete skips notifyCompletion
-      // when isErrorTerminal).
-      expect(mockShowNotification).not.toHaveBeenCalled();
+      // One failure banner, never the "finished" one (no completion badge).
+      expect(mockShowNotification).toHaveBeenCalledTimes(1);
+      expect(mockShowNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('the run failed') }),
+      );
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
       // No queue drain on the error path (gated by terminalEvent?.type !== 'error').
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();

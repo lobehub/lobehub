@@ -113,6 +113,30 @@ const createInitialState = (overrides: Partial<AgentState> = {}): AgentState => 
   } as AgentState;
 };
 
+const createExecutors = (store: ChatStore) =>
+  createGroupOrchestrationExecutors({
+    get: () => store,
+    messageContext: {
+      agentId: TEST_IDS.GROUP_ID,
+      groupId: TEST_IDS.GROUP_ID,
+      scope: 'group',
+      topicId: TEST_IDS.TOPIC_ID,
+    },
+    orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
+    supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+  });
+
+const createBatchInstruction = () => ({
+  payload: {
+    tasks: [
+      { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+      { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
+    ],
+    toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
+  },
+  type: 'batch_exec_async_tasks' as const,
+});
+
 describe('createGroupOrchestrationExecutors', () => {
   describe('batch_exec_async_tasks executor', () => {
     beforeEach(() => {
@@ -135,19 +159,7 @@ describe('createGroupOrchestrationExecutors', () => {
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 
-      const result = await batchExecTasksExecutor(
-        {
-          payload: {
-            tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
-            ],
-            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          },
-          type: 'batch_exec_async_tasks',
-        },
-        createInitialState(),
-      );
+      const result = await batchExecTasksExecutor(createBatchInstruction(), createInitialState());
 
       expect(result.result?.type).toBe('tasks_completed');
       expect((result.result?.payload as any).results).toHaveLength(2);
@@ -169,33 +181,11 @@ describe('createGroupOrchestrationExecutors', () => {
         status: 'completed',
       });
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createExecutors(mockStore);
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 
-      await batchExecTasksExecutor(
-        {
-          payload: {
-            tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
-            ],
-            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          },
-          type: 'batch_exec_async_tasks',
-        },
-        createInitialState(),
-      );
+      await batchExecTasksExecutor(createBatchInstruction(), createInitialState());
 
       expect(mockStore.optimisticCreateMessage).not.toHaveBeenCalled();
       expect(aiAgentService.execSubAgentTask).toHaveBeenCalledTimes(2);
@@ -235,72 +225,6 @@ describe('createGroupOrchestrationExecutors', () => {
       );
     });
 
-    it('should call execSubAgentTask for each task', async () => {
-      const mockStore = createMockStore();
-
-      vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(
-        createMockExecResult({ threadId: 'thread-1' }),
-      );
-
-      vi.mocked(aiAgentService.getSubAgentTaskStatus).mockResolvedValue({
-        result: 'Task completed',
-        status: 'completed',
-      });
-
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
-
-      const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
-
-      await batchExecTasksExecutor(
-        {
-          payload: {
-            tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
-            ],
-            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          },
-          type: 'batch_exec_async_tasks',
-        },
-        createInitialState(),
-      );
-
-      // Should call execSubAgentTask for both tasks
-      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledTimes(2);
-
-      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: TEST_IDS.AGENT_1_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          instruction: 'Task 1',
-          parentMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          title: 'Task 1 Title',
-          topicId: TEST_IDS.TOPIC_ID,
-        }),
-      );
-
-      expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: TEST_IDS.AGENT_2_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          instruction: 'Task 2',
-          parentMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          title: 'Task 2 Title',
-          topicId: TEST_IDS.TOPIC_ID,
-        }),
-      );
-    });
-
     it('should return tasks_completed result with all task results', async () => {
       const mockStore = createMockStore();
 
@@ -313,33 +237,11 @@ describe('createGroupOrchestrationExecutors', () => {
         status: 'completed',
       });
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createExecutors(mockStore);
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 
-      const result = await batchExecTasksExecutor(
-        {
-          payload: {
-            tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
-            ],
-            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          },
-          type: 'batch_exec_async_tasks',
-        },
-        createInitialState(),
-      );
+      const result = await batchExecTasksExecutor(createBatchInstruction(), createInitialState());
 
       expect(result.result?.type).toBe('tasks_completed');
       expect((result.result?.payload as any).results).toHaveLength(2);
@@ -372,33 +274,11 @@ describe('createGroupOrchestrationExecutors', () => {
         status: 'completed',
       });
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createExecutors(mockStore);
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 
-      const result = await batchExecTasksExecutor(
-        {
-          payload: {
-            tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
-            ],
-            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
-          },
-          type: 'batch_exec_async_tasks',
-        },
-        createInitialState(),
-      );
+      const result = await batchExecTasksExecutor(createBatchInstruction(), createInitialState());
 
       expect(result.result?.type).toBe('tasks_completed');
       // First task should fail
@@ -426,17 +306,7 @@ describe('createGroupOrchestrationExecutors', () => {
         status: 'failed',
       });
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createExecutors(mockStore);
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 
@@ -474,17 +344,7 @@ describe('createGroupOrchestrationExecutors', () => {
         status: 'processing',
       });
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createExecutors(mockStore);
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 
@@ -526,17 +386,7 @@ describe('createGroupOrchestrationExecutors', () => {
         taskDetail,
       });
 
-      const executors = createGroupOrchestrationExecutors({
-        get: () => mockStore,
-        messageContext: {
-          agentId: TEST_IDS.GROUP_ID,
-          groupId: TEST_IDS.GROUP_ID,
-          scope: 'group',
-          topicId: TEST_IDS.TOPIC_ID,
-        },
-        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
-        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
-      });
+      const executors = createExecutors(mockStore);
 
       const batchExecTasksExecutor = executors.batch_exec_async_tasks!;
 

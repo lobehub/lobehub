@@ -4,10 +4,20 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Select, SliderWithInput, Spin, Switch, TextArea } from '@lobehub/ui/base-ui';
-import { useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Segmented,
+  Select,
+  SliderWithInput,
+  Spin,
+  Switch,
+  TextArea,
+} from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -29,6 +39,9 @@ import { systemAgentSelectors } from '@/store/user/selectors';
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useEffectiveAgentMode } from '../../hooks/useEffectiveAgentMode';
+import { useToggleAgentMode } from '../../hooks/useToggleAgentMode';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { useParamsModelConfig } from './useParamsModelConfig';
 
@@ -205,19 +218,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
-
-    .ant-switch {
-      min-width: 28px;
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    .ant-switch .ant-switch-handle::before {
-      background: ${cssVar.colorBgElevated};
-    }
-
-    .ant-switch.ant-switch-checked {
-      background: ${cssVar.colorText};
-    }
   `,
   sidebarPanel: css`
     width: 100%;
@@ -261,61 +261,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   slider: css`
     width: 100%;
-
-    .ant-slider {
-      margin-block: 0;
-      margin-inline: 0;
-    }
-
-    .ant-slider-rail {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    .ant-slider-track {
-      background: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-handle::after {
-      background: ${cssVar.colorBgElevated};
-      box-shadow: 0 0 0 2px ${cssVar.colorTextSecondary};
-    }
-
-    .ant-slider-handle:hover::after,
-    .ant-slider-handle:focus::after,
-    .ant-slider-handle:active::after {
-      box-shadow: 0 0 0 3px ${cssVar.colorTextSecondary};
-    }
-
-    .ant-input-number,
-    .ant-input-number-affix-wrapper {
-      overflow: hidden;
-
-      height: 28px;
-      border: none;
-      border-radius: 10px;
-
-      color: ${cssVar.colorTextSecondary};
-
-      background: ${cssVar.colorFillTertiary};
-      box-shadow: none;
-    }
-
-    .ant-input-number:hover,
-    .ant-input-number-focused,
-    .ant-input-number-affix-wrapper:hover,
-    .ant-input-number-affix-wrapper-focused {
-      background: ${cssVar.colorFillSecondary};
-      box-shadow: none;
-    }
-
-    .ant-input-number-input {
-      height: 28px;
-      padding-inline: 6px;
-
-      font-size: 13px;
-      color: ${cssVar.colorTextSecondary};
-      text-align: center;
-    }
   `,
 }));
 
@@ -485,8 +430,12 @@ const SliderField = ({
 );
 
 const Controls = ({ variant = 'popover' }: ControlsProps) => {
-  const { t } = useTranslation(['setting', 'components']);
+  const { t } = useTranslation(['setting', 'components', 'chat']);
   const agentId = useAgentId();
+  const toggleAgentMode = useToggleAgentMode();
+  const { canUseResource } = useChatInputResourceAccess();
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+    useEffectiveAgentMode(agentId);
   const { updateAgentConfig } = useUpdateAgentConfig();
   const { allowed: canCreate } = usePermission('create_content');
   // Saving feedback belongs to this form. Keeping it here prevents a write from
@@ -796,6 +745,36 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
         </div>
         <div className={styles.body}>
           <div className={styles.commonSection}>
+            <ControlRow
+              tag="agentMode"
+              title={t('settingModel.params.panel.chatMode')}
+              action={
+                <Segmented
+                  disabled={!canCreate || !canUseResource}
+                  size={'small'}
+                  value={currentMode}
+                  options={[
+                    {
+                      disabled: !canSelectAgentMode,
+                      label: t('chatMode.agent', { ns: 'chat' }),
+                      value: 'agent',
+                    },
+                    { label: t('chatMode.chat', { ns: 'chat' }), value: 'chat' },
+                  ]}
+                  onChange={(value) => {
+                    if (value === 'agent' && !canSelectAgentMode) return;
+                    void toggleAgentMode(value === 'agent');
+                  }}
+                />
+              }
+              tooltip={
+                isAgentModeUnavailable
+                  ? t('chatMode.agentUnsupported', { ns: 'chat' })
+                  : t(currentMode === 'agent' ? 'chatMode.agentDesc' : 'chatMode.chatDesc', {
+                      ns: 'chat',
+                    })
+              }
+            />
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}

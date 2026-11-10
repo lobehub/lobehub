@@ -1,20 +1,16 @@
 'use client';
 
-import { Block, Empty, Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { Button, Text, toast } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
-import { ArrowDownIcon, ArrowUpIcon, FileSearchIcon, FlaskConicalIcon, PencilIcon, PlusIcon } from 'lucide-react';
+import { Block, Button, cx, Flexbox, Icon, SortableList, Text, toast } from '@lobehub/ui';
+import { ArrowDownIcon, ArrowUpIcon, FileSearchIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
+import { SelfLearningLabOff, useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { expertiseService, type RuleItem, type UpdateRuleInput } from '@/services/expertise';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 
 import { createComposeRuleModal } from './ComposeModal';
 import DetailPanel from './DetailPanel';
@@ -37,24 +33,6 @@ import RulesOnboarding, { type RulesOnboardingAgents } from './RulesOnboarding';
 import { styles } from './styles';
 import { useJudgeDirections } from './useJudgeDirections';
 
-const LabOff = () => {
-  const { t } = useTranslation('memory');
-  const navigate = useWorkspaceAwareNavigate();
-  return (
-    <Flexbox align={'center'} flex={1} justify={'center'}>
-      <Empty
-        description={t('rules.labOff.description')}
-        icon={FlaskConicalIcon}
-        title={t('rules.labOff.title')}
-      >
-        <Button size={'small'} onClick={() => navigate('/settings/labs')}>
-          {t('rules.labOff.open')}
-        </Button>
-      </Empty>
-    </Flexbox>
-  );
-};
-
 /**
  * Self-evolving, as one sheet per part: a switcher above it picks the reviewer's own rules (the
  * default) or what one agent learned by itself. Within the part, groups are full-width section
@@ -70,7 +48,7 @@ const LabOff = () => {
  */
 const MemoryRules = () => {
   const { t } = useTranslation('memory');
-  const enabled = useUserStore(labPreferSelectors.enableSelfLearning);
+  const { enabled, ready } = useSelfLearningSurface();
   const { data, error, isLoading, mutate } = useRules();
   const [selectedId, setSelectedId] = useState<string>();
   const [titleEditing, setTitleEditing] = useState(false);
@@ -354,7 +332,8 @@ const MemoryRules = () => {
     return (
       <Flexbox height={'100%'} width={'100%'}>
         <NavHeader />
-        <LabOff />
+        {/* The Labs preference arrives with the user state; wait for it instead of flashing Labs. */}
+        {ready && <SelfLearningLabOff />}
       </Flexbox>
     );
   }

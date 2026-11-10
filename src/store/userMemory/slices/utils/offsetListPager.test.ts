@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { OffsetListPager, type OffsetPagedSlice } from './offsetListPager';
+import {
+  MemoryDeleteScopeChangedError,
+  OffsetListPager,
+  type OffsetPagedSlice,
+} from './offsetListPager';
 
 const deferred = <T = void>() => {
   let resolve!: (value: T) => void;
@@ -11,6 +15,8 @@ const deferred = <T = void>() => {
   });
   return { promise, reject, resolve };
 };
+
+const scopeRef = { current: 'user-1:*' };
 
 const setup = ({ refreshHead = vi.fn(async () => undefined) } = {}) => {
   const log: string[] = [];
@@ -33,6 +39,7 @@ const setup = ({ refreshHead = vi.fn(async () => undefined) } = {}) => {
   const pager = new OffsetListPager({
     keys: () => ['all'],
     read: (key) => views[key],
+    scope: () => scopeRef.current,
     refreshHead,
     slice,
   });
@@ -55,6 +62,50 @@ describe('OffsetListPager', () => {
     expect(log).toEqual(['optimistic', 'removeEntity:a', 'collapse:all']);
     expect(refreshHead).toHaveBeenCalledTimes(1);
     expect(pager.isHeadStale('all')).toBe(true);
+  });
+
+  it('routes a delete confirmed after an account switch to the account that asked', async () => {
+    scopeRef.current = 'user-1:*';
+    const { log, pager, refreshHead, slice } = setup();
+    const server = deferred();
+    const serverDelete = vi.fn(() => server.promise);
+
+    const deleting = pager.delete('a', serverDelete);
+    // The account switches while the server deletes (the request was sent).
+    await vi.waitFor(() => expect(serverDelete).toHaveBeenCalled());
+    scopeRef.current = 'user-2:*';
+    server.resolve();
+    await deleting;
+
+    expect(slice.removeEntity).toHaveBeenCalledWith('a', { scope: 'user-1:*' });
+    // Nothing on screen (the other account's lists) is collapsed or refreshed.
+    expect(log).not.toContain('collapse:all');
+    expect(refreshHead).not.toHaveBeenCalled();
+    expect(pager.isHeadStale('all')).toBe(false);
+    scopeRef.current = 'user-1:*';
+  });
+
+  it('does not send a queued delete once another account is active', async () => {
+    scopeRef.current = 'user-1:*';
+    const page = deferred();
+    const { pager, slice, tokens } = setup();
+    vi.mocked(slice.loadMore).mockImplementation(() => page.promise);
+    const serverDelete = vi.fn(async () => undefined);
+
+    // The delete queues behind a page in flight...
+    const paging = pager.loadMore('all');
+    const deleting = pager.delete('a', serverDelete);
+    // ...and the account switches before its turn comes.
+    scopeRef.current = 'user-2:*';
+    page.resolve();
+    await paging;
+
+    await expect(deleting).rejects.toBeInstanceOf(MemoryDeleteScopeChangedError);
+    // Never sent under the new account; the optimistic removal is rolled back.
+    expect(serverDelete).not.toHaveBeenCalled();
+    expect(tokens.rollback).toHaveBeenCalledTimes(1);
+    expect(slice.removeEntity).not.toHaveBeenCalled();
+    scopeRef.current = 'user-1:*';
   });
 
   it('rolls the optimistic removal back when the server rejects', async () => {

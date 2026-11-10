@@ -12,7 +12,6 @@ import {
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import { SkillsApiName, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
-import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
@@ -37,7 +36,6 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
       'lobe-local-system',
       'lobe-creds',
       'lobe-task',
-      TopicReferenceIdentifier,
     ]) {
       expect(AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS.has(identifier)).toBe(false);
     }

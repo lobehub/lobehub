@@ -7,6 +7,7 @@ import {
   type DeviceUnavailableErrorData,
 } from './deviceTransportError';
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
@@ -145,6 +146,11 @@ export class GatewayHttpClient {
 
   async executeToolCall(
     params: {
+      /**
+       * The device clients that may serve this call, when the caller already
+       * knows; otherwise `resolveClientKinds` decides from the tool identifier.
+       */
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -184,6 +190,7 @@ export class GatewayHttpClient {
 
   private async postToolCall(
     params: {
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -207,11 +214,13 @@ export class GatewayHttpClient {
       res = await this.post(
         '/api/device/tool-call',
         {
-          clientKinds: this.clientKindsFor({
-            identifier: toolCall.identifier,
-            kind: 'tool',
-            type: toolCall.type ?? 'tool',
-          }),
+          clientKinds: params.clientKinds?.length
+            ? params.clientKinds
+            : this.clientKindsFor({
+                identifier: toolCall.identifier,
+                kind: 'tool',
+                type: toolCall.type ?? 'tool',
+              }),
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,
@@ -309,6 +318,9 @@ export class GatewayHttpClient {
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeAccountRouting?: AgentRunRequestMessage['claudeAccountRouting'];
+    /** Restricts the run to connections of these clients; omitted means any client. */
+    clientKinds?: DeviceClient[];
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */

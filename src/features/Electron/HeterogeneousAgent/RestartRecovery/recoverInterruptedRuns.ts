@@ -141,7 +141,11 @@ const ensureAgentLoaded = async (agentId: string): Promise<void> => {
   );
 };
 
-const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> => {
+const recoverRun = async (
+  run: InterruptedRun,
+  /** The workspace the ledger was read for; navigation may move on during recovery. */
+  workspaceId: string | null,
+): Promise<RestartRecoveryResult> => {
   const { agentId, topicId } = run;
   if (!agentId || !topicId) return { outcome: 'skipped', reason: 'missing-context', topicId };
 
@@ -367,6 +371,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       replayTranscriptConfigDir: run.configDir,
       replayTranscriptStartedAt: run.startedAt,
       topic: topic as ChatTopic,
+      workspaceId,
     });
 
     if (replayComplete === true) {
@@ -393,6 +398,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       parentOperationId: operationId,
       prompt: HETERO_RESTART_CONTINUE_PROMPT,
       topic: topic as ChatTopic,
+      workspaceId,
     });
     // The executor persists a terminal error rather than throwing, so the call
     // resolving is not success. Reporting `resumed` here would tell the user a
@@ -432,9 +438,12 @@ export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryRes
   // through both, so a run recorded elsewhere stays on the ledger until the
   // launch that owns it. Personal space has no workspace, which is why the
   // account has to be part of the key.
+  // Snapshot once: every recovered run belongs to this workspace, even if the user
+  // navigates elsewhere during the awaits that follow.
+  const workspaceId = getActiveWorkspaceId();
   const runs = (await heterogeneousAgentService.listInterruptedRuns({
     userId: userProfileSelectors.userId(getUserStoreState()),
-    workspaceId: getActiveWorkspaceId() ?? undefined,
+    workspaceId: workspaceId ?? undefined,
   })) as InterruptedRun[];
   if (!runs?.length) return [];
 
@@ -460,7 +469,7 @@ export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryRes
   const results: RestartRecoveryResult[] = [];
   for (const run of [...byTopic.values(), ...unkeyed]) {
     try {
-      results.push(await recoverRun(run));
+      results.push(await recoverRun(run, workspaceId));
       // Recovery reached an outcome, so the ledger entry has done its job.
       // It is only released here: main hands entries over as CLAIMS, which is
       // what lets a crash in the middle of all this be retried at next launch.

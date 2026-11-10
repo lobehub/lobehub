@@ -1,5 +1,6 @@
 import { getMessageError } from '@lobechat/fetch-sse';
 
+import { getBusinessTrpcHeaders } from '@/business/client/trpc-headers';
 import { createHeaderWithAuth } from '@/services/_auth';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { type ChatModelCard } from '@/types/llm';
@@ -7,9 +8,22 @@ import { type ChatModelCard } from '@/types/llm';
 import { API_ENDPOINTS } from './_url';
 import { resolveRuntimeProvider } from './chat/helper';
 import { initializeWithClientStore } from './chat/mecha';
+import { oneShotRelay } from './llmRelay';
 
 const isEnableFetchOnClient = (provider: string) =>
   aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState());
+
+/**
+ * Auth headers plus the business ones (the cloud build's `X-Workspace-Id`): the
+ * server resolves the provider config — and whether to relay — per workspace.
+ */
+const createServerHeaders = async (provider: string) => ({
+  ...((await createHeaderWithAuth({
+    headers: { 'Content-Type': 'application/json' },
+    provider,
+  })) as Record<string, string>),
+  ...(await getBusinessTrpcHeaders()),
+});
 
 // Progress information interface
 export interface ModelProgressInfo {
@@ -28,17 +42,17 @@ export class ModelsService {
   private _abortController: AbortController | null = null;
 
   getModels = async (provider: string): Promise<ChatModelCard[] | undefined> => {
-    const headers = await createHeaderWithAuth({
-      headers: { 'Content-Type': 'application/json' },
-      provider,
-    });
+    const headers = await createServerHeaders(provider);
 
     const runtimeProvider = resolveRuntimeProvider(provider);
     /**
-     * Use browser agent runtime
+     * A provider only this device reaches: within the LLM relay the server
+     * lists its models through this tab (one-shot relay); outside it, the
+     * legacy browser runtime asks the provider directly.
      */
     const enableFetchOnClient = isEnableFetchOnClient(provider);
-    if (enableFetchOnClient) {
+    const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
+    if (enableFetchOnClient && !relayToThisTab) {
       const agentRuntime = await initializeWithClientStore({
         provider,
         runtimeProvider,
@@ -46,7 +60,11 @@ export class ModelsService {
       return agentRuntime.models();
     }
 
-    const res = await fetch(API_ENDPOINTS.models(provider), { headers });
+    const res = await oneShotRelay.run(relayToThisTab ? provider : undefined, (relay) =>
+      fetch(API_ENDPOINTS.models(provider), {
+        headers: relay ? { ...headers, ...relay.headers } : headers,
+      }),
+    );
     if (!res.ok) {
       const error = await getMessageError(res);
       const message =
@@ -71,37 +89,40 @@ export class ModelsService {
       this._abortController = new AbortController();
       const signal = this._abortController.signal;
 
-      const headers = await createHeaderWithAuth({
-        headers: { 'Content-Type': 'application/json' },
-        provider,
-      });
+      const headers = await createServerHeaders(provider);
 
       const runtimeProvider = resolveRuntimeProvider(provider);
       const enableFetchOnClient = isEnableFetchOnClient(provider);
+      // Within the LLM relay the server downloads through this tab (see `getModels`).
+      const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
 
-      let res: Response;
-      if (enableFetchOnClient) {
+      if (enableFetchOnClient && !relayToThisTab) {
         const agentRuntime = await initializeWithClientStore({
           provider,
           runtimeProvider,
         });
-        res = (await agentRuntime.pullModel({ model }, { signal }))!;
-      } else {
-        res = await fetch(API_ENDPOINTS.modelPull(provider), {
-          body: JSON.stringify({ model }),
-          headers,
-          method: 'POST',
-          signal,
-        });
+        const res = (await agentRuntime.pullModel({ model }, { signal }))!;
+        if (!res.ok) throw await getMessageError(res);
+        if (res.body) await this.processModelPullStream(res, { onProgress });
+        return;
       }
 
-      if (!res.ok) {
-        throw await getMessageError(res);
-      }
+      // The relay channel must stay open until the whole progress stream is read.
+      await oneShotRelay.run(
+        relayToThisTab ? provider : undefined,
+        async (relay) => {
+          const res = await fetch(API_ENDPOINTS.modelPull(provider), {
+            body: JSON.stringify({ model }),
+            headers: relay ? { ...headers, ...relay.headers } : headers,
+            method: 'POST',
+            signal,
+          });
 
-      if (res.body) {
-        await this.processModelPullStream(res, { onProgress });
-      }
+          if (!res.ok) throw await getMessageError(res);
+          if (res.body) await this.processModelPullStream(res, { onProgress });
+        },
+        { signal },
+      );
     } catch (error) {
       // If operation is canceled, no need to continue throwing error
       if (error instanceof DOMException && error.name === 'AbortError') {

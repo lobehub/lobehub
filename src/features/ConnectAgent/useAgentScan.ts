@@ -1,7 +1,8 @@
 import type { HeterogeneousAgentScanMap } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
+import { useClientDataSWR } from '@/libs/swr';
 import { deviceService } from '@/services/device';
 import { binaryService } from '@/services/electron/binary';
 
@@ -53,42 +54,40 @@ export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
   return Object.fromEntries(entries);
 };
 
-export const useAgentScan = () => {
-  const [state, setState] = useState<AgentScanState>(IDLE);
-  const seqRef = useRef(0);
+const scanTargetKey = (target: ScanTarget | null) => {
+  if (!target) return null;
+  // Same key as the device page's agent runtimes, so either surface reuses the other's probe.
+  return target.kind === 'local'
+    ? ['connectAgent/localScan']
+    : ['device/agentScan', target.device.deviceId];
+};
 
-  const scan = useCallback(async (target: ScanTarget) => {
-    const seq = ++seqRef.current;
-    setState({ agents: null, status: 'scanning' });
+/**
+ * The agent inventory of the picked target. Keyed by target, so picking one
+ * (or opening the wizard on one) scans it; `rescan` re-probes in place.
+ */
+export const useAgentScan = (target: ScanTarget | null) => {
+  const { data, error, isValidating, mutate } = useClientDataSWR(
+    scanTargetKey(target),
+    async (): Promise<{ agents: HeterogeneousAgentScanMap | null; error?: string }> =>
+      target?.kind === 'device'
+        ? deviceService.scanAgents({ deviceId: target.device.deviceId })
+        : { agents: await scanLocal() },
+    // Only an explicit rescan re-probes: it also clears the picked runtimes, which
+    // a silent refresh (focus, reconnect, retry) would leave pointing at stale rows.
+    { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false },
+  );
 
-    try {
-      let agents: HeterogeneousAgentScanMap;
-      if (target.kind === 'local') {
-        agents = await scanLocal();
-      } else {
-        const result = await deviceService.scanAgents({ deviceId: target.device.deviceId });
-        if (result.error) {
-          if (seq === seqRef.current)
-            setState({ agents: null, error: result.error, status: 'error' });
-          return;
-        }
-        agents = result.agents;
-      }
-      if (seq === seqRef.current) setState({ agents, status: 'success' });
-    } catch (error) {
-      if (seq === seqRef.current)
-        setState({
-          agents: null,
-          error: error instanceof Error ? error.message : String(error),
-          status: 'error',
-        });
-    }
-  }, []);
+  const state = useMemo<AgentScanState>(() => {
+    if (!target) return IDLE;
+    if (isValidating) return { agents: null, status: 'scanning' };
+    const failure = error ? (error instanceof Error ? error.message : String(error)) : data?.error;
+    if (failure) return { agents: null, error: failure, status: 'error' };
+    if (!data) return { agents: null, status: 'scanning' };
+    return { agents: data.agents, status: 'success' };
+  }, [data, error, isValidating, target]);
 
-  const reset = useCallback(() => {
-    seqRef.current += 1;
-    setState(IDLE);
-  }, []);
+  const rescan = useCallback(() => void mutate(), [mutate]);
 
-  return { reset, scan, state };
+  return { rescan, state };
 };

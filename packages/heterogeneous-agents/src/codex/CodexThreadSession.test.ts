@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AskUserBridge } from '../askUser';
 import {
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
@@ -28,6 +29,7 @@ interface ClientHarness {
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
   resume: (model?: string) => Promise<void> | void;
+  serverRequest: (method: string, params: unknown) => Promise<unknown>;
 }
 
 const createClientHarness = (
@@ -41,11 +43,14 @@ const createClientHarness = (
     initialThreadId?: string;
     interruptError?: Error;
     malformedThreadStart?: boolean;
+    /** Statuses returned by successive `thread/resume` calls; later calls report idle. */
+    resumeStatuses?: Array<'active' | 'idle' | 'systemError'>;
     threadNameError?: Error;
   } = {},
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
   let notificationHandler: ((method: string, params: unknown) => Promise<void>) | undefined;
+  let serverRequestHandler: ((method: string, params: unknown) => unknown) | undefined;
   let registration:
     | {
         onResume: (response: unknown) => Promise<void> | void;
@@ -72,6 +77,7 @@ const createClientHarness = (
 
   const client = {
     acquireConsumer: vi.fn(() => releaseConsumer),
+    acquireThread: vi.fn(() => vi.fn()),
     connect: options.connectError
       ? vi.fn().mockRejectedValue(options.connectError)
       : vi.fn().mockResolvedValue({ userAgent: 'codex-test' }),
@@ -84,7 +90,9 @@ const createClientHarness = (
     registerThread: vi.fn((_threadId: string, params: unknown, value: typeof registration) => {
       resumeParams = params;
       registration = value;
-      return vi.fn();
+      return vi.fn(() => {
+        if (registration === value) registration = undefined;
+      });
     }),
     request: vi.fn(async (method: string, params: unknown) => {
       requests.push({ method, params });
@@ -97,7 +105,10 @@ const createClientHarness = (
         if (options.failResume) throw new Error('Thread not found');
         return {
           model: 'gpt-5.5-codex',
-          thread: { id: options.initialThreadId ?? 'thread-1' },
+          thread: {
+            id: options.initialThreadId ?? 'thread-1',
+            status: { type: options.resumeStatuses?.shift() ?? 'idle' },
+          },
         };
       }
       if (method === 'thread/name/set') {
@@ -144,7 +155,10 @@ const createClientHarness = (
       notificationHandler = handler;
       return vi.fn();
     }),
-    subscribeServerRequests: vi.fn(() => vi.fn()),
+    subscribeServerRequests: vi.fn((_threadId, handler) => {
+      serverRequestHandler = handler;
+      return vi.fn();
+    }),
   };
 
   return {
@@ -158,12 +172,18 @@ const createClientHarness = (
     resolveTurnStart,
     resume: (model = 'gpt-5.5-codex') =>
       registration?.onResume({ model, thread: { id: options.initialThreadId ?? 'thread-1' } }),
+    serverRequest: async (method, params) => serverRequestHandler?.(method, params),
   };
 };
 
 const createSession = (
   harness: ClientHarness,
-  options: { initialThreadId?: string; onEventsError?: Error; threadName?: string } = {},
+  options: {
+    ephemeral?: boolean;
+    initialThreadId?: string;
+    onEventsError?: Error;
+    threadName?: string;
+  } = {},
 ) => {
   const events: any[] = [];
   const statuses: string[] = [];
@@ -182,6 +202,7 @@ const createSession = (
     threadParams: {
       approvalPolicy: 'never',
       cwd: '/workspace',
+      ...(options.ephemeral ? { ephemeral: true } : {}),
       sandbox: 'danger-full-access',
     },
   });
@@ -195,6 +216,466 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  describe('native user input', () => {
+    const contexts: Array<{ bridge: AskUserBridge; session: CodexThreadSession }> = [];
+    afterEach(() => {
+      for (const { bridge, session } of contexts.splice(0)) {
+        bridge.cancelAll();
+        session.close();
+      }
+    });
+    const question = {
+      header: 'Database',
+      id: 'database',
+      isOther: true,
+      isSecret: false,
+      options: [{ description: 'Preserve existing data', label: 'Keep' }],
+      question: 'Keep the database?',
+    };
+    const request = (questions = [question]) => ({
+      autoResolutionMs: null,
+      isBlocking: true,
+      itemId: 'question-1',
+      questions,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const start = async () => {
+      const harness = createClientHarness({ autoComplete: false });
+      const { events, session } = createSession(harness);
+      const bridge = new AskUserBridge('op-question', { identifier: 'codex', provider: 'codex' });
+      contexts.push({ bridge, session });
+      const running = session.run({
+        askUserBridge: bridge,
+        input: [{ text: 'Ask me', text_elements: [], type: 'text' }],
+        onRawMessage: vi.fn(),
+        operationId: 'op-question',
+      });
+      await vi.waitFor(() =>
+        expect(harness.requests.some((r) => r.method === 'turn/start')).toBe(true),
+      );
+      return { bridge, events, harness, running, session };
+    };
+    const finish = async (ctx: Awaited<ReturnType<typeof start>>) => {
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await ctx.running;
+      ctx.session.close();
+    };
+
+    it('presents native questions and returns selected/custom answers by their original ids', async () => {
+      const ctx = await start();
+      const reply = ctx.harness.serverRequest(
+        'item/tool/requestUserInput',
+        request([question, { ...question, id: 'name', options: null, question: 'Database name?' }]),
+      );
+      await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+      const intervention = await ctx.bridge.events()[Symbol.asyncIterator]().next();
+      expect(intervention.value).toMatchObject({
+        data: {
+          apiName: 'askUserQuestion',
+          identifier: 'codex',
+          provider: 'codex',
+          toolCallId: 'question-1',
+        },
+        operationId: 'op-question',
+        type: 'agent_intervention_request',
+      });
+      ctx.bridge.resolve('question-1', {
+        result: { 'Keep the database?': 'Keep', 'Database name?': 'archive' },
+      });
+      await expect(reply).resolves.toEqual({
+        answers: { database: { answers: ['Keep'] }, name: { answers: ['archive'] } },
+      });
+      expect(ctx.events).toContainEqual(
+        expect.objectContaining({
+          type: 'tool_result',
+          data: expect.objectContaining({
+            pluginState: {
+              askUserAnswers: { 'Keep the database?': 'Keep', 'Database name?': 'archive' },
+            },
+            toolCallId: 'question-1',
+          }),
+        }),
+      );
+      await finish(ctx);
+    });
+
+    it.each(['user_cancelled', 'timeout'] as const)(
+      'resolves %s without inventing an answer',
+      async (cancelReason) => {
+        const ctx = await start();
+        const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+        await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+        ctx.bridge.resolve('question-1', { cancelled: true, cancelReason });
+        await expect(reply).resolves.toEqual({ answers: {} });
+        await finish(ctx);
+      },
+    );
+
+    it('maps whole-form free text and supplementary notes without losing them', async () => {
+      const ctx = await start();
+      const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+      await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+      ctx.bridge.resolve('question-1', {
+        result: { __freeform__: 'Use a snapshot', __supplement__: 'Read only' },
+      });
+      await expect(reply).resolves.toEqual({
+        answers: { database: { answers: ['Use a snapshot', 'Read only'] } },
+      });
+      await finish(ctx);
+    });
+
+    it('releases a pending question on interruption', async () => {
+      const ctx = await start();
+      const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+      await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+      await ctx.session.interrupt();
+      await expect(reply).resolves.toEqual({ answers: {} });
+      await ctx.running;
+      expect(ctx.bridge.pendingCount).toBe(0);
+      ctx.session.close();
+    });
+
+    it('uses the native deadline and clears a timed-out question', async () => {
+      const ctx = await start();
+      vi.useFakeTimers();
+      try {
+        const reply = ctx.harness.serverRequest('item/tool/requestUserInput', {
+          ...request(),
+          autoResolutionMs: 100,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(ctx.bridge.pendingCount).toBe(1);
+        await vi.advanceTimersByTimeAsync(100);
+        await expect(reply).resolves.toEqual({ answers: {} });
+        expect(ctx.bridge.pendingCount).toBe(0);
+        const stream = ctx.bridge.events()[Symbol.asyncIterator]();
+        await stream.next();
+        expect((await stream.next()).value).toMatchObject({
+          data: { cancelled: true, cancelReason: 'timeout' },
+          type: 'agent_intervention_response',
+        });
+        await finish(ctx);
+      } finally {
+        vi.useRealTimers();
+        ctx.session.close();
+      }
+    });
+
+    it.each(['disconnect', 'close', 'complete'] as const)(
+      'clears questions when the turn ends via %s',
+      async (end) => {
+        const ctx = await start();
+        const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+        await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+        if (end === 'disconnect') ctx.harness.disconnect();
+        else if (end === 'close') ctx.session.close();
+        else
+          await ctx.harness.notify('turn/completed', {
+            threadId: 'thread-1',
+            turn: turn('turn-1', 'completed'),
+          });
+        await expect(reply).resolves.toEqual({ answers: {} });
+        await ctx.running;
+        expect(ctx.bridge.pendingCount).toBe(0);
+        ctx.session.close();
+      },
+    );
+
+    it('rejects secret or ambiguous questions before persisting them', async () => {
+      const ctx = await start();
+      await expect(
+        ctx.harness.serverRequest(
+          'item/tool/requestUserInput',
+          request([{ ...question, isSecret: true }]),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        ctx.harness.serverRequest('item/tool/requestUserInput', request([question, question])),
+      ).rejects.toThrow();
+      expect(ctx.bridge.pendingCount).toBe(0);
+      expect(ctx.events.some((event) => event.type === 'tool_start')).toBe(false);
+      await finish(ctx);
+    });
+
+    it('rejects a request from another turn without displaying a question', async () => {
+      const ctx = await start();
+      await expect(
+        ctx.harness.serverRequest('item/tool/requestUserInput', {
+          ...request(),
+          turnId: 'old-turn',
+        }),
+      ).rejects.toThrow();
+      expect(ctx.bridge.pendingCount).toBe(0);
+      await finish(ctx);
+    });
+
+    it('leaves the operation bridge usable when startup fails before a turn begins', async () => {
+      const harness = createClientHarness({ connectError: new Error('unavailable') });
+      const { session } = createSession(harness);
+      const bridge = new AskUserBridge('retry-operation', {
+        identifier: 'codex',
+        provider: 'codex',
+      });
+      await expect(
+        session.run({
+          askUserBridge: bridge,
+          input: [],
+          onRawMessage: vi.fn(),
+          operationId: 'retry-operation',
+        }),
+      ).rejects.toThrow('unavailable');
+      const answer = bridge.pending({ arguments: {}, toolCallId: 'retry-question' });
+      expect(bridge.pendingCount).toBe(1);
+      bridge.cancelAll();
+      await expect(answer).resolves.toMatchObject({ cancelled: true });
+      session.close();
+    });
+  });
+
+  const provenance = (operationId: string) => ({
+    LOBEHUB_AGENT_ID: 'agent',
+    LOBEHUB_OPERATION_ID: operationId,
+    LOBEHUB_TOPIC_ID: 'topic',
+  });
+  const runWithProvenance = (session: CodexThreadSession, operationId: string) =>
+    session.run({
+      input: [{ text: 'hello', text_elements: [], type: 'text' }],
+      onRawMessage: () => {},
+      operationId,
+      provenance: provenance(operationId),
+    });
+
+  it('unsubscribes and resumes the loaded thread with the current run provenance', async () => {
+    const harness = createClientHarness();
+    const { session } = createSession(harness);
+
+    try {
+      await runWithProvenance(session, 'op-a');
+      await runWithProvenance(session, 'op-b');
+
+      const threadRequests = harness.requests.filter(({ method }) =>
+        ['thread/start', 'thread/unsubscribe', 'thread/resume'].includes(method),
+      );
+      expect(threadRequests.map(({ method }) => method)).toEqual([
+        'thread/start',
+        'thread/unsubscribe',
+        'thread/resume',
+      ]);
+      expect(threadRequests.at(-1)?.params).toMatchObject({
+        config: {
+          shell_environment_policy: {
+            set: { LOBEHUB_OPERATION_ID: 'op-b', LOBEHUB_TOPIC_ID: 'topic' },
+          },
+        },
+      });
+    } finally {
+      session.close();
+    }
+  });
+
+  it('replaces queued reconnect params when the next run has new provenance', async () => {
+    const harness = createClientHarness();
+    const { session } = createSession(harness);
+
+    try {
+      await runWithProvenance(session, 'old');
+      harness.disconnect();
+      harness.client.connect.mockImplementationOnce(async () => {
+        await harness.resume();
+      });
+      await runWithProvenance(session, 'new');
+
+      const resume = harness.requests.filter(({ method }) => method === 'thread/resume');
+      expect(resume.at(-1)?.params).toMatchObject({
+        config: { shell_environment_policy: { set: { LOBEHUB_OPERATION_ID: 'new' } } },
+      });
+      expect(harness.registeredResumeParams()).toMatchObject({
+        config: { shell_environment_policy: { set: { LOBEHUB_OPERATION_ID: 'new' } } },
+      });
+    } finally {
+      session.close();
+    }
+  });
+
+  it('does not resume after closing during an unsubscribe request', async () => {
+    const harness = createClientHarness({ initialThreadId: 'existing' });
+    const { session } = createSession(harness, { initialThreadId: 'existing' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const request = harness.client.request.getMockImplementation();
+    harness.client.request.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'thread/unsubscribe') await gate;
+      return request(method, params);
+    });
+
+    const run = runWithProvenance(session, 'old');
+    await vi.waitFor(() =>
+      expect(harness.client.request).toHaveBeenCalledWith('thread/unsubscribe', {
+        threadId: 'existing',
+      }),
+    );
+    session.close();
+    release();
+    await run;
+
+    expect(harness.requests.map(({ method }) => method)).toEqual(['thread/unsubscribe']);
+  });
+
+  it('reports a claimed native thread as a run error instead of failing construction', async () => {
+    const harness = createClientHarness({ initialThreadId: 'thread-existing' });
+    harness.client.acquireThread.mockImplementation(() => {
+      throw new Error('Codex thread already has an active session: thread-existing');
+    });
+    const { session, statuses } = createSession(harness, { initialThreadId: 'thread-existing' });
+
+    await expect(runWithProvenance(session, 'op-a')).rejects.toThrow(
+      'already has an active session',
+    );
+    expect(statuses.at(-1)).toBe('error');
+    expect(harness.requests).toEqual([]);
+    session.close();
+  });
+
+  it('waits for a turn interrupted by a closed session to settle before resuming', async () => {
+    const harness = createClientHarness({
+      initialThreadId: 'thread-existing',
+      resumeStatuses: ['active', 'active'],
+    });
+    const { session } = createSession(harness, { initialThreadId: 'thread-existing' });
+
+    try {
+      await runWithProvenance(session, 'op-next');
+      expect(harness.requests.map(({ method }) => method)).toEqual([
+        'thread/unsubscribe',
+        'thread/resume',
+        'thread/unsubscribe',
+        'thread/resume',
+        'thread/unsubscribe',
+        'thread/resume',
+        'turn/start',
+      ]);
+    } finally {
+      session.close();
+    }
+  });
+
+  it('gives up when the previous turn never settles', async () => {
+    vi.useFakeTimers();
+    const harness = createClientHarness({
+      initialThreadId: 'thread-existing',
+      resumeStatuses: Array.from({ length: 100 }, () => 'active' as const),
+    });
+    const { session } = createSession(harness, { initialThreadId: 'thread-existing' });
+
+    try {
+      const run = runWithProvenance(session, 'op-next');
+      const assertion = expect(run).rejects.toThrow('still finishing the previous turn');
+      await vi.advanceTimersByTimeAsync(11_000);
+      await assertion;
+      expect(session.canFallbackToExec).toBe(false);
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    } finally {
+      session.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('runs on a resumed thread that reports a non-active status', async () => {
+    const harness = createClientHarness({
+      initialThreadId: 'thread-existing',
+      resumeStatuses: ['systemError'],
+    });
+    const { session } = createSession(harness, { initialThreadId: 'thread-existing' });
+
+    try {
+      await runWithProvenance(session, 'op-a');
+      expect(harness.requests.map(({ method }) => method)).toEqual([
+        'thread/unsubscribe',
+        'thread/resume',
+        'turn/start',
+      ]);
+    } finally {
+      session.close();
+    }
+  });
+
+  // ROOT CAUSE:
+  // A connected device resumes a native thread without the rollout usage that Desktop
+  // reads locally. Without a baseline, the first turn reported the thread's entire
+  // cumulative usage as its own. Rebase from the first native total/last pair instead.
+  /** @example A resumed device turn reports only its own native steps. */
+  it('rebases usage on a resumed thread that has no saved cumulative usage', async () => {
+    const harness = createClientHarness({ autoComplete: false, initialThreadId: 'thread-1' });
+    const { events, session } = createSession(harness, { initialThreadId: 'thread-1' });
+    const run = session.run({
+      input: [{ text: 'continue', text_elements: [], type: 'text' }],
+      operationId: 'resumed-usage',
+      onRawMessage: vi.fn(),
+    });
+    await vi.waitFor(() => {
+      /** @example Usage is observed only after the resumed turn starts. */
+      expect(harness.requests.some((request) => request.method === 'turn/start')).toBe(true);
+    });
+    await harness.notify('turn/started', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'inProgress'),
+    });
+    for (const [total, last] of [
+      [350, 250],
+      [370, 20],
+    ]) {
+      const usage = (tokens: number) => ({
+        cachedInputTokens: 0,
+        inputTokens: tokens,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: tokens,
+      });
+      await harness.notify('thread/tokenUsage/updated', {
+        threadId: 'thread-1',
+        tokenUsage: { last: usage(last), total: usage(total) },
+        turnId: 'turn-1',
+      });
+    }
+    await harness.notify('turn/completed', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'completed'),
+    });
+    await run;
+    session.close();
+    /** @example Both new steps count once; the 100 earlier thread tokens are excluded. */
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          usage: expect.objectContaining({ totalInputTokens: 270 }),
+        }),
+        type: 'step_complete',
+      }),
+    );
+  });
+
+  // ROOT CAUSE:
+  // stream_start carried the thread id as `sessionId` even for `--ephemeral` threads, so the
+  // server saved it as the topic resume binding and the next turn resumed an ephemeral thread.
+  /** @example An ephemeral native thread is never reported as a resumable session. */
+  it('does not report an ephemeral thread as the stream session', async () => {
+    const { events, onSessionId, run, session } = createSession(createClientHarness(), {
+      ephemeral: true,
+    });
+    await run('ephemeral-op', 'hello');
+    session.close();
+    const streamStart = events.find((event) => event.type === 'stream_start');
+    /** @example The turn still starts, without a session id the server would persist. */
+    expect(streamStart?.data).not.toHaveProperty('sessionId');
+    expect(onSessionId).not.toHaveBeenCalled();
+  });
+
   it('sets the original prompt as the name of a new persisted thread', async () => {
     const harness = createClientHarness();
     const { run, session } = createSession(harness, { threadName: 'Original prompt title' });

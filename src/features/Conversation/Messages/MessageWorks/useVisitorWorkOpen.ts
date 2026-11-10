@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { createShareVisitorDocumentModal } from '@/features/Work/ShareVisitorDocumentModal';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useChatStore } from '@/store/chat';
 
 import { useConversationStore } from '../../store';
@@ -12,12 +13,15 @@ import { useConversationStore } from '../../store';
  * default open targets (Portal document viewer, owner file fetch, task detail)
  * are all owner-scoped, so opens route through share-authorized paths instead.
  * `/f/:id` is public by id, so a file previews in the visitor page's portal
- * straight from its URL.
+ * straight from its URL. A file Work without a persisted URL (e.g. an edited
+ * file whose version metadata only carries `fileId`) previews from the
+ * `/f/:id` proxy built from that id.
  */
 export const useVisitorWorkOpen = () => {
   const agentShareId = useConversationStore((s) => s.context.agentShareId);
   const topicId = useConversationStore((s) => s.context.topicId);
   const openFilePreview = useChatStore((s) => s.openFilePreview);
+  const appOrigin = useAppOrigin();
 
   return useCallback(
     (item: WorkSummaryItem) => {
@@ -37,10 +41,12 @@ export const useVisitorWorkOpen = () => {
           return;
         }
         case 'filePreview': {
-          if (!isSafeExternalUrl(target.url)) return;
+          const url = isSafeExternalUrl(target.url)
+            ? target.url
+            : `${appOrigin}/f/${encodeURIComponent(target.fileId)}`;
           openFilePreview({
             fileId: target.fileId,
-            source: { name: descriptor.getTitle(item) || target.fileId, url: target.url },
+            source: { name: descriptor.getTitle(item) || target.fileId, url },
           });
           return;
         }
@@ -54,6 +60,6 @@ export const useVisitorWorkOpen = () => {
         }
       }
     },
-    [agentShareId, openFilePreview, topicId],
+    [agentShareId, appOrigin, openFilePreview, topicId],
   );
 };

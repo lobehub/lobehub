@@ -5,7 +5,6 @@ import type {
   GoogleGenAI,
   Part,
 } from '@google/genai';
-import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
 import { AgentRuntimeErrorType } from '../../types/error';
@@ -17,6 +16,7 @@ import type {
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 
 // Maximum number of images allowed for processing
@@ -199,7 +199,7 @@ async function processImageForParts(imageUrl: string): Promise<Part> {
       },
     };
   } else if (type === 'url') {
-    const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(imageUrl);
+    const { base64: urlBase64, mimeType: urlMimeType } = await referenceImageUrlToBase64(imageUrl);
 
     return {
       inlineData: {

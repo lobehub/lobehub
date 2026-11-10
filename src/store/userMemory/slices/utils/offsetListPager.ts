@@ -8,7 +8,8 @@ export interface OffsetPagedSlice {
   ) => ReplicaOptimisticToken<any>[];
   collapse: (key: string) => unknown;
   loadMore: (key: string) => Promise<void>;
-  removeEntity: (id: string) => void;
+  /** `scope` routes a removal confirmed after an account switch to the scope that asked. */
+  removeEntity: (id: string, options?: { scope?: string }) => void;
   update: (key: string, apply: (data: any) => any, options?: { persist?: boolean }) => unknown;
 }
 
@@ -23,7 +24,21 @@ interface OffsetListPagerOptions {
    * settled, whether or not it succeeded.
    */
   refreshHead: () => Promise<unknown>;
+  /** The list resource's active scope (the user the store shows). */
+  scope: () => string;
   slice: OffsetPagedSlice;
+}
+
+/**
+ * A delete that waited behind other paging work and found another account
+ * active when its turn came. It was not sent: the server call would run with
+ * the new account's credentials. The optimistic removal is rolled back.
+ */
+export class MemoryDeleteScopeChangedError extends Error {
+  constructor() {
+    super('The account changed before the delete could be sent');
+    this.name = 'MemoryDeleteScopeChangedError';
+  }
 }
 
 /** Shown on the footer when the head could not be refreshed and no request error is known. */
@@ -58,6 +73,7 @@ export class OffsetListPager {
   readonly #loadingMore = new Map<string, Promise<void>>();
   readonly #read: OffsetListPagerOptions['read'];
   readonly #refreshHead: () => Promise<unknown>;
+  readonly #scope: () => string;
   readonly #slice: OffsetPagedSlice;
   readonly #staleHeads = new Set<string>();
   /** Serialized paging work not settled yet. */
@@ -65,7 +81,8 @@ export class OffsetListPager {
   /** Tail of the serialized paging work. */
   #tail: Promise<unknown> = Promise.resolve();
 
-  constructor({ keys, read, refreshHead, slice }: OffsetListPagerOptions) {
+  constructor({ keys, read, refreshHead, scope, slice }: OffsetListPagerOptions) {
+    this.#scope = scope;
     this.#keys = keys;
     this.#read = read;
     this.#refreshHead = refreshHead;
@@ -130,9 +147,18 @@ export class OffsetListPager {
    * rolling the optimistic removal back.
    */
   delete = (id: string, serverCall: () => Promise<unknown>): Promise<void> => {
+    // The account that asks for the delete. If another one is active once the
+    // server confirms, the removal belongs to this one's persisted rows only.
+    const scope = this.#scope();
     const tokens = this.#slice.beginEntityOptimistic(id, () => undefined);
 
     return this.#serialize(async () => {
+      // Queued behind a page or another delete: by the time it runs, another
+      // account may be active. Never send it under that account's credentials.
+      if (this.#scope() !== scope) {
+        for (const token of tokens) token.rollback();
+        throw new MemoryDeleteScopeChangedError();
+      }
       try {
         await serverCall();
       } catch (error) {
@@ -140,6 +166,15 @@ export class OffsetListPager {
         throw error;
       }
       for (const token of tokens) token.commit();
+
+      if (this.#scope() !== scope) {
+        // Account switched meanwhile: drop the row from the requesting account's
+        // persisted query rows (and guard its hydrates). The page sets on screen
+        // belong to the other account — no collapse, no head refresh for them.
+        this.#slice.removeEntity(id, { scope });
+        return;
+      }
+
       // Drop the row from every loaded and persisted page set, and keep a read
       // already in flight from bringing it back.
       this.#slice.removeEntity(id);

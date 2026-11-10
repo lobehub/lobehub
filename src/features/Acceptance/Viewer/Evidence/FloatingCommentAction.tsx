@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar } from '@lobehub/ui';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
 
@@ -70,6 +69,7 @@ const FloatingCommentAction = memo<{ onClick: () => void; title: string }>(({ on
   return (
     <div className={styles.rail}>
       <ActionIcon
+        aria-label={title}
         className={styles.button}
         icon={MessageSquarePlus}
         size={'small'}

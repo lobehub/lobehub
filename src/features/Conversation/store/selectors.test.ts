@@ -148,6 +148,32 @@ describe('conversationSelectors', () => {
         expect(conversationSelectors.isTopic(store)).toBe(false);
       });
     });
+
+    describe('isSharePage', () => {
+      it('should return true on a topic share link', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', topicShareId: 'share-1' },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(true);
+      });
+
+      it('should return true for a shared-agent visitor', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', agentShareId: 'agent-share-1', topicId: 'topic-1' },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(true);
+      });
+
+      it('should return false in the owner conversation', () => {
+        const store = createMockState({
+          context: { agentId: 'session-1', topicId: 'topic-1', threadId: null },
+        });
+
+        expect(conversationSelectors.isSharePage(store)).toBe(false);
+      });
+    });
   });
 
   describe('UI State Selectors', () => {

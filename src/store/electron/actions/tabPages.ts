@@ -7,6 +7,7 @@ import {
   PERSONAL_TAB_SCOPE,
   resolveTabScope,
   type TabScope,
+  tabScopeHomeUrl,
   tabScopeKey,
 } from '@/features/Electron/titlebar/TabBar/scope';
 import { getTabPages, saveTabPages } from '@/features/Electron/titlebar/TabBar/storage';
@@ -233,17 +234,28 @@ export class TabPagesActionImpl {
   };
 
   removeTab = (id: string): string | null => {
-    const { tabs, activeTabId } = this.#get();
+    const { activeTabScope, tabs, activeTabId } = this.#get();
     const index = tabs.findIndex((t) => t.id === id);
     if (index < 0) return null;
 
     const newTabs = tabs.filter((t) => t.id !== id);
 
+    // With no tab left TabHost has nothing to render, so the last close lands on a fresh
+    // home tab instead — a new id, because a live router is never re-pointed at a new url.
+    if (newTabs.length === 0) {
+      const home: TabItem = {
+        id: generateTabId(),
+        lastVisited: Date.now(),
+        url: tabScopeHomeUrl(activeTabScope),
+      };
+      this.#set({ activeTabId: home.id, splitView: null, tabs: [home] }, false, 'removeTab');
+      this.#persist();
+      return home.id;
+    }
+
     let newActiveId = activeTabId;
     if (activeTabId === id) {
-      if (newTabs.length === 0) {
-        newActiveId = null;
-      } else if (index >= newTabs.length) {
+      if (index >= newTabs.length) {
         newActiveId = newTabs.at(-1)!.id;
       } else {
         newActiveId = newTabs[index].id;

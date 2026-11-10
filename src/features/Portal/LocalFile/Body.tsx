@@ -1,8 +1,16 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { Center, Empty, Flexbox, Image, Markdown } from '@lobehub/ui';
-import { Text, ToggleGroup } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Image,
+  Markdown,
+  Text,
+  ToggleGroup,
+} from '@lobehub/ui';
 import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,14 +23,11 @@ import {
   PublishHtmlArtifactProvider,
   PublishHtmlArtifactTrigger,
 } from '@/features/Portal/LocalFile/PublishHtmlArtifactButton';
-import { useClientDataSWR } from '@/libs/swr';
-import { localFileKeys } from '@/libs/swr/keys';
-import { cloudSandboxService } from '@/services/cloudSandbox';
 import { localFileService } from '@/services/electron/localFileService';
-import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
+import { useLocalFilePreview, useLocalFilePreviewStore } from '@/store/localFilePreview';
 import {
   parseSkillMarkdownFrontmatter,
   parseSkillMarkdownMetadata,
@@ -142,7 +147,8 @@ interface TextPreviewPaneProps {
   ext: string;
   filePath: string;
   onReload?: () => Promise<unknown> | void;
-  onSaved?: (savedContent: string) => void;
+  /** Called when a save starts; returns the commit for the saved body. */
+  onSaveStart?: () => (savedContent: string) => void;
   readOnly?: boolean;
   reloading?: boolean;
   resourceBaseUrl?: string;
@@ -159,7 +165,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     ext,
     filePath,
     onReload,
-    onSaved,
+    onSaveStart,
     readOnly = false,
     reloading = false,
     resourceBaseUrl,
@@ -202,12 +208,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       if (readOnly) return;
 
       try {
+        const commitSaved = onSaveStart?.();
         const saved = await saveLocalFile({ deviceId, filePath, workingDirectory });
         if (saved === undefined) return;
         // Update SWR cache BEFORE clearing the buffer, otherwise React will
         // briefly render with buffer cleared but content still stale, causing
         // CodeMirror to setValue and reset the cursor.
-        onSaved?.(saved);
+        commitSaved?.(saved);
         setLocalFileBuffer(tabId, undefined);
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
@@ -215,7 +222,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     }, [
       deviceId,
       filePath,
-      onSaved,
+      onSaveStart,
       readOnly,
       saveLocalFile,
       setLocalFileBuffer,
@@ -395,32 +402,6 @@ interface ActiveFileViewProps {
   workingDirectory: string;
 }
 
-/**
- * Live-read a text file from the topic's cloud sandbox via the `readLocalFile`
- * sandbox tool. There is no durable copy anywhere — a recycled sandbox (or any
- * tool failure) rejects, surfacing the sandbox-unavailable empty state.
- */
-const fetchSandboxFilePreview = async (
-  path: string,
-  topicId: string,
-): Promise<LocalFilePreview> => {
-  // `readLocalFile` defaults an omitted range to the first 200 lines — always
-  // request the whole file for previews so long files don't render truncated.
-  const result = await cloudSandboxService.callTool(
-    'readLocalFile',
-    { fullContent: true, path },
-    { topicId },
-  );
-  if (!result.success || typeof result.result?.content !== 'string')
-    throw new Error(result.error?.message || 'Failed to read sandbox file');
-
-  return {
-    content: result.result.content,
-    contentType: result.result.mimeType || 'text/plain',
-    type: 'text',
-  };
-};
-
 const ActiveFileView = memo<ActiveFileViewProps>(
   ({
     activeTopicId,
@@ -434,52 +415,38 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     const filename = filePath.split('/').at(-1) ?? '';
     const enabled = sandboxTopicId ? true : Boolean(workingDirectory) && (!!deviceId || isDesktop);
-    const resourceScope =
-      !sandboxTopicId && !deviceId && isHtmlFile({ path: filePath }) ? 'workspace' : undefined;
-    const {
-      data: preview,
-      error,
-      isLoading,
-      isValidating,
-      mutate,
-    } = useClientDataSWR<LocalFilePreview>(
-      enabled
-        ? localFileKeys.preview({
-            allowExternalFile: allowExternalFilePreview,
-            deviceId,
-            filePath,
-            ...(resourceScope && { resourceScope }),
-            ...(sandboxTopicId && { sandboxTopicId }),
-            workingDirectory,
-          })
-        : null,
-      () =>
-        sandboxTopicId
-          ? fetchSandboxFilePreview(filePath, sandboxTopicId)
-          : projectFileService.getLocalFilePreview({
-              allowExternalFile: allowExternalFilePreview,
-              deviceId,
-              path: filePath,
-              ...(resourceScope && { resourceScope }),
-              workingDirectory,
-            }),
-      { revalidateOnFocus: false },
+    const target = useMemo(
+      () => ({
+        allowExternalFile: allowExternalFilePreview,
+        deviceId,
+        filePath,
+        sandboxTopicId,
+        workingDirectory,
+      }),
+      [allowExternalFilePreview, deviceId, filePath, sandboxTopicId, workingDirectory],
     );
+    const [useFetchPreview, beginSave, refreshPreview] = useLocalFilePreviewStore((s) => [
+      s.useFetchPreview,
+      s.beginSave,
+      s.refreshPreview,
+    ]);
+    const { error, isHydrated, isLoading, isValidating } = useFetchPreview(target, enabled);
+    const preview = useLocalFilePreview(enabled ? target : undefined);
 
-    const handleSavedContent = useCallback(
-      (saved: string) => {
-        mutate((prev) => (prev && prev.type === 'text' ? { ...prev, content: saved } : prev), {
-          revalidate: false,
-        });
-      },
-      [mutate],
-    );
+    const handleSaveStart = useCallback(() => beginSave(target), [beginSave, target]);
 
-    const handleReload = useCallback(() => mutate(), [mutate]);
+    const handleReload = useCallback(() => refreshPreview(target), [refreshPreview, target]);
 
-    if (isLoading) return <Loading />;
+    // The persisted preview is still being read: paint nothing rather than a
+    // spinner that the cached text replaces a few frames later.
+    if (isLoading) return isHydrated ? <Loading /> : null;
 
-    if (error || !preview) {
+    // Text previews are persisted (stale-while-revalidate): a transiently failed
+    // background refresh keeps the cached text, while a deleted / denied file
+    // evicts it in the store (so `preview` is gone). Any other preview type surfaces the error
+    // (a deleted file / disconnected device), and so does a sandbox — a recycled
+    // sandbox has no file left to show.
+    if (!preview || (error && (sandboxTopicId || preview.type !== 'text'))) {
       return (
         <Center height={'100%'} width={'100%'}>
           <Empty
@@ -556,7 +523,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         sandboxTopicId={sandboxTopicId}
         workingDirectory={workingDirectory}
         onReload={handleReload}
-        onSaved={handleSavedContent}
+        onSaveStart={handleSaveStart}
       />
     );
   },

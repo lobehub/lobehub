@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Alert, Button, Popover, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Alert,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { AlertTriangle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,17 +38,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadius};
 
     font-size: ${cssVar.fontSizeSM};
-
-    .ant-alert-content {
-      min-width: 0;
-    }
-
-    .ant-alert-icon {
-      flex: none;
-      height: 18px !important;
-      margin-block-start: 1px;
-      margin-inline-end: 0 !important;
-    }
   `,
   list: css`
     overflow-y: auto;

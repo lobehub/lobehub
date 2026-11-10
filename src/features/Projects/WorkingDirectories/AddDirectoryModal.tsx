@@ -1,20 +1,20 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   Alert,
   Button,
   createModal,
+  Flexbox,
   Input,
   Select,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { deviceService } from '@/services/device';
-import { useDeviceStore } from '@/store/device';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 function AddDirectoryContent({
@@ -26,7 +26,7 @@ function AddDirectoryContent({
 }) {
   const { t } = useTranslation('project');
   const deviceRequest = useDeviceStore((s) => s.useFetchDevices)(true);
-  const devices = useDeviceStore((s) => s.devices);
+  const devices = useDeviceStore(deviceSelectors.deviceList);
   const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const environments = useProjectEnvironments(projectId);
   const [environmentId, setEnvironment] = useState(initialEnvironmentId ?? '');
@@ -106,7 +106,9 @@ function AddDirectoryContent({
       {deviceRequest.error || environmentsRequest.error ? (
         <AsyncError
           error={deviceRequest.error || environmentsRequest.error}
-          onRetry={() => Promise.all([deviceRequest.mutate(), environmentsRequest.revalidate()])}
+          onRetry={() =>
+            Promise.all([deviceRequest.revalidate(), environmentsRequest.revalidate()])
+          }
         />
       ) : null}
       <Flexbox horizontal gap={8} justify="flex-end">

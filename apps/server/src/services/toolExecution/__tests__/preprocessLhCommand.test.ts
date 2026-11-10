@@ -69,6 +69,29 @@ describe('preprocessLhCommand', () => {
     );
   });
 
+  it('should hand the run its own operation id, so a sandbox dispatch can be attributed', async () => {
+    const result = await preprocessLhCommand(
+      'lh agent run -a agt_123 -p hi',
+      'user-1',
+      'workspace-1',
+      false,
+      'op-1',
+    );
+
+    expect(result.command).toBe(
+      wrap(
+        'lh agent run -a agt_123 -p hi',
+        " LOBEHUB_WORKSPACE_ID='workspace-1' LOBEHUB_OPERATION_ID='op-1'",
+      ),
+    );
+  });
+
+  it('should omit the operation id when the caller has no run context', async () => {
+    const result = await preprocessLhCommand('lh topic list', 'user-1');
+
+    expect(result.command).not.toContain('LOBEHUB_OPERATION_ID');
+  });
+
   it('should emit the JWT once regardless of how many lh calls the script makes', async () => {
     const cmd = 'lh topic list --page 1 && lh topic list --page 2 && echo "done"';
     const result = await preprocessLhCommand(cmd, 'user-1');
@@ -407,15 +430,26 @@ describe('isDirectLhInvocation', () => {
 
 describe('buildDeviceLhEnv', () => {
   it('scopes the run to its workspace', () => {
-    expect(buildDeviceLhEnv('ws-1')).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-1' });
+    expect(buildDeviceLhEnv({ workspaceId: 'ws-1' })).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-1' });
   });
 
   it('never ships the caller JWT onto the device', () => {
-    expect(buildDeviceLhEnv('ws-1')).not.toHaveProperty('LOBEHUB_JWT');
+    expect(buildDeviceLhEnv({ workspaceId: 'ws-1' })).not.toHaveProperty('LOBEHUB_JWT');
   });
 
-  it('returns undefined for personal runs', () => {
-    expect(buildDeviceLhEnv(undefined)).toBeUndefined();
+  it('returns undefined when there is neither a workspace nor a run id', () => {
+    expect(buildDeviceLhEnv({})).toBeUndefined();
+  });
+
+  // Regression: only the workspace scope travelled to the device, so `lh goal
+  // plan` there failed with "Current manager operation ID required" and a goal
+  // whose manager ran on a device never left planning.
+  it('passes the run id, in personal runs too', () => {
+    expect(buildDeviceLhEnv({ operationId: 'op-1' })).toEqual({ LOBEHUB_OPERATION_ID: 'op-1' });
+    expect(buildDeviceLhEnv({ operationId: 'op-1', workspaceId: 'ws-1' })).toEqual({
+      LOBEHUB_OPERATION_ID: 'op-1',
+      LOBEHUB_WORKSPACE_ID: 'ws-1',
+    });
   });
 
   // Regression: this used to be gated on `isLhCommand(command)`, so an `lh`
@@ -425,7 +459,7 @@ describe('buildDeviceLhEnv', () => {
   it('scopes commands that reach lh indirectly, which no detector could match', () => {
     for (const command of ['make deploy', './sync.sh', 'npm run sync']) {
       expect(isLhCommand(command)).toBe(false);
-      expect(buildDeviceLhEnv('ws-1')).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-1' });
+      expect(buildDeviceLhEnv({ workspaceId: 'ws-1' })).toEqual({ LOBEHUB_WORKSPACE_ID: 'ws-1' });
     }
   });
 });

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +43,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     cursor: pointer;
+
+    /* The hover wash keeps its inset; the row's content lines up with the section title. */
+    margin-inline: -8px;
     padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};

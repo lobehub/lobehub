@@ -53,27 +53,35 @@ const scopedHeadroom = (a: AccountLoad, modelScope?: string): number => {
 };
 
 /**
+ * Every eligible account, best first. A caller that may not be able to run the
+ * top pick (a device holds only some of the logins) walks this order instead
+ * of asking again.
+ */
+export const rankAccounts = (
+  candidates: AccountLoad[],
+  opts: SelectAccountOptions,
+): AccountLoad[] =>
+  candidates
+    .filter((a) => isEligible(a, opts))
+    .sort((a, b) => {
+      // 1) weekly headroom (the bottleneck) — more is better
+      const weekly = 100 - (a.weeklyUtil ?? 0) - (100 - (b.weeklyUtil ?? 0));
+      if (weekly !== 0) return -weekly;
+      // 2) scoped headroom for the requested model
+      const scoped = scopedHeadroom(a, opts.modelScope) - scopedHeadroom(b, opts.modelScope);
+      if (scoped !== 0) return -scoped;
+      // 3) session headroom
+      const session = 100 - (a.sessionUtil ?? 0) - (100 - (b.sessionUtil ?? 0));
+      if (session !== 0) return -session;
+      // 4) explicit priority (lower first)
+      return a.priority - b.priority;
+    });
+
+/**
  * Pick the account an agent should run on. Returns null when every candidate is
  * exhausted or cooling down (caller then queues / rolls the task over).
  */
 export const selectAccount = (
   candidates: AccountLoad[],
   opts: SelectAccountOptions,
-): AccountLoad | null => {
-  const eligible = candidates.filter((a) => isEligible(a, opts));
-  if (eligible.length === 0) return null;
-
-  return eligible.sort((a, b) => {
-    // 1) weekly headroom (the bottleneck) — more is better
-    const weekly = 100 - (a.weeklyUtil ?? 0) - (100 - (b.weeklyUtil ?? 0));
-    if (weekly !== 0) return -weekly;
-    // 2) scoped headroom for the requested model
-    const scoped = scopedHeadroom(a, opts.modelScope) - scopedHeadroom(b, opts.modelScope);
-    if (scoped !== 0) return -scoped;
-    // 3) session headroom
-    const session = 100 - (a.sessionUtil ?? 0) - (100 - (b.sessionUtil ?? 0));
-    if (session !== 0) return -session;
-    // 4) explicit priority (lower first)
-    return a.priority - b.priority;
-  })[0];
-};
+): AccountLoad | null => rankAccounts(candidates, opts)[0] ?? null;

@@ -1,8 +1,8 @@
 'use client';
 
 import { Empty, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AppWindowIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,17 +14,21 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { resolveAppListState } from '../appList';
 import AppDetail from './AppDetail';
 import AppItem from './AppItem';
+import { AppRowsSkeleton } from './AppListSkeleton';
 import CreateAppButton from './CreateAppButton';
 import { useOAuthAppList } from './useOAuthAppList';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  listCol: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  listCol: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface OAuthAppsProps {
   canEdit: boolean;
@@ -35,9 +39,11 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
   const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ sub?: string }>();
 
-  const { data: apps, error, isLoading, isValidating, mutate } = useOAuthAppList();
+  const { data: apps, error, isLoading, isValidating, revalidate } = useOAuthAppList();
 
-  const reload = () => mutate();
+  const reload = () => {
+    void revalidate();
+  };
 
   if (params.sub)
     return (
@@ -46,7 +52,6 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
         id={params.sub}
         key={params.sub}
         onBack={() => navigate('/settings/oauth-apps')}
-        onChanged={reload}
       />
     );
 
@@ -72,28 +77,20 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
     );
 
   const renderRows = () => {
-    if (listState === 'loading')
-      return (
-        <Flexbox gap={12} padding={12}>
-          <Skeleton.Text rows={2} />
-          <Skeleton.Text rows={2} />
-        </Flexbox>
-      );
+    if (listState === 'loading') return <AppRowsSkeleton />;
 
     return apps?.map((app) => (
       <AppItem
         app={app}
         canEdit={canEdit}
         key={app.id}
-        onChanged={reload}
-        onDeleted={reload}
         onOpen={() => navigate(`/settings/oauth-apps/${app.id}`)}
       />
     ));
   };
 
   return (
-    <Flexbox className={styles.listCol} gap={2} padding={4}>
+    <Flexbox className={stylex.props(styles.listCol).className} gap={2} padding={4}>
       {renderRows()}
     </Flexbox>
   );

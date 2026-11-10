@@ -1,5 +1,5 @@
 import type { ActionIconProps } from '@lobehub/ui';
-import type { FormProps } from '@lobehub/ui/base-ui/form';
+import type { FormProps } from '@lobehub/ui/form';
 
 export const HEADER_HEIGHT = 64;
 export const MOBILE_NABBAR_HEIGHT = 44;

@@ -1,7 +1,7 @@
 name = "ui-restrained-color"
 builtInAgent = "basic-structured"
 instruction = """
-You are reviewing one React component file from LobeHub's web client (styles through antd-style `createStaticStyles` with `cssVar.*` tokens, `Tag` / `Alert` from `@lobehub/ui/base-ui`).
+You are reviewing one React component file from LobeHub's web client (styles through `@lobehub/ui` `createStaticStyles` with `cssVar.*` tokens, `Tag` / `Alert` from `@lobehub/ui/base-ui`).
 
 Team rule, distilled from the product owner's review rejections: color carries state, not decoration. Quotes: "都不要用 link 色，弄成文本色，然后可以点击那种感觉就够了（用图标）", "不要再用色块表达类型了……不要再加颜色", "最好还是有一些图标，但是不用颜色，就是灰色的图标", "都用灰色，不要用这么 colorText 主色", "用 colorTextSecondary 吧，不要用最重一级颜色", "这个时间的颜色要换成浅的", "断开用蓝色很怪啊，你换成亮灰色", "不啊要用蓝色的，感觉是信息条了，换成那种白底的告知", "不要有这个黄 tag", "已解决应该默认折起然后置灰，也不应该有任何这种绿色的显眼的 tag", "你应该用 cssVar 的吧".
 

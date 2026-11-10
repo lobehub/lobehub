@@ -178,6 +178,44 @@ describe('VerifyEvidenceModel', () => {
     expect(rows.every((f) => f.source === 'acceptance')).toBe(true);
   });
 
+  it('stamps the stdout / stderr / recording files a terminal evidence references', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    const [stdout] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'stdout.txt',
+        size: 3,
+        url: 's3://ev/stdout',
+        userId,
+      })
+      .returning();
+    const [cast] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'application/octet-stream',
+        name: 'session.cast',
+        size: 9,
+        url: 's3://ev/cast',
+        userId,
+      })
+      .returning();
+
+    await model.create({
+      checkResultId,
+      content: '$ ls',
+      metadata: {
+        terminal: { artifacts: { cast: { fileId: cast.id }, stdout: { fileId: stdout.id } } },
+      },
+      type: 'terminal',
+    });
+
+    const rows = await serverDB.query.files.findMany({
+      where: (f, { inArray }) => inArray(f.id, [stdout.id, cast.id]),
+    });
+    expect(rows.map((f) => f.source)).toEqual(['acceptance', 'acceptance']);
+  });
+
   it('keeps an existing file source instead of overwriting it', async () => {
     const model = new VerifyEvidenceModel(serverDB, userId);
     const [generated] = await serverDB

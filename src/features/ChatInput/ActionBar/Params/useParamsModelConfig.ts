@@ -1,13 +1,12 @@
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { useAgentModelSelection } from '../../hooks/useAgentModelSelection';
+import { useTopicModel } from '../../hooks/useEffectiveModel';
 
 export const useParamsModelConfig = (agentId: string) => {
   const { model: selectedAgentModel, provider: selectedAgentProvider } =
     useAgentModelSelection(agentId);
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useTopicModel();
   const model = topicModel?.model ?? selectedAgentModel;
   const provider = topicModel?.model ? topicModel.provider : selectedAgentProvider;
 

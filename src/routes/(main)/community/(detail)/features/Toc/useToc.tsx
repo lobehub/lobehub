@@ -1,6 +1,6 @@
 'use client';
 
-import { type AnchorProps } from '@lobehub/ui/base-ui';
+import { type AnchorProps } from '@lobehub/ui';
 import { unionBy } from 'es-toolkit/compat';
 import { type FC, type PropsWithChildren } from 'react';
 import { createContext, use, useState } from 'react';

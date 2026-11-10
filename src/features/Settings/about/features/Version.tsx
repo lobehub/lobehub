@@ -4,9 +4,9 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, Button, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,11 +49,7 @@ const OtaVersionTag = memo(() => {
 
 OtaVersionTag.displayName = 'OtaVersionTag';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  logo: css`
-    border-radius: calc(${cssVar.borderRadiusLG} * 2);
-  `,
-}));
+const styles = stylex.create({ logo: { borderRadius: `calc(${cssVar.borderRadiusLG} * 2)` } });
 
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
@@ -198,7 +194,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Block
             clickable
             align={'center'}
-            className={styles.logo}
+            className={stylex.props(styles.logo).className}
             height={64}
             justify={'center'}
             width={64}

@@ -5,9 +5,8 @@ import {
   type SidebarAgentLabel,
   type SidebarVisibility,
 } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
@@ -36,6 +35,7 @@ import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalPr
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentService } from '@/services/agent';
@@ -69,6 +69,12 @@ interface UseAgentDropdownMenuParams {
   name?: string | null;
   openCreateGroupModal: () => void;
   pinned: boolean;
+  /**
+   * Offer "Remove from sidebar". Off for lists that ignore the sidebar
+   * visibility preference (the `im_layout` Messages list), where it would
+   * change nothing visible. Defaults to on.
+   */
+  sidebarVisibilityEnabled?: boolean;
   slug?: string | null;
   title: string;
   userId?: string | null;
@@ -85,11 +91,12 @@ export const useAgentDropdownMenu = ({
   name,
   openCreateGroupModal,
   pinned,
+  sidebarVisibilityEnabled = true,
   slug,
   title,
   userId,
   visibility,
-}: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
+}: UseAgentDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common', 'setting']);
   const navigate = useWorkspaceAwareNavigate();
 
@@ -142,7 +149,8 @@ export const useAgentDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
-  const isShownInSidebar = isSidebarItemVisible({ id, slug, type: 'agent', userId });
+  const isShownInSidebar =
+    sidebarVisibilityEnabled && isSidebarItemVisible({ id, slug, type: 'agent', userId });
   const isPrivate = visibility === 'private';
   const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
   const showPublishAction = Boolean(activeWorkspaceId) && isPrivate;
@@ -188,6 +196,8 @@ export const useAgentDropdownMenu = ({
     { avatar, backgroundColor, title },
     { userId, visibility },
   );
+
+  const copyAgentIdItem = useCopyAgentIdMenuItem(id);
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -240,6 +250,7 @@ export const useAgentDropdownMenu = ({
           },
           sfSymbol: 'macwindow.badge.plus',
         },
+        ...(copyAgentIdItem ? [copyAgentIdItem] : []),
         ...(canConfigure || canCreate || canEdit ? [{ type: 'divider' as const }] : []),
         ...(canConfigure
           ? [
@@ -584,7 +595,7 @@ export const useAgentDropdownMenu = ({
                 : []),
             ]
           : []),
-      ] as MenuProps['items'],
+      ] as DropdownItem[],
     [
       activeWorkspaceId,
       canCreate,
@@ -610,6 +621,7 @@ export const useAgentDropdownMenu = ({
       labelsEnabled,
       openCreateLabelModal,
       openAgentInNewWindow,
+      copyAgentIdItem,
       sessionCustomGroups,
       group,
       isDefault,

@@ -1,8 +1,7 @@
 'use client';
 
 import type { AppMenuNode } from '@lobechat/electron-client-ipc';
-import { DropdownMenu, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, DropdownMenu, Tooltip } from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,9 +26,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   logo: css`
     display: flex;
+    gap: 4px;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+
     width: 100%;
     height: 100%;
   `,
@@ -46,6 +46,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 44px;
     height: 28px;
+
     /* Align the mark with the sidebar navigation icons below. */
     margin-inline-start: -4px;
     padding: 0;

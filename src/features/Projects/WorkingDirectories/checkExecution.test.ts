@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceService } from '@/services/device';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
+import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { checkProjectExecution } from './checkExecution';
 
@@ -45,5 +46,60 @@ describe('project send preflight', () => {
 
     expect(resolve).toHaveBeenCalledWith('directory');
     expect(stat).not.toHaveBeenCalled();
+  });
+
+  // Regression: the DB resolve held every project send behind a network round
+  // trip before the composer even cleared. The sidebar's directory replica
+  // already carries the binding, so a loaded row is checked locally.
+  describe('with the directory row in the local replica', () => {
+    const row = {
+      deviceId: 'pinned-device',
+      environmentId: 'env',
+      id: 'directory',
+      instanceId: 'instance',
+      permission: 'readWrite',
+      projectId: 'project',
+    } as ProjectDirectory;
+
+    afterEach(() => useProjectDirectoryStore.setState({ directoriesMap: {} }));
+
+    it('passes without resolving over the network', async () => {
+      useProjectDirectoryStore.setState({ directoriesMap: { all: [row] } });
+      const resolve = vi.spyOn(projectWorkingDirectoryService, 'resolve');
+
+      await expect(checkProjectExecution(topic, true)).resolves.toBeUndefined();
+      expect(resolve).not.toHaveBeenCalled();
+    });
+
+    // Regression: a cached unlinked/read-only row was rejected locally, but the
+    // replica can lag a change (`attachEnvironment` refreshes only environments),
+    // so a send the server would accept was blocked. Negative states re-resolve.
+    it.each([
+      ['unlinked', { environmentId: null, instanceId: null }],
+      ['read-only', { permission: 'read' }],
+    ])('re-resolves a cached %s row and passes when the server accepts it', async (_, patch) => {
+      useProjectDirectoryStore.setState({
+        directoriesMap: { all: [{ ...row, ...patch } as ProjectDirectory] },
+      });
+      const resolve = vi
+        .spyOn(projectWorkingDirectoryService, 'resolve')
+        .mockResolvedValue({ data: row, success: true } as any);
+
+      await expect(checkProjectExecution(topic, true)).resolves.toBeUndefined();
+      expect(resolve).toHaveBeenCalledWith('directory');
+    });
+
+    it('rejects a cached negative row the server still refuses', async () => {
+      useProjectDirectoryStore.setState({
+        directoriesMap: { all: [{ ...row, permission: 'read' } as ProjectDirectory] },
+      });
+      vi.spyOn(projectWorkingDirectoryService, 'resolve').mockRejectedValue(
+        new Error('This directory is read-only'),
+      );
+
+      await expect(checkProjectExecution(topic, true)).rejects.toThrow(
+        'This directory is read-only',
+      );
+    });
   });
 });

@@ -9,10 +9,10 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   },
   lab: {
     enableAgentGraphConfig: false,
-    enableInputMarkdown: true,
     enableMessageTextSelectionActions: false,
     enableOAuthApps: false,
   },
+  projectTopicGroupMode: 'byAgent',
   topicGroupMode: 'byTime',
   topicIncludeCompleted: false,
   topicSortBy: 'updatedAt',

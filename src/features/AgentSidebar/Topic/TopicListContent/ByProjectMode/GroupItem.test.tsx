@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { AccordionRoot } from '@lobehub/ui/base-ui';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { AccordionRoot } from '@lobehub/ui';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
@@ -26,9 +26,43 @@ const directoryRows = vi.hoisted(
       projectId: string;
       projectAvatar: string;
       deviceId?: string;
+      deviceName?: string;
       path?: string;
+      environmentId?: string;
+      instanceId?: string;
+      permission?: string;
     }>,
 );
+const subGroupModeMock = vi.hoisted(() => ({ value: 'none' as string }));
+const updateSystemStatusMock = vi.hoisted(() => vi.fn());
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (state: object) => unknown) =>
+    selector({
+      status: {
+        projectTopicSubGroupModeByGroup: {
+          'project-id:prj-1': subGroupModeMock.value,
+          'project:/tmp/x': subGroupModeMock.value,
+        },
+      },
+      updateSystemStatus: updateSystemStatusMock,
+    }),
+}));
+
+const deviceRows = vi.hoisted(() => [
+  { deviceId: 'device-2', friendlyName: 'Studio Linux', scope: 'personal' },
+  // This desktop (`device-1`) as a workspace device: same machine, own id.
+  { deviceId: 'device-1-ws', hostname: 'mocha-laptop', scope: 'workspace' },
+  { deviceId: 'device-1', hostname: 'mocha-laptop', scope: 'personal' },
+]);
+vi.mock('@/store/device', () => ({
+  deviceSelectors: { deviceList: (s: { devices: unknown[] }) => s.devices },
+  useDeviceStore: (selector: (state: object) => unknown) =>
+    selector({
+      devices: deviceRows,
+      useFetchDevices: () => ({}),
+    }),
+}));
+
 vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectoryStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -57,20 +91,16 @@ vi.mock('@/helpers/agentWorkingDirectory', () => ({
   resolveTargetDeviceId: () => 'device-1',
 }));
 
+const openBindDirectoryModalMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/Projects/WorkingDirectories/BindDirectoryModal', () => ({
-  openBindDirectoryModal: vi.fn(),
-}));
-
-const openProjectTopicModalMock = vi.hoisted(() => vi.fn());
-vi.mock('@/features/Projects/WorkingDirectories/StartDirectoryModal', () => ({
-  openProjectTopicModal: openProjectTopicModalMock,
+  openBindDirectoryModal: openBindDirectoryModalMock,
 }));
 
 vi.mock('react-router', () => ({
   useParams: () => routeParamsMock,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
@@ -129,9 +159,25 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 
+const updateTopicStatusMock = vi.hoisted(() => vi.fn());
+const refreshTopicMock = vi.hoisted(() => vi.fn());
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => undefined,
+}));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: object) => unknown) => selector({}),
+}));
+vi.mock('@/store/user/selectors', () => ({
+  preferenceSelectors: { topicSortBy: () => 'updatedAt' },
+  userProfileSelectors: { userId: () => 'user-1' },
+}));
+
 vi.mock('@/store/chat', () => {
   const useChatStore = (selector: (state: object) => unknown) => selector({});
   useChatStore.getState = () => ({
+    refreshTopic: refreshTopicMock,
+    updateTopicStatus: updateTopicStatusMock,
     setPendingNewTopicDirectory: setPendingNewTopicDirectoryMock,
     switchTopic: switchTopicMock,
   });
@@ -160,9 +206,345 @@ describe('Project topic group item', () => {
     routeParamsMock.aid = 'agent-1';
     agentStoreStateMock.activeAgentId = 'agent-1';
     activeWorkspaceSlugMock.value = 'lobehub';
+    subGroupModeMock.value = 'none';
+    updateTopicStatusMock.mockReset();
+    refreshTopicMock.mockReset();
   });
 
-  it('opens the new-topic composer for the project directory without creating a topic', async () => {
+  it('keeps the sub-group menu when the newest project topic has no working directory', () => {
+    // Without a directory the add-topic actions can't render; the grouping
+    // choice must not disappear with them.
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [{ id: 't1', title: 'Conversation only' }] as any,
+            id: 'project-id:prj-1',
+            title: 'LobeHub',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'directories.start' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'topics.subGroup.title' })).toBeTruthy();
+  });
+
+  it('picks a sub-group mode from the row grouping button and remembers it per group', async () => {
+    updateSystemStatusMock.mockReset();
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [{ id: 't1', title: 'Topic' }] as any,
+            id: 'project-id:prj-1',
+            title: 'LobeHub',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'topics.subGroup.title' }));
+    fireEvent.click(await screen.findByText('topics.subGroup.byDevice'));
+
+    expect(updateSystemStatusMock).toHaveBeenCalledWith({
+      projectTopicSubGroupModeByGroup: { 'project-id:prj-1': 'byDevice' },
+    });
+  });
+
+  it('sections a project group by device when that mode is picked', () => {
+    subGroupModeMock.value = 'byDevice';
+    directoryRows.push(
+      {
+        deviceId: 'device-1',
+        deviceName: 'MacBook',
+        id: 'binding-mac',
+        path: '/Users/me/project',
+        projectAvatar: '',
+        projectId: 'prj-1',
+        projectName: 'LobeHub',
+        projectSlug: 'lobehub',
+      },
+      {
+        deviceId: 'device-2',
+        id: 'binding-linux',
+        path: '/home/me/project',
+        projectAvatar: '',
+        projectId: 'prj-1',
+        projectName: 'LobeHub',
+        projectSlug: 'lobehub',
+      },
+    );
+
+    render(
+      <AccordionRoot defaultValue={['project-id:prj-1']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', projectWorkingDirectoryId: 'binding-linux', title: 'Linux topic' },
+              { id: 't2', title: 'Loose topic' },
+              { id: 't3', projectWorkingDirectoryId: 'binding-mac', title: 'Mac topic' },
+            ] as any,
+            id: 'project-id:prj-1',
+            title: 'LobeHub',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    const order = ['Studio Linux', 'Linux topic', 'MacBook', 'Mac topic'];
+    const text = document.body.textContent ?? '';
+    order.reduce((from, label) => {
+      const at = text.indexOf(label, from);
+      expect(at, label).toBeGreaterThanOrEqual(from);
+      return at;
+    }, 0);
+    expect(text.indexOf('groupTitle.byDevice.unknown')).toBeLessThan(text.indexOf('Loose topic'));
+    expect(text.indexOf('Mac topic')).toBeLessThan(text.indexOf('groupTitle.byDevice.unknown'));
+  });
+
+  it('offers no device grouping for a plain folder group and ignores a stale byDevice choice', async () => {
+    subGroupModeMock.value = 'byDevice';
+    render(
+      <AccordionRoot defaultValue={['project:/tmp/x']}>
+        <GroupItem
+          expanded
+          group={{
+            // A path-only group: no project id, no bound directory.
+            children: [
+              { id: 't1', metadata: { workingDirectory: '/tmp/x' }, title: 'Folder topic' },
+            ] as any,
+            id: 'project:/tmp/x',
+            title: '/tmp/x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'topics.subGroup.title' }));
+    expect(await screen.findByText('topics.subGroup.byTime')).toBeTruthy();
+    expect(screen.queryByText('topics.subGroup.byDevice')).toBeNull();
+    expect(document.body.textContent).not.toContain('groupTitle.byDevice.unknown');
+  });
+
+  it("sections a folder by device once it merges this machine's two device identities", () => {
+    subGroupModeMock.value = 'byDevice';
+    const folder = (id: string, boundDeviceId: string) => ({
+      id,
+      metadata: { boundDeviceId, workingDirectory: '/tmp/x' },
+      title: id,
+    });
+    render(
+      <AccordionRoot defaultValue={['project:/tmp/x']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              folder('Desktop topic', 'device-1'),
+              folder('Shared topic', 'device-1-ws'),
+            ] as any,
+            id: 'project:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    const text = document.body.textContent ?? '';
+    // Both sections are "mocha-laptop"; the category tells them apart.
+    expect(text.match(/mocha-laptop/g)).toHaveLength(2);
+    expect(text.indexOf('heteroAgent.executionTarget.local')).toBeLessThan(
+      text.indexOf('Desktop topic'),
+    );
+    expect(text.indexOf('Desktop topic')).toBeLessThan(
+      text.indexOf('heteroAgent.executionTarget.workspaceGroup'),
+    );
+    expect(text.indexOf('heteroAgent.executionTarget.workspaceGroup')).toBeLessThan(
+      text.indexOf('Shared topic'),
+    );
+  });
+
+  it('names the device of a folder that another machine also has', () => {
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', metadata: { boundDeviceId: 'device-2', workingDirectory: '/tmp/x' } },
+            ] as any,
+            deviceId: 'device-2',
+            id: 'project:device-2:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    expect(document.body.textContent).toContain(
+      'Studio Linux · heteroAgent.executionTarget.personalGroup',
+    );
+  });
+
+  it('archives only this group\'s merged-PR topics from the group "more" menu', async () => {
+    const merged = { github: { pullRequest: { mergedAt: '2026-10-01', state: 'closed' } } };
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              {
+                id: 't-merged',
+                metadata: { workingDirectory: '/tmp/x', workingDirectoryConfig: { git: merged } },
+                title: 'Merged',
+              },
+              {
+                id: 't-done',
+                metadata: { workingDirectory: '/tmp/x', workingDirectoryConfig: { git: merged } },
+                status: 'completed',
+                title: 'Already done',
+              },
+              { id: 't-open', metadata: { workingDirectory: '/tmp/x' }, title: 'Open' },
+            ] as any,
+            id: 'project:/tmp/x',
+            title: '/tmp/x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'directories.projectBinding' }));
+    fireEvent.click(await screen.findByText('actions.archiveMergedPullRequests'));
+
+    await waitFor(() => expect(refreshTopicMock).toHaveBeenCalled());
+    expect(updateTopicStatusMock).toHaveBeenCalledTimes(1);
+    expect(updateTopicStatusMock).toHaveBeenCalledWith({
+      status: 'completed',
+      topicId: 't-merged',
+    });
+  });
+
+  it('folds a device section from its header without touching the others', async () => {
+    subGroupModeMock.value = 'byDevice';
+    directoryRows.push({
+      deviceId: 'device-2',
+      id: 'binding-linux',
+      path: '/home/me/project',
+      projectAvatar: '',
+      projectId: 'prj-1',
+      projectName: 'LobeHub',
+      projectSlug: 'lobehub',
+    });
+
+    render(
+      <AccordionRoot defaultValue={['project-id:prj-1']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', projectWorkingDirectoryId: 'binding-linux', title: 'Linux topic' },
+              { id: 't2', title: 'Loose topic' },
+            ] as any,
+            id: 'project-id:prj-1',
+            title: 'LobeHub',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    expect(screen.getByText('Linux topic')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Studio Linux' }));
+
+    await waitFor(() => expect(screen.queryByText('Linux topic')).toBeNull());
+    expect(screen.getByText('Loose topic')).toBeTruthy();
+  });
+
+  it('starts a new topic in the project directory of a device section from its "+"', () => {
+    subGroupModeMock.value = 'byDevice';
+    directoryRows.push(
+      {
+        deviceId: 'device-1',
+        deviceName: 'MacBook',
+        environmentId: 'env-1',
+        id: 'binding-mac',
+        instanceId: 'ins-mac',
+        path: '/Users/me/project',
+        permission: 'readWrite',
+        runnable: true,
+        projectAvatar: '',
+        projectId: 'prj-1',
+        projectName: 'LobeHub',
+        projectSlug: 'lobehub',
+      },
+      {
+        deviceId: 'device-2',
+        environmentId: 'env-1',
+        id: 'binding-linux',
+        instanceId: 'ins-linux',
+        path: '/home/me/project',
+        permission: 'readWrite',
+        runnable: true,
+        projectAvatar: '',
+        projectId: 'prj-1',
+        projectName: 'LobeHub',
+        projectSlug: 'lobehub',
+      },
+      // A read-only directory on a third device cannot start a run, so it must
+      // not seed an empty device section with a "+".
+      {
+        deviceId: 'device-3',
+        environmentId: 'env-1',
+        id: 'binding-readonly',
+        instanceId: 'ins-readonly',
+        path: '/srv/project',
+        permission: 'readOnly',
+        runnable: false,
+        projectAvatar: '',
+        projectId: 'prj-1',
+        projectName: 'LobeHub',
+        projectSlug: 'lobehub',
+      },
+    );
+
+    render(
+      <AccordionRoot defaultValue={['project-id:prj-1']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', projectWorkingDirectoryId: 'binding-linux', title: 'Linux topic' },
+              { id: 't2', title: 'Loose topic' },
+            ] as any,
+            id: 'project-id:prj-1',
+            title: 'LobeHub',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    // Both runnable device sections get a "+" — the MacBook one is listed
+    // empty so a topic can start there — while the read-only device gets no
+    // section and the unknown section has no directory to start in (and the
+    // group header has no path, so it renders none). The Linux section comes
+    // first because it has the newest topic.
+    const starts = screen.getAllByRole('button', { name: 'directories.start' });
+    expect(starts).toHaveLength(2);
+    fireEvent.click(starts[0]);
+
+    expect(commitAgentDefaultMock).not.toHaveBeenCalled();
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      projectWorkingDirectoryId: 'binding-linux',
+    });
+    expect(routerPushMock).toHaveBeenCalled();
+  });
+
+  it('opens a path-only composer from a path group even when a project registered that path', async () => {
     // The group "+" must not persist anything: it opens the composer, and the
     // topic is created once the user sends the first message. Regression for
     // the straight-to-server start that dropped an empty "untitled" topic into
@@ -197,12 +579,49 @@ describe('Project topic group item', () => {
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(routerPushMock).toHaveBeenCalledWith('/agent/agent-1');
     expect(startTopicMock).not.toHaveBeenCalled();
-    // The deferred row must still be born inside the project: the staged
-    // directory rides along to the first-message creation.
-    expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith({
-      agentId: 'agent-1',
-      projectWorkingDirectoryId: 'binding-1',
+    // A plain path group stays path-only: a project directory registered at
+    // the same path must not pull the new topic into that project.
+    expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith(undefined);
+  });
+
+  it('offers binding a path group even when a project registered that path', async () => {
+    directoryRows.push({
+      deviceId: 'device-1',
+      id: 'binding-1',
+      path: '/Users/me/project',
+      projectAvatar: '',
+      projectId: 'prj-1',
+      projectName: 'LobeHub',
+      projectSlug: 'lobehub',
     });
+    openBindDirectoryModalMock.mockReset();
+
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', metadata: { workingDirectory: '/Users/me/project' }, title: 'Loose' },
+            ] as any,
+            id: 'project:/Users/me/project',
+            title: 'project',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'directories.projectBinding' }));
+    expect(screen.queryByText('topics.viewProject')).toBeNull();
+    fireEvent.click(await screen.findByText('directories.bind'));
+
+    expect(openBindDirectoryModalMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deviceId: 'device-1',
+        path: '/Users/me/project',
+        topicIds: ['t1'],
+      }),
+    );
   });
 
   it('preserves the detected route prefix when adding a project topic without an active workspace slug', async () => {
@@ -416,9 +835,8 @@ it('opens the plain new-topic composer when a merged project group spans multipl
   // ROOT CAUSE: the first fix opened a chooser modal here, but the expected
   // habit is the plain new-topic composer — the user picks the machine in the
   // composer control bar, so no modal may pop and no directory default may be
-  // pre-committed for a multi-machine merged group.
+  // committed to the agent for a multi-machine merged group.
   directoryRows.length = 0;
-  openProjectTopicModalMock.mockClear();
   commitAgentDefaultMock.mockClear();
   switchTopicMock.mockClear();
   setPendingNewTopicDirectoryMock.mockClear();
@@ -430,6 +848,10 @@ it('opens the plain new-topic composer when a merged project group spans multipl
       projectSlug: 'multi-project',
       projectId: 'prj-multi',
       projectAvatar: '📦',
+      deviceId: 'device-2',
+      environmentId: 'env-a',
+      instanceId: 'inst-a',
+      permission: 'readWrite',
     },
     {
       id: 'binding-multi-b',
@@ -437,6 +859,10 @@ it('opens the plain new-topic composer when a merged project group spans multipl
       projectSlug: 'multi-project',
       projectId: 'prj-multi',
       projectAvatar: '📦',
+      deviceId: 'device-1',
+      environmentId: 'env-b',
+      instanceId: 'inst-b',
+      permission: 'readWrite',
     },
   );
   render(
@@ -471,18 +897,20 @@ it('opens the plain new-topic composer when a merged project group spans multipl
     </AccordionRoot>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'directories.start' }));
-  expect(openProjectTopicModalMock).not.toHaveBeenCalled();
   expect(commitAgentDefaultMock).not.toHaveBeenCalled();
   expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
   expect(routerPushMock).toHaveBeenCalledWith('/agent/agent-1');
-  // A multi-directory group has no single directory to stage — the user picks
-  // the machine in the composer.
-  expect(setPendingNewTopicDirectoryMock).not.toHaveBeenCalled();
+  // ROOT CAUSE of the detached topic: nothing was staged, so the first send
+  // created a path-only conversation outside the project. The agent's current
+  // device (device-1) wins; the composer's device switcher can move it.
+  expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith({
+    agentId: 'agent-1',
+    projectWorkingDirectoryId: 'binding-multi-b',
+  });
 });
 
 it('keeps the legacy directory start when a project group has a single directory', async () => {
   directoryRows.length = 0;
-  openProjectTopicModalMock.mockClear();
   commitAgentDefaultMock.mockClear();
   commitAgentDefaultMock.mockResolvedValue(undefined);
   startTopicMock.mockClear();
@@ -521,7 +949,6 @@ it('keeps the legacy directory start when a project group has a single directory
   await expect.poll(() => commitAgentDefaultMock.mock.calls.length).toBe(1);
   expect(commitAgentDefaultMock).toHaveBeenCalledWith('/repo');
   expect(startTopicMock).not.toHaveBeenCalled();
-  expect(openProjectTopicModalMock).not.toHaveBeenCalled();
   expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith({
     agentId: 'agent-1',
     projectWorkingDirectoryId: 'binding-single',

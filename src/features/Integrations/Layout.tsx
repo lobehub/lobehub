@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo, type PropsWithChildren } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

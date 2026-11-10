@@ -1,21 +1,22 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
-  Avatar,
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   SkeletonAvatar,
   SkeletonText,
   Tag,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import UserAvatar from '@/components/UserAvatar';
 import type { PermissionResourceType, ResourceCollaborator } from '@/services/resourcePermission';
 
 import { useAccessLevelOptions } from '../useAccessLevelOptions';
@@ -89,7 +90,7 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
             gap={12}
             key={collaborator.userId}
           >
-            <Avatar avatar={collaborator.user?.avatar || undefined} size={32} title={name} />
+            <UserAvatar avatar={collaborator.user?.avatar} name={name} size={32} />
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               <Text ellipsis weight={500}>
                 {name}
