@@ -560,7 +560,7 @@ export const computeChatCost = (
           const segments: Array<{ credits: number; quantity: number; rate: number }> = [];
 
           for (const [ttl, tokens] of ttlSplits) {
-            const bucket = computeLookupCredits(lookupUnit, tokens, {
+            const bucket = computeLookupCredits(lookupUnit, tokens, usage, {
               ...options,
               lookupParams: { ...options?.lookupParams, ttl },
             });
