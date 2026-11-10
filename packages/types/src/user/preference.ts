@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { DeviceExecutionTarget } from '../agent/agencyConfig';
 import type { AgentModelOverride } from '../agent/modelSelection';
+import type { UserMeetingPreference } from '../meeting';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
@@ -322,6 +323,7 @@ export interface UserPreference {
    * context. Stored as id (not slug) so workspace renames don't invalidate it.
    */
   lastWorkspaceId?: string | null;
+  meeting?: UserMeetingPreference;
   /**
    * How a project's topic sidebar groups its topics. Kept apart from
    * `topicGroupMode` because a project spans agents and devices: it defaults to
@@ -415,6 +417,7 @@ export const UserPreferenceSchema = z
     integration: UserIntegrationPreferenceSchema.optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    meeting: z.object({ autoCreateTasks: z.boolean().optional() }).optional(),
     projectTopicGroupMode: z
       .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
       .optional(),

@@ -1979,6 +1979,13 @@ When I am ___, I need ___
   'systemAgent.inputCompletion.modelDesc':
     'Suggests text while you type. When enabled, this model generates the suggestions.',
   'systemAgent.inputCompletion.title': 'Input Suggestions',
+  'systemAgent.meetingMinutes.modelDesc':
+    'Writes the summary, chapters, decisions and to-dos of a meeting from its transcript.',
+  'systemAgent.meetingMinutes.title': 'Meeting Minutes',
+  'systemAgent.meetingTranscription.modelDesc':
+    'Transcribes meeting recordings after they end, with speakers and timestamps. Pick a diarizing model (such as gpt-4o-transcribe-diarize) to label who spoke. Also drafts the live transcript where realtime transcription is unavailable.',
+  'systemAgent.meetingTranscription.placeholder': 'Select a speech-to-text model',
+  'systemAgent.meetingTranscription.title': 'Meeting Transcription',
   'systemAgent.userMemoryEmbedding.label': 'Model',
   'systemAgent.userMemoryEmbedding.modelDesc':
     'Model used to embed memory content for retrieval. The context limit caps each embedding input.',
@@ -4807,6 +4814,110 @@ When I am ___, I need ___
   'environments.files.openHint': 'Double-click a folder to open it, or a file to view it',
   'environments.files.unusedInstance':
     'Nothing here yet. The code appears once the copy is built or a conversation runs in it.',
+  'tab.transcription': 'Transcription',
+  'settingsSearch.tabKeywords.transcription':
+    'transcription, speech recognition, ASR, meeting, local model, speaker',
+  'localAsr.title': 'Meeting transcription',
+  'localAsr.desc': 'Choose where this device transcribes meeting recordings.',
+  'localAsr.provider.title': 'Transcription engine',
+  'localAsr.provider.desc':
+    'Cloud uses LobeHub speech recognition. Local runs open-source models on this computer, and the audio never leaves it.',
+  'localAsr.provider.cloud': 'Cloud',
+  'localAsr.provider.local': 'Local',
+  'localAsr.provider.localNeedsModel':
+    'Download the speech recognition model below to use local transcription.',
+  'localAsr.provider.localUnsupported':
+    "This device can't run local transcription. Use cloud transcription.",
+  'localAsr.privacy':
+    'Local mode records and transcribes on this computer. Only the transcript text is sent when meeting notes are generated.',
+  'localAsr.language.title': 'Recognition language',
+  'localAsr.language.desc':
+    'Chinese also recognizes mixed Chinese and English. Auto-detect can mistake mixed speech for English.',
+  'localAsr.language.zh': 'Chinese',
+  'localAsr.language.en': 'English',
+  'localAsr.language.auto': 'Auto-detect',
+  'localAsr.language.ja': 'Japanese',
+  'localAsr.language.ko': 'Korean',
+  'localAsr.language.yue': 'Cantonese',
+  'localAsr.diarization.title': 'Identify speakers',
+  'localAsr.diarization.desc':
+    'After recording, work out who spoke when, on this computer. Needs the speaker model.',
+  'localAsr.hardware.title': 'Device compatibility',
+  'localAsr.hardware.desc': "Local transcription runs on this computer's CPU and memory.",
+  'localAsr.hardware.cpuValue': '{{model}} · {{cores}} cores · {{arch}}',
+  'localAsr.hardware.memory': 'Memory',
+  'localAsr.hardware.disk': 'Disk space',
+  'localAsr.hardware.diskValue': '{{free}} free; the models need {{required}}',
+  'localAsr.hardware.verdict': 'Assessment',
+  'localAsr.hardware.tier.recommended': 'Recommended',
+  'localAsr.hardware.tier.supported': 'Supported',
+  'localAsr.hardware.tier.limited': 'May be slow',
+  'localAsr.hardware.tier.unsupported': 'Not supported',
+  'localAsr.hardware.reason.apple_silicon':
+    'Apple Silicon is the measured configuration. Live transcription keeps up with speech.',
+  'localAsr.hardware.reason.untested_platform':
+    'Not measured on this platform yet. It should work, but may be slower than on Apple Silicon.',
+  'localAsr.hardware.reason.low_memory':
+    'Less than 8 GB of memory. The engine uses about 1.1 GB at peak and may slow other apps.',
+  'localAsr.hardware.reason.low_disk': 'Not enough free disk space for the models.',
+  'localAsr.hardware.reason.unsupported_platform':
+    'No local engine is available for this operating system or processor.',
+  'localAsr.hardware.reason.native_runtime_missing':
+    'The local engine is missing from this installation. Reinstall LobeHub to restore it.',
+  'localAsr.models.title': 'Local models',
+  'localAsr.models.corruptedHint': 'Model files are damaged. Download again to fix.',
+  'localAsr.models.desc': 'Stored in {{dir}}. Each file is checked against its SHA-256 before use.',
+  'localAsr.models.pack.asr-sensevoice': 'Speech recognition',
+  'localAsr.models.pack.diarization': 'Speaker identification',
+  'localAsr.models.required': 'Required',
+  'localAsr.models.optional': 'Optional',
+  'localAsr.models.status.ready': 'Ready',
+  'localAsr.models.status.not_downloaded': 'Not downloaded',
+  'localAsr.models.status.downloading': 'Downloading',
+  'localAsr.models.status.verifying': 'Verifying',
+  'localAsr.models.status.corrupted': 'Verification failed',
+  'localAsr.models.download': 'Download',
+  'localAsr.models.resume': 'Resume',
+  'localAsr.models.pause': 'Pause',
+  'localAsr.models.verify': 'Verify',
+  'localAsr.models.delete': 'Delete',
+  'localAsr.models.redownload': 'Download again',
+  'localAsr.models.progress': '{{downloaded}} / {{total}} · {{speed}}',
+  'localAsr.models.deleteConfirm.title': 'Delete the {{name}} model?',
+  'localAsr.models.deleteConfirm.desc': 'This frees {{size}}. You can download it again later.',
+  'localAsr.models.verifyOk': 'All files passed SHA-256 verification',
+  'localAsr.models.verifyFailed': 'Some files failed verification. Download the model again.',
+  'localAsr.test.title': 'Try transcription',
+  'localAsr.test.desc': 'Uses the engine selected above. In local mode nothing is uploaded.',
+  'localAsr.test.live.title': 'Live transcription',
+  'localAsr.test.live.desc': 'Speak into the microphone and the text appears as you talk.',
+  'localAsr.test.live.start': 'Start',
+  'localAsr.test.live.stop': 'Stop',
+  'localAsr.test.live.listening': 'Listening…',
+  'localAsr.test.file.title': 'Transcribe a recording locally',
+  'localAsr.test.file.desc':
+    'Refine the live recording above, or choose a WAV file, to get a transcript with timestamps and speakers.',
+  'localAsr.test.file.pick': 'Choose WAV file',
+  'localAsr.test.file.noDiarization':
+    "The speaker model isn't downloaded, so speakers won't be identified.",
+  'localAsr.test.phase.loading': 'Loading model',
+  'localAsr.test.phase.transcribing': 'Transcribing',
+  'localAsr.test.phase.diarization': 'Identifying speakers',
+  'localAsr.test.phase.merging': 'Merging results',
+  'localAsr.test.speaker': 'Speaker {{index}}',
+  'localAsr.test.fileStats':
+    '{{audio}} of audio processed in {{elapsed}} · RTF {{rtf}} · peak memory {{rss}} MB',
+  'localAsr.test.liveStats':
+    '{{audio}} of audio · median decode {{p50}} ms per sentence · RTF {{rtf}}',
+  'localAsr.test.needModel': 'Download the speech recognition model first.',
+  'localAsr.error': 'Transcription failed: {{message}}',
+  'localAsr.test.engine.local': 'Local engine · audio stays on this device',
+  'localAsr.test.engine.cloud': 'Cloud engine',
+  'localAsr.hardware.benchmark': 'Measured reference',
+  'localAsr.hardware.benchmarkDesc':
+    "Apple M4 Pro: live transcription takes about 1.3% of the meeting's length; a refine pass with speakers about 7.4% (about 4.4 minutes for a 1-hour meeting); peak memory about 1.1 GB.",
+  'localAsr.test.file.refineRecording': 'Refine the last recording',
+  'localAsr.hardware.cpu': 'Processor',
   'environments.files.folderNotEmpty':
     'This folder already has files in it. Only a new or empty folder can be initialized from an environment.',
   'environments.files.folderTaken': 'An environment directory with this name already exists.',
