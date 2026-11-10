@@ -24,6 +24,13 @@ export const DRIVE_DOWNLOAD_MAX_FILES = 50_000;
 /** How long the sandbox may spend packing and uploading. */
 export const DRIVE_DOWNLOAD_TIMEOUT_MS = 180_000;
 
+/**
+ * How long the storage service may spend exporting. It answers well inside
+ * this or not at all; past it the request is abandoned rather than holding
+ * this one open, and not retried in a sandbox, which would stall the same way.
+ */
+export const DRIVE_EXPORT_TIMEOUT_MS = 90_000;
+
 /** How long the link the browser follows stays valid. */
 export const DRIVE_DOWNLOAD_URL_EXPIRES_IN = 15 * 60;
 
@@ -382,15 +389,18 @@ export interface PrepareDriveDownloadParams {
    * sandbox session — tried first. Absent where there is none.
    */
   storage?: {
-    exportFile: (params: {
-      fileOnly?: boolean;
-      hidden?: string[];
-      maxBytes?: number;
-      maxFiles?: number;
-      path: string;
-      uploadHeaders?: Record<string, string>;
-      uploadUrl: string;
-    }) => Promise<SandboxStorageExportResult>;
+    exportFile: (
+      params: {
+        fileOnly?: boolean;
+        hidden?: string[];
+        maxBytes?: number;
+        maxFiles?: number;
+        path: string;
+        uploadHeaders?: Record<string, string>;
+        uploadUrl: string;
+      },
+      options?: { signal?: AbortSignal },
+    ) => Promise<SandboxStorageExportResult>;
   };
 }
 
@@ -413,17 +423,24 @@ const exportFromStorage = async (
   params: { fileOnly: boolean; hidden: string[]; path: string; upload: PreSignedUpload },
 ): Promise<CopyOutcome | undefined> => {
   try {
-    const result = await storage.exportFile({
-      fileOnly: params.fileOnly || undefined,
-      hidden: params.hidden,
-      maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
-      maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
-      path: params.path,
-      uploadHeaders: params.upload.headers,
-      uploadUrl: params.upload.url,
-    });
+    const result = await storage.exportFile(
+      {
+        fileOnly: params.fileOnly || undefined,
+        hidden: params.hidden,
+        maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
+        maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
+        path: params.path,
+        uploadHeaders: params.upload.headers,
+        uploadUrl: params.upload.url,
+      },
+      { signal: AbortSignal.timeout(DRIVE_EXPORT_TIMEOUT_MS) },
+    );
     return { ...result, ok: true };
   } catch (error) {
+    if ((error as { name?: unknown } | null)?.name === 'TimeoutError') {
+      log('drive export timed out after %dms', DRIVE_EXPORT_TIMEOUT_MS);
+      throw new DriveDownloadError('DOWNLOAD_FAILED', 'EXPORT_TIMEOUT');
+    }
     if (error instanceof SandboxStorageFilesError) {
       const unsupported =
         error.code === 'EXPORT_UNAVAILABLE' ||

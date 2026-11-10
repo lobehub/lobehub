@@ -245,17 +245,21 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
      * that cannot export answers 501 `EXPORT_UNAVAILABLE`, and one that
      * predates the route answers 404 with no code.
      */
-    exportFile: async (params: {
-      fileOnly?: boolean;
-      hidden?: string[];
-      maxBytes?: number;
-      maxFiles?: number;
-      path: string;
-      uploadHeaders?: Record<string, string>;
-      uploadUrl: string;
-    }): Promise<SandboxStorageExportResult> =>
+    exportFile: async (
+      params: {
+        fileOnly?: boolean;
+        hidden?: string[];
+        maxBytes?: number;
+        maxFiles?: number;
+        path: string;
+        uploadHeaders?: Record<string, string>;
+        uploadUrl: string;
+      },
+      options: { signal?: AbortSignal } = {},
+    ): Promise<SandboxStorageExportResult> =>
       request(`${CURRENT_STORAGE}/export`, {
         body: JSON.stringify(params),
+        signal: options.signal,
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       }),

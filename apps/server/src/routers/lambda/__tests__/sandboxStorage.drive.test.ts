@@ -657,6 +657,7 @@ describe('downloading from the drive', () => {
         path: 'projects',
         uploadUrl: expect.stringContaining('sandbox-drive-downloads/'),
       }),
+      { signal: expect.any(AbortSignal) },
     );
     expect(reached.at(-1)).toBe(STORAGE_KEY);
     expect(downloads.callTool).not.toHaveBeenCalled();

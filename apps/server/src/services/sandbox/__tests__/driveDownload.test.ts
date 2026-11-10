@@ -447,17 +447,39 @@ describe('prepareDriveDownload', () => {
       });
 
       const [key] = fileService.createPreSignedUpload.mock.calls[0] as unknown as [string];
-      expect(storage.exportFile).toHaveBeenCalledWith({
-        fileOnly: undefined,
-        hidden: ['project/private'],
-        maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
-        maxFiles: expect.any(Number),
-        path: 'project',
-        uploadHeaders: { 'x-amz-acl': 'public-read' },
-        uploadUrl: `https://upload/${key}`,
-      });
+      expect(storage.exportFile).toHaveBeenCalledWith(
+        {
+          fileOnly: undefined,
+          hidden: ['project/private'],
+          maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
+          maxFiles: expect.any(Number),
+          path: 'project',
+          uploadHeaders: { 'x-amz-acl': 'public-read' },
+          uploadUrl: `https://upload/${key}`,
+        },
+        { signal: expect.any(AbortSignal) },
+      );
       expect(result).toMatchObject({ fileName: 'project.zip', kind: 'directory', size: 9 });
       expect(sandbox.callTool).not.toHaveBeenCalled();
+    });
+
+    it('bounds the export, and fails it without a sandbox when it runs out of time', async () => {
+      const storage = storageAnswering(async () => {
+        throw new DOMException('The operation timed out.', 'TimeoutError');
+      });
+      const sandbox = sandboxAnswering(undefined);
+
+      await expect(
+        prepareDriveDownload({ fileService, hidden: [], path: 'big', sandbox, storage }),
+      ).rejects.toMatchObject({
+        code: 'DOWNLOAD_FAILED',
+        message: 'DOWNLOAD_FAILED: EXPORT_TIMEOUT',
+      });
+
+      const [, options] = storage.exportFile.mock.calls[0] as unknown as [unknown, any];
+      expect(options.signal).toBeInstanceOf(AbortSignal);
+      expect(sandbox.callTool).not.toHaveBeenCalled();
+      expect(fileService.deleteFile).toHaveBeenCalled();
     });
 
     it('works on a deployment whose sandbox has no shell', async () => {
@@ -477,7 +499,10 @@ describe('prepareDriveDownload', () => {
           storage,
         }),
       ).resolves.toMatchObject({ fileName: 'a.txt' });
-      expect(storage.exportFile).toHaveBeenCalledWith(expect.objectContaining({ fileOnly: true }));
+      expect(storage.exportFile).toHaveBeenCalledWith(
+        expect.objectContaining({ fileOnly: true }),
+        expect.anything(),
+      );
     });
 
     it('packs in a sandbox when the storage service cannot export', async () => {
