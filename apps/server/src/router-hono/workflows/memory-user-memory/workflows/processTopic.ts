@@ -55,6 +55,8 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
       // banned account's backlog otherwise floods that key, which every user's extraction shares.
       if (await isUntrackedRunOfBannedUser(context.requestPayload)) {
         span.setStatus({ code: SpanStatusCode.OK });
+        // Outside the try/finally below, so this path ends its own span.
+        span.end();
         return { message: 'User is banned, skipping memory extraction.', skipped: true };
       }
 
