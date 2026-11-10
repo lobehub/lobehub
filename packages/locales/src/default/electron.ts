@@ -64,6 +64,7 @@ export default {
   'navigation.task': 'Task',
   'navigation.tasks': 'Tasks',
   'navigation.goals': 'Goals',
+  'navigation.meetings': 'Meeting notes',
   'navigation.topics': 'Topics',
   'navigation.unpin': 'Unpin',
   'navigation.video': 'Video',

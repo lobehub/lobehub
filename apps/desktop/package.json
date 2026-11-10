@@ -59,7 +59,8 @@
     "electron-sparkle-updater": "0.5.3",
     "font-list": "^2.1.0",
     "get-windows": "^9.3.0",
-    "node-screenshots": "^0.2.8"
+    "node-screenshots": "^0.2.8",
+    "sherpa-onnx-node": "1.13.8"
   },
   "devDependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.78",

@@ -2,6 +2,7 @@ import type {
   CompletionSoundSettings,
   DataSyncConfig,
   ImessageBridgeConfig,
+  LocalAsrPreferences,
   NetworkProxySettings,
   UpdateChannel,
   WindowsShellMode,
@@ -79,6 +80,8 @@ export interface ElectronMainStore {
    * boots, and the renderer settles the real scope from there.
    */
   lastWorkspaceSlugByAccount: Record<string, string>;
+  /** Meeting transcription engine choice; per device because local ASR depends on this machine. */
+  localAsr: LocalAsrPreferences;
   locale: string;
   localFileWorkspaceRoots: string[];
   networkProxy: NetworkProxySettings;

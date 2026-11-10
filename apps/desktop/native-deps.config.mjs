@@ -110,6 +110,8 @@ export const nativeModules = [
   '@lydell/node-pty',
   'get-windows',
   'node-screenshots',
+  // Local meeting ASR runtime; its platform prebuild (`sherpa-onnx-<os>-<arch>`) is an optional dep.
+  'sherpa-onnx-node',
 ];
 
 /**

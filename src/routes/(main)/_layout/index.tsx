@@ -15,6 +15,7 @@ import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
+import MeetingRecorderHost from '@/features/Meeting/Recorder/Host';
 import NavPanelShell from '@/features/NavPanel/Shell';
 import NavRail from '@/features/NavRail';
 import { useImLayout, useSyncImLayoutHint } from '@/features/NavRail/useImLayout';
@@ -105,6 +106,7 @@ const Layout: FC = () => {
           <CmdkLazy />
           <GlobalApprovalNotification />
         </Suspense>
+        <MeetingRecorderHost />
       </WorkspaceContextSlot>
     </HotkeysProvider>
   );

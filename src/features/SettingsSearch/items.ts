@@ -176,6 +176,14 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
     'cli',
     'environment',
   ],
+  [SettingsTabs.Transcription]: [
+    'transcription',
+    'speech recognition',
+    'asr',
+    'meeting',
+    'local model',
+    'speaker',
+  ],
   [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
   [WorkspaceSettingsTabs.ChatPreference]: [
     'chat preferences',
@@ -222,6 +230,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.Stats]: 'settingsSearch.tabKeywords.stats',
   [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
   [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
+  [SettingsTabs.Transcription]: 'settingsSearch.tabKeywords.transcription',
   [SettingsTabs.Trash]: 'settingsSearch.tabKeywords.trash',
   [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
   [WorkspaceSettingsTabs.ChatPreference]: 'settingsSearch.tabKeywords.chatPreference',
