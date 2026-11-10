@@ -85,6 +85,7 @@ export default {
   'creditsChip.percent': '{{percent}}%',
   'creditsChip.title': 'Usage left',
   'creditsChip.tooltip': 'Usage left in the current billing cycle',
+  'creditsChip.viewDetails': 'View details',
   'creditsChip.viewUsage': 'View usage',
   'creditsChip.balanceNote.free': 'Free usage has run out. Requests now use your balance.',
   'creditsChip.balanceNote.limit': 'Monthly limit reached. Requests now use your balance.',
