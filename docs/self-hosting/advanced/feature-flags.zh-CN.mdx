@@ -45,6 +45,7 @@ tags:
 | `agent_deferred_hetero_dispatch` | 普通聊天发给在线设备上的异构助理（Claude Code、Codex 等）时，不等设备接收任务就立即返回；派发在响应后执行，失败会显示在助理消息上。 | 关闭 |
 | `dashboard` | 看板：首页与项目看板页面、监控组件侧边栏、对话内的组件预览，以及用于搭建监控组件的 `builtin-dashboard` 助理工具。关闭时以上入口均隐藏，组件与看板相关接口返回 FORBIDDEN；已发布的组件仍按计划刷新。 | 关闭 |
 | `mcp_apps` | MCP Apps：MCP 服务器为工具结果声明了交互页面（`ui://`）时，在对话中渲染该页面（服务器提供的 HTML，运行在沙箱 iframe 中）。关闭时按普通工具结果显示，服务端也不再向 MCP 服务器声明支持 MCP Apps。 | 关闭 |
+| `mcp_code_mode` | MCP Code Mode：一次运行里连接器工具达到 20 个及以上时，把它们折叠成一个 Code Mode 工具（`docs` + `execute`），模型在服务端沙箱脚本里调用这些工具，不再每一步发一次函数调用。含需审批工具的连接器保持原样。 | 关闭 |
 | `edit_agent` | 允许用户编辑助手。 | 开启 |
 | `ai_image` | 控制 AI 图像生成功能和页面 (/image)。 | 开启 |
 | `speech_to_text` | 启用语音转文本功能。 | 开启 |
