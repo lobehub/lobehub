@@ -947,9 +947,10 @@ export default class HeterogeneousAgentCtr {
     // shim finds its interpreter. `session.env` still wins if it sets PATH.
     if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
     const env: NodeJS.ProcessEnv = {
-      ...withEmbeddedCliEnv(inheritedEnv),
-      ...proxyEnv,
-      ...getHeterogeneousAgentSpawnEnv(session.agentType, session.env),
+      ...getHeterogeneousAgentSpawnEnv(session.agentType, session.env, {
+        ...withEmbeddedCliEnv(inheritedEnv),
+        ...proxyEnv,
+      }),
       ...(includeProcessOwnership
         ? managedProcessEnvironment(
             { ...session.processOwner, label: session.agentType },

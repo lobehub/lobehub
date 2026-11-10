@@ -86,8 +86,9 @@ describe('spawnAgent preset env', () => {
     expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe('1');
   });
 
+  // Turned off means no custom entrypoint, even one the launcher inherited.
   it('does not pass on an entrypoint the agent cleared', async () => {
-    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined);
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'inherited');
     vi.stubEnv('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', undefined);
 
     const env = await spawnClaudeCode({ CLAUDE_CODE_ENTRYPOINT: '' });

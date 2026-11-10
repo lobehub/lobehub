@@ -506,10 +506,11 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     options.inputOptions,
   );
   const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
-  const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...getHeterogeneousAgentSpawnEnv(options.agentType, options.env),
-  };
+  const childEnv: NodeJS.ProcessEnv = getHeterogeneousAgentSpawnEnv(
+    options.agentType,
+    options.env,
+    process.env,
+  );
   // Codex builds each shell command's env from `[shell_environment_policy]`,
   // not from its own process env, so a user's `inherit = "core"` strips the
   // run context `lh` needs. Forward it as `shell_environment_policy.set.*`

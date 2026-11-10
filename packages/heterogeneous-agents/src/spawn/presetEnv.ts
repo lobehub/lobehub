@@ -41,14 +41,17 @@ const getHeterogeneousAgentPresetEnv = (
 };
 
 /**
- * What a host layers over the inherited environment for a run: the presets,
- * then the agent's own `env` on top, minus an entrypoint the agent cleared.
+ * The environment a host spawns a run with: what it inherited, then the
+ * presets, then the agent's own `env` on top. An entrypoint the agent cleared
+ * is removed from the result, so an inherited one does not stand in for it.
  */
 export const getHeterogeneousAgentSpawnEnv = (
   agentType: string,
   agentEnv?: Readonly<Record<string, string>>,
-): Record<string, string> =>
+  inheritedEnv: Readonly<Record<string, string | undefined>> = {},
+): Record<string, string | undefined> =>
   dropClearedClaudeCodeEntrypoint({
+    ...inheritedEnv,
     ...getHeterogeneousAgentPresetEnv(agentType, agentEnv),
     ...agentEnv,
   });
