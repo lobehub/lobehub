@@ -31,7 +31,7 @@ const ENABLED_FLAG_SLOTS = new Set<UserServiceModelConfigKey>([
 ]);
 
 /** Speech-to-text treats an empty model as unconfigured, which hides voice input. */
-const EMPTY_MODEL_OFF_SLOTS = new Set<UserServiceModelConfigKey>(['asr']);
+const EMPTY_MODEL_OFF_SLOTS = new Set<UserServiceModelConfigKey>(['asr', 'meetingTranscription']);
 
 export const canDisableSlot = (slot: UserServiceModelConfigKey) =>
   ENABLED_FLAG_SLOTS.has(slot) || EMPTY_MODEL_OFF_SLOTS.has(slot);

@@ -104,6 +104,7 @@ import {
   StructuredOutputError,
 } from './structuredOutput';
 import { createOpenAICompatibleSpeech } from './textToSpeech';
+import { toASRSegments, toTranscriptionParams } from './transcription';
 
 export type { PollVideoStatusResult };
 export * from './createVideo';
@@ -148,12 +149,8 @@ type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effo
 const getGenerateObjectReasoningParams = ({
   reasoning_effort,
   thinking,
-}: GenerateObjectReasoningParams) => ({
-  // `thinking` is a Lobe runtime abstraction, not a generic OpenAI-compatible API field.
-  // Use it here only to suppress `reasoning_effort`; providers that support thinking
-  // must translate it via `generateObject.handlePayload`.
-  ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
-});
+}: GenerateObjectReasoningParams) =>
+  reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {};
 
 const getGenerateObjectResponsesReasoningParams = ({
   model,
@@ -1187,7 +1184,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
       const log = debug(`${this.logPrefix}:transcribe`);
-      const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
+      const { file, fileName, model } = payload;
       const requestModel = withMappedModelId(payload, this.modelIdMappingOptions).model;
       log('transcribe called with model: %s, audio size: %d bytes', model, file?.size || 0);
 
@@ -1198,14 +1195,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           file instanceof File ? file : new File([file], fileName || 'audio', { type: file.type });
 
         const transcription = await this.getTranscriptionClient().audio.transcriptions.create(
-          {
-            file: uploadFile,
-            language,
-            model: requestModel,
-            prompt,
-            response_format: responseFormat,
-            temperature,
-          },
+          toTranscriptionParams(payload, uploadFile, requestModel),
           { headers: options?.headers, signal: options?.signal },
         );
 
@@ -1219,7 +1209,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           if (usage) await options.onUsage(usage);
         }
 
-        return { text };
+        return { text, ...toASRSegments(transcription) };
       } catch (error) {
         throw this.handleError(error);
       }
@@ -1415,7 +1405,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         max_tokens,
         ...res
       } = responses?.handlePayload
-        ? (responses?.handlePayload(payload, this._options) as ChatStreamPayload)
+        ? (responses.handlePayload(payload, this._options) as ChatStreamPayload)
         : payload;
       const requestModel =
         this.withMappedRequestModel({ model: res.model }, usageModel).model ?? usageModel;
