@@ -132,6 +132,36 @@ describe('withProjectSandbox', () => {
     expect(mocks.resolveProjectTopicSandbox).not.toHaveBeenCalled();
   });
 
+  // An explicit temporary-sandbox pick used to arrive as no pick at all and
+  // was given the project's persistent checkout.
+  it('keeps an explicit temporary sandbox, and does not store the marker', async () => {
+    await expect(
+      withProjectSandbox(deps, {
+        hasDirectory: false,
+        metadata: { sandboxTemporary: true },
+        projectId: 'proj-1',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      withProjectSandbox(deps, {
+        hasDirectory: false,
+        metadata: { reasoningConfig: { effort: 'high' }, sandboxTemporary: true } as never,
+        projectId: 'proj-1',
+      }),
+    ).resolves.toEqual({ reasoningConfig: { effort: 'high' } });
+    expect(mocks.resolveProjectTopicSandbox).not.toHaveBeenCalled();
+  });
+
+  it('drops the marker outside a project too', async () => {
+    await expect(
+      withProjectSandbox(deps, {
+        hasDirectory: false,
+        metadata: { sandboxTemporary: true },
+        projectId: undefined,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('leaves a device directory conversation alone', async () => {
     await expect(
       withProjectSandbox(deps, { hasDirectory: true, metadata: undefined, projectId: 'proj-1' }),

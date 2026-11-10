@@ -130,7 +130,12 @@ export const consumePendingSandboxSelection = (agentId: string): SandboxSelectio
   return selection;
 };
 
-/** The topic metadata a pending selection becomes when the topic is created with it. */
+/**
+ * The topic metadata a pending selection becomes when the topic is created with
+ * it. An empty selection is the temporary sandbox picked on purpose, and says so:
+ * otherwise it would arrive as nothing picked, and a project conversation would
+ * be given the project's checkout instead.
+ */
 export const toSandboxTopicMetadata = (
   selection: SandboxSelection | undefined,
 ): ChatTopicMetadata | undefined =>
@@ -139,4 +144,7 @@ export const toSandboxTopicMetadata = (
     sandboxEnvironmentId: selection.environmentId,
     sandboxInstanceId: selection.instanceId,
     sandboxWorkingDirectory: selection.workingDirectory,
+    ...(!selection.environmentId &&
+      !selection.instanceId &&
+      selection.workingDirectory === undefined && { sandboxTemporary: true }),
   };

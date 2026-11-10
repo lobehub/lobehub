@@ -68,6 +68,18 @@ describe('pendingSandboxSelection', () => {
     expect(toSandboxTopicMetadata(undefined)).toBeUndefined();
   });
 
+  // An explicit temporary-sandbox pick serialized to no fields at all, the same
+  // as no pick, so a project conversation was given the project's checkout.
+  it('marks an explicit temporary-sandbox pick, and only that', () => {
+    expect(toSandboxTopicMetadata({})).toMatchObject({ sandboxTemporary: true });
+    expect(toSandboxTopicMetadata({ workingDirectory: 'app' })).not.toHaveProperty(
+      'sandboxTemporary',
+    );
+    expect(toSandboxTopicMetadata({ environmentId: 'env_1' })).not.toHaveProperty(
+      'sandboxTemporary',
+    );
+  });
+
   // The entitlement loads after the composer does. A first message sent while
   // it is still in flight used to be born with no folder — the paid default
   // silently became a temporary sandbox.

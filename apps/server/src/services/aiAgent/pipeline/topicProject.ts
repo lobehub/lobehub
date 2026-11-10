@@ -62,7 +62,8 @@ export const resolveTurnProjectId = async (
  *
  * Left alone when there is no project, when the topic lives in a device
  * directory (it runs there, not in the cloud), or when the conversation already
- * picked where it keeps its files — a pick in the composer wins.
+ * picked where it keeps its files — a pick in the composer wins, the temporary
+ * sandbox included.
  */
 export const withProjectSandbox = async (
   deps: TurnProjectDeps,
@@ -74,8 +75,17 @@ export const withProjectSandbox = async (
     projectId: string | undefined;
   },
 ): Promise<ChatTopicMetadata | undefined> => {
-  const { agentId, hasDirectory, metadata, projectId } = input;
-  if (!projectId || hasDirectory) return metadata;
+  const { agentId, hasDirectory, projectId } = input;
+  // A creation-time marker, never stored: the composer chose a temporary
+  // sandbox on purpose, so the project's checkout is not applied over it.
+  const { sandboxTemporary, ...rest } = input.metadata ?? {};
+  const metadata =
+    sandboxTemporary === undefined
+      ? input.metadata
+      : Object.keys(rest).length > 0
+        ? rest
+        : undefined;
+  if (sandboxTemporary || !projectId || hasDirectory) return metadata;
   if (
     metadata?.sandboxEnvironmentId ||
     metadata?.sandboxInstanceId ||
