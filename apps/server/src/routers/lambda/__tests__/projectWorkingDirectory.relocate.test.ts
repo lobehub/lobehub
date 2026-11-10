@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   assertCanUseTopicTargets: vi.fn(),
+  listTopics: vi.fn(),
   relocate: vi.fn(),
   resolve: vi.fn(),
   statPath: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 
 vi.mock('@/database/models/projectWorkingDirectory', () => ({
   ProjectWorkingDirectoryModel: vi.fn(function () {
-    return { resolve: mocks.resolve };
+    return { listTopics: mocks.listTopics, resolve: mocks.resolve };
   }),
 }));
 
@@ -61,6 +62,7 @@ describe('projectWorkingDirectory.relocate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.relocate.mockResolvedValue({ id: 'directory-2' });
+    mocks.listTopics.mockResolvedValue([{ id: 'topic-1' }, { id: 'topic-2' }]);
   });
 
   it('relocates once the new path exists on the chosen device', async () => {
@@ -74,7 +76,14 @@ describe('projectWorkingDirectory.relocate', () => {
       userId: 'user-1',
       workspaceId: undefined,
     });
-    expect(mocks.relocate).toHaveBeenCalledWith(input);
+    expect(mocks.assertCanUseTopicTargets).toHaveBeenCalledWith(expect.anything(), [
+      'topic-1',
+      'topic-2',
+    ]);
+    expect(mocks.relocate).toHaveBeenCalledWith({
+      ...input,
+      authorizedTopicIds: ['topic-1', 'topic-2'],
+    });
   });
 
   it('keeps the directory where it is when the new path is not on the device', async () => {
@@ -83,6 +92,14 @@ describe('projectWorkingDirectory.relocate', () => {
     await expect(caller().relocate(input)).rejects.toThrow(
       'Device is offline or working directory is unavailable',
     );
+    expect(mocks.relocate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the directory where it is when the caller cannot use one of its topics', async () => {
+    mocks.statPath.mockResolvedValue({ exists: true, isDirectory: true });
+    mocks.assertCanUseTopicTargets.mockRejectedValue(new Error('Forbidden topic'));
+
+    await expect(caller().relocate(input)).rejects.toThrow('Forbidden topic');
     expect(mocks.relocate).not.toHaveBeenCalled();
   });
 });

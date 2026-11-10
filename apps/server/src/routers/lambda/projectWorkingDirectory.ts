@@ -304,7 +304,18 @@ export const projectWorkingDirectoryRouter = router({
           code: 'PRECONDITION_FAILED',
           message: 'Device is offline or working directory is unavailable',
         });
-      return { data: await ctx.directoryRepo.relocate(input), success: true };
+      // Relocating rewrites each topic's execution target and drops its CLI
+      // session, which is a write to every one of them: the caller needs `use`
+      // access to each, as `moveTopic` requires for one.
+      const topicIds = (await ctx.directoryModel.listTopics(input.id)).map((topic) => topic.id);
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        topicIds,
+      );
+      return {
+        data: await ctx.directoryRepo.relocate({ ...input, authorizedTopicIds: topicIds }),
+        success: true,
+      };
     }),
   remove: write
     .input(idInput.extend({ projectId: z.string() }))

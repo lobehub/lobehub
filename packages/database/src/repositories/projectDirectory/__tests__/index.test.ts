@@ -749,6 +749,23 @@ describe('ProjectDirectoryRepository.relocate', () => {
     ]);
   });
 
+  it('refuses a topic bound after the caller was authorized', async () => {
+    const directory = await repo.bind(base);
+    await seedTopic(directory.id);
+
+    await expect(
+      repo.relocate({
+        authorizedTopicIds: [],
+        deviceId: otherDevice,
+        id: directory.id,
+        path: '/work/fixed',
+        projectId: base.projectId,
+      }),
+    ).rejects.toThrow('The topics in this directory changed');
+
+    expect(await directoryModel.list(base.projectId)).toMatchObject([{ id: directory.id }]);
+  });
+
   it('refuses a move away from the device a topic agent is fixed to', async () => {
     const directory = await repo.bind(base);
     await db

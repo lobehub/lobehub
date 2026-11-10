@@ -19,10 +19,21 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
-/** A refusal the user can act on, in their language; anything else keeps its own message. */
-const describeError = (error: unknown) => {
-  if (error instanceof TRPCClientError && error.data?.code === 'CONFLICT')
-    return t('settings.editDirectoryBusy', { ns: 'project' });
+/**
+ * The refusals a user can act on, in their language. `CONFLICT` covers both a
+ * running topic and a destination owned by another environment; only the
+ * first is resolved by waiting, so each keeps its own advice.
+ */
+const CONFLICT_MESSAGES = [
+  ['running topics', 'settings.editDirectoryBusy'],
+  ['another environment', 'settings.editDirectoryOtherEnvironment'],
+] as const;
+
+export const describeEditDirectoryError = (error: unknown) => {
+  if (error instanceof TRPCClientError && error.data?.code === 'CONFLICT') {
+    const key = CONFLICT_MESSAGES.find(([match]) => error.message.includes(match))?.[1];
+    if (key) return t(key, { ns: 'project' });
+  }
   return error instanceof Error ? error.message : undefined;
 };
 
@@ -87,7 +98,7 @@ function EditDirectoryContent({
       {error ? (
         <Alert
           showIcon
-          description={describeError(error)}
+          description={describeEditDirectoryError(error)}
           title={t('settings.editDirectoryFailed')}
           type="error"
         />

@@ -344,6 +344,7 @@
   "settings.editDirectoryBusy": "有话题正在此文件夹运行，请等待结束后重试。",
   "settings.editDirectoryDescription": "选择这个工作目录对应的设备和文件夹。相关话题会一起迁移到新文件夹，并在那里开始新的会话。",
   "settings.editDirectoryFailed": "无法修改文件夹",
+  "settings.editDirectoryOtherEnvironment": "这个文件夹已属于其他环境，请选择别的文件夹或设备。",
   "settings.environmentDescription": "用环境管理仓库来源，再添加设备上的文件夹，开始在项目中工作。",
   "settings.environments": "环境",
   "settings.general": "基础设置",

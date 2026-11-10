@@ -72,6 +72,12 @@ const isTopicInFlight = (topic: { metadata?: ChatTopicMetadata | null; status?: 
   hasLiveTaskCallbackReservation(topic.metadata);
 
 export interface RelocateProjectDirectoryInput {
+  /**
+   * The topics the caller was authorized to move. A topic bound to the
+   * directory after that check fails the relocation instead of moving
+   * unchecked.
+   */
+  authorizedTopicIds?: string[];
   deviceId: string;
   id: string;
   path: string;
@@ -453,6 +459,12 @@ export class ProjectDirectoryRepository {
         throw new ProjectDirectoryError(
           'CONFLICT',
           'Wait for the running topics to finish before changing this directory',
+        );
+      const authorized = input.authorizedTopicIds && new Set(input.authorizedTopicIds);
+      if (authorized && bound.some((topic) => !authorized.has(topic.id)))
+        throw new ProjectDirectoryError(
+          'CONFLICT',
+          'The topics in this directory changed; try again',
         );
       const next = await new ProjectDirectoryRepository(db, this.userId, this.workspaceId).bind({
         deviceId: input.deviceId,

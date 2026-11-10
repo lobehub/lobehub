@@ -6,6 +6,8 @@ export default {
   'settings.editDirectory': 'Edit folder',
   'settings.editDirectoryBusy':
     'A topic is running in this folder. Wait for it to finish and try again.',
+  'settings.editDirectoryOtherEnvironment':
+    'This folder already belongs to another environment. Choose a different folder or device.',
   'settings.editDirectoryDescription':
     'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
   'settings.editDirectoryFailed': 'Could not update the folder',

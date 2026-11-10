@@ -344,6 +344,7 @@
   "settings.editDirectoryBusy": "A topic is running in this folder. Wait for it to finish and try again.",
   "settings.editDirectoryDescription": "Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.",
   "settings.editDirectoryFailed": "Could not update the folder",
+  "settings.editDirectoryOtherEnvironment": "This folder already belongs to another environment. Choose a different folder or device.",
   "settings.environmentDescription": "Keep repository sources together in an environment, then add a folder on your device to start working.",
   "settings.environments": "Environments",
   "settings.general": "General",
