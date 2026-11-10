@@ -1,5 +1,5 @@
 import { GOAL_MANAGER_QUESTION_TITLE, ROLLOUT_MAX_CANARY_SIZE } from '@lobechat/const/goal';
-import type { GoalItem, GoalManagerState } from '@lobechat/types';
+import type { GoalItem, GoalManagerState, GoalRolloutState } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { z } from 'zod';
 
@@ -7,9 +7,12 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import type { UserSkillFile } from '@/database/models/userSkill';
 import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { mergePackageFiles, packageSizeProblem } from '../../skill/packageFiles';
+import { UserSkillService } from '../../userSkill';
 import { GoalBriefService } from '../goalBriefs';
 import { countUnchargedRuns } from '../recoveryPolicy';
 import {
@@ -22,6 +25,37 @@ import { GoalWaitService } from '../wait';
 import { evaluateAdmission, PLAN_REJECTION } from './admission';
 import { type GoalPlan, goalPlanSchema, type planRolloutSchema } from './planSchema';
 import { type ManagerContext, saveManagerState, terminalNodes } from './turnState';
+
+/**
+ * A revised plan ships with the plan skill as a package, and a revision only
+ * names the files it touches. The limits therefore hold for the package the edit
+ * lands in, and they are refused here — where the Agent can drop a file and
+ * answer again — rather than at the write, which drops the whole package and
+ * leaves later units without the references their recipe needs.
+ */
+const refuseOversizedPlanPackage = async (
+  ctx: ManagerContext,
+  db: LobeChatDatabase,
+  rollout: GoalRolloutState,
+  edits: { removedFiles?: string[]; revisedFiles?: UserSkillFile[] },
+) => {
+  if (!rollout.planSkill || (!edits.revisedFiles?.length && !edits.removedFiles?.length)) return;
+
+  const skill = await new UserSkillService(db, ctx.userId, ctx.workspaceId).getSkill(
+    rollout.planSkill.id,
+  );
+  if (!skill) return;
+
+  const problem = packageSizeProblem(
+    mergePackageFiles(skill.files, { remove: edits.removedFiles, upsert: edits.revisedFiles }),
+  );
+  if (!problem) return;
+
+  throw new TRPCError({
+    code: 'BAD_REQUEST',
+    message: `The plan's package would not fit: ${problem}. Drop a file or shorten one, then answer revise_plan again.`,
+  });
+};
 
 /**
  * Lay a main Agent's declared batch onto the graph, returning the probe node
@@ -96,6 +130,7 @@ const declareBatch = async (
     policy,
     problemId: problemId!,
     probes: plan.tasks.map((task) => ({ instruction: task.description, title: task.title })),
+    recipeFiles: plan.rollout.files,
     recipeOutline: plan.rollout.recipe,
     repeatable: true,
     roster,
@@ -278,11 +313,18 @@ export const submitPlan = async (
           code: 'CONFLICT',
           message: 'The batch is no longer waiting on a plan distilled from its probes',
         });
+      await refuseOversizedPlanPackage(ctx, db, rollout, {
+        removedFiles: plan.removeFiles,
+        revisedFiles: plan.files,
+      });
       await model.updateRolloutState(goalId, {
         ...rollout,
         pendingDistill: {
+          // What the probes produced that later units reuse ships with the plan.
+          ...(plan.files && { files: plan.files }),
           reason: plan.reason,
           recipe: plan.recipe,
+          ...(plan.removeFiles && { removedFiles: plan.removeFiles }),
           ...(plan.rerun?.length && { rerun: plan.rerun }),
         },
       });
@@ -294,15 +336,16 @@ export const submitPlan = async (
           code: 'CONFLICT',
           message: 'The batch is no longer waiting on a plan revision',
         });
-      await model.updateRolloutState(goalId, {
-        ...rollout,
-        pendingRevision: {
-          ...rollout.pendingRevision,
-          ...(plan.rerun && { rerun: plan.rerun }),
-          revisedReason: plan.reason,
-          revisedRecipe: plan.recipe,
-        },
-      });
+      const pendingRevision = {
+        ...rollout.pendingRevision,
+        ...(plan.rerun && { rerun: plan.rerun }),
+        ...(plan.files && { revisedFiles: plan.files }),
+        ...(plan.removeFiles && { removedFiles: plan.removeFiles }),
+        revisedReason: plan.reason,
+        revisedRecipe: plan.recipe,
+      };
+      await refuseOversizedPlanPackage(ctx, db, rollout, pendingRevision);
+      await model.updateRolloutState(goalId, { ...rollout, pendingRevision });
     } else if (plan.action === 'escalate' && state.problem && plan.ask) {
       // A takeover question is answered on the failed Task's gate, so every
       // answer has to say what happens to that Task — an answer that leaves it

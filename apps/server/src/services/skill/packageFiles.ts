@@ -57,3 +57,43 @@ export const packageFilesSchema = z
   );
 
 export type PackageFile = z.infer<typeof packageFilesSchema>[number];
+
+/**
+ * A package as an edit leaves it: the paths it drops go, the paths it names
+ * replace what was there, and everything else stays. A revision is an edit, so
+ * this is the set its limits are checked against.
+ */
+export const mergePackageFiles = <T extends { path: string }>(
+  files: T[],
+  edits?: { remove?: string[]; upsert?: T[] },
+): T[] => {
+  if (!edits) return files;
+
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  for (const path of edits.remove ?? []) byPath.delete(path);
+  for (const file of edits.upsert ?? []) byPath.set(file.path, file);
+
+  return [...byPath.values()];
+};
+
+/**
+ * A revision names the files it touches, not the whole package, so its edit can
+ * be small and still push the package it lands in past the limits. Returns why
+ * the merged package does not fit, or `undefined` when it does. Binary files
+ * carry no `content`, but they still count as files.
+ */
+export const packageSizeProblem = (
+  files: { content?: string; path: string }[],
+): string | undefined => {
+  if (files.length > MAX_PACKAGE_FILES) return `A package holds at most ${MAX_PACKAGE_FILES} files`;
+
+  const oversized = files.find((file) => (file.content?.length ?? 0) > MAX_PACKAGE_FILE_CHARS);
+  if (oversized)
+    return `A package file holds at most ${MAX_PACKAGE_FILE_CHARS} characters: ${oversized.path}`;
+
+  const chars = files.reduce((sum, file) => sum + (file.content?.length ?? 0), 0);
+  if (chars > MAX_PACKAGE_CHARS)
+    return `A package holds at most ${MAX_PACKAGE_CHARS} characters of files`;
+
+  return undefined;
+};

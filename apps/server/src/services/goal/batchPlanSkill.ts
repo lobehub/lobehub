@@ -57,7 +57,7 @@ export const planUnitBrief = (
   plan.skill
     ? [
         `Unit: ${title}`,
-        `${PLAN_SKILL_BRIEF_LEAD}, the skill \`${planSkillIdentifier(plan.skill)}\` loaded for this run. Follow its latest version.`,
+        `${PLAN_SKILL_BRIEF_LEAD}, the skill \`${planSkillIdentifier(plan.skill)}\` loaded for this run. Follow its latest version, and use the references, templates and scripts it ships as they are rather than rewriting them.`,
         plan.outline &&
           `If that skill is not loaded in this run, follow the plan as it stood at dispatch:\n\n${plan.outline}`,
       ]
@@ -91,15 +91,18 @@ export class BatchPlanSkillService {
     private readonly workspaceId?: string,
   ) {}
 
-  /** Writes v1 of a batch's plan as a user skill. */
+  /** Writes v1 of a batch's plan as a user skill, with the files it ships. */
   create = async (params: {
     batchNodeId: string;
+    /** References, templates and scripts beside the recipe. */
+    files?: { content: string; path: string }[];
     goalId: string;
     goalTitle: string;
     plan: string;
   }): Promise<GoalRolloutPlanSkill> => {
     const skill = await new UserSkillService(this.db, this.userId, this.workspaceId).createSkill({
       body: params.plan,
+      files: params.files,
       description: oneLine(
         `How each unit of "${params.goalTitle}" is done. Revised whenever the batch's release gate sends it back.`,
         MAX_DESCRIPTION,
@@ -134,10 +137,18 @@ export class BatchPlanSkillService {
   /** Writes the plan's next version; returns its number. */
   revise = async (
     skill: GoalRolloutPlanSkill,
-    params: { goalId: string; guidance?: string; plan: string; revision: number },
+    params: {
+      /** Package files to add or replace by path, and paths to drop. */
+      files?: { remove?: string[]; upsert?: { content: string; path: string }[] };
+      goalId: string;
+      guidance?: string;
+      plan: string;
+      revision: number;
+    },
   ) =>
     new UserSkillService(this.db, this.userId, this.workspaceId).reviseSkill(skill.id, {
       body: params.plan,
+      files: params.files,
       note: params.guidance,
       origin: { goalId: params.goalId, revision: params.revision },
     });

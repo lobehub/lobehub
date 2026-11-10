@@ -506,7 +506,7 @@ export function registerGoalCommand(program: Command) {
     )
     .requiredOption(
       '--file <path>',
-      'JSON plan: action tasks/wait/verify/retry/escalate/release/revise_plan, reason and action fields; a tasks plan may add "rollout" to run its units as a batch; release answers a batch release handed to this turn; revise_plan answers a plan the owner sent back, with "recipe" the full revised plan and optional "rerun" the experiment unit ids to run again on it (omitted: all), and answers settled probes to distill with "recipe" and optional "rerun" the probe ids that fall short of it (omitted: none)',
+      'JSON plan: action tasks/wait/verify/retry/escalate/release/revise_plan, reason and action fields; a tasks plan may add "rollout" to run its units as a batch, with "rollout.files" the references/templates/scripts its recipe ships; release answers a batch release handed to this turn; revise_plan answers a plan the owner sent back, with "recipe" the full revised plan, optional "rerun" the experiment unit ids to run again on it (omitted: all) and optional "files"/"removeFiles" to change its package, and answers settled probes to distill with "recipe" and optional "rerun" the probe ids that fall short of it (omitted: none)',
     )
     .requiredOption('--token <token>', 'Current server-issued planning turn token')
     .option('--operation <id>', 'Defaults to LOBEHUB_OPERATION_ID')

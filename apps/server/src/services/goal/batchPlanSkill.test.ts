@@ -17,6 +17,8 @@ describe('planUnitBrief', () => {
     });
     expect(brief).toContain('Unit: Unit 3');
     expect(brief).toContain('`user-skills:goal-plan-x`');
+    // The plan is a package: its files are the unit's to use, not to redo.
+    expect(brief).toContain('use the references, templates and scripts it ships');
     // A run that cannot load the skill still has the plan to work from.
     expect(brief).toContain('If that skill is not loaded in this run');
     expect(brief).toContain('Swap the store for replica');

@@ -272,6 +272,8 @@ export interface MaterializeRolloutBatchInput {
   policy?: GoalRolloutPolicy;
   probes: RolloutBatchProbe[];
   problemId: string;
+  /** References, templates and scripts the recipe ships with, into its plan skill. */
+  recipeFiles?: { content: string; path: string }[];
   recipeOutline?: string;
   repeatable: boolean;
   /** The whole roster, probes first, in delivery order. */
@@ -298,6 +300,7 @@ export const materializeRolloutBatch = async ({
   goalId,
   goalModel,
   planSkillOwner,
+  recipeFiles,
   policy,
   problemId,
   probes,
@@ -341,6 +344,7 @@ export const materializeRolloutBatch = async ({
           planSkillOwner.workspaceId,
         ).create({
           batchNodeId: batch.id,
+          files: recipeFiles,
           goalId,
           goalTitle: planSkillOwner.goalTitle,
           plan: outline,
