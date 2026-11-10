@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyMailWrites, type MailWrite, pendingMailDeltas } from './mailWrites';
+import { applyMailWrites, type MailWrite, pendingMailDeltas, queueRowWrite } from './mailWrites';
 
 const row = (id: string) => ({ id, isStarred: false, isUnread: true });
 const write = (
@@ -51,5 +51,42 @@ describe('pendingMailDeltas', () => {
         'a',
       ),
     ).toEqual({ drafts: -1, unread: -2 });
+  });
+});
+
+describe('queueRowWrite', () => {
+  it('sends a later write to the same row only after the earlier one settles', async () => {
+    const order: string[] = [];
+    let finishStar!: () => void;
+    const star = queueRowWrite(['m1'], async () => {
+      order.push('star:sent');
+      await new Promise<void>((resolve) => {
+        finishStar = resolve;
+      });
+      order.push('star:done');
+    });
+    const unstar = queueRowWrite(['m1'], async () => {
+      order.push('unstar:sent');
+    });
+    const other = queueRowWrite(['m2'], async () => {
+      order.push('other:sent');
+    });
+
+    await other;
+    expect(order).toEqual(['star:sent', 'other:sent']);
+
+    finishStar();
+    await Promise.all([star, unstar]);
+    expect(order).toEqual(['star:sent', 'other:sent', 'star:done', 'unstar:sent']);
+  });
+
+  it('still sends the later write when the earlier one fails', async () => {
+    const failing = queueRowWrite(['m3'], async () => {
+      throw new Error('down');
+    });
+    const next = queueRowWrite(['m3'], async () => 'sent');
+
+    await expect(failing).rejects.toThrow('down');
+    await expect(next).resolves.toBe('sent');
   });
 });

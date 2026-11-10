@@ -47,6 +47,30 @@ export const mailWriteActions = {
     })),
 };
 
+const sendingByRow = new Map<string, Promise<unknown>>();
+
+/**
+ * Send a write once every earlier write touching any of `ids` has settled.
+ *
+ * The screen shows each write at once, so a person can star and unstar a row
+ * before the first request lands. The server applies writes unconditionally,
+ * so they must reach it in the order they were made, or the earlier one could
+ * land last and win.
+ */
+export const queueRowWrite = <T>(ids: string[], send: () => Promise<T>): Promise<T> => {
+  const earlier = [...new Set(ids)].flatMap((id) => sendingByRow.get(id) ?? []);
+  const sent = Promise.allSettled(earlier).then(send);
+  const settled = sent.then(
+    () => undefined,
+    () => undefined,
+  );
+  for (const id of ids) sendingByRow.set(id, settled);
+  void settled.then(() => {
+    for (const id of ids) if (sendingByRow.get(id) === settled) sendingByRow.delete(id);
+  });
+  return sent;
+};
+
 /** The rows as the screen should show them, oldest write first so the latest intent wins. */
 export const applyMailWrites = <T extends { id: string; isStarred: boolean; isUnread: boolean }>(
   rows: T[],

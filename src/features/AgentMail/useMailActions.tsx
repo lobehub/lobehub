@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { agentAccountService, type AgentMailTarget } from '@/services/agentAccount';
 
-import { type MailPatch, mailWriteActions } from './mailWrites';
+import { type MailPatch, mailWriteActions, queueRowWrite } from './mailWrites';
 import { mailFolderOf, type MailListItem, type MailView } from './useMailList';
 
 /** What the undo toast and the spec's undo window promise. */
@@ -164,16 +164,21 @@ export const useMailActions = ({
     // preparation would otherwise leave no failed row and read as success.
     let prepareFailed = false;
     try {
-      try {
-        await prepare?.();
-      } catch (error) {
-        prepareFailed = true;
-        throw error;
-      }
-      const results = await Promise.allSettled(
-        batches.map(({ batch, folder }) =>
-          call({ conversationIn: folder, ids: batch.map((item) => item.id) }),
-        ),
+      const results = await queueRowWrite(
+        items.map((item) => item.id),
+        async () => {
+          try {
+            await prepare?.();
+          } catch (error) {
+            prepareFailed = true;
+            throw error;
+          }
+          return Promise.allSettled(
+            batches.map(({ batch, folder }) =>
+              call({ conversationIn: folder, ids: batch.map((item) => item.id) }),
+            ),
+          );
+        },
       );
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') values.push(result.value);
