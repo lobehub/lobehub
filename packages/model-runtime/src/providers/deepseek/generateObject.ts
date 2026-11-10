@@ -3,7 +3,7 @@ import type { Pricing } from 'model-bank';
 
 import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatibleFactory/generateObject';
 import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
 import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { isDeepSeekV4Model } from './chatPayload';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';

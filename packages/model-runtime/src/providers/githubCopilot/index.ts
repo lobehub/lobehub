@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
-import { transformResponseAPIToStream } from '../../core/openaiCompatibleFactory';
+import { transformResponseAPIToStream } from '../../core/openaiCompatible';
 import { convertOpenAIMessages } from '../../core/protocols/openaiChatCompletions/messages';
 import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
 import { convertOpenAIResponseInputs } from '../../core/protocols/openaiResponses/inputs';

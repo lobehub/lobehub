@@ -6,8 +6,8 @@ import {
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
 } from '../../core/anthropicCompatibleFactory';
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { resolveParameters } from '../../core/parameterResolver';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';

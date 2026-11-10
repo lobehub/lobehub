@@ -7,7 +7,7 @@ import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
+import { transformResponseToStream } from '../../core/openaiCompatible';
 import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
 import {
   appendProviderResponseEvent,
