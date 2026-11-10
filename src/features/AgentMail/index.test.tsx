@@ -222,7 +222,8 @@ describe('AgentMail', () => {
 
     expect(service.revoke).toHaveBeenCalledWith('acc_a');
     expect(await screen.findByText('preview of For B')).toBeInTheDocument();
-    expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument();
+    // Switching the list and leaving the message are separate updates; wait for both.
+    await waitFor(() => expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument());
   });
 
   it('adds another mailbox through a dialog', async () => {
