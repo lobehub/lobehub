@@ -10,10 +10,12 @@ import type {
 import {
   ELASTICSEARCH_FTS_SEARCH_CONVERSATION_QUERY_FIELDS,
   ELASTICSEARCH_FTS_SEARCH_DOCUMENT_QUERY_FIELDS,
+  ELASTICSEARCH_FTS_SEARCH_MAIL_QUERY_FIELDS,
   ELASTICSEARCH_FTS_SEARCH_MEMORY_QUERY_FIELDS,
   ELASTICSEARCH_FTS_SEARCH_RESOURCE_QUERY_FIELDS,
   type ElasticsearchFtsSearchEntity,
   isElasticsearchFtsSearchConversationEntity,
+  isElasticsearchFtsSearchMailEntity,
   isElasticsearchFtsSearchMemoryEntity,
 } from './query-fields';
 import type {
@@ -288,6 +290,12 @@ export const searchElasticsearchCandidates = async (
     if (roles?.length) filter.push({ terms: { role: roles } });
     if (topicId) filter.push({ term: { topic_id: topicId } });
   }
+  if (entity === 'agentMails') {
+    const { accountId, agentId, direction } = request.filters.mailScope ?? {};
+    if (agentId) filter.push({ term: { agent_id: agentId } });
+    if (accountId) filter.push({ term: { account_id: accountId } });
+    if (direction) filter.push({ term: { direction } });
+  }
   if (request.filters.excludeVirtual && entity === 'agents') {
     mustNot.push({ term: { virtual: true } });
   }
@@ -347,9 +355,11 @@ export const searchElasticsearchCandidates = async (
       ? ELASTICSEARCH_FTS_SEARCH_DOCUMENT_QUERY_FIELDS[target.documentKind]
       : isElasticsearchFtsSearchConversationEntity(target.entity)
         ? ELASTICSEARCH_FTS_SEARCH_CONVERSATION_QUERY_FIELDS[target.entity]
-        : isElasticsearchFtsSearchMemoryEntity(target.entity)
-          ? ELASTICSEARCH_FTS_SEARCH_MEMORY_QUERY_FIELDS[target.entity]
-          : ELASTICSEARCH_FTS_SEARCH_RESOURCE_QUERY_FIELDS[target.entity]);
+        : isElasticsearchFtsSearchMailEntity(target.entity)
+          ? ELASTICSEARCH_FTS_SEARCH_MAIL_QUERY_FIELDS[target.entity]
+          : isElasticsearchFtsSearchMemoryEntity(target.entity)
+            ? ELASTICSEARCH_FTS_SEARCH_MEMORY_QUERY_FIELDS[target.entity]
+            : ELASTICSEARCH_FTS_SEARCH_RESOURCE_QUERY_FIELDS[target.entity]);
   const preparedQuery = prepareMultiMatchQuery(query, fields.length);
   const requestedLimit = request.pagination.limit;
   const size = requestedLimit

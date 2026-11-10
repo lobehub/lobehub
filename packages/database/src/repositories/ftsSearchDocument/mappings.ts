@@ -34,6 +34,7 @@ export interface FtsSearchIndexDefinition<
 
 /** Public current definitions; history and current query metadata have separate owners. */
 export const FTS_SEARCH_INDEX_DEFINITIONS = {
+  agentMails: { ...FTS_SEARCH_CURRENT_MAPPINGS.agentMails, ...FTS_SEARCH_INDEX_POLICY.agentMails },
   agents: { ...FTS_SEARCH_CURRENT_MAPPINGS.agents, ...FTS_SEARCH_INDEX_POLICY.agents },
   chatGroups: { ...FTS_SEARCH_CURRENT_MAPPINGS.chatGroups, ...FTS_SEARCH_INDEX_POLICY.chatGroups },
   documents: { ...FTS_SEARCH_CURRENT_MAPPINGS.documents, ...FTS_SEARCH_INDEX_POLICY.documents },

@@ -32,6 +32,7 @@ export type ElasticsearchFtsSearchErrorCode =
   | 'unknown_http_error';
 export type ElasticsearchFtsSearchTraceContext = 'missing' | 'non_recording' | 'recording';
 export type FtsSearchUsage =
+  | 'agent_mail_search'
   | 'home_search'
   | 'knowledge_base'
   | 'memory'

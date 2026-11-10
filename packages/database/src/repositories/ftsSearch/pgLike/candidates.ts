@@ -17,6 +17,7 @@ import {
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import {
+  agentMails,
   agents,
   chatGroups,
   DOCUMENT_FOLDER_TYPE,
@@ -92,6 +93,16 @@ const contextParentText = sql`COALESCE((
   FROM ${userMemories}
   WHERE ${userMemories.userId} = ${userMemoriesContexts.userId}
     AND COALESCE(${userMemoriesContexts.userMemoryIds}, '[]'::jsonb) ? (${userMemories.id})::text
+), '')`;
+
+/**
+ * A mail's `To` and `Cc` addresses and names as one text, the `recipients`
+ * field of its search document. Read per element so the JSON keys themselves
+ * (`address`, `name`) never match.
+ */
+const mailRecipientsText = sql`COALESCE((
+  SELECT string_agg(concat_ws(' ', recipient->>'address', recipient->>'name'), ' ')
+  FROM jsonb_array_elements(${agentMails.to} || ${agentMails.cc}) AS recipient
 ), '')`;
 
 const parentMemoryJoin = (layer: { userId: AnyPgColumn; userMemoryId: AnyPgColumn }): SQL =>
@@ -282,6 +293,31 @@ const DOCUMENT_FOLDER_DEFAULT_FIELDS = ['title', 'slug', 'description'];
 const DOCUMENT_PAGE_DEFAULT_FIELDS = ['title', 'slug', 'content'];
 
 const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefined> = {
+  agentMails: {
+    defaultFields: ['subject', 'from_name', 'from_address', 'recipients', 'text'],
+    fields: {
+      from_address: [{ column: agentMails.fromAddress, weight: 3 }],
+      from_name: [{ column: agentMails.fromName, weight: 3 }],
+      recipients: [{ column: mailRecipientsText, weight: 2 }],
+      subject: [{ column: agentMails.subject, weight: 4 }],
+      text: [{ column: agentMails.text }],
+    },
+    id: agentMails.id,
+    table: agentMails,
+    where: (scope, filters) => [
+      buildWorkspaceWhere(scope, agentMails),
+      // Trashed and purged mail is not searchable; Elasticsearch never indexes it.
+      isNull(agentMails.trashedAt),
+      isNull(agentMails.purgedAt),
+      filters.mailScope?.agentId ? eq(agentMails.agentId, filters.mailScope.agentId) : undefined,
+      filters.mailScope?.accountId
+        ? eq(agentMails.accountId, filters.mailScope.accountId)
+        : undefined,
+      filters.mailScope?.direction
+        ? eq(agentMails.direction, filters.mailScope.direction)
+        : undefined,
+    ],
+  },
   agents: {
     defaultFields: ['title', 'slug', 'tags', 'description', 'system_role'],
     fields: {

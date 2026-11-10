@@ -86,4 +86,35 @@ describe('ElasticsearchFtsSearchBackend candidate filters', () => {
       ]),
     );
   });
+
+  it('narrows agent mail candidates to the agent, address and direction', async () => {
+    const client = createClient();
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace: 'test' });
+
+    await backend.search(
+      candidates('agentMails', {
+        mailScope: { accountId: 'acc-1', agentId: 'agt-1', direction: 'inbound' },
+      }),
+    );
+
+    expect(sentFilters(client)).toEqual(
+      expect.arrayContaining([
+        { term: { user_id: userId } },
+        { term: { agent_id: 'agt-1' } },
+        { term: { account_id: 'acc-1' } },
+        { term: { direction: 'inbound' } },
+      ]),
+    );
+    expect(vi.mocked(client.search).mock.calls[0][0].index).toBe('test-agent-mails');
+  });
+
+  it('rejects agent mail in hydrated product-result mode before querying', async () => {
+    const client = createClient();
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace: 'test' });
+
+    await expect(
+      backend.search({ ...candidates('agentMails', {}), mode: 'results' }),
+    ).rejects.toThrow('Agent mail entity only supports candidate search');
+    expect(client.search).not.toHaveBeenCalled();
+  });
 });

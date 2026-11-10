@@ -18,6 +18,7 @@ type FtsSearchRetainedSourceProperties = {
  * They are excluded from the current physical mapping and must not be used by current queries.
  */
 export const FTS_SEARCH_RETAINED_SOURCE_PROPERTIES = {
+  agentMails: {},
   agents: {},
   chatGroups: {},
   documents: {},
@@ -36,6 +37,10 @@ export const FTS_SEARCH_RETAINED_SOURCE_PROPERTIES = {
 
 /** Current document metadata, independent of physical mapping history. */
 export const FTS_SEARCH_INDEX_POLICY = {
+  agentMails: {
+    longTextFields: ['text'],
+    queryFields: ['subject', 'from_name', 'from_address', 'recipients', 'text'],
+  },
   agents: {
     longTextFields: ['system_role'],
     queryFields: ['title', 'description', 'slug', 'tags', 'system_role'],

@@ -1,3 +1,5 @@
+import type { AgentMailDirection } from '@lobechat/types';
+
 export type FtsSearchResultType =
   | 'page'
   | 'pageContent'
@@ -197,6 +199,7 @@ export interface FtsSearchOptions {
 
 /** Entities implemented by the current product search repository contract. */
 export const FTS_SEARCH_BACKEND_ENTITIES = [
+  'agentMails',
   'agents',
   'chatGroups',
   'documents',
@@ -235,6 +238,16 @@ export interface FtsSearchBackendFilters {
   excludeKnowledgeBaseIds?: string[];
   excludeVirtual?: boolean;
   knowledgeBaseIds?: string[];
+  /**
+   * Agent-mail-only candidate narrowing (owning agent, address, direction).
+   * Candidate-only: trashed and purged mail is never indexed, and the mail
+   * model re-checks ownership and visibility when it hydrates the ids.
+   */
+  mailScope?: {
+    accountId?: string;
+    agentId?: string;
+    direction?: AgentMailDirection;
+  };
   memoryCategories?: string[];
   memoryRelationships?: string[];
   memoryStatus?: string[];

@@ -5,6 +5,7 @@ import type { FtsSearchDocumentEntity } from '../ftsSearchDocument';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '../ftsSearchDocument';
 import captureHistory from './captureHistory.json';
 import {
+  createFtsSearchSyncCaptureFunctionSnapshotStatement,
   FTS_SEARCH_SYNC_CAPTURE_FINGERPRINT,
   FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS,
   FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
@@ -73,7 +74,7 @@ interface CaptureInfrastructureState {
   version: number | null;
 }
 
-const CURRENT_CAPTURE_VERSION = 2;
+const CURRENT_CAPTURE_VERSION = 3;
 const CAPTURE_VERSIONS = [
   ...captureHistory,
   {
@@ -399,6 +400,21 @@ export class FtsSearchSyncOutboxRepository {
         if (nextVersion === CURRENT_CAPTURE_VERSION) {
           for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
             await transaction.execute(statement);
+          }
+        } else {
+          /** An intermediate step must leave exactly that version's functions for its validation. */
+          const changedFunctions = next.functions.filter(
+            (target) =>
+              !previous.functions.some(
+                (old) =>
+                  old.name === target.name &&
+                  old.identityArguments === target.identityArguments &&
+                  old.body === target.body &&
+                  old.result === target.result,
+              ),
+          );
+          for (const target of changedFunctions) {
+            await transaction.execute(createFtsSearchSyncCaptureFunctionSnapshotStatement(target));
           }
         }
         for (const trigger of changedTriggers) {

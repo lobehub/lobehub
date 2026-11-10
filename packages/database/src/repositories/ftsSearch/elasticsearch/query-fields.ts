@@ -75,8 +75,22 @@ export const isElasticsearchFtsSearchMemoryEntity = (
 ): entity is ElasticsearchFtsSearchMemoryEntity =>
   Object.hasOwn(ELASTICSEARCH_FTS_SEARCH_MEMORY_QUERY_FIELDS, entity);
 
+/** Agent mail is candidate-only: the mail model hydrates and authorizes the ids. */
+export const ELASTICSEARCH_FTS_SEARCH_MAIL_QUERY_FIELDS = {
+  agentMails: ['subject^4', 'from_name^3', 'from_address^3', 'recipients^2', 'text'],
+} as const;
+
+export type ElasticsearchFtsSearchMailEntity =
+  keyof typeof ELASTICSEARCH_FTS_SEARCH_MAIL_QUERY_FIELDS;
+
+export const isElasticsearchFtsSearchMailEntity = (
+  entity: FtsSearchBackendEntity,
+): entity is ElasticsearchFtsSearchMailEntity =>
+  Object.hasOwn(ELASTICSEARCH_FTS_SEARCH_MAIL_QUERY_FIELDS, entity);
+
 export type ElasticsearchFtsSearchEntity =
   | ElasticsearchFtsSearchConversationEntity
+  | ElasticsearchFtsSearchMailEntity
   | ElasticsearchFtsSearchMemoryEntity
   | ElasticsearchFtsSearchResourceEntity;
 
@@ -84,5 +98,6 @@ export const isElasticsearchFtsSearchEntity = (
   entity: FtsSearchBackendEntity,
 ): entity is ElasticsearchFtsSearchEntity =>
   isElasticsearchFtsSearchConversationEntity(entity) ||
+  isElasticsearchFtsSearchMailEntity(entity) ||
   isElasticsearchFtsSearchMemoryEntity(entity) ||
   isElasticsearchFtsSearchResourceEntity(entity);

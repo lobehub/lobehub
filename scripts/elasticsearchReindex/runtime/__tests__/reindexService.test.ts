@@ -317,7 +317,7 @@ describe('FtsSearchReindexService', () => {
     expect(builder.buildBatch).not.toHaveBeenCalledWith('messages', expect.anything());
   });
 
-  it('creates aliases only after all 14 entities complete', async () => {
+  it('creates aliases only after all 15 entities complete', async () => {
     const { builder, client, repository, state } = createDependencies();
     const events: unknown[] = [];
     const lifecycle: string[] = [];
@@ -339,7 +339,7 @@ describe('FtsSearchReindexService', () => {
       status: 'ready_for_incremental_sync',
     });
 
-    expect(client.ensureIndex).toHaveBeenCalledTimes(14);
+    expect(client.ensureIndex).toHaveBeenCalledTimes(15);
     expect(client.ensureIndex).toHaveBeenCalledWith(
       'test-agents-v1',
       expect.objectContaining({
@@ -353,7 +353,7 @@ describe('FtsSearchReindexService', () => {
       }),
       { createIfMissing: true },
     );
-    expect(client.ensureAlias).toHaveBeenCalledTimes(14);
+    expect(client.ensureAlias).toHaveBeenCalledTimes(15);
     expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
     expect(state.progress.every(({ status }) => status === 'completed')).toBe(true);
     expect(events).toEqual(
@@ -366,7 +366,7 @@ describe('FtsSearchReindexService', () => {
     expect(validateIncrementalSyncSource).toHaveBeenCalledOnce();
     expect(lifecycle).toEqual([
       'validate-incremental-sync-source',
-      ...Array.from({ length: 14 }, () => 'create-alias'),
+      ...Array.from({ length: 15 }, () => 'create-alias'),
     ]);
   });
 
@@ -422,7 +422,7 @@ describe('FtsSearchReindexService', () => {
     await service.prepareIndices(state);
     await service.run('test', 1);
 
-    expect(client.ensureIndex).toHaveBeenCalledTimes(14);
+    expect(client.ensureIndex).toHaveBeenCalledTimes(15);
   });
 
   it('requires completed physical indexes to remain present', async () => {
@@ -956,7 +956,7 @@ describe('FtsSearchReindexService', () => {
       status: 'ready_for_incremental_sync',
     });
 
-    expect(client.ensureAlias).toHaveBeenCalledTimes(14);
+    expect(client.ensureAlias).toHaveBeenCalledTimes(15);
     expect(repository.markReadyForIncrementalSync).toHaveBeenCalledOnce();
     expect(
       events.filter(({ type }) => type === 'aliases_created' || type === 'promotion_pending'),
@@ -996,7 +996,7 @@ describe('FtsSearchReindexService', () => {
 
     await service.prepareIndices(state);
 
-    expect(client.ensureIndex).toHaveBeenCalledTimes(13);
+    expect(client.ensureIndex).toHaveBeenCalledTimes(14);
     expect(client.ensureIndex).not.toHaveBeenCalledWith(
       'test-topics-v1',
       expect.anything(),

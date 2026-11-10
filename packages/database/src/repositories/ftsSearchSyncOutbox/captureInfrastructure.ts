@@ -216,6 +216,28 @@ export const FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS = CAPTURE_FUNCTION_DEFI
   createCaptureFunctionStatement,
 );
 
+/**
+ * Recreate a historical function snapshot for an intermediate upgrade step. Snapshots keep only
+ * identity arguments, so the declared signature (with its parameter defaults) comes from the
+ * current definition of the same function.
+ */
+export const createFtsSearchSyncCaptureFunctionSnapshotStatement = (target: {
+  body: string;
+  identityArguments: string;
+  name: string;
+  result: string;
+}) => {
+  const current = CAPTURE_FUNCTION_DEFINITIONS.find(
+    ({ identityArguments, name }) =>
+      name === target.name && identityArguments === target.identityArguments,
+  );
+  const { result } = target;
+  if (!current || (result !== 'trigger' && result !== 'void')) {
+    throw new Error(`Unknown FTS search sync capture function snapshot: ${target.name}`);
+  }
+  return createCaptureFunctionStatement({ ...current, body: target.body, result });
+};
+
 export const FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS = CAPTURE_FUNCTION_DEFINITIONS.map(
   ({ body, identityArguments, name, result }) => ({
     body: body.trim(),
@@ -297,6 +319,17 @@ const CAPTURE_TRIGGER_DEFINITIONS: CaptureTriggerDefinition[] = [
     entities: ['messages'],
     name: 'fts_search_sync_messages',
     table: 'messages',
+  },
+  {
+    /** Starring and read state touch only `updated_at` and their own columns, so they enqueue nothing. */
+    createSql: `CREATE TRIGGER fts_search_sync_agent_mails
+      AFTER INSERT OR DELETE OR UPDATE OF account_id, agent_id, cc, direction, from_address, from_name, purged_at, subject, text, "to", trashed_at, user_id, workspace_id ON public.agent_mails
+      FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change(
+        'agentMails', 'purged_at', 'trashed_at', 'user_id', 'workspace_id'
+      )`,
+    entities: ['agentMails'],
+    name: 'fts_search_sync_agent_mails',
+    table: 'agent_mails',
   },
   {
     createSql: `CREATE TRIGGER fts_search_sync_user_memories
@@ -412,8 +445,11 @@ export const normalizeFtsSearchSyncCaptureDefinition = (definition: string) => {
     .replaceAll(/\(\s+/g, '(')
     .replaceAll(/\s+\)/g, ')');
 
-  /** PostgreSQL renders UPDATE OF columns in table-column order; their SQL order is immaterial. */
-  return compact.replace(/UPDATE OF ([\w, ]+) ON /, (_, columns: string) => {
+  /**
+   * PostgreSQL renders UPDATE OF columns in table-column order; their SQL order is immaterial.
+   * Reserved column names such as `"to"` stay quoted on both sides.
+   */
+  return compact.replace(/UPDATE OF ([\w", ]+) ON /, (_, columns: string) => {
     const normalizedColumns = columns
       .split(',')
       .map((column) => column.trim())

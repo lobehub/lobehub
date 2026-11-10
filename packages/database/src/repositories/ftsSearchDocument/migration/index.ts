@@ -1,14 +1,17 @@
 import type { FtsSearchDocumentEntity } from '../zodSchema';
 import { initialSearchIndexes } from './0000-initial-search-indexes/mapping';
+import { agentMailsSearchIndex } from './0001-agent-mails/mapping';
 import type { FtsSearchMappingMigration } from './types';
 
 /** Source-history batches, not a sequential migration executor. Register every batch explicitly. */
 export const FTS_SEARCH_MAPPING_MIGRATIONS = [
   initialSearchIndexes,
+  agentMailsSearchIndex,
 ] as const satisfies readonly FtsSearchMappingMigration[];
 
 /** Select the latest batch containing each entity; unaffected entities retain their prior batch. */
 export const FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS = {
+  agentMails: agentMailsSearchIndex,
   agents: initialSearchIndexes,
   chatGroups: initialSearchIndexes,
   documents: initialSearchIndexes,
@@ -29,6 +32,7 @@ export const FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS = {
 export const FTS_SEARCH_INDEX_ANALYSIS = initialSearchIndexes.analysis;
 
 export const FTS_SEARCH_CURRENT_MAPPINGS = {
+  agentMails: FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS.agentMails.definitions.agentMails,
   agents: FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS.agents.definitions.agents,
   chatGroups: FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS.chatGroups.definitions.chatGroups,
   documents: FTS_SEARCH_CURRENT_MAPPING_MIGRATIONS.documents.definitions.documents,

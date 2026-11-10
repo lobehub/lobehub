@@ -1,6 +1,7 @@
-import { and, asc, eq, gt, gte, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import {
+  agentMails,
   agents,
   chatGroups,
   documents,
@@ -237,6 +238,9 @@ export class FtsSearchDocumentBuilder {
     selection: FtsSearchDocumentSelection,
   ): Promise<FtsSearchBuiltDocument[]> {
     switch (entity) {
+      case 'agentMails': {
+        return this.buildAgentMails(selection);
+      }
       case 'agents': {
         return this.buildAgents(selection);
       }
@@ -512,6 +516,68 @@ export class FtsSearchDocumentBuilder {
         title: row.title,
         updated_at: toDateTime(row.updatedAt),
         user_id: row.userId,
+      }),
+    );
+  }
+
+  /**
+   * Trashed and purged mail is left out, so a sync tombstones it: search covers what is not
+   * trashed, and a purge must not leave its old subject or body behind in the index.
+   */
+  private async buildAgentMails(selection: FtsSearchDocumentSelection) {
+    const rows = await this.db
+      .select({
+        accountId: agentMails.accountId,
+        agentId: agentMails.agentId,
+        cc: agentMails.cc,
+        createdAt: agentMails.createdAt,
+        deliveredAt: agentMails.deliveredAt,
+        direction: agentMails.direction,
+        fromAddress: agentMails.fromAddress,
+        fromName: agentMails.fromName,
+        id: agentMails.id,
+        subject: agentMails.subject,
+        text: sql<string>`left(${agentMails.text}, ${FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS})`,
+        threadKey: agentMails.threadKey,
+        to: agentMails.to,
+        updatedAt: agentMails.updatedAt,
+        userId: agentMails.userId,
+        workspaceId: agentMails.workspaceId,
+      })
+      .from(agentMails)
+      .where(
+        and(
+          isNull(agentMails.trashedAt),
+          isNull(agentMails.purgedAt),
+          selection.ids
+            ? inArray(agentMails.id, selection.ids)
+            : selection.afterId
+              ? gt(agentMails.id, selection.afterId)
+              : undefined,
+        ),
+      )
+      .orderBy(asc(agentMails.id))
+      .limit(selection.limit);
+
+    return rows.map((row) =>
+      this.createDocument('agentMails', {
+        account_id: row.accountId,
+        agent_id: row.agentId,
+        created_at: toDateTime(row.createdAt),
+        delivered_at: toDateTime(row.deliveredAt),
+        direction: row.direction,
+        from_address: row.fromAddress,
+        from_name: row.fromName,
+        id: row.id,
+        recipients: [...row.to, ...row.cc].flatMap(({ address, name }) =>
+          name ? [address, name] : [address],
+        ),
+        subject: row.subject,
+        text: row.text,
+        thread_key: row.threadKey,
+        updated_at: toDateTime(row.updatedAt),
+        user_id: row.userId,
+        workspace_id: row.workspaceId,
       }),
     );
   }

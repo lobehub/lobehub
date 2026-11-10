@@ -37,15 +37,18 @@ import type {
 export type {
   ElasticsearchFtsSearchConversationEntity,
   ElasticsearchFtsSearchEntity,
+  ElasticsearchFtsSearchMailEntity,
   ElasticsearchFtsSearchMemoryEntity,
   ElasticsearchFtsSearchResourceEntity,
 } from './elasticsearch/query-fields';
 export {
   ELASTICSEARCH_FTS_SEARCH_CONVERSATION_QUERY_FIELDS,
+  ELASTICSEARCH_FTS_SEARCH_MAIL_QUERY_FIELDS,
   ELASTICSEARCH_FTS_SEARCH_MEMORY_QUERY_FIELDS,
   ELASTICSEARCH_FTS_SEARCH_RESOURCE_QUERY_FIELDS,
   isElasticsearchFtsSearchConversationEntity,
   isElasticsearchFtsSearchEntity,
+  isElasticsearchFtsSearchMailEntity,
   isElasticsearchFtsSearchMemoryEntity,
   isElasticsearchFtsSearchResourceEntity,
 } from './elasticsearch/query-fields';
@@ -136,6 +139,10 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
       (target.entity === 'topics' || target.entity === 'messages')
     ) {
       return this.searchConversationProduct(request, target.entity, query);
+    }
+
+    if (entity === 'agentMails' && request.mode !== 'candidates') {
+      throw new Error('Agent mail entity only supports candidate search');
     }
 
     const candidateResult = await this.observe(entity, 'candidate_query', () =>

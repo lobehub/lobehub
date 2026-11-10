@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentAccounts,
+  agentMails,
   agents,
   chatGroups,
   documents,
@@ -29,6 +31,8 @@ const userId = 'search-document-user';
 const createdAt = new Date('2026-01-01T00:00:00.000Z');
 const updatedAt = new Date('2026-01-02T00:00:00.000Z');
 const capturedAt = new Date('2026-01-03T00:00:00.000Z');
+
+const trashedMailId = '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e';
 
 const db: LobeChatDatabase = await getTestDB();
 const builder = new FtsSearchDocumentBuilder(db);
@@ -244,6 +248,54 @@ const seedFixtures = async () => {
     userMemoryId: 'memory-1',
   });
 
+  const mailFixture = FTS_SEARCH_DOCUMENT_FIXTURES.agentMails;
+  await db.insert(agentAccounts).values({
+    agentId: 'agent-1',
+    capabilities: { receive: true, send: true },
+    id: mailFixture.account_id,
+    identifier: 'agent@lobe.id',
+    kind: 'mail',
+    provider: 'agent-mail',
+    userId,
+  });
+  await db.insert(agentMails).values([
+    {
+      accountId: mailFixture.account_id,
+      agentId: 'agent-1',
+      cc: [],
+      createdAt,
+      deliveredAt: createdAt,
+      direction: 'inbound',
+      fromAddress: 'alice@example.com',
+      fromName: 'Alice',
+      id: mailFixture.id,
+      provider: 'agent-mail',
+      providerMessageId: 'msg-1',
+      subject: 'Mail subject',
+      text: 'Mail body',
+      threadKey: '<m1@example.com>',
+      to: [{ address: 'agent@lobe.id', name: 'Agent' }],
+      updatedAt,
+      userId,
+    },
+    {
+      accountId: mailFixture.account_id,
+      agentId: 'agent-1',
+      createdAt,
+      deliveredAt: createdAt,
+      direction: 'inbound',
+      fromAddress: 'bob@example.com',
+      id: trashedMailId,
+      provider: 'agent-mail',
+      providerMessageId: 'msg-2',
+      subject: 'Trashed subject',
+      text: 'Trashed body',
+      trashedAt: updatedAt,
+      updatedAt,
+      userId,
+    },
+  ]);
+
   await db.insert(userPersonaDocuments).values({
     capturedAt,
     createdAt,
@@ -267,7 +319,7 @@ afterAll(async () => {
 });
 
 describe('FtsSearchDocumentBuilder', () => {
-  it('builds all 14 canonical fixtures with stable IDs and deterministic payloads', async () => {
+  it('builds all 15 canonical fixtures with stable IDs and deterministic payloads', async () => {
     for (const entity of FTS_SEARCH_DOCUMENT_ENTITIES) {
       const fixture = FTS_SEARCH_DOCUMENT_FIXTURES[entity];
       const first = await builder.buildByIds(entity, [fixture.id]);
@@ -276,6 +328,13 @@ describe('FtsSearchDocumentBuilder', () => {
       expect(first).toEqual([{ entity, id: fixture.id, source: fixture }]);
       expect(second).toEqual(first);
     }
+  });
+
+  it('leaves trashed mail out so sync tombstones it', async () => {
+    await expect(builder.buildByIds('agentMails', [trashedMailId])).resolves.toEqual([]);
+    await expect(builder.buildBatch('agentMails', { limit: 10 })).resolves.toMatchObject([
+      { id: FTS_SEARCH_DOCUMENT_FIXTURES.agentMails.id },
+    ]);
   });
 
   it('uses a stable ID cursor for deterministic batches', async () => {

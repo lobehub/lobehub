@@ -41,7 +41,7 @@ describe('FtsSearchReindexFileRepository', () => {
     ).createOrResume('test-search', 1);
 
     expect(first.run.baseRevision).toBe(11);
-    expect(first.progress).toHaveLength(14);
+    expect(first.progress).toHaveLength(15);
     expect(first.progress.map(({ physicalIndex }) => physicalIndex)).toContain(
       'test-search-messages-v1',
     );

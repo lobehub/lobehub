@@ -154,7 +154,7 @@ Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.m
    ```
 
 2. **全量回填。** 先查看状态，再执行一次性回填。`--apply` 会安装 PostgreSQL 变更采集、按 ICU
-   映射创建 14 类索引、复制数据并创建别名：
+   映射创建 15 类索引、复制数据并创建别名：
 
    ```bash
    docker compose run --rm fts-search-reindex --status

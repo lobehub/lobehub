@@ -30,6 +30,7 @@ import {
 const USER_ID = 'fts-search-sync-integration-user';
 const CAPTURE_INSTALL_TEST_TIMEOUT = 30_000;
 const FTS_SEARCH_SYNC_TRIGGER_TARGETS = [
+  { name: 'fts_search_sync_agent_mails', table: 'agent_mails' },
   { name: 'fts_search_sync_agents', table: 'agents' },
   { name: 'fts_search_sync_chat_groups', table: 'chat_groups' },
   { name: 'fts_search_sync_documents', table: 'documents' },
@@ -96,7 +97,7 @@ const dropCaptureInfrastructure = async () => {
   await db.delete(ftsSearchSyncCaptureVersion);
 };
 
-const installHistoricalCapture = async (version: 0 | 1) => {
+const installHistoricalCapture = async (version: 0 | 1 | 2) => {
   const snapshot = captureHistory.find((item) => item.version === version)!;
   for (const target of snapshot.functions) {
     await db.execute(
@@ -198,6 +199,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
     expect(digests).toEqual([
       { digest: 'fdc9c529f0b72e1eb7fc75d298456de9f9ce2d01a4d206ace2dbb080aa140bd8', version: 0 },
       { digest: 'b34bcad257cf1351708bdf82aa5d031653b54b15c0d06ddc013328c58e4e99e1', version: 1 },
+      { digest: 'fcf437e04f227ce1fc0fb61a0c814e427482f90ab8122169643347c2a8a1dd11', version: 2 },
     ]);
   });
 
@@ -365,10 +367,10 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
     `);
       const rows = Array.isArray(result) ? result : result.rows;
       expect(rows).toEqual(firstRows);
-      expect(rows).toHaveLength(16);
+      expect(rows).toHaveLength(17);
       await expect(repository.readCaptureFingerprint()).resolves.toMatch(/^[a-f\d]{64}$/);
       await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([
-        { id: 'capture', version: 2 },
+        { id: 'capture', version: 3 },
       ]);
     },
     CAPTURE_INSTALL_TEST_TIMEOUT,
@@ -381,7 +383,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
     ]);
 
     await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([
-      { id: 'capture', version: 2 },
+      { id: 'capture', version: 3 },
     ]);
   });
 
@@ -395,12 +397,12 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
         'unknown capture version 99',
       );
     } finally {
-      await db.update(ftsSearchSyncCaptureVersion).set({ version: 2 });
+      await db.update(ftsSearchSyncCaptureVersion).set({ version: 3 });
     }
     await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
   });
 
-  it.each([0, 1] as const)(
+  it.each([0, 1, 2] as const)(
     'atomically upgrades unversioned capture v%i through fixed migrations',
     async (version) => {
       await dropCaptureInfrastructure();
@@ -411,7 +413,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
         await expect(repository.installCaptureInfrastructure()).resolves.toBeUndefined();
         await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
         await expect(db.select().from(ftsSearchSyncCaptureVersion)).resolves.toEqual([
-          { id: 'capture', version: 2 },
+          { id: 'capture', version: 3 },
         ]);
       } finally {
         await dropCaptureInfrastructure();
@@ -445,6 +447,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
       expect(statements.filter((statement) => statement.startsWith('DROP TRIGGER'))).toEqual([]);
       expect(statements.filter((statement) => statement.startsWith('LOCK TABLE'))).toEqual([
         'LOCK TABLE "public"."messages", "public"."topics" IN SHARE ROW EXCLUSIVE MODE',
+        'LOCK TABLE "public"."agent_mails" IN SHARE ROW EXCLUSIVE MODE',
       ]);
       expect(
         statements.filter((statement) => statement.startsWith('SET LOCAL lock_timeout')),
@@ -454,7 +457,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
           .filter((statement) => statement.startsWith('CREATE OR REPLACE TRIGGER'))
           .map((statement) => statement.split(' ')[4])
           .sort(),
-      ).toEqual(['fts_search_sync_messages', 'fts_search_sync_topics']);
+      ).toEqual(['agent_mails', 'messages', 'topics'].map((table) => `fts_search_sync_${table}`));
       await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
     } finally {
       await dropCaptureInfrastructure();
@@ -506,7 +509,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
         FOR EACH ROW EXECUTE FUNCTION capture_fts_search_sync_change('agents', 'id')
       `);
       try {
-        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow('triggers 17/16');
+        await expect(repository.assertCaptureInfrastructure()).rejects.toThrow('triggers 18/17');
         await expect(repository.installCaptureInfrastructure()).rejects.toThrow(
           'Refusing to replace partial or unknown FTS search sync capture infrastructure',
         );

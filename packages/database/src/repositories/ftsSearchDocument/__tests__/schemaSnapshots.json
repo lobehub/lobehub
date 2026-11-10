@@ -56,5 +56,11 @@
       "fingerprint": "df04d074c1f56b5934891b8612b804917c09302a9042015c394216513093d6e9",
       "schemaVersion": 1
     }
+  },
+  "0001-agent-mails": {
+    "agentMails": {
+      "fingerprint": "8b8edd02644d198be89e0a6579468baddd93fdb37ed3a23f7e590f3ad11f01a4",
+      "schemaVersion": 1
+    }
   }
 }

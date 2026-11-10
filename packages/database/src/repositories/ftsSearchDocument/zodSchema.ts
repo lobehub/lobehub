@@ -38,6 +38,26 @@ const ownershipShape = {
 };
 
 export const FTS_SEARCH_DOCUMENT_SCHEMAS = {
+  agentMails: z
+    .object({
+      ...projectionMetadataShape,
+      ...timestampShape,
+      account_id: z.string(),
+      agent_id: z.string(),
+      delivered_at: dateTime,
+      direction: z.enum(['inbound', 'outbound']),
+      from_address: z.string(),
+      from_name: nullableString,
+      id: z.string().uuid(),
+      /** `To` and `Cc` addresses and names, flattened. */
+      recipients: stringArray,
+      subject: nullableString,
+      text: z.string(),
+      thread_key: nullableString,
+      user_id: z.string(),
+      workspace_id: nullableString,
+    })
+    .strict(),
   agents: z
     .object({
       ...ownershipShape,

@@ -13,6 +13,7 @@ export const FTS_SEARCH_DOCUMENT_ENTITIES = [
   'personaDocuments',
   'documents',
   'messages',
+  'agentMails',
 ] as const;
 
 export type FtsSearchDocumentEntity = (typeof FTS_SEARCH_DOCUMENT_ENTITIES)[number];

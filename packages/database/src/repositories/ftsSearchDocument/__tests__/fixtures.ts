@@ -5,6 +5,23 @@ const updatedAt = '2026-01-02T00:00:00.000Z';
 const capturedAt = '2026-01-03T00:00:00.000Z';
 
 export const FTS_SEARCH_DOCUMENT_FIXTURES = {
+  agentMails: {
+    account_id: '6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b',
+    agent_id: 'agent-1',
+    created_at: createdAt,
+    delivered_at: createdAt,
+    direction: 'inbound',
+    from_address: 'alice@example.com',
+    from_name: 'Alice',
+    id: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    recipients: ['agent@lobe.id', 'Agent'],
+    subject: 'Mail subject',
+    text: 'Mail body',
+    thread_key: '<m1@example.com>',
+    updated_at: updatedAt,
+    user_id: 'search-document-user',
+    workspace_id: null,
+  },
   agents: {
     created_at: createdAt,
     description: 'Agent description',
