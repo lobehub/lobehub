@@ -101,6 +101,40 @@ describe('accountWindows', () => {
     expect(windows[4]).toMatchObject({ start: NOW + 16 * HOUR, state: 'idle' });
   });
 
+  it('keeps a used-up limit with no reported reset, bounded by its latest reset', () => {
+    // Kimi-style reading: 100% used, no reset time, still within its window.
+    const session = accountWindows(
+      view({
+        session: { latestResetAt: NOW + 2 * HOUR, resetsAt: null, usedPercent: 100 },
+        status: 'exhausted',
+      }),
+      axis,
+      NOW,
+    );
+    expect(session[0]).toMatchObject({
+      blockedBy: { estimated: true, key: 'session', until: NOW + 2 * HOUR },
+      start: NOW - 3 * HOUR,
+      state: 'blocked',
+    });
+    expect(isUsableAt(session, NOW)).toBe(false);
+    expect(session[1]).toMatchObject({ start: NOW + 2 * HOUR, state: 'idle' });
+
+    const weekly = accountWindows(
+      view({
+        status: 'exhausted',
+        weekly: { latestResetAt: NOW + 12 * HOUR, resetsAt: null, usedPercent: 100 },
+      }),
+      axis,
+      NOW,
+    );
+    expect(weekly.filter((w) => w.state === 'blocked').map((w) => w.start)).toEqual([
+      NOW,
+      NOW + 5 * HOUR,
+      NOW + 10 * HOUR,
+    ]);
+    expect(weekly[0].blockedBy?.estimated).toBe(true);
+  });
+
   it('flags a nearly used-up window, and every window a tight weekly limit covers', () => {
     const session = accountWindows(
       view({ session: { resetsAt: NOW + HOUR, usedPercent: 85 } }),

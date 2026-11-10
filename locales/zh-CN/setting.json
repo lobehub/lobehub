@@ -1936,6 +1936,7 @@
   "subscriptionAccounts.calendar.failedNote": "额度读取失败",
   "subscriptionAccounts.calendar.summary.failed": "{{count}} 个读取失败",
   "subscriptionAccounts.calendar.idle": "已恢复 · 未开始计时",
+  "subscriptionAccounts.calendar.latest": "最晚{{time}}",
   "subscriptionAccounts.calendar.legend.blocked": "已用尽",
   "subscriptionAccounts.calendar.legend.idle": "未使用",
   "subscriptionAccounts.calendar.legend.tight": "快用完",

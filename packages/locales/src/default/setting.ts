@@ -4948,6 +4948,7 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.state.blocked': '{{window}} used up, back {{time}}',
   'subscriptionAccounts.calendar.desc':
     'Next 7 days, one square per 5-hour window: grey is unused, blue is in use.',
+  'subscriptionAccounts.calendar.latest': 'by {{time}}',
   'subscriptionAccounts.calendar.legend.blocked': 'Used up',
   'subscriptionAccounts.calendar.legend.idle': 'Unused',
   'subscriptionAccounts.calendar.legend.tight': 'Nearly used up',

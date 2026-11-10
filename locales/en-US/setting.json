@@ -1936,6 +1936,7 @@
   "subscriptionAccounts.calendar.failedNote": "Couldn't load this account's quota",
   "subscriptionAccounts.calendar.summary.failed": "{{count}} couldn't load",
   "subscriptionAccounts.calendar.idle": "Refilled · not started",
+  "subscriptionAccounts.calendar.latest": "by {{time}}",
   "subscriptionAccounts.calendar.legend.blocked": "Used up",
   "subscriptionAccounts.calendar.legend.idle": "Unused",
   "subscriptionAccounts.calendar.legend.tight": "Nearly used up",

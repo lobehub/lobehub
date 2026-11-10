@@ -268,7 +268,12 @@ const windowText = (window: QuotaWindow, now: number, t: TFunction<'setting'>) =
   const limit = window.blockedBy ?? window.tightBy;
   const values = {
     percent: formatPercent(limit?.usedPercent),
-    time: limit ? formatTime(limit.until, now, t) : '',
+    // An unreported reset is only known as a bound: say "by" rather than "at".
+    time: limit
+      ? limit.estimated
+        ? t('subscriptionAccounts.calendar.latest', { time: formatTime(limit.until, now, t) })
+        : formatTime(limit.until, now, t)
+      : '',
     window: windowLabel(limit?.key, t),
   };
   const state =
@@ -327,8 +332,16 @@ const AccountWindowsRow = ({
 
   const resets = (['session', 'weekly'] as const).flatMap((key) => {
     const window = view[key];
-    if (!window || window.resetsAt == null || window.resetsAt <= now) return [];
-    return [{ exhausted: window.usedPercent >= 100, key, resetsAt: window.resetsAt }];
+    const at = window?.resetsAt ?? window?.latestResetAt;
+    if (!window || at == null || at <= now) return [];
+    return [
+      {
+        estimated: window.resetsAt == null,
+        exhausted: window.usedPercent >= 100,
+        key,
+        resetsAt: at,
+      },
+    ];
   });
   // Before the readings arrive the row says nothing rather than "no data".
   const idleText = failed
@@ -408,7 +421,12 @@ const AccountWindowsRow = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {windowLabel(reset.key, t)} · {formatTime(reset.resetsAt, now, t)}
+                {windowLabel(reset.key, t)} ·{' '}
+                {reset.estimated
+                  ? t('subscriptionAccounts.calendar.latest', {
+                      time: formatTime(reset.resetsAt, now, t),
+                    })
+                  : formatTime(reset.resetsAt, now, t)}
               </Text>
             ))
           )}

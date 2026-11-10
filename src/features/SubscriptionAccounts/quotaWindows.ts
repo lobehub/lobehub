@@ -27,6 +27,8 @@ export const buildQuotaAxis = (now: number): QuotaAxis => ({
 
 /** A limit that colours a window: which one, how far it is used, and when it resets. */
 export interface WindowLimit {
+  /** The provider gave no reset time: `until` is the latest it can be. */
+  estimated?: boolean;
   key: AccountWindowKey;
   until: number;
   usedPercent: number;
@@ -56,10 +58,17 @@ const liveLimit = (
   view: Pick<AccountView, AccountWindowKey>,
   key: AccountWindowKey,
   now: number,
-) => {
+): WindowLimit | undefined => {
   const window = view[key];
-  if (!window || window.resetsAt == null || window.resetsAt <= now) return undefined;
-  return { key, until: window.resetsAt, usedPercent: window.usedPercent };
+  if (!window) return undefined;
+  if (window.resetsAt != null)
+    return window.resetsAt > now
+      ? { key, until: window.resetsAt, usedPercent: window.usedPercent }
+      : undefined;
+  // No reported reset: the reading still binds until it ages out, so keep it, marked as a bound.
+  if (window.latestResetAt != null && window.latestResetAt > now)
+    return { estimated: true, key, until: window.latestResetAt, usedPercent: window.usedPercent };
+  return undefined;
 };
 
 /**
