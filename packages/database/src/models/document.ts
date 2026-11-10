@@ -27,6 +27,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentHistories,
   documentLikes,
   documents,
   files,
@@ -800,6 +801,20 @@ export class DocumentModel {
           .delete(documentLikes)
           .where(inArray(documentLikes.documentId, ids));
       }
+
+      // Revision history denormalizes the scope and every history read is
+      // scope-filtered, so snapshots left behind become invisible in the target
+      // scope. A workspace target filters on `workspace_id` alone, so author
+      // attribution (`user_id`) survives; a personal target reads
+      // `user_id = owner AND workspace_id IS NULL`, so the owner is rehomed too.
+      await (trx as LobeChatDatabase)
+        .update(documentHistories)
+        .set(
+          targetWorkspaceId
+            ? { workspaceId: targetWorkspaceId }
+            : { userId: targetUserId, workspaceId: null },
+        )
+        .where(inArray(documentHistories.documentId, ids));
 
       // Move files anchored to these documents; their visibility mirrors the
       // document subtree in workspace scope.

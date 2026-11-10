@@ -13,7 +13,7 @@ import type {
 import { redisService } from '@/server/services/redis';
 import { getResourceMeta } from '@/server/services/resourcePermission';
 
-import { toStoredMarkdown } from './editorData';
+import { hasStoredBody, toStoredMarkdown } from './editorData';
 import { projectPageState } from './fork';
 
 const log = debug('lobe-server:page-collab:persist');
@@ -35,8 +35,12 @@ const bodyDigest = (editorData: unknown) =>
     .digest('hex');
 
 export class PageProjectionRejectedError extends Error {
-  constructor(documentId: string) {
-    super(`Refusing to persist page ${documentId}: the room holds blocks the projection lost`);
+  constructor(documentId: string, reason: 'empty-room' | 'lost-blocks' = 'lost-blocks') {
+    super(
+      reason === 'empty-room'
+        ? `Refusing to persist page ${documentId}: an empty room would erase the stored body`
+        : `Refusing to persist page ${documentId}: the room holds blocks the projection lost`,
+    );
     this.name = 'PageProjectionRejectedError';
   }
 }
@@ -64,9 +68,8 @@ export const persistPageState = async (
   const meta = await getResourceMeta(db, 'document', documentId);
   if (!meta) return false;
 
-  const { editorData, lostBlocks, markdown, title } = await withHeadlessEditorLock(() =>
-    projectPageState(state),
-  );
+  const { editorData, lostBlocks, markdown, roomRemovedContent, title } =
+    await withHeadlessEditorLock(() => projectPageState(state));
   // A binding that fails to read the room exports an empty page; writing it
   // would erase the stored body and the version history's latest state.
   if (lostBlocks) throw new PageProjectionRejectedError(documentId);
@@ -79,7 +82,25 @@ export const persistPageState = async (
   // changed since the last projection was written around it anyway; keep that
   // version as its own `system` entry in the history before the room replaces it.
   const lastProjected = await redisService.pageCollab.lastProjectedBody(documentId);
-  const writtenOutsideRoom = lastProjected !== null && lastProjected !== bodyDigest(row.editorData);
+  const storedDigest = bodyDigest(row.editorData);
+
+  // An empty room over a stored body is a room that never received that body:
+  // never bootstrapped, or seeded by a client that had not loaded the page (a
+  // page's first room opens when it moves into a workspace). Clearing the page
+  // is accepted once the room is known to have held a body: its last projection
+  // wrote exactly the stored one, or the room records content being removed
+  // (the digest expires after a day and is absent without Redis).
+  if (
+    !markdown.trim() &&
+    hasStoredBody(row) &&
+    lastProjected !== storedDigest &&
+    !roomRemovedContent
+  ) {
+    log('page %s: refusing an empty room projection over a stored body', documentId);
+    throw new PageProjectionRejectedError(documentId, 'empty-room');
+  }
+
+  const writtenOutsideRoom = lastProjected !== null && lastProjected !== storedDigest;
   if (writtenOutsideRoom) log('page %s body was written outside its room', documentId);
 
   await service.updateDocument(documentId, {
