@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -225,6 +225,34 @@ describe('executeCompression', () => {
       act(() => {
         useChatStore.setState({
           topicDataMap: { [agentId]: { items: [{ id: topicId }] } as any },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'gpt-4o-mini', provider: 'openai' });
+    });
+
+    it('ignores a heterogeneous runtime pin, which the chat endpoint cannot serve', async () => {
+      vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockImplementation(() => () => true);
+      // snapshotAgentModel pins the CLI runtime type as the topic provider.
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [agentId]: { items: [{ id: topicId, model: 'default', provider: 'cursor' }] } as any,
+          },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'gpt-4o-mini', provider: 'openai' });
+    });
+
+    it('falls back to the agent default when the topic pin has no provider', async () => {
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: { [agentId]: { items: [{ id: topicId, model: 'gpt-5' }] } as any },
         });
       });
 
