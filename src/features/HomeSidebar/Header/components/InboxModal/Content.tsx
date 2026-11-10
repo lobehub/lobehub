@@ -67,7 +67,6 @@ const Content = memo<ContentProps>(
       loadMoreError,
       notifications: loadedNotifications,
       retry,
-      unconfirmedError,
     } = useNotificationList({ category, isRead });
 
     // Cross-resource transfer inbox: live pending requests rendered as
@@ -193,12 +192,13 @@ const Content = memo<ContentProps>(
       : [];
 
     if (visibleNotifications.length === 0 && transferItems.length === 0) {
-      // An unconfirmed empty snapshot whose refresh failed is a failure, not "empty".
-      if (!isEmptyConfirmed && unconfirmedError) {
+      // A failed read — of a restored snapshot, or a refresh after a settled
+      // empty answer — shows with its Retry rather than as "nothing here".
+      if (error) {
         return (
           <AsyncError
-            error={unconfirmedError}
-            retrying={isHeadValidating}
+            error={error}
+            retrying={isHeadValidating || isLoadingMore}
             variant="page"
             onRetry={retry}
           />

@@ -112,7 +112,8 @@ describe('useNotificationList', () => {
 
     const { result } = renderHook(() => useNotificationList({ isRead: false }), { wrapper });
 
-    await waitFor(() => expect(result.current.unconfirmedError).toBeTruthy());
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(result.current.isConfirmed).toBe(false);
     expect(result.current.notifications).toEqual([]);
     // Rows were restored, so this is not a first-load failure with nothing to show.
     expect(result.current.headError).toBeUndefined();
@@ -127,5 +128,19 @@ describe('useNotificationList', () => {
     await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(result.current.notifications?.map((item) => item.id)).toEqual(['n1']);
     expect(result.current.headError).toBeUndefined();
+  });
+
+  it('surfaces a failed refresh after a confirmed empty answer', async () => {
+    const list = vi.spyOn(notificationService, 'list').mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() => useNotificationList({ isRead: false }), { wrapper });
+    await waitFor(() => expect(result.current.isConfirmed).toBe(true));
+    expect(result.current.notifications).toEqual([]);
+
+    list.mockRejectedValue(new Error('offline'));
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(result.current.notifications).toEqual([]);
   });
 });

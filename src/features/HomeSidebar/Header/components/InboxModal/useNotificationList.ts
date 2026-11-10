@@ -65,7 +65,5 @@ export const useNotificationList = ({ category, isRead }: UseNotificationListOpt
     loadMore,
     loadMoreError,
     retry,
-    /** A failed refresh that left an unconfirmed (restored) view behind. */
-    unconfirmedError: isConfirmed ? undefined : headError,
   };
 };
