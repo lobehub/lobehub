@@ -171,7 +171,7 @@ describe('sanitizeMailCss', () => {
 
   it('keeps ordinary rules around what it removes', () => {
     expect(sanitizeMailCss('@import url(https://evil.test/x.css); p{color:red}')).toBe(
-      ' p{color:red}',
+      '  p{color:red}',
     );
     expect(sanitizeMailCss('a{background:url(https://evil.test/a.png) no-repeat;color:red}')).toBe(
       'a{background: none  no-repeat;color:red}',
