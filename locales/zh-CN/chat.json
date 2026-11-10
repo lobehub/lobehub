@@ -2870,7 +2870,7 @@
   "taskSchedule.clear": "清除",
   "taskSchedule.continuous": "持续运行",
   "taskSchedule.customMinute": "自定义",
-  "taskSchedule.customMinute.badge": "付费",
+  "taskSchedule.customMinute.badge": "Pro",
   "taskSchedule.enable": "启用自动化",
   "taskSchedule.every": "每",
   "taskSchedule.frequency": "运行频率",

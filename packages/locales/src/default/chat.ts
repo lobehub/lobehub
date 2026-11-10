@@ -2004,7 +2004,7 @@ export default {
   'taskSchedule.clear': 'Clear',
   'taskSchedule.continuous': 'Continuous',
   'taskSchedule.customMinute': 'Custom',
-  'taskSchedule.customMinute.badge': 'Paid',
+  'taskSchedule.customMinute.badge': 'Pro',
   'taskSchedule.enable': 'Enable automation',
   'taskSchedule.every': 'Every',
   'taskSchedule.frequency': 'Frequency',
