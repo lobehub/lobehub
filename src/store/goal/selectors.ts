@@ -10,6 +10,10 @@ const goalGraph = (goalId?: string | null) => (s: GoalStore) =>
 const goalMetricSeries = (goalId?: string | null) => (s: GoalStore) =>
   goalId ? s.goalMetricSeriesById[goalId] : undefined;
 
+/** `undefined` until the share record is read; `null` once known to be unshared. */
+const goalShare = (goalId?: string | null) => (s: GoalStore) =>
+  goalId ? s.goalShareById[goalId]?.share : undefined;
+
 const isGoalTitleRenaming = (goalId?: string | null) => (s: GoalStore) =>
   !!goalId && s.goalTitleRenamingIds.includes(goalId);
 
@@ -39,6 +43,7 @@ export const goalSelectors = {
   goalList,
   goalListView,
   goalMetricSeries,
+  goalShare,
   homeGoals,
   isGoalTitleRenaming,
   topicGoals,

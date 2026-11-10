@@ -2,6 +2,7 @@ import type { GoalGraphSnapshot } from '@lobechat/types';
 
 import { defineReplica, type ReplicaEntityAdapter } from '@/libs/replica';
 import type { GoalListItem, goalService } from '@/services/goal';
+import type { GoalShareInfo } from '@/services/goalShare';
 import type { MetricSeriesWithPoints } from '@/services/metric';
 
 import type { GoalListFilter } from './initialState';
@@ -143,6 +144,24 @@ export const topicGoalListResource = defineReplica<string, GoalListValue, GoalLi
   key: (topicId) => topicId,
   name: 'topicGoalList',
   persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * What the owner has read of one goal's share. The wrapper is the value: a
+ * replica cannot hold a bare `null` (a write that yields `null` reads as "no
+ * change"), and the popover has to tell "read, nothing shared" (`share: null`)
+ * from "not read yet" (no entry).
+ */
+export interface GoalShareValue {
+  share: GoalShareInfo | null;
+}
+
+/** The owner's share record of a goal, keyed by goal id. */
+export const goalShareResource = defineReplica<string, GoalShareValue>({
+  key: (goalId) => goalId,
+  name: 'goalShare',
   storage: 'indexedDB',
   version: 1,
 });
