@@ -1,6 +1,7 @@
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
+import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
@@ -17,6 +18,7 @@ import {
   isKimiReasoningEffortModel,
   isKimiReasoningModel,
 } from '../moonshot/modelId';
+import { isOpenAIReasoningPayloadModel } from '../openai/modelId';
 import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
@@ -338,9 +340,26 @@ export const sanitizeJsonSchema = (schema: any): any => {
  * Select Responses-only models and build OpenAI-compatible payloads with
  * reasoning_content handling for interleaved and Kimi K2.x models.
  */
+/**
+ * OpenAI reasoning-era models (GPT-5.x / GPT-6 / o-series) reject sampling
+ * params such as `top_p` with a 400, and the default agent config always sends
+ * them. Prune them the same way the built-in OpenAI provider does; the penalty
+ * fields are dropped entirely because the gateway forwards them verbatim.
+ */
+const pruneOpenAIReasoningSampling = (payload: ChatStreamPayload): ChatStreamPayload => {
+  if (!isOpenAIReasoningPayloadModel(payload.model)) return payload;
+
+  return {
+    ...pruneReasoningPayload(payload),
+    frequency_penalty: undefined,
+    presence_penalty: undefined,
+  } as ChatStreamPayload;
+};
+
 const buildOpenAIPayload = (
-  payload: ChatStreamPayload,
+  rawPayload: ChatStreamPayload,
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
+  const payload = pruneOpenAIReasoningSampling(rawPayload);
   const model = payload.model;
   if (getResponsesModelIds().has(model)) {
     return { ...payload, apiMode: 'responses' } as OpenAI.ChatCompletionCreateParamsStreaming;
@@ -452,6 +471,9 @@ const LobeOpenCodeCodingPlanOpenAI = createOpenAICompatibleRuntime({
       return [...getResponsesModelIds()];
     },
   },
+  // The Responses path receives the payload from before `chatCompletion.handlePayload`
+  // ran, so it needs its own pruning (GPT-5.x / GPT-6 are routed here by model id).
+  responses: { handlePayload: pruneOpenAIReasoningSampling },
 });
 
 // Anthropic SDK auto-appends /v1/messages to baseURL, so strip trailing /v1
