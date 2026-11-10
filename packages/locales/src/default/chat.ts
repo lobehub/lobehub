@@ -989,10 +989,6 @@ export default {
     'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
   'input.agentRunFeeUnfunded.descTopUp':
     'Each agent run carries a fee, even on your own API key. Top up, then send again.',
-  'input.agentRunFeeUnfunded.descUpgrade':
-    "Each agent run carries a fee, even on your own API key. Your monthly balance limit is used up, so a top-up can't pay it. Upgrade your plan, then send again.",
-  'input.agentRunFeeUnfunded.descWait':
-    'Each agent run carries a fee, even on your own API key. Your monthly balance limit is used up. Send again once it resets.',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
