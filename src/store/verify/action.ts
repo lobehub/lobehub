@@ -451,7 +451,8 @@ export class ActionImpl {
         entry.value ? { value: { ...entry.value, run: { ...entry.value.run, title } } } : entry,
       () => verifyService.updateRunTitle(verifyRunId, title),
     );
-    await this.#report.revalidate(verifyRunId);
+    // The confirmed title is already on the replica; pick up any other server change.
+    void this.#report.revalidate(verifyRunId);
   };
 
   /** Re-read one Agent Run's verify card (after a plan action or a manual refresh). */
