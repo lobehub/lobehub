@@ -1340,6 +1340,34 @@ describe('aiChatRouter', () => {
       }
     });
 
+    it('exposes the runtime payload as cause.data so the client receives errorData', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const budgetError = {
+        budget: { blockingRules: [{ rule: 'overflow.month' }], requiredCredits: 1000 },
+        error: { message: 'Budget exceeded' },
+        errorType: 'InsufficientBudgetForModel',
+        message: 'Budget exceeded',
+      };
+      const mockGenerateObject = vi.fn().mockRejectedValue(budgetError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(
+        objectGenerationRuntime(mockGenerateObject) as any,
+      );
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      await expect(
+        caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'claude-fable-5',
+          provider: 'lobehub',
+        }),
+      ).rejects.toMatchObject({
+        cause: { data: budgetError },
+        code: 'PAYMENT_REQUIRED',
+      });
+    });
+
     it.each([
       {
         accessError: {

@@ -105,8 +105,18 @@ const createRuntimeTRPCError = (
   if (runtimeStatus) {
     if (options?.silentHandlerLog && runtimeStatus < 500) markSilentTRPCErrorLog(error);
 
+    // The lambda errorFormatter forwards `cause.data` to the client as
+    // `errorData`. Expose the runtime payload there so callers such as the
+    // input-completion alert can read structured details (e.g. which budget
+    // rule blocked), the same payload the chat error card receives.
+    const record = toRecord(error);
+    const cause =
+      record && !(error instanceof Error) && !('data' in record)
+        ? { ...record, data: record }
+        : error;
+
     return new TRPCError({
-      cause: error,
+      cause,
       code: getTRPCErrorCodeFromStatus(runtimeStatus),
       message:
         typeof errorType === 'string'
