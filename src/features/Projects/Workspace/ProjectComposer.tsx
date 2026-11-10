@@ -50,15 +50,15 @@ const inputContainerProps = {
 };
 
 const styles = stylex.create({
+  // Inset like the action bar below it, so both rows start on the same line and
+  // the bar reads as a panel inside the composer rather than its top edge.
   contextBar: {
     gap: '8px',
-    paddingBlock: '6px',
-    paddingInline: '8px',
-    borderBlockEndWidth: '1px',
-    borderBlockEndStyle: 'solid',
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-    borderStartStartRadius: `${CONTAINER_RADIUS}px`,
-    borderStartEndRadius: `${CONTAINER_RADIUS}px`,
+    marginBlockStart: `${ACTION_BAR_INSET}px`,
+    marginInline: `${ACTION_BAR_INSET}px`,
+    paddingBlock: '4px',
+    paddingInline: '4px',
+    borderRadius: `${CONTAINER_RADIUS - ACTION_BAR_INSET}px`,
     backgroundColor: cssVar.colorFillQuaternary,
   },
 });
