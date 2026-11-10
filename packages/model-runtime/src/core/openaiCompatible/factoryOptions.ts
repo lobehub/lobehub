@@ -1,7 +1,7 @@
 import type { ChatModelCard } from '@lobechat/types';
 import type { AiFullModelCard } from 'model-bank';
-import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
+import type { ClientOptions } from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import type {

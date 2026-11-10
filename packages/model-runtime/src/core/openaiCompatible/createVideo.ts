@@ -7,7 +7,7 @@ import type {
   PollVideoStatusResult,
 } from '../../types/video';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
-import type { CreateVideoOptions } from '../openaiCompatibleFactory';
+import type { CreateVideoOptions } from '.';
 
 const log = createDebug('lobe-video:openai-compatible');
 

@@ -7,16 +7,16 @@ import type {
   GenerateObjectPayload,
   GenerateObjectSchema,
 } from '../../../types';
-import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
+import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatible/context';
 import type {
   ChatCompletionCreateParamsWithPromptCacheKey,
   OpenAICompatibleFactoryOptions,
-} from '../../openaiCompatibleFactory/factoryOptions';
+} from '../../openaiCompatible/factoryOptions';
 import {
   parseStructuredOutputText,
   parseStructuredToolArguments,
   StructuredOutputError,
-} from '../../openaiCompatibleFactory/structuredOutput';
+} from '../../openaiCompatible/structuredOutput';
 import type { ChatPayloadForTransformStream } from '../../streams/protocol';
 import { convertOpenAIUsage } from '../../usageConverters/openai';
 import { convertOpenAIMessages } from './messages';
