@@ -290,6 +290,14 @@ export const agentAccountMailRouter = router({
     .input(z.object({ folder: folderSchema.optional(), id: z.string().uuid() }))
     .query(async ({ ctx, input }) => ctx.mailbox.mail.listConversation(input)),
 
+  /**
+   * A mail's sanitized HTML, fetched from the provider when a person opens it;
+   * see {@link AgentMailboxService.readHtml}. Scoped like `conversation`.
+   */
+  html: mailProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => ctx.mailbox.readHtml(input.id)),
+
   markRead: mailProcedure.input(targetInput).mutation(async ({ ctx, input }) => ({
     count: await ctx.mailbox.mail.markRead(await resolveIds(ctx, input)),
   })),

@@ -429,6 +429,25 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
    * resolves. Optional: a provider that stores no messages has nothing to delete.
    */
   deleteMessage?: (ref: AgentAccountRef, providerMessageId: string) => Promise<void>;
+  /**
+   * The bytes of one attachment, or `null` once the provider no longer holds
+   * them. Throws on a failure worth retrying, and with `attachment_too_large`
+   * past `maxBytes`. Optional: a provider that stores no messages has nothing to serve.
+   */
+  downloadAttachment?: (
+    ref: AgentAccountRef,
+    providerMessageId: string,
+    index: number,
+    options: { maxBytes: number },
+  ) => Promise<{ buffer: Buffer; contentType?: string } | null>;
+  /**
+   * The message's raw HTML: `null` when it has none, `undefined` once the
+   * provider no longer holds the message. Never sanitized here.
+   */
+  getMessageHtml?: (
+    ref: AgentAccountRef,
+    providerMessageId: string,
+  ) => Promise<null | string | undefined>;
   /** The account kind this provider issues. */
   readonly kind: K;
 

@@ -408,20 +408,58 @@ export class AgentAccountService {
 
   /**
    * Delete a message's provider-side copy. Nothing to do once the address is
-   * released (that purged its mail) or its provider is gone from this
-   * deployment. Answers for the account's own row, so the caller must already
-   * have proved it may purge this mail.
+   * released or its provider is gone ({@link providerForMail}). Answers for
+   * the account's own row, so the caller must already have proved it may
+   * purge this mail.
    */
   deleteProviderMessage = async (accountId: string, providerMessageId: string): Promise<void> => {
-    const account = await this.model.findById(accountId);
-    if (!account || !ROUTING_KEY_HELD_STATUSES.includes(account.status)) return;
-    if (!this.options.registry.has(account.provider)) return;
+    const held = await this.providerForMail(accountId);
+    if (!held?.provider.deleteMessage) return;
 
-    const provider = this.options.registry.get(account.provider);
-    if (!provider.deleteMessage) return;
+    await held.provider.deleteMessage(held.ref, providerMessageId);
+  };
+
+  /**
+   * A mail's raw HTML as the provider's `getMessageHtml` reports
+   * it; `undefined` once the address or its provider can no longer answer.
+   * Answers for the account's own row, so the caller must already have proved
+   * it may read this mail.
+   */
+  getProviderMessageHtml = async (accountId: string, providerMessageId: string) => {
+    const held = await this.providerForMail(accountId);
+    if (!held?.provider.getMessageHtml) return undefined;
+
+    return held.provider.getMessageHtml(held.ref, providerMessageId);
+  };
+
+  /** One attachment's bytes, `null` when nobody holds them any more. Same contract as above. */
+  downloadProviderAttachment = async (
+    accountId: string,
+    providerMessageId: string,
+    index: number,
+    options: { maxBytes: number },
+  ) => {
+    const held = await this.providerForMail(accountId);
+    if (!held?.provider.downloadAttachment) return null;
+
+    return held.provider.downloadAttachment(held.ref, providerMessageId, index, options);
+  };
+
+  /**
+   * The provider behind an address while it can still answer for that
+   * address's mail: not once the address is released (that purged its mail)
+   * or its provider is gone from this deployment.
+   */
+  private providerForMail = async (accountId: string) => {
+    const account = await this.model.findById(accountId);
+    if (!account || !ROUTING_KEY_HELD_STATUSES.includes(account.status)) return undefined;
+    if (!this.options.registry.has(account.provider)) return undefined;
 
     const credential = await this.model.getCredential(accountId);
-    await provider.deleteMessage(this.toRef(account, credential), providerMessageId);
+    return {
+      provider: this.options.registry.get(account.provider),
+      ref: this.toRef(account, credential),
+    };
   };
 
   /**

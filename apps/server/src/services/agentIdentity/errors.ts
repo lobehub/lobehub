@@ -28,10 +28,14 @@
  * - `reply_target_gone`: the mail being answered no longer exists.
  * - `account_not_found` / `draft_not_found`: not in the caller's scope.
  * - `draft_sending`: another request is already sending this draft.
+ *
+ * Refused reads:
+ * - `attachment_too_large`: the attachment is larger than a download may serve.
  */
 export type AgentAccountErrorCode =
   | 'account_not_found'
   | 'account_unavailable'
+  | 'attachment_too_large'
   | 'capabilities_required'
   | 'draft_not_found'
   | 'draft_sending'

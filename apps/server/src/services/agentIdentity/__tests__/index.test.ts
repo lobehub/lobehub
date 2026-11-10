@@ -646,6 +646,86 @@ describe('AgentAccountService — actions', () => {
   });
 });
 
+describe('AgentAccountService — reading mail for a person', () => {
+  /** The shared fake lobe.id, plus a message with HTML and one attachment. */
+  const readFetch = () => {
+    const base = createMailFetch();
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const { pathname } = new URL(String(input));
+      if (pathname === '/v1/messages/msg_in_1') {
+        base.calls.push({ method: 'GET', path: pathname });
+        return json(mailDetail({ html: '<p>hi</p>' }));
+      }
+      if (pathname === '/v1/messages/msg_in_1/attachments/0') {
+        base.calls.push({ method: 'GET', path: pathname });
+        return new Response('bytes');
+      }
+      return base.fetchImpl(input, init);
+    };
+    return { calls: base.calls, fetchImpl };
+  };
+
+  const serviceFor = (fetchImpl: typeof fetch, id: string, workspaceId?: string) =>
+    new AgentAccountService(serverDB, id, {
+      gateKeeper,
+      registry: new AgentAccountProviderRegistry().register(
+        createAgentMailProvider({ apiKey: 'am_svc', fetchImpl, webhookUrl: 'https://x/hook' }),
+      ),
+      workspaceId,
+    });
+
+  it("answers through the address's provider", async () => {
+    const { fetchImpl } = readFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    expect(await service.getProviderMessageHtml(created.id, 'msg_in_1')).toBe('<p>hi</p>');
+    const file = await service.downloadProviderAttachment(created.id, 'msg_in_1', 0, {
+      maxBytes: 1024,
+    });
+    expect(file?.buffer.toString()).toBe('bytes');
+  });
+
+  it('asks no provider for an address outside the caller scope', async () => {
+    const workspaceId = 'agent-identity-service-read-ws';
+    await serverDB.insert(users).values({ id: foreignUserId });
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: workspaceId, primaryOwnerId: userId, slug: workspaceId });
+    const { calls, fetchImpl } = readFetch();
+    const created = await buildService(fetchImpl).provision({ agentId, provider: 'agent-mail' });
+    calls.length = 0;
+
+    // Another user, and the owner reading from inside a workspace, both miss
+    // the personal address: neither may reach its provider.
+    for (const service of [
+      serviceFor(fetchImpl, foreignUserId),
+      serviceFor(fetchImpl, userId, workspaceId),
+    ]) {
+      expect(await service.getProviderMessageHtml(created.id, 'msg_in_1')).toBeUndefined();
+      expect(
+        await service.downloadProviderAttachment(created.id, 'msg_in_1', 0, { maxBytes: 1024 }),
+      ).toBeNull();
+    }
+    expect(calls).toEqual([]);
+    await serverDB.delete(workspaces);
+  });
+
+  it('answers nothing once the address is released', async () => {
+    const { calls, fetchImpl } = readFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+    await service.revoke(created.id);
+    calls.length = 0;
+
+    expect(await service.getProviderMessageHtml(created.id, 'msg_in_1')).toBeUndefined();
+    expect(
+      await service.downloadProviderAttachment(created.id, 'msg_in_1', 0, { maxBytes: 1024 }),
+    ).toBeNull();
+    expect(calls).toEqual([]);
+  });
+});
+
 describe('AgentAccountService — inbound routing', () => {
   it('resolves the account, verifies the signature and normalizes the message', async () => {
     const { fetchImpl } = createMailFetch();
