@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 
-import type { ChatCompletionTool, ChatStreamPayload } from '../../types';
+import type { ChatCompletionTool, ChatStreamPayload } from '../../../types';
 
 export const convertChatCompletionToolToResponseTool = (
   tool: ChatCompletionTool,

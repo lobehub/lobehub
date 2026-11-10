@@ -8,6 +8,7 @@ import type OpenAI from 'openai';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
+import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
 import {
   appendProviderResponseEvent,
   appendRawProviderEvent,
@@ -16,7 +17,7 @@ import {
   observeProviderReadableStream,
   recordProviderError,
 } from '../../core/providerDiagnostics';
-import { createSSEDataExtractor, OpenAIStream } from '../../core/streams';
+import { createSSEDataExtractor } from '../../core/streams';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';

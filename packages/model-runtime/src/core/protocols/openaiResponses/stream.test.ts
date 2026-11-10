@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../../types/error';
 import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
-import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
-import { createReadableStream, readStreamChunk } from '../utils';
-import { OpenAIResponsesStream } from './responsesStream';
+import { FIRST_CHUNK_ERROR_KEY } from '../../streams/protocol';
+import { createReadableStream, readStreamChunk } from '../../streams/utils';
+import { OpenAIResponsesStream } from './stream';
 
 const createdResponse = (id: string) => ({
   type: 'response.created',

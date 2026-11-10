@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MessageToolCall } from '../../../types';
-import { createReadableStream, readStreamChunk } from '../utils';
-import { OpenAIStream } from './openai';
+import { createReadableStream, readStreamChunk } from '../../streams/utils';
+import { OpenAIStream } from './stream';
 
 const toolChunk = (toolCall: Record<string, unknown>) => ({
   choices: [{ delta: { tool_calls: [toolCall] }, index: 0 }],

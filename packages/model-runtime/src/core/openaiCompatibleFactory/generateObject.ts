@@ -6,6 +6,7 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { detectModelProvider } from '../../utils/modelParse';
 import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
+import { convertChatCompletionToolToResponseTool } from '../protocols/openaiResponses/tools';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import type { OpenAICompatibleRuntimeContext } from './context';
@@ -18,7 +19,6 @@ import {
   getGenerateObjectReasoningParams,
   getGenerateObjectResponsesReasoningParams,
 } from './generateObjectReasoning';
-import { convertChatCompletionToolToResponseTool } from './responseTools';
 import {
   parseStructuredOutputText,
   parseStructuredToolArguments,

@@ -2,27 +2,27 @@ import type debug from 'debug';
 import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
-import { respondJsonAfterStream } from '../../utils/consumeStream';
-import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
-import { desensitizeUrl } from '../../utils/desensitizeUrl';
-import { getModelPricing } from '../../utils/getModelPricing';
-import { StreamingResponse } from '../../utils/response';
-import { convertOpenAIMessages } from '../contextBuilders/openai';
-import { resolveModelSamplingParameters } from '../parameterResolver';
-import type { OpenAIStreamOptions } from '../streams';
-import { OpenAIStream } from '../streams';
-import { readableFromAsyncIterable } from '../streams/protocol';
-import type { OpenAICompatibleRuntimeContext } from './context';
-import type { OpenAICompatibleFactoryOptions } from './factoryOptions';
-import { transformResponseToStream } from './nonStreamToStream';
+import type { ChatMethodOptions, ChatStreamPayload } from '../../../types';
+import { respondJsonAfterStream } from '../../../utils/consumeStream';
+import { debugPayload, debugResponse, debugStream } from '../../../utils/debugStream';
+import { desensitizeUrl } from '../../../utils/desensitizeUrl';
+import { getModelPricing } from '../../../utils/getModelPricing';
+import { StreamingResponse } from '../../../utils/response';
+import { convertOpenAIMessages } from '../../contextBuilders/openai';
+import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
+import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatibleFactory/factoryOptions';
+import { transformResponseToStream } from '../../openaiCompatibleFactory/nonStreamToStream';
 import {
   initializeOpenAIDiagnostics,
   observeOpenAIChatCompletionStream,
   recordOpenAIChatCompletionResponse,
   recordOpenAIResponseMetadata,
   resolveOpenAIResponseWithMetadata,
-} from './providerDiagnostics';
+} from '../../openaiCompatibleFactory/providerDiagnostics';
+import { resolveModelSamplingParameters } from '../../parameterResolver';
+import { readableFromAsyncIterable } from '../../streams/protocol';
+import type { OpenAIStreamOptions } from './stream';
+import { OpenAIStream } from './stream';
 
 export interface ChatCompletionsRequest {
   handledPayload: OpenAI.ChatCompletionCreateParamsStreaming;

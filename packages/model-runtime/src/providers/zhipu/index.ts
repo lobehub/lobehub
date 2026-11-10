@@ -5,7 +5,7 @@ import {
   type OpenAICompatibleFactoryOptions,
 } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
-import { OpenAIStream } from '../../core/streams/openai';
+import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
 import { convertIterableToStream } from '../../core/streams/protocol';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';

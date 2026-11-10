@@ -2,34 +2,31 @@ import debug from 'debug';
 import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
-import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
-import { desensitizeUrl } from '../../utils/desensitizeUrl';
-import { getModelPricing } from '../../utils/getModelPricing';
-import { StreamingResponse } from '../../utils/response';
-import { convertOpenAIResponseInputs } from '../contextBuilders/openai';
-import { resolveModelSamplingParameters } from '../parameterResolver';
-import type { OpenAIStreamOptions } from '../streams';
-import { OpenAIResponsesStream } from '../streams';
-import { readableFromAsyncIterable } from '../streams/protocol';
-import type { OpenAICompatibleRuntimeContext } from './context';
+import type { ChatMethodOptions, ChatStreamPayload } from '../../../types';
+import { debugPayload, debugResponse, debugStream } from '../../../utils/debugStream';
+import { desensitizeUrl } from '../../../utils/desensitizeUrl';
+import { getModelPricing } from '../../../utils/getModelPricing';
+import { StreamingResponse } from '../../../utils/response';
+import { convertOpenAIResponseInputs } from '../../contextBuilders/openai';
+import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
 import type {
   OpenAICompatibleFactoryOptions,
   OpenAIExtraParams,
   ResponseCreateParamsWithPromptCacheKey,
-} from './factoryOptions';
-import { transformResponseAPIToStream } from './nonStreamToStream';
+} from '../../openaiCompatibleFactory/factoryOptions';
+import { transformResponseAPIToStream } from '../../openaiCompatibleFactory/nonStreamToStream';
 import {
   initializeOpenAIDiagnostics,
   observeOpenAIResponsesStream,
   recordOpenAIResponseMetadata,
   recordOpenAIResponsesResponse,
   resolveOpenAIResponseWithMetadata,
-} from './providerDiagnostics';
-import {
-  convertChatCompletionToolToResponseTool,
-  stripChatCompletionParameters,
-} from './responseTools';
+} from '../../openaiCompatibleFactory/providerDiagnostics';
+import { resolveModelSamplingParameters } from '../../parameterResolver';
+import { readableFromAsyncIterable } from '../../streams/protocol';
+import type { OpenAIStreamOptions } from '../openaiChatCompletions/stream';
+import { OpenAIResponsesStream } from './stream';
+import { convertChatCompletionToolToResponseTool, stripChatCompletionParameters } from './tools';
 
 export const chatViaResponses = async (
   runtime: OpenAICompatibleRuntimeContext,

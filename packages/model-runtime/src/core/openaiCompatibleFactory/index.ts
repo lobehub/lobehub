@@ -37,13 +37,14 @@ import {
 } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { normalizeToolsParameters } from '../contextBuilders/normalizeToolSchema';
+import { chatViaChatCompletions } from '../protocols/openaiChatCompletions/chat';
+import { chatViaResponses } from '../protocols/openaiResponses/chat';
 import { convertOpenAITranscriptionUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import {
   resolvePromptCacheKey,
   shouldUseResponsesAPI,
   type ShouldUseResponsesAPIParams,
 } from './apiMode';
-import { chatViaChatCompletions } from './chatCompletions';
 import { OpenAICompatibleClient } from './client';
 import type { OpenAICompatibleRuntimeContext } from './context';
 import { createOpenAICompatibleImage } from './createImage';
@@ -58,7 +59,6 @@ import type {
 } from './factoryOptions';
 import { generateObject as runGenerateObject } from './generateObject';
 import { listOpenAICompatibleModels } from './models';
-import { chatViaResponses } from './responses';
 import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
