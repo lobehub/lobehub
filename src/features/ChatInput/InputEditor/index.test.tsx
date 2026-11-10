@@ -12,6 +12,10 @@ const platform = vi.hoisted(() => ({
   isMobile: false,
 }));
 
+const userSettings = vi.hoisted(() => ({
+  enablePasteAutoConvert: true,
+}));
+
 const mocks = vi.hoisted(() => {
   const chatInputState = {
     clearInputCompletionError: vi.fn(() => {
@@ -67,6 +71,15 @@ const getAutoCompleteProps = async (): Promise<AutoCompleteProps> => {
   return autoCompleteProps!;
 };
 
+const getEditorProps = async () => {
+  const { Editor } = await import('@lobehub/editor/react');
+  const props = vi.mocked(Editor).mock.lastCall?.[0] as Record<string, unknown> | undefined;
+
+  expect(props).toBeDefined();
+
+  return props!;
+};
+
 const getEditorStyle = async () => {
   const { Editor } = await import('@lobehub/editor/react');
   const props = vi.mocked(Editor).mock.lastCall?.[0] as
@@ -118,7 +131,10 @@ vi.mock('@lobehub/editor/react', () => {
     useEditorState: vi.fn(() => ({ isEmpty: true })),
   };
 });
-vi.mock('@lobehub/ui', () => ({ combineKeys: vi.fn(() => 'alt+enter') }));
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  combineKeys: vi.fn(() => 'alt+enter'),
+}));
 vi.mock('fuse.js', () => ({
   default: class Fuse {
     search() {
@@ -159,9 +175,12 @@ vi.mock('@/services/aiChat', () => ({
   },
 }));
 vi.mock('@/store/chat', () => ({
-  useChatStore: Object.assign(<T,>(selector: StoreSelector<T>) => selector({}), {
-    getState: () => ({ activeTopicId: undefined }),
-  }),
+  useChatStore: Object.assign(
+    <T,>(selector: StoreSelector<T>) => selector({ useFetchTopicDetail: () => {} }),
+    {
+      getState: () => ({ activeTopicId: undefined }),
+    },
+  ),
 }));
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: <T,>(selector: StoreSelector<T>) =>
@@ -191,15 +210,18 @@ vi.mock('@/store/user', () => {
   return { useUserStore };
 });
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableInputMarkdown: () => false },
   settingsSelectors: { getHotkeyById: () => () => 'alt+enter' },
   systemAgentSelectors: {
     inputCompletion: () => mocks.inputCompletionConfig,
+  },
+  userGeneralSettingsSelectors: {
+    enablePasteAutoConvert: () => userSettings.enablePasteAutoConvert,
   },
   userProfileSelectors: { userId: () => 'user-id' },
 }));
 
 vi.mock('../hooks/useAgentId', () => ({ useAgentId: () => 'agent-id' }));
+vi.mock('../hooks/useChatInputUpload', () => ({ useChatInputUploadKey: () => 'composer-key' }));
 vi.mock('../hooks/useLargeFileLocalPath', () => ({
   useLargeFileLocalPath: () => (files: File[]) => files,
 }));
@@ -235,8 +257,7 @@ vi.mock('./Placeholder', () => ({
   default: () => <span>placeholder</span>,
 }));
 vi.mock('./plugins', () => ({
-  CHAT_INPUT_EMBED_PLUGINS: [],
-  createChatInputRichPlugins: () => [],
+  createChatInputRichPlugins: () => ['rich-plugins'],
 }));
 vi.mock('./ReferTopic', () => ({ INSERT_REFER_TOPIC_COMMAND: 'insert-refer-topic' }));
 vi.mock('./LocalFileTag', () => ({
@@ -248,13 +269,36 @@ vi.mock('./useLocalFileTag', () => ({
     searchLocalFiles: vi.fn(async () => []),
   }),
 }));
-vi.mock('./useMentionCategories', () => ({ useMentionCategories: () => [] }));
+vi.mock('@/services/mentionMarketInstall', () => ({
+  prepareMentionedMarketAgent: vi.fn(),
+  prepareMentionedMarketSkill: vi.fn(),
+}));
+vi.mock('./marketMentionItems', () => ({
+  searchMarketForMention: vi.fn(async () => ({ agents: [], skills: [] })),
+  toMarketAgentItem: vi.fn(),
+  toMarketSkillItem: vi.fn(),
+}));
+vi.mock('./useMentionCategories', () => ({
+  useMentionCategories: () => ({
+    categories: [],
+    market: {
+      agentCategory: undefined,
+      agentVisibility: 'public',
+      agents: false,
+      installedAgentSources: new Set(),
+      installedSkills: new Set(),
+      skillCategory: { icon: null, id: 'skill', label: 'Skills' },
+      skills: false,
+    },
+  }),
+}));
 
 describe('ChatInput InputEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permission.allowed = false;
     platform.isMobile = false;
+    userSettings.enablePasteAutoConvert = true;
     mocks.inputCompletionConfig.enabled = false;
     mocks.inputCompletionConfig.model = 'gpt-4o-mini';
     mocks.inputCompletionConfig.provider = 'openai';
@@ -282,6 +326,32 @@ describe('ChatInput InputEditor', () => {
       'data-content',
       'typed before the editor loaded',
     );
+  });
+
+  it('always mounts the rich text plugins with markdown shortcuts', async () => {
+    render(<InputEditor />);
+
+    const props = await getEditorProps();
+    expect(props.plugins).toEqual(['rich-plugins']);
+    expect(props.markdownOption).toBeUndefined();
+  });
+
+  it('converts pasted markdown when paste auto-convert is on', async () => {
+    render(<InputEditor />);
+
+    const props = await getEditorProps();
+    expect(props.enablePasteMarkdown).toBe(true);
+    expect(props.pasteAsPlainText).toBe(true);
+  });
+
+  it('pastes verbatim when paste auto-convert is off', async () => {
+    userSettings.enablePasteAutoConvert = false;
+
+    render(<InputEditor />);
+
+    const props = await getEditorProps();
+    expect(props.enablePasteMarkdown).toBe(false);
+    expect(props.pasteAsPlainText).toBe(true);
   });
 
   it('renders the editor at 16px on mobile', async () => {

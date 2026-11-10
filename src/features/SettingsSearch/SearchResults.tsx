@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,11 +13,7 @@ import { isModifierClick } from '@/utils/navigation';
 import { useSettingsSearchAnalytics } from './analytics';
 import type { SettingsSearchResult } from './useSettingsSearch';
 
-const styles = createStaticStyles(({ css }) => ({
-  match: css`
-    color: ${cssVar.colorPrimary};
-  `,
-}));
+const styles = stylex.create({ match: { color: cssVar.colorPrimary } });
 
 const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) => {
   const index = text.toLowerCase().indexOf(query.toLowerCase());
@@ -26,7 +22,7 @@ const HighlightMatch = memo<{ query: string; text: string }>(({ text, query }) =
   return (
     <>
       {text.slice(0, index)}
-      <span className={styles.match}>{text.slice(index, index + query.length)}</span>
+      <span {...stylex.props(styles.match)}>{text.slice(index, index + query.length)}</span>
       {text.slice(index + query.length)}
     </>
   );

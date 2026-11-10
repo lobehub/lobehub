@@ -1,8 +1,8 @@
 'use client';
 
+import { findLatestWorkRootOperationId } from '@lobechat/conversation-flow';
 import type { AssistantContentBlock, EmojiReaction, UISignalCallbacksBlock } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
@@ -32,10 +32,10 @@ import {
   useConversationStore,
 } from '../../store';
 import type { SteerContinuation } from '../../store/slices/data/steerChains';
-import { getOperationFinalRootId } from '../../store/slices/data/workSummaries';
 import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
+import RefreshingIndicator from '../components/RefreshingIndicator';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
@@ -62,21 +62,6 @@ const actionBarHolder = (
     style={{ height: '28px' }}
   />
 );
-
-const findLatestWorkRootOperationId = (
-  metadata?: { work?: { rootOperationId?: unknown } } | null,
-  children?: AssistantContentBlock[],
-  taskCompletions?: AssistantContentBlock[],
-) => {
-  const blocks = [...(children ?? []), ...(taskCompletions ?? [])];
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const rootOperationId = getOperationFinalRootId(blocks[index]?.metadata);
-    if (rootOperationId) return rootOperationId;
-  }
-
-  return getOperationFinalRootId(metadata);
-};
 
 interface GroupMessageProps {
   /** Later turns steered onto this one, rendered as one continuous chain. */
@@ -108,15 +93,19 @@ const GroupMessage = memo<GroupMessageProps>(
       agentId,
       usage,
       createdAt,
-      children,
+      children: groupChildren,
       performance,
       model,
       provider,
       branch,
       metadata,
       signalCallbacks,
-      taskCompletions,
     } = item;
+    const children = useMemo(
+      () =>
+        item.role === 'assistant' ? [item as unknown as AssistantContentBlock] : groupChildren,
+      [groupChildren, item],
+    );
     const avatar = useAgentMeta(agentId);
     const continuationMessages = useConversationStore(
       (s) => continuations.map((c) => dataSelectors.getDisplayMessageById(c.groupId)(s)),
@@ -140,7 +129,6 @@ const GroupMessage = memo<GroupMessageProps>(
       () => [...(children ?? []), ...chains.flatMap((chain) => chain.blocks)],
       [chains, children],
     );
-
     // Supervisor messages render the GROUP's identity (avatar + name + 主管 badge)
     // rather than the supervisor agent's own bare meta (whose title is literally
     // "Supervisor" with no avatar). The flag is a persisted snapshot on the
@@ -169,8 +157,8 @@ const GroupMessage = memo<GroupMessageProps>(
       [allChildren],
     );
     const workRootOperationId = useMemo(
-      () => findLatestWorkRootOperationId(metadata, allChildren, taskCompletions),
-      [allChildren, metadata, taskCompletions],
+      () => findLatestWorkRootOperationId(metadata, allChildren),
+      [allChildren, metadata],
     );
     // Codex-style aggregate of files edited this round. Purely derived from the
     // group's tool calls (entity-format files are excluded — they surface as
@@ -187,7 +175,16 @@ const GroupMessage = memo<GroupMessageProps>(
       // (the work anchor marks them); without it the card keeps every entry.
       !!workRootOperationId,
     );
-    const operationGoals = useOperationGoals(isGroupGenerating ? undefined : allChildren);
+    const derivedGoals = useOperationGoals(allChildren);
+    // A goal a CLI agent creates with `lh` gets its card as soon as it exists:
+    // `/goal` keeps the same run going to plan it, and the card is how the user
+    // sees the goal while that happens. A builtin createGoal call already renders
+    // live inline, so its card stays a turn-end artifact like edited files.
+    const operationGoals = useMemo(
+      () =>
+        isGroupGenerating ? derivedGoals.filter((goal) => goal.source === 'command') : derivedGoals,
+      [derivedGoals, isGroupGenerating],
+    );
 
     const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
     const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -285,11 +282,11 @@ const GroupMessage = memo<GroupMessageProps>(
         // The supervisor row is labelled by the group, not by the agent behind it —
         // drop `name` too, or the renderer's name-first resolution would surface the
         // agent's personal name over the group title.
+        agentId={agentId ?? null}
         avatar={isSupervisor ? { ...avatar, name: undefined, title: groupMeta.title } : avatar}
         id={id}
         placement={'left'}
         time={createdAt}
-        titleAddon={isSupervisor ? <Tag>{t('supervisor.label')}</Tag> : undefined}
         actionAddon={
           reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
             <>
@@ -357,16 +354,21 @@ const GroupMessage = memo<GroupMessageProps>(
               )
             : undefined
         }
+        titleAddon={
+          <>
+            {isSupervisor && <Tag>{t('supervisor.label')}</Tag>}
+            <RefreshingIndicator messageId={id} />
+          </>
+        }
         onAvatarClick={onAvatarClick}
         onMouseEnter={onMouseEnter}
       >
         {/*
-          Wrap main chain + signal callbacks + post-task summary in a tight
-          flex stack so the SignalCallbacks accordion sits visually inside
-          the same "agent reply" block. The ChatItem body gap (16px) would
-          otherwise stretch them apart and the natural narrative — initial
-          reply → callbacks → summary — reads as three disconnected
-          sections ().
+          Wrap main chain + signal callbacks in a tight flex stack so the
+          SignalCallbacks accordion sits visually inside the same "agent
+          reply" block. The ChatItem body gap (16px) would otherwise stretch
+          them apart into disconnected sections. Wake-up turns are steps of
+          the main chain, each marked by its own task-completion notice.
         */}
         <Flexbox gap={4}>
           {children && children.length > 0 && (
@@ -388,16 +390,6 @@ const GroupMessage = memo<GroupMessageProps>(
           {allSignalCallbacks.map((block) => (
             <SignalCallbacks block={block} key={block.sourceToolMessageId} />
           ))}
-          {taskCompletions && taskCompletions.length > 0 && (
-            <Group
-              blocks={taskCompletions}
-              contentId={taskCompletions.at(-1)?.id}
-              defaultWorkflowExpandLevel={workflowExpandLevel}
-              disableEditing={disableEditing}
-              id={id}
-              messageIndex={index}
-            />
-          )}
         </Flexbox>
 
         {aggregatedFileList.length > 0 && (

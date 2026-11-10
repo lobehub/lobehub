@@ -1,17 +1,19 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
-import { type PluginItem, type PluginListResponse } from '@lobehub/market-sdk';
+import { type PluginItem } from '@lobehub/market-sdk';
 import { type TRPCClientError } from '@trpc/client';
 import debug from 'debug';
-import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
-import { toolKeys } from '@/libs/swr/keys';
+import {
+  createReplicaSlice,
+  type ReplicaLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
@@ -24,14 +26,18 @@ import {
   type McpConnectionParams,
   type MCPErrorInfo,
   type MCPInstallProgress,
-  type MCPPluginListParams,
 } from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
+import { ConnectorOAuthError, openConnectorOAuthPopup } from '@/utils/connectorOAuth';
+import { getPlatform } from '@/utils/platform';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
-import { type MCPStoreState } from './initialState';
+import { pluginSelectors } from '../plugin/selectors';
+import { type MCPPluginListData, type MCPStoreState } from './initialState';
+import { installOAuthPlugin } from './installOAuthPlugin';
+import { MCP_PLUGIN_LIST_KEY, type MCPPluginListParams, mcpPluginListResource } from './projection';
 
 const log = debug('lobe-mcp:store:action');
 
@@ -141,19 +147,68 @@ export interface TestMcpConnectionResult {
   success: boolean;
 }
 
+/**
+ * The marketplace list keeps a dedicated `mcpPluginList` field as the replica
+ * view. It is `undefined` until the persisted row hydrates or the first network
+ * page lands, so an un-loaded list never reads as an empty one — the gate is the
+ * field's own default instead of a separate init flag.
+ */
+const mcpPluginListLens: ReplicaLens<ToolStore, MCPPluginListData> = {
+  clear: () => ({ mcpPluginList: undefined }),
+  get: (state) => state.mcpPluginList,
+  set: (_state, _key, data) => ({ mcpPluginList: data }),
+};
+
 type Setter = StoreSetter<ToolStore>;
 export const createMCPPluginStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new PluginMCPStoreActionImpl(set, get, _api);
 
 export class PluginMCPStoreActionImpl {
   readonly #get: () => ToolStore;
+  /**
+   * The MCP marketplace list is a `local-replica` paged resource: the
+   * persisted head page paints before the network answers, and "load more"
+   * appends further pages through the engine instead of a hand-rolled
+   * `currentPage` + accumulator.
+   */
+  readonly #mcpPluginList;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#mcpPluginList = createReplicaSlice(mcpPluginListResource, {
+      actionPrefix: 'mcpPluginList',
+      fetcher: (params, cursor) => this.#fetchMCPPluginListPage(params, cursor),
+      get,
+      set,
+      stateKey: 'mcpPluginListReplica',
+      view: mcpPluginListLens,
+      viewFields: ({ connectionType, locale, pageSize, q }) => ({
+        connectionType,
+        locale,
+        pageSize,
+        q: q || undefined,
+      }),
+    });
   }
+
+  /** One page of the marketplace list; `cursor` is the page index (0 = head). */
+  #fetchMCPPluginListPage = async (
+    params: MCPPluginListParams,
+    cursor?: number,
+  ): Promise<ReplicaPageResult<PluginItem, number>> => {
+    const response = await discoverService.getMCPPluginList({
+      connectionType: params.connectionType,
+      locale: params.locale,
+      page: (cursor ?? 0) + 1,
+      pageSize: params.pageSize,
+      q: params.q,
+    });
+
+    return { items: response.items, total: response.totalCount };
+  };
 
   cancelInstallMCPPlugin = async (identifier: string): Promise<void> => {
     // Get and cancel AbortController
@@ -196,9 +251,15 @@ export class PluginMCPStoreActionImpl {
 
   installMCPPlugin = async (
     identifier: string,
-    options: { config?: Record<string, any>; resume?: boolean; skipDepsCheck?: boolean } = {},
+    options: {
+      authorize?: boolean;
+      config?: Record<string, any>;
+      oauthPopup?: Window | null;
+      resume?: boolean;
+      skipDepsCheck?: boolean;
+    } = {},
   ): Promise<boolean | undefined> => {
-    const { resume = false, config, skipDepsCheck } = options;
+    const { authorize = false, resume = false, config, skipDepsCheck } = options;
     const normalizedConfig = toNonEmptyStringRecord(config);
     let plugin = mcpStoreSelectors.getPluginById(identifier)(this.#get());
 
@@ -212,7 +273,6 @@ export class PluginMCPStoreActionImpl {
     if (!plugin) return;
 
     // Extract haveCloudEndpoint after plugin is loaded
-    // @ts-expect-error
     const { haveCloudEndpoint } = plugin || {};
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
@@ -236,6 +296,7 @@ export class PluginMCPStoreActionImpl {
     let result: CheckMcpInstallResult | undefined;
     let connection: any;
     const userAgent = `LobeHub Desktop/${CURRENT_VERSION}`;
+    const oauthPopup = options.oauthPopup;
 
     try {
       // Check if already cancelled
@@ -486,19 +547,50 @@ export class PluginMCPStoreActionImpl {
         );
       }
       if (connection?.type === 'http') {
-        manifest = await mcpService.getStreamableMcpServerManifest(
-          {
-            auth: connection.auth,
-            headers: mergedHttpHeaders,
-            identifier,
-            metadata: {
-              avatar: plugin.icon,
+        if (connection.auth?.type === 'oauth2') {
+          if (!authorize) {
+            updateMCPInstallProgress(identifier, {
+              connection: { ...connection, headers: mergedHttpHeaders },
+              manifest: data,
+              progress: 50,
+              step: MCPInstallStep.AUTHORIZATION_REQUIRED,
+            });
+            updateInstallLoadingState(identifier, undefined);
+            return false;
+          }
+
+          if (oauthPopup === null) throw new ConnectorOAuthError('blocked');
+          updateMCPInstallProgress(identifier, {
+            progress: 70,
+            step: MCPInstallStep.AUTHORIZING,
+          });
+          manifest = await installOAuthPlugin(
+            {
+              connection: { ...connection, headers: mergedHttpHeaders },
               description: plugin.description,
+              icon: plugin.icon,
+              identifier,
+              name: data.name || identifier,
+              popup: oauthPopup,
+              signal: abortController.signal,
             },
-            url: connection.url!,
-          },
-          abortController.signal,
-        );
+            this.#get,
+          );
+        } else {
+          manifest = await mcpService.getStreamableMcpServerManifest(
+            {
+              auth: connection.auth,
+              headers: mergedHttpHeaders,
+              identifier,
+              metadata: {
+                avatar: plugin.icon,
+                description: plugin.description,
+              },
+              url: connection.url!,
+            },
+            abortController.signal,
+          );
+        }
       }
       if (connection?.type === 'cloud') {
         // Cloud type: build manifest directly from market data
@@ -547,8 +639,11 @@ export class PluginMCPStoreActionImpl {
       }
 
       // Update connection object, write merged configuration
-      const finalConnection = { ...connection };
-      if (finalConnection.type === 'http' && mergedHttpHeaders) {
+      const isOAuth = connection?.type === 'http' && connection.auth?.type === 'oauth2';
+      const finalConnection = isOAuth
+        ? { auth: { type: 'oauth2' }, type: 'http', url: connection.url }
+        : { ...connection };
+      if (finalConnection.type === 'http' && mergedHttpHeaders && !isOAuth) {
         finalConnection.headers = mergedHttpHeaders;
       }
       if (finalConnection.type === 'stdio' && mergedStdioEnv) {
@@ -563,7 +658,7 @@ export class PluginMCPStoreActionImpl {
         customParams: { mcp: finalConnection },
         identifier: plugin.identifier,
         manifest,
-        settings: normalizedConfig,
+        settings: isOAuth ? undefined : normalizedConfig,
         type: 'plugin',
       });
 
@@ -598,7 +693,7 @@ export class PluginMCPStoreActionImpl {
           resources: (manifest as any).resources,
           tools: (manifest as any).tools,
         },
-        platform: result?.platform || process.platform,
+        platform: result?.platform || getPlatform(),
         success: true,
         userAgent,
         version: manifest.version || data.version,
@@ -671,11 +766,41 @@ export class PluginMCPStoreActionImpl {
         };
       }
 
+      // Some marketplace manifests omit auth. A 401 from an unauthenticated
+      // endpoint can still lead into the connector's OAuth discovery flow.
+      if (
+        !authorize &&
+        connection?.type === 'http' &&
+        connection.auth?.type === 'none' &&
+        errorInfo.type === 'AUTHORIZATION_ERROR'
+      ) {
+        updateMCPInstallProgress(identifier, {
+          connection: {
+            ...connection,
+            auth: { type: 'oauth2' },
+            headers: { ...connection.headers, ...normalizedConfig },
+          },
+          manifest: data,
+          progress: 50,
+          step: MCPInstallStep.AUTHORIZATION_REQUIRED,
+        });
+        updateInstallLoadingState(identifier, undefined);
+        return false;
+      }
+
       // Set error status, display structured error info
       updateMCPInstallProgress(identifier, {
         errorInfo,
+        ...(authorize && {
+          connection,
+          manifest: data,
+          errorInfo: {
+            message: e instanceof ConnectorOAuthError ? e.reason : errorInfo.message,
+            type: 'AUTHORIZATION_ERROR' as const,
+          },
+        }),
         progress: 0,
-        step: MCPInstallStep.ERROR,
+        step: authorize ? MCPInstallStep.AUTHORIZATION_REQUIRED : MCPInstallStep.ERROR,
       });
 
       // Report installation failure result
@@ -686,7 +811,7 @@ export class PluginMCPStoreActionImpl {
         installDurationMs,
         installParams: connection,
         metadata: errorInfo.metadata,
-        platform: result?.platform || process.platform,
+        platform: result?.platform || getPlatform(),
         success: false,
         userAgent,
         version: data?.version,
@@ -705,32 +830,33 @@ export class PluginMCPStoreActionImpl {
     }
   };
 
-  loadMoreMCPPlugins = (): void => {
-    const { mcpPluginItems, totalCount, currentPage } = this.#get();
-
-    // Check if there's more data to load
-    if (mcpPluginItems.length < (totalCount || 0)) {
-      this.#set(
-        produce((draft: MCPStoreState) => {
-          draft.currentPage = currentPage + 1;
-        }),
-        false,
-        n('loadMoreMCPPlugins'),
-      );
+  authorizeMCPPlugin = async (identifier: string): Promise<boolean | undefined> => {
+    if (this.#get().mcpInstallProgress[identifier]?.step !== MCPInstallStep.AUTHORIZATION_REQUIRED)
+      return false;
+    const oauthPopup = openConnectorOAuthPopup();
+    try {
+      return await this.installMCPPlugin(identifier, { authorize: true, oauthPopup, resume: true });
+    } finally {
+      oauthPopup?.close();
     }
   };
 
+  /**
+   * Append the next page of the marketplace list. The engine reads the loaded
+   * head params, dedupes by identifier and keeps `hasMore` honest.
+   */
+  loadMoreMCPPlugins = async (): Promise<void> => {
+    await this.#mcpPluginList.loadMore(MCP_PLUGIN_LIST_KEY);
+  };
+
+  /**
+   * The search term drives the resource query, so "reset" drops the painted page
+   * set: the next (query-changed) fetch repaints from its own head page instead
+   * of appending to the previous search. The persisted rows are left alone.
+   */
   resetMCPPluginList = (keywords?: string): void => {
-    this.#set(
-      produce((draft: MCPStoreState) => {
-        draft.mcpPluginItems = [];
-        draft.currentPage = 1;
-        draft.mcpSearchKeywords = keywords;
-        draft.isMcpListInit = false;
-      }),
-      false,
-      n('resetMCPPluginList'),
-    );
+    this.#set({ mcpSearchKeywords: keywords }, false, n('resetMCPPluginList'));
+    this.#mcpPluginList.update(MCP_PLUGIN_LIST_KEY, () => undefined, { persist: false });
   };
 
   testMcpConnection = async (params: McpConnectionParams): Promise<TestMcpConnectionResult> => {
@@ -837,8 +963,22 @@ export class PluginMCPStoreActionImpl {
   };
 
   uninstallMCPPlugin = async (identifier: string): Promise<void> => {
-    await pluginService.uninstallPlugin(identifier);
-    await this.#get().refreshPlugins();
+    // Persisted display projections omit OAuth configuration. Confirm them
+    // before deciding whether this installation owns server-held credentials.
+    if (pluginSelectors.isInstalledPluginsCacheOnly(this.#get())) {
+      await this.#get().refreshPlugins();
+    }
+    const connection = pluginSelectors.getInstalledPluginById(identifier)(this.#get())?.customParams
+      ?.mcp;
+    if (connection?.type === 'http' && connection.auth?.type === 'oauth2') {
+      await this.#get().fetchConnectors();
+      const connector = this.#get().connectors.find(
+        (item) =>
+          item.identifier === identifier && item.sourceType === 'marketplace' && item.mcpServerUrl,
+      );
+      if (connector) await this.#get().deleteConnector(connector.id);
+    }
+    await this.#get().uninstallPlugin(identifier);
 
     discoverService.reportMcpEvent({
       event: 'uninstall',
@@ -860,57 +1000,21 @@ export class PluginMCPStoreActionImpl {
     );
   };
 
-  useFetchMCPPluginList = (params: MCPPluginListParams): SWRResponse<PluginListResponse> => {
-    const locale = globalHelpers.getCurrentLanguage();
-    const requestParams = isDesktop
-      ? params
-      : { ...params, connectionType: McpConnectionType.http };
-    const page = requestParams.page ?? 1;
-
-    return useSWR<PluginListResponse>(
-      toolKeys.mcpPluginList(locale, {
-        connectionType: requestParams.connectionType,
-        page: requestParams.page,
-        pageSize: requestParams.pageSize,
-        q: requestParams.q,
-      }),
-      () => discoverService.getMCPPluginList(requestParams),
-      {
-        onSuccess: (data) => {
-          this.#set(
-            produce((draft: MCPStoreState) => {
-              draft.searchLoading = false;
-
-              // Set basic information
-              if (!draft.isMcpListInit) {
-                draft.activeMCPIdentifier = data.items?.[0]?.identifier;
-
-                draft.isMcpListInit = true;
-                draft.categories = data.categories;
-                draft.totalCount = data.totalCount;
-                draft.totalPages = data.totalPages;
-              }
-
-              // Accumulate data logic
-              if (page === 1) {
-                // First page, set directly
-                draft.mcpPluginItems = uniqBy(data.items, 'identifier');
-              } else {
-                // Subsequent pages, accumulate data
-                draft.mcpPluginItems = uniqBy(
-                  [...draft.mcpPluginItems, ...data.items],
-                  'identifier',
-                );
-              }
-            }),
-            false,
-            n('useFetchMCPPluginList/onSuccess'),
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
-  };
+  /**
+   * Fetch orchestration for the marketplace list. Hydrates the persisted head
+   * page, then revalidates; the rows land in the `mcpPluginList` view — read them
+   * from the store, never from this hook.
+   */
+  useFetchMCPPluginList = (
+    params: { connectionType?: McpConnectionType; pageSize?: number; q?: string } = {},
+  ): ReplicaSyncResult =>
+    this.#mcpPluginList.useSync({
+      // The web client can only reach http MCP endpoints; desktop may also use stdio.
+      connectionType: isDesktop ? params.connectionType : McpConnectionType.http,
+      locale: globalHelpers.getCurrentLanguage(),
+      pageSize: params.pageSize ?? 20,
+      q: params.q,
+    });
 }
 
 export type PluginMCPStoreAction = Pick<PluginMCPStoreActionImpl, keyof PluginMCPStoreActionImpl>;

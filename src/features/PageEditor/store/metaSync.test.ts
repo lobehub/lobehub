@@ -49,7 +49,7 @@ describe('PageEditorStore - meta save vs in-flight typing', () => {
     expect(performSaveMock).toHaveBeenLastCalledWith(
       'docs_1',
       { emoji: undefined, title: 'abcdef' },
-      { saveSource: 'autosave' },
+      { metadataOnly: true, saveSource: 'autosave' },
     );
     expect(store.getState().isMetaDirty).toBe(false);
     expect(store.getState().lastSavedTitle).toBe('abcdef');

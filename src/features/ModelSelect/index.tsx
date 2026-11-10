@@ -1,6 +1,16 @@
-import { Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { Button, Select, type SelectProps, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Select,
+  type SelectProps,
+  Switch,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+  TooltipGroup,
+} from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -159,7 +169,14 @@ const ModelSelect = memo<ModelSelectProps>(
 
         return models.map((model) => ({
           ...model,
-          label: <ModelItemRender {...model} {...model.abilities} showInfoTag={false} />,
+          label: (
+            <ModelItemRender
+              {...model}
+              {...model.abilities}
+              provider={provider.id}
+              showInfoTag={false}
+            />
+          ),
           provider: provider.id,
           title: model.displayName || model.id,
           value: `${provider.id}/${model.id}`,
@@ -389,6 +406,7 @@ const ModelSelect = memo<ModelSelectProps>(
               <ModelItemRender
                 {...(option as ModelOption)}
                 {...(option as ModelOption).abilities}
+                provider={(option as ModelOption).provider}
                 showInfoTag={false}
               />
             );

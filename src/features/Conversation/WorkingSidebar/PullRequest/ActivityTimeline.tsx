@@ -3,9 +3,7 @@ import type {
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestReview,
 } from '@lobechat/types';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Avatar, Button, TextArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Avatar, Button, createStaticStyles, Flexbox, Icon, Markdown, TextArea } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { CheckIcon, CircleSlashIcon, EyeIcon, GitCommitHorizontalIcon, XIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -149,103 +147,106 @@ const buildTimeline = (detail: DeviceGitPullRequestDetail): Entry[] =>
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
 interface ActivityTimelineProps {
+  actionsDisabled?: boolean;
   busy?: PullRequestBusy;
   detail: DeviceGitPullRequestDetail;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
 }
 
-const ActivityTimeline = memo<ActivityTimelineProps>(({ busy, detail, onAction }) => {
-  const { t } = useTranslation('chat');
-  const tr = t as unknown as TranslateKey;
-  const [draft, setDraft] = useState('');
-  const timeline = useMemo(() => buildTimeline(detail), [detail]);
+const ActivityTimeline = memo<ActivityTimelineProps>(
+  ({ actionsDisabled, busy, detail, onAction }) => {
+    const { t } = useTranslation('chat');
+    const tr = t as unknown as TranslateKey;
+    const [draft, setDraft] = useState('');
+    const timeline = useMemo(() => buildTimeline(detail), [detail]);
 
-  const submit = async () => {
-    const body = draft.trim();
-    if (!body) return;
-    if (await onAction({ body, type: 'comment' })) setDraft('');
-  };
+    const submit = async () => {
+      const body = draft.trim();
+      if (!body) return;
+      if (await onAction({ body, type: 'comment' })) setDraft('');
+    };
 
-  return (
-    <>
-      {timeline.map((entry) => {
-        if (entry.kind === 'comment')
-          return (
-            <div className={styles.comment} key={entry.id}>
-              <Flexbox horizontal align={'center'} className={styles.commentHead} gap={8}>
-                <Avatar avatar={githubAvatar(entry.author)} size={18} />
-                <strong>{entry.author}</strong>
-                <span>{timeAgo(entry.at)}</span>
-              </Flexbox>
-              <div className={styles.commentBodyWrap}>
-                <Markdown className={styles.commentBody} fontSize={13} variant={'chat'}>
-                  {entry.body}
-                </Markdown>
+    return (
+      <>
+        {timeline.map((entry) => {
+          if (entry.kind === 'comment')
+            return (
+              <div className={styles.comment} key={entry.id}>
+                <Flexbox horizontal align={'center'} className={styles.commentHead} gap={8}>
+                  <Avatar avatar={githubAvatar(entry.author)} size={18} />
+                  <strong>{entry.author}</strong>
+                  <span>{timeAgo(entry.at)}</span>
+                </Flexbox>
+                <div className={styles.commentBodyWrap}>
+                  <Markdown className={styles.commentBody} fontSize={13} variant={'chat'}>
+                    {entry.body}
+                  </Markdown>
+                </div>
               </div>
-            </div>
+            );
+          const visual =
+            entry.kind === 'review'
+              ? REVIEW_VISUAL[entry.state]
+              : {
+                  icon: GitCommitHorizontalIcon,
+                  labelKey: 'workingPanel.pr.activity.committed',
+                  tone: 'neutral' as Tone,
+                };
+          return (
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={styles.event}
+              gap={8}
+              key={entry.kind === 'commit' ? entry.sha : `review:${entry.author}:${entry.at}`}
+            >
+              <Icon
+                icon={visual.icon}
+                size={14}
+                style={visual.tone === 'neutral' ? undefined : { color: TONE_COLOR[visual.tone] }}
+              />
+              <span>
+                <strong>{entry.author}</strong> {tr(visual.labelKey)}{' '}
+                {entry.kind === 'commit' && (
+                  <code
+                    className={styles.sha}
+                    onClick={() =>
+                      void electronSystemService.openExternalLink(
+                        `https://github.com/${detail.repo.owner}/${detail.repo.name}/pull/${detail.number}/commits/${entry.sha}`,
+                      )
+                    }
+                  >
+                    {entry.sha.slice(0, 7)}
+                  </code>
+                )}{' '}
+                · {timeAgo(entry.at)}
+              </span>
+            </Flexbox>
           );
-        const visual =
-          entry.kind === 'review'
-            ? REVIEW_VISUAL[entry.state]
-            : {
-                icon: GitCommitHorizontalIcon,
-                labelKey: 'workingPanel.pr.activity.committed',
-                tone: 'neutral' as Tone,
-              };
-        return (
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={styles.event}
-            gap={8}
-            key={entry.kind === 'commit' ? entry.sha : `review:${entry.author}:${entry.at}`}
-          >
-            <Icon
-              icon={visual.icon}
-              size={14}
-              style={visual.tone === 'neutral' ? undefined : { color: TONE_COLOR[visual.tone] }}
-            />
-            <span>
-              <strong>{entry.author}</strong> {tr(visual.labelKey)}{' '}
-              {entry.kind === 'commit' && (
-                <code
-                  className={styles.sha}
-                  onClick={() =>
-                    void electronSystemService.openExternalLink(
-                      `https://github.com/${detail.repo.owner}/${detail.repo.name}/pull/${detail.number}/commits/${entry.sha}`,
-                    )
-                  }
-                >
-                  {entry.sha.slice(0, 7)}
-                </code>
-              )}{' '}
-              · {timeAgo(entry.at)}
-            </span>
+        })}
+        <Flexbox className={styles.composer} gap={6}>
+          <TextArea
+            autoSize={{ minRows: 1 }}
+            placeholder={t('workingPanel.pr.composer.placeholder')}
+            value={draft}
+            variant={'filled'}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <Flexbox horizontal justify={'flex-end'}>
+            <Button
+              disabled={!draft.trim() || !!busy || actionsDisabled}
+              loading={busy === 'comment'}
+              size={'small'}
+              onClick={() => void submit()}
+            >
+              {t('workingPanel.pr.composer.submit')}
+            </Button>
           </Flexbox>
-        );
-      })}
-      <Flexbox className={styles.composer} gap={6}>
-        <TextArea
-          autoSize={{ minRows: 1 }}
-          placeholder={t('workingPanel.pr.composer.placeholder')}
-          value={draft}
-          variant={'filled'}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        <Flexbox horizontal justify={'flex-end'}>
-          <Button
-            disabled={!draft.trim() || !!busy}
-            loading={busy === 'comment'}
-            size={'small'}
-            onClick={() => void submit()}
-          >
-            {t('workingPanel.pr.composer.submit')}
-          </Button>
         </Flexbox>
-      </Flexbox>
-    </>
-  );
-});
+      </>
+    );
+  },
+);
 
 ActivityTimeline.displayName = 'PullRequestActivityTimeline';
 

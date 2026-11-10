@@ -9,6 +9,7 @@ export type * from './graph';
 export * from './heteroCliArgs';
 export * from './heterogeneousAgent';
 export * from './heterogeneousIntervention';
+export * from './heterogeneousRuntimeConfig';
 export * from './heteroSelectorCapabilities';
 export * from './item';
 export * from './modelSelection';

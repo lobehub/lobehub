@@ -1,6 +1,53 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildThreadSharePath, PORTAL_THREAD_QUERY_KEY } from './sharePath';
+import {
+  buildOperationSourcePath,
+  buildThreadSharePath,
+  PORTAL_THREAD_QUERY_KEY,
+} from './sharePath';
+
+describe('buildOperationSourcePath', () => {
+  it('points at the agent topic when the turn ran in a one-to-one conversation', () => {
+    expect(buildOperationSourcePath({ agentId: 'agt_1', topicId: 'tpc_1' })).toBe(
+      '/agent/agt_1/tpc_1',
+    );
+  });
+
+  it('reopens the thread the turn ran in', () => {
+    expect(
+      buildOperationSourcePath({ agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' }),
+    ).toBe('/agent/agt_1/tpc_1?portalThread=thd_1');
+  });
+
+  /**
+   * A group's turns live under the group route; routing them through the agent
+   * would open the supervisor's own conversation instead of the group the turn
+   * actually came from.
+   */
+  it('points at the group conversation, with or without a thread', () => {
+    expect(
+      buildOperationSourcePath({
+        agentId: 'agt_supervisor',
+        chatGroupId: 'grp_1',
+        topicId: 'tpc_1',
+      }),
+    ).toBe('/group/grp_1/tpc_1');
+
+    expect(
+      buildOperationSourcePath({
+        agentId: 'agt_supervisor',
+        chatGroupId: 'grp_1',
+        threadId: 'thd_1',
+        topicId: 'tpc_1',
+      }),
+    ).toBe('/group/grp_1/tpc_1?portalThread=thd_1');
+  });
+
+  it('has no path without a topic', () => {
+    expect(buildOperationSourcePath({ agentId: 'a', topicId: undefined })).toBeUndefined();
+    expect(buildOperationSourcePath({ topicId: 't' })).toBeUndefined();
+  });
+});
 
 describe('buildThreadSharePath', () => {
   it('points at the topic and reopens the thread in the side panel', () => {

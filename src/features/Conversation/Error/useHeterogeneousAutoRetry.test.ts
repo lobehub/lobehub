@@ -8,6 +8,8 @@ import { useHeterogeneousAutoRetry } from './useHeterogeneousAutoRetry';
 // each render → churn the effect and reset the countdown.
 const storeMock = vi.hoisted(() => ({
   aborted: false,
+  retryAvailable: true,
+  hasOperation: true,
   attempts: {} as Record<string, number>,
   internal_beginHeteroOverloadWait: vi.fn(),
   internal_endHeteroOverloadWait: vi.fn(),
@@ -28,11 +30,42 @@ vi.mock('@/features/Conversation/store', () => ({
     }),
 }));
 
+const runtimeMock = {
+  abortController: new AbortController(),
+  id: 'runtime-1',
+  metadata: {
+    get heteroAutoRetryAvailable() {
+      return storeMock.retryAvailable;
+    },
+  },
+  status: 'completed',
+  type: 'execServerAgentRuntime',
+};
+const chatState = {
+  messageOperationMap: { 'failed-step': 'runtime-1' },
+  get operations() {
+    return storeMock.hasOperation ? { 'runtime-1': runtimeMock } : {};
+  },
+  updateOperationMetadata: (_id: string, metadata: { heteroAutoRetryAvailable: boolean }) => {
+    storeMock.retryAvailable = metadata.heteroAutoRetryAvailable;
+  },
+};
+vi.mock('@/store/chat', () => ({
+  useChatStore: Object.assign(
+    (selector: (state: typeof chatState) => unknown) => selector(chatState),
+    {
+      getState: () => chatState,
+    },
+  ),
+}));
+
 const SCOPE = 'user-msg-1';
 
 describe('useHeterogeneousAutoRetry', () => {
   beforeEach(() => {
     storeMock.attempts = {};
+    storeMock.retryAvailable = true;
+    storeMock.hasOperation = true;
     storeMock.recordHeteroOverloadRetry.mockClear();
     storeMock.markHeteroOverloadRetryExhausted.mockClear();
     storeMock.internal_beginHeteroOverloadWait.mockClear();
@@ -52,7 +85,12 @@ describe('useHeterogeneousAutoRetry', () => {
   it('schedules an auto-retry and fires it after the first backoff window', () => {
     const onRetry = vi.fn();
     const { result } = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
 
     // first attempt: 2s window, shown as attempt 1 / 5
@@ -76,7 +114,14 @@ describe('useHeterogeneousAutoRetry', () => {
 
   it('aborts the scheduled retry when the wait op was cancelled (global Stop)', () => {
     const onRetry = vi.fn();
-    renderHook(() => useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }));
+    renderHook(() =>
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
+    );
 
     // Simulate the wait op being cancelled out from under us mid-countdown.
     storeMock.isHeteroOverloadWaitAborted.mockReturnValue(true);
@@ -94,7 +139,12 @@ describe('useHeterogeneousAutoRetry', () => {
     storeMock.attempts = { [SCOPE]: 1 };
     const onRetry = vi.fn();
     const { result } = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
 
     // second attempt: 5s window, shown as attempt 2 / 5
@@ -116,7 +166,12 @@ describe('useHeterogeneousAutoRetry', () => {
     storeMock.attempts = { [SCOPE]: 5 };
     const onRetry = vi.fn();
     const { result } = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
 
     expect(result.current).toBeUndefined();
@@ -130,12 +185,22 @@ describe('useHeterogeneousAutoRetry', () => {
   it('does not schedule when disabled or without a scope', () => {
     const onRetry = vi.fn();
     const disabled = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: false, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: false,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
     expect(disabled.result.current).toBeUndefined();
 
     const noScope = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: undefined }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: undefined,
+      }),
     );
     expect(noScope.result.current).toBeUndefined();
 
@@ -148,7 +213,12 @@ describe('useHeterogeneousAutoRetry', () => {
   it('onRetryNow fires immediately and the scheduled timer cannot double-fire', () => {
     const onRetry = vi.fn();
     const { result } = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
 
     act(() => {
@@ -167,7 +237,12 @@ describe('useHeterogeneousAutoRetry', () => {
   it('onCancel pins the counter past the cap, ends the wait, and blocks a queued timer', () => {
     const onRetry = vi.fn();
     const { result } = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
 
     act(() => {
@@ -187,13 +262,101 @@ describe('useHeterogeneousAutoRetry', () => {
   it('cleans up the pending timer on unmount', () => {
     const onRetry = vi.fn();
     const { unmount } = renderHook(() =>
-      useHeterogeneousAutoRetry({ enabled: true, onRetry, scopeId: SCOPE }),
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        onRetry,
+        messageId: 'failed-step',
+        scopeId: SCOPE,
+      }),
     );
 
     unmount();
     act(() => {
       vi.advanceTimersByTime(60_000);
     });
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+  // ROOT CAUSE:
+  // Persisted overloaded cards used their mount as permission to execute again.
+  // Looking at an old branch or reloading reset the budget and reran shell steps.
+  // A live local run now grants one claim; hydration and consumed claims grant none.
+  /** @example Loading historical failure data never dispatches a native run. */
+  it('keeps hydrated historical failures manual when there is no local run', () => {
+    storeMock.hasOperation = false;
+    const onRetry = vi.fn();
+    const { result } = renderHook(() =>
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        messageId: 'failed-step',
+        onRetry,
+        scopeId: SCOPE,
+      }),
+    );
+    act(() => vi.advanceTimersByTime(60_000));
+    /** @example No countdown and no implicit retry for loaded history. */
+    expect(result.current).toBeUndefined();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  /** @example Returning to an already retried branch cannot consume another attempt. */
+  it('does not rearm the same failed run after navigating away and back', () => {
+    const onRetry = vi.fn();
+    const renderFailure = () =>
+      renderHook(() =>
+        useHeterogeneousAutoRetry({
+          enabled: true,
+          messageId: 'failed-step',
+          onRetry,
+          scopeId: SCOPE,
+        }),
+      );
+    const first = renderFailure();
+    act(() => vi.advanceTimersByTime(2000));
+    first.unmount();
+    const historical = renderFailure();
+    act(() => vi.advanceTimersByTime(60_000));
+    /** @example Only the original live error can schedule this run's retry. */
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(historical.result.current).toBeUndefined();
+  });
+
+  /** @example Stop followed directly by a fresh page load stays stopped. */
+  it('does not restart a cancelled countdown after reload clears the local budget', () => {
+    const onRetry = vi.fn();
+    const renderFailure = () =>
+      renderHook(() =>
+        useHeterogeneousAutoRetry({
+          enabled: true,
+          messageId: 'failed-step',
+          onRetry,
+          scopeId: SCOPE,
+        }),
+      );
+    const first = renderFailure();
+    act(() => first.result.current?.onCancel());
+    first.unmount();
+    storeMock.attempts = {};
+    storeMock.hasOperation = false;
+    renderFailure();
+    act(() => vi.advanceTimersByTime(60_000));
+    /** @example Refreshing does not imply a Retry action. */
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  /** @example Reconnecting an existing run only observes it, without retry permission. */
+  it('keeps reconnected runs manual unless a new run granted retry permission', () => {
+    storeMock.retryAvailable = false;
+    const onRetry = vi.fn();
+    renderHook(() =>
+      useHeterogeneousAutoRetry({
+        enabled: true,
+        messageId: 'failed-step',
+        onRetry,
+        scopeId: SCOPE,
+      }),
+    );
+    act(() => vi.advanceTimersByTime(60_000));
+    /** @example A server operation id alone cannot authorize replay. */
     expect(onRetry).not.toHaveBeenCalled();
   });
 });

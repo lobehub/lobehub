@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(7);
+    expect(models).toHaveLength(8);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -197,7 +197,7 @@ describe('MiniMax video models', () => {
         parameters: expect.objectContaining({
           aspectRatio: expect.objectContaining({ default: '16:9' }),
           duration: expect.objectContaining({ max: 15, min: 4 }),
-          imageUrls: expect.objectContaining({ maxCount: 7 }),
+          imageUrls: expect.objectContaining({ maxCount: 9 }),
           resolution: expect.objectContaining({ default: '768P', enum: ['768P', '2K'] }),
         }),
         releasedAt: '2026-07-31',
@@ -206,26 +206,14 @@ describe('MiniMax video models', () => {
     );
   });
 
-  it('keeps the combined MiniMax-H3 reference capacity within the v2 limit of 9', () => {
+  it('lets References mode fill the whole MiniMax-H3 reference pool of 9', () => {
     const h3 = LOBE_DEFAULT_MODEL_LIST.find(
       (model) => model.providerId === ModelProvider.Minimax && model.id === 'MiniMax-H3',
     );
 
-    const parameters = (h3?.parameters ?? {}) as {
-      endImageUrl?: unknown;
-      imageUrl?: unknown;
-      imageUrls?: { maxCount?: number };
-    };
-
-    // The first-frame (imageUrl), reference-list (imageUrls), and last-frame
-    // (endImageUrl) slots all normalize into a single reference pool that the
-    // runtime caps at 9. The combined upload capacity must stay within that
-    // limit so the UI can never assemble a payload createVideo would reject.
-    const firstFrameSlots = parameters.imageUrl === undefined ? 0 : 1;
-    const lastFrameSlots = parameters.endImageUrl === undefined ? 0 : 1;
-    const referenceSlots = parameters.imageUrls?.maxCount ?? 0;
-
-    expect(firstFrameSlots + referenceSlots + lastFrameSlots).toBeLessThanOrEqual(9);
+    // The UI's References mode clears the frame slots and submits only imageUrls, so the
+    // reference slot alone must allow the full pool the v2 API accepts.
+    expect((h3?.parameters as { imageUrls?: { maxCount?: number } })?.imageUrls?.maxCount).toBe(9);
   });
 });
 
@@ -321,6 +309,30 @@ describe('vendor provider cards', () => {
 });
 
 describe('recent direct-provider models', () => {
+  it('registers GPT-6.1 Sol with its published limits, pricing, and reasoning controls', () => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === ModelProvider.OpenAI && entry.id === 'gpt-6.1-sol',
+    );
+
+    expect(model).toMatchObject({
+      contextWindowTokens: 1_050_000,
+      enabled: true,
+      generation: 'gpt-6.1',
+      knowledgeCutoff: '2026-04',
+      maxOutput: 128_000,
+      settings: { extendParams: ['gpt6ReasoningEffort', 'textVerbosity'] },
+    });
+    expect(model?.pricing?.units).toContainEqual({
+      name: 'textInput_cacheRead',
+      strategy: 'tiered',
+      tiers: [
+        { rate: 0.1, upTo: 272_000 },
+        { rate: 0.2, upTo: 'infinity' },
+      ],
+      unit: 'millionTokens',
+    });
+  });
+
   it.each(['qwen3.8-max', 'qwen3.8-max-0902'])(
     'exposes exactly one %s card with effort and thinking preservation controls',
     (id) => {
@@ -373,6 +385,7 @@ describe('Gemini 3.8 introductory pricing', () => {
 describe('subscription model catalogs', () => {
   it.each([
     ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['chatgpt', 'gpt-6.1-sol', 'gpt6ReasoningEffort'],
     ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
   ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
@@ -389,5 +402,87 @@ describe('subscription model catalogs', () => {
     );
     expect(model?.contextWindowTokens).toBe(272_000);
     expect(model?.settings?.extendParams).toContain('preserveThinking');
+  });
+});
+
+describe('Anthropic cache-write pricing', () => {
+  it('lists both the 5-minute and 1-hour cache-write prices for flat-priced models', () => {
+    // Official multipliers: a 5-minute write is 1.25x base input, a 1-hour write is 2x.
+    // https://platform.claude.com/docs/en/about-claude/pricing
+    const flatPriced = LOBE_DEFAULT_MODEL_LIST.filter(
+      (m) =>
+        m.providerId === ModelProvider.Anthropic &&
+        m.pricing?.units.find((u) => u.name === 'textInput')?.strategy === 'fixed',
+    );
+
+    expect(flatPriced.map((m) => m.id)).toContain('claude-fable-5-1');
+
+    for (const model of flatPriced) {
+      const units = model.pricing!.units;
+      const input = units.find((u) => u.name === 'textInput');
+      const cacheWrite = units.find((u) => u.name === 'textInput_cacheWrite');
+      const inputRate = input?.strategy === 'fixed' ? input.rate : NaN;
+
+      expect({ id: model.id, unit: cacheWrite }).toEqual({
+        id: model.id,
+        unit: {
+          lookup: {
+            prices: { '1h': inputRate * 2, '5m': inputRate * 1.25 },
+            pricingParams: ['ttl'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      });
+    }
+  });
+});
+
+describe('Google context-caching pricing', () => {
+  // https://ai.google.dev/gemini-api/docs/pricing
+  const units = (id: string) =>
+    LOBE_DEFAULT_MODEL_LIST.find((m) => m.providerId === ModelProvider.Google && m.id === id)
+      ?.pricing?.units;
+  const storage = {
+    lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+    name: 'textInput_cacheWrite',
+    strategy: 'lookup',
+    unit: 'millionTokens',
+  };
+  const fixed = (name: string, rate: number) => ({
+    name,
+    rate,
+    strategy: 'fixed',
+    unit: 'millionTokens',
+  });
+
+  it('prices Gemini 2.5 Pro cache reads by prompt length', () => {
+    expect(units('gemini-2.5-pro')).toContainEqual({
+      name: 'textInput_cacheRead',
+      strategy: 'tiered',
+      tiers: [
+        { rate: 0.125, upTo: 200_000 },
+        { rate: 0.25, upTo: 'infinity' },
+      ],
+      unit: 'millionTokens',
+    });
+  });
+
+  it.each([
+    ['gemini-2.5-flash', 0.03, 0.1],
+    ['gemini-2.5-flash-lite', 0.01, 0.03],
+  ])('lists text and audio cache reads plus storage for %s', (id, text, audio) => {
+    expect(units(id)).toEqual(
+      expect.arrayContaining([
+        fixed('textInput_cacheRead', text),
+        fixed('audioInput_cacheRead', audio),
+        storage,
+      ]),
+    );
+  });
+
+  it('lists the audio cache read for Gemini 3 Flash Preview', () => {
+    expect(units('gemini-3-flash-preview')).toContainEqual(fixed('audioInput_cacheRead', 0.1));
   });
 });

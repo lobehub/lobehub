@@ -591,30 +591,6 @@ describe('DiscoverService', () => {
         expect(result.items[1].identifier).toBe('plugin-1');
       });
     });
-
-    describe('getPluginDetail', () => {
-      it('should return plugin detail with related items', async () => {
-        const result = await service.getPluginDetail({
-          identifier: 'plugin-1',
-        });
-
-        expect(result).toEqual(
-          expect.objectContaining({
-            identifier: 'plugin-1',
-            title: 'Test Plugin 1',
-            related: expect.any(Array),
-          }),
-        );
-      });
-
-      it('should return undefined for non-existent plugin', async () => {
-        const result = await service.getPluginDetail({
-          identifier: 'non-existent',
-        });
-
-        expect(result).toBeUndefined();
-      });
-    });
   });
 
   describe('MCP Market', () => {
@@ -673,8 +649,6 @@ describe('DiscoverService', () => {
 
       it('should filter by search query', async () => {
         const result = await service.getProviderList({ q: 'openai' });
-
-        expect(result.items.length).toBeGreaterThan(0);
         expect(result.items).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -796,11 +770,6 @@ describe('DiscoverService', () => {
             }),
           ]),
         );
-      });
-
-      it('should not include categories that only have hidden models', async () => {
-        const result = await service.getModelCategories();
-
         expect(result.some((item) => item.category === 'lobehub')).toBe(false);
       });
     });

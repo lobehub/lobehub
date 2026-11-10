@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "Copiar link",
+  "popover.copyLinkSuccess": "Link copiado",
+  "popover.linkHint": "Qualquer pessoa com o link pode visualizar e baixar este arquivo",
+  "popover.permissionLink": "Qualquer pessoa com o link",
+  "popover.permissionPrivate": "Privado",
+  "popover.privateHint": "Somente você pode abrir este arquivo",
+  "popover.sectionViews_one": "{{count}} visualização",
+  "popover.sectionViews_other": "{{count}} visualizações",
+  "popover.title": "Compartilhar arquivo",
+  "popover.updateError": "Falha ao atualizar as configurações de compartilhamento",
+  "popover.visibility": "Visibilidade",
+  "popover.visibilityUpdated": "Visibilidade atualizada",
+  "shareButton.label": "Compartilhar"
+}

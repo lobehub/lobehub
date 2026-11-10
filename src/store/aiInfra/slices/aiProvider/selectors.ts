@@ -1,4 +1,4 @@
-import { isProviderDisableBrowserRequest } from 'model-bank/modelProviders';
+import { isProviderFetchOnClient as isSharedProviderFetchOnClient } from 'model-bank/modelProviders';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { type AiProviderRuntimeConfig } from '@/types/aiProvider';
@@ -49,8 +49,6 @@ const activeProviderConfig = (s: AIProviderStoreState) =>
 const isAiProviderConfigLoading = (id: string) => (s: AIProviderStoreState) =>
   !s.aiProviderDetailMap[id];
 
-const providerWhitelist = new Set(['ollama', 'lmstudio', 'unsloth']);
-
 const activeProviderKeyVaults = (s: AIProviderStoreState) => activeProviderConfig(s)?.keyVaults;
 
 const isActiveProviderEndpointNotEmpty = (s: AIProviderStoreState) => {
@@ -75,37 +73,13 @@ const isProviderConfigUpdating = (id: string) => (s: AIProviderStoreState) =>
   s.aiProviderConfigUpdatingIds.includes(id);
 
 /**
- * @description The conditions to enable client fetch
- * 1. If no baseUrl and apikey input, force on Server.
- * 2. If only contains baseUrl, force on Client
- * 3. Follow the user settings.
- * 4. On Server, by default.
+ * Whether requests to this provider leave from this device. The rule is shared
+ * with the server (`isProviderFetchOnClient` in model-bank), which relays a
+ * call back to this tab exactly when it applies.
  */
 const isProviderFetchOnClient =
-  (provider: GlobalLLMProviderKey | string) => (s: AIProviderStoreState) => {
-    const config = providerConfigById(provider)(s);
-
-    // If the provider already disable browser request in model config, force on Server.
-    if (isProviderDisableBrowserRequest(provider)) return false;
-
-    // If the provider in the whitelist, follow the user settings
-    if (providerWhitelist.has(provider) && typeof config?.fetchOnClient !== 'undefined')
-      return config?.fetchOnClient;
-
-    // 1. If no baseUrl and apikey input, force on Server.
-    const isProviderEndpointNotEmpty = !!config?.keyVaults.baseURL;
-    const isProviderApiKeyNotEmpty = !!config?.keyVaults.apiKey;
-    if (!isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return false;
-
-    // 2. If only contains baseUrl, force on Client
-    if (isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return true;
-
-    // 3. Follow the user settings.
-    if (typeof config?.fetchOnClient !== 'undefined') return config?.fetchOnClient;
-
-    // 4. On Server, by default.
-    return false;
-  };
+  (provider: GlobalLLMProviderKey | string) => (s: AIProviderStoreState) =>
+    isSharedProviderFetchOnClient(provider, providerConfigById(provider)(s));
 
 const providerKeyVaults = (provider: string | undefined) => (s: AIProviderStoreState) => {
   if (!provider) return undefined;

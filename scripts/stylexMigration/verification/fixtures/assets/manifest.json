@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://registry.npmmirror.com/@lobehub/assets-fileicon/1.0.0/files/assets/react_ts.svg",
+    "file": "react_ts.svg",
+    "sha256": "0a8fb7beb18bf9e3f8e4302b5a6e129a7546301c97efb0a84c406629e2038d86",
+    "bytes": 1442
+  },
+  {
+    "url": "https://registry.npmmirror.com/@lobehub/assets-fileicon/1.0.0/files/assets/folder-components.svg",
+    "file": "folder-components.svg",
+    "sha256": "52db2ea34a51325fdcfd1ba94878d66e88d7edc84dd7e66967e1ddf6d2062fcd",
+    "bytes": 605
+  }
+]

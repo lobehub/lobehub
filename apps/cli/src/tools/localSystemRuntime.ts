@@ -7,7 +7,14 @@ import { createFileSearchModule } from '@lobechat/local-file-shell';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import { CLI_DISPLAY_NAME } from '../constants/identity';
-import { editLocalFile, grepContent, listLocalFiles, readLocalFile, writeLocalFile } from './file';
+import {
+  editLocalFile,
+  grepContent,
+  type ImageUploader,
+  listLocalFiles,
+  readLocalFile,
+  writeLocalFile,
+} from './file';
 import { getCommandOutput, killCommand, runCommand } from './shell';
 
 /**
@@ -66,7 +73,18 @@ const localSystemService: ILocalSystemService = {
   writeFile: writeLocalFile,
 };
 
-const runtime = new LocalSystemExecutionRuntime(localSystemService);
+const createRuntime = (uploadImage?: ImageUploader) =>
+  new LocalSystemExecutionRuntime({
+    ...localSystemService,
+    readLocalFile: (params) => readLocalFile(params, uploadImage),
+  });
+
+const defaultRuntime = createRuntime();
+
+export interface LocalSystemToolContext {
+  /** Uploads images `readFile` returns, so vision models can see them. */
+  uploadImage?: ImageUploader;
+}
 
 /**
  * Route file/shell tool calls through `LocalSystemExecutionRuntime` so the
@@ -84,7 +102,11 @@ const runtime = new LocalSystemExecutionRuntime(localSystemService);
 export async function runLocalSystemTool(
   apiName: string,
   args: Record<string, any>,
+  { uploadImage }: LocalSystemToolContext = {},
 ): Promise<LocalSystemToolOutput | null> {
+  // The uploader carries per-call credentials, so it gets its own runtime.
+  const runtime = uploadImage ? createRuntime(uploadImage) : defaultRuntime;
+
   // `trustArgsCwd` — args reach the CLI only after the server runtime has
   // stripped any inbound `cwd` and re-injected the device-bound one, so the
   // `cwd` in `args` here is server-controlled rather than model-chosen.

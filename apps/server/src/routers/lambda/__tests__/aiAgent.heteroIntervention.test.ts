@@ -11,7 +11,7 @@ import {
   deriveAgentInterventionQueueDeduplicationId,
 } from '@/business/server/agent-run/agentInterventionIdentity';
 
-import { aiAgentRouter } from '../aiAgent';
+import { aiAgentRouter, dispatchClaimedAgentIntervention } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
 
 const business = vi.hoisted(() => ({
@@ -1058,6 +1058,77 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       expect(params.userInterventionConfig).toEqual({ allowList: [], approvalMode: 'manual' });
     });
 
+    it("continues a share visitor's run under its share gate and the visitor's own mode", async () => {
+      const sourceOperationId = 'operation-share-source';
+      stateFor(sourceOperationId, {
+        operationId: sourceOperationId,
+        principal: { policy: { userIntervention: { approvalMode: 'manual' } } },
+        status: 'waiting_for_human',
+      });
+      // The creator's own allow list must not leak into the visitor's run.
+      await serverDB
+        .insert(userSettings)
+        .values({
+          id: userId,
+          tool: {
+            humanIntervention: {
+              allowList: ['lobe-local-system____runCommand'],
+              approvalMode: 'allow-list',
+            },
+          },
+        })
+        .onConflictDoNothing();
+      await insertPendingTool({
+        batchId: 'batch-share-source',
+        messageId: 'assistant-share',
+        operationId: sourceOperationId,
+        toolCallId: 'tool-share',
+      });
+      aiAgentService.execAgent.mockResolvedValueOnce(execution);
+      const shareGate = {
+        agentId: 'agent-runtime',
+        shareConfig: {},
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      };
+
+      await dispatchClaimedAgentIntervention(
+        {
+          claimId: 'claim-share',
+          contractVersion: 2,
+          handled: true,
+          ownerUserId: userId,
+          resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000045',
+          runtimeAction: {
+            agentId: 'agent-runtime',
+            appContext: { topicId: 'topic-runtime' },
+            content: '{"answer":"A"}',
+            operationId: sourceOperationId,
+            outcome: 'submitted',
+            parentMessageId: 'assistant-share',
+            toolCallId: 'tool-share',
+            type: 'resume_tool_result',
+          },
+          state: 'claimed',
+        } as any,
+        {
+          aiAgentService: aiAgentService as any,
+          serverDB,
+          shareGate: shareGate as any,
+          userId: 'visitor-1',
+          workspaceId: null,
+        },
+      );
+
+      expect(aiAgentService.execAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shareGate,
+          trigger: 'agent_share',
+          userInterventionConfig: { approvalMode: 'manual' },
+        }),
+      );
+    });
+
     it('keeps a continuation headless when the answered run was headless', async () => {
       const sourceOperationId = 'operation-headless-source';
       stateFor(sourceOperationId, {
@@ -1074,6 +1145,113 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       expect(aiAgentService.execAgent).toHaveBeenCalledWith(
         expect.objectContaining({ userInterventionConfig: { approvalMode: 'headless' } }),
       );
+    });
+  });
+
+  // The router's contract is pass-through: it forwards the claimed runtime
+  // action's appContext verbatim plus the parked operation id
+  // (`approvalSourceOperationId`). The Group Agent Builder target inheritance
+  // itself lives in the service pipeline — see
+  // `startOperation.editingGroupId.test.ts` (Codex P1 on #20626: a bare
+  // execAgent mock never reaches that enrichment, so asserting an inherited
+  // value here was both failing and vacuous).
+  describe('group builder editing target forwarding', () => {
+    const execution = {
+      autoStarted: true,
+      messageId: 'assistant-continuation-group',
+      operationId: 'operation-continuation-group',
+      success: true,
+    };
+
+    const resolveGroupContinuation = async (params: {
+      appContext?: Record<string, unknown>;
+      resolutionRequestId: string;
+      sourceOperationId: string;
+    }) => {
+      await insertPendingTool({
+        batchId: `batch-${params.sourceOperationId}`,
+        messageId: 'assistant-runtime',
+        operationId: params.sourceOperationId,
+        toolCallId: 'tool-runtime',
+      });
+      businessV2.resolveAgentIntervention.mockResolvedValueOnce({
+        claimId: `claim-${params.sourceOperationId}`,
+        contractVersion: 2,
+        handled: true,
+        ownerUserId: userId,
+        resolutionRequestId: params.resolutionRequestId,
+        runtimeAction: {
+          agentId: 'agt_group_builder',
+          appContext: params.appContext ?? { topicId: 'topic-runtime' },
+          content: '{"answer":"A"}',
+          operationId: params.sourceOperationId,
+          outcome: 'submitted',
+          parentMessageId: 'assistant-runtime',
+          toolCallId: 'tool-runtime',
+          type: 'resume_tool_result',
+        },
+        state: 'claimed',
+      });
+      aiAgentService.execAgent.mockResolvedValueOnce(execution);
+
+      await userCaller().resolveAgentIntervention({
+        action: { itemId: 'item-runtime', type: 'skip_interaction' },
+        expectedBatchVersion: 1,
+        expectedRequestRevisions: {
+          'item-runtime': { hash: 'c'.repeat(64), version: 1 },
+        },
+        resolutionRequestId: params.resolutionRequestId,
+        reviewToken: 'h'.repeat(43),
+      });
+    };
+
+    const execCallFor = () =>
+      aiAgentService.execAgent.mock.calls.find(
+        ([input]) => input?.appContext?.topicId === 'topic-runtime',
+      );
+
+    it('forwards the appContext verbatim and names the parked operation for the service to enrich', async () => {
+      const sourceOperationId = 'operation-group-source';
+      await insertOperation(sourceOperationId, userId);
+
+      await resolveGroupContinuation({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000051',
+        sourceOperationId,
+      });
+
+      const call = execCallFor();
+      expect(call?.[0]?.appContext).toEqual({ topicId: 'topic-runtime' });
+      expect(call?.[0]?.approvalSourceOperationId).toBe(sourceOperationId);
+    });
+
+    it('never injects an editing group at the router boundary (ordinary topic)', async () => {
+      const sourceOperationId = 'operation-plain-source';
+      await insertOperation(sourceOperationId, userId);
+
+      await resolveGroupContinuation({
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000052',
+        sourceOperationId,
+      });
+
+      expect(execCallFor()?.[0]?.appContext).not.toHaveProperty('editingGroupId');
+    });
+
+    it('passes a request-named editing group through without rewriting it', async () => {
+      const sourceOperationId = 'operation-group-explicit';
+      await insertOperation(sourceOperationId, userId);
+
+      await resolveGroupContinuation({
+        appContext: { editingGroupId: 'cg_panel', topicId: 'topic-runtime' },
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000053',
+        sourceOperationId,
+      });
+
+      const call = execCallFor();
+      expect(call?.[0]?.appContext).toEqual({
+        editingGroupId: 'cg_panel',
+        topicId: 'topic-runtime',
+      });
+      expect(call?.[0]?.approvalSourceOperationId).toBe(sourceOperationId);
     });
   });
 

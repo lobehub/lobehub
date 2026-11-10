@@ -1,18 +1,27 @@
 import debug from 'debug';
 import type { Context } from 'hono';
 
-import { BriefModel } from '@/database/models/brief';
-import { TaskModel } from '@/database/models/task';
 import { getServerDB } from '@/database/server';
+import { failStuckTasks } from '@/server/services/taskLifecycle/failStuckTasks';
+import { reconcileOrphanedTaskRuns } from '@/server/services/taskLifecycle/reconcile';
+import { reconcileInterruptedTaskRuns } from '@/server/services/taskLifecycle/reconcileInterrupted';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { TaskResultCallbackRedisStore } from '@/server/services/taskResultBridge/redisStore';
 
 const log = debug('lobe-server:workflows:task:watchdog');
 
 /**
- * Cron-style watchdog. Scans all `running` tasks where
- * `lastHeartbeatAt + heartbeatTimeout < now()` and marks them `failed`,
- * leaving an urgent brief for the user.
+ * Cron-style watchdog. Two nets over Tasks that are `running` with nothing
+ * behind them:
+ *
+ * 1. `lastHeartbeatAt + heartbeatTimeout < now()` — the automation-heartbeat
+ *    net, which marks the Task `failed` and notifies the owner.
+ * 2. A `running` run row whose operation already ended (see
+ *    {@link reconcileOrphanedTaskRuns}) — the net for a Task the first one
+ *    cannot see, either because it sets no `heartbeatTimeout` or because its
+ *    run ends without ever delivering its terminal state.
+ * 3. A `running` run row whose operation was interrupted and that no run took
+ *    over (see {@link reconcileInterruptedTaskRuns}) — parked as `paused`.
  *
  * No per-user authentication: this is a global sweep registered as a QStash
  * Schedule (cron). Signature verification is handled by the `qstashAuth`
@@ -21,30 +30,17 @@ const log = debug('lobe-server:workflows:task:watchdog');
 export async function watchdog(c: Context) {
   try {
     const db = await getServerDB();
-    const stuckTasks = await TaskModel.findStuckTasks(db);
-    const failed: string[] = [];
+    const { checked, failed } = await failStuckTasks(db);
 
-    for (const task of stuckTasks) {
-      const wsId = task.workspaceId ?? undefined;
-      const taskModel = new TaskModel(db, task.createdByUserId, wsId);
-      await taskModel.updateStatus(task.id, 'failed', {
-        completedAt: new Date(),
-        error: 'Heartbeat timeout',
-      });
-
-      const briefModel = new BriefModel(db, task.createdByUserId, wsId);
-      await briefModel.create({
-        agentId: task.assigneeAgentId || undefined,
-        priority: 'urgent',
-        summary: `Task has been running without heartbeat update for more than ${task.heartbeatTimeout} seconds.`,
-        taskId: task.id,
-        title: `${task.identifier} heartbeat timeout`,
-        trigger: 'task',
-        type: 'error',
-      });
-
-      failed.push(task.identifier);
-    }
+    // The heartbeat net above cannot see every stuck Task: it requires a
+    // configured `heartbeatTimeout`, which schedule and goal tasks do not set. A
+    // run whose terminal delivery was lost leaves no trace here at all, so its
+    // Task would read as `running` forever. Settle those from the
+    // operation's own end instead.
+    const reconciled = await reconcileOrphanedTaskRuns(db);
+    // An interrupted run is not an outcome the net above may converge; a run
+    // nothing took over is handed back to a person instead.
+    const interrupted = await reconcileInterruptedTaskRuns(db);
 
     const recoverableCallbacks = await TaskResultCallbackRedisStore.findRecoverableScopes();
     const recoveredCallbacks: string[] = [];
@@ -72,14 +68,18 @@ export async function watchdog(c: Context) {
     }
 
     log(
-      'Watchdog scan: checked=%d failed=%d callbacks=%d',
-      stuckTasks.length,
+      'Watchdog scan: checked=%d failed=%d orphaned=%d interrupted=%d callbacks=%d',
+      checked,
       failed.length,
+      reconciled.converged.length,
+      interrupted.paused.length,
       recoveredCallbacks.length,
     );
     return c.json({
-      checked: stuckTasks.length,
+      checked,
       failed,
+      interrupted,
+      orphaned: reconciled,
       recoveredCallbacks,
       success: true,
     });

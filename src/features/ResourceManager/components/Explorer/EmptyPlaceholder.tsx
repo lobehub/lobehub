@@ -1,6 +1,14 @@
-import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text, Upload } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  FileTypeIcon,
+  Flexbox,
+  Icon,
+  Text,
+  Upload,
+} from '@lobehub/ui';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -110,7 +118,8 @@ const EmptyPlaceholder = () => {
         <Text as={'h4'}>{t('FileManager.emptyStatus.title')}</Text>
         <Text type={'secondary'}>{t('FileManager.emptyStatus.or')}</Text>
       </Flexbox>
-      <Flexbox horizontal gap={12}>
+      {/* Wraps so the three 200px cards stack on a phone instead of clipping. */}
+      <Flexbox horizontal gap={12} justify={'center'} paddingInline={16} wrap={'wrap'}>
         {!libraryId && (
           <Flexbox
             className={styles.card}

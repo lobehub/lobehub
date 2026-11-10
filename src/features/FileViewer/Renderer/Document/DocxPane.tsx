@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';

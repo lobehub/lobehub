@@ -1,8 +1,7 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text, toast } from '@lobehub/ui/base-ui';
+import type { ItemType } from '@lobehub/ui';
+import { Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
-import type { ItemType } from 'antd/es/menu/interface';
 import {
   BotIcon,
   FileTextIcon,
@@ -16,20 +15,19 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWRMutation from 'swr/mutation';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import { useOpenCreateAgentModal } from '@/features/AgentIdentityModal/useOpenCreateAgentModal';
 import { openConnectAgentModal } from '@/features/ConnectAgent';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import type { CreateAgentParams } from '@/services/agent';
 import type { GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
-import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 
 type MenuItem = NonNullable<ItemType> & { sfSymbol?: SFSymbol };
 
@@ -54,36 +52,18 @@ export const useCreateMenuItems = () => {
   const { t: tFile } = useTranslation('file');
 
   const navigate = useWorkspaceAwareNavigate();
-  const activeWorkspaceId = useActiveWorkspaceId();
   const groupTemplates = useGroupTemplates();
   const { allowed: canCreate } = usePermission('create_content');
 
-  const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
   const [addGroup, refreshAgentList, switchToGroup] = useHomeStore((s) => [
     s.addGroup,
     s.refreshAgentList,
     s.switchToGroup,
   ]);
   const [createGroup, loadGroups] = useAgentGroupStore((s) => [s.createGroup, s.loadGroups]);
-  const createNewPage = usePageStore((s) => s.createNewPage);
 
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingSessionGroup, setIsCreatingSessionGroup] = useState(false);
-
-  // SWR-based agent creation with auto navigation to profile
-  const { trigger: mutateAgent, isMutating: isMutatingAgent } = useSWRMutation(
-    'agent.createAgent',
-    async (_key: string, { arg }: { arg?: CreateAgentParams }) => {
-      const result = await storeCreateAgent(arg ?? {});
-      return result;
-    },
-    {
-      onSuccess: async (result) => {
-        navigate(`/agent/${result.agentId}/profile`);
-        await refreshAgentList();
-      },
-    },
-  );
 
   // SWR-based group creation with auto navigation to profile
   const { trigger: mutateGroup, isMutating: isMutatingGroup } = useSWRMutation(
@@ -110,24 +90,6 @@ export const useCreateMenuItems = () => {
         await loadGroups();
       },
     },
-  );
-
-  /**
-   * Create agent action (optionally with a prompt as systemRole)
-   */
-  const createAgent = useCallback(
-    async (options?: CreateAgentOptions & { prompt?: string }) => {
-      if (!canCreate) return;
-
-      const config = options?.prompt ? { systemRole: options.prompt } : undefined;
-      await mutateAgent({
-        config,
-        groupId: options?.groupId,
-        visibility: options?.visibility,
-      });
-      options?.onSuccess?.();
-    },
-    [canCreate, mutateAgent],
   );
 
   /**
@@ -232,6 +194,24 @@ export const useCreateMenuItems = () => {
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
   const openCreateGroupModal = agentModal?.openCreateGroupModal;
+  const openCreateAgentIdentityModal = useOpenCreateAgentModal();
+
+  /**
+   * Every "new agent" entry opens the identity form — through the provider when
+   * one is mounted, otherwise directly in the global ModalHost.
+   */
+  const openCreateAgentModal = useCallback(
+    (options?: Pick<CreateAgentOptions, 'groupId' | 'visibility'>) => {
+      if (!canCreate) return;
+      const params = {
+        ...(options?.groupId ? { groupId: options.groupId } : {}),
+        ...(options?.visibility ? { visibility: options.visibility } : {}),
+      };
+      if (openCreateModal) openCreateModal('agent', params);
+      else openCreateAgentIdentityModal(params);
+    },
+    [canCreate, openCreateAgentIdentityModal, openCreateModal],
+  );
 
   /**
    * Create agent menu item
@@ -245,21 +225,12 @@ export const useCreateMenuItems = () => {
       key: options?.visibility === 'private' ? 'newPrivateAgent' : 'newAgent',
       label: t('newAgent'),
       sfSymbol: 'plus.bubble',
-      onClick: async (info) => {
+      onClick: (info) => {
         info.domEvent?.stopPropagation();
-        if (!canCreate) return;
-
-        if (openCreateModal) {
-          openCreateModal('agent', {
-            ...(options?.groupId ? { groupId: options.groupId } : {}),
-            ...(options?.visibility ? { visibility: options.visibility } : {}),
-          });
-        } else {
-          await createAgent(options);
-        }
+        openCreateAgentModal(options);
       },
     }),
-    [canCreate, t, createAgent, openCreateModal],
+    [canCreate, t, openCreateAgentModal],
   );
 
   /**
@@ -415,17 +386,13 @@ export const useCreateMenuItems = () => {
 
     const untitledTitle = tFile('pageList.untitled');
     try {
-      // In workspace mode the server auto-defaults top-level `sourceType: 'api'`
-      // rows to `'private'`; pass it explicitly so the optimistic row lands in
-      // 私人 too, instead of flashing in 工作区 and jumping when the server replies.
-      const defaultVisibility = activeWorkspaceId ? 'private' : undefined;
-      const newPageId = await createNewPage(untitledTitle, defaultVisibility);
-      navigate(`/page/${newPageId}`);
+      const newPageId = await pageActions.createNewPage(untitledTitle);
+      navigate(docsPagePath(newPageId));
     } catch (error) {
       console.error('Failed to create page:', error);
-      toast.error('Failed to create page');
+      toast.error(tFile('pageList.createFailed'));
     }
-  }, [canCreate, createNewPage, tFile, navigate, activeWorkspaceId]);
+  }, [canCreate, tFile, navigate]);
 
   /**
    * Create page menu item
@@ -474,7 +441,6 @@ export const useCreateMenuItems = () => {
 
   return {
     configMenuItem,
-    createAgent,
     createAgentListMenuItem,
     createAgentMenuItem,
     createConnectAgentMenuItem,
@@ -487,12 +453,12 @@ export const useCreateMenuItems = () => {
     createPageMenuItem,
     createSessionGroupMenuItem,
     createTopLevelMenuItems,
+    openCreateAgentModal,
     openCreateModal,
 
     // Loading states
     isCreatingGroup,
     isCreatingSessionGroup,
-    isLoading: isMutatingAgent || isMutatingGroup || isCreatingGroup || isCreatingSessionGroup,
-    isMutatingAgent,
+    isLoading: isMutatingGroup || isCreatingGroup || isCreatingSessionGroup,
   };
 };

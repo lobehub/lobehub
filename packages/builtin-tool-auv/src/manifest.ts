@@ -4,6 +4,9 @@ import { systemPrompt } from './systemRole';
 import { AuvApiName, AuvIdentifier } from './types';
 
 export const AuvManifest: BuiltinToolManifest = {
+  // The desktop app always can; `lh connect` only when started with `--auv`. The
+  // server runtime picks the client that reports the capability (see `auvRuntime`).
+  deviceClients: ['desktop', 'cli'],
   executors: ['client', 'server'],
   api: [
     {

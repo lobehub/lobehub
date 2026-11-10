@@ -1,3 +1,4 @@
+import { siteReviewFromResource } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 import type { Configuration, KoaContextWithOIDC } from 'oidc-provider';
@@ -7,10 +8,21 @@ import urlJoin from 'url-join';
 import { UserModel } from '@/database/models/user';
 import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
+import { OIDC_ISSUER_PATH, OIDC_ROUTES } from '@/libs/oidc-provider/routes';
 import { normalizeLocale } from '@/locales/resources';
+import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
+import {
+  accessTokenTTL,
+  defaultResourceFor,
+  extensionCorsDecision,
+  extensionResourceServer,
+  isAcceptanceReviewClient,
+  reviewResourceServer,
+} from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
+import { stampClientLastUsed } from './clientLastUsed';
 import { defaultClaims, defaultClients, defaultScopes } from './config';
 import { getOIDCCookieKeys } from './cookies';
 import { createInteractionPolicy } from './interaction-policy';
@@ -67,6 +79,13 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
     // Added: client-based CORS control logic
     clientBasedCORS(ctx, origin, client) {
+      // The acceptance toolbar runs on whatever origin the delivered product is
+      // previewed on; its token is scoped to one acceptance by audience.
+      if (isAcceptanceReviewClient(client?.clientId)) return true;
+
+      const extension = extensionCorsDecision(client?.clientId, origin);
+      if (extension !== null) return extension;
+
       // Check if the client allows this origin
       // A common strategy is to allow origins of all registered redirect_uris
       if (!client || !client.redirectUris) {
@@ -140,11 +159,27 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       },
       introspection: { enabled: true },
       resourceIndicators: {
-        defaultResource: () => API_AUDIENCE,
+        defaultResource: (ctx, client) => defaultResourceFor(client?.clientId, API_AUDIENCE),
         enabled: true,
 
-        getResourceServerInfo: (ctx, resourceIndicator) => {
+        getResourceServerInfo: async (ctx, resourceIndicator) => {
           logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
+          const extension = extensionResourceServer(ctx.oidc.client?.clientId, resourceIndicator);
+          if (extension === 'reject') throw new errors.InvalidTarget();
+          if (extension) return extension;
+          const review = reviewResourceServer(
+            ctx.oidc.client?.clientId,
+            resourceIndicator,
+            ctx.oidc.params?.resource,
+            { grantType: ctx.oidc.params?.grant_type as string | undefined, route: ctx.oidc.route },
+          );
+          if (review === 'reject') throw new errors.InvalidTarget();
+          const site = review ? siteReviewFromResource(resourceIndicator) : undefined;
+          if (site && !(await findSiteForOrigin(db, site.siteId, site.origin))) {
+            throw new errors.InvalidTarget('site is not registered for this origin');
+          }
+          if (review) return review;
+
           if (resourceIndicator === API_AUDIENCE) {
             logProvider('Indicator matches API_AUDIENCE, returning JWT config.'); // <-- Add this log line
             return {
@@ -310,24 +345,19 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     // mounted under it and the adapter hands it the untouched pathname. A route
     // left at its default (e.g. `/jwks`) is therefore unreachable: the request
     // arrives as `/oidc/jwks` and the provider answers 404.
-    routes: {
-      authorization: '/oidc/auth',
-      code_verification: '/oidc/device',
-      device_authorization: '/oidc/device/auth',
-      end_session: '/oidc/session/end',
-      jwks: '/oidc/jwks',
-      token: '/oidc/token',
-      userinfo: '/oidc/me',
-    },
+    routes: { ...OIDC_ROUTES },
     // 3. Scopes definition
     scopes: defaultScopes,
 
     // 8. Token TTL
-    ttl: oidcArtifactTTL,
+    ttl: {
+      ...oidcArtifactTTL,
+      AccessToken: (ctx, token) => accessTokenTTL(token, oidcArtifactTTL.AccessToken),
+    },
   };
 
   // Create provider instance
-  const baseUrl = urlJoin(appEnv.APP_URL!, '/oidc');
+  const baseUrl = urlJoin(appEnv.APP_URL!, OIDC_ISSUER_PATH);
 
   const provider = new Provider(baseUrl, configuration);
   provider.proxy = true;
@@ -336,6 +366,10 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     logProvider('OIDC Provider Server Error: %O', err); // Use logProvider
     console.error('OIDC Provider Error:', err);
   });
+
+  // JWT access tokens (every token for the API audience) are self-contained and
+  // never written through the adapter, so its upsert never sees them.
+  provider.on('access_token.issued', (token) => stampClientLastUsed(db, token.clientId));
 
   provider.on('authorization.success', (ctx) => {
     logProvider('Authorization successful for client: %s', ctx.oidc.client?.clientId); // Use logProvider

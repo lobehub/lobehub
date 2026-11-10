@@ -1,8 +1,15 @@
 import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, type ModalInstance, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  toast,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
@@ -35,6 +42,7 @@ import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -175,7 +183,9 @@ const Header = memo(() => {
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
-      title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
+      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
+      okText: t('delete', { ns: 'common' }),
+      title: t('delete', { ns: 'common' }),
     });
   }, [activeAgentId, canManage, navigate, removeAgent, t]);
 
@@ -237,6 +247,7 @@ const Header = memo(() => {
     t,
   ]);
 
+  const copyAgentIdItem = useCopyAgentIdMenuItem(activeAgentId);
   const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
   const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined, meta);
   // Ownership handover to a workspace member — separate from the scope moves.
@@ -331,6 +342,7 @@ const Header = memo(() => {
         key: 'export',
         label: t('pageEditor.menu.export', { ns: 'file' }),
       },
+      copyAgentIdItem,
       importMenuItem ? { type: 'divider' as const } : null,
       importMenuItem,
       businessTransferMenuItems.length > 0 || transferToMemberItem
@@ -381,6 +393,7 @@ const Header = memo(() => {
     canConfigure,
     canManage,
     canSubmitToMarket,
+    copyAgentIdItem,
     createdAt,
     dateLocale,
     handleExportMarkdown,

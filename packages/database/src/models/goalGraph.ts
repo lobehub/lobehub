@@ -6,6 +6,7 @@ import type {
   GoalEventActorType,
   GoalEventEntityType,
   GoalEventType,
+  GoalGraphEvent,
   GoalGraphSnapshot,
   GoalGraphWorkVersionDisplay,
   GoalNodeKind,
@@ -13,8 +14,22 @@ import type {
   GoalNodeWorkVersionRelation,
   GoalStatus,
 } from '@lobechat/types';
-import { experimentMembers, experimentOwner, experimentStatus } from '@lobechat/utils/goalGraph';
-import { and, asc, count, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { experimentStatus } from '@lobechat/utils/goalGraph';
+import { ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT } from '@lobechat/utils/verify/acceptanceStatus';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
 import {
@@ -24,10 +39,13 @@ import {
   goalNodes,
   goalNodeWorkVersions,
 } from '../schemas/goalGraph';
-import { tasks } from '../schemas/task';
+import { briefs, tasks } from '../schemas/task';
+import { acceptances } from '../schemas/verify';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { assertContainerEdge } from './goalEdgeRules';
 import { workOwnership } from './work/context';
 
 interface EventInput {
@@ -48,6 +66,8 @@ interface CreateNodeInput {
   kind: GoalNodeKind;
   priority?: number;
   questionId?: string;
+  /** Why the node was created this way, kept on its `created` event. */
+  reason?: string;
   scopeId?: string;
   status?: GoalNodeStatus;
   title: string;
@@ -63,6 +83,27 @@ interface CreateDecisionInput {
 }
 
 /** Persistence boundary for an owned Goal Graph and its append-only audit trail. */
+/**
+ * A goal gate is asked in two places — the goal itself and the brief that
+ * carries it to the inbox. Whichever answers, the other must stop asking, so
+ * every write that settles a decision settles its brief in the same transaction.
+ */
+const settleDecisionBriefs = async (
+  tx: Transaction,
+  decisionId: string,
+  action: string,
+  comment?: string,
+) =>
+  tx
+    .update(briefs)
+    .set({ resolvedAction: action, resolvedAt: new Date(), resolvedComment: comment ?? null })
+    .where(
+      and(
+        isNull(briefs.resolvedAt),
+        sql`${briefs.metadata} -> 'goal' ->> 'decisionId' = ${decisionId}`,
+      ),
+    );
+
 export class GoalGraphModel {
   /**
    * `actor` is who the audit trail records for the transitions made through this
@@ -163,6 +204,80 @@ export class GoalGraphModel {
   };
 
   /**
+   * The goal's audit trail, newest first, with the cursor that continues it.
+   *
+   * `getGraph` bundles only the newest {@link GRAPH_EVENT_LIMIT} events, which a
+   * long-running goal exhausts — the transition that explains a stall can sit
+   * just past the cap. This pages the same table so a reader can reach it.
+   * Ownership is the predicate `getGraph` uses, so "no such goal" and "not
+   * yours" stay indistinguishable and neither leaks another user's goal.
+   *
+   * A cursor, not an offset: this feed is live and events are PREPENDED while the
+   * goal runs, so an offset taken on page one re-serves a row that a later insert
+   * pushed down. `(createdAt, id)` is the sort key, so it is also the
+   * continuation key.
+   *
+   * `createdAt` is compared and ordered at **millisecond** precision, matching
+   * the cursor. The column is `timestamptz` and can carry microseconds, but the
+   * cursor round-trips through a JS `Date` / ISO string and so only carries
+   * milliseconds; comparing the raw column against that truncated cursor makes a
+   * same-millisecond row match neither the `<` bound nor the `eq`/id tie-break,
+   * silently dropping it from the next page. Truncating both sides keeps the
+   * keyset lossless — the same pattern as `verifyRun.queryPage`.
+   */
+  listEvents = async (
+    goalId: string,
+    options: {
+      cursor?: { createdAt: Date; id: string };
+      entityType?: GoalEventEntityType;
+      eventType?: GoalEventType;
+      limit: number;
+    },
+  ): Promise<
+    { events: GoalGraphEvent[]; nextCursor?: { createdAt: Date; id: string } } | undefined
+  > => {
+    const [goal] = await this.db
+      .select({ id: goals.id })
+      .from(goals)
+      .where(and(eq(goals.id, goalId), this.ownership()))
+      .limit(1);
+    if (!goal) return undefined;
+
+    // Millisecond-truncated `createdAt`, the precision the cursor round-trips at.
+    const createdAtMs = sql`date_trunc('milliseconds', ${goalEvents.createdAt})`;
+
+    const filters = [eq(goalEvents.goalId, goalId)];
+    if (options.entityType) filters.push(eq(goalEvents.entityType, options.entityType));
+    if (options.eventType) filters.push(eq(goalEvents.eventType, options.eventType));
+    // Strictly older than the cursor, ties broken by id — the same pair the rows
+    // are ordered by, so a page can neither repeat nor skip.
+    const afterCursor = options.cursor
+      ? or(
+          lt(createdAtMs, options.cursor.createdAt),
+          and(eq(createdAtMs, options.cursor.createdAt), lt(goalEvents.id, options.cursor.id)),
+        )
+      : undefined;
+
+    // One row past the page answers "is there more?" without a second count query.
+    const rows = await this.db
+      .select()
+      .from(goalEvents)
+      .where(and(...filters, afterCursor))
+      .orderBy(desc(createdAtMs), desc(goalEvents.id))
+      .limit(options.limit + 1);
+
+    const events = rows.slice(0, options.limit);
+    const last = events.at(-1);
+    return {
+      events,
+      nextCursor:
+        rows.length > options.limit && last
+          ? { createdAt: last.createdAt, id: last.id }
+          : undefined,
+    };
+  };
+
+  /**
    * Display snapshots for linked Work versions, keyed by version id.
    *
    * Read separately from the link rows, and gated by `workOwnership`: `goals`
@@ -218,6 +333,9 @@ export class GoalGraphModel {
         workId: row.workId,
         ...(row.metadata?.agentDocumentId ? { agentDocumentId: row.metadata.agentDocumentId } : {}),
         ...(row.metadata?.fileUrl ? { fileUrl: row.metadata.fileUrl } : {}),
+        ...(row.metadata?.fileId ? { fileId: row.metadata.fileId } : {}),
+        ...(typeof row.metadata?.fileSize === 'number' ? { fileSize: row.metadata.fileSize } : {}),
+        ...(row.metadata?.mimeType ? { mimeType: row.metadata.mimeType } : {}),
       });
     }
     return display;
@@ -274,6 +392,27 @@ export class GoalGraphModel {
     });
   };
 
+  /**
+   * Record a change to the goal row itself that is not a status move, such as
+   * binding it to a topic, so the goal's timeline says when and by whom
+   * its carrier changed.
+   */
+  recordGoalUpdate = async (
+    goalId: string,
+    input: { operationId?: string; reason: string },
+  ): Promise<void> => {
+    await this.db.insert(goalEvents).values({
+      actorId: this.actor?.id ?? this.userId,
+      actorType: this.actor?.type ?? 'user',
+      entityId: goalId,
+      entityType: 'goal',
+      eventType: 'updated',
+      goalId,
+      operationId: input.operationId,
+      reason: input.reason,
+    });
+  };
+
   attachWorkVersion = async (
     goalId: string,
     nodeId: string,
@@ -320,6 +459,32 @@ export class GoalGraphModel {
     });
 
   /**
+   * Work ids this goal already declares as produced, on any node.
+   *
+   * The claim predicate for deliverables: one Work is one deliverable, and it
+   * belongs to the node that first delivered it. A later round that merely
+   * revises the same resource (a shared document every task appends to is the
+   * common case) must not re-declare it on its own node, or the goal history
+   * repeats one deliverable under every task and its Works list counts one
+   * artifact several times.
+   *
+   * Read from the database rather than from a graph snapshot because the
+   * harvest of one settle has to see the links an earlier settle — possibly in
+   * the same tick — already wrote. Ticks of one goal are serialized by the
+   * dispatch advisory lock, so this read-then-write needs no extra guard.
+   */
+  listProducedWorkIds = async (goalId: string): Promise<Set<string>> => {
+    const rows = await this.db
+      .select({ workId: workVersions.workId })
+      .from(goalNodeWorkVersions)
+      .innerJoin(goalNodes, eq(goalNodeWorkVersions.nodeId, goalNodes.id))
+      .innerJoin(workVersions, eq(goalNodeWorkVersions.workVersionId, workVersions.id))
+      .where(and(eq(goalNodes.goalId, goalId), eq(goalNodeWorkVersions.relation, 'produced')));
+
+    return new Set(rows.map((row) => row.workId));
+  };
+
+  /**
    * How many of a goal's tasks are occupying a concurrency slot.
    *
    * Counted in the database rather than from a graph snapshot so it can be read
@@ -336,15 +501,165 @@ export class GoalGraphModel {
           eq(goalNodes.goalId, goalId),
           eq(goalNodes.kind, 'task'),
           inArray(tasks.status, ['running', 'scheduled']),
+          notTrashed(tasks.isDeleted),
         ),
       );
     return row?.count ?? 0;
   };
 
+  /**
+   * The goal a task belongs to — as the responsible Task of one of its nodes,
+   * as the goal's own execution carrier, or through the nearest ancestor that is
+   * either (goal Tasks spawn their own subtasks). Lets a Task page link back to
+   * the goal that owns it.
+   */
+  findGoalByTaskId = async (taskId: string): Promise<{ id: string; title: string } | undefined> => {
+    // Walk up `parent_task_id`, nearest first. The task tree has no depth limit,
+    // so stop on a revisited id instead of a fixed depth: a corrupt cycle ends
+    // without truncating a valid deep chain.
+    const chain = await this.db.execute<{ depth: number; id: string }>(sql`
+      WITH RECURSIVE chain(id, depth, visited) AS (
+        SELECT ${tasks.id}, 0, ARRAY[${tasks.id}] FROM ${tasks} WHERE ${tasks.id} = ${taskId}
+        UNION ALL
+        SELECT ${tasks.parentTaskId}, chain.depth + 1, chain.visited || ${tasks.parentTaskId}
+        FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
+        WHERE ${tasks.parentTaskId} IS NOT NULL
+          AND NOT (${tasks.parentTaskId} = ANY(chain.visited))
+      )
+      SELECT id, depth FROM chain
+    `);
+    const depthOf = new Map(chain.rows.map((row) => [row.id, Number(row.depth)]));
+    if (depthOf.size === 0) return undefined;
+    const taskIds = [...depthOf.keys()];
+
+    const rows = await this.db
+      .select({
+        carrierTaskId: goals.subjectId,
+        createdAt: goals.createdAt,
+        id: goals.id,
+        nodeTaskId: goalNodes.taskId,
+        subjectType: goals.subjectType,
+        title: goals.title,
+      })
+      .from(goals)
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), inArray(goalNodes.taskId, taskIds)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            inArray(goalNodes.taskId, taskIds),
+            and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, taskIds)),
+          ),
+        ),
+      );
+
+    const depthOfRow = (row: (typeof rows)[number]) =>
+      Math.min(
+        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
+        row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
+        /* v8 ignore stop */
+        row.subjectType === 'task' && row.carrierTaskId
+          ? (depthOf.get(row.carrierTaskId) ?? Infinity)
+          : Infinity,
+      );
+    const [nearest] = rows.sort(
+      (a, b) =>
+        depthOfRow(a) - depthOfRow(b) ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return nearest ? { id: nearest.id, title: nearest.title } : undefined;
+  };
+
+  /**
+   * {@link findGoalByTaskId} for many tasks in two queries, with the same
+   * nearest-ancestor rule and the goal's status — for bulk task writes that
+   * must not probe each task on its own. Tasks without a goal are absent.
+   */
+  findGoalsByTaskIds = async (
+    taskIds: string[],
+  ): Promise<Map<string, { id: string; status: string; title: string }>> => {
+    const result = new Map<string, { id: string; status: string; title: string }>();
+    if (taskIds.length === 0) return result;
+
+    const chain = await this.db.execute<{ depth: number; id: string; root: string }>(sql`
+      WITH RECURSIVE chain(root, id, depth, visited) AS (
+        SELECT ${tasks.id}, ${tasks.id}, 0, ARRAY[${tasks.id}] FROM ${tasks}
+        WHERE ${tasks.id} IN (${sql.join(
+          taskIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+        UNION ALL
+        SELECT chain.root, ${tasks.parentTaskId}, chain.depth + 1, chain.visited || ${tasks.parentTaskId}
+        FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
+        WHERE ${tasks.parentTaskId} IS NOT NULL
+          AND NOT (${tasks.parentTaskId} = ANY(chain.visited))
+      )
+      SELECT root, id, depth FROM chain
+    `);
+    // ancestor id → every selected root it sits above, with its distance.
+    const rootsOf = new Map<string, { depth: number; root: string }[]>();
+    for (const row of chain.rows) {
+      const list = rootsOf.get(row.id) ?? [];
+      list.push({ depth: Number(row.depth), root: row.root });
+      rootsOf.set(row.id, list);
+    }
+    const chainIds = [...rootsOf.keys()];
+    if (chainIds.length === 0) return result;
+
+    const rows = await this.db
+      .select({
+        carrierTaskId: goals.subjectId,
+        createdAt: goals.createdAt,
+        id: goals.id,
+        nodeTaskId: goalNodes.taskId,
+        status: goals.status,
+        subjectType: goals.subjectType,
+        title: goals.title,
+      })
+      .from(goals)
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), inArray(goalNodes.taskId, chainIds)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            inArray(goalNodes.taskId, chainIds),
+            and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, chainIds)),
+          ),
+        ),
+      );
+
+    const best = new Map<
+      string,
+      { createdAt: number; depth: number; row: (typeof rows)[number] }
+    >();
+    const consider = (anchorId: string | null, row: (typeof rows)[number]) => {
+      if (!anchorId) return;
+      for (const { depth, root } of rootsOf.get(anchorId) ?? []) {
+        const createdAt = new Date(row.createdAt).getTime();
+        const current = best.get(root);
+        if (
+          !current ||
+          depth < current.depth ||
+          (depth === current.depth && createdAt > current.createdAt)
+        ) {
+          best.set(root, { createdAt, depth, row });
+        }
+      }
+    };
+    for (const row of rows) {
+      consider(row.nodeTaskId, row);
+      if (row.subjectType === 'task') consider(row.carrierTaskId, row);
+    }
+    for (const [root, { row }] of best) {
+      result.set(root, { id: row.id, status: row.status, title: row.title });
+    }
+    return result;
+  };
+
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
-      const { scopeId, questionId, ...values } = input;
+      const { scopeId, questionId, reason, ...values } = input;
       if (input.kind === 'experiment' && !questionId)
         throw new Error('An experiment must answer a question');
       if (input.kind !== 'experiment' && questionId)
@@ -364,6 +679,7 @@ export class GoalGraphModel {
         entityId: node.id,
         entityType: 'node',
         eventType: 'created',
+        reason,
       });
       const model = new GoalGraphModel(
         tx as unknown as LobeChatDatabase,
@@ -426,47 +742,7 @@ export class GoalGraphModel {
       if (kind === 'contains' || kind === 'answers') {
         const nodes = await tx.select().from(goalNodes).where(eq(goalNodes.goalId, goalId));
         const edges = await tx.select().from(goalEdges).where(eq(goalEdges.goalId, goalId));
-        const graph = { nodes, edges };
-        const source = nodes.find((node) => node.id === sourceNodeId);
-        const target = nodes.find((node) => node.id === targetNodeId);
-        if (!source || !target || source.id === target.id)
-          throw new Error('Invalid experiment relationship');
-        if (source.kind !== 'experiment')
-          throw new Error('Only an experiment can contain nodes or answer a question');
-        if (kind === 'contains') {
-          const owner = experimentOwner(graph, target.id);
-          if (owner && owner !== source.id)
-            throw new Error('A node can belong to only one experiment');
-          if (experimentMembers(graph, target.id).has(source.id))
-            throw new Error('Experiment containment cannot form a cycle');
-          const questionId = edges.find(
-            (edge) => edge.kind === 'answers' && edge.sourceNodeId === target.id,
-          )?.targetNodeId;
-          if (
-            edges.some(
-              (edge) =>
-                edge.kind === 'answers' &&
-                edge.targetNodeId === target.id &&
-                experimentOwner(graph, edge.sourceNodeId) !== source.id,
-            )
-          )
-            throw new Error('A question must share its answer scope');
-          if (questionId && experimentOwner(graph, questionId) !== source.id)
-            throw new Error('An answer must share its question scope');
-        } else {
-          if (target.kind !== 'problem') throw new Error('An experiment must answer a question');
-          if (experimentOwner(graph, source.id) !== experimentOwner(graph, target.id))
-            throw new Error('An answer must share its question scope');
-          if (
-            edges.some(
-              (edge) =>
-                edge.kind === 'answers' &&
-                edge.sourceNodeId === source.id &&
-                edge.targetNodeId !== target.id,
-            )
-          )
-            throw new Error('An experiment answers one question');
-        }
+        assertContainerEdge({ edges, nodes }, sourceNodeId, targetNodeId, kind);
       }
       const [edge] = await tx
         .insert(goalEdges)
@@ -480,6 +756,81 @@ export class GoalGraphModel {
       return edge;
     });
 
+  /**
+   * Take nodes back off a draft Goal's graph, with every edge touching them.
+   *
+   * Only a `draft` can lose nodes, and only ones never bound to a Task: nothing
+   * has run, so no history goes with them. A started Goal retires nodes instead.
+   */
+  removeDraftNodes = async (goalId: string, nodeIds: string[], reason: string) =>
+    this.db.transaction(async (tx) => {
+      const goal = await this.ownedGoal(goalId, tx);
+      if (!goal) return 0;
+      if (goal.status !== 'draft') throw new Error('Only a draft Goal can remove nodes');
+      if (!nodeIds.length) return 0;
+      const removed = await tx
+        .delete(goalNodes)
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            inArray(goalNodes.id, nodeIds),
+            isNull(goalNodes.taskId),
+          ),
+        )
+        .returning({ id: goalNodes.id });
+      if (removed.length !== nodeIds.length)
+        throw new Error('Only unbound nodes of this Goal can be removed');
+      for (const { id } of removed) {
+        await this.appendEvent(tx, goalId, {
+          entityId: id,
+          entityType: 'node',
+          eventType: 'unlinked',
+          reason,
+        });
+      }
+      return removed.length;
+    });
+
+  /**
+   * Take edges back off a draft Goal's graph: every edge from `sourceNodeId` to
+   * `targetNodeId`, or only those of `kind`. A draft has dispatched nothing, so
+   * no run was gated by them; a started Goal keeps its edges.
+   */
+  removeDraftEdges = async (
+    goalId: string,
+    match: { kind?: GoalEdgeKind; sourceNodeId: string; targetNodeId: string },
+    reason?: string,
+  ): Promise<
+    | { edgeIds: string[]; status: 'removed' }
+    | { goalStatus: GoalStatus; status: 'not_draft' }
+    | { status: 'not_found' }
+  > =>
+    this.db.transaction(async (tx) => {
+      const goal = await this.ownedGoal(goalId, tx);
+      if (!goal) return { status: 'not_found' as const };
+      if (goal.status !== 'draft') return { goalStatus: goal.status, status: 'not_draft' as const };
+      const removed = await tx
+        .delete(goalEdges)
+        .where(
+          and(
+            eq(goalEdges.goalId, goalId),
+            eq(goalEdges.sourceNodeId, match.sourceNodeId),
+            eq(goalEdges.targetNodeId, match.targetNodeId),
+            match.kind ? eq(goalEdges.kind, match.kind) : undefined,
+          ),
+        )
+        .returning({ id: goalEdges.id });
+      for (const { id } of removed) {
+        await this.appendEvent(tx, goalId, {
+          entityId: id,
+          entityType: 'edge',
+          eventType: 'unlinked',
+          reason,
+        });
+      }
+      return { edgeIds: removed.map(({ id }) => id), status: 'removed' as const };
+    });
+
   bindTask = async (goalId: string, nodeId: string, taskId: string) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
@@ -491,6 +842,10 @@ export class GoalGraphModel {
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
             eq(goalNodes.kind, 'task'),
+            // A node retired (or otherwise settled) while its Task was being
+            // created must not be flipped back to `active` by the bind — that
+            // is the fence `GoalService.retireNodes` relies on.
+            notInArray(goalNodes.status, ['resolved', 'rejected', 'retired']),
             isNull(goalNodes.taskId),
           ),
         )
@@ -534,12 +889,48 @@ export class GoalGraphModel {
     });
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
-  updateNodeDescription = async (goalId: string, nodeId: string, description: string) =>
+  /** `confidence` travels with the description when the planner re-reads the problem. */
+  /** Follow a goal rename on the root question, while it still carries the goal's old title. */
+  renameProblemNode = async (goalId: string, from: string, to: string) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
       const [node] = await tx
         .update(goalNodes)
-        .set({ description, updatedAt: new Date() })
+        .set({ title: to, updatedAt: new Date() })
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, 'problem'),
+            eq(goalNodes.title, from),
+          ),
+        )
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Goal renamed',
+        taskId: node.taskId ?? undefined,
+      });
+      return node;
+    });
+
+  updateNodeDescription = async (
+    goalId: string,
+    nodeId: string,
+    description: string,
+    confidence?: number,
+  ) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({
+          description,
+          ...(confidence === undefined ? {} : { confidence: confidence.toString() }),
+          updatedAt: new Date(),
+        })
         .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
         .returning();
       if (!node) return undefined;
@@ -552,6 +943,17 @@ export class GoalGraphModel {
       });
       return node;
     });
+
+  /** Current status of one node, read fresh — for writers holding an older snapshot. */
+  getNodeStatus = async (goalId: string, nodeId: string): Promise<GoalNodeStatus | undefined> => {
+    const [row] = await this.db
+      .select({ status: goalNodes.status })
+      .from(goalNodes)
+      .innerJoin(goals, eq(goals.id, goalNodes.goalId))
+      .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId), this.ownership()))
+      .limit(1);
+    return row?.status as GoalNodeStatus | undefined;
+  };
 
   updateNodeStatus = async (
     goalId: string,
@@ -568,7 +970,24 @@ export class GoalGraphModel {
           status,
           updatedAt: new Date(),
         })
-        .where(and(eq(goalNodes.goalId, goalId), eq(goalNodes.id, nodeId)))
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.id, nodeId),
+            // A write that does not change the status is a no-op: rewriting the
+            // same status would bump `updatedAt` and append a duplicate event
+            // for nothing. A coordinator retry loop re-activating an
+            // already-active node on every tick would then churn the graph
+            // until no in-flight planning turn could submit a plan (the
+            // manager's snapshot hash reads these rows).
+            ne(goalNodes.status, status),
+            // Retirement is a person's final word on a node. A coordinator tick
+            // that loaded the node before it was retired must not write it back
+            // to `resolved` / `active` afterwards; the goal row lock taken above
+            // serializes this check with the retirement itself.
+            status === 'retired' ? undefined : ne(goalNodes.status, 'retired'),
+          ),
+        )
         .returning();
       if (!node) return undefined;
       const eventType: GoalEventType =
@@ -588,6 +1007,34 @@ export class GoalGraphModel {
         reason,
         taskId: node.taskId ?? undefined,
       });
+      // A retired node's delivery will never be judged: its outcome is
+      // discarded (see GoalService completion). Left open — awaiting sign-off,
+      // a first round that never comes (`pending` / `planned`), or rework after
+      // a reject — its acceptance stays in the active list for work the Goal
+      // already dropped. Close it in the same transaction so the node and its
+      // acceptance reach their terminal states together. A round still
+      // verifying is left to land; settling it closes it (recomputeStatus).
+      if (status === 'retired' && node.taskId) {
+        // Lock the acceptance whatever its status: a round settling right now
+        // (AcceptanceModel.settleTaskPolicyStatus) holds the same lock while it
+        // checks for retirement, so a `verifying` row skipped here cannot be
+        // written back to `delivered` after this commits unseen.
+        await tx
+          .select({ id: acceptances.id })
+          .from(acceptances)
+          .where(and(eq(acceptances.subjectType, 'task'), eq(acceptances.subjectId, node.taskId)))
+          .for('update');
+        await tx
+          .update(acceptances)
+          .set({ completedAt: new Date(), status: 'closed' })
+          .where(
+            and(
+              eq(acceptances.subjectType, 'task'),
+              eq(acceptances.subjectId, node.taskId),
+              inArray(acceptances.status, [...ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT]),
+            ),
+          );
+      }
       return node;
     });
 
@@ -664,6 +1111,42 @@ export class GoalGraphModel {
         eventType: 'resolved',
         reason: resolution,
       });
+      await settleDecisionBriefs(tx, decision.id, optionId, resolution);
+      return decision;
+    });
+
+  /**
+   * Rewrite the options of a still-pending decision, for when what an answer
+   * would do changed after the question was asked. A settled decision keeps
+   * the options it was answered against.
+   */
+  updatePendingDecisionOptions = async (
+    goalId: string,
+    decisionId: string,
+    options: GoalDecisionOption[],
+  ) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [ownedDecision] = await tx
+        .select({ id: goalNodeDecisions.id })
+        .from(goalNodeDecisions)
+        .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+        .where(
+          and(
+            eq(goalNodeDecisions.id, decisionId),
+            eq(goalNodeDecisions.status, 'pending'),
+            eq(goalNodes.goalId, goalId),
+          ),
+        )
+        .limit(1);
+      if (!ownedDecision) return undefined;
+      const [decision] = await tx
+        .update(goalNodeDecisions)
+        .set({ options, updatedAt: new Date() })
+        .where(
+          and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
+        )
+        .returning();
       return decision;
     });
 
@@ -707,6 +1190,7 @@ export class GoalGraphModel {
         eventType: 'retired',
         reason,
       });
+      await settleDecisionBriefs(tx, decision.id, 'canceled', reason);
       return decision;
     });
 }

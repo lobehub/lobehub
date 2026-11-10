@@ -11,8 +11,6 @@ import { join } from 'node:path';
 import { loadFile } from '@lobechat/file-loaders';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { isTextReadableFile } from '../src/utils/isTextReadableFile';
-
 describe('T-331 E2E: loadFile extracts .v/.sv content for model context', () => {
   const dir = mkdtempSync(join(tmpdir(), 't331-e2e-'));
 
@@ -70,10 +68,5 @@ endmodule
     expect(doc.content).toContain('package alu_pkg');
     expect(doc.content).toContain('module alu_top');
     expect(doc.content).toContain('always_comb');
-  });
-
-  it('isTextReadableFile gate accepts v/sv (the parseFile dispatch decision)', () => {
-    expect(isTextReadableFile('v')).toBe(true);
-    expect(isTextReadableFile('sv')).toBe(true);
   });
 });

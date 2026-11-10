@@ -1,9 +1,7 @@
 'use client';
 
 import type { MemoryDump } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Button, cx, Flexbox } from '@lobehub/ui';
 import { Fragment, memo, useState } from 'react';
 
 import { isDesktop } from '@/const/version';

@@ -1,15 +1,47 @@
 import type {
   AcceptanceCheckGroup,
+  AcceptanceMetadata,
+  AcceptanceRepairRequest,
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
+import type { SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
 
+import { acceptanceComments } from '../schemas/acceptanceComment';
+import { goalNodes } from '../schemas/goalGraph';
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
+import { workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Whose acceptances the list shows.
+ *
+ * `all` / `created` stay inside the active scope (personal or workspace);
+ * `participated` follows the caller across scopes — taking part in a review
+ * is about the person, not the workspace they happen to have open.
+ */
+export type AcceptanceListScope = 'all' | 'created' | 'participated';
+
+/**
+ * Where an acceptance came from. `goal` is a task acceptance whose task is a
+ * step of a goal graph; `standalone` also covers the rare document subject.
+ */
+export type AcceptanceListSource = 'all' | 'goal' | 'standalone' | 'task' | 'topic';
+
+/** `null` = only acceptances filed under no project. */
+export type AcceptanceListProject = string | null;
+
+export interface AcceptanceListQuery {
+  projectId?: AcceptanceListProject;
+  scope?: AcceptanceListScope;
+  source?: AcceptanceListSource;
+  statuses?: AcceptanceStatus[];
+}
 
 /** Statuses a user's decision produced — sticky until explicitly re-opened. */
 const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
@@ -55,6 +87,119 @@ export class AcceptanceModel {
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
+
+  /**
+   * What the list reads in the active scope. Wider than {@link ownership} in a
+   * workspace: a `private` workspace acceptance is member-gated, not
+   * creator-only — every member can open it (`resolveAcceptanceCommentAccess`),
+   * so the list must show it too. Only an `owner` row stays its creator's.
+   * Writes keep using `ownership`.
+   */
+  private listScope = (): SQL => {
+    const scope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    if (!this.workspaceId) return scope;
+    return and(scope, or(eq(acceptances.userId, this.userId), this.workspaceReadable()))!;
+  };
+
+  /** Rows a member of their workspace may read; mirrors `isWorkspaceReadableVisibility`. */
+  private workspaceReadable = (): SQL => ne(acceptances.visibility, 'owner');
+
+  /**
+   * Acceptances the caller has spoken on — a remark or an approval, replies
+   * included; a bare emoji reaction is not taking part. Rows the caller can no
+   * longer read (made private, or they left its workspace) drop out: the link
+   * would 404 and the title is no longer theirs to see. Mirrors the read rule
+   * of `resolveAcceptanceCommentAccess`.
+   */
+  private participation = (): SQL =>
+    and(
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(acceptanceComments)
+          .where(
+            and(
+              eq(acceptanceComments.acceptanceId, acceptances.id),
+              eq(acceptanceComments.authorUserId, this.userId),
+              inArray(acceptanceComments.kind, ['comment', 'approval']),
+              isNull(acceptanceComments.deletedAt),
+            ),
+          ),
+      ),
+      or(
+        eq(acceptances.userId, this.userId),
+        eq(acceptances.visibility, 'public'),
+        and(
+          this.workspaceReadable(),
+          exists(
+            this.db
+              .select({ one: sql`1` })
+              .from(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.workspaceId, acceptances.workspaceId),
+                  eq(workspaceMembers.userId, this.userId),
+                  isNull(workspaceMembers.deletedAt),
+                ),
+              ),
+          ),
+        ),
+      ),
+    )!;
+
+  private sourceCondition = (source: AcceptanceListSource): SQL | undefined => {
+    const goalStep = exists(
+      this.db
+        .select({ one: sql`1` })
+        .from(goalNodes)
+        .where(eq(goalNodes.taskId, acceptances.subjectId)),
+    );
+    switch (source) {
+      case 'topic': {
+        return eq(acceptances.subjectType, 'topic');
+      }
+      case 'task': {
+        return and(eq(acceptances.subjectType, 'task'), not(goalStep));
+      }
+      case 'goal': {
+        // A Goal's step deliveries, and the release reviews its batches are held on.
+        return or(
+          and(eq(acceptances.subjectType, 'task'), goalStep),
+          eq(acceptances.subjectType, 'goal_gate'),
+        );
+      }
+      case 'standalone': {
+        return inArray(acceptances.subjectType, ['standalone', 'document']);
+      }
+      default: {
+        return undefined;
+      }
+    }
+  };
+
+  /** The shared WHERE of {@link query} and {@link queryPage}. */
+  private listConditions = ({
+    projectId,
+    scope = 'all',
+    source = 'all',
+    statuses,
+  }: AcceptanceListQuery) => {
+    const conditions: SQL[] = [];
+    if (scope === 'participated') conditions.push(this.participation());
+    else {
+      conditions.push(this.listScope());
+      if (scope === 'created') conditions.push(eq(acceptances.userId, this.userId));
+    }
+    if (projectId === null) conditions.push(isNull(acceptances.projectId));
+    else if (projectId) conditions.push(eq(acceptances.projectId, projectId));
+    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const sourceCondition = this.sourceCondition(source);
+    if (sourceCondition) conditions.push(sourceCondition);
+    return conditions;
+  };
 
   /** Presentation-only write: never starts a round or rewrites evidence-bearing snapshots. */
   setCheckGroups = async (id: string, groups: AcceptanceCheckGroup[], expectedVersion: number) => {
@@ -172,6 +317,55 @@ export class AcceptanceModel {
   };
 
   /**
+   * Settle a task acceptance's rollup status, closing it instead when the task
+   * is a retired step of a goal graph (the Goal discards a retired node's
+   * outcome, so nothing is left to sign off). Returns the status now stored.
+   *
+   * The acceptance row is locked before the goal node is read, and node
+   * retirement locks the same row (GoalGraphModel.updateNodeStatus), so the two
+   * cannot interleave: whichever commits second sees the other's write. A
+   * user's `accepted` / `closed` that landed meanwhile is kept.
+   */
+  settleTaskPolicyStatus = async (
+    id: string,
+    status: AcceptanceStatus,
+  ): Promise<AcceptanceStatus | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ status: acceptances.status, subjectId: acceptances.subjectId })
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), policyScope))
+        .for('update');
+      if (!row) return undefined;
+      const current = row.status as AcceptanceStatus;
+      if (current === 'accepted' || current === 'closed') return current;
+
+      let next = status;
+      if (isClosedByRetirement(status)) {
+        const [retired] = await tx
+          .select({ id: goalNodes.id })
+          .from(goalNodes)
+          .where(and(eq(goalNodes.taskId, row.subjectId), eq(goalNodes.status, 'retired')))
+          .limit(1);
+        if (retired) next = 'closed';
+      }
+      if (next !== current)
+        await tx
+          .update(acceptances)
+          .set({
+            completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(next) ? new Date() : null,
+            status: next,
+          })
+          .where(eq(acceptances.id, id));
+      return next;
+    });
+  };
+
+  /**
    * The status of many subjects' acceptances in one read — for list surfaces
    * that must know each row's state without a request per row. Exact where the
    * recency-capped `query()` is not: it answers about the subjects asked for,
@@ -204,7 +398,9 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
+    defaults?: Partial<
+      Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility'>
+    >,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -223,7 +419,12 @@ export class AcceptanceModel {
         await this.db
           .update(acceptances)
           .set({
-            metadata,
+            // Only the title key: `existing` was read without a lock.
+            ...(nextTitle
+              ? {
+                  metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify({ title: nextTitle })}::jsonb`,
+                }
+              : {}),
             projectId: nextProjectId ?? existing.projectId,
             requirement: nextRequirement ?? existing.requirement,
           })
@@ -255,18 +456,14 @@ export class AcceptanceModel {
 
   /** Acceptances for the current user/workspace, newest first. */
   query = async (
-    options: {
+    options: AcceptanceListQuery & {
       limit?: number;
-      projectId?: string;
-      statuses?: AcceptanceStatus[];
       unbounded?: boolean;
     } = {},
   ) => {
-    const { projectId, statuses, unbounded } = options;
+    const { unbounded, ...filters } = options;
     const limit = unbounded ? undefined : (options.limit ?? 50);
-    const conditions = [this.ownership()];
-    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
-    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const conditions = this.listConditions(filters);
 
     return this.db.query.acceptances.findMany({
       limit,
@@ -285,20 +482,15 @@ export class AcceptanceModel {
   queryPage = async ({
     cursor,
     limit = 30,
-    projectId,
-    statuses,
-  }: {
+    ...filters
+  }: AcceptanceListQuery & {
     cursor?: string;
     limit?: number;
-    projectId?: string;
-    statuses?: AcceptanceStatus[];
   } = {}): Promise<{
     items: AcceptanceItem[];
     nextCursor: string | null;
   }> => {
-    const conditions = [this.ownership()];
-    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
-    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const conditions = this.listConditions(filters);
 
     // Millisecond-truncated createdAt — the precision the cursor round-trips
     // at. Comparing the raw timestamptz (microseconds) against a cursor read
@@ -332,6 +524,20 @@ export class AcceptanceModel {
     };
   };
 
+  /**
+   * File an ungrouped acceptance under a project. Never moves one already
+   * grouped: the `project_id IS NULL` guard lets a filing that landed in the
+   * meantime — by hand, or by another round — win. Resolves whether it wrote.
+   */
+  fillProject = async (id: string, projectId: string): Promise<boolean> => {
+    const rows = await this.db
+      .update(acceptances)
+      .set({ projectId })
+      .where(and(eq(acceptances.id, id), isNull(acceptances.projectId), this.ownership()))
+      .returning({ id: acceptances.id });
+    return rows.length > 0;
+  };
+
   update = async (
     id: string,
     value: Partial<
@@ -345,6 +551,77 @@ export class AcceptanceModel {
       .update(acceptances)
       .set(value)
       .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /**
+   * Set some metadata keys atomically, leaving every other key as stored.
+   * Metadata holds independent slots (title, check grouping, linked pull
+   * requests) written by different paths; spreading a previously read
+   * snapshot back would drop or revert whatever another writer committed in
+   * between.
+   */
+  patchMetadata = async (
+    id: string,
+    patch: Partial<AcceptanceMetadata>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /** Claim before any external side effect: concurrent submissions share one handoff. */
+  claimRepair = async (id: string, request: AcceptanceRepairRequest) =>
+    this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const previous = row.metadata?.repair;
+      if (previous?.state === 'starting' || previous?.state === 'running') {
+        return { claimed: false, request: previous };
+      }
+      const next =
+        previous?.state === 'failed'
+          ? {
+              ...previous,
+              error: undefined,
+              operationId: undefined,
+              topicId: undefined,
+              state: 'starting' as const,
+            }
+          : request;
+      await tx
+        .update(acceptances)
+        .set({
+          metadata: { ...row.metadata, repair: next },
+        })
+        .where(eq(acceptances.id, id));
+      return { claimed: true, request: next };
+    });
+
+  /** Late dispatch callbacks cannot overwrite a newer handoff or unrelated metadata. */
+  patchRepair = async (id: string, requestId: string, patch: Partial<AcceptanceRepairRequest>) => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`jsonb_set(${acceptances.metadata}, '{repair}', (${acceptances.metadata}->'repair') || ${JSON.stringify(patch)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(acceptances.id, id),
+          this.ownership(),
+          sql`${acceptances.metadata}->'repair'->>'id' = ${requestId}`,
+        ),
+      )
       .returning();
     return row;
   };
@@ -398,5 +675,30 @@ export class AcceptanceModel {
 
   delete = async (id: string) => {
     return this.db.delete(acceptances).where(and(eq(acceptances.id, id), this.ownership()));
+  };
+
+  /**
+   * Delete every acceptance attached to the given subjects in the caller's
+   * user/workspace scope. Used when the subjects themselves are deleted (see
+   * `TaskSubtreeRepository.deleteSubtree`).
+   */
+  deleteBySubjects = async (
+    subjectType: AcceptanceSubjectType,
+    subjectIds: string[],
+  ): Promise<void> => {
+    if (subjectIds.length === 0) return;
+
+    await this.db
+      .delete(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+          ),
+        ),
+      );
   };
 }

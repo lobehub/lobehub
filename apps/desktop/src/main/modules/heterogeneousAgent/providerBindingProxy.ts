@@ -3,10 +3,8 @@ import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'nod
 import type { AddressInfo } from 'node:net';
 import { pipeline } from 'node:stream/promises';
 
-import {
-  type HeterogeneousProviderBindingProtocol,
-  normalizeAnthropicSdkBaseURL,
-} from '@lobechat/heterogeneous-agents';
+import type { HeterogeneousProviderBindingProtocol } from '@lobechat/heterogeneous-agents';
+import { normalizeAnthropicSdkBaseURL } from '@lobechat/heterogeneous-agents/spawn';
 import { isRecord, pickString } from '@lobechat/utils/object';
 import { request } from 'undici';
 

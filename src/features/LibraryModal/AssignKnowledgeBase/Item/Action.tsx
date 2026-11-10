@@ -1,11 +1,10 @@
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildLibraryPath, buildPagePath } from '@/features/ResourceManager/utils/resourcePath';
+import { buildFilePath, buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useAgentStore } from '@/store/agent';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { KnowledgeType } from '@/types/knowledgeBase';
@@ -69,7 +68,7 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
                 window.open(
                   type === KnowledgeType.KnowledgeBase
                     ? buildLibraryPath(id, activeWorkspaceSlug)
-                    : buildPagePath(id, activeWorkspaceSlug),
+                    : buildFilePath(id, activeWorkspaceSlug),
                 );
               },
             },

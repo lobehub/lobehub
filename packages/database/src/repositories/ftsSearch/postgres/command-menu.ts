@@ -1,5 +1,5 @@
 import type { SQLWrapper } from 'drizzle-orm';
-import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -16,8 +16,10 @@ import {
   notAgentShareFileReference,
 } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { isUserKnowledgeBase } from '../../../utils/knowledgeBaseType';
 import { searchableMessageText } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
+import { notChannelTopic, notChannelTopicRef } from '../../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchAgentResult,
@@ -26,12 +28,14 @@ import type {
   FtsSearchFileResult,
   FtsSearchKnowledgeBaseResult,
   FtsSearchMessageResult,
+  FtsSearchTimeRange,
   FtsSearchTopicResult,
 } from '../types';
 import type { PostgresFtsSearchContext } from './context';
 import { AGENT_SCOPE_CANDIDATE_POOL } from './context';
 import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, buildSelectedResponse, mapScoresToRelevance, truncate } from './results';
+import { timeRangeWhere } from './timeRange';
 
 /** Topics and messages are displayed by recency after a larger scored candidate pool is fetched. */
 const RECENCY_CANDIDATE_MULTIPLIER = 4;
@@ -145,6 +149,7 @@ export async function searchTopics(
   query: string,
   limit: number,
   agentId?: string,
+  timeRange?: FtsSearchTimeRange,
 ): Promise<FtsSearchBackendResponse<FtsSearchTopicResult>> {
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
   const { db, dialect } = context;
@@ -173,7 +178,9 @@ export async function searchTopics(
         // the scope predicate alone would surface a visitor's conversation in
         // the creator's command-menu search.
         notShareVisitorTopic(),
+        notChannelTopic(),
         agentId && !context.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
+        timeRangeWhere(topics, timeRange),
         dialect.match(TOPIC_FIELDS, preparedQuery),
       ),
     )
@@ -262,6 +269,7 @@ export async function searchMessages(
   query: string,
   limit: number,
   agentId?: string,
+  timeRange?: FtsSearchTimeRange,
 ): Promise<FtsSearchBackendResponse<FtsSearchMessageResult>> {
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
   const { db, dialect } = context;
@@ -291,7 +299,9 @@ export async function searchMessages(
         // Twin of the topics guard: visitor messages inherit the creator's
         // userId and are only identifiable through their parent topic.
         notShareVisitorMessage(),
+        notChannelTopicRef(messages.topicId),
         agentId && !context.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
+        timeRangeWhere(messages, timeRange),
         dialect.match(MESSAGE_FIELDS, preparedQuery),
       ),
     )
@@ -328,6 +338,10 @@ export async function searchMessages(
     })
     .from(hits)
     .leftJoin(agents, eq(hits.agentId, agents.id))
+    // Keep parent visibility outside the isolated BM25 scan so ParadeDB can
+    // still use TopN. A topic-less message is valid; a topic-backed message is
+    // visible only when its ownership-scoped parent remains live.
+    .leftJoin(topics, and(eq(hits.topicId, topics.id), buildWorkspaceWhere(context.scope, topics)))
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
@@ -335,6 +349,7 @@ export async function searchMessages(
         // ParadeDB rejects regex predicates inside the scored BM25 scan. Blank content cannot
         // match content @@@, so filtering after the candidate pool preserves eligible hits.
         searchableMessageText(hits.content, hits.summary),
+        or(isNull(hits.topicId), isNotNull(topics.id)),
       ),
     )
     .orderBy(desc(hits.score))
@@ -543,6 +558,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
+        isUserKnowledgeBase(),
         context.liftsExclusionFilter ? undefined : excludeIdsWhere(knowledgeBases.id),
         dialect.match(KNOWLEDGE_BASE_FIELDS, preparedQuery),
       ),

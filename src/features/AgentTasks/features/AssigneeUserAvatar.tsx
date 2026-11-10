@@ -1,9 +1,8 @@
-import { Center, Icon, Tooltip } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Icon, Tooltip } from '@lobehub/ui';
 import { CircleUser } from 'lucide-react';
 import { memo } from 'react';
 
-import Avatar from '@/components/Avatar';
+import UserAvatar from '@/components/UserAvatar';
 
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 
@@ -34,12 +33,11 @@ const AssigneeUserAvatar = memo<AssigneeUserAvatarProps>(({ userId, size = 18, t
   }
 
   const avatar = (
-    <Avatar
-      avatar={displayMeta.avatar || undefined}
-      name={displayMeta.title || undefined}
+    <UserAvatar
+      avatar={displayMeta.avatar}
+      name={displayMeta.title}
       shape={'circle'}
       size={size}
-      title={displayMeta.title || undefined}
       variant={'outlined'}
     />
   );

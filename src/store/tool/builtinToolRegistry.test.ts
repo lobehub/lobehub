@@ -170,12 +170,12 @@ describe('builtin tool registry', () => {
     ['input.clickPoint', 'operate'],
     ['input.typeText', 'input'],
     ['input.pasteText', 'input'],
-    ['input.key', 'keyboard'],
-    ['input.keyboard', 'keyboard'],
-    ['input.focusText', 'focus'],
+    ['input.pressKeys', 'keyboard'],
+    ['input.performKeyboardInputs', 'keyboard'],
+    ['accessibility.focusText', 'focus'],
     ['display.capture', 'capture'],
     ['window.capture', 'capture'],
-    ['screen.captureRegion', 'capture'],
+    ['display.captureRegion', 'capture'],
     ['window.list', 'inspect'],
     ['future.command', 'operate'],
   ])('describes %s while it executes', (command, activity) => {
@@ -298,7 +298,7 @@ describe('builtin tool registry', () => {
     const view = render(
       createElement(ToolInspector, {
         apiName: AuvApiName.runCommand,
-        arguments: JSON.stringify({ argv: ['invoke', 'input.key', 'return'] }),
+        arguments: JSON.stringify({ argv: ['invoke', 'input.pressKeys', 'return'] }),
         identifier: 'lobe-auv',
         isExpanded: false,
         result: { content: null, error: { message: 'Input failed' } },
@@ -425,6 +425,26 @@ describe('builtin tool registry', () => {
       ClaudeCodeInterventions[UserInteractionApiName.askUserQuestion],
     );
     expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinInspector('opencode', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinRender('opencode', UserInteractionApiName.askUserQuestion)).toBeDefined();
+    expect(getBuiltinIntervention('opencode', UserInteractionApiName.askUserQuestion)).toBe(
+      ClaudeCodeInterventions[UserInteractionApiName.askUserQuestion],
+    );
+  });
+
+  it('registers command and local-file surfaces for Devin ACP tool names', () => {
+    // Devin tool calls arrive under the CLI's inference names
+    // (`_meta['cognition.ai/inferenceToolName']`), not Claude Code's.
+    expect(getBuiltinInspector('devin', 'exec')).toBeDefined();
+    expect(getBuiltinRender('devin', 'exec')).toBeDefined();
+    expect(getBuiltinInspector('devin', 'read')).toBeDefined();
+    expect(getBuiltinRender('devin', 'read')).toBeDefined();
+    expect(getBuiltinInspector('devin', 'write')).toBeDefined();
+    expect(getBuiltinRender('devin', 'write')).toBeDefined();
+    expect(getBuiltinInspector('devin', 'edit')).toBeDefined();
+    // No diffText is synthesized for ACP updates, so edit keeps the generic
+    // result view instead of an empty patch card.
+    expect(getBuiltinRender('devin', 'edit')).toBeUndefined();
   });
 
   it('exposes the marketplace APIs under the web onboarding manifest', () => {

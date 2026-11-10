@@ -3,10 +3,13 @@ import { memo, useMemo } from 'react';
 
 import CollapsibleContent from '@/components/CollapsibleContent';
 import MarkdownMessage from '@/features/Conversation/Markdown';
+import { StartTopicConversationContext } from '@/features/LocalFile';
 import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { splitReferencedMessage } from '@/store/chat/utils/parseReferencedMessage';
 import { type UIChatMessage } from '@/types/index';
 
+import { useStartTopicConversation } from '../../../hooks/useStartTopicConversation';
+import { hasRenderableEditorData } from '../editorData';
 import { useMarkdown } from '../useMarkdown';
 import AudioFileListViewer from './AudioFileListViewer';
 import FileListViewer from './FileListViewer';
@@ -19,6 +22,7 @@ import VideoFileListViewer from './VideoFileListViewer';
 const UserMessageContent = memo<UIChatMessage>(
   ({ id, content, editorData, imageList, videoList, audioList, fileList, metadata }) => {
     const markdownProps = useMarkdown(id);
+    const startTopicConversation = useStartTopicConversation();
     const selections = metadata?.contextSelections?.length
       ? metadata.contextSelections
       : metadata?.pageSelections;
@@ -31,11 +35,14 @@ const UserMessageContent = memo<UIChatMessage>(
       return { displayContent: body, reference };
     }, [content]);
 
-    const hasEditorData =
-      editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
+    const hasEditorData = hasRenderableEditorData(editorData);
 
     const textBody = hasEditorData ? (
-      <RichTextMessage editorState={editorData} />
+      // Rich-text folder chips render headlessly, so they receive the
+      // conversation through context rather than props.
+      <StartTopicConversationContext value={startTopicConversation}>
+        <RichTextMessage editorState={editorData} />
+      </StartTopicConversationContext>
     ) : (
       displayContent && <MarkdownMessage {...markdownProps}>{displayContent}</MarkdownMessage>
     );

@@ -6,8 +6,8 @@ import type {
   ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
-import { serializePartsForStorage } from '@lobechat/utils/multimodalContent';
-import { sanitizeToolCallArguments } from '@lobechat/utils/sanitizeToolCallArguments';
+import { serializePartsForStorage } from '../utils/multimodalContent';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 
 import { UsageCounter } from '../core/UsageCounter';
 import type { AgentRuntimeHost, LLMAttemptOutput } from '../transport';
@@ -44,6 +44,8 @@ interface CallLlmMessageMetadata extends MessageMetadata {
 
 interface FinalizeCallLlmTurnInput {
   assistantMessageId: string;
+  /** Provider attempts spent on this call, including retries. */
+  attempts?: number;
   events: AgentEvent[];
   host: AgentRuntimeHost;
   model: string;
@@ -65,16 +67,20 @@ const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
   currentStepSpeed,
   currentStepUsage,
+  executionSite,
   finishType,
   hasContentImages,
   interruptedMidStream,
+  usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
+  executionSite?: LLMAttemptOutput['executionSite'];
   finishType?: string;
   hasContentImages?: boolean;
   interruptedMidStream?: boolean;
+  usageEstimated?: boolean;
 }): CallLlmMessageMetadata | undefined => {
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
@@ -83,6 +89,8 @@ const buildMessageMetadata = ({
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
     ...(interruptedMidStream && { interruptedMidStream: true }),
+    ...(executionSite && { executionSite }),
+    ...(usageEstimated && currentStepUsage && { usageEstimated: true }),
   };
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -182,8 +190,10 @@ const persistFinalMessage = async ({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
+    executionSite: output.executionSite,
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
+    usageEstimated: output.usageEstimated,
   });
   const workAnchor = buildWorkAnchor({
     operationId: host.operation.operationId,
@@ -211,6 +221,7 @@ const persistFinalMessage = async ({
 
 const buildFinalState = ({
   assistantMessageId,
+  attempts,
   model,
   output,
   provider,
@@ -242,6 +253,7 @@ const buildFinalState = ({
 
   if (output.usage) {
     const { usage, cost } = UsageCounter.accumulateLLM({
+      apiCallsDelta: attempts ?? 1,
       cost: newState.cost,
       model,
       modelUsage: output.usage,
@@ -251,6 +263,11 @@ const buildFinalState = ({
 
     newState.usage = usage;
     if (cost) newState.cost = cost;
+  } else {
+    // A successful response may omit usage. The provider attempt still
+    // happened, so record it independently of token accumulation instead of
+    // dropping it from the LLM-call metric.
+    newState.usage = UsageCounter.accumulateAttempts(newState.usage, Math.max(attempts ?? 1, 1));
   }
 
   if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
@@ -268,6 +285,7 @@ const buildFinalState = ({
 
 export const finalizeCallLlmTurn = async ({
   assistantMessageId,
+  attempts,
   events,
   host,
   model,
@@ -355,6 +373,7 @@ export const finalizeCallLlmTurn = async ({
   });
   const newState = buildFinalState({
     assistantMessageId,
+    attempts,
     finalReasoning,
     model,
     output: finalizedOutput,
@@ -429,7 +448,9 @@ export const persistInterruptedCallLlmResult = async ({
       metadata: buildMessageMetadata({
         currentStepSpeed: output.speed,
         currentStepUsage: output.usage,
+        executionSite: output.executionSite,
         interruptedMidStream: true,
+        usageEstimated: output.usageEstimated,
       }),
       reasoning: output.thinkingContent ? { content: output.thinkingContent } : undefined,
       tools: sanitizePersistedTools(output.toolsCalling),

@@ -1,9 +1,9 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { createModal, type ModalInstance, Tabs } from '@lobehub/ui/base-ui';
+import { createModal, cssVar, Flexbox, Icon, type ModalInstance, Tabs } from '@lobehub/ui';
 import { t } from 'i18next';
+import { BracesIcon, FileDownIcon, FileTextIcon, ImageIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -55,53 +55,61 @@ const ShareModalContent = memo(() => {
   const tabItems = useMemo(
     () => [
       {
+        icon: isMobile ? undefined : <Icon icon={ImageIcon} size={14} />,
         key: ShareTab.Screenshot,
-        label: t('shareModal.screenshot'),
+        label: t('shareModal.format.image'),
       },
       {
+        icon: isMobile ? undefined : <Icon icon={FileTextIcon} size={14} />,
         key: ShareTab.Text,
-        label: t('shareModal.text'),
+        label: t('shareModal.format.markdown'),
       },
       {
+        icon: isMobile ? undefined : <Icon icon={FileDownIcon} size={14} />,
         key: ShareTab.PDF,
         label: t('shareModal.pdf'),
       },
       {
+        icon: isMobile ? undefined : <Icon icon={BracesIcon} size={14} />,
         key: ShareTab.JSON,
         label: 'JSON',
       },
     ],
-    [t],
+    [isMobile, t],
+  );
+
+  const loadingFallback = (
+    <Flexbox flex={1} gap={12} padding={24}>
+      <ArticleSkeleton rows={8} />
+    </Flexbox>
   );
 
   return (
-    <Flexbox
-      gap={isMobile ? 8 : 24}
-      height={'100%'}
-      style={{ overflow: 'hidden', position: 'relative' }}
-    >
+    <Flexbox height={'100%'} style={{ overflow: 'hidden', position: 'relative' }}>
       <Tabs
         activeKey={tab}
         items={tabItems}
-        variant="rounded"
+        size={isMobile ? 'small' : 'middle'}
+        variant="square"
         styles={{
-          list: { display: 'flex', width: '100%' },
-          tab: { flex: 1 },
+          list: {
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            overflowX: 'auto',
+            paddingInline: 12,
+          },
         }}
         onChange={(key) => setTab(key as ShareTab)}
       />
       {isLoading && dbMessages.length === 0 ? (
-        <Flexbox gap={12} paddingBlock={8}>
-          <ArticleSkeleton rows={8} />
-        </Flexbox>
+        loadingFallback
       ) : rendererState.status === 'error' && rendererState.tab === tab ? (
-        <AsyncError error={rendererState.error} variant={'block'} onRetry={retryRenderer} />
+        <Flexbox padding={24}>
+          <AsyncError error={rendererState.error} variant={'block'} onRetry={retryRenderer} />
+        </Flexbox>
       ) : rendererState.status === 'ready' && rendererState.tab === tab ? (
         rendererState.render({ mobile: isMobile })
       ) : (
-        <Flexbox gap={12} paddingBlock={8}>
-          <ArticleSkeleton rows={8} />
-        </Flexbox>
+        loadingFallback
       )}
     </Flexbox>
   );
@@ -125,7 +133,7 @@ export const openShareModal = ({
       if (!open) afterClose?.();
     },
     styles: {
-      content: { height: 'min(80vh, 800px)' },
+      content: { display: 'flex', flexDirection: 'column', height: 'min(80vh, 760px)', padding: 0 },
     },
     title: t('shareModal.title', { ns: 'chat' }),
     width: 'min(90vw, 1024px)',

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { Maximize2Icon, Minimize2Icon, MinusIcon, XIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

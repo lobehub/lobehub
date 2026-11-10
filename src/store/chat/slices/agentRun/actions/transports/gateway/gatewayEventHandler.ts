@@ -2,6 +2,8 @@ import type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamEvent,
+  LlmCancelData,
+  LlmExecuteData,
   MessagePatchData,
   StepCompleteData,
   StreamChunkData,
@@ -12,11 +14,16 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
+import { isSessionTerminalEvent } from '@lobechat/agent-gateway-client';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
+import { isClientLlmWaitableError } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
+import { readConversationMessages } from '@/helpers/conversationMessageRead';
+import { llmRelayExecutor } from '@/services/llmRelay';
+import type { RelayProtocolChunk } from '@/services/llmRelay/protocolChunks';
 import { messageService } from '@/services/message';
 import { didToolMutateWorkView, workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
@@ -31,20 +38,13 @@ import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNo
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { applyMessagePatch } from './messagePatch';
-
-// `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
-// cancel and a deferred-tool park. These must NOT mark the topic unread, and
-// must take the non-success branch in `onSessionComplete` so the run clears
-// back to 'active' rather than persisting as an unread completion.
-const NON_COMPLETION_RUNTIME_END_REASONS = new Set(['interrupted', 'waiting_for_async_tool']);
-
-/**
- * Whether an `agent_runtime_end` event represents a clean completion (vs. a
- * cancel / park). A clean completion is the only ending that should surface an
- * unread badge.
- */
-export const isCompletedRuntimeEnd = (reason?: string | null): boolean =>
-  !NON_COMPLETION_RUNTIME_END_REASONS.has(reason ?? '');
+import {
+  findTerminalAssistantError,
+  isCompletedRuntimeEnd,
+  resolveRuntimeEndStatus,
+} from './runtimeEndReason';
+import { applyStepMetrics } from './stepMetrics';
+import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -88,9 +88,7 @@ const fetchAndReplaceMessages = async (
   const skipWorks = options?.skipWorks;
   const snapshotGeneration = options?.snapshotGeneration;
   const started = snapshotGeneration?.current;
-  const messages = await messageService.getMessages(
-    skipWorks ? { ...context, skipWorks } : context,
-  );
+  const messages = await readConversationMessages(skipWorks ? { ...context, skipWorks } : context);
   if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
   if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
@@ -400,6 +398,12 @@ export const createGatewayEventHandler = (
     reasoningOperationId = undefined;
   };
 
+  // Reply of the relayed LLM attempt this tab is executing (`llm_execute`),
+  // rendered from the local model output instead of the server's echo. Reset
+  // per call id: a re-dispatched attempt starts its reply over.
+  let relayRender:
+    { callId: string; content: string; messageId: string; reasoning: string } | undefined;
+
   // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
@@ -549,6 +553,55 @@ export const createGatewayEventHandler = (
     toolStateBootstrapPromiseByCallId.set(data.toolCallId, trackedBootstrapPromise);
   };
 
+  /**
+   * Optimistic render of a relayed attempt this tab executes: the local model's
+   * text and reasoning land on the step's assistant message as they are
+   * produced, and the server's echo of the same output (`relayCallId`) is
+   * skipped. Tool calls, `stream_end` and the step's message patch still come
+   * from the server, so its final state overrides what was rendered here.
+   */
+  const applyLocalRelayOutput = (call: LlmExecuteData, chunk: RelayProtocolChunk) => {
+    const messageId = call.assistantMessageId;
+    if (!messageId || terminalState) return;
+    if (chunk.type !== 'text' && chunk.type !== 'reasoning') return;
+    if (typeof chunk.data !== 'string' || !chunk.data) return;
+
+    if (relayRender?.callId !== call.callId) {
+      relayRender = { callId: call.callId, content: '', messageId, reasoning: '' };
+    }
+    const isCurrent = messageId === currentAssistantMessageId;
+    hasStreamedContent = true;
+
+    if (chunk.type === 'text') {
+      relayRender.content += chunk.data;
+      if (isCurrent) {
+        endReasoningIfNeeded();
+        accumulatedContent = relayRender.content;
+      }
+      // The whole reply so far, not the delta: a chunk that raced ahead of
+      // `stream_start` (the message shell not in the store yet) is not lost.
+      get().internal_dispatchMessage(
+        { id: messageId, type: 'updateMessage', value: { content: relayRender.content } },
+        dispatchContext,
+      );
+      return;
+    }
+
+    relayRender.reasoning += chunk.data;
+    if (isCurrent) {
+      startReasoningIfNeeded();
+      accumulatedReasoning = relayRender.reasoning;
+    }
+    get().internal_dispatchMessage(
+      {
+        id: messageId,
+        type: 'updateMessage',
+        value: { reasoning: { content: relayRender.reasoning } },
+      },
+      dispatchContext,
+    );
+  };
+
   return (event: AgentStreamEvent) => {
     if (terminalState) return;
 
@@ -564,8 +617,12 @@ export const createGatewayEventHandler = (
       return;
     }
 
-    if (event.type === 'agent_runtime_end' || event.type === 'error') {
+    // A parked LLM call's error is not terminal: the run streams on in this
+    // same session once a client resumes it.
+    if (isSessionTerminalEvent(event)) {
       terminalState = event.type === 'error' ? 'error' : 'completed';
+      // A relayed attempt this tab still runs for the run is moot now.
+      llmRelayExecutor.cancelOperation(event.operationId || gatewayOperationId);
     }
 
     switch (event.type) {
@@ -584,37 +641,12 @@ export const createGatewayEventHandler = (
             // interrupt instead of falling back to a placeholder-clobbering refetch.
             hasStreamedContent = true;
 
-            // The step_start uiMessages snapshot is resolved BEFORE the server
-            // creates this step's assistant row, so for every step after the
-            // first the message is NOT in the store yet. `updateMessage`
-            // dispatches on a missing id are silent no-ops, so without an
-            // insert here the whole step renders nothing until the next DB
-            // refetch — and the final step has none before agent_runtime_end,
-            // which is how "loading cleared but no text" happened.
+            // The step_start uiMessages snapshot predates this step's rows;
+            // insert the seeded ones so chunks land on a stored message.
             const stored = dbMessageSelectors.getDbMessageById(newAssistantMessageId)(get());
             if (!stored) {
-              const seed = data?.assistantMessage;
-              if (seed?.role) {
-                // Newer servers ship the message seed on stream_start — insert
-                // the shell locally so chunks land immediately, zero roundtrips.
-                get().internal_dispatchMessage(
-                  {
-                    id: newAssistantMessageId,
-                    type: 'createMessage',
-                    value: {
-                      agentId: seed.agentId ?? context.agentId,
-                      content: '',
-                      groupId: seed.groupId ?? undefined,
-                      model: seed.model ?? data?.model,
-                      parentId: seed.parentId ?? undefined,
-                      provider: seed.provider ?? data?.provider,
-                      role: 'assistant',
-                      threadId: seed.threadId ?? undefined,
-                      topicId: seed.topicId ?? context.topicId ?? undefined,
-                    },
-                  },
-                  dispatchContext,
-                );
+              if (data?.assistantMessage?.role) {
+                insertStreamStartSeeds(get, data, context, dispatchContext);
               } else {
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the
@@ -630,10 +662,38 @@ export const createGatewayEventHandler = (
           // current id.
           endReasoningIfNeeded();
 
-          // Reset accumulators for the new stream
-          accumulatedContent = '';
-          accumulatedReasoning = '';
-          get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
+          // Reset accumulators for the new stream — unless this tab already
+          // rendered the step's relayed reply locally ahead of `stream_start`.
+          const localRelay =
+            relayRender && relayRender.messageId === currentAssistantMessageId
+              ? relayRender
+              : undefined;
+          accumulatedContent = localRelay?.content ?? '';
+          accumulatedReasoning = localRelay?.reasoning ?? '';
+          // Output that raced ahead of the shell inserted above was dispatched
+          // to a missing id (a no-op), and the server echo of it is skipped:
+          // put it on the message now.
+          if (localRelay?.content) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { content: localRelay.content },
+              },
+              dispatchContext,
+            );
+          }
+          if (localRelay?.reasoning) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { reasoning: { content: localRelay.reasoning } },
+              },
+              dispatchContext,
+            );
+          }
+          get().updateOperationMetadata(operationId, streamStartOperationMetadata(data));
 
           // Native gateway streams carry `assistantMessage.id` directly on
           // stream_start and the shell-insert above guarantees a valid chunk
@@ -641,12 +701,12 @@ export const createGatewayEventHandler = (
           // is what un-blocks the enqueue chain so live chunks can land
           // mid-stream.
           //
-          // Hetero CLI adapters (Claude Code / Codex) never set
-          // `assistantMessage.id` on stream_start, so the DB read stays
-          // mandatory for them — it (a) pulls the executor-created
-          // placeholder into `dbMessagesMap` so subsequent chunks can
-          // dispatch to it, and (b) resolves the next-step assistant id for
-          // the `newStep` fallback.
+          // Server-ingested hetero runs get `assistantMessage.id` stamped at
+          // publish; desktop-local hetero steps and older servers send none,
+          // so the DB read stays mandatory for them — it (a) pulls the
+          // executor-created placeholder into `dbMessagesMap` for later
+          // chunks, and (b) resolves the `newStep` fallback, which only knows
+          // "the assistant after the current one" (wrong for a replay).
           if (!newAssistantMessageId) {
             const messages = await refreshMessagesFromDb({
               skipWorks: true,
@@ -692,6 +752,14 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as StreamChunkData | undefined;
           if (!data) return;
+
+          // Echo of a relayed attempt this tab ran: already rendered locally.
+          if (
+            (data.chunkType === 'text' || data.chunkType === 'reasoning') &&
+            llmRelayExecutor.ownsCall(data.relayCallId)
+          ) {
+            return;
+          }
 
           if (data.chunkType === 'text' && data.content) {
             // `lh hetero exec` coalesces main-agent text into full-text
@@ -968,12 +1036,9 @@ export const createGatewayEventHandler = (
           });
         }
 
-        // The server's stepIndex is the authoritative step counter — mirror it
-        // onto the operation so step-based UI (OpStatusTray) stays correct
-        // even across page-refresh reconnects.
-        if (typeof event.stepIndex === 'number') {
-          get().updateOperationMetadata(operationId, { stepCount: event.stepIndex + 1 });
-        }
+        // `stepIndex` is the execution counter; `llmCalls` is the user-facing metric.
+        const update = get().updateOperationMetadata;
+        applyStepMetrics(update, operationId, event.stepIndex, (event.data as any)?.llmCalls);
 
         // Server attaches the canonical UIChatMessage[] snapshot at every
         // step boundary (agent-runtime #15152). Use it as Source of Truth
@@ -1040,6 +1105,29 @@ export const createGatewayEventHandler = (
           localOperationId: operationId,
           operationId: gatewayOperationId,
         });
+        break;
+      }
+
+      case 'llm_execute': {
+        // The server hands this tab one LLM attempt for a provider only this
+        // device can reach. Started right away, not queued: the queue may be
+        // waiting on a DB read, and the claim deadline is 15 s. Its output is
+        // rendered through the queue so it keeps its order with stream_start.
+        const data = event.data as LlmExecuteData | undefined;
+        if (!data?.callId || context.agentShareId) break;
+        void llmRelayExecutor.execute(data, {
+          // A sub-agent's call rides this run's channel: this run ending ends it.
+          channelOperationId: event.operationId || gatewayOperationId,
+          onOutput: (chunk) => {
+            enqueue(() => applyLocalRelayOutput(data, chunk));
+          },
+        });
+        break;
+      }
+
+      case 'llm_cancel': {
+        const data = event.data as LlmCancelData | undefined;
+        if (data?.callId) llmRelayExecutor.cancel(data);
         break;
       }
 
@@ -1121,6 +1209,8 @@ export const createGatewayEventHandler = (
           }
           break;
         }
+
+        applyStepMetrics(get().updateOperationMetadata, operationId, undefined, data?.llmCalls);
 
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
@@ -1247,15 +1337,24 @@ export const createGatewayEventHandler = (
           //   • completed → completeRun completes the op, marks the topic unread,
           //     drains the input queue, then afterRunComplete fires the desktop
           //     notification (skipped if a queued follow-up was scheduled).
+          //   • failed → completeRun lands the op in `failed`; afterRunComplete
+          //     fires the failure notification.
           //   • cancelled → completeRun only completes the op (no unread badge,
           //     no queue drain, no notification) — same as the old inline path.
           if (runtimeType === 'gateway' && runLifecycle) {
-            const status = isCompletedRuntimeEnd(data?.reason) ? 'completed' : 'cancelled';
+            const status = resolveRuntimeEndStatus(data?.reason);
             const { requeued } = await runLifecycle.completeRun({
               ...lifecycleEventBase,
               status,
             });
-            if (!requeued && status === 'completed') {
+            if (status === 'failed') {
+              // The failed row's content is the loading placeholder: announce the error.
+              await runLifecycle.afterRunComplete({
+                ...lifecycleEventBase,
+                notification: { error: findTerminalAssistantError(terminalMessages) },
+                status,
+              });
+            } else if (!requeued && status === 'completed') {
               // Notification body, resolved most-authoritative first:
               //
               // 1. the terminal snapshot's final assistant text — server-
@@ -1312,6 +1411,20 @@ export const createGatewayEventHandler = (
           const messageError = normalizeHeterogeneousMessageError(
             normalizeChatMessageError(event.data),
           );
+
+          // A relayed LLM call no client took: the server parks the run in
+          // `waiting_for_client` (or, if it cannot, fails it and writes the
+          // error itself), so this is not the run's end and the row is not ours
+          // to write — persisting it here would replace the waiting notice, and
+          // a stream replay on reconnect would do so long after the park. Show
+          // what the server wrote instead.
+          if (isClientLlmWaitableError(messageError)) {
+            get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+            endReasoningIfNeeded();
+            await refreshMessagesFromDb().catch(console.error);
+            return;
+          }
+
           const errorMessage = messageError.message;
 
           void emitAgentSignal({
@@ -1328,15 +1441,10 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
-          // An errored run is a FAILED run, not a completed one — failed runs
-          // receive no unread badge, no queue drain, and no notification.
-          // For gateway, drive the terminal disposition through the
-          // shared lifecycle so the op lands in `failed` (no unread badge, no queue
-          // drain, no notification). hetero never forwards `error` to this handler
-          // (its executor routes errors through persistTerminalError), but keep the
-          // legacy completeOperation for any other caller for safety.
+          // Failed run: no unread badge or queue drain. hetero never forwards `error`.
+          const failedEvent = { ...lifecycleEventBase, status: 'failed' as const };
           if (runtimeType === 'gateway' && runLifecycle) {
-            await runLifecycle.completeRun({ ...lifecycleEventBase, status: 'failed' });
+            await runLifecycle.completeRun(failedEvent);
           } else {
             get().completeOperation(operationId);
           }
@@ -1379,6 +1487,11 @@ export const createGatewayEventHandler = (
             },
             dispatchContext,
           );
+
+          // Notify after the error shows; this event ends the session (end is dropped).
+          const notification = { error: messageError };
+          if (runtimeType === 'gateway')
+            await runLifecycle?.afterRunComplete({ ...failedEvent, notification });
         });
         break;
       }

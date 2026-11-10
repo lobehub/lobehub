@@ -1,6 +1,6 @@
 import { isRecord } from '@lobechat/utils/object';
 
-import type { UsageData } from '../types';
+import type { HeterogeneousAgentEvent, UsageData } from '../types';
 import { TraeAcpAdapter, type TraeAcpPayload } from './traeAcp';
 
 const toFiniteNumber = (value: unknown): number | undefined => {
@@ -11,6 +11,20 @@ const toFiniteNumber = (value: unknown): number | undefined => {
 export class DevinAcpAdapter extends TraeAcpAdapter {
   constructor() {
     super({ eventPrefix: 'devin', provider: 'devin' });
+  }
+
+  override adapt(value: unknown): HeterogeneousAgentEvent[] {
+    return super.adapt(value).map((event) => {
+      if (event.type !== 'tool_result' || event.data.isError) return event;
+      const tool = this.stream.stepTools.find((tool) => tool.id === event.data.toolCallId);
+      if (tool?.identifier !== 'devin' || tool.apiName !== 'read') return event;
+
+      // A successful empty read needs state even when ACP skipped running updates.
+      return {
+        ...event,
+        data: { ...event.data, pluginState: { content: event.data.content } },
+      };
+    });
   }
 
   protected override extractUsageFromUsageUpdate(raw: TraeAcpPayload): UsageData | undefined {

@@ -1,4 +1,4 @@
-import { ActionIcon, type ActionIconProps } from '@lobehub/ui/base-ui';
+import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 

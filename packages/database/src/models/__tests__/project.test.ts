@@ -1,18 +1,23 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq } from 'drizzle-orm';
+import { INBOX_SESSION_ID } from '@lobechat/const';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import {
+  agentOperations,
   agents,
   environments,
   knowledgeBases,
+  projectAgents,
   projectCompletionReviews,
   projectEnvironments,
   projects,
   projectWorks,
   tasks,
+  topics,
   users,
   works,
   workspaces,
@@ -30,15 +35,17 @@ const userId = 'project-model-user';
 const otherUserId = 'project-model-other-user';
 let projectIdentifierSequence = 0;
 
-const createProject = (projectModel: ProjectModel, input: Omit<CreateProjectInput, 'identifier'>) =>
-  projectModel.create({
+const createProject = (repo: ProjectModel, input: Omit<CreateProjectInput, 'identifier'>) =>
+  repo.create({
     ...input,
     identifier: `P${String(++projectIdentifierSequence).padStart(5, '0')}`,
   });
 
 describe('ProjectModel', () => {
   const model = new ProjectModel(serverDB, userId);
+  const repo = new ProjectRepository(serverDB, userId);
   const otherModel = new ProjectModel(serverDB, otherUserId);
+  const otherRepo = new ProjectRepository(serverDB, otherUserId);
 
   beforeEach(async () => {
     await serverDB.delete(users);
@@ -52,14 +59,255 @@ describe('ProjectModel', () => {
     await serverDB.delete(users);
   });
 
+  describe('move', () => {
+    // The manual order as the sidebar reads it: sort_order, unplaced first, newest first.
+    const ids = async (m: ProjectModel) =>
+      (await m.list())
+        .toSorted(
+          (a, b) =>
+            (a.sortOrder ?? -1) - (b.sortOrder ?? -1) ||
+            b.updatedAt.getTime() - a.updatedAt.getTime(),
+        )
+        .map((p) => p.name);
+
+    it('leaves the list API in recently-updated order', async () => {
+      const a = await createProject(repo, { name: 'A' });
+      const b = await createProject(repo, { name: 'B' });
+      await model.move(a.id, { beforeId: b.id });
+
+      expect((await model.list()).map((p) => p.name)).toEqual(['B', 'A']);
+    });
+
+    it('places a project before or after another and keeps the order', async () => {
+      const a = await createProject(repo, { name: 'A' });
+      const b = await createProject(repo, { name: 'B' });
+      const c = await createProject(repo, { name: 'C' });
+      expect(await ids(model)).toEqual(['C', 'B', 'A']);
+
+      await model.move(a.id, { beforeId: c.id });
+      expect(await ids(model)).toEqual(['A', 'C', 'B']);
+
+      await model.move(a.id, { afterId: b.id });
+      expect(await ids(model)).toEqual(['C', 'B', 'A']);
+      expect((await model.findById(c.id))?.sortOrder).toBe(0);
+    });
+
+    it('lists projects never placed above placed ones', async () => {
+      const a = await createProject(repo, { name: 'A' });
+      const b = await createProject(repo, { name: 'B' });
+      await model.move(a.id, { beforeId: b.id });
+      await createProject(repo, { name: 'New' });
+
+      expect(await ids(model)).toEqual(['New', 'A', 'B']);
+    });
+
+    it('keeps updatedAt so the recently-updated order does not move', async () => {
+      const a = await createProject(repo, { name: 'A' });
+      const b = await createProject(repo, { name: 'B' });
+      const before = await model.findByIds([a.id, b.id]);
+
+      await model.move(a.id, { beforeId: b.id });
+
+      for (const row of await model.findByIds([a.id, b.id])) {
+        const original = before.find((p) => p.id === row.id)!;
+        expect(row.updatedAt.getTime()).toBe(original.updatedAt.getTime());
+      }
+    });
+
+    it('rejects projects outside the caller scope', async () => {
+      const mine = await createProject(repo, { name: 'Mine' });
+      const theirs = await createProject(otherRepo, { name: 'Theirs' });
+
+      await expect(model.move(theirs.id, { beforeId: mine.id })).rejects.toThrow(
+        'Project not found',
+      );
+      expect((await otherModel.findById(theirs.id))?.sortOrder).toBeNull();
+    });
+
+    it("keeps each member's private projects in place when another member moves", async () => {
+      await serverDB.insert(workspaces).values({
+        id: 'project-order-workspace',
+        name: 'Project Order Workspace',
+        primaryOwnerId: userId,
+        slug: 'project-order-workspace',
+      });
+      const alice = new ProjectModel(serverDB, userId, 'project-order-workspace');
+      const bob = new ProjectModel(serverDB, otherUserId, 'project-order-workspace');
+      const aliceRepo = new ProjectRepository(serverDB, userId, 'project-order-workspace');
+      const bobRepo = new ProjectRepository(serverDB, otherUserId, 'project-order-workspace');
+      const publicA = await createProject(aliceRepo, { name: 'PublicA' });
+      const publicB = await createProject(aliceRepo, { name: 'PublicB' });
+      const privateA = await createProject(aliceRepo, { name: 'PrivateA', visibility: 'private' });
+      const privateB = await createProject(bobRepo, { name: 'PrivateB', visibility: 'private' });
+
+      await alice.move(privateA.id, { beforeId: publicA.id });
+      await alice.move(publicB.id, { afterId: publicA.id });
+      expect(await ids(alice)).toEqual(['PrivateA', 'PublicA', 'PublicB']);
+
+      await bob.move(privateB.id, { afterId: publicB.id });
+
+      expect(await ids(alice)).toEqual(['PrivateA', 'PublicA', 'PublicB']);
+      expect(await ids(bob)).toEqual(['PublicA', 'PublicB', 'PrivateB']);
+    });
+  });
+
+  it('lets several projects share one main agent', async () => {
+    const shared = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    const first = await createProject(repo, { name: 'First' });
+    const second = await createProject(repo, { name: 'Second' });
+
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: shared.id })
+      .where(eq(projects.userId, userId));
+
+    expect((await model.findById(first.id))?.coordinatorAgentId).toBe(shared.id);
+    expect((await model.findById(second.id))?.coordinatorAgentId).toBe(shared.id);
+  });
+
+  it('keeps a shared main agent when one of its projects is deleted', async () => {
+    const shared = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    const first = await createProject(repo, { name: 'First' });
+    const second = await createProject(repo, { name: 'Second' });
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: shared.id })
+      .where(eq(projects.userId, userId));
+
+    await model.delete(first.id);
+
+    expect(await serverDB.select().from(agents).where(eq(agents.id, shared.id))).toHaveLength(1);
+    expect((await model.findById(second.id))?.coordinatorAgentId).toBe(shared.id);
+  });
+
+  it('keeps LobeAI when a project led by it is deleted', async () => {
+    const inbox = (await new AgentModel(serverDB, userId).getBuiltinAgent(INBOX_SESSION_ID))!;
+    const project = await createProject(repo, { name: 'Inbox-led' });
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: inbox.id })
+      .where(eq(projects.id, project.id));
+
+    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await serverDB.select().from(agents).where(eq(agents.id, inbox.id))).toHaveLength(1);
+  });
+
+  it('clears the main agent when it is deleted and resolves to LobeAI', async () => {
+    const agentModel = new AgentModel(serverDB, userId);
+    const agent = await agentModel.create({ title: 'Short-lived' });
+    const project = await createProject(repo, { name: 'Orphan' });
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: agent.id })
+      .where(eq(projects.id, project.id));
+
+    await agentModel.delete(agent.id);
+
+    const cleared = (await model.findById(project.id))!;
+    expect(cleared.coordinatorAgentId).toBeNull();
+    const inbox = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+    expect(await model.resolveCoordinatorAgents([cleared])).toEqual([
+      expect.objectContaining({ coordinatorAgentId: inbox?.id, id: project.id }),
+    ]);
+    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+  });
+
+  it('tells whether replacing a main agent retires it', async () => {
+    // Earlier projects were led by a virtual coordinator created for them.
+    const legacy = await new AgentModel(serverDB, userId).create({
+      title: 'Disposition Coordinator',
+      virtual: true,
+    });
+    const project = await createProject(repo, {
+      coordinatorAgentId: legacy.id,
+      name: 'Disposition',
+    });
+    const inbox = (await new AgentModel(serverDB, userId).getBuiltinAgent(INBOX_SESSION_ID))!;
+    const user = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    // The agent a project creates now is the user's to keep.
+    const created = await createProject(repo, { name: 'Created' });
+    expect(
+      await model.isDedicatedCoordinator(created.coordinatorAgentId, {
+        exceptProjectId: created.id,
+      }),
+    ).toBe(false);
+
+    // The project's own lead is ignored only when asked about handing it over.
+    expect(
+      await model.isDedicatedCoordinator(project.coordinatorAgentId, {
+        exceptProjectId: project.id,
+      }),
+    ).toBe(true);
+    expect(await model.isDedicatedCoordinator(project.coordinatorAgentId)).toBe(false);
+    // A member of another project is still in use there.
+    const other = await createProject(repo, { name: 'Borrower' });
+    await model.addAgent(other.id, { agentId: project.coordinatorAgentId });
+    expect(
+      await model.isDedicatedCoordinator(project.coordinatorAgentId, {
+        exceptProjectId: project.id,
+      }),
+    ).toBe(false);
+    expect(await model.isDedicatedCoordinator(inbox.id, { exceptProjectId: project.id })).toBe(
+      false,
+    );
+    expect(await model.isDedicatedCoordinator(user.id, { exceptProjectId: project.id })).toBe(
+      false,
+    );
+  });
+
+  it('creates a project led by a picked agent without provisioning a coordinator', async () => {
+    const picked = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    const agentCount = (await serverDB.select().from(agents).where(eq(agents.userId, userId)))
+      .length;
+
+    const project = await createProject(repo, { coordinatorAgentId: picked.id, name: 'Picked' });
+
+    expect(project.coordinatorAgentId).toBe(picked.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.userId, userId))).toHaveLength(
+      agentCount,
+    );
+    expect(
+      await serverDB
+        .select({ role: projectAgents.role })
+        .from(projectAgents)
+        .where(eq(projectAgents.projectId, project.id)),
+    ).toEqual([{ role: 'coordinator' }]);
+
+    await model.delete(project.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
+  });
+
+  it('lets the identifier be omitted, keeping the default task prefix', async () => {
+    const named = await repo.create({ identifier: 'ace', name: 'Named' });
+    const unnamed = await repo.create({ name: 'Unnamed' });
+    const taskModel = new TaskModel(serverDB, userId);
+
+    const namedTask = await taskModel.create({ instruction: 'a', projectId: named.id });
+    const unnamedTask = await taskModel.create({ instruction: 'b', projectId: unnamed.id });
+
+    expect(named.identifier).toBe('ACE');
+    expect(unnamed.identifier).toBeNull();
+    expect(namedTask.identifier).toBe('ACE-1');
+    expect(unnamedTask.identifier).toBe('T-2');
+  });
+
+  it('refuses to create a project led by an agent outside the scope', async () => {
+    const foreign = await new AgentModel(serverDB, otherUserId).create({ title: 'Foreign' });
+
+    await expect(
+      createProject(repo, { coordinatorAgentId: foreign.id, name: 'Foreign-led' }),
+    ).rejects.toThrow('Agent not found');
+    expect(await serverDB.select().from(projects).where(eq(projects.userId, userId))).toEqual([]);
+  });
+
   it('creates, lists, updates, and deletes a project in the owner scope', async () => {
-    const project = await createProject(model, { description: 'A large effort', name: 'Apollo' });
+    const project = await createProject(repo, { description: 'A large effort', name: 'Apollo' });
     expect(project.status).toBe('backlog');
     expect(project.coordinatorAgentId).toBeTruthy();
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
-    ).toEqual([expect.objectContaining({ virtual: true })]);
-    expect(await new AgentModel(serverDB, userId).queryAgents()).not.toContainEqual(
+    ).toEqual([expect.objectContaining({ title: 'Apollo Project Agent', virtual: false })]);
+    expect(await new AgentModel(serverDB, userId).queryAgents()).toContainEqual(
       expect.objectContaining({ id: project.coordinatorAgentId }),
     );
     expect(await model.listAgents(project.id)).toEqual([
@@ -74,28 +322,49 @@ describe('ProjectModel', () => {
     expect(updated?.name).toBe('Apollo 2');
     expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await model.findById(project.id)).toBeNull();
+    // The main agent is an ordinary agent and stays with the user.
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it('resolves a project by slug without escaping the current scope', async () => {
-    const project = await createProject(model, { name: 'Apollo', slug: 'apollo' });
-    await createProject(otherModel, { name: 'Other Apollo', slug: 'other-apollo' });
+    const project = await createProject(repo, { name: 'Apollo', slug: 'apollo' });
+    await createProject(otherRepo, { name: 'Other Apollo', slug: 'other-apollo' });
 
-    expect(await model.findByIdOrSlug('apollo')).toEqual(
+    expect(await model.findByReference('apollo')).toEqual(
       expect.objectContaining({ id: project.id }),
     );
-    expect(await model.findByIdOrSlug(project.id)).toEqual(
+    expect(await model.findByReference(project.id)).toEqual(
       expect.objectContaining({ slug: 'apollo' }),
     );
-    expect(await model.findByIdOrSlug('other-apollo')).toBeNull();
+    expect(await model.findByReference('other-apollo')).toBeNull();
+  });
+
+  it('resolves a project by its identifier, case-insensitively, within the current scope', async () => {
+    const project = await repo.create({ identifier: 'APLO', name: 'Apollo' });
+    await otherRepo.create({ identifier: 'OTHR', name: 'Other' });
+
+    expect(await model.findByReference('APLO')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(await model.findByReference('aplo')).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(await model.findByReference('OTHR')).toBeNull();
+  });
+
+  it('prefers an exact id or slug over another project whose identifier matches', async () => {
+    const bySlug = await createProject(repo, { name: 'By slug', slug: 'crux' });
+    await repo.create({ identifier: 'CRUX', name: 'By identifier' });
+
+    expect(await model.findByReference('crux')).toEqual(expect.objectContaining({ id: bySlug.id }));
   });
 
   it('finds a bounded set of readable projects', async () => {
-    const first = await createProject(model, { name: 'First' });
-    const second = await createProject(model, { name: 'Second' });
-    const hidden = await createProject(otherModel, { name: 'Hidden', visibility: 'private' });
+    const first = await createProject(repo, { name: 'First' });
+    const second = await createProject(repo, { name: 'Second' });
+    const hidden = await createProject(otherRepo, { name: 'Hidden', visibility: 'private' });
 
     expect(await model.findByIds([])).toEqual([]);
     expect(await model.findByIds([first.id, second.id, hidden.id])).toEqual(
@@ -107,47 +376,9 @@ describe('ProjectModel', () => {
     expect(await model.findByIds([first.id, second.id, hidden.id])).toHaveLength(2);
   });
 
-  it('normalizes identifiers and enforces uniqueness within their ownership scope', async () => {
-    const first = await model.create({ identifier: ' lobe ', name: 'First' });
-    expect(first.identifier).toBe('LOBE');
-
-    await expect(model.create({ identifier: 'LOBE', name: 'Duplicate' })).rejects.toThrow();
-    await expect(otherModel.create({ identifier: 'LOBE', name: 'Other user' })).resolves.toEqual(
-      expect.objectContaining({ identifier: 'LOBE' }),
-    );
-
-    await serverDB.insert(workspaces).values({
-      id: 'identifier-workspace',
-      name: 'Identifier Workspace',
-      primaryOwnerId: userId,
-      slug: 'identifier-workspace',
-    });
-    const owner = new ProjectModel(serverDB, userId, 'identifier-workspace');
-    const member = new ProjectModel(serverDB, otherUserId, 'identifier-workspace');
-    await owner.create({ identifier: 'TEAM', name: 'Workspace project' });
-    await expect(
-      member.create({ identifier: 'TEAM', name: 'Workspace duplicate' }),
-    ).rejects.toThrow();
-  });
-
-  it('requires identifiers to contain between 3 and 6 characters', async () => {
-    await expect(model.create({ identifier: 'AB', name: 'Too short' })).rejects.toThrow(
-      'Project identifier must be between 3 and 6 characters',
-    );
-    await expect(model.create({ identifier: 'ABCDEFG', name: 'Too long' })).rejects.toThrow(
-      'Project identifier must be between 3 and 6 characters',
-    );
-    await expect(model.create({ identifier: 'ABC', name: 'Minimum' })).resolves.toEqual(
-      expect.objectContaining({ identifier: 'ABC' }),
-    );
-    await expect(model.create({ identifier: 'ABCDEF', name: 'Maximum' })).resolves.toEqual(
-      expect.objectContaining({ identifier: 'ABCDEF' }),
-    );
-  });
-
   it('filters and paginates projects', async () => {
-    await createProject(model, { name: 'Backlog' });
-    const active = await createProject(model, { name: 'Active' });
+    await createProject(repo, { name: 'Backlog' });
+    const active = await createProject(repo, { name: 'Active' });
     await model.updateStatus(active.id, 'active');
 
     expect(await model.list({ limit: 1, offset: 0, statuses: ['active'] })).toEqual([
@@ -157,8 +388,49 @@ describe('ProjectModel', () => {
     expect(await model.list({ limit: 1, offset: 1 })).toHaveLength(1);
   });
 
+  it('lists projects with their main agent display meta', async () => {
+    const project = await createProject(repo, { name: 'Apollo' });
+    const styled = await createProject(repo, { name: 'Gemini' });
+    const cleared = await createProject(repo, { name: 'Cleared' });
+    await serverDB
+      .update(agents)
+      .set({ avatar: '🚀', backgroundColor: '#000', name: 'Ada' })
+      .where(eq(agents.id, styled.coordinatorAgentId));
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: null })
+      .where(eq(projects.id, cleared.id));
+
+    const coordinators = await serverDB
+      .select({ avatar: agents.avatar, id: agents.id, title: agents.title })
+      .from(agents)
+      .where(inArray(agents.id, [project.coordinatorAgentId, styled.coordinatorAgentId]));
+    const titleOf = (id: string) => coordinators.find((agent) => agent.id === id)?.title;
+    const rows = await model.list();
+
+    // A freshly created coordinator has no avatar; its meta must still be listed.
+    expect(
+      coordinators.find((agent) => agent.id === project.coordinatorAgentId)?.avatar,
+    ).toBeNull();
+    expect(rows.find((row) => row.id === project.id)?.coordinatorAgent).toEqual({
+      avatar: null,
+      backgroundColor: null,
+      id: project.coordinatorAgentId,
+      name: null,
+      title: titleOf(project.coordinatorAgentId),
+    });
+    expect(rows.find((row) => row.id === styled.id)?.coordinatorAgent).toEqual({
+      avatar: '🚀',
+      backgroundColor: '#000',
+      id: styled.coordinatorAgentId,
+      name: 'Ada',
+      title: titleOf(styled.coordinatorAgentId),
+    });
+    expect(rows.find((row) => row.id === cleared.id)?.coordinatorAgent).toBeNull();
+  });
+
   it('does not expose or mutate another user project in personal mode', async () => {
-    const project = await createProject(otherModel, { name: 'Private effort' });
+    const project = await createProject(otherRepo, { name: 'Private effort' });
     expect(await model.findById(project.id)).toBeNull();
     expect(await model.update(project.id, { name: 'Hacked' })).toBeNull();
     expect(await model.delete(project.id)).toBeNull();
@@ -172,20 +444,88 @@ describe('ProjectModel', () => {
       primaryOwnerId: userId,
       slug: 'project-workspace',
     });
-    const owner = new ProjectModel(serverDB, userId, 'project-workspace');
+    const ownerRepo = new ProjectRepository(serverDB, userId, 'project-workspace');
     const member = new ProjectModel(serverDB, otherUserId, 'project-workspace');
-    const publicProject = await createProject(owner, { name: 'Public' });
-    const privateProject = await createProject(owner, { name: 'Private', visibility: 'private' });
+    const publicProject = await createProject(ownerRepo, { name: 'Public' });
+    const privateProject = await createProject(ownerRepo, {
+      name: 'Private',
+      visibility: 'private',
+    });
 
     expect(await member.findById(publicProject.id)).toEqual(
       expect.objectContaining({ id: publicProject.id }),
     );
     expect(await member.findById(privateProject.id)).toBeNull();
-    expect(await member.update(publicProject.id, { name: 'Nope' })).toBeNull();
+    expect(await member.update(privateProject.id, { name: 'Nope' })).toBeNull();
+    expect(await member.delete(privateProject.id)).toBeNull();
+  });
+
+  it('lets any workspace member manage a public project another member created', async () => {
+    await serverDB.insert(workspaces).values({
+      id: 'project-manage-workspace',
+      name: 'Project Manage Workspace',
+      primaryOwnerId: userId,
+      slug: 'project-manage-workspace',
+    });
+    const owner = new ProjectModel(serverDB, userId, 'project-manage-workspace');
+    const ownerRepo = new ProjectRepository(serverDB, userId, 'project-manage-workspace');
+    const member = new ProjectModel(serverDB, otherUserId, 'project-manage-workspace');
+    const project = await createProject(ownerRepo, { name: 'Shared' });
+
+    expect(await member.findManageableById(project.id)).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(await member.update(project.id, { name: 'Renamed' })).toEqual(
+      expect.objectContaining({ name: 'Renamed', userId }),
+    );
+    expect(await member.updateStatus(project.id, 'active')).toEqual(
+      expect.objectContaining({ status: 'active' }),
+    );
+    // Visibility decides who can see the project, so it stays with the creator.
+    expect(await member.update(project.id, { visibility: 'private' })).toBeNull();
+    expect(await owner.update(project.id, { visibility: 'private' })).toEqual(
+      expect.objectContaining({ visibility: 'private' }),
+    );
+    await owner.update(project.id, { visibility: 'public' });
+
+    expect(await member.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await owner.findById(project.id)).toBeNull();
+    expect(
+      await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
+    ).toHaveLength(1);
+  });
+
+  it('lists the main agent first whatever order the other members carry', async () => {
+    const project = await createProject(repo, { name: 'Ordering' });
+    const [agent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Early bird', userId })
+      .returning();
+    await model.addAgent(project.id, { agentId: agent.id, sortOrder: -10 });
+
+    expect((await model.listAgents(project.id))?.map(({ agent }) => agent.id)).toEqual([
+      project.coordinatorAgentId,
+      agent.id,
+    ]);
+  });
+
+  it('still lists members of a project whose main agent was cleared', async () => {
+    const project = await createProject(repo, { name: 'Orphaned' });
+    const [agent] = await serverDB.insert(agents).values({ title: 'Stays', userId }).returning();
+    await model.addAgent(project.id, { agentId: agent.id });
+    // Deleting the main agent clears the column (ON DELETE SET NULL).
+    await serverDB
+      .update(projects)
+      .set({ coordinatorAgentId: null })
+      .where(eq(projects.id, project.id));
+
+    expect((await model.listAgents(project.id))?.map(({ agent }) => agent.id)).toEqual(
+      expect.arrayContaining([agent.id]),
+    );
   });
 
   it('binds only accessible agents and knowledge bases', async () => {
-    const project = await createProject(model, { name: 'Bindings' });
+    const project = await createProject(repo, { name: 'Bindings' });
     const [agent] = await serverDB
       .insert(agents)
       .values({ title: 'Researcher', userId })
@@ -234,8 +574,212 @@ describe('ProjectModel', () => {
     expect(await model.removeKnowledgeBase(project.id, knowledgeBase.id)).toBe(false);
   });
 
+  it('refuses to lead a shared workspace project with a private agent', async () => {
+    const workspaceId = 'project-shared-lead-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Shared Lead Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    const creatorRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const [privateAgent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Private lead', userId, visibility: 'private', workspaceId })
+      .returning();
+
+    await expect(
+      createProject(creatorRepo, {
+        coordinatorAgentId: privateAgent.id,
+        name: 'Shared-led',
+        visibility: 'public',
+      }),
+    ).rejects.toThrow('A shared project only takes shared agents');
+    expect(
+      await serverDB.select().from(projects).where(eq(projects.workspaceId, workspaceId)),
+    ).toEqual([]);
+  });
+
+  // A private binding on a shared project would be filtered out for every reader but its creator.
+  it('binds only shared agents and knowledge bases to a shared workspace project', async () => {
+    const workspaceId = 'project-shared-binding-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Shared Binding Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    const creator = new ProjectModel(serverDB, userId, workspaceId);
+    const creatorRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const sharedProject = await createProject(creatorRepo, { name: 'Shared' });
+    const privateProject = await createProject(creatorRepo, {
+      name: 'Mine',
+      visibility: 'private',
+    });
+    const [privateAgent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Private agent', userId, visibility: 'private', workspaceId })
+      .returning();
+    const [privateKnowledgeBase] = await serverDB
+      .insert(knowledgeBases)
+      .values({ name: 'Private KB', userId, visibility: 'private', workspaceId })
+      .returning();
+
+    await expect(creator.addAgent(sharedProject.id, { agentId: privateAgent.id })).rejects.toThrow(
+      'A shared project only takes shared agents',
+    );
+    await expect(
+      creator.addKnowledgeBase(sharedProject.id, { knowledgeBaseId: privateKnowledgeBase.id }),
+    ).rejects.toThrow('A shared project only takes shared knowledge bases');
+
+    expect(await creator.addAgent(privateProject.id, { agentId: privateAgent.id })).toEqual(
+      expect.objectContaining({ agentId: privateAgent.id }),
+    );
+    expect(
+      await creator.addKnowledgeBase(privateProject.id, {
+        knowledgeBaseId: privateKnowledgeBase.id,
+      }),
+    ).toEqual(expect.objectContaining({ knowledgeBaseId: privateKnowledgeBase.id }));
+  });
+
+  it('updates member and knowledge bindings without touching the coordinator', async () => {
+    const project = await createProject(repo, { name: 'Patch bindings' });
+    const [agent] = await serverDB.insert(agents).values({ title: 'Writer', userId }).returning();
+    const [knowledgeBase] = await serverDB
+      .insert(knowledgeBases)
+      .values({ name: 'Notes', userId })
+      .returning();
+    await model.addAgent(project.id, { agentId: agent.id, role: 'writer' });
+    await model.addKnowledgeBase(project.id, { knowledgeBaseId: knowledgeBase.id });
+
+    expect(
+      await model.updateAgent(project.id, agent.id, { enabled: false, responsibility: 'Docs' }),
+    ).toEqual(expect.objectContaining({ enabled: false, responsibility: 'Docs', role: 'writer' }));
+    expect(await model.updateAgent(project.id, 'missing-agent', { enabled: false })).toBeNull();
+    await expect(
+      model.updateAgent(project.id, project.coordinatorAgentId, { enabled: false }),
+    ).rejects.toThrow('The project coordinator is managed by the project');
+    await expect(
+      model.addAgent(project.id, { agentId: project.coordinatorAgentId, enabled: false }),
+    ).rejects.toThrow('The project coordinator is managed by the project');
+
+    expect(await model.getEnabledKnowledgeBaseIds(project.id)).toEqual([knowledgeBase.id]);
+    expect(
+      await model.updateKnowledgeBase(project.id, knowledgeBase.id, { enabled: false }),
+    ).toEqual(expect.objectContaining({ enabled: false }));
+    expect(await model.getEnabledKnowledgeBaseIds(project.id)).toEqual([]);
+    expect(await model.updateKnowledgeBase(project.id, 'missing-kb', { enabled: true })).toBeNull();
+  });
+
+  it('lets workspace admins manage members and every reader manage knowledge', async () => {
+    await serverDB.insert(workspaces).values({
+      id: 'project-member-workspace',
+      name: 'Project Member Workspace',
+      primaryOwnerId: userId,
+      slug: 'project-member-workspace',
+    });
+    const workspaceId = 'project-member-workspace';
+    const creator = new ProjectModel(serverDB, userId, workspaceId);
+    const creatorRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const member = new ProjectModel(serverDB, otherUserId, workspaceId);
+    const admin = new ProjectModel(serverDB, otherUserId, workspaceId, {
+      canManageAllMembers: true,
+    });
+    const project = await createProject(creatorRepo, { name: 'Shared' });
+    const [agent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Shared agent', userId, visibility: 'public', workspaceId })
+      .returning();
+    const [knowledgeBase] = await serverDB
+      .insert(knowledgeBases)
+      .values({ name: 'Shared KB', userId, visibility: 'public', workspaceId })
+      .returning();
+
+    expect(member.getPermissions(project)).toEqual({
+      canManage: true,
+      canManageKnowledgeBases: true,
+      canManageMembers: false,
+    });
+    expect(admin.getPermissions(project)).toEqual(
+      expect.objectContaining({ canManage: true, canManageMembers: true }),
+    );
+    expect(creator.getPermissions(project)).toEqual(
+      expect.objectContaining({ canManage: true, canManageMembers: true }),
+    );
+
+    expect(await member.addAgent(project.id, { agentId: agent.id })).toBeNull();
+    expect(await admin.addAgent(project.id, { agentId: agent.id, role: 'lead' })).toEqual(
+      expect.objectContaining({ agentId: agent.id, role: 'lead' }),
+    );
+    expect(await member.removeAgent(project.id, agent.id)).toBe(false);
+    expect(await admin.updateAgent(project.id, agent.id, { role: 'reviewer' })).toEqual(
+      expect.objectContaining({ role: 'reviewer' }),
+    );
+    expect(await admin.update(project.id, { name: 'Renamed by admin' })).toEqual(
+      expect.objectContaining({ name: 'Renamed by admin' }),
+    );
+    // Member management stays with the creator and workspace admins.
+    expect(await member.findMembersManageableById(project.id)).toBeNull();
+    expect(await admin.findMembersManageableById(project.id)).toEqual(
+      expect.objectContaining({ id: project.id }),
+    );
+
+    expect(
+      await member.addKnowledgeBase(project.id, { knowledgeBaseId: knowledgeBase.id }),
+    ).toEqual(expect.objectContaining({ knowledgeBaseId: knowledgeBase.id }));
+    expect(await member.removeKnowledgeBase(project.id, knowledgeBase.id)).toBe(true);
+    expect(await admin.removeAgent(project.id, agent.id)).toBe(true);
+  });
+
+  it('reports no management permissions to a read-only caller, even the creator', async () => {
+    await serverDB.insert(workspaces).values({
+      id: 'project-viewer-workspace',
+      name: 'Project Viewer Workspace',
+      primaryOwnerId: userId,
+      slug: 'project-viewer-workspace',
+    });
+    const workspaceId = 'project-viewer-workspace';
+    const project = await createProject(new ProjectRepository(serverDB, userId, workspaceId), {
+      name: 'Viewed',
+    });
+    const downgradedCreator = new ProjectModel(serverDB, userId, workspaceId, { readOnly: true });
+    const viewer = new ProjectModel(serverDB, otherUserId, workspaceId, { readOnly: true });
+
+    for (const model of [downgradedCreator, viewer]) {
+      expect(model.getPermissions(project)).toEqual({
+        canManage: false,
+        canManageKnowledgeBases: false,
+        canManageMembers: false,
+      });
+    }
+  });
+
+  it('lets every member who can see a project file work in it', async () => {
+    const workspaceId = 'project-task-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Task Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    const creatorRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const project = await createProject(creatorRepo, { name: 'Shared work' });
+    const privateProject = await createProject(creatorRepo, {
+      name: 'Solo',
+      visibility: 'private',
+    });
+    const memberTasks = new TaskModel(serverDB, otherUserId, workspaceId);
+
+    expect(await memberTasks.create({ instruction: 'Pitch in', projectId: project.id })).toEqual(
+      expect.objectContaining({ identifier: `${project.identifier}-1` }),
+    );
+    await expect(
+      memberTasks.create({ instruction: 'Sneak in', projectId: privateProject.id }),
+    ).rejects.toThrow('Project not found');
+  });
+
   it('returns null or false for binding operations on inaccessible projects and resources', async () => {
-    const foreignProject = await createProject(otherModel, { name: 'Foreign' });
+    const foreignProject = await createProject(otherRepo, { name: 'Foreign' });
     const [foreignKnowledgeBase] = await serverDB
       .insert(knowledgeBases)
       .values({ name: 'Foreign KB', userId: otherUserId })
@@ -267,7 +811,7 @@ describe('ProjectModel', () => {
     expect(await model.addWork(foreignProject.id, { workId: 'missing' })).toBeNull();
     expect(await model.removeWork(foreignProject.id, 'missing')).toBe(false);
 
-    const project = await createProject(model, { name: 'Local' });
+    const project = await createProject(repo, { name: 'Local' });
     await expect(
       model.addKnowledgeBase(project.id, { knowledgeBaseId: foreignKnowledgeBase.id }),
     ).rejects.toThrow('Knowledge base not found');
@@ -277,8 +821,8 @@ describe('ProjectModel', () => {
   });
 
   it('associates one durable Work with multiple projects without changing Work ownership', async () => {
-    const firstProject = await createProject(model, { name: 'First Work Project' });
-    const secondProject = await createProject(model, { name: 'Second Work Project' });
+    const firstProject = await createProject(repo, { name: 'First Work Project' });
+    const secondProject = await createProject(repo, { name: 'Second Work Project' });
     const [work] = await serverDB
       .insert(works)
       .values({
@@ -312,66 +856,9 @@ describe('ProjectModel', () => {
     expect(await serverDB.select().from(works).where(eq(works.id, work.id))).toHaveLength(1);
   });
 
-  it('moves a task subtree into a project', async () => {
-    const project = await createProject(model, { name: 'Tasks' });
-    const taskModel = new TaskModel(serverDB, userId);
-    const parent = await taskModel.create({ instruction: 'Parent' });
-    const child = await taskModel.create({ instruction: 'Child', parentTaskId: parent.id });
-
-    const moved = await model.moveTaskTree(project.id, parent.id);
-    expect(moved?.map(({ id }) => id).sort()).toEqual([child.id, parent.id].sort());
-    const projectTasks = await model.listTasks(project.id);
-    expect(projectTasks?.map(({ id }) => id).sort()).toEqual([child.id, parent.id].sort());
-  });
-
-  it('preserves project tree boundaries when moving tasks', async () => {
-    const source = await createProject(model, { name: 'Source' });
-    const target = await createProject(model, { name: 'Target' });
-    const taskModel = new TaskModel(serverDB, userId);
-    const parent = await taskModel.create({ instruction: 'Parent', projectId: source.id });
-    const child = await taskModel.create({
-      instruction: 'Child',
-      parentTaskId: parent.id,
-      projectId: source.id,
-    });
-
-    await expect(model.moveTaskTree(target.id, child.id)).rejects.toThrow(
-      'Cannot move a task away from its parent project',
-    );
-    await serverDB.update(tasks).set({ projectId: target.id }).where(eq(tasks.id, parent.id));
-    expect(await model.moveTaskTree(target.id, child.id)).toEqual([
-      expect.objectContaining({ id: child.id }),
-    ]);
-    await expect(model.moveTaskTree(target.id, 'missing')).rejects.toThrow('Task not found');
-    expect(await model.moveTaskTree('missing', child.id)).toBeNull();
-  });
-
-  it('rejects moving a workspace task tree with descendants created by another member', async () => {
-    await serverDB.insert(workspaces).values({
-      id: 'mixed-tree-workspace',
-      name: 'Mixed Tree',
-      primaryOwnerId: userId,
-      slug: 'mixed-tree-workspace',
-    });
-    const workspaceModel = new ProjectModel(serverDB, userId, 'mixed-tree-workspace');
-    const ownerTasks = new TaskModel(serverDB, userId, 'mixed-tree-workspace');
-    const memberTasks = new TaskModel(serverDB, otherUserId, 'mixed-tree-workspace');
-    const project = await createProject(workspaceModel, { name: 'Target' });
-    const parent = await ownerTasks.create({ instruction: 'Parent' });
-    await memberTasks.create({
-      instruction: 'Member child',
-      parentTaskId: parent.id,
-      visibility: 'private',
-    });
-
-    await expect(workspaceModel.moveTaskTree(project.id, parent.id)).rejects.toThrow(
-      'Cannot move a task tree containing tasks created by another user',
-    );
-  });
-
   it('enforces project boundaries in the shared dependency model path', async () => {
-    const firstProject = await createProject(model, { name: 'First' });
-    const secondProject = await createProject(model, { name: 'Second' });
+    const firstProject = await createProject(repo, { name: 'First' });
+    const secondProject = await createProject(repo, { name: 'Second' });
     const taskModel = new TaskModel(serverDB, userId);
     const first = await taskModel.create({ instruction: 'First', projectId: firstProject.id });
     const second = await taskModel.create({ instruction: 'Second', projectId: secondProject.id });
@@ -383,7 +870,7 @@ describe('ProjectModel', () => {
   });
 
   it('requires review state and records immutable human completion decisions', async () => {
-    const project = await createProject(model, { name: 'Reviewed' });
+    const project = await createProject(repo, { name: 'Reviewed' });
     await model.updateStatus(project.id, 'active');
     await model.requestCompletion(project.id);
 
@@ -418,7 +905,7 @@ describe('ProjectModel', () => {
   });
 
   it('requires reopen for completed projects even after archival', async () => {
-    const project = await createProject(model, { name: 'Archived completion' });
+    const project = await createProject(repo, { name: 'Archived completion' });
     await model.updateStatus(project.id, 'active');
     await model.requestCompletion(project.id);
     await model.reviewCompletion(project.id, 'accepted');
@@ -433,7 +920,7 @@ describe('ProjectModel', () => {
   });
 
   it('covers lifecycle guards and missing review targets', async () => {
-    const project = await createProject(model, { name: 'Lifecycle' });
+    const project = await createProject(repo, { name: 'Lifecycle' });
     expect(await model.updateStatus('missing', 'active')).toBeNull();
     await expect(model.updateStatus(project.id, 'completed')).rejects.toThrow(
       'Completion states must be changed through the review workflow',
@@ -461,7 +948,7 @@ describe('ProjectModel', () => {
   });
 
   it('handles completed transitions and a concurrent deletion during status update', async () => {
-    const completed = await createProject(model, { name: 'Completed' });
+    const completed = await createProject(repo, { name: 'Completed' });
     await model.updateStatus(completed.id, 'active');
     await model.requestCompletion(completed.id);
     await model.reviewCompletion(completed.id, 'accepted');
@@ -469,7 +956,7 @@ describe('ProjectModel', () => {
       'A completed project must be reopened',
     );
 
-    const disappearing = await createProject(model, { name: 'Disappearing' });
+    const disappearing = await createProject(repo, { name: 'Disappearing' });
     const snapshot = await model.findManageableById(disappearing.id);
     await serverDB.delete(projects).where(eq(projects.id, disappearing.id));
     vi.spyOn(model, 'findManageableById').mockResolvedValueOnce(snapshot);
@@ -477,7 +964,7 @@ describe('ProjectModel', () => {
   });
 
   it('rejects completion requests from invalid states', async () => {
-    const project = await createProject(model, { name: 'Backlog' });
+    const project = await createProject(repo, { name: 'Backlog' });
     await expect(model.requestCompletion(project.id)).rejects.toThrow(
       'Only active or paused projects can request completion',
     );
@@ -491,7 +978,7 @@ describe('ProjectModel', () => {
   });
 
   it('attaches environments and lists them per project in the owner scope', async () => {
-    const project = await createProject(model, { name: 'Env host' });
+    const project = await createProject(repo, { name: 'Env host' });
     const environmentModel = new EnvironmentModel(serverDB, userId);
     const env = await environmentModel.save({
       name: 'Shared GitHub',
@@ -511,7 +998,7 @@ describe('ProjectModel', () => {
   });
 
   it('lists project conversations with or without directories, retaining each agent', async () => {
-    const project = await createProject(model, { name: 'Topics host' });
+    const project = await createProject(repo, { name: 'Topics host' });
     const topicModel = new TopicModel(serverDB, userId);
     const plain = await topicModel.create({
       agentId: project.coordinatorAgentId,
@@ -541,8 +1028,64 @@ describe('ProjectModel', () => {
     await expect(otherModel.listTopics(project.id)).rejects.toThrow('access denied');
   });
 
+  it("carries each agent's execution-target pin on its project topics", async () => {
+    const project = await createProject(repo, { name: 'Pinned host' });
+    const [pinned] = await serverDB
+      .insert(agents)
+      .values({
+        agencyConfig: { boundDeviceId: 'device-mac', executionTargetSelectionPolicy: 'fixed' },
+        title: 'Pinned',
+        userId,
+      })
+      .returning();
+    const topicModel = new TopicModel(serverDB, userId);
+    await topicModel.create({ agentId: pinned.id, projectId: project.id, title: 'Pinned work' });
+    await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      projectId: project.id,
+      title: 'Free work',
+    });
+
+    const list = await model.listTopics(project.id);
+    expect(list.find((t) => t.agentId === pinned.id)).toMatchObject({
+      agentBoundDeviceId: 'device-mac',
+      agentExecutionTargetSelectionPolicy: 'fixed',
+    });
+    expect(list.find((t) => t.agentId === project.coordinatorAgentId)).toMatchObject({
+      agentBoundDeviceId: null,
+      agentExecutionTargetSelectionPolicy: null,
+    });
+  });
+
+  it("carries each agent's heterogeneous provider type on its project topics", async () => {
+    const project = await createProject(repo, { name: 'External runtime' });
+    const [external] = await serverDB
+      .insert(agents)
+      .values({
+        agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+        title: 'Claude Code',
+        userId,
+      })
+      .returning();
+    const topicModel = new TopicModel(serverDB, userId);
+    await topicModel.create({ agentId: external.id, projectId: project.id, title: 'External' });
+    await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      projectId: project.id,
+      title: 'Built-in',
+    });
+
+    const list = await model.listTopics(project.id);
+    expect(list.find((t) => t.agentId === external.id)).toMatchObject({
+      agentHeterogeneousProviderType: 'claude-code',
+    });
+    expect(list.find((t) => t.agentId === project.coordinatorAgentId)).toMatchObject({
+      agentHeterogeneousProviderType: null,
+    });
+  });
+
   it('keeps agentless conversations visible in project listings', async () => {
-    const project = await createProject(model, { name: 'Agentless host' });
+    const project = await createProject(repo, { name: 'Agentless host' });
     const topic = await new TopicModel(serverDB, userId).create({
       projectId: project.id,
       title: 'Agentless',
@@ -550,5 +1093,44 @@ describe('ProjectModel', () => {
     expect(await model.listTopics(project.id)).toEqual([
       expect.objectContaining({ agentId: null, agentTitle: null, id: topic.id }),
     ]);
+  });
+
+  // The project sidebar renders a running row's elapsed clock from this. Rows
+  // the client holds no local operation for (every non-active running topic
+  // after a refresh) otherwise show a spinner with no timer.
+  it('resolves runStartedAt for running project topics', async () => {
+    const project = await createProject(repo, { name: 'Running work' });
+    await serverDB.insert(topics).values([
+      { id: 't-op', projectId: project.id, status: 'running', title: 'server run', userId },
+      {
+        id: 't-stamp',
+        metadata: { runStartedAt: '2026-01-05T00:00:00Z' },
+        projectId: project.id,
+        status: 'running',
+        title: 'client run',
+        userId,
+      },
+      {
+        id: 't-done',
+        metadata: { runStartedAt: '2026-01-06T00:00:00Z' },
+        projectId: project.id,
+        status: 'completed',
+        title: 'finished run',
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentOperations).values({
+      id: 'op-project-run',
+      startedAt: new Date('2026-01-02T00:00:00Z'),
+      status: 'running',
+      topicId: 't-op',
+      userId,
+    });
+
+    const byId = Object.fromEntries((await model.listTopics(project.id)).map((t) => [t.id, t]));
+
+    expect(byId['t-op'].runStartedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
+    expect(byId['t-stamp'].runStartedAt).toEqual(new Date('2026-01-05T00:00:00Z'));
+    expect(byId['t-done'].runStartedAt).toBeNull();
   });
 });

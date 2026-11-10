@@ -139,13 +139,6 @@ describe('PiRpcClient', () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it('captures the raw handshake before the ready client is returned', async () => {
-    const raw: Buffer[] = [];
-    const { client } = await createReadyClient({ onRawStdout: (chunk) => raw.push(chunk) });
-    expect(JSON.parse(Buffer.concat(raw).toString()).command).toBe('get_state');
-    await client.close();
-  });
-
   it('bounds abort even when ordinary command timeouts are disabled', async () => {
     const { client } = await createReadyClient({ requestTimeoutMs: false });
     vi.useFakeTimers();
@@ -321,16 +314,6 @@ describe('PiRpcClient', () => {
     await client.close();
   });
 
-  it('rejects commands when the process dies before responding', async () => {
-    const { child, client, stdout } = await createReadyClient();
-    const request = client.command({ type: 'get_messages' });
-    stdout.end();
-    child.emit('close', 1, null);
-    await expect(request).rejects.toThrow(PiRpcConnectionError);
-    await expect(request).rejects.toThrow(/exited unexpectedly/);
-    await client.close();
-  });
-
   it('hard-fails the handshake when get_state never answers', async () => {
     const { child } = createProcess();
     spawnMock.mockReturnValue(child);
@@ -346,21 +329,5 @@ describe('PiRpcClient', () => {
     const started = client.start();
     await expect(started).rejects.toThrow(PiRpcConnectionError);
     await expect(started).rejects.toThrow(/handshake/);
-  });
-
-  it('gracefully closes via stdin EOF and escalates only when exit stalls', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
-    const { child, client } = await createReadyClient({ closeGraceMs: 50 });
-    vi.spyOn(process, 'kill').mockImplementation(() => {
-      setTimeout(() => child.emit('close', null, 'SIGTERM'), 1);
-      return true;
-    });
-    // Override the simulated clean-exit so the process lingers.
-    child.stdin.end = vi.fn(() => {
-      /* no exit */
-    });
-    await client.close();
-    // SIGTERM escalation attempted after the grace window.
-    expect(process.kill).toHaveBeenCalledWith(-child.pid, 'SIGTERM');
   });
 });

@@ -88,14 +88,15 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
 
     // --- step facts (gathered per step) ---
     ...definedOnly({
+      agentAccountContext: step?.agentAccountContext,
       agentBuilderContext: step?.agentBuilderContext,
       agentManagementContext: step?.agentManagementContext,
       groupAgentBuilderContext: step?.groupAgentBuilderContext,
       onboardingContext: step?.onboardingContext,
-      pageContentContext: step?.pageContentContext,
       planTodo: step?.planTodo,
       workspaceContext: step?.workspaceContext,
     }),
     ...(step?.topicReferences?.length && { topicReferences: step.topicReferences }),
+    ...(step?.documentReferences?.length && { documentReferences: step.documentReferences }),
   };
 };

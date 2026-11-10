@@ -2,6 +2,10 @@
 import { readFile } from 'node:fs/promises';
 
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import {
+  MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+  MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE,
+} from '@lobechat/types';
 import { eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -19,18 +23,19 @@ import {
 
 const db = await getTestDB();
 const userId = 'environment-schema-user';
+const colleagueId = 'environment-schema-colleague';
 const workspaceId = 'environment-schema-workspace';
 const configuration: EnvironmentConfiguration = {
   sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub.git' }],
 };
 
-const createEnvironment = async (name = 'Development', scope?: string) => {
+const createEnvironment = async (name = 'Development', scope?: string, owner = userId) => {
   const [environment] = await db
     .insert(environments)
     .values({
       configuration,
       name,
-      userId,
+      userId: owner,
       workspaceId: scope,
     })
     .returning();
@@ -51,36 +56,22 @@ const createProject = async (identifier: string) => {
   return project;
 };
 
+const members = [userId, colleagueId];
+
 beforeEach(async () => {
   await db.insert(users).values({ id: userId });
 });
 
 afterEach(async () => {
   // Explicit unlink and cleanup mirrors the resource deletion contract.
-  await db
-    .delete(projectEnvironments)
-    .where(
-      inArray(
-        projectEnvironments.environmentId,
-        db
-          .select({ id: environments.id })
-          .from(environments)
-          .where(eq(environments.userId, userId)),
-      ),
-    );
-  await db
-    .delete(environmentInstances)
-    .where(
-      inArray(
-        environmentInstances.environmentId,
-        db
-          .select({ id: environments.id })
-          .from(environments)
-          .where(eq(environments.userId, userId)),
-      ),
-    );
-  await db.delete(environments).where(eq(environments.userId, userId));
-  await db.delete(users).where(eq(users.id, userId));
+  const owned = db
+    .select({ id: environments.id })
+    .from(environments)
+    .where(inArray(environments.userId, members));
+  await db.delete(projectEnvironments).where(inArray(projectEnvironments.environmentId, owned));
+  await db.delete(environmentInstances).where(inArray(environmentInstances.environmentId, owned));
+  await db.delete(environments).where(inArray(environments.userId, members));
+  await db.delete(users).where(inArray(users.id, members));
 });
 
 describe('Environment registration schema', () => {
@@ -121,6 +112,25 @@ describe('Environment registration schema', () => {
   it('rejects empty names', async () => {
     const values = { configuration, name: 'Development', userId };
     await expect(db.insert(environments).values({ ...values, name: '  ' })).rejects.toThrow();
+  });
+
+  it('identifies an environment by name per member, not per workspace', async () => {
+    await db.insert(users).values({ id: colleagueId });
+    await db
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Team', primaryOwnerId: userId, slug: workspaceId });
+
+    await createEnvironment('Data analysis');
+    await expect(createEnvironment('Data analysis')).rejects.toThrow();
+
+    // Personal and workspace scope are separate namespaces: the same person may
+    // keep a private environment and a work one under one name.
+    await createEnvironment('Data analysis', workspaceId);
+    await expect(createEnvironment('Data analysis', workspaceId)).rejects.toThrow();
+
+    // And a colleague in that workspace keeps their own, because an environment
+    // is theirs to build even when the workspace owns the storage it sits in.
+    await createEnvironment('Data analysis', workspaceId, colleagueId);
   });
 
   it('retains environment records until explicit cleanup on owner or workspace deletion', async () => {
@@ -231,7 +241,7 @@ const createDevice = async () => {
 };
 
 describe('Environment instances', () => {
-  it('materializes the same definition on a device, a sandbox and an rc cluster', async () => {
+  it('materializes the same definition on a device, a sandbox and a cluster', async () => {
     const environment = await createEnvironment();
     const device = await createDevice();
     const common = instanceValues(environment.id);
@@ -249,9 +259,9 @@ describe('Environment instances', () => {
         {
           ...common,
           kind: 'cluster',
-          provider: 'rc',
-          providerScope: 'cluster-1',
-          providerResourceId: 'allocation-1',
+          provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+          providerScope: 'region-1',
+          providerResourceId: 'managed-device-1',
         },
       ])
       .returning();
@@ -286,8 +296,8 @@ describe('Environment instances', () => {
       db.insert(environmentInstances).values({
         ...common,
         kind: 'cluster',
-        provider: 'rc',
-        providerScope: 'cluster-1',
+        provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+        providerScope: 'region-1',
         providerResourceId: ' ',
       }),
     ).rejects.toThrow();
@@ -301,6 +311,38 @@ describe('Environment instances', () => {
         providerResourceId: 'sandbox-1',
       }),
     ).rejects.toThrow();
+  });
+
+  it('maps a managed cloud device to a cluster instance by its managed device id', async () => {
+    const environment = await createEnvironment();
+    const managedDeviceId = '00000000-0000-4000-8000-000000000001';
+    const [device] = await db
+      .insert(devices)
+      .values({
+        deviceId: managedDeviceId,
+        identitySource: MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE,
+        userId,
+      })
+      .returning();
+    expect(device.identitySource).toBe(MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE);
+
+    const [instance] = await db
+      .insert(environmentInstances)
+      .values({
+        ...instanceValues(environment.id),
+        kind: 'cluster',
+        provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+        providerScope: 'region-1',
+        providerResourceId: device.deviceId,
+      })
+      .returning();
+    expect(instance).toMatchObject({
+      deviceId: null,
+      kind: 'cluster',
+      provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1,
+      providerResourceId: managedDeviceId,
+      providerScope: 'region-1',
+    });
   });
 
   it('keeps distinct folders on a device and scopes remote identities to the provider account', async () => {

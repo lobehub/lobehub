@@ -1,6 +1,5 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { cx } from 'antd-style';
 import { TargetIcon, TerminalIcon, WrenchIcon } from 'lucide-react';
 import type { FC, MouseEvent } from 'react';
 import { memo } from 'react';
@@ -109,7 +108,7 @@ export const ActionMention = memo<ActionMentionProps>(
           className={cx(styles.actionTag, styles[styleKey], isClickable && styles.clickable)}
           onClick={handleClick}
         >
-          <Icon icon={IconComponent} size={14} />
+          <Icon className={styles.actionTagIcon} icon={IconComponent} size={14} />
           <span className={styles.actionTagLabel}>{label}</span>
         </span>
       </Tooltip>

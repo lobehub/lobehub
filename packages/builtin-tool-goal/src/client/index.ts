@@ -5,7 +5,7 @@ import {
 } from '@lobechat/builtin-tool-task/client';
 import type { BuiltinInspector, BuiltinIntervention, BuiltinRender } from '@lobechat/types';
 
-import { GoalIdentifier, GoalManifest } from '../manifest';
+import { GoalIdentifier, GoalManifest, LegacyGoalIdentifier } from '../manifest';
 import { GoalApiName } from '../types';
 
 export const GoalInspectors: Record<string, BuiltinInspector> = {
@@ -20,7 +20,7 @@ export const GoalRenders: Record<string, BuiltinRender> = {
   [GoalApiName.createGoal]: CreateGoalRender as BuiltinRender,
 };
 
-export { GoalIdentifier, GoalManifest };
+export { GoalIdentifier, GoalManifest, LegacyGoalIdentifier };
 export { GoalSupervisorManifest } from '../supervisor';
 export * from '../types';
 export { GoalSupervisorInspectors } from './supervisorInspector';

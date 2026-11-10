@@ -5,7 +5,8 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerArtifactCommand } from './artifact';
+import { log } from '../utils/logger';
+import { fingerprintCreate, registerArtifactCommand } from './artifact';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -13,6 +14,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       deployments: {
         commitWorkspaceHtmlUpload: { mutate: vi.fn() },
         prepareWorkspaceHtmlUpload: { mutate: vi.fn() },
+        unpublish: { mutate: vi.fn() },
       },
     },
   },
@@ -159,15 +161,15 @@ describe('artifact publish', () => {
       expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
     });
 
-    it('prints the product share URL rather than the raw hosting URL', async () => {
+    it('prints the hosting URL with a separate product share URL', async () => {
       await publish();
 
       const output = consoleSpy.mock.calls.flat().join('\n');
       expect(output).toContain('https://app.lobehub.com/share/artifact/dep-1');
-      expect(output).not.toContain('https://example.com/p');
+      expect(output).toContain('https://example.com/p');
     });
 
-    it('emits the product share URL as publicUrl in JSON output', async () => {
+    it('keeps publicUrl as the hosting URL and exposes shareUrl separately', async () => {
       await publish('--json');
 
       const payload = JSON.parse(
@@ -176,7 +178,8 @@ describe('artifact publish', () => {
           .filter((value): value is string => typeof value === 'string')
           .join('\n'),
       );
-      expect(payload.publicUrl).toBe('https://app.lobehub.com/share/artifact/dep-1');
+      expect(payload.publicUrl).toBe('https://example.com/p');
+      expect(payload.shareUrl).toBe('https://app.lobehub.com/share/artifact/dep-1');
       expect(payload.id).toBe('dep-1');
     });
 
@@ -233,6 +236,86 @@ describe('artifact publish', () => {
       expect(call.idempotencyKey).toBe('key-from-a-lost-response');
     });
 
+    // T-6166: the commit failed after the site went live; the next publish
+    // changed the title with --new and was rejected as a reused key.
+    describe('after a commit whose outcome is unknown', () => {
+      let errorSpy: ReturnType<typeof vi.spyOn>;
+      const commit = () => mockTrpcClient.market.deployments.commitWorkspaceHtmlUpload.mutate;
+      const preparedKey = (index: number) =>
+        mockTrpcClient.market.deployments.prepareWorkspaceHtmlUpload.mutate.mock.calls[index][0]
+          .idempotencyKey;
+
+      beforeEach(async () => {
+        errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+        commit().mockRejectedValueOnce(
+          Object.assign(
+            new Error(
+              'The hosting service did not confirm this publish, so the site may already be live',
+            ),
+            { data: { code: 'INTERNAL_SERVER_ERROR' } },
+          ),
+        );
+        await publish('--title', 'First');
+      });
+
+      afterEach(() => {
+        errorSpy.mockRestore();
+      });
+
+      it('says the site may be live and that retrying is safe', () => {
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        const output = errorSpy.mock.calls.flat().join('\n');
+        expect(output).toContain('may already be live');
+        expect(output).toContain('Run the same command again');
+        expect(readManifest().artifacts['index.html'].pendingCreateKey).toBe(preparedKey(0));
+      });
+
+      it('reuses the key when the same command is retried', async () => {
+        await publish('--title', 'First');
+
+        expect(preparedKey(1)).toBe(preparedKey(0));
+        expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+      });
+
+      it('uses a fresh key for --new with a changed title', async () => {
+        await publish('--new', '--title', 'Second');
+
+        expect(preparedKey(1)).toEqual(expect.any(String));
+        expect(preparedKey(1)).not.toBe(preparedKey(0));
+        expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+      });
+    });
+
+    it('reports a definite rejection without suggesting a retry', async () => {
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      mockTrpcClient.market.deployments.commitWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
+        Object.assign(new Error('Upload expired'), { data: { code: 'BAD_REQUEST' } }),
+      );
+
+      await publish();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      const output = errorSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('Upload expired');
+      expect(output).not.toContain('Run the same command again');
+      errorSpy.mockRestore();
+    });
+
+    it('discards a pre-fingerprint key that market rejects as a different publish', async () => {
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      writeManifest({ 'index.html': { pendingCreateKey: 'legacy-key', pendingType: 'html' } });
+      mockTrpcClient.market.deployments.commitWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
+        new Error('Idempotency key was already used for a different publish'),
+      );
+
+      await publish('--new', '--title', 'Changed');
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(errorSpy.mock.calls.flat().join('\n')).toContain('Run the command again');
+      expect(readManifest().artifacts['index.html']).toEqual({});
+      errorSpy.mockRestore();
+    });
+
     it('records the pending key before sending, so a crash mid-publish is recoverable', async () => {
       mockTrpcClient.market.deployments.prepareWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
         new Error('network died'),
@@ -242,5 +325,109 @@ describe('artifact publish', () => {
 
       expect(readManifest().artifacts['index.html'].pendingCreateKey).toEqual(expect.any(String));
     });
+
+    it('remembers a pending HTML type when replacing a Canvas and retries through HTML', async () => {
+      writeManifest({
+        'index.html': { type: 'canvas', canvasId: 'cvs_old', deploymentId: 'dep_old' },
+      });
+      mockTrpcClient.market.deployments.prepareWorkspaceHtmlUpload.mutate.mockRejectedValueOnce(
+        new Error('Response lost'),
+      );
+      await expect(publish('--type', 'html', '--new')).rejects.toThrow('Response lost');
+      await publish('--new');
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+    });
+  });
+
+  describe('unpublishing', () => {
+    const runUnpublish = async (...args: string[]) => {
+      const program = new Command();
+      program.exitOverride();
+      registerArtifactCommand(program);
+      await program.parseAsync(['node', 'lh', 'artifact', 'unpublish', ...args]);
+    };
+
+    const boundFile = () => path.join(workingDirectory, 'index.html');
+
+    beforeEach(() => {
+      fs.writeFileSync(boundFile(), '<title>Bound</title>');
+      mockTrpcClient.market.deployments.unpublish.mutate
+        .mockReset()
+        .mockResolvedValue({ data: { id: 'dep-bound', status: 'unpublished', title: 'Bound' } });
+    });
+
+    it('takes the deployment bound to the file offline', async () => {
+      writeManifest({ 'index.html': { deploymentId: 'dep-bound' } });
+
+      await runUnpublish(boundFile());
+
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).toHaveBeenCalledWith({
+        id: 'dep-bound',
+      });
+      // Kept on purpose: republishing the same file reactivates this deployment.
+      expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-bound' });
+    });
+
+    it('--deployment targets an id without a file', async () => {
+      await runUnpublish('--deployment', 'dep-oneoff');
+
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).toHaveBeenCalledWith({
+        id: 'dep-oneoff',
+      });
+    });
+
+    it('refuses to guess when neither a file nor --deployment is given', async () => {
+      await runUnpublish();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a file with no bound deployment', async () => {
+      writeManifest({});
+
+      await runUnpublish(boundFile());
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).not.toHaveBeenCalled();
+    });
+
+    it('reports a server failure instead of claiming success', async () => {
+      writeManifest({ 'index.html': { deploymentId: 'dep-gone' } });
+      mockTrpcClient.market.deployments.unpublish.mutate.mockRejectedValueOnce(
+        new Error('Deployment not found'),
+      );
+
+      await runUnpublish(boundFile());
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+});
+
+describe('fingerprintCreate', () => {
+  const entry = (path: string, body: string) => ({
+    body: Buffer.from(body),
+    contentType: 'text/plain',
+    path,
+  });
+
+  it('does not depend on the order assets finished reading', () => {
+    const a = entry('/a.png', 'a');
+    const b = entry('/b.png', 'b');
+    const index = entry('/index.html', '<html></html>');
+
+    expect(fingerprintCreate([index, b, a], '', 'Site')).toBe(
+      fingerprintCreate([index, a, b], '', 'Site'),
+    );
+  });
+
+  it('changes when the title changes', () => {
+    const index = entry('/index.html', '<html></html>');
+
+    expect(fingerprintCreate([index], '', 'First')).not.toBe(
+      fingerprintCreate([index], '', 'Second'),
+    );
   });
 });

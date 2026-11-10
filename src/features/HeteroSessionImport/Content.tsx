@@ -6,9 +6,19 @@ import type {
   HeteroSessionDirPref,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { Flexbox, Icon, ScrollShadow, SearchBar } from '@lobehub/ui';
-import { Button, Checkbox, Progress, Spin, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  Checkbox,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Progress,
+  ScrollShadow,
+  SearchBar,
+  Spin,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -253,9 +263,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.empty.desc')}
         </Text>
-        <Button size="small" onClick={scan}>
-          {t('heteroImport.footer.rescan')}
-        </Button>
+        <Button onClick={scan}>{t('heteroImport.footer.rescan')}</Button>
       </Flexbox>
     );
 
@@ -267,9 +275,7 @@ const Content = memo<ContentProps>(({ agentId }) => {
         <Text fontSize={13} style={{ maxWidth: 380, textAlign: 'center' }} type="secondary">
           {t('heteroImport.error.desc')}
         </Text>
-        <Button size="small" onClick={scan}>
-          {t('heteroImport.footer.rescan')}
-        </Button>
+        <Button onClick={scan}>{t('heteroImport.footer.rescan')}</Button>
       </Flexbox>
     );
 

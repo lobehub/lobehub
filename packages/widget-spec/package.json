@@ -1,0 +1,18 @@
+{
+  "name": "@lobechat/widget-spec",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Widget authoring contract: layout, view, manifest and preset validation shared by LobeHub and Market",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "zod": "^4.4.3"
+  }
+}

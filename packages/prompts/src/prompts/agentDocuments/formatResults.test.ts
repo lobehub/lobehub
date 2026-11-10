@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCopyDocumentResult,
   formatCreateDocumentResult,
+  formatCreateFolderResult,
   formatModifyDocumentResult,
+  formatMoveDocumentsResult,
   formatRemoveDocumentResult,
   formatRenameDocumentResult,
   formatReplaceDocumentResult,
@@ -69,5 +71,30 @@ describe('agentDocuments formatResults', () => {
 
   it('reports removal with only the id (no live url to share)', () => {
     expect(formatRemoveDocumentResult({ id: 'assoc-id' })).toBe('Removed document assoc-id.');
+  });
+
+  describe('folder results', () => {
+    it('hands back the folder id for parentId and marks reuse', () => {
+      expect(formatCreateFolderResult({ created: true, folderId: 'docs_f', title: 'P95' })).toBe(
+        'Created folder "P95" (folder id: docs_f). Pass this id as parentId to createDocument, moveDocuments or listDocuments. It is an internal handle; never show it to the user.',
+      );
+      expect(
+        formatCreateFolderResult({ created: false, folderId: 'docs_f', title: 'P95' }),
+      ).toMatch(/^Reused existing folder "P95"/);
+    });
+
+    it('summarizes a move and lists only the failures', () => {
+      expect(
+        formatMoveDocumentsResult({
+          parentId: null,
+          results: [
+            { id: 'a', status: 'moved', title: 'A' },
+            { error: 'Skill documents cannot be moved.', id: 'b', status: 'failed', title: 'B' },
+          ],
+        }),
+      ).toBe(
+        'Moved 1 item(s) to the root; 0 already there; 1 failed.\nFailed:\n- "B" (b): Skill documents cannot be moved.',
+      );
+    });
   });
 });

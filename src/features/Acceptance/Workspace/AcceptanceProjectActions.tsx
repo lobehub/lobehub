@@ -1,6 +1,6 @@
 'use client';
 
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 import Icon from '@lobehub/ui/es/Icon/index';
 import { Eye, Plus } from 'lucide-react';
 import { useCallback } from 'react';

@@ -1,13 +1,14 @@
 import { parse } from '../parse';
 import type { Message, MessageGroupMetadata } from '../types';
+import { toTime } from '../utils/timestamp';
 import type { RepairOp, TopicDiagnosis, TopicIssue } from './types';
 
 /**
  * Every message id referenced anywhere in the rendered payload.
  *
  * The renderer does not emit one flat entry per message: tool results live in
- * `children[].tools[].result_msg_id`, signal turns in `signalCallbacks[]`, post-task
- * summaries in `taskCompletions[]`, and so on. Rather than mirror each nesting site
+ * `children[].tools[].result_msg_id`, signal turns in `signalCallbacks[]`, and so on.
+ * Rather than mirror each nesting site
  * (and silently start over-reporting whenever a new one is added), walk the payload
  * generically and collect anything that could be a message id. Ids that are not
  * messages (tool_call ids) fall out when the set is intersected with the topic.
@@ -73,8 +74,8 @@ const canAnchor = (message: Message): boolean =>
   message.role !== 'tool' && !getSignal(message) && !isEmptyShell(message);
 
 const timeSpan = (messages: Message[]): [number, number] => [
-  Math.min(...messages.map((m) => m.createdAt)),
-  Math.max(...messages.map((m) => m.createdAt)),
+  Math.min(...messages.map((m) => toTime(m.createdAt))),
+  Math.max(...messages.map((m) => toTime(m.createdAt))),
 ];
 
 const overlaps = (a: [number, number], b: [number, number]): boolean =>
@@ -96,7 +97,7 @@ export const diagnoseTopic = (
   const mainFlow = messages.filter((m) => !m.threadId);
   if (mainFlow.length === 0) return { hiddenCount: 0, issues: [], patch: [] };
 
-  const sorted = [...mainFlow].sort((a, b) => a.createdAt - b.createdAt);
+  const sorted = [...mainFlow].sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
   const byId = new Map(sorted.map((m) => [m.id, m]));
 
   const childrenOf = new Map<string, Message[]>();
@@ -174,8 +175,11 @@ export const diagnoseTopic = (
       // a message inside this very section can't anchor it.
       const sectionIds = new Set(section.map((m) => m.id));
       const anchor = sorted
-        .filter((m) => canAnchor(m) && m.createdAt < root.createdAt && !sectionIds.has(m.id))
-        .sort((a, b) => b.createdAt - a.createdAt)[0];
+        .filter(
+          (m) =>
+            canAnchor(m) && toTime(m.createdAt) < toTime(root.createdAt) && !sectionIds.has(m.id),
+        )
+        .sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))[0];
       if (!anchor) continue;
 
       report(
@@ -216,7 +220,7 @@ export const diagnoseTopic = (
         const runIds = new Set(runSubtree.map((m) => m.id));
         const anchor = [...runSubtree]
           .filter((m) => canAnchor(m))
-          .sort((a, b) => b.createdAt - a.createdAt)[0];
+          .sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))[0];
 
         // The shape is wrong, but if the reader still gets everything on screen there is
         // nothing to fix and no reason to rewrite the user's history.
@@ -256,7 +260,8 @@ export const diagnoseTopic = (
 
     const ownIds = new Set(ownSubtree.map((m) => m.id));
     const candidates = sorted.filter(
-      (m) => m.role === 'tool' && m.createdAt < message.createdAt && !ownIds.has(m.id),
+      (m) =>
+        m.role === 'tool' && toTime(m.createdAt) < toTime(message.createdAt) && !ownIds.has(m.id),
     );
     // The signal names the tool call it is reacting to; fall back to the most recent tool
     // result only when that call cannot be found.

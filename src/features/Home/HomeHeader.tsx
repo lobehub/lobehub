@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +6,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import AgentSelect from './AgentSelect';
+import { getGreetingKey } from './greeting';
 
 const styles = createStaticStyles(({ css }) => ({
   root: css`
@@ -32,12 +31,6 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 48px;
   `,
 }));
-
-const getGreetingKey = (hour: number): 'afternoon' | 'evening' | 'morning' => {
-  if (hour < 12) return 'morning';
-  if (hour < 18) return 'afternoon';
-  return 'evening';
-};
 
 interface HomeHeaderProps {
   centered?: boolean;

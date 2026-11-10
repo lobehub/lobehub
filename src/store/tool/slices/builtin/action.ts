@@ -1,54 +1,50 @@
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import debug from 'debug';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
 import {
   getActiveWorkspaceId,
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
-import { mutate } from '@/libs/swr';
-import { toolKeys } from '@/libs/swr/keys';
+import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
 import { userService } from '@/services/user';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
 import { invokeExecutor } from './executors/index';
+import {
+  resolveUninstalledBuiltinTools,
+  UNINSTALLED_BUILTIN_TOOLS_KEY,
+  uninstalledBuiltinToolsResource,
+} from './projection';
 import { type BuiltinToolContext, type BuiltinToolResult } from './types';
 
 const n = setNamespace('builtinTool');
 const log = debug('lobe-store:builtin-tool');
 
 /**
- * Minimal view of `settings.tool` covering just the builtin-tool install slots.
- * Typed locally so the helpers accept the loosened shape returned by
- * `getUserState()` while still spreading the rest of `tool` through at runtime.
+ * The uninstalled-tools list keeps its long-standing flat `uninstalledBuiltinTools`
+ * field as the replica view, so every selector keeps reading what it did. The
+ * init flag gates `get`: before the first hydrate / replace the view must read
+ * `undefined`, otherwise the default seed would block hydration from storage.
+ * The default seed stays the first-frame value (what the server resolves for a
+ * never-configured scope), so an un-hydrated replica still reads as "not yet
+ * filled" rather than as "everything is uninstalled".
  */
-interface UninstalledBuiltinToolsScope {
-  uninstalledBuiltinTools?: string[];
-  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
-}
-
-/**
- * Resolve the uninstalled-builtin-tools list for the active scope.
- *
- * - Personal context (`workspaceId == null`) → the user's personal list.
- * - Workspace context → the per-workspace list; a workspace with no stored
- *   entry falls back to the default seed (a clean default state), never the
- *   user's personal customization.
- *
- * `undefined` (never configured) maps to the default seed in both scopes.
- */
-const resolveUninstalledBuiltinTools = (
-  tool: UninstalledBuiltinToolsScope | undefined,
-  workspaceId: string | null,
-): string[] => {
-  const stored = workspaceId
-    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
-    : tool?.uninstalledBuiltinTools;
-
-  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+const uninstalledBuiltinToolsLens: ReplicaLens<ToolStore, string[]> = {
+  clear: () => ({
+    isUninstalledBuiltinToolsInit: false,
+    uninstalledBuiltinTools: defaultUninstalledBuiltinTools,
+  }),
+  get: (state) => (state.isUninstalledBuiltinToolsInit ? state.uninstalledBuiltinTools : undefined),
+  keys: (state) => (state.isUninstalledBuiltinToolsInit ? [UNINSTALLED_BUILTIN_TOOLS_KEY] : []),
+  set: (_state, _key, data) =>
+    data
+      ? { isUninstalledBuiltinToolsInit: true, uninstalledBuiltinTools: data }
+      : {
+          isUninstalledBuiltinToolsInit: false,
+          uninstalledBuiltinTools: defaultUninstalledBuiltinTools,
+        },
 };
 
 /**
@@ -62,11 +58,23 @@ export const createBuiltinToolSlice = (set: Setter, get: () => ToolStore, _api?:
 export class BuiltinToolActionImpl {
   readonly #get: () => ToolStore;
   readonly #set: Setter;
+  readonly #uninstalledBuiltinTools;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#uninstalledBuiltinTools = createReplicaSlice(uninstalledBuiltinToolsResource, {
+      actionPrefix: n('uninstalledBuiltinTools'),
+      fetcher: async ({ workspaceId }) => {
+        const userState = await userService.getUserState();
+        return resolveUninstalledBuiltinTools(userState?.settings?.tool, workspaceId);
+      },
+      get,
+      set,
+      stateKey: 'uninstalledBuiltinToolsReplica',
+      view: uninstalledBuiltinToolsLens,
+    });
   }
 
   invokeBuiltinTool = async (
@@ -134,19 +142,28 @@ export class BuiltinToolActionImpl {
 
   // ========== Uninstalled Builtin Tools Management ==========
 
+  /** The replica scope a request starts under; its result may only land there. */
+  #isCurrentScope = (scope: string): boolean =>
+    this.#uninstalledBuiltinTools.resource.scope.get() === scope;
+
   /**
    * Toggle a builtin tool's installed state for the active scope (personal or
    * workspace), persisting to the matching slot in user settings.
    *
    * The current list is read fresh from the server so the diff is against the
-   * real stored value (not the default seed). Persistence goes through the
-   * scope-targeted server-side patch (`updateUninstalledBuiltinTools`), which
-   * replaces only this scope's slot atomically — writing the whole `tool`
-   * column from this snapshot would race with concurrent tool-column writers
-   * (e.g. an approvalMode change from another tab) and could revert them.
+   * real stored value (not the default seed, and not a possibly-stale persisted
+   * copy). Persistence goes through the scope-targeted server-side patch
+   * (`updateUninstalledBuiltinTools`), which replaces only this scope's slot
+   * atomically — writing the whole `tool` column from a snapshot would race
+   * with concurrent tool-column writers (e.g. an approvalMode change from
+   * another tab) and could revert them.
    */
   #toggleBuiltinToolInstalled = async (identifier: string, install: boolean): Promise<void> => {
     const workspaceId = getActiveWorkspaceId();
+    // The identity the request starts under. `getUserState()` below can resolve
+    // after the user switched workspace, so the captured scope is re-checked
+    // before the replica is written (see the guard after the read).
+    const scope = this.#uninstalledBuiltinTools.resource.scope.get();
 
     const userState = await userService.getUserState();
     const tool = userState?.settings?.tool;
@@ -160,20 +177,35 @@ export class BuiltinToolActionImpl {
       ? currentUninstalled.filter((id) => id !== identifier)
       : [...currentUninstalled, identifier];
 
-    // Optimistic update
-    this.#set(
-      { uninstalledBuiltinTools: newUninstalled, uninstalledBuiltinToolsLoading: false },
-      false,
-      n(install ? 'installBuiltinTool' : 'uninstallBuiltinTool'),
+    // The active identity changed while we read the server: keep the write
+    // pinned to the workspace the toggle started in, but never update the
+    // switched-to scope's replica with this list. The optimistic overlay would
+    // paint it into the scope now on screen and persist it there, and a
+    // rejected write would keep that wrong base — the follow-up refresh cannot
+    // repair a scope whose sync query is not mounted. Mirrors the connector /
+    // agent-skill actions' late-response guard.
+    if (!this.#isCurrentScope(scope)) {
+      await userService.updateUninstalledBuiltinTools(newUninstalled, workspaceId);
+      return;
+    }
+
+    // Adopt the freshly-read list when the replica has not painted yet: an
+    // un-initialized replica drops an optimistic write, so without this base
+    // the toggle would only appear once the revalidation below lands.
+    if (!this.#get().isUninstalledBuiltinToolsInit) {
+      this.#uninstalledBuiltinTools.update(UNINSTALLED_BUILTIN_TOOLS_KEY, () => currentUninstalled);
+    }
+
+    // The replica shows the new list immediately and rolls it back when the
+    // server rejects the write; the confirmed list is then persisted as this
+    // scope's local-first copy.
+    await this.#uninstalledBuiltinTools.optimistic(
+      UNINSTALLED_BUILTIN_TOOLS_KEY,
+      () => newUninstalled,
+      () => userService.updateUninstalledBuiltinTools(newUninstalled, workspaceId),
     );
 
-    // Persist the captured scope's slot. The scope is pinned explicitly: the
-    // list above was computed for `workspaceId`, and relying on the request's
-    // dynamic workspace header instead would write it into whatever workspace
-    // the user has switched to while `getUserState()` was in flight.
-    await userService.updateUninstalledBuiltinTools(newUninstalled, workspaceId);
-
-    // Refresh to ensure consistency
+    // Refresh to ensure consistency.
     await this.refreshUninstalledBuiltinTools();
   };
 
@@ -192,39 +224,28 @@ export class BuiltinToolActionImpl {
   };
 
   /**
-   * Refresh uninstalled builtin tools from server (active scope)
+   * Refresh the uninstalled-tools replica: the painted list stays on screen
+   * while the network answers, instead of blanking to the default seed first.
    */
   refreshUninstalledBuiltinTools = async (): Promise<void> => {
-    await mutate(toolKeys.uninstalledBuiltins(getActiveWorkspaceId()));
+    await this.#uninstalledBuiltinTools.revalidate(UNINSTALLED_BUILTIN_TOOLS_KEY);
   };
 
   /**
-   * SWR hook to fetch uninstalled builtin tools for the active scope.
+   * Fetch orchestration for the uninstalled-builtin list. The replica is
+   * partitioned by the active identity (personal / each workspace), so a scope
+   * switch paints that scope's persisted copy on the first frame; combined with
+   * the SPA's per-workspace remount this revalidates automatically.
    *
-   * The cache key carries the active workspace id so personal and each
-   * workspace keep independent caches; combined with the SPA's per-workspace
-   * remount this revalidates automatically on workspace switch.
+   * Read the list through `builtinToolSelectors.uninstalledBuiltinTools`; this
+   * only schedules the network round-trip.
    */
-  useFetchUninstalledBuiltinTools = (enabled: boolean): SWRResponse<string[]> => {
+  useFetchUninstalledBuiltinTools = (enabled: boolean): ReplicaSyncResult => {
     const workspaceId = useActiveWorkspaceId();
 
-    return useSWR<string[]>(
-      enabled ? toolKeys.uninstalledBuiltins(workspaceId) : null,
-      async () => {
-        const userState = await userService.getUserState();
-        return resolveUninstalledBuiltinTools(userState?.settings?.tool, workspaceId);
-      },
-      {
-        fallbackData: defaultUninstalledBuiltinTools,
-        onSuccess: (data) => {
-          this.#set(
-            { uninstalledBuiltinTools: data, uninstalledBuiltinToolsLoading: false },
-            false,
-            n('useFetchUninstalledBuiltinTools'),
-          );
-        },
-        revalidateOnFocus: false,
-      },
+    return this.#uninstalledBuiltinTools.useSync(
+      { workspaceId },
+      { enabled, revalidateOnFocus: false },
     );
   };
 }

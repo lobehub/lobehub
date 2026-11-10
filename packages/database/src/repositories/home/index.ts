@@ -21,13 +21,21 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import type { FtsSearchCandidateSource } from '../ftsSearch';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
 // so counting them here can leave a badge the regular agent topic list cannot clear.
-const HOME_UNREAD_EXCLUDE_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const HOME_UNREAD_EXCLUDE_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+];
 
 // Re-export types for backward compatibility
 export type {
@@ -92,8 +100,10 @@ export class HomeRepository {
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
+        forkedFromIdentifier: sql<string | null>`${agents.params}->>'forkedFromIdentifier'`,
         id: agents.id,
         name: agents.name,
+        model: agents.model,
         pinned: agents.pinned,
         slug: agents.slug,
         title: agents.title,
@@ -104,6 +114,7 @@ export class HomeRepository {
       .where(
         and(
           buildWorkspaceWhere(this.scope, {
+            isDeleted: agents.isDeleted,
             userId: agents.userId,
             workspaceId: agents.workspaceId,
             visibility: agents.visibility,
@@ -130,6 +141,7 @@ export class HomeRepository {
       .from(chatGroups)
       .where(
         buildWorkspaceWhere(this.scope, {
+          isDeleted: chatGroups.isDeleted,
           userId: chatGroups.userId,
           workspaceId: chatGroups.workspaceId,
           visibility: chatGroups.visibility,
@@ -173,6 +185,7 @@ export class HomeRepository {
           .from(sessionGroups)
           .where(
             buildWorkspaceWhere(this.scope, {
+              isDeleted: sessionGroups.isDeleted,
               userId: sessionGroups.userId,
               workspaceId: sessionGroups.workspaceId,
               visibility: sessionGroups.visibility,
@@ -285,8 +298,10 @@ export class HomeRepository {
       avatar: string | null;
       backgroundColor: string | null;
       description: string | null;
+      forkedFromIdentifier: string | null;
       id: string;
       name: string | null;
+      model: string | null;
       pinned: boolean | null;
       sessionGroupId: string | null;
       slug: string | null;
@@ -341,12 +356,14 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
+          forkedFromIdentifier: a.forkedFromIdentifier,
           groupId: a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
           name: a.name,
+          model: a.model,
           pinned: a.pinned ?? false,
           slug: a.slug,
           title: meta.title,
@@ -407,19 +424,23 @@ export class HomeRepository {
 
     for (const item of allItems) {
       const { groupId, isPrivate, ...sidebarItem } = item;
-      const cleanedItem = cleanObject(sidebarItem) as SidebarAgentItem;
+      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
+      const categoryId = groupId && validGroupIds.has(groupId) ? groupId : null;
+      const cleanedItem = {
+        ...cleanObject(sidebarItem),
+        groupId: categoryId,
+      } as SidebarAgentItem;
 
       if (item.pinned) {
         (isPrivate ? privatePinned : pinned).push(cleanedItem);
         continue;
       }
 
-      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
-      if (groupId && validGroupIds.has(groupId)) {
+      if (categoryId) {
         const bucket = isPrivate ? privateGroupedMap : groupedMap;
-        const existing = bucket.get(groupId) || [];
+        const existing = bucket.get(categoryId) || [];
         existing.push(cleanedItem);
-        bucket.set(groupId, existing);
+        bucket.set(categoryId, existing);
       } else if (isPrivate) {
         privateUngrouped.push(cleanedItem);
       } else {

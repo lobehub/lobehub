@@ -1,11 +1,10 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert, CopyButton, Descriptions, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useQuery } from '@tanstack/react-query';
-import { Descriptions, Typography } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,78 +13,63 @@ import { ArticleSkeleton } from '@/components/Skeleton';
 
 import { type CredsApi } from '../useCredsApi';
 
-const { Text } = Typography;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  kvKey: css`
-    min-width: 140px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius} 0 0 ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  kvRow: css`
-    display: flex;
-    align-items: stretch;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    &:not(:last-child) {
-      margin-block-end: 8px;
-    }
-  `,
-  kvValue: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 0 ${cssVar.borderRadius} ${cssVar.borderRadius} 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  maskedValue: css`
-    color: ${cssVar.colorTextQuaternary};
-    letter-spacing: 2px;
-  `,
-  toggleBtn: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    padding: 4px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  valuesSection: css`
-    margin-block-start: 16px;
-  `,
-  valuesTitle: css`
-    margin-block-end: 12px;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  kvKey: {
+    minWidth: '140px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderTopLeftRadius: cssVar.borderRadius,
+    borderTopRightRadius: '0',
+    borderBottomRightRadius: '0',
+    borderBottomLeftRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  kvRow: {
+    display: 'flex',
+    alignItems: 'stretch',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    marginBlockEnd: { 'default': null, ':not(:last-child)': '8px' },
+  },
+  kvValue: {
+    display: 'flex',
+    flex: '1',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderTopLeftRadius: '0',
+    borderTopRightRadius: cssVar.borderRadius,
+    borderBottomRightRadius: cssVar.borderRadius,
+    borderBottomLeftRadius: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  maskedValue: { color: cssVar.colorTextQuaternary, letterSpacing: '2px' },
+  toggleBtn: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '4px',
+    borderRadius: cssVar.borderRadiusSM,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  valuesSection: { marginBlockStart: '16px' },
+  valuesTitle: { marginBlockEnd: '12px', fontWeight: 500 },
+});
 
 const maskValue = (value: string): string => {
   if (value.length <= 4) return '••••••••';
@@ -101,11 +85,12 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
   const [visible, setVisible] = useState(false);
 
   return (
-    <div className={styles.kvRow}>
-      <div className={styles.kvKey}>{keyName}</div>
-      <div className={styles.kvValue}>
+    <div {...stylex.props(styles.kvRow)}>
+      <div {...stylex.props(styles.kvKey)}>{keyName}</div>
+      <div {...stylex.props(styles.kvValue)}>
         <Text
-          className={cx(!visible && styles.maskedValue)}
+          as={'span'}
+          className={stylex.props(!visible && styles.maskedValue).className}
           style={{
             flex: 1,
             fontFamily: 'var(--lobe-font-family-code)',
@@ -116,7 +101,7 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
           {visible ? value : maskValue(value)}
         </Text>
         <Flexbox horizontal align={'center'} gap={4}>
-          <div className={styles.toggleBtn} onClick={() => setVisible(!visible)}>
+          <div {...stylex.props(styles.toggleBtn)} onClick={() => setVisible(!visible)}>
             {visible ? <EyeOff size={16} /> : <Eye size={16} />}
           </div>
           <CopyButton content={value} size={'small'} />
@@ -128,13 +113,6 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
 
 export interface ViewCredModalContentProps {
   cred: UserCredSummary;
-  /**
-   * Bound explicitly by the caller (rendered inline, inside CredsApiProvider)
-   * instead of read via useCredsApi() here — this content tree is portaled by
-   * createModal() to a global ModalHost that sits outside CredsApiProvider,
-   * so a local useCredsApi() call would silently fall back to the personal
-   * (market.creds) API even on the workspace creds page.
-   */
   credsApi: CredsApi;
 }
 
@@ -176,19 +154,22 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred, credsApi })
         style={{ marginBottom: 16 }}
         type={'warning'}
       />
-      <Descriptions bordered column={1} size={'small'}>
-        <Descriptions.Item label={t('creds.table.name')}>{cred.name}</Descriptions.Item>
-        <Descriptions.Item label={t('creds.table.key')}>
-          <code>{cred.key}</code>
-        </Descriptions.Item>
-        <Descriptions.Item label={t('creds.table.type')}>
-          {cred.type ? t(`creds.types.${cred.type}` as any) : '-'}
-        </Descriptions.Item>
-      </Descriptions>
+      <Descriptions
+        bordered
+        items={[
+          { children: cred.name, key: 'name', label: t('creds.table.name') },
+          { children: <code>{cred.key}</code>, key: 'key', label: t('creds.table.key') },
+          {
+            children: cred.type ? t(`creds.types.${cred.type}` as any) : '-',
+            key: 'type',
+            label: t('creds.table.type'),
+          },
+        ]}
+      />
 
       {valueEntries.length > 0 && (
-        <div className={styles.valuesSection}>
-          <div className={styles.valuesTitle}>{t('creds.view.values')}</div>
+        <div {...stylex.props(styles.valuesSection)}>
+          <div {...stylex.props(styles.valuesTitle)}>{t('creds.view.values')}</div>
           {valueEntries.map(([key, value]) => (
             <KVRow key={key} keyName={key} value={String(value)} />
           ))}

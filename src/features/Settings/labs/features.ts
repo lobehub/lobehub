@@ -1,3 +1,5 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+
 import { type labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 
 /**
@@ -13,41 +15,50 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
+  | 'agentIdentity'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
   | 'deviceTunnel'
   | 'evalCapture'
+  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inputMarkdown'
-  | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
   | 'selfLearning'
-  | 'topicAcceptance';
+  | 'topicBugReport';
+
+/** Locale key stems that also carry a `features.${stem}.note` line */
+type LabFeatureNoteI18nKey = 'selfLearning';
 
 export interface LabFeatureItem {
+  /**
+   * Only offered when business features are on: the experiment needs a service
+   * that a self-hosted deployment does not have, so its toggle would do nothing.
+   */
+  businessOnly?: boolean;
   /** Only rendered (and searchable) in the Electron shell */
   desktopOnly?: boolean;
   /** Lab flag, also the search anchor suffix (`labs-${flag}`) */
   flag: keyof typeof labPreferSelectors;
   /** Locale key stem in the `labs` namespace: `features.${i18nKey}.title|desc` */
   i18nKey: LabFeatureI18nKey;
+  /**
+   * Second description line for what the user must know before turning it on
+   * (e.g. extra usage cost): `features.${noteI18nKey}.note`
+   */
+  noteI18nKey?: LabFeatureNoteI18nKey;
   /** Extra untranslated English synonyms for the settings search index */
   searchKeywords: string[];
   stage: LabStage;
+  /** Only rendered (and searchable) for users with workspace access */
+  workspaceOnly?: boolean;
 }
 
-/**
- * Single source of truth for the lab experiments: the Labs settings page
- * renders this list (general first, then desktop-only), and the settings
- * search index derives its entries from it — adding a flag here makes it both
- * visible and searchable without a second registration.
- */
-export const LAB_FEATURES: LabFeatureItem[] = [
+const ALL_LAB_FEATURES: LabFeatureItem[] = [
   {
     flag: 'enableAgentGraphConfig',
     i18nKey: 'agentGraphConfig',
@@ -55,10 +66,10 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableInputMarkdown',
-    i18nKey: 'inputMarkdown',
-    searchKeywords: ['markdown', 'input markdown'],
-    stage: 'beta',
+    flag: 'enableAgentIdentity',
+    i18nKey: 'agentIdentity',
+    searchKeywords: ['agent identity', 'agent mail', 'inbox', 'address'],
+    stage: 'alpha',
   },
   {
     flag: 'enableMessageTextSelectionActions',
@@ -69,7 +80,16 @@ export const LAB_FEATURES: LabFeatureItem[] = [
   {
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
-    searchKeywords: ['self-evolving', 'self learning', 'rule base'],
+    noteI18nKey: 'selfLearning',
+    searchKeywords: [
+      'self-evolving',
+      'self learning',
+      'rule base',
+      'rules',
+      'memory rules',
+      'delivery rules',
+      'verifier',
+    ],
     stage: 'alpha',
   },
   {
@@ -79,10 +99,17 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableTopicAcceptance',
-    i18nKey: 'topicAcceptance',
-    searchKeywords: ['acceptance', 'checklist'],
+    businessOnly: true,
+    flag: 'enableTopicBugReport',
+    i18nKey: 'topicBugReport',
+    searchKeywords: ['bug', 'report', 'feedback', 'issue', 'support'],
     stage: 'alpha',
+  },
+  {
+    flag: 'enableGoals',
+    i18nKey: 'goals',
+    searchKeywords: ['goal', 'goals', 'objective'],
+    stage: 'beta',
   },
   {
     flag: 'enableDeviceTunnel',
@@ -101,12 +128,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
-  },
-  {
-    flag: 'enableIntegrations',
-    i18nKey: 'integrations',
-    searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
-    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',
@@ -152,3 +173,20 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'beta',
   },
 ];
+
+export const filterAvailableLabFeatures = (
+  features: LabFeatureItem[],
+  enableBusinessFeatures: boolean,
+): LabFeatureItem[] =>
+  features.filter((feature) => enableBusinessFeatures || !feature.businessOnly);
+
+/**
+ * Single source of truth for the lab experiments: the Labs settings page
+ * renders this list (general first, then workspace-only, then desktop-only), and the settings
+ * search index derives its entries from it — adding a flag here makes it both
+ * visible and searchable without a second registration.
+ */
+export const LAB_FEATURES: LabFeatureItem[] = filterAvailableLabFeatures(
+  ALL_LAB_FEATURES,
+  ENABLE_BUSINESS_FEATURES,
+);

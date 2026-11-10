@@ -7,6 +7,21 @@ import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
+const createFileStats = (isDirectory: boolean, size: number) => ({
+  isDirectory: () => isDirectory,
+  birthtime: new Date('2024-01-01'),
+  mtime: new Date('2024-01-15'),
+  atime: new Date('2024-01-20'),
+  size,
+});
+
+const createEditFileInput = () => ({
+  file_path: '/test/file.txt',
+  old_string: 'Hello',
+  new_string: 'Hi',
+  replace_all: false,
+});
+
 const { getProjectFileIndexMock, ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
   getProjectFileIndexMock: vi.fn(),
   ipcMainHandleMock: vi.fn(),
@@ -287,9 +302,28 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({
+        code: 'forbidden',
         error: 'File is outside the approved workspace',
         success: false,
       });
+    });
+
+    it('marks a file that vanished before its preview URL exists as not found', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockRejectedValue(
+        Object.assign(
+          new Error("ENOENT: no such file or directory, realpath '/workspace/gone.md'"),
+          {
+            code: 'ENOENT',
+          },
+        ),
+      );
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/workspace/gone.md',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toMatchObject({ code: 'not_found', success: false });
     });
 
     it('should forward image-only preview URL constraints', async () => {
@@ -479,6 +513,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({
+        code: 'forbidden',
         error: 'File is outside the approved workspace',
         success: false,
       });
@@ -1145,12 +1180,7 @@ describe('LocalFileCtr', () => {
     it('should replace a unique occurrence successfully', async () => {
       const disk = useDisk({ '/test/file.txt': 'Hello world\nGreetings again\nGoodbye world' });
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(true);
       expect(result.replacements).toBe(1);
@@ -1167,12 +1197,7 @@ describe('LocalFileCtr', () => {
       const originalContent = 'Hello world\nHello again\nGoodbye world';
       vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(false);
       expect(result.replacements).toBe(0);
@@ -1236,12 +1261,7 @@ describe('LocalFileCtr', () => {
     it('should handle file read error', async () => {
       vi.mocked(mockFsPromises.readFile).mockRejectedValue(new Error('Permission denied'));
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Permission denied');
@@ -1253,12 +1273,7 @@ describe('LocalFileCtr', () => {
       vi.mocked(mockFsPromises.readFile).mockResolvedValue(originalContent);
       vi.mocked(mockFsPromises.writeFile).mockRejectedValue(new Error('Disk full'));
 
-      const result = await localFileCtr.handleEditFile({
-        file_path: '/test/file.txt',
-        old_string: 'Hello',
-        new_string: 'Hi',
-        replace_all: false,
-      });
+      const result = await localFileCtr.handleEditFile(createEditFileInput());
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Disk full');
@@ -1287,13 +1302,7 @@ describe('LocalFileCtr', () => {
       vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
         const name = (filePath as string).split('/').pop();
         if (name === 'folder1') {
-          return {
-            isDirectory: () => true,
-            birthtime: new Date('2024-01-01'),
-            mtime: new Date('2024-01-15'),
-            atime: new Date('2024-01-20'),
-            size: 4096,
-          } as any;
+          return createFileStats(true, 4096) as any;
         }
         return {
           isDirectory: () => false,
@@ -1321,13 +1330,7 @@ describe('LocalFileCtr', () => {
       vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
         const name = (filePath as string).split('/').pop();
         if (name === 'folder1') {
-          return {
-            isDirectory: () => true,
-            birthtime: new Date('2024-01-01'),
-            mtime: new Date('2024-01-15'),
-            atime: new Date('2024-01-20'),
-            size: 4096,
-          } as any;
+          return createFileStats(true, 4096) as any;
         }
         return {
           isDirectory: () => false,
@@ -1373,13 +1376,7 @@ describe('LocalFileCtr', () => {
 
     it('should sort by name ascending when specified', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['zebra.txt', 'alpha.txt', 'apple.txt']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1449,13 +1446,7 @@ describe('LocalFileCtr', () => {
         'file4.txt',
         'file5.txt',
       ]);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1470,13 +1461,7 @@ describe('LocalFileCtr', () => {
       // Create 150 files
       const files = Array.from({ length: 150 }, (_, i) => `file${i}.txt`);
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(files);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
@@ -1548,13 +1533,7 @@ describe('LocalFileCtr', () => {
 
     it('should sort by name descending when specified', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['alpha.txt', 'zebra.txt', 'middle.txt']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1672,13 +1651,7 @@ describe('LocalFileCtr', () => {
 
     it('should handle limit larger than file count', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['file1.txt', 'file2.txt']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => false,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 1024,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(false, 1024) as any);
 
       const result = await localFileCtr.listLocalFiles({
         path: '/test',
@@ -1734,13 +1707,7 @@ describe('LocalFileCtr', () => {
         if ((filePath as string).includes('bad.txt')) {
           throw new Error('Cannot stat file');
         }
-        return {
-          isDirectory: () => false,
-          birthtime: new Date('2024-01-01'),
-          mtime: new Date('2024-01-15'),
-          atime: new Date('2024-01-20'),
-          size: 1024,
-        } as any;
+        return createFileStats(false, 1024) as any;
       });
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
@@ -1753,13 +1720,7 @@ describe('LocalFileCtr', () => {
 
     it('should handle directory type correctly', async () => {
       vi.mocked(mockFsPromises.readdir).mockResolvedValue(['my_folder']);
-      vi.mocked(mockFsPromises.stat).mockResolvedValue({
-        isDirectory: () => true,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-15'),
-        atime: new Date('2024-01-20'),
-        size: 4096,
-      } as any);
+      vi.mocked(mockFsPromises.stat).mockResolvedValue(createFileStats(true, 4096) as any);
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 

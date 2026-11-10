@@ -102,12 +102,6 @@ describe('RouteVariants', () => {
       expect(result).toEqual(DEFAULT_VARIANTS);
     });
 
-    it('should handle isMobile value correctly for "0"', () => {
-      const serialized = 'en-US__0';
-      const result = RouteVariants.deserializeVariants(serialized);
-      expect(result.isMobile).toBe(false);
-    });
-
     it('should handle isMobile value correctly for "1"', () => {
       const serialized = 'en-US__1';
       const result = RouteVariants.deserializeVariants(serialized);

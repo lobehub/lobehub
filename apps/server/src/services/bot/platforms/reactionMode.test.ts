@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOT_REACTION_MODES,
   DEFAULT_BOT_REACTION_MODE,
+  NEW_BOT_REACTION_MODE,
   normalizeBotReactionMode,
   reactionModeField,
   shouldApplyReaction,
@@ -55,5 +56,14 @@ describe('reactionModeField', () => {
     expect(reactionModeField.enum).toEqual([...BOT_REACTION_MODES]);
     expect(reactionModeField.enumLabels).toHaveLength(BOT_REACTION_MODES.length);
     expect(reactionModeField.enumDescriptions).toHaveLength(BOT_REACTION_MODES.length);
+  });
+});
+
+describe('NEW_BOT_REACTION_MODE', () => {
+  it('starts a new bot with reactions off, while old rows keep the on default', () => {
+    expect(NEW_BOT_REACTION_MODE).toBe('none');
+    expect(shouldApplyReaction(NEW_BOT_REACTION_MODE, 'received')).toBe(false);
+    expect(reactionModeField.default).toBe(DEFAULT_BOT_REACTION_MODE);
+    expect(normalizeBotReactionMode(undefined)).not.toBe(NEW_BOT_REACTION_MODE);
   });
 });

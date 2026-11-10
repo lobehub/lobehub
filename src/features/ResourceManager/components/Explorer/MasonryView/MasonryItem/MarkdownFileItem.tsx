@@ -1,16 +1,14 @@
-import { stopPropagation, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Button, createStaticStyles, cx, stopPropagation, Tooltip } from '@lobehub/ui';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 
@@ -150,7 +148,7 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
       s.parseFilesToChunks,
     ]);
 
-    const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
+    const isSupportedForChunking = isChunkingSupported({ fileType, name });
 
     return (
       <>

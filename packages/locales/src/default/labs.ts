@@ -4,6 +4,9 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
+  'features.agentIdentity.desc':
+    'Give an agent its own email address, and read what arrives in its inbox from the agent settings.',
+  'features.agentIdentity.title': 'Agent Identity',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -31,6 +34,9 @@ export default {
     'Give a port on the working device a link, so a dev server running there can be opened from here. The link only works for people who can reach that device.',
   'features.deviceTunnel.title': 'Remote Port Links',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
+  'features.goals.desc':
+    'Hand the agent a goal: it breaks the goal into tasks, tracks progress, and delivers the result for you to review.',
+  'features.goals.title': 'Goals',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',
@@ -39,12 +45,6 @@ export default {
   'features.inAppBrowser.title': 'In-App Browser',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
-  'features.inputMarkdown.desc':
-    'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
-  'features.integrations.desc':
-    'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
-  'features.integrations.title': 'Integrations',
-  'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
@@ -58,13 +58,16 @@ export default {
     'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
-    'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
+    'Agents learn from your conversations in the background and review their day each night. See the results under Memory → Self-evolving.',
+  'features.selfLearning.note':
+    'This runs model calls in the background and uses additional quota. Each nightly review covers up to 50 conversations.',
   'features.selfLearning.title': 'Self-evolving',
-  'features.topicAcceptance.desc':
-    'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
-  'features.topicAcceptance.title': 'Topic Acceptance',
+  'features.topicBugReport.desc':
+    'Adds Report Bug to the topic menu. Send the topic’s IDs, your app environment, and optional attachments to the LobeHub support team.',
+  'features.topicBugReport.title': 'Report Bug',
   'group.desktop': 'Desktop',
   'group.general': 'General',
+  'group.workspace': 'Workspace',
   'stage.alpha.desc':
     'Internal testing only. Not recommended for daily use yet — it may change or break at any time.',
   'stage.alpha.label': 'Alpha',

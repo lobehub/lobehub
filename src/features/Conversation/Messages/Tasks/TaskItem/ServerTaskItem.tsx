@@ -1,15 +1,14 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { Accordion } from '@lobehub/ui/base-ui';
+import { Accordion, Block } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
 import { type UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
 
 import { TaskContent } from '../shared';
-import { type TaskMetrics } from './TaskTitle';
 import TaskTitle from './TaskTitle';
+import { type TaskMetrics } from './TaskTitle';
 
 interface ServerTaskItemProps {
   item: UIChatMessage;
@@ -31,7 +30,8 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
     if (isCompleted || isError) {
       return {
         duration: taskDetail?.duration,
-        steps: taskDetail?.totalSteps,
+        // `totalSteps` is the server's user-facing step metric: actual LLM calls.
+        llmCalls: taskDetail?.totalSteps,
         toolCalls: taskDetail?.totalToolCalls,
       };
     }

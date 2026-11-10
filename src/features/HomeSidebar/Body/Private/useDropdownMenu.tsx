@@ -1,4 +1,4 @@
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { ArrowDownIcon, ArrowUpIcon, Hash, LucideCheck, SlidersHorizontalIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -18,7 +18,7 @@ interface PrivateActionsDropdownMenuProps {
 
 export const usePrivateActionsDropdownMenu = ({
   openConfigGroupModal,
-}: PrivateActionsDropdownMenuProps): MenuProps['items'] => {
+}: PrivateActionsDropdownMenuProps): DropdownItem[] => {
   const { t } = useTranslation('common');
 
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -93,7 +93,7 @@ export const usePrivateActionsDropdownMenu = ({
         label: t('navPanel.customizeSidebar'),
         onClick: () => openCustomizeSidebarModal(),
       },
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
     privateAgentPageSize,
     updateSystemStatus,

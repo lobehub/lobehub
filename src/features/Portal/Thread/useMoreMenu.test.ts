@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   updateThreadTitle: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ confirmModal: mocks.confirmModal }));
+vi.mock('@lobehub/ui', () => ({ confirmModal: mocks.confirmModal }));
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.lobehub.com' }));
@@ -70,6 +70,14 @@ describe('useThreadMoreMenu', () => {
     await mocks.confirmModal.mock.calls[0][0].onOk();
     expect(mocks.removeThread).toHaveBeenCalledWith('thd_1');
     expect(mocks.closeThreadPortal).toHaveBeenCalledOnce();
+  });
+
+  it('offers no delete for a subagent thread', () => {
+    mocks.thread = { ...mocks.thread, metadata: { sourceToolCallId: 'toolu_1' } };
+    const { result } = renderHook(() => useThreadMoreMenu());
+
+    expect(result.current!.delete).toBeUndefined();
+    expect(result.current!.rename).toBeDefined();
   });
 
   it('renames the thread from its current title', async () => {

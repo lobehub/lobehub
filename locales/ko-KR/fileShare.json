@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "링크 복사",
+  "popover.copyLinkSuccess": "링크가 복사되었습니다",
+  "popover.linkHint": "링크를 가진 사람은 누구나 이 파일을 보고 다운로드할 수 있습니다",
+  "popover.permissionLink": "링크를 가진 사람",
+  "popover.permissionPrivate": "비공개",
+  "popover.privateHint": "본인만 이 파일을 열 수 있습니다",
+  "popover.sectionViews_one": "{{count}}회 조회",
+  "popover.sectionViews_other": "{{count}}회 조회",
+  "popover.title": "파일 공유",
+  "popover.updateError": "공유 설정을 업데이트하지 못했습니다",
+  "popover.visibility": "공개 범위",
+  "popover.visibilityUpdated": "공개 범위가 업데이트되었습니다",
+  "shareButton.label": "공유"
+}

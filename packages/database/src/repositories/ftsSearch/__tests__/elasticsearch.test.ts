@@ -235,6 +235,15 @@ describe('ElasticsearchFtsSearchBackend', () => {
         userId,
       },
       {
+        deletedAt: new Date(),
+        id: 'memory-deleted',
+        isDeleted: true,
+        lastAccessedAt: new Date(),
+        memoryLayer: 'context',
+        title: 'Deleted memory',
+        userId,
+      },
+      {
         id: 'memory-other',
         lastAccessedAt: new Date(),
         memoryLayer: 'context',

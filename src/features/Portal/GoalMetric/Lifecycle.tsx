@@ -1,33 +1,44 @@
 import type { GoalEventType, GoalGraphEvent, GoalNodeKind } from '@lobechat/types';
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { GithubIcon } from '@lobehub/ui/icons';
 import dayjs from 'dayjs';
 import {
   Archive,
+  ArrowUpRight,
+  Ban,
   Check,
+  GitPullRequest,
   History,
   Link2,
   type LucideIcon,
+  PackageCheck,
+  Pause,
   Pencil,
   Play,
   Plus,
-  Settings2,
   Unlink,
   X,
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
+import {
+  artifactIconOf,
+  openTargetOf,
+  useOpenGoalArtifact,
+} from '@/features/AgentGoals/ProcessControl/Deliverables';
+import { AgentActor, UserActor } from '@/features/AgentGoals/ProcessControl/GoalActors';
 import type {
+  GoalArtifactView,
   GoalGraphView,
   GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+
+import type { LifecycleNote } from './lifecycleEvent';
+import { buildLifecycleDays, type LifecycleGroup, type LifecycleRow } from './lifecycleRows';
 
 /**
  * The goal's history as a timeline, newest first and grouped by day. Each event
@@ -36,11 +47,56 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
  * for a quick scan — never coded in color. Only the leading glyph carries tone:
  * a resolve reads green, a reject red, everything else stays neutral, so the eye
  * can skim the outcomes.
+ *
+ * Which events share a line is decided in `lifecycleRows`: one line per
+ * deliverable and one line per moment, so a settle that attached five artifacts
+ * reads as one event with five cards instead of five identical sentences.
  */
 
 const BADGE = 20;
+/** The metric panel body's padding (`Body`), which is also the scroller's. */
+const PANEL_PADDING = 16;
+/** How much closer to the panel title a stuck day label sits than at rest. */
+const STUCK_LIFT = 12;
 
 const styles = createStaticStyles(({ css }) => ({
+  artifact: css`
+    margin: 0;
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: none;
+    border-radius: ${cssVar.borderRadius};
+
+    font: inherit;
+    color: ${cssVar.colorText};
+    text-align: start;
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  artifactIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  artifactOpenable: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
+  `,
   badge: css`
     display: flex;
     flex: none;
@@ -51,12 +107,18 @@ const styles = createStaticStyles(({ css }) => ({
     height: ${BADGE}px;
     border-radius: 50%;
   `,
+  // Sticks past the panel's top edge instead of at the scroller's padding edge,
+  // so rows scrolling by never show through a gap above it, and a stuck label
+  // sits close under the panel title rather than a full padding below it. The
+  // negative margin cancels the extra padding, leaving the resting layout as is.
+  // Each day's header is bounded by its own group, so the next day pushes it out.
   day: css`
     position: sticky;
     z-index: 1;
-    inset-block-start: 0;
+    inset-block-start: -${PANEL_PADDING + STUCK_LIFT}px;
 
-    padding-block: 6px;
+    margin-block-start: -${PANEL_PADDING}px;
+    padding-block: ${PANEL_PADDING + 6}px 6px;
 
     font-size: 12px;
     font-weight: 600;
@@ -64,9 +126,23 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
+  // The same header for a host that scrolls the whole page instead of owning a
+  // padded scroller: nothing to cancel, so it simply reads as a label.
+  dayPlain: css`
+    padding-block: 12px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${cssVar.colorTextTertiary};
+  `,
   item: css`
     position: relative;
     padding-block-end: 14px;
+
+    /* The next day's header reaches ${PANEL_PADDING}px up above it; the last
+       row leaves that much room so a card's bottom edge is never covered. */
+    &:last-child {
+      padding-block-end: ${PANEL_PADDING}px;
+    }
 
     /* The rail: runs from under this badge to the next one. */
     &:not(:last-child)::before {
@@ -99,6 +175,7 @@ const styles = createStaticStyles(({ css }) => ({
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
     overflow-wrap: anywhere;
+    white-space: pre-line;
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -158,6 +235,13 @@ const EVENT_VISUAL: Record<GoalEventType, { icon: LucideIcon; tone: Tone }> = {
   retired: { icon: Archive, tone: NEUTRAL },
   unlinked: { icon: Unlink, tone: NEUTRAL },
   updated: { icon: Pencil, tone: NEUTRAL },
+};
+
+const ACTION_ICON: Record<string, LucideIcon> = {
+  paused: Pause,
+  resumed: Play,
+  taskCanceled: Ban,
+  work: PackageCheck,
 };
 
 /**
@@ -229,60 +313,129 @@ const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>
 
 Subject.displayName = 'GoalMetricLifecycleSubject';
 
-const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
-  const { t } = useTranslation('chat');
-  const meta = useAgentDisplayMeta(agentId);
+const parseUrl = (url: string | null) => {
+  if (!url) return null;
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+};
 
-  // The node titles give way first — who acted stays readable, and only a very
-  // long agent name is capped.
+/**
+ * The glyph and caption a deliverable card leads with. A GitHub link is named
+ * by its own glyph — a pull request as a PR — so its host would only repeat
+ * what the icon already says; any other external link keeps its host.
+ */
+const artifactLook = (artifact: GoalArtifactView) => {
+  const url = artifact.type === 'document' ? null : parseUrl(artifact.url);
+  if (url?.hostname === 'github.com')
+    return {
+      host: null,
+      icon: /\/pull\/\d+/.test(url.pathname) ? GitPullRequest : GithubIcon,
+    };
+  return { host: url?.host ?? null, icon: artifactIconOf(artifact.type) };
+};
+
+/**
+ * A deliverable the event attached, as a card on its own line: the row names
+ * the task that produced it, the card is the thing itself, opened where it
+ * lives.
+ */
+const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
+  const { t } = useTranslation('chat');
+  const open = useOpenGoalArtifact();
+  const openable = !!openTargetOf(artifact);
+  const label = artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled');
+  const { host, icon } = artifactLook(artifact);
+
   return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      <AssigneeProfileAvatar agentId={agentId} size={16} />
-      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
-        {meta?.title ?? t('goalProcess.actor.agent')}
-      </Text>
+    <Flexbox
+      horizontal
+      align={'center'}
+      as={openable ? 'button' : 'div'}
+      className={cx(styles.artifact, openable && styles.artifactOpenable)}
+      gap={10}
+      {...(openable ? { onClick: () => open(artifact), type: 'button' as const } : {})}
+    >
+      <span className={styles.artifactIcon}>
+        <Icon color={cssVar.colorTextSecondary} icon={icon} size={16} />
+      </span>
+      <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+        <Text ellipsis fontSize={13} weight={500}>
+          {label}
+        </Text>
+        {host && (
+          <Text ellipsis fontSize={12} type={'secondary'}>
+            {host}
+          </Text>
+        )}
+      </Flexbox>
+      {openable && <Icon color={cssVar.colorTextQuaternary} icon={ArrowUpRight} size={14} />}
     </Flexbox>
   );
 });
 
-AgentActor.displayName = 'GoalMetricLifecycleAgentActor';
+ArtifactCard.displayName = 'GoalMetricLifecycleArtifact';
 
 const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
   const { t } = useTranslation('chat');
   if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
+  if (event.actorType === 'user') return <UserActor userId={event.actorId} />;
+
+  // Automatic steps name no actor: the event reads as the action alone, so
+  // the rows a person or agent drove stand out.
+  if (event.actorType === 'system') return null;
 
   return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      {event.actorType === 'system' && (
-        <Icon color={cssVar.colorTextTertiary} icon={Settings2} size={14} />
-      )}
-      <Text fontSize={13} weight={500}>
-        {t(`goalProcess.actor.${event.actorType}` as const)}
-      </Text>
-    </Flexbox>
+    <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
+      {t('goalProcess.actor.agent')}
+    </Text>
   );
 });
 
 Actor.displayName = 'GoalMetricLifecycleActor';
 
+const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
+  if (!('key' in note)) return note.text;
+  if (note.key === 'mainAgent')
+    return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
+  return t(`goalProcess.lifecycle.note.${note.key}` as const);
+};
+
 const EventItem = memo<{
-  event: GoalGraphEvent;
   graph: GoalGraphView;
+  group: LifecycleGroup;
   onSelect: (nodeId: string) => void;
-}>(({ event, graph, onSelect }) => {
+}>(({ graph, group, onSelect }) => {
   const { t } = useTranslation('chat');
-  const { icon, tone } = EVENT_VISUAL[event.eventType] ?? {
-    icon: History,
-    tone: NEUTRAL,
-  };
+  const { event, presentation } = group.rows[0] as LifecycleRow;
+  const visual = EVENT_VISUAL[event.eventType] ?? { icon: History, tone: NEUTRAL };
+  const tone = visual.tone;
+  // A recognised event names what happened more precisely than its raw type:
+  // a canceled task or a delivered Work is not an "edit".
+  const icon =
+    (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
   const subjects = subjectNodes(event, graph);
   const kind = eventKind(event, subjects);
   const phrase = `${event.eventType}.${kind}`;
-  const action = ACTION_PHRASES.has(phrase)
-    ? t(`goalProcess.lifecycle.action.${phrase}` as any)
-    : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
-        kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
-      }).trim();
+  const action = presentation.action
+    ? t(`goalProcess.lifecycle.action.${presentation.action}` as const)
+    : ACTION_PHRASES.has(phrase)
+      ? t(`goalProcess.lifecycle.action.${phrase}` as any)
+      : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
+          kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
+        }).trim();
+  // One row can carry several deliverables: a settle attaches each of them, and
+  // the fold in `buildLifecycleDays` merged them back into the moment they were
+  // attached in. The row names the task, each card is one thing it delivered.
+  const artifacts = group.rows.flatMap((row) => {
+    const version = row.presentation.workVersion;
+    if (!version) return [];
+    const artifact = graph.artifacts.find((item) => item.workVersionId === version.id);
+    return artifact ? [artifact] : [];
+  });
+  const note = presentation.note ? noteText(presentation.note, t) : undefined;
 
   return (
     <Flexbox horizontal className={styles.item} gap={10}>
@@ -321,9 +474,12 @@ const EventItem = memo<{
             {dayjs(event.createdAt).format('HH:mm')}
           </Text>
         </Flexbox>
-        {event.reason && (
-          <div className={styles.reason} title={event.reason}>
-            {event.reason}
+        {artifacts.map((artifact) => (
+          <ArtifactCard artifact={artifact} key={artifact.workVersionId} />
+        ))}
+        {note && (
+          <div className={styles.reason} title={note}>
+            {note}
           </div>
         )}
       </Flexbox>
@@ -345,39 +501,62 @@ const useDayLabel = () => {
   };
 };
 
-const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }) => {
+interface LifecycleProps {
+  goalId: string;
+  graph: GoalGraphView;
+  /**
+   * Click landing for a row's subject. A host that also renders the graph passes
+   * its own handler so a timeline click keeps the map's selection in sync —
+   * without it the timeline would open the node but leave the graph stale.
+   */
+  onSelect?: (nodeId: string) => void;
+  /**
+   * Pins each day label under the host's top edge. Only right inside the metric
+   * panel, whose padded scroller the offsets are computed against; a host that
+   * scrolls the page turns it off.
+   */
+  stickyDays?: boolean;
+}
+
+const Lifecycle = memo<LifecycleProps>(({ goalId, graph, stickyDays = true, onSelect }) => {
   const { t } = useTranslation('chat');
   const dayLabel = useDayLabel();
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
   // Same landing as a click anywhere else on the goal: a Task opens its Task
-  // panel, other nodes their drill-down.
-  const onSelect = useGoalNodeSelect(goalId, graph);
+  // panel, other nodes their drill-down. A host that owns the graph's selection
+  // passes its own handler instead, so the click updates both surfaces.
+  const openNode = useGoalNodeSelect(goalId, graph);
+  const select = onSelect ?? openNode;
 
   const days = useMemo(() => {
-    const sorted = [...(snapshot?.events ?? [])].sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    const workTypes = new Map(
+      (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.type]),
     );
-    const groups: { day: dayjs.Dayjs; events: GoalGraphEvent[] }[] = [];
-    for (const event of sorted) {
-      const day = dayjs(event.createdAt).startOf('day');
-      const last = groups.at(-1);
-      if (last?.day.isSame(day)) last.events.push(event);
-      else groups.push({ day, events: [event] });
-    }
-    return groups;
+    const workIds = new Map(
+      (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.workId]),
+    );
+    return buildLifecycleDays(snapshot?.events ?? [], {
+      workIdOf: (id) => workIds.get(id),
+      workTypeOf: (id) => workTypes.get(id),
+    });
   }, [snapshot]);
 
   if (days.length === 0)
     return <Empty description={t('goalProcess.metricDetail.lifecycle.empty')} icon={History} />;
 
   return (
-    <Flexbox gap={8}>
-      {days.map(({ day, events }) => (
-        <Flexbox gap={4} key={day.valueOf()}>
-          <div className={styles.day}>{dayLabel(day)}</div>
+    <Flexbox gap={0}>
+      {days.map(({ day, groups }) => (
+        <Flexbox gap={2} key={day.valueOf()}>
+          <div className={stickyDays ? styles.day : styles.dayPlain}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
-            {events.map((event) => (
-              <EventItem event={event} graph={graph} key={event.id} onSelect={onSelect} />
+            {groups.map((group) => (
+              <EventItem
+                graph={graph}
+                group={group}
+                key={group.rows[0].event.id}
+                onSelect={select}
+              />
             ))}
           </Flexbox>
         </Flexbox>

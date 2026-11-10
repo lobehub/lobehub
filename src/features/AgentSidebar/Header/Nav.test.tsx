@@ -20,10 +20,11 @@ const permissionMock = vi.hoisted(() => ({
 }));
 const labMock = vi.hoisted(() => ({
   enableSelfLearning: true,
-  enableTopicAcceptance: true,
+  enableGoals: true,
 }));
+const resourceAccessMock = vi.hoisted(() => ({ canEditResource: true, isAccessResolved: true }));
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
-  useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
+  useResourceAccess: () => resourceAccessMock,
 }));
 
 vi.mock('react-router', async () => {
@@ -102,25 +103,28 @@ vi.mock('@/store/global', () => ({
     selector({ toggleCommandMenu: toggleCommandMenuMock }),
 }));
 
+interface ServerConfigTestState {
+  featureFlags: { isAgentEditable: boolean };
+  serverConfigInit: boolean;
+}
+
 vi.mock('@/store/serverConfig', () => ({
-  featureFlagsSelectors: (state: { featureFlags: { isAgentEditable: boolean } }) =>
-    state.featureFlags,
-  useServerConfigStore: (
-    selector: (state: { featureFlags: { isAgentEditable: boolean } }) => unknown,
-  ) => selector({ featureFlags: { isAgentEditable: true } }),
+  featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
+  useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
+    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
 }));
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) =>
-    selector({ preference: { lab: labMock } }),
+    selector({ isUserStateInit: true, preference: { lab: labMock } }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: {
     enableSelfLearning: (state: { preference: { lab?: { enableSelfLearning?: boolean } } }) =>
       state.preference.lab?.enableSelfLearning ?? false,
-    enableTopicAcceptance: (state: { preference: { lab?: { enableTopicAcceptance?: boolean } } }) =>
-      state.preference.lab?.enableTopicAcceptance ?? false,
+    enableGoals: (state: { preference: { lab?: { enableGoals?: boolean } } }) =>
+      state.preference.lab?.enableGoals ?? false,
   },
 }));
 
@@ -136,7 +140,9 @@ describe('Agent sidebar header nav', () => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
-    labMock.enableTopicAcceptance = true;
+    labMock.enableGoals = true;
+    resourceAccessMock.canEditResource = true;
+    resourceAccessMock.isAccessResolved = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -276,5 +282,30 @@ describe('Agent sidebar header nav', () => {
     expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
     expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
     expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+  });
+
+  // r1018 issue 7: in a workspace, `useResourceAccess` reports the edit check as
+  // permissive while `getGeneralAccess` is in flight (`canEditResource: true`,
+  // `isAccessResolved: false`). The profile entry must not vanish for that
+  // window — it used to disappear right after opening an agent and only
+  // reappear once the batched request returned.
+  it('keeps the profile entry visible while workspace resource access is still loading', () => {
+    resourceAccessMock.canEditResource = true;
+    resourceAccessMock.isAccessResolved = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toBeInTheDocument();
+  });
+
+  it('hides the profile entry once the server confirms the member cannot edit the agent', () => {
+    resourceAccessMock.canEditResource = false;
+    resourceAccessMock.isAccessResolved = true;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
   });
 });

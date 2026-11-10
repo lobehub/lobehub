@@ -342,7 +342,7 @@ depends on the scenario:
   API/Cron triggers. The loop runs on the server,
   streaming events to the client via SSE, entry point is
   `AgentRuntimeService.executeStep()`
-  (`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`),
+  (`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`),
   tRPC route at `apps/server/src/routers/lambda/aiAgent.ts`
 
 ## Model Runtime

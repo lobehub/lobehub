@@ -6,6 +6,7 @@ import {
   BubblesIcon,
   CalendarClockIcon,
   HeartPulseIcon,
+  ScaleIcon,
   SearchIcon,
   SignatureIcon,
 } from 'lucide-react';
@@ -13,8 +14,9 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
-import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
@@ -34,6 +36,7 @@ enum MemoryTabKey {
   Home = 'home',
   Identities = 'identities',
   Preferences = 'preferences',
+  Rules = 'rules',
 }
 
 const useActiveTabKey = () => {
@@ -47,11 +50,13 @@ const Nav = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('memory');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const { enabled: enableSelfLearning } = useSelfLearningSurface();
 
   /**
-   * Groups separated by space rather than rules: what the whole section is (home), who the
-   * person is (identity, preferences), and what is going on around them (contexts, activities).
-   * Search sits above all of them because it is an action, not a destination.
+   * Four groups, separated by space rather than rules: what the whole section is (home), what it
+   * requires of a delivery (rules), who the person is (identity, preferences), and what is
+   * going on around them (contexts, activities). Search sits above all of them because it is an
+   * action, not a destination.
    */
   const groups: Item[][] = useMemo(
     () => [
@@ -73,6 +78,20 @@ const Nav = memo(() => {
           url: '/memory',
         },
       ],
+      // Shown to the self-iteration rollout and to Labs opt-ins; for everyone else the group
+      // disappears rather than sitting there disabled, so their sidebar reads exactly as before.
+      ...(enableSelfLearning
+        ? [
+            [
+              {
+                icon: ScaleIcon,
+                key: MemoryTabKey.Rules,
+                title: t('tab.rules'),
+                url: '/memory/rules',
+              },
+            ],
+          ]
+        : []),
       [
         {
           icon: SignatureIcon,
@@ -102,7 +121,7 @@ const Nav = memo(() => {
         },
       ],
     ],
-    [t, toggleCommandMenu],
+    [t, toggleCommandMenu, enableSelfLearning],
   );
 
   return (

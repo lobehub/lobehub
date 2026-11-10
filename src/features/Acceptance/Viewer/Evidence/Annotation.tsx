@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 
@@ -156,6 +154,7 @@ interface AnnotatedImageProps {
    */
   annotations: EvidenceOverlay[];
   imageStyle?: React.CSSProperties;
+  onLoad?: React.ReactEventHandler<HTMLImageElement>;
   /** Render the per-region notes under the image. Off when a caller already lists them. */
   showComments?: boolean;
   src: string;
@@ -163,7 +162,7 @@ interface AnnotatedImageProps {
 
 /** An evidence image with its circled regions (read-only display). */
 export const AnnotatedImage = memo<AnnotatedImageProps>(
-  ({ annotations, imageStyle, showComments = true, src }) => {
+  ({ annotations, imageStyle, onLoad, showComments = true, src }) => {
     // A badge is noise on a single unnumbered region, but required as soon as
     // anything refers to a region by number.
     const numbered = annotations.length > 1 || annotations.some((item) => item.label !== undefined);
@@ -171,7 +170,7 @@ export const AnnotatedImage = memo<AnnotatedImageProps>(
     return (
       <Flexbox gap={6} style={{ maxWidth: '100%', width: 'fit-content' }}>
         <div className={styles.frame}>
-          <img alt={''} className={styles.image} src={src} style={imageStyle} />
+          <img alt={''} className={styles.image} src={src} style={imageStyle} onLoad={onLoad} />
           {annotations.map((annotation, index) => (
             <div
               className={styles.rect}

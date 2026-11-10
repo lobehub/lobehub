@@ -149,20 +149,26 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // When JSON.parse fails, return a dedicated error rather than silently
     // falling back to `{}`. Passing `{}` to the tool produced generic
     // "required field missing" errors, which led the model to retry with the
-    // same broken payload. Distinguish a truncated payload (typical when
-    // max_tokens is exhausted mid-tool-call) from plain malformed JSON, and
-    // echo the raw arguments string so the model can verify it is exactly
-    // what it produced.
+    // same broken payload. Distinguish a truncated payload from plain
+    // malformed JSON, and echo the raw arguments string so the model can
+    // verify it is exactly what it produced.
+    //
+    // The truncation cause is unknown at this point: an exhausted output
+    // budget and an upstream that closed the stream early look identical.
+    // Naming max_tokens made models tell users the platform caps output and
+    // that they should raise a setting, which was wrong for interrupted streams
+    // so the message lists both causes and asks the model not to
+    // assert either one.
     if (parsed === undefined && argsStr?.trim()) {
       const truncationReason = detectTruncatedJSON(argsStr);
       const explanation = truncationReason
         ? `The tool call arguments JSON appears to be truncated (${truncationReason}), ` +
-          `likely because the model's max_tokens budget was exhausted ` +
-          `(possibly by extended-thinking tokens). ` +
-          `Either reduce the size of the content you are about to write, ` +
-          `or ask the user to increase the model's max_tokens ` +
-          `(and/or disable extended thinking or set a separate thinking budget). ` +
-          `Do not retry with the same payload.`
+          `so the tool was not invoked. The output was cut off before the call was complete, ` +
+          `either because the output length limit was reached or because the response stream ` +
+          `was interrupted; the cause cannot be determined here, so do not tell the user it ` +
+          `was a specific limit or setting. ` +
+          `If the arguments carry large content, split it into smaller pieces across several calls. ` +
+          `Do not resend the same truncated arguments.`
         : `The tool call arguments string is not valid JSON and could not be parsed, ` +
           `so the tool was not invoked. Fix the JSON syntax and try again.`;
       const content = `${explanation}\n\nThe received arguments string was:\n${argsStr}`;
@@ -182,8 +188,9 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // this executor runs whatever call reaches it, so a resume path, recovery
     // hint, or future tool-discovery route that bypasses assembly must still
     // clear the FULL gate here: master default-deny allowlist, the owner's
-    // `toolGrants` picker, humanIntervention policy (re-read from the
-    // unstripped manifest), and the per-API data-tool rules. Non-builtin
+    // `toolGrants` picker, and the per-API data-tool rules. `humanIntervention`
+    // is not a block reason: the visitor approves granted tools like any
+    // other run, so the approval itself already happened upstream. Non-builtin
     // identifiers pass through (governed by the share's `toolGrants` at
     // assembly). Fail closed: block, never throw open.
     if (

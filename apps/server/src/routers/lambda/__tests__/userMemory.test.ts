@@ -17,6 +17,8 @@ const mockFindById = vi.fn();
 const mockCountTopicsForMemoryExtractor = vi.fn();
 const mockDeleteAll = vi.fn();
 const mockDeletePersona = vi.fn();
+const mockGetStory = vi.fn();
+const mockListStories = vi.fn();
 const mockListPersonaVersions = vi.fn();
 const mockResetMemoryExtractStatus = vi.fn();
 const mockRestorePersonaVersion = vi.fn();
@@ -53,6 +55,9 @@ vi.mock('@/database/models/userMemory', () => ({
   }),
   UserMemoryContextModel: vi.fn(function () {
     return {};
+  }),
+  UserMemoryContextStoryModel: vi.fn(function () {
+    return { getStory: mockGetStory, listStories: mockListStories };
   }),
   UserMemoryExperienceModel: vi.fn(function () {
     return {};
@@ -414,4 +419,51 @@ describe('userMemoryRouter persona versions', () => {
       await expect(operation).rejects.toMatchObject({ code: 'FORBIDDEN' });
     },
   );
+});
+
+describe('userMemoryRouter.deletePersona', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('deletes only the caller persona without purging memories or resetting topics', async () => {
+    mockDeletePersona.mockResolvedValue(undefined);
+    await expect(createCaller().deletePersona()).resolves.toEqual({ success: true });
+    expect(mockDeletePersona).toHaveBeenCalledOnce();
+    expect(mockDeleteAll).not.toHaveBeenCalled();
+    expect(mockResetMemoryExtractStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects workspace scope before deleting personal data', async () => {
+    await expect(
+      createCaller({ workspaceId: 'workspace-1' }).deletePersona(),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDeletePersona).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed deletion', async () => {
+    mockDeletePersona.mockRejectedValueOnce(new Error('delete failed'));
+    await expect(createCaller().deletePersona()).rejects.toThrow('delete failed');
+    expect(mockDeleteAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('userMemoryRouter context stories', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('lists the story cards of the caller', async () => {
+    const list = { legacyCap: 100, legacyCount: 3, stories: [{ id: 'ctx-1' }] };
+    mockListStories.mockResolvedValue(list);
+
+    await expect(createCaller().getContextStories()).resolves.toEqual(list);
+  });
+
+  it('reads one story by id and passes a missing one through as null', async () => {
+    mockGetStory.mockResolvedValueOnce({ dossiers: [], id: 'ctx-1' }).mockResolvedValueOnce(null);
+    const caller = createCaller();
+
+    await expect(caller.getContextStory({ id: 'ctx-1' })).resolves.toMatchObject({ id: 'ctx-1' });
+    await expect(caller.getContextStory({ id: 'legacy-1' })).resolves.toBeNull();
+    expect(mockGetStory.mock.calls).toEqual([['ctx-1'], ['legacy-1']]);
+  });
 });

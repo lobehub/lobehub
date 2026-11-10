@@ -92,7 +92,7 @@ export const tasks = pgTable(
 
     // Context & config (each task independent, no inheritance from parent)
     context: jsonb('context').default({}),
-    config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, etc.
+    config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, TaskExecutionConfig, etc.
     error: text('error'),
 
     // Visibility (mirrors agent.visibility semantics). Workspace-mode rows can be
@@ -106,6 +106,9 @@ export const tasks = pgTable(
     // Timestamps
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
+    // Set when the user archives the task ("truly done"); orthogonal to
+    // `status`, null = not archived.
+    archivedAt: timestamptz('archived_at'),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
     ...timestamps,

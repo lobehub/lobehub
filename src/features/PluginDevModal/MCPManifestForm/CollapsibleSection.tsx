@@ -1,4 +1,4 @@
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useState } from 'react';

@@ -1,3 +1,4 @@
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,13 +17,20 @@ const Title = memo(() => {
   const { data } = useAcceptanceBundle(portal?.acceptanceId ?? null);
   const check = data?.checks.find((item) => item.id === portal?.checkId);
 
-  if (!check) return t('taskDetail.acceptance.detailTitle');
+  let title: string = t('taskDetail.acceptance.detailTitle');
+  if (check) {
+    const name = checkDisplayTitle(
+      check.title,
+      t('acceptance.checks.holisticTitle', { ns: 'verify' }),
+    );
+    title = check.seq ? `C${check.seq} · ${name}` : name;
+  }
 
-  const title = checkDisplayTitle(
-    check.title,
-    t('acceptance.checks.holisticTitle', { ns: 'verify' }),
+  return (
+    <Text ellipsis={{ tooltipWhenOverflow: true }} style={{ minWidth: 0 }}>
+      {title}
+    </Text>
   );
-  return check.seq ? `C${check.seq} · ${title}` : title;
 });
 
 Title.displayName = 'AcceptanceCheckPortalTitle';

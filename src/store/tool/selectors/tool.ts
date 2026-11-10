@@ -10,6 +10,7 @@ import { type MetaData } from '@/types/meta';
 import { type LobeToolMeta } from '@/types/tool/tool';
 
 import { type ToolStoreState } from '../initialState';
+import { agentSkillsSelectors } from '../slices/agentSkills/selectors';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
 import { ComposioServerStatus } from '../slices/composioStore';
 import { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore';
@@ -132,7 +133,9 @@ export interface AvailableToolForDiscovery {
 const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscovery[] => {
   // Build exclusion sets for deduplication
   const builtinSkillIds = new Set((s.builtinSkills || []).map((skill) => skill.identifier));
-  const agentSkillIds = new Set((s.agentSkills || []).map((skill) => skill.identifier));
+  const agentSkillIds = new Set(
+    agentSkillsSelectors.getAgentSkills(s).map((skill) => skill.identifier),
+  );
   const composioIds = new Set((s.composioServers || []).map((server) => server.identifier));
   const lobehubSkillIds = new Set((s.lobehubSkillServers || []).map((server) => server.identifier));
 
@@ -147,9 +150,11 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
       name: tool.title || tool.identifier,
     }));
 
-  // 2. User-installed plugins — directly from s.installedPlugins
+  // 2. User-installed plugins — only full records: a plugin painted from the
+  //    cached display projection has no connection yet, so it cannot be activated.
   //    Exclude Composio, LobeHub Skill, and agent skill entries (they are handled in dedicated sources)
-  const pluginItems = s.installedPlugins
+  const pluginItems = pluginSelectors
+    .confirmedInstalledPlugins(s)
     .filter((p) => !composioIds.has(p.identifier))
     .filter((p) => !lobehubSkillIds.has(p.identifier))
     .filter((p) => !agentSkillIds.has(p.identifier))

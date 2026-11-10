@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { ActionIcon, Divider, Flexbox, Switch, Tabs, Text } from '@lobehub/ui';
 import { Images } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +18,7 @@ import {
   ConfigAction,
   GenerationMediaModeSegment,
   GenerationModelNotice,
+  GenerationPromptBlockedNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineImageReference,
@@ -28,7 +27,10 @@ import {
 import {
   CfgSliderInput,
   DimensionControlGroup,
+  FrameCountSliderInput,
+  FrameDurationSliderInput,
   ImageNum,
+  OutputFormatSelect,
   QualitySelect,
   ResolutionSelect,
   SeedNumberInput,
@@ -94,7 +96,7 @@ const PromptExtendItem = memo(() => {
     const options = enumValues.map((item) => ({
       disabled: !canCreate,
       key: item,
-      label: item,
+      label: t(`config.promptExtend.options.${item}`, { defaultValue: item }),
     }));
 
     return (
@@ -151,6 +153,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   } = useImageReferenceUpload();
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
+  const blockedPrompt = useImageStore(createImageSelectors.blockedPrompt);
+  const dismissBlockedPrompt = useImageStore((s) => s.dismissBlockedPrompt);
+  // Editing the prompt dismisses the notice: it only describes the submitted text.
+  const isPromptBlocked = blockedPrompt !== undefined && blockedPrompt === value;
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const activeGenerationTopicId = useImageStore(generationTopicSelectors.activeGenerationTopicId);
   const activeGenerationTopic = useImageStore((s) =>
@@ -174,6 +180,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportPromptExtend = useImageStore(isSupportedParamSelector('promptExtend'));
   const isSupportWatermark = useImageStore(isSupportedParamSelector('watermark'));
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
+  const isSupportOutputFormat = useImageStore(isSupportedParamSelector('outputFormat'));
+  const isSupportFrameCount = useImageStore(isSupportedParamSelector('frameCount'));
+  const isSupportFrameDurationMs = useImageStore(isSupportedParamSelector('frameDurationMs'));
+  const isAnimatedOutput = useImageStore(imageGenerationConfigSelectors.isAnimatedOutput);
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
   const isModelConfigReady = useAiInfraStore((s) =>
@@ -266,6 +276,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     createImage,
   ]);
 
+  // `canDropImage` is false while GIF output is selected (see `useImageReferenceUpload`).
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
   const displayVisibility = activeGenerationTopic
@@ -289,6 +300,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         isCreating={isCreating}
         isDarkMode={isDarkMode}
         value={value}
+        header={
+          isPromptBlocked ? (
+            <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
+          ) : undefined
+        }
         inlineContent={
           showInlineRef ? (
             <InlineImageReference
@@ -340,6 +356,27 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     <Flexbox gap={6}>
                       <Text fontSize={12}>{t('config.quality.label')}</Text>
                       <QualitySelect />
+                    </Flexbox>
+                  )}
+                  {isSupportOutputFormat && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.outputFormat.label')}</Text>
+                      <OutputFormatSelect
+                        // In-flight uploads count too: they land as references after finishing.
+                        disableAnimated={hasRefImages || uploadingPreviews.length > 0}
+                      />
+                    </Flexbox>
+                  )}
+                  {isAnimatedOutput && isSupportFrameCount && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.frameCount.label')}</Text>
+                      <FrameCountSliderInput />
+                    </Flexbox>
+                  )}
+                  {isAnimatedOutput && isSupportFrameDurationMs && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.frameDurationMs.label')}</Text>
+                      <FrameDurationSliderInput />
                     </Flexbox>
                   )}
                   {isSupportResolution && (

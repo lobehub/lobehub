@@ -6,6 +6,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   ActivationResultTrimProcessor,
   AgentCouncilFlattenProcessor,
+  AgentSenderMessageProcessor,
   cacheEconomicsForProvider,
   CompressedGroupRoleTransformProcessor,
   DisabledToolCallFilter,
@@ -14,12 +15,14 @@ import {
   GroupRoleTransformProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
+  LH_COMMAND_TOOL_IDENTIFIERS,
   MessageCleanupProcessor,
   MessageContentProcessor,
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   StaleToolResultTrimProcessor,
+  SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
@@ -30,6 +33,7 @@ import {
 } from '../../processors';
 import {
   ActiveTopicDocumentContextInjector,
+  AgentAccountContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -42,6 +46,7 @@ import {
   ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
+  DocumentReferenceContextInjector,
   EvalContextSystemInjector,
   ExpertiseContextInjector,
   ForceFinishSummaryInjector,
@@ -55,9 +60,8 @@ import {
   OnboardingActionHintInjector,
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
-  PageEditorContextInjector,
-  PageSelectionsInjector,
   PlanInjector,
+  ProjectContextInjector,
   ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
   selectActivatedSkills,
@@ -85,6 +89,7 @@ const log = debug('context-engine:MessagesEngine');
 
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
+const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -162,6 +167,7 @@ export class MessagesEngine {
       provider,
       systemRole,
       agentIdentity,
+      agentAccountContext,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -197,8 +203,8 @@ export class MessagesEngine {
       userMemory,
       initialContext,
       stepContext,
-      pageContentContext,
       topicReferences,
+      documentReferences,
       enableSystemDate,
       timezone,
     } = this.params;
@@ -221,8 +227,6 @@ export class MessagesEngine {
     const isAgentMode = enableAgentMode !== false;
     const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
-    // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
-    const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // Runtime message state is authoritative, including an empty clear tombstone.
     const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
@@ -254,6 +258,9 @@ export class MessagesEngine {
     // Oversized file previews may only promise `readAttachment` when the model is actually sent that
     // tool; custom / exclusive tool modes, share visitors and clients without it get a plain preview.
     const canReadAttachment = toolIds.includes(ATTACHMENTS_TOOL_ID) && !!canUseFC(model, provider);
+    // Same gate for referenced agent documents: only point at `readDocument` when it is sent.
+    const canReadDocuments =
+      toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -319,6 +326,13 @@ export class MessagesEngine {
       new AgentIdentityInjector({
         enabled: !isGroupContextEnabled,
         identity: agentIdentity,
+      }),
+      // The agent's own accounts + inbox, as first-class state. Injected right
+      // after the person's identity because it refines "who am I" with "and I
+      // can be reached here". Skipped entirely when the agent owns nothing.
+      new AgentAccountContextInjector({
+        context: agentAccountContext,
+        enabled: isAgentMode,
       }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
@@ -442,7 +456,7 @@ export class MessagesEngine {
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({
         activeTopicDocument: initialContext?.activeTopicDocument,
-        enabled: hasActiveTopicDocument && !isPageEditorEnabled,
+        enabled: hasActiveTopicDocument,
       }),
       // LobeHub skill URLs in the current message → route them to the Skill Store
       // instead of letting the model crawl the page and follow its CLI steps.
@@ -453,38 +467,28 @@ export class MessagesEngine {
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Generic user-attached selections from chat/code/text contexts.
       new ContextSelectionsInjector({ enabled: true }),
-      // Legacy page editor selections.
-      new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
-      // Page Editor context (inject current page content to last user message)
-      new PageEditorContextInjector({
-        enabled: isPageEditorEnabled,
-        pageContentContext:
-          pageContentContext ??
-          (initialContext?.pageEditor
-            ? {
-                markdown: initialContext.pageEditor.markdown,
-                metadata: {
-                  charCount: initialContext.pageEditor.metadata.charCount,
-                  lineCount: initialContext.pageEditor.metadata.lineCount,
-                  title: initialContext.pageEditor.metadata.title,
-                },
-                xml: stepContext?.stepPageEditor?.xml || initialContext.pageEditor.xml,
-              }
-            : undefined),
+      // Project context (members, linked knowledge, open tasks) for a run inside a project
+      new ProjectContextInjector({
+        contextPrompt: initialContext?.projectContext?.contextPrompt,
+        enabled: !!initialContext?.projectContext?.contextPrompt,
       }),
       // Task Manager page context (inject current tasks list/detail to last user message)
       new TaskManagerContextInjector({
         contextPrompt: initialContext?.taskManager?.contextPrompt,
         enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
-      // Todo list (at end of last user message)
-      new TodoInjector({ enabled: isTodoEnabled, todos: effectiveTodos }),
       // Topic Reference context (referenced topic summaries to last user message)
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
         topicReferences,
+      }),
+      // Document Reference context (dragged/referenced agent documents to last user message)
+      new DocumentReferenceContextInjector({
+        canReadDocuments,
+        documentReferences,
+        enabled: !!(documentReferences && documentReferences.length > 0),
       }),
 
       // =============================================
@@ -509,6 +513,11 @@ export class MessagesEngine {
         enabled: !!onboardingContext?.phaseGuidance,
         onboardingContext,
       }),
+      // Todo list (standalone virtual tail message)
+      new TodoInjector({
+        enabled: isTodoEnabled && planTodo?.injectTodos !== false,
+        todos: effectiveTodos,
+      }),
       new RuntimeAdditionalContextProvider({ additionalContexts }),
 
       // =============================================
@@ -516,6 +525,9 @@ export class MessagesEngine {
       // Flattens group/task messages, applies templates and variables
       // =============================================
 
+      // Background sub-agent results arrive as user messages from the
+      // sub-agent; mark them as its report before any user-text template
+      new SubAgentResultMessageProcessor(),
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
       // AgentCouncil message flatten
@@ -605,6 +617,14 @@ export class MessagesEngine {
 
       // Reaction feedback
       new ReactionFeedbackProcessor({ enabled: true }),
+      // Who sent an agent → agent message, and how to reply (string content only)
+      new AgentSenderMessageProcessor({
+        // Enabled now or activatable on demand: either way the agent can run `lh`.
+        canRunLhCommand: [
+          ...(toolsConfig?.manifests ?? []).map((manifest) => manifest.identifier),
+          ...(toolDiscoveryConfig?.availableTools ?? []).map((tool) => tool.identifier),
+        ].some((identifier) => LH_COMMAND_TOOL_IDENTIFIERS.includes(identifier)),
+      }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
         canReadAttachment,

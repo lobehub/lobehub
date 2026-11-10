@@ -1,6 +1,6 @@
 import { AgentRuntimeErrorType, ChatErrorType, type ChatMessageError } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
 
+import { isRecord } from '../utils/object';
 import { refineErrorCode } from './refine';
 import { getErrorCodeSpec } from './specs';
 
@@ -22,14 +22,18 @@ const extractProvider = (body: unknown): string | undefined => {
   return typeof p === 'string' ? p : undefined;
 };
 
-const extractMessage = (value: unknown, depth = 0): string | undefined => {
+/**
+ * Find the first human-readable message in an error value, walking the nested `error`,
+ * `_responseBody` and `body` layers that runtime payloads use.
+ */
+export const extractErrorMessage = (value: unknown, depth = 0): string | undefined => {
   if (typeof value === 'string') return value.trim() ? value : undefined;
   if (!isRecord(value) || depth > 5) return undefined;
   if (typeof value.message === 'string' && value.message.trim() && value.message !== 'error') {
     return value.message;
   }
   for (const nested of [value.error, value._responseBody, value.body]) {
-    const message = extractMessage(nested, depth + 1);
+    const message = extractErrorMessage(nested, depth + 1);
     if (message) return message;
   }
 };
@@ -134,6 +138,45 @@ const truncateStack = (stack: string | undefined): string | undefined => {
  * JSONB, S3 trace snapshots, agent-gateway WS push, dashboards) all get the
  * same shape without re-running pattern matching themselves.
  */
+/** The model gateway's message for a model tier the user's plan does not include. */
+const PLAN_GATE_PATTERN = /available on paid plans only/i;
+
+/**
+ * Classification for a platform admission refusal that arrives as a bare HTTP 403.
+ *
+ * The model gateway rejects a call it will not serve before any provider sees it, either
+ * because the user's plan does not include the model tier or because a usage-security gate
+ * holds the account (`body.reason`). Both carry the numeric `Forbidden` type, which has no
+ * spec, so they were stored with no category and read as unknown failures. Both are the
+ * account's state, not a runtime fault, so they are classified as user-side. The `type`
+ * stays as is, because the chat error renderer picks its card from it.
+ *
+ * A bare `Forbidden` with neither marker is left unclassified on purpose: the refusal lost
+ * its explanation somewhere upstream, which is a defect to fix rather than a user state.
+ */
+const classifyForbidden = (formatted: ChatMessageError): ChatMessageError | undefined => {
+  if (String(formatted.type) !== String(ChatErrorType.Forbidden)) return undefined;
+  const reason = isRecord(formatted.body) ? formatted.body.reason : undefined;
+  const category =
+    typeof reason === 'string' && reason
+      ? 'auth'
+      : PLAN_GATE_PATTERN.test(formatted.message ?? '')
+        ? 'quota'
+        : undefined;
+  if (!category) return undefined;
+
+  return {
+    ...formatted,
+    attribution: 'user',
+    category,
+    countAsFailure: false,
+    httpStatus: 403,
+    isFallback: false,
+    retryable: false,
+    severity: 'warning',
+  };
+};
+
 const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
   // Generic `ProviderBizError` is re-derived from the message / HTTP status into
   // a more specific code before enrichment, so the catch-all doesn't swallow
@@ -150,7 +193,7 @@ const enrichWithSpec = (formatted: ChatMessageError): ChatMessageError => {
   // because `ChatMessageError['type']` widens to include numeric `ChatErrorType`
   // values, which simply miss the lookup and pass through unenriched.
   const spec = getErrorCodeSpec(String(type));
-  if (!spec) return formatted;
+  if (!spec) return classifyForbidden(formatted) ?? formatted;
 
   return {
     ...formatted,
@@ -197,9 +240,9 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     };
     const message =
       (payload.message && payload.message !== 'error' ? payload.message : undefined) ??
-      extractMessage(payload.body) ??
-      extractMessage(payload._responseBody) ??
-      extractMessage(payload.error) ??
+      extractErrorMessage(payload.body) ??
+      extractErrorMessage(payload._responseBody) ??
+      extractErrorMessage(payload.error) ??
       String(payload.errorType);
 
     return enrichWithSpec({
@@ -221,9 +264,21 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     (typeof (error as { type: unknown }).type === 'string' ||
       typeof (error as { type: unknown }).type === 'number')
   ) {
-    const formatted = error as ChatMessageError;
-    const message = extractMessage(formatted);
-    return enrichWithSpec({ ...formatted, ...(message ? { message } : {}) });
+    const { _responseBody: responseBody, ...formatted } = error as ChatMessageError & {
+      _responseBody?: unknown;
+    };
+    const message = extractErrorMessage(formatted);
+    // Error hooks attach display fields such as `traceId` through `_responseBody`, including on
+    // a typed provider stream error that fails a router's last channel mid-stream.
+    const body =
+      isRecord(responseBody) && responseBody !== formatted.body
+        ? { ...(isRecord(formatted.body) ? formatted.body : {}), ...responseBody }
+        : formatted.body;
+    return enrichWithSpec({
+      ...formatted,
+      ...(body === undefined ? {} : { body }),
+      ...(message ? { message } : {}),
+    });
   }
 
   if (error instanceof Error) {
@@ -256,7 +311,7 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
   if (isRecord(error)) {
     return enrichWithSpec({
       body: error,
-      message: extractMessage(error) ?? 'Agent runtime error',
+      message: extractErrorMessage(error) ?? 'Agent runtime error',
       type:
         typeof error.code === 'string'
           ? (getErrorCodeSpec(error.code)?.code ?? AgentRuntimeErrorType.AgentRuntimeError)

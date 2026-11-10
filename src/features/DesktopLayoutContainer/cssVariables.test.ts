@@ -29,8 +29,8 @@ describe('getInnerCssVariables', () => {
     mockDarwin.mockReturnValue(24);
     const vars = getInnerCssVariables({ isDark: false });
 
-    expect(vars['--container-border-radius']).toBe('var(--ant-border-radius)');
-    expect(vars['--container-border-bottom-right-radius']).toBe('var(--ant-border-radius)');
+    expect(vars['--container-border-radius']).toBe('var(--lobe-border-radius)');
+    expect(vars['--container-border-bottom-right-radius']).toBe('var(--lobe-border-radius)');
   });
 
   it('switches to 12px from darwin 25, and rounds the bottom-right too from darwin 26', () => {
@@ -56,10 +56,10 @@ describe('getInnerCssVariables', () => {
 
   it('softens the border color in dark mode', () => {
     expect(getInnerCssVariables({ isDark: true })['--container-border-color']).toBe(
-      'var(--ant-color-border-secondary)',
+      'var(--lobe-color-border-secondary)',
     );
     expect(getInnerCssVariables({ isDark: false })['--container-border-color']).toBe(
-      'var(--ant-color-border)',
+      'var(--lobe-color-border)',
     );
   });
 });

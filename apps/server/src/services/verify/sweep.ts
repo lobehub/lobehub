@@ -1,4 +1,5 @@
 import type { VerifyCheckItem } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -12,16 +13,9 @@ import { planItemToPendingResult } from './resultSnapshot';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
+import { releaseUndeliveredRound } from './undeliveredRound';
 
 const log = debug('lobe-server:verify-sweep');
-
-/** An operation in any of these can still produce a verdict. */
-const LIVE_OPERATION_STATUSES = new Set([
-  'idle',
-  'running',
-  'waiting_for_human',
-  'waiting_for_async_tool',
-]);
 
 const PENDING_RESULT_STATUSES = new Set(['pending', 'running']);
 
@@ -32,6 +26,8 @@ const SWEEP_MAX_RUNS = 1000;
 export interface VerifySweepOutcome {
   /** Runs whose outstanding checks were closed as `errored` before the rollup. */
   abandoned: string[];
+  /** Task rounds taken off their acceptance because the run never delivered. */
+  released: string[];
   /** Runs whose checks had all landed and only needed the missing rollup. */
   settled: string[];
   /** Runs left alone — still plausibly mid-flight. */
@@ -39,8 +35,9 @@ export interface VerifySweepOutcome {
 }
 
 /**
- * Recover verification runs stranded in `verifying` and planned repairs whose
- * operation has already failed or been interrupted.
+ * Recover verification runs stranded in `verifying`, planned repairs whose
+ * operation has already failed or been interrupted, and task rounds whose run
+ * ended without a delivery (see {@link releaseUndeliveredRound}).
  *
  * Entering `verifying` is a durable write; the judging that leaves it runs as
  * post-response work, so any host-level interruption — instance recycled,
@@ -74,7 +71,7 @@ export const sweepStuckVerifyRuns = async (
   const now = options?.now ?? new Date();
   const pageSize = options?.pageSize ?? SWEEP_PAGE_SIZE;
   const staleBefore = new Date(now.getTime() - VERIFY_ROLLUP_GRACE_MS);
-  const outcome: VerifySweepOutcome = { abandoned: [], settled: [], skipped: 0 };
+  const outcome: VerifySweepOutcome = { abandoned: [], released: [], settled: [], skipped: 0 };
 
   // Walk the whole stranded set, not just its oldest page: rows the sweep leaves
   // alone keep their timestamp, so a single fixed-size read would return the same
@@ -118,16 +115,17 @@ const recoverRun = async (
   db: LobeChatDatabase,
   run: VerifyRunItem,
   now: Date,
-): Promise<'abandoned' | 'settled' | 'skipped'> => {
+): Promise<'abandoned' | 'released' | 'settled' | 'skipped'> => {
   const operationId = run.operationId;
   if (!operationId) return 'skipped';
+  const workspaceId = run.workspaceId ?? undefined;
   if (run.status === 'planned') {
-    return (await settleFailedRepair(db, run.userId, operationId, run.workspaceId ?? undefined))
-      ? 'abandoned'
+    if (await settleFailedRepair(db, run.userId, operationId, workspaceId)) return 'abandoned';
+    return (await releaseUndeliveredRound(db, run.userId, operationId, workspaceId))
+      ? 'released'
       : 'skipped';
   }
 
-  const workspaceId = run.workspaceId ?? undefined;
   const plan = (run.plan ?? []) as VerifyCheckItem[];
   if (plan.length === 0) return 'skipped';
 
@@ -154,7 +152,8 @@ const recoverRun = async (
       // Its verifier is still working — `settleVerifierCheckFromTerminal` owns
       // this row's ending, and stamping it `errored` now would discard a verdict
       // that is still coming.
-      if (verifierOp && LIVE_OPERATION_STATUSES.has(verifierOp.status)) return 'skipped';
+      // A still-live verifier (parked ones included) can still produce a verdict.
+      if (verifierOp && isAgentOperationInFlight(verifierOp.status)) return 'skipped';
     }
   }
 

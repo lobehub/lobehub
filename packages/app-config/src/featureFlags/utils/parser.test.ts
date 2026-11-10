@@ -24,6 +24,11 @@ describe('parseFeatureFlag', () => {
     });
   });
 
+  it('should toggle dashboards with +dashboard / -dashboard', () => {
+    expect(parseFeatureFlag('+dashboard')).toEqual({ dashboard: true });
+    expect(parseFeatureFlag('-dashboard')).toEqual({ dashboard: false });
+  });
+
   it('should hide content with commercial flags', () => {
     const input = '+commercial_hide_github,+commercial_hide_docs';
     expect(parseFeatureFlag(input)).toEqual({
@@ -42,14 +47,11 @@ describe('parseFeatureFlag', () => {
     expect(parseFeatureFlag(input)).toEqual({});
   });
 
-  it('invalid flag format return nothing', () => {
-    const input = 'invalid_format';
-    expect(parseFeatureFlag(input)).toEqual({});
-  });
-
-  it('invalid format return empty object', () => {
-    const input = '+webrtc_sync:unexpected';
-    expect(parseFeatureFlag(input)).toEqual({});
+  it('ignores unknown flag names while keeping known ones', () => {
+    expect(parseFeatureFlag('-some_removed_flag')).toEqual({});
+    expect(parseFeatureFlag('+some_removed_flag,+api_key_manage')).toEqual({
+      api_key_manage: true,
+    });
   });
 
   it('ignores +/- on array-only flags like dev_dock_workspaces', () => {

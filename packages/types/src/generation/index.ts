@@ -88,6 +88,10 @@ export interface Generation {
   asset?: GenerationAsset | null;
   asyncTaskId: string | null;
   createdAt: Date;
+  /**
+   * Library file the generated asset was saved as, once the task succeeded.
+   */
+  fileId?: string | null;
   id: string;
   /**
    * Source generation this one edits, read from the async task metadata so the

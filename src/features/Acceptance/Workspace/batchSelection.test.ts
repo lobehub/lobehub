@@ -6,6 +6,7 @@ import {
   ACCEPTANCE_BATCH_CHUNK,
   acceptanceBatchTargets,
   acceptanceProjectTargets,
+  acceptanceRedirectAfterDelete,
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
@@ -145,5 +146,17 @@ describe('chunkAcceptanceBatch', () => {
 
   it('has nothing to send for an empty selection', () => {
     expect(chunkAcceptanceBatch([])).toEqual([]);
+  });
+});
+
+describe('acceptanceRedirectAfterDelete', () => {
+  it('returns to the acceptance list, not the app home, when the open row is deleted', () => {
+    expect(acceptanceRedirectAfterDelete('a', ['a', 'b'], [])).toBe('/acceptance');
+  });
+
+  it('stays put when the open row survived or was not targeted', () => {
+    expect(acceptanceRedirectAfterDelete('a', ['a'], ['a'])).toBeUndefined();
+    expect(acceptanceRedirectAfterDelete('a', ['b'], [])).toBeUndefined();
+    expect(acceptanceRedirectAfterDelete(undefined, ['a'], [])).toBeUndefined();
   });
 });

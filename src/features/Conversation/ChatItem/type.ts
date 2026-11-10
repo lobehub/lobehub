@@ -1,5 +1,4 @@
-import type { DivProps, FlexboxProps } from '@lobehub/ui';
-import { type AlertProps, type AvatarProps } from '@lobehub/ui/base-ui';
+import type { AlertProps, AvatarProps, DivProps, FlexboxProps } from '@lobehub/ui';
 import type { EditableMessageProps, MetaData } from '@lobehub/ui/chat';
 import type { ReactNode } from 'react';
 
@@ -16,6 +15,12 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
   actions?: ReactNode;
   actionsWrapWidth?: number;
   afterActions?: ReactNode;
+  /**
+   * Set on agent messages: the avatar becomes an agent avatar, drawing the
+   * agent's generated character when it has no avatar of its own. The id seeds
+   * that character; an empty id falls back to the conversation's agent.
+   */
+  agentId?: string | null;
   avatar: ChatItemAvatarMeta;
   avatarProps?: AvatarProps;
   belowMessage?: ReactNode;
@@ -66,6 +71,8 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
    * @default false
    */
   showAvatar?: boolean;
+  /** Omit the identity row for a continuation in a grouped message feed. */
+  showHeader?: boolean;
   /**
    * @description Whether to show the title of the chat item
    */

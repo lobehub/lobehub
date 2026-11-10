@@ -9,11 +9,28 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { readRequiredEvidence } from './evidenceCoverage';
+
+// A criterion that declares evidence types fails its structural gate until
+// each one is present, so the prompt has to name them: without the types, the
+// evidence turn sent whatever it reached for first (markdown for a `text`
+// requirement, a recording as `video` for `gif`) and failed every repair round.
+const describeRequiredEvidence = (item: VerifyCheckItem): string => {
+  const types = [
+    ...new Set(
+      (readRequiredEvidence(item.verifierConfig) ?? [])
+        .filter((spec) => !spec.scope || spec.scope === 'run_evidence')
+        .map((spec) => spec.type),
+    ),
+  ];
+  return types.length > 0 ? ` [requires evidence type: ${types.join(', ')}]` : '';
+};
+
 const buildEvidencePrompt = (
   items: VerifyCheckItem[],
 ): string => `The task execution is complete. Submit the evidence you produced for every Acceptance criterion below.
 
-${items.map((item) => `- ${item.id}: ${item.title}${item.description ? ` — ${item.description}` : ''}`).join('\n')}
+${items.map((item) => `- ${item.id}: ${item.title}${item.description ? ` — ${item.description}` : ''}${describeRequiredEvidence(item)}`).join('\n')}
 
 Call submitEvidence once for each criterion. This is evidence collection only: do not assign verdicts and do not redo the implementation.`;
 
@@ -21,6 +38,12 @@ Call submitEvidence once for each criterion. This is evidence collection only: d
  * External CLI agents cannot call server builtin tools. Preserve their final
  * handoff as inline evidence instead of starting an evidence-only hetero turn
  * that can never reach `submitEvidence`.
+ *
+ * Only criteria the builder left without any evidence get the handoff. A
+ * criterion it already evidenced through `lh acceptance run result submit`
+ * keeps exactly what it submitted, as an Acceptance round does: the final
+ * report is not evidence for a specific check and is already handed to the
+ * verifier as the deliverable.
  */
 export const recordHeterogeneousDeliverableEvidence = async (params: {
   db: LobeChatDatabase;
@@ -34,7 +57,15 @@ export const recordHeterogeneousDeliverableEvidence = async (params: {
   const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operation.id);
   if (!run) throw new Error('Verification run is missing for heterogeneous evidence');
 
+  const evidenced = new Set(
+    (await new VerifyEvidenceModel(db, userId, workspaceId).listByRun(run.id)).map(
+      (row) => row.checkItemId,
+    ),
+  );
+
   for (const item of plan) {
+    if (evidenced.has(item.id)) continue;
+
     const result = await new VerifyCheckResultModel(db, userId, workspaceId).upsertByCheckItem({
       checkItemId: item.id,
       checkItemIndex: item.index,

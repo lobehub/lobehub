@@ -1,6 +1,5 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox, type MenuProps } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -9,9 +8,12 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  type DropdownItem,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -31,7 +33,7 @@ import { SortType, useProviderDropdownMenu } from './useDropdownMenu';
 interface ProviderSectionProps {
   action?: ReactNode;
   children: ReactNode;
-  contextMenuItems: MenuProps['items'];
+  contextMenuItems: DropdownItem[];
   title: string;
   value: string;
 }

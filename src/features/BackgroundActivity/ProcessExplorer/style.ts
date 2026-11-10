@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -101,8 +101,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 11px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   `,
   sort: css`
     cursor: pointer;
