@@ -374,6 +374,7 @@ describe('desktop router shared definition', () => {
     // `/share/*` moved to the standalone Share app (apps/share).
     expect(webPaths).not.toContain('/share/t');
     expect(webPaths).not.toContain('/share/page');
+    expect(webPaths).not.toContain('/share/goal');
     // …and the agent-share visitor surface is no longer defined here: it runs
     // a visitor's conversation on the creator's account, so it ships with the
     // deployment that does that accounting and registers itself through
@@ -395,6 +396,7 @@ describe('desktop router shared definition', () => {
     expect(electronPaths).not.toContain('/verify-im');
     expect(electronPaths).not.toContain('/share/t');
     expect(electronPaths).not.toContain('/share/page');
+    expect(electronPaths).not.toContain('/share/goal');
     expect(electronPaths).not.toContain('/verify');
     expect(electronPaths).not.toContain('/acceptance');
     // Electron runs account onboarding after its local first-run setup.
