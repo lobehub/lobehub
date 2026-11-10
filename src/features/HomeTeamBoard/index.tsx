@@ -16,6 +16,7 @@ import ActivityPanel from './ActivityPanel';
 import AttentionList from './AttentionList';
 import BoardFilters from './BoardFilters';
 import DayCalendar from './DayCalendar';
+import QuotaCapacity from './QuotaCapacity';
 import Timeline from './Timeline';
 
 // Matches the other overview pages; the gateway only streams a user's own runs.
@@ -154,6 +155,8 @@ const HomeTeamBoard = () => {
           </div>
         </Flexbox>
       )}
+      {/* Independent of the run board: it loads, polls and fails on its own. */}
+      <QuotaCapacity />
     </Flexbox>
   );
 };
