@@ -12,6 +12,12 @@ export {
   collectHeteroAttachedFiles,
   type HeteroAttachedFileRef,
 } from './attachedFiles';
+export {
+  buildClaudeCodeEntrypointEnv,
+  CLAUDE_CODE_ENTRYPOINT_ENV,
+  DEFAULT_CLAUDE_CODE_ENTRYPOINT,
+  normalizeClaudeCodeEntrypoint,
+} from './claudeCodeEntrypoint';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,

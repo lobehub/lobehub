@@ -224,6 +224,45 @@ describe('spawnHeteroAgentRun', () => {
     );
   });
 
+  it('runs Claude Code under the entrypoint the agent asked for', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'claude-code',
+      claudeCodeEntrypoint: 'lobehub',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env).toEqual(
+      expect.objectContaining({
+        CLAUDE_CODE_DISABLE_TERMINAL_TITLE: '1',
+        CLAUDE_CODE_ENTRYPOINT: 'lobehub',
+      }),
+    );
+  });
+
+  // The value arrives from another machine and lands in a process environment.
+  it('drops an entrypoint that is not a plain name', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined);
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'claude-code',
+      claudeCodeEntrypoint: 'x\nLD_PRELOAD=/tmp/evil.so',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , opts] = spawnMock.mock.calls[0];
+    expect(opts.env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
+  });
+
   it('appends --resume when resuming a session', () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);

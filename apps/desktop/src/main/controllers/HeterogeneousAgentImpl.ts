@@ -78,7 +78,7 @@ import {
   ensureClaudeCodeResumeTranscript,
   findClaudeCodeTranscriptPath,
   getCodexAppServerUnsupportedArgs,
-  getHeterogeneousAgentPresetEnv,
+  getHeterogeneousAgentSpawnEnv,
   prepareClaudeCodeLobeHubCli,
   readClaudeCodeSessionCost,
   readCodexSessionModel,
@@ -949,8 +949,7 @@ export default class HeterogeneousAgentCtr {
     const env: NodeJS.ProcessEnv = {
       ...withEmbeddedCliEnv(inheritedEnv),
       ...proxyEnv,
-      ...getHeterogeneousAgentPresetEnv(session.agentType),
-      ...session.env,
+      ...getHeterogeneousAgentSpawnEnv(session.agentType, session.env),
       ...(includeProcessOwnership
         ? managedProcessEnvironment(
             { ...session.processOwner, label: session.agentType },

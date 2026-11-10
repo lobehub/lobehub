@@ -28,7 +28,7 @@ import {
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 import { prepareClaudeCodeLobeHubCli } from './lobeHubCliPlugin';
-import { getHeterogeneousAgentPresetEnv } from './presetEnv';
+import { getHeterogeneousAgentSpawnEnv } from './presetEnv';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 export interface SpawnAgentOptions {
@@ -508,8 +508,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
-    ...getHeterogeneousAgentPresetEnv(options.agentType),
-    ...options.env,
+    ...getHeterogeneousAgentSpawnEnv(options.agentType, options.env),
   };
   // Codex builds each shell command's env from `[shell_environment_policy]`,
   // not from its own process env, so a user's `inherit = "core"` strips the

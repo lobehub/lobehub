@@ -1,3 +1,8 @@
+import {
+  CLAUDE_CODE_ENTRYPOINT_ENV,
+  dropClearedClaudeCodeEntrypoint,
+} from '../claudeCodeEntrypoint';
+
 /**
  * Environment variables a host always sets for a heterogeneous agent, shared by
  * every spawn site (desktop CLI/SDK runs, `lh hetero exec`). Hosts apply them
@@ -18,6 +23,32 @@ const HETEROGENEOUS_AGENT_PRESET_ENV: Partial<Record<string, Readonly<Record<str
   'codebuddy': { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' },
 };
 
-export const getHeterogeneousAgentPresetEnv = (
+/**
+ * @param agentEnv the agent's configured `env`, which the host applies over
+ * the result. Presets that only make sense next to a setting the agent chose
+ * are derived from it.
+ */
+const getHeterogeneousAgentPresetEnv = (
   agentType: string,
-): Readonly<Record<string, string>> => HETEROGENEOUS_AGENT_PRESET_ENV[agentType] ?? {};
+  agentEnv?: Readonly<Record<string, string | undefined>>,
+): Readonly<Record<string, string>> => {
+  const preset = HETEROGENEOUS_AGENT_PRESET_ENV[agentType] ?? {};
+  // An agent that picks its own entrypoint also gets the terminal title off.
+  if (agentType === 'claude-code' && agentEnv?.[CLAUDE_CODE_ENTRYPOINT_ENV]?.trim()) {
+    return { ...preset, CLAUDE_CODE_DISABLE_TERMINAL_TITLE: '1' };
+  }
+  return preset;
+};
+
+/**
+ * What a host layers over the inherited environment for a run: the presets,
+ * then the agent's own `env` on top, minus an entrypoint the agent cleared.
+ */
+export const getHeterogeneousAgentSpawnEnv = (
+  agentType: string,
+  agentEnv?: Readonly<Record<string, string>>,
+): Record<string, string> =>
+  dropClearedClaudeCodeEntrypoint({
+    ...getHeterogeneousAgentPresetEnv(agentType, agentEnv),
+    ...agentEnv,
+  });
