@@ -160,6 +160,15 @@ describe('persistPageState', () => {
       expect(store.updates[1].content).toBe('');
     });
 
+    it('writes a room with content over a new, empty page', async () => {
+      store.row = { content: '', editorData: null, title: 'Page' };
+
+      await persist(await roomOf('first words\n'));
+
+      expect(store.updates).toHaveLength(1);
+      expect(store.updates[0].content).toBe('first words\n');
+    });
+
     it('accepts an empty room over an empty page', async () => {
       store.row = { content: '', editorData: null, title: 'Page' };
 
