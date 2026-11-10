@@ -239,9 +239,18 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
     // `PERSONAL_SCOPE` is the sentinel for personal (null).
     messengerActions.useFetchBindingScopes(enableWorkspaceScopes);
     const bindingScopes = useMessengerStore(messengerSelectors.bindingScopes);
-    const [scope, setScope] = useState<string>(
-      enableWorkspaceScopes ? (link.workspaceId ?? PERSONAL_SCOPE) : PERSONAL_SCOPE,
-    );
+    const linkScope = enableWorkspaceScopes ? (link.workspaceId ?? PERSONAL_SCOPE) : PERSONAL_SCOPE;
+    const [scope, setScope] = useState<string>(linkScope);
+    // A link painted from the local copy may name an older binding scope. When
+    // the server's link moves to another scope, the picker follows it, so the
+    // agent below is read (and defaulted) in the scope the link is bound to.
+    const [syncedLinkScope, setSyncedLinkScope] = useState(linkScope);
+    if (syncedLinkScope !== linkScope) {
+      setSyncedLinkScope(linkScope);
+      setScope(linkScope);
+    }
+    // Defaulting to the inbox writes the binding: never from a restored link.
+    const isLinksConfirmed = useMessengerStore(messengerSelectors.isLinksConfirmed);
     const userAvatar = useUserStore(userProfileSelectors.userAvatar);
     const userDisplayName = useUserStore(userProfileSelectors.displayUserName);
     const userFullName = useUserStore(userProfileSelectors.fullName);
@@ -340,7 +349,7 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
             <AgentSelect
               // Default to the scope's inbox agent whenever the selected scope has
               // no active Agent. This also repairs historical agent-less links.
-              defaultToInbox={canEdit && !pendingForScope && !activeAgentId}
+              defaultToInbox={canEdit && isLinksConfirmed && !pendingForScope && !activeAgentId}
               disabled={!canEdit}
               placeholder={t('messenger.activeAgentPlaceholder')}
               value={activeAgentId ?? undefined}

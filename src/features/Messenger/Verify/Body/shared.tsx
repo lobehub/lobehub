@@ -21,6 +21,7 @@ import {
   PERSONAL_SCOPE,
   resolvePersonalScopeLabel,
 } from '../../scopeOptions';
+import { resolveDefaultAgentId } from './defaultAgent';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   bubble: css`
@@ -193,13 +194,14 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
     const [confirming, setConfirming] = useState(false);
 
-    // Default-select the first agent (inbox is pinned to the top) once a scope's
-    // list loads. Resetting selectedAgentId on scope change re-triggers this so
-    // it re-defaults to the new scope's inbox.
+    // Default-select the first agent (inbox is pinned to the top) once the
+    // server confirms a scope's list, and drop a pick that list no longer has.
+    // Resetting selectedAgentId on scope change re-triggers this so it
+    // re-defaults to the new scope's inbox.
+    const resolvedAgentId = resolveDefaultAgentId(agents, isAgentsConfirmed, selectedAgentId);
     useEffect(() => {
-      if (selectedAgentId || !agents?.length) return;
-      setSelectedAgentId(agents[0].id);
-    }, [agents, selectedAgentId]);
+      if (resolvedAgentId !== selectedAgentId) setSelectedAgentId(resolvedAgentId);
+    }, [resolvedAgentId, selectedAgentId]);
 
     // Mirror the Messenger connection card's scope picker: avatar + name per row.
     // Personal uses the user's avatar; workspaces use their own.
@@ -224,7 +226,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     const isBlocked = !!blockingNotice;
 
     const handleConfirm = async () => {
-      if (!selectedAgentId) return;
+      if (!selectedAgentId || !isAgentsConfirmed) return;
       setConfirming(true);
       try {
         await messengerService.confirmLink({ initialAgentId: selectedAgentId, randomId });
@@ -310,7 +312,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
         <Button
           block
-          disabled={isBlocked || !selectedAgentId}
+          disabled={isBlocked || !selectedAgentId || !isAgentsConfirmed}
           loading={confirming}
           size="large"
           type="primary"

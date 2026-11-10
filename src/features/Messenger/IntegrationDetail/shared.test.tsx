@@ -1,6 +1,6 @@
 import { render, renderHook, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useLinkActions, UserAgentConnection } from './shared';
 
@@ -24,11 +24,13 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       Select: ({
         classNames,
         options,
+        value,
       }: {
         classNames?: { value?: string };
         options: { label: ReactNode; value: string }[];
+        value?: string;
       }) => (
-        <div data-testid="scope-select" data-value-class={classNames?.value}>
+        <div data-testid="scope-select" data-value={value} data-value-class={classNames?.value}>
           {options.map((option) => (
             <div data-testid={`scope-option-${option.value}`} key={option.value}>
               {option.label}
@@ -96,6 +98,7 @@ vi.mock('react-i18next', () => ({
 
 const messengerState = {
   bindingScopes: [{ avatar: 'workspace-avatar', id: 'workspace-1', name: 'love' }],
+  linksConfirmed: true,
 };
 
 vi.mock('@/store/messenger', () => ({
@@ -107,6 +110,7 @@ vi.mock('@/store/messenger', () => ({
   },
   messengerSelectors: {
     bindingScopes: (state: typeof messengerState) => state.bindingScopes,
+    isLinksConfirmed: (state: typeof messengerState) => state.linksConfirmed,
   },
   useMessengerStore: (selector: (state: typeof messengerState) => unknown) =>
     selector(messengerState),
@@ -189,6 +193,53 @@ describe('Messenger UserAgentConnection', () => {
     );
 
     expect(screen.getByTestId('agent-select')).toHaveAttribute('data-default-to-inbox', 'true');
+  });
+});
+
+describe('Messenger UserAgentConnection with a restored link', () => {
+  const restoredLink = {
+    activeAgentId: 'agt_workspace',
+    platformUserId: 'platform-user',
+    platformUsername: 'platform-name',
+    workspaceId: 'workspace-1' as string | null,
+  };
+
+  afterEach(() => {
+    messengerState.linksConfirmed = true;
+  });
+
+  it('moves the scope picker to the scope the server link is bound to', () => {
+    const { rerender } = render(
+      <UserAgentConnection link={restoredLink} onSetActive={vi.fn()} onUnlink={vi.fn()} />,
+    );
+    expect(screen.getByTestId('scope-select')).toHaveAttribute('data-value', 'workspace-1');
+
+    // Revalidation: the binding moved to the personal scope since the copy was saved.
+    rerender(
+      <UserAgentConnection
+        link={{ ...restoredLink, activeAgentId: 'agt_personal', workspaceId: null }}
+        onSetActive={vi.fn()}
+        onUnlink={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('scope-select')).toHaveAttribute('data-value', 'personal');
+    // The picker shows the link's own agent, so nothing is auto-defaulted over it.
+    expect(screen.getByTestId('agent-select')).toHaveAttribute('data-default-to-inbox', 'false');
+  });
+
+  it('does not default the binding to an inbox from a link the server has not confirmed', () => {
+    messengerState.linksConfirmed = false;
+
+    render(
+      <UserAgentConnection
+        link={{ ...restoredLink, activeAgentId: null, workspaceId: null }}
+        onSetActive={vi.fn()}
+        onUnlink={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('agent-select')).toHaveAttribute('data-default-to-inbox', 'false');
   });
 });
 

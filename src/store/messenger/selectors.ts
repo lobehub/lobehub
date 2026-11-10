@@ -31,6 +31,8 @@ const isPlatformsConfirmed = (s: MessengerState) =>
 const isPlatformsSettled = (s: MessengerState) =>
   isSettled(platforms(s), isConfirmed(s.platformsReplica, MESSENGER_LIST_KEY));
 
+const isLinksConfirmed = (s: MessengerState) => isConfirmed(s.linksReplica, MESSENGER_LIST_KEY);
+
 const isLinksSettled = (s: MessengerState) =>
   isSettled(links(s), isConfirmed(s.linksReplica, MESSENGER_LIST_KEY));
 
@@ -78,6 +80,7 @@ export const messengerSelectors = {
   installationsByPlatform,
   isBindingAgentsConfirmed,
   isBindingAgentsSettled,
+  isLinksConfirmed,
   isLinksSettled,
   isPlatformDataSettled,
   isPlatformsConfirmed,
