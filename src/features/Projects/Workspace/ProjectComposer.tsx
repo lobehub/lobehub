@@ -51,13 +51,17 @@ const inputContainerProps = {
 
 const styles = stylex.create({
   // Inset like the action bar below it, so both rows start on the same line and
-  // the bar reads as a panel inside the composer rather than its top edge.
+  // the bar reads as a panel inside the composer rather than its top edge. The
+  // inset is the frame's padding, not the bar's margin: the bar fills its
+  // parent's width, and a margin would push it past the composer's right edge.
+  contextBarFrame: {
+    paddingBlockStart: `${ACTION_BAR_INSET}px`,
+    paddingInline: `${ACTION_BAR_INSET}px`,
+  },
   contextBar: {
     gap: '8px',
-    marginBlockStart: `${ACTION_BAR_INSET}px`,
-    marginInline: `${ACTION_BAR_INSET}px`,
     paddingBlock: '4px',
-    paddingInline: '4px',
+    paddingInline: '6px',
     borderRadius: `${CONTAINER_RADIUS - ACTION_BAR_INSET}px`,
     backgroundColor: cssVar.colorFillQuaternary,
   },
@@ -168,41 +172,43 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             leftContent={<FileUpload includeKnowledge={false} />}
             showControlBar={false}
             extentHeaderContent={
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={stylex.props(styles.contextBar).className}
-                justify={'space-between'}
-              >
-                <Flexbox horizontal align={'center'} gap={4}>
-                  <Segmented
-                    size={'small'}
-                    value={mode}
-                    options={[
-                      { label: t('overview.mode.chat'), value: 'chat' },
-                      { label: t('overview.mode.task'), value: 'task' },
-                    ]}
-                    onChange={(value) => setMode(value as ProjectComposerMode)}
-                  />
-                  <ProjectAgentSelect
-                    agents={agents}
-                    disabled={sending}
-                    value={agentId}
-                    onChange={setPickedAgentId}
-                  />
-                </Flexbox>
-                <Flexbox horizontal align={'center'} gap={2}>
-                  {mode === 'chat' && (
-                    <ProjectRepositoryChip
-                      canManage={canManageProject}
-                      disabled={sending}
-                      projectId={project.id}
-                      state={repositoryState}
+              <div {...stylex.props(styles.contextBarFrame)}>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={stylex.props(styles.contextBar).className}
+                  justify={'space-between'}
+                >
+                  <Flexbox horizontal align={'center'} gap={4}>
+                    <Segmented
+                      size={'small'}
+                      value={mode}
+                      options={[
+                        { label: t('overview.mode.chat'), value: 'chat' },
+                        { label: t('overview.mode.task'), value: 'task' },
+                      ]}
+                      onChange={(value) => setMode(value as ProjectComposerMode)}
                     />
-                  )}
-                  <ProjectRunTargetChip agentId={agentId} disabled={sending} />
+                    <ProjectAgentSelect
+                      agents={agents}
+                      disabled={sending}
+                      value={agentId}
+                      onChange={setPickedAgentId}
+                    />
+                  </Flexbox>
+                  <Flexbox horizontal align={'center'} gap={2}>
+                    {mode === 'chat' && (
+                      <ProjectRepositoryChip
+                        canManage={canManageProject}
+                        disabled={sending}
+                        projectId={project.id}
+                        state={repositoryState}
+                      />
+                    )}
+                    <ProjectRunTargetChip agentId={agentId} disabled={sending} />
+                  </Flexbox>
                 </Flexbox>
-              </Flexbox>
+              </div>
             }
             placeholder={t(
               mode === 'task' ? 'overview.taskPlaceholder' : 'overview.composerPlaceholder',
