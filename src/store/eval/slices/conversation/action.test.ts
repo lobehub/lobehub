@@ -6,13 +6,13 @@ import { createElement, type PropsWithChildren } from 'react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { topicService } from '@/services/topic';
-import type { EvalStore } from '@/store/eval/store';
-
-import { ConversationActionImpl } from './action';
+import { useEvalStore } from '@/store/eval';
 
 const scope = vi.hoisted(() => ({ workspaceId: undefined as string | undefined }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => scope.workspaceId,
   useActiveWorkspaceId: () => scope.workspaceId,
 }));
 vi.mock('@/services/topic', () => ({
@@ -40,11 +40,19 @@ const createWrapper = () => {
     );
 };
 
-const actions = new ConversationActionImpl(vi.fn(), () => ({}) as EvalStore);
+const actions = {
+  useFetchConversationTopics: (query: string) =>
+    useEvalStore.getState().useFetchConversationTopics(query),
+};
 
 beforeEach(() => {
   scope.workspaceId = undefined;
   vi.resetAllMocks();
+  // Picker results live in the store, partitioned like the cache by workspace.
+  const current = () => `eval-user:${scope.workspaceId ?? 'personal'}`;
+  vi.spyOn(cacheScope, 'get').mockImplementation(current);
+  vi.spyOn(cacheScope, 'use').mockImplementation(current);
+  useEvalStore.setState({ conversationTopicMap: {} });
 });
 afterEach(() => vi.restoreAllMocks());
 

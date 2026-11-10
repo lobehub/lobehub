@@ -2,23 +2,21 @@ import type { AgentEvalRunListItem } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { agentEvalService } from '@/services/agentEval';
+import { fetchLobeBenchRuns } from '@/store/eval/slices/lobeBench/fetchers';
+
 import { useExperimentActions } from './useExperimentActions';
-import { useExperimentRuns, useLobeBenchRuns } from './useLobeBench';
+
+/** What the experiment run list's replica fetches. */
+const loadExperimentRuns = () => agentEvalService.listAllRuns({ experimentId: 'experiment-a' });
 
 const mocks = vi.hoisted(() => ({
   abort: vi.fn(),
-  fetcher: undefined as (() => Promise<AgentEvalRunListItem[]>) | undefined,
   list: vi.fn(),
 }));
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     agentEval: { abortRun: { mutate: mocks.abort }, listRuns: { query: mocks.list } },
-  },
-}));
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: (_key: unknown, fetcher: () => Promise<AgentEvalRunListItem[]>) => {
-    mocks.fetcher = fetcher;
-    return {};
   },
 }));
 vi.mock('@/store/eval', () => ({ useEvalStore: vi.fn() }));
@@ -41,7 +39,6 @@ const pageResponse = (items: AgentEvalRunListItem[], limit = 50, offset = 0) => 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.fetcher = undefined;
   mocks.abort.mockResolvedValue({ success: true });
 });
 
@@ -51,8 +48,7 @@ describe('complete LobeBench run lists', () => {
     mocks.list.mockImplementation(({ limit, offset }) =>
       Promise.resolve(pageResponse(all, limit, offset)),
     );
-    renderHook(() => useExperimentRuns('experiment-a'));
-    const loaded = await mocks.fetcher!();
+    const loaded = await loadExperimentRuns();
     expect(loaded.map(({ id }) => id)).toEqual(all.map(({ id }) => id));
     expect(mocks.list.mock.calls.every(([params]) => params.experimentId === 'experiment-a')).toBe(
       true,
@@ -82,8 +78,7 @@ describe('complete LobeBench run lists', () => {
     mocks.list.mockImplementation(({ benchmarkId, limit, offset }) =>
       Promise.resolve(pageResponse(benchmarkId === 'first' ? first : second, limit, offset)),
     );
-    renderHook(() => useLobeBenchRuns(['first', 'second']));
-    const loaded = await mocks.fetcher!();
+    const loaded = await fetchLobeBenchRuns(['first', 'second']);
     expect(loaded).toHaveLength(265);
     expect(new Set(loaded.map(({ id }) => id))).toEqual(
       new Set([...first, ...second].map(({ id }) => id)),
@@ -98,8 +93,7 @@ describe('complete LobeBench run lists', () => {
     mocks.list.mockImplementation(({ limit, offset }) =>
       Promise.resolve(pageResponse(all, limit, offset)),
     );
-    renderHook(() => useExperimentRuns('experiment-a'));
-    expect(await mocks.fetcher!()).toHaveLength(100);
+    expect(await loadExperimentRuns()).toHaveLength(100);
     expect(mocks.list.mock.calls.at(-1)?.[0].offset).toBe(100);
   });
 
@@ -110,8 +104,7 @@ describe('complete LobeBench run lists', () => {
         ? Promise.reject(failure)
         : Promise.resolve(pageResponse(runs(205), limit, offset)),
     );
-    renderHook(() => useExperimentRuns('experiment-a'));
-    await expect(mocks.fetcher!()).rejects.toBe(failure);
+    await expect(loadExperimentRuns()).rejects.toBe(failure);
   });
 
   it('deduplicates overlapping pages when concurrent creation shifts the offset', async () => {
@@ -119,8 +112,7 @@ describe('complete LobeBench run lists', () => {
     mocks.list.mockImplementation(({ offset = 0 }) =>
       Promise.resolve({ data: offset === 0 ? all.slice(0, 100) : all.slice(99), total: 100 }),
     );
-    renderHook(() => useExperimentRuns('experiment-a'));
-    const loaded = await mocks.fetcher!();
+    const loaded = await loadExperimentRuns();
     expect(loaded.map(({ id }) => id)).toEqual(all.map(({ id }) => id));
   });
 });

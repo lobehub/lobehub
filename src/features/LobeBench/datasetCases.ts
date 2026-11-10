@@ -2,16 +2,11 @@ import type { RubricType } from '@lobechat/types';
 
 import { LOBE_BENCH_KIND } from '@/features/LobeBench/lobeBench';
 import { type LobeBenchCase, ownEnvironmentOf } from '@/features/LobeBench/useLobeBench';
-import { mutate } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
+import { useEvalStore } from '@/store/eval';
 
-/**
- * Revalidates every cached Lobe Bench dataset list (sidebar, pickers, pages).
- * Goes through the scoped mutate: the app's SWR cache provider makes the
- * global one from `swr` a no-op.
- */
-export const refreshLobeBenchDatasets = () =>
-  mutate((key) => Array.isArray(key) && key[0] === 'lobe-bench/datasets');
+/** Revalidates every mounted Lobe Bench dataset list (sidebar, pickers, pages). */
+export const refreshLobeBenchDatasets = () => useEvalStore.getState().refreshLobeBenchDatasets();
 
 interface LibraryDataset {
   evalConfig?: unknown;

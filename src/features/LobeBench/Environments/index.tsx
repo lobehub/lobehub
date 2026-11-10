@@ -24,8 +24,9 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isBuiltInRow } from '@/features/LobeBench/lobeBench';
-import { useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
+import { useEvalStore } from '@/store/eval';
+import type { EvalEnvironmentRow } from '@/store/eval/slices/lobeBench/projection';
 
 import { saveEnvironment } from './saveEnvironment';
 
@@ -58,17 +59,7 @@ const styles = stylex.create({
   mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
 });
 
-interface EnvironmentRow {
-  config: EvalCaseEnvironment;
-  description?: string | null;
-  id: string;
-  identifier?: string | null;
-  metadata?: Record<string, unknown> | null;
-  name: string;
-  testCaseCount?: number;
-  /** Null for a built-in environment (one of the product's own case sets). */
-  userId?: string | null;
-}
+type EnvironmentRow = EvalEnvironmentRow;
 
 type Effort = 'high' | 'low' | 'medium';
 type Permission = 'read-only' | 'read-write';
@@ -140,10 +131,7 @@ const LobeBenchEnvironments = memo(() => {
     data: environments,
     isLoading,
     mutate: refresh,
-  } = useClientDataSWR<EnvironmentRow[]>(
-    'lobe-bench/environments',
-    () => agentEvalService.listEnvironments() as Promise<EnvironmentRow[]>,
-  );
+  } = useEvalStore.getState().useFetchEvalEnvironments();
   const [editing, setEditing] = useState<{ row?: EnvironmentRow } | undefined>();
 
   const [name, setName] = useState('');

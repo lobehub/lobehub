@@ -20,8 +20,8 @@ import { useTranslation } from 'react-i18next';
 import { buildCaseContent } from '@/features/LobeBench/caseEditorContent';
 import { getCaseRules, getCaseTitle } from '@/features/LobeBench/lobeBench';
 import { type LobeBenchCase, ownEnvironmentOf } from '@/features/LobeBench/useLobeBench';
-import { useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
+import { useEvalStore } from '@/store/eval';
 
 type Role = 'assistant' | 'user';
 interface Turn {
@@ -67,9 +67,7 @@ const splitList = (value: string) =>
 const CaseEditor = memo<CaseEditorProps>(
   ({ datasetId, draft, onClose, onSaved, open, testCase }) => {
     const { t } = useTranslation('eval');
-    const { data: environments } = useClientDataSWR('lobe-bench/environments', () =>
-      agentEvalService.listEnvironments(),
-    );
+    const { data: environments } = useEvalStore.getState().useFetchEvalEnvironments();
 
     const [title, setTitle] = useState('');
     const [input, setInput] = useState('');

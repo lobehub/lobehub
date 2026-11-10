@@ -162,7 +162,7 @@ export const DatasetConnections = ({
             {t(expanded ? 'connections.hideDetails' : 'connections.showDetails')}
           </Button>
         </Flexbox>
-        {connectorError && (
+        {!!connectorError && (
           <AsyncError
             error={connectorError}
             variant="inline"

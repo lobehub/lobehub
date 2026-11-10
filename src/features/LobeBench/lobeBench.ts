@@ -348,12 +348,6 @@ export const describeSettings = (
   return parts.join(' · ');
 };
 
-export const unwrapList = <T>(response: unknown): T[] => {
-  if (Array.isArray(response)) return response as T[];
-  const data = (response as { data?: unknown } | null)?.data;
-  return Array.isArray(data) ? (data as T[]) : [];
-};
-
 // ---------- cases ----------
 
 interface CaseLike {

@@ -2,6 +2,7 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
+import { modelMappings } from '@lobehub/icons';
 import { Block, Button, DropdownMenu, Flexbox, Select, Text, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -25,7 +26,6 @@ import {
 import { adaptBrandColor, findBrandColor } from '@/features/LobeBench/modelBrand';
 import RankingBars, { type RankingBarRow } from '@/features/LobeBench/RankingBars';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
 
 const styles = stylex.create({
   title: {
@@ -58,13 +58,6 @@ interface ContenderRankingProps {
 const modelOf = (run: AgentEvalRunListItem) =>
   (run.config as { model?: string } | null | undefined)?.model;
 
-/** The brand catalog of `@lobehub/icons`, loaded after paint like `ModelIcon` does. */
-const useBrandCatalog = () =>
-  useClientDataSWR(
-    ['lobe-bench/model-brands'],
-    async () => (await import('@lobehub/icons/es/features/modelConfig')).modelMappings,
-  ).data;
-
 /**
  * The benchmark page's headline: the models ranked by their best completed
  * run on one case set, in LobeBench's ranking form (see `RankingBars`). Every
@@ -74,7 +67,6 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const theme = useTheme();
-  const brands = useBrandCatalog();
   const [chosen, setChosen] = useState<string>();
   // The contenders picked to compare (by setup); none picked shows them all.
   const [compared, setCompared] = useState<string[]>([]);
@@ -112,7 +104,7 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
   const shown = picked.length > 0 ? ranked.filter(({ key }) => picked.includes(key)) : ranked;
   const rows: RankingBarRow[] = shown.map(({ entry, rank }) => {
     const model = modelOf(entry.run);
-    const brand = findBrandColor(brands, model);
+    const brand = findBrandColor(modelMappings, model);
     const anyRate = entry.k > 1 && entry.total ? (entry.anyK ?? 0) / entry.total : undefined;
     return {
       color: brand ? adaptBrandColor(brand, theme.isDarkMode) : undefined,

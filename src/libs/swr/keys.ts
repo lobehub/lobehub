@@ -136,11 +136,6 @@ export const isMessageListKey = (
 
 // ---- topic --------------------------------------------------------------
 export const topicKeys = {
-  evalPicker: def('topic:evalPicker', (query: string, limit: number) => [
-    'topic:evalPicker',
-    query,
-    limit,
-  ]),
   list: def('topic:list', (containerKey: string, opts: Record<string, unknown>) => [
     'topic:list',
     containerKey,
@@ -391,16 +386,6 @@ export const discoverKeys = {
 
 // ---- agent eval ---------------------------------------------------------
 export const evalKeys = {
-  connectors: def('eval:connectors', (datasetId: string) => ['eval:connectors', datasetId]),
-  connector: def('eval:connector', (datasetId: string, id: string) => [
-    'eval:connector',
-    datasetId,
-    id,
-  ]),
-  datasetConnectorBindings: def('eval:datasetConnectorBindings', (id: string) => [
-    'eval:datasetConnectorBindings',
-    id,
-  ]),
   benchmarkDetail: def('eval:benchmarkDetail', (id: string) => ['eval:benchmarkDetail', id]),
   benchmarks: def('eval:benchmarks', () => ['eval:benchmarks']),
   datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),

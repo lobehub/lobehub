@@ -9,12 +9,8 @@ import { useTranslation } from 'react-i18next';
 import CaseTable from '@/features/LobeBench/CaseTable';
 import { datasetsOf, isViewDataset, libraryOf, nativeCaseId } from '@/features/LobeBench/lobeBench';
 import { useImportLobeBenchDataset } from '@/features/LobeBench/useImportDataset';
-import {
-  fetchDatasetCases,
-  useLobeBenchBenchmarks,
-  useLobeBenchDatasets,
-} from '@/features/LobeBench/useLobeBench';
-import { useClientDataSWR } from '@/libs/swr';
+import { useLobeBenchBenchmarks, useLobeBenchDatasets } from '@/features/LobeBench/useLobeBench';
+import { useEvalStore } from '@/store/eval';
 
 const styles = stylex.create({
   container: {
@@ -38,18 +34,18 @@ const LobeBenchLibrary = memo(() => {
   const library = libraryOf(datasets);
   // Cases that are also in a built-in dataset of library cases carry its name (Hard 50).
   const views = useMemo(() => datasetsOf(datasets).filter(isViewDataset), [datasets]);
-  const { data: memberships } = useClientDataSWR(
-    views.length > 0 ? ['lobe-bench/memberships', ...views.map((view) => view.id)] : null,
-    async () => {
-      const names: Record<string, string[]> = {};
-      for (const view of views) {
-        for (const item of await fetchDatasetCases(view.id)) {
-          (names[nativeCaseId(item)] ??= []).push(view.name);
-        }
+  const viewIds = useMemo(() => views.map((view) => view.id), [views]);
+  const { data: viewCases } = useEvalStore.getState().useFetchCasesByDataset(viewIds);
+  const memberships = useMemo(() => {
+    if (!viewCases) return;
+    const names: Record<string, string[]> = {};
+    for (const view of views) {
+      for (const item of viewCases[view.id] ?? []) {
+        (names[nativeCaseId(item)] ??= []).push(view.name);
       }
-      return names;
-    },
-  );
+    }
+    return names;
+  }, [viewCases, views]);
 
   return (
     <Flexbox className={stylex.props(styles.container).className} flex={1} gap={20}>

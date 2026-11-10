@@ -598,7 +598,7 @@ const ExperimentDashboard = memo(() => {
         )}
       </Flexbox>
 
-      {refreshError && (
+      {!!refreshError && (
         <AsyncError
           error={refreshError}
           retrying={refreshing}

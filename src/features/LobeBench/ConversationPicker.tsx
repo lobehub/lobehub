@@ -105,7 +105,7 @@ const ConversationPicker = memo<{ onPick: (topicId: string) => void }>(({ onPick
             </Flexbox>
           ))}
         </AsyncBoundary>
-        {topics !== undefined && error && (
+        {topics !== undefined && !!error && (
           <AsyncError error={error} retrying={isValidating} variant={'inline'} onRetry={retry} />
         )}
       </Block>

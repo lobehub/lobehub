@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createDataset } from '@/features/LobeBench/datasetCases';
 import type { LobeBenchCase } from '@/features/LobeBench/useLobeBench';
-import { mutate } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
 
-vi.mock('@/libs/swr', () => ({ mutate: vi.fn(), useClientDataSWR: vi.fn() }));
-vi.mock('@/store/eval', () => ({ useEvalStore: vi.fn() }));
+const refreshLobeBenchDatasets = vi.hoisted(() => vi.fn());
+vi.mock('@/store/eval', () => ({
+  useEvalStore: { getState: () => ({ refreshLobeBenchDatasets }) },
+}));
 vi.mock('@/services/agentEval', () => ({
   agentEvalService: {
     batchCreateTestCases: vi.fn(),
@@ -64,7 +65,7 @@ describe('atomic dataset creation request', () => {
         }),
       );
       expect(agentEvalService.batchCreateTestCases).not.toHaveBeenCalled();
-      expect(mutate).toHaveBeenCalledTimes(1);
+      expect(refreshLobeBenchDatasets).toHaveBeenCalledTimes(1);
       expect(cases[0].content?.environment).toEqual({ mergedSharedValue: true });
     },
   );
@@ -79,6 +80,6 @@ describe('atomic dataset creation request', () => {
     );
     expect(agentEvalService.batchCreateTestCases).not.toHaveBeenCalled();
     expect(agentEvalService.deleteDataset).not.toHaveBeenCalled();
-    expect(mutate).not.toHaveBeenCalled();
+    expect(refreshLobeBenchDatasets).not.toHaveBeenCalled();
   });
 });

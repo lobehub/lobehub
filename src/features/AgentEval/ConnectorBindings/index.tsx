@@ -49,7 +49,7 @@ export const ConnectorBindings = ({
       <Text fontSize={13} type="secondary">
         {t('connections.hint')}
       </Text>
-      {error && (
+      {!!error && (
         <AsyncError
           error={error}
           retrying={isValidating}
