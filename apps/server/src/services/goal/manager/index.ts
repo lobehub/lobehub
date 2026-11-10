@@ -143,13 +143,47 @@ export class GoalManagerService {
     return { goalId, outcome: 'no_progress', message };
   };
 
-  stop = async (graph: GoalGraphSnapshot) => {
+  /**
+   * Interrupt the main Agent turn the Goal is on.
+   *
+   * `ownerConfirmsExit` is a person ending or deleting the Goal themselves. A
+   * turn whose dispatch never returned an operation id and has no operation row
+   * is one nothing here can interrupt — the dispatch most likely failed before
+   * the run was written, e.g. a database timeout in `execAgent`. Once it is
+   * older than the turn timeout, that person's decision settles it the way
+   * `confirmTurnExit` does; otherwise such a Goal could never be closed from the
+   * product. A younger turn may still be starting, and a turn that did return
+   * an operation id (or was adopted from a local run) may be live without a
+   * row, so both keep refusing.
+   */
+  stop = async (graph: GoalGraphSnapshot, options?: { ownerConfirmsExit?: boolean }) => {
     const state = graph.goal.config?.managerState;
     if (!state || state.consumed) return;
     const operations = new AgentOperationModel(this.db, this.userId, this.workspaceId);
     const op = state.operationId
       ? await operations.findById(state.operationId)
       : await operations.findByTopicSourceMessage(state.topicId, `msg_goal_manager_${state.token}`);
+    if (
+      !op &&
+      options?.ownerConfirmsExit &&
+      !state.operationId &&
+      !state.adopted &&
+      Date.now() - Date.parse(state.startedAt) > TIMEOUT_MS
+    ) {
+      await this.db.transaction(async (db) => {
+        const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(
+          graph.goal.id,
+        );
+        const current = fresh?.config?.managerState;
+        if (current?.token !== state.token || current.consumed) return;
+        await saveManagerState(db, graph.goal.id, { ...current, consumed: true });
+        console.warn('[goal:manager] owner settled a main Agent turn that never wrote a run', {
+          goalId: graph.goal.id,
+          token: state.token,
+        });
+      });
+      return;
+    }
     if (!op)
       throw new TRPCError({
         code: 'CONFLICT',

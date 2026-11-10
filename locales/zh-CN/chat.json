@@ -631,6 +631,7 @@
   "goalDetail.closeConfirm.canceled.content": "仍在运行的任务会被中止，也不会再开始新的任务。之后可以在这个菜单里重新打开目标。",
   "goalDetail.closeConfirm.canceled.ok": "取消目标",
   "goalDetail.closeConfirm.canceled.title": "取消这个目标？",
+  "goalDetail.closeConfirm.failed": "无法结束这个目标，请稍后再试。",
   "goalDetail.definition": "目标定义",
   "goalDetail.deleteConfirm.content": "该目标及其任务计划将被永久删除；对话历史会保留。",
   "goalDetail.deleteConfirm.ok": "删除目标",

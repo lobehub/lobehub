@@ -301,6 +301,80 @@ describe('GoalService', () => {
       // Still fenced so nothing new starts, but not claimed as ended.
       expect((await new GoalModel(serverDB, userId).findById(goalId))?.status).toBe('paused');
     });
+
+    // A dispatch that failed before its run was written (a database timeout in
+    // `execAgent`) leaves a claimed turn with no operation to interrupt.
+    const strandedGoal = async (
+      title: string,
+      startedAt: Date,
+      receipt: Record<string, unknown> = {},
+    ) => {
+      const service = new GoalService(serverDB, userId);
+      const graph = await service.create({ tasks: ['Managed'], title });
+      await serverDB
+        .update(goals)
+        .set({
+          config: {
+            ...graph.goal.config,
+            manager: {},
+            managerState: {
+              startedAt: startedAt.toISOString(),
+              token: `turn-${title}`,
+              topicId: 'management-topic',
+              turns: 3,
+              ...receipt,
+            },
+          } as never,
+        })
+        .where(eq(goals.id, graph.goal.id));
+      return { goalId: graph.goal.id, service };
+    };
+
+    it('ends a goal whose timed-out main Agent turn never wrote a run', async () => {
+      const { goalId, service } = await strandedGoal(
+        'stranded',
+        new Date(Date.now() - 2 * 60 * 60_000),
+      );
+      const interrupt = vi.spyOn(AiAgentService.prototype, 'interruptTask');
+
+      expect((await service.close(goalId, 'achieved')).status).toBe('achieved');
+      expect(interrupt).not.toHaveBeenCalled();
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.config?.managerState?.consumed).toBe(true);
+    });
+
+    it('deletes a goal whose timed-out main Agent turn never wrote a run', async () => {
+      const { goalId, service } = await strandedGoal(
+        'stranded-delete',
+        new Date(Date.now() - 2 * 60 * 60_000),
+      );
+
+      await service.delete(goalId);
+      expect(await new GoalModel(serverDB, userId).findById(goalId)).toBeFalsy();
+    });
+
+    // `execAgent` returned an operation id, so the run may be live even though
+    // its row was never written; only the explicit --confirm-exit settles it.
+    it('still refuses a timed-out turn that did get an operation id', async () => {
+      const { goalId, service } = await strandedGoal(
+        'dispatched',
+        new Date(Date.now() - 2 * 60 * 60_000),
+        { operationId: 'op-without-row' },
+      );
+
+      await expect(service.close(goalId, 'achieved')).rejects.toThrow(/not closed/);
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
+
+    it('still refuses while a main Agent turn without a run may be starting', async () => {
+      const { goalId, service } = await strandedGoal('starting', new Date());
+
+      await expect(service.close(goalId, 'achieved')).rejects.toThrow(/not closed/);
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.status).toBe('paused');
+      expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
   });
 
   it('restarts a split-role goal under a new executor without replacing its supervisor', async () => {

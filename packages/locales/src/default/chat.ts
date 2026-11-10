@@ -2537,6 +2537,7 @@ export default {
     'Runs still in progress will be stopped and no new tasks will start. You can reopen the goal from this menu.',
   'goalDetail.closeConfirm.canceled.ok': 'Cancel goal',
   'goalDetail.closeConfirm.canceled.title': 'Cancel this goal?',
+  'goalDetail.closeConfirm.failed': 'Couldn’t close this goal. Try again in a moment.',
   'goalDetail.deleteConfirm.content':
     'This goal and its task plan will be permanently deleted. Conversation history is retained.',
   'goalDetail.deleteConfirm.ok': 'Delete goal',

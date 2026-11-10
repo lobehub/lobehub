@@ -373,8 +373,12 @@ export class GoalActionImpl {
   };
 
   closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {
-    await goalService.close(goalId, status);
-    await this.refreshGoalGraph(goalId);
+    try {
+      await goalService.close(goalId, status);
+    } finally {
+      // A refused close has still paused the goal on the server.
+      await this.refreshGoalGraph(goalId);
+    }
   };
 
   refreshGoalGraph = async (goalId: string): Promise<void> => {
