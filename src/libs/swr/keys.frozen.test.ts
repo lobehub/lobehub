@@ -115,8 +115,6 @@ const LEGACY_SWR_KEYS = [
   'ragEvalKeys.datasetList',
   'ragEvalKeys.datasetRecords',
   'ragEvalKeys.evaluationList',
-  'recentKeys.topicList',
-  'recentKeys.trayList',
   'recommendationsKeys.heteroDetections',
   'resourceKeys.list',
   'scmKeys.changeRequests',
