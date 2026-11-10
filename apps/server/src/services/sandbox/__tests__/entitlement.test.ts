@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resolveSandboxStorageEntitlement = vi.fn();
 
@@ -7,7 +7,8 @@ vi.mock('@/business/server/sandboxStorage', () => ({
     resolveSandboxStorageEntitlement(...args),
 }));
 
-const { resolveSandboxStorageClaim } = await import('../entitlement');
+const { clearSandboxClaimFailures, resolveSandboxStorageClaim, resolveSandboxStorageClaimResult } =
+  await import('../entitlement');
 
 const resolve = (overrides: Record<string, unknown> = {}) =>
   resolveSandboxStorageClaim({
@@ -18,6 +19,7 @@ const resolve = (overrides: Record<string, unknown> = {}) =>
 
 describe('resolveSandboxStorageClaim', () => {
   beforeEach(() => {
+    clearSandboxClaimFailures();
     resolveSandboxStorageEntitlement.mockReset();
     resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 2048 });
   });
@@ -108,5 +110,73 @@ describe('resolveSandboxStorageClaim', () => {
   it('degrades to no entitlement when the lookup throws', async () => {
     resolveSandboxStorageEntitlement.mockRejectedValue(new Error('entitlement lookup failed'));
     await expect(resolve()).resolves.toBeNull();
+  });
+
+  // "Never had one" and "cannot tell right now" both come out as no claim, and
+  // only the second is something an operator should look at.
+  describe('why there is no claim', () => {
+    const result = (overrides: Record<string, unknown> = {}) =>
+      resolveSandboxStorageClaimResult({
+        isShareVisitorRun: false,
+        userId: 'user_1',
+        ...overrides,
+      });
+
+    let warn: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      warn.mockRestore();
+    });
+
+    it('tells the lasting answers apart, without warning', async () => {
+      await expect(result({ isShareVisitorRun: true })).resolves.toEqual({
+        claim: null,
+        denial: 'shareVisitor',
+      });
+      await expect(result({ userId: '../etc/passwd' })).resolves.toEqual({
+        claim: null,
+        denial: 'noStorageKey',
+      });
+      resolveSandboxStorageEntitlement.mockResolvedValue(null);
+      await expect(result()).resolves.toEqual({ claim: null, denial: 'notEntitled' });
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed lookup once, then backs off until the window passes', async () => {
+      resolveSandboxStorageEntitlement.mockRejectedValue(new Error('billing down'));
+
+      await expect(result()).resolves.toEqual({ claim: null, denial: 'lookupFailed' });
+      await expect(result()).resolves.toEqual({ claim: null, denial: 'lookupBackoff' });
+      expect(resolveSandboxStorageEntitlement).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warn.mock.calls[0][0] as string)).toMatchObject({
+        error: 'billing down',
+        event: 'sandbox.placement.degraded',
+        layer: 'entitlement',
+        reason: 'lookupFailed',
+      });
+
+      resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 2048 });
+      vi.advanceTimersByTime(15_000);
+      await expect(result()).resolves.toEqual({
+        claim: { key: 'ws-user_1', quotaBytes: 2048 },
+      });
+    });
+
+    it('backs off one principal without affecting another', async () => {
+      resolveSandboxStorageEntitlement.mockRejectedValueOnce(new Error('billing down'));
+      await result();
+
+      await expect(result({ userId: 'user_2' })).resolves.toEqual({
+        claim: { key: 'ws-user_2', quotaBytes: 2048 },
+      });
+    });
   });
 });

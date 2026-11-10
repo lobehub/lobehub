@@ -21,7 +21,9 @@ vi.mock('@/server/services/scm/cloneCredential', () => ({
 }));
 
 vi.mock('../entitlement', () => ({
-  resolveSandboxStorageClaim: mocks.resolveSandboxStorageClaim,
+  resolveSandboxStorageClaimResult: async (input: unknown) => ({
+    claim: await mocks.resolveSandboxStorageClaim(input),
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
@@ -266,6 +268,41 @@ describe('resolveSandboxSessionConfig', () => {
       mode: 'ephemeral',
     });
     expect(mocks.driveFolderExists).not.toHaveBeenCalled();
+  });
+
+  // The operator's line: a failure names its layer, while the healthy ephemeral
+  // branches stay quiet because they are most runs.
+  describe('degraded placement logs', () => {
+    it('names the topic layer when the placement cannot be read', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      findById.mockRejectedValue(new Error('connection reset'));
+
+      await expect(resolve()).resolves.toMatchObject({ claim: CLAIM, mode: 'ephemeral' });
+
+      expect(JSON.parse(warn.mock.calls[0][0])).toEqual({
+        drive: 'personal',
+        error: 'connection reset',
+        event: 'sandbox.placement.degraded',
+        layer: 'topic',
+        reason: 'placementReadFailed',
+        topicId: 'topic-1',
+      });
+      warn.mockRestore();
+    });
+
+    it('stays quiet on a topic with no folder and on a plan with no drive', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      findById.mockResolvedValue({ metadata: {} });
+
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      await resolve();
+      resolveSandboxStorageClaim.mockResolvedValue(null);
+      await resolve();
+
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
   });
 
   // The claim is independent of the placement: the drive exists whether or not

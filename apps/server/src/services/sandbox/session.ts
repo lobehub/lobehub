@@ -22,8 +22,9 @@ import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential
 
 import { sandboxStorageBinding } from './binding';
 import { driveFolderExists } from './driveFolder';
-import { resolveSandboxStorageClaim } from './entitlement';
+import { resolveSandboxStorageClaimResult, type SandboxStorageClaimDenial } from './entitlement';
 import { type SandboxInitialization, toSandboxInitialization } from './environmentInit';
+import { warnSandboxDegraded } from './failureCooldown';
 import type { SandboxSessionSpecification } from './types';
 
 const log = debug('lobe-server:sandbox:session');
@@ -206,8 +207,18 @@ const resolvePlacement = async ({
 
   // One claim per drive, and each is resolved at most once: the topic decides
   // which drive the run addresses, and a run only ever addresses one.
-  const claimFor = (drive: SandboxDrive) =>
-    resolveSandboxStorageClaim({ drive, isShareVisitorRun, userId, workspaceId });
+  let claimDenial: SandboxStorageClaimDenial | undefined;
+  const claimFor = async (drive: SandboxDrive) => {
+    const result = await resolveSandboxStorageClaimResult({
+      drive,
+      isShareVisitorRun,
+      userId,
+      workspaceId,
+    });
+    claimDenial = result.denial;
+
+    return result.claim;
+  };
 
   if (!topicId) {
     const claim = await claimFor(defaultDrive);
@@ -268,7 +279,10 @@ const resolvePlacement = async ({
         : undefined;
       if (instanceDrive) drive = instanceDrive;
       claim = await claimFor(drive);
-      if (!claim) return { claim, drive, mode: DEFAULT_SANDBOX_MODE };
+      if (!claim) {
+        log('Ephemeral for topic %s: no claim for drive %s (%s)', topicId, drive, claimDenial);
+        return { claim, drive, mode: DEFAULT_SANDBOX_MODE };
+      }
 
       // Deleted, never this member's, or private under a public agent. Any
       // way, the conversation still runs — in a temporary sandbox, and the
@@ -342,12 +356,19 @@ const resolvePlacement = async ({
     // lapsed subscription pick up exactly where it left off.
     claim = await claimFor(drive);
     if (!claim) {
-      log('Ephemeral for topic %s: no claim for drive %s', topicId, drive);
+      log('Ephemeral for topic %s: no claim for drive %s (%s)', topicId, drive, claimDenial);
       return { claim, drive, mode: DEFAULT_SANDBOX_MODE };
     }
 
     if (folder === undefined) {
-      log('Ephemeral for topic %s: no folder picked', topicId);
+      // Not a failure: the run has its drive and works in a temporary sandbox
+      // because nothing says otherwise. An unreadable topic looks the same from
+      // here, and is what a wrong workspace scope turns into.
+      log(
+        'Ephemeral for topic %s: no folder picked (%s)',
+        topicId,
+        topic ? 'topicHasNoFolder' : 'topicNotVisible',
+      );
       return { claim, drive, mode: DEFAULT_SANDBOX_MODE };
     }
 
@@ -375,6 +396,7 @@ const resolvePlacement = async ({
     return { claim, cwd: folder, drive, mode: 'drive' };
   } catch (error) {
     log('Failed to read sandbox preferences for topic %s: %O', topicId, error);
+    warnSandboxDegraded('topic', { drive, reason: 'placementReadFailed', topicId }, error);
     return { claim: claim ?? (await claimFor(drive)), drive, mode: DEFAULT_SANDBOX_MODE };
   }
 };
