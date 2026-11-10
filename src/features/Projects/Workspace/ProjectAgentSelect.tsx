@@ -145,7 +145,7 @@ const ProjectAgentSelect = memo<ProjectAgentSelectProps>(
           {...stylex.props(styles.trigger)}
           disabled={disabled}
           size={'small'}
-          title={compact ? meta.name : undefined}
+          title={meta.name}
           type={'text'}
         >
           <AgentAvatar
