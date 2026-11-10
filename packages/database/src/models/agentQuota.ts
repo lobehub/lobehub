@@ -140,17 +140,23 @@ export class AgentProviderAccountModel {
    *
    * Dedupe looks past visibility: a teammate's private row for the same
    * identity is still that account, and inserting a second one would collide
-   * with the workspace identity index. The caller records the login that makes
-   * it visible to this member. A new workspace row starts `private` — a login
-   * reported from a member's machine is theirs until they publish it.
+   * with the workspace identity index. Finding such a row grants nothing on its
+   * own — knowing an external id is not holding the login. The caller may pass
+   * `claimLogin` to record the login on a device it reports from; the row is
+   * updated and returned only if that (or anything else) makes it visible to
+   * this member, and `undefined` comes back otherwise. A new workspace row
+   * starts `private` — a login reported from a member's machine is theirs
+   * until they publish it.
    */
   upsertByIdentity = async (
     provider: string,
     identity: AccountIdentityInput,
     defaults: Partial<NewAgentProviderAccount> = {},
-  ): Promise<SafeAccount> => {
+    options: { claimLogin?: (accountId: string) => Promise<unknown> } = {},
+  ): Promise<SafeAccount | undefined> => {
     if (identity.externalAccountId) {
       const existing = await this.db.query.agentProviderAccounts.findFirst({
+        columns: { id: true },
         where: and(
           this.scope(),
           eq(agentProviderAccounts.provider, provider),
@@ -158,12 +164,14 @@ export class AgentProviderAccountModel {
         ),
       });
       if (existing) {
+        if (!(await this.findById(existing.id)) && options.claimLogin)
+          await options.claimLogin(existing.id);
         const [row] = await this.db
           .update(agentProviderAccounts)
           .set({ ...identity, lastValidatedAt: new Date(), updatedAt: new Date() })
-          .where(eq(agentProviderAccounts.id, existing.id))
+          .where(and(eq(agentProviderAccounts.id, existing.id), this.mine()))
           .returning();
-        return stripCredentials(row);
+        return row ? stripCredentials(row) : undefined;
       }
     }
 

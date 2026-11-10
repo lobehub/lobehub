@@ -188,18 +188,18 @@ describe('Agent quota workspace scope', () => {
     const teammate = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
 
     const reported = await workspaceAccounts.upsertByIdentity('claude-code', identity);
-    expect(reported.visibility).toBe('private');
+    expect(reported?.visibility).toBe('private');
     expect(await teammate.list()).toEqual([]);
 
     // Re-reporting does not undo a publish.
-    await workspaceAccounts.setVisibility(reported.id, 'public');
+    await workspaceAccounts.setVisibility(reported!.id, 'public');
     const again = await workspaceAccounts.upsertByIdentity('claude-code', identity);
-    expect(again.visibility).toBe('public');
+    expect(again?.visibility).toBe('public');
 
     // Personal rows have no team to hide from.
     const personal = new AgentProviderAccountModel(serverDB, userId);
     const own = await personal.upsertByIdentity('claude-code', identity);
-    expect(await personal.setVisibility(own.id, 'public')).toBe(false);
+    expect(await personal.setVisibility(own!.id, 'public')).toBe(false);
   });
 
   it('shows a private account to a teammate once their device holds a login for it', async () => {
@@ -218,18 +218,36 @@ describe('Agent quota workspace scope', () => {
 
     const mine = new AgentProviderAccountModel(serverDB, userId, workspaceId);
     const teammate = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
-    const account = await mine.upsertByIdentity('claude-code', identity);
+    const account = (await mine.upsertByIdentity('claude-code', identity))!;
 
-    // The teammate's own report resolves to the same row instead of colliding
-    // with the workspace identity index, but stays hidden until a login exists.
-    const fromTeammate = await teammate.upsertByIdentity('claude-code', identity);
-    expect(fromTeammate.id).toBe(account.id);
+    // Knowing the external id is not holding the login: a report without one
+    // neither inserts a colliding row nor reads or overwrites the private one.
+    const blind = await teammate.upsertByIdentity('claude-code', {
+      ...identity,
+      email: 'overwritten@b.com',
+    });
+    expect(blind).toBeUndefined();
     expect(await teammate.findById(account.id)).toBeNull();
+    expect((await mine.findById(account.id))?.email).toBe('pair@b.com');
+    expect(
+      await serverDB
+        .select({ id: agentProviderAccounts.id })
+        .from(agentProviderAccounts)
+        .where(eq(agentProviderAccounts.externalAccountId, identity.externalAccountId)),
+    ).toHaveLength(1);
 
-    await new AgentProviderAccountLoginModel(serverDB, teammateId, workspaceId).record(
-      account.id,
-      device.id,
+    // Reporting it from their own device records the login, which reveals the
+    // same row instead of colliding with the workspace identity index.
+    const logins = new AgentProviderAccountLoginModel(serverDB, teammateId, workspaceId);
+    const fromTeammate = await teammate.upsertByIdentity(
+      'claude-code',
+      identity,
+      {},
+      {
+        claimLogin: (accountId) => logins.record(accountId, device.id),
+      },
     );
+    expect(fromTeammate?.id).toBe(account.id);
     expect((await teammate.list()).map((a) => a.id)).toEqual([account.id]);
     // Using it is not owning it: only the creator decides who else sees it.
     expect(await teammate.setVisibility(account.id, 'public')).toBe(false);
@@ -242,20 +260,20 @@ describe('Agent quota workspace scope', () => {
 
     const personal = await personalAccounts.upsertByIdentity('claude-code', identity);
     const shared = await workspaceAccounts.upsertByIdentity('claude-code', identity);
-    expect(shared.id).not.toBe(personal.id);
+    expect(shared?.id).not.toBe(personal?.id);
 
     // re-observing the same identity in the same scope dedupes instead of inserting
     const again = await workspaceAccounts.upsertByIdentity('claude-code', identity);
-    expect(again.id).toBe(shared.id);
+    expect(again?.id).toBe(shared?.id);
     expect(await workspaceAccounts.list()).toHaveLength(1);
     expect(await personalAccounts.list()).toHaveLength(1);
 
-    // …and so does a teammate observing it from their own device: one real
-    // account must stay ONE row per workspace, or the load balancer would count
-    // its capacity twice.
+    // …and so does a teammate observing it: one real account must stay ONE row
+    // per workspace, or the load balancer would count its capacity twice. The
+    // row is private, so without a login the teammate gets nothing back.
     const teammateAccounts = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
     const fromTeammate = await teammateAccounts.upsertByIdentity('claude-code', identity);
-    expect(fromTeammate.id).toBe(shared.id);
+    expect(fromTeammate).toBeUndefined();
     expect(await workspaceAccounts.list()).toHaveLength(1);
   });
 });
