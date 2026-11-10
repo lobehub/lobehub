@@ -10,6 +10,7 @@ import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/Ag
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { StyleSheet } from '@/utils/styles';
 
@@ -47,10 +48,13 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const navigate = useWorkspaceAwareNavigate();
   const mailbox = useMailbox(agentId, messageId);
   const openable = useOpenableChannel();
+  const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
   const mailPath = urlJoin('/agent', agentId, 'mail');
   // Nothing to read and nothing this deployment could open, so there is no page.
-  const unavailable = !!mailbox.data && !mailbox.current && !openable;
+  // Until the server config has loaded, an empty provider list is only the
+  // default (a cold desktop start), not the deployment saying it has none.
+  const unavailable = configLoaded && !!mailbox.data && !mailbox.current && !openable;
 
   useEffect(() => {
     if (unavailable) navigate(urlJoin('/agent', agentId, 'profile'), { replace: true });

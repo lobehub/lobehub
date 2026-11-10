@@ -16,12 +16,15 @@ const service = vi.hoisted(() => ({
 vi.mock('@/services/agentAccount', () => ({ agentAccountService: service }));
 
 const surface = vi.hoisted(() => ({ mobile: false }));
-const server = vi.hoisted(() => ({ providers: ['agent-mail'] }));
+const server = vi.hoisted(() => ({ loaded: true, providers: ['agent-mail'] }));
 vi.mock('@/utils/mobileSurface', () => ({ isMobileSurface: () => surface.mobile }));
 
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: (state: unknown) => unknown) =>
-    selector({ serverConfig: { agentIdentityProviders: server.providers } }),
+    selector({
+      serverConfig: { agentIdentityProviders: server.providers },
+      serverConfigLoaded: server.loaded,
+    }),
 }));
 vi.mock('@/features/NavHeader', () => ({ default: () => null }));
 vi.mock('@/features/AgentBreadcrumb', () => ({ default: () => null }));
@@ -106,6 +109,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   surface.mobile = false;
   server.providers = ['agent-mail'];
+  server.loaded = true;
   service.list.mockResolvedValue([account('acc_a', 'a@lobe.id'), account('acc_b', 'b@lobe.id')]);
   service.listInbox.mockImplementation(async ({ accountId }: { accountId?: string }) =>
     accountId === 'acc_b' ? [row('msg_b', 'For B')] : [row('msg_a', 'For A')],
@@ -286,6 +290,17 @@ describe('AgentMail', () => {
     page();
 
     expect(await screen.findByText('profile page')).toBeInTheDocument();
+  });
+
+  it('does not leave the page while the server config is still loading', async () => {
+    server.loaded = false;
+    server.providers = [];
+    service.list.mockResolvedValue([]);
+    page();
+
+    await waitFor(() => expect(service.list).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('profile page')).not.toBeInTheDocument();
   });
 
   it('keeps an existing mailbox readable after the provider is removed', async () => {
