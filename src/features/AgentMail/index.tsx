@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { useEffect } from 'react';
 import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
@@ -15,9 +16,10 @@ import { StyleSheet } from '@/utils/styles';
 import InboxMessageDetail from './InboxMessageDetail';
 import InboxSection from './InboxSection';
 import MailboxCard from './MailboxCard';
-import MailSplitView from './MailSplitView';
+import MailboxEmptyState from './MailboxEmptyState';
+import MailSplitView, { MailNavHeader } from './MailSplitView';
 import { identityStyles } from './styles';
-import { useMailbox } from './useAgentIdentity';
+import { useMailbox, useOpenableChannel } from './useAgentIdentity';
 
 const styles = StyleSheet.create({
   body: {
@@ -44,8 +46,15 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const { messageId } = useParams<{ messageId?: string }>();
   const navigate = useWorkspaceAwareNavigate();
   const mailbox = useMailbox(agentId, messageId);
+  const openable = useOpenableChannel();
   const mobile = isMobileSurface();
   const mailPath = urlJoin('/agent', agentId, 'mail');
+  // Nothing to read and nothing this deployment could open, so there is no page.
+  const unavailable = !!mailbox.data && !mailbox.current && !openable;
+
+  useEffect(() => {
+    if (unavailable) navigate(urlJoin('/agent', agentId, 'profile'), { replace: true });
+  }, [agentId, navigate, unavailable]);
 
   // Moving between messages replaces the entry, so back leaves the mail page.
   const openMessage = (id: string) => {
@@ -59,6 +68,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     if (messageId) navigate(mailPath, { replace: true });
   };
 
+  if (unavailable) return null;
+
   const mailboxCard = (
     <MailboxCard agentId={agentId} disabled={disabled} mailbox={mailbox} onSwitch={switchMailbox} />
   );
@@ -70,6 +81,19 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
       selectedId={mobile ? undefined : messageId}
       onOpen={openMessage}
     />
+  );
+
+  // With no address there is nothing to list or read, so the offer takes the
+  // whole page. Waits for a successful read: a failure must not look like "none".
+  const emptyState = mailbox.data && !mailbox.current && openable && (
+    <Center flex={1} padding={24} style={{ minHeight: 0 }}>
+      <MailboxEmptyState
+        agentId={agentId}
+        channel={openable}
+        disabled={disabled}
+        onProvisioned={mailbox.mutate}
+      />
+    </Center>
   );
 
   return (
@@ -88,14 +112,21 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           >
             <AgentProfileTabs active={'mail'} agentId={agentId} />
           </NavHeader>
-          <Flexbox flex={1} style={styles.body} width={'100%'}>
-            <WideScreenContainer>
-              <Flexbox gap={24} paddingBlock={16}>
-                {mailboxCard}
-                {inbox}
-              </Flexbox>
-            </WideScreenContainer>
-          </Flexbox>
+          {emptyState || (
+            <Flexbox flex={1} style={styles.body} width={'100%'}>
+              <WideScreenContainer>
+                <Flexbox gap={24} paddingBlock={16}>
+                  {mailboxCard}
+                  {inbox}
+                </Flexbox>
+              </WideScreenContainer>
+            </Flexbox>
+          )}
+        </>
+      ) : emptyState ? (
+        <>
+          <MailNavHeader />
+          {emptyState}
         </>
       ) : (
         <MailSplitView inbox={inbox} mailbox={mailboxCard} messageId={messageId} />
