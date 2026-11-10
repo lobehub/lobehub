@@ -13,7 +13,6 @@ import type {
   OpenAIExtraParams,
   ResponseCreateParamsWithPromptCacheKey,
 } from '../../openaiCompatibleFactory/factoryOptions';
-import { transformResponseAPIToStream } from '../../openaiCompatibleFactory/nonStreamToStream';
 import {
   initializeOpenAIDiagnostics,
   observeOpenAIResponsesStream,
@@ -25,6 +24,7 @@ import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { readableFromAsyncIterable } from '../../streams/protocol';
 import type { OpenAIStreamOptions } from '../openaiChatCompletions/stream';
 import { convertOpenAIResponseInputs } from './inputs';
+import { transformResponseAPIToStream } from './nonStreamToStream';
 import { OpenAIResponsesStream } from './stream';
 import { convertChatCompletionToolToResponseTool, stripChatCompletionParameters } from './tools';
 

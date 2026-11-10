@@ -10,7 +10,6 @@ import { getModelPricing } from '../../../utils/getModelPricing';
 import { StreamingResponse } from '../../../utils/response';
 import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
 import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatibleFactory/factoryOptions';
-import { transformResponseToStream } from '../../openaiCompatibleFactory/nonStreamToStream';
 import {
   initializeOpenAIDiagnostics,
   observeOpenAIChatCompletionStream,
@@ -21,6 +20,7 @@ import {
 import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { readableFromAsyncIterable } from '../../streams/protocol';
 import { convertOpenAIMessages } from './messages';
+import { transformResponseToStream } from './nonStreamToStream';
 import type { OpenAIStreamOptions } from './stream';
 import { OpenAIStream } from './stream';
 

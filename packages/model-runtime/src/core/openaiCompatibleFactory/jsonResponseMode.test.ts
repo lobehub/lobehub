@@ -2,9 +2,9 @@
 import type OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
 
+import { transformResponseToStream } from '../protocols/openaiChatCompletions/nonStreamToStream';
 import type { OnFinishData } from '../streams/protocol';
 import { createOpenAICompatibleRuntime } from './index';
-import { transformResponseToStream } from './nonStreamToStream';
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),

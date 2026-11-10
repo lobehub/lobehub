@@ -62,6 +62,8 @@ import { listOpenAICompatibleModels } from './models';
 import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
+export * from '../protocols/openaiChatCompletions/nonStreamToStream';
+export * from '../protocols/openaiResponses/nonStreamToStream';
 export * from './createVideo';
 export type {
   CreateImageOptions,
@@ -71,7 +73,6 @@ export type {
 } from './factoryOptions';
 export { isResponseFormatUnsupportedError } from './generateObject';
 export { CHAT_MODELS_BLOCK_LIST } from './models';
-export * from './nonStreamToStream';
 
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>(
   factory: OpenAICompatibleFactoryOptions<T>,

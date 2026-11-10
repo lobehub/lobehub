@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as nonStreamToStreamModule from '../../core/openaiCompatibleFactory/nonStreamToStream';
+import * as nonStreamToStreamModule from '../../core/protocols/openaiChatCompletions/nonStreamToStream';
 import * as chatCompletionsStreamModule from '../../core/protocols/openaiChatCompletions/stream';
 import * as responsesStreamModule from '../../core/protocols/openaiResponses/stream';
 import { AgentRuntimeErrorType } from '../../types/error';
