@@ -28,23 +28,43 @@ const agentId = 'goal-stranded-turn-agent';
 const service = () => new GoalService(db, userId);
 const model = () => new GoalModel(db, userId);
 
-/** Age the claimed turn past the manager's turn timeout. */
-const ageTurn = async (goalId: string) => {
+/** Rewrite the claimed turn's receipt, e.g. to age it past a timeout. */
+const editReceipt = async (goalId: string, patch: Record<string, unknown>) => {
   const goal = await model().findById(goalId);
   const config = goal!.config!;
   await db
     .update(goals)
-    .set({
-      config: {
-        ...config,
-        managerState: {
-          ...config.managerState!,
-          startedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
-        },
-      },
-    })
+    .set({ config: { ...config, managerState: { ...config.managerState!, ...patch } } })
     .where(eq(goals.id, goalId));
 };
+const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60_000).toISOString();
+
+const managedGoal = async () => {
+  const graph = await service().create({
+    config: { manager: { maxTurns: 4 } },
+    createdByAgentId: agentId,
+    title: 'Stranded planning',
+  });
+  await db
+    .update(goals)
+    .set({ config: { manager: { maxTurns: 4 } } })
+    .where(eq(goals.id, graph.goal.id));
+  return graph.goal.id;
+};
+
+const started = (params: Parameters<AiAgentService['execAgent']>[0], operationId: string) => ({
+  agentId: params.agentId!,
+  assistantMessageId: 'm',
+  autoStarted: true,
+  createdAt: new Date().toISOString(),
+  message: 'started',
+  operationId,
+  status: 'running',
+  success: true,
+  timestamp: new Date().toISOString(),
+  topicId: params.appContext!.topicId!,
+  userMessageId: 'u',
+});
 
 beforeEach(async () => {
   await db.insert(users).values({ id: userId }).onConflictDoNothing();
@@ -60,43 +80,49 @@ afterEach(async () => {
   await db.delete(users);
 });
 
+describe('GoalManagerService with a planning turn whose dispatch never wrote a run', () => {
+  // The production failure: `execAgent` failed on a database timeout before
+  // writing the planning message or the operation.
+  it('lets the owner close the goal once the failed dispatch is past the turn timeout', async () => {
+    const goalId = await managedGoal();
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockRejectedValue(
+      new Error('timeout exceeded when trying to connect'),
+    );
+    await service().tick(goalId);
+    const receipt = (await model().findById(goalId))!.config!.managerState!;
+    expect(receipt.dispatchReturnedWithoutRun).toBe(true);
+
+    await editReceipt(goalId, { startedAt: hoursAgo(2) });
+    expect((await service().close(goalId, 'achieved')).status).toBe('achieved');
+  });
+
+  it('refuses to settle a turn whose dispatch may still be pending', async () => {
+    const goalId = await managedGoal();
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
+      await editReceipt(goalId, { startedAt: hoursAgo(2) });
+      await expect(service().close(goalId, 'achieved')).rejects.toThrow(/not closed/);
+      return started(params, 'op-stranded-pending') as never;
+    });
+
+    await service().tick(goalId);
+    expect((await model().findById(goalId))!.config!.managerState!.consumed).toBeFalsy();
+  });
+});
+
 /**
- * A dispatch that hangs past the turn timeout lets the owner close the Goal and
- * settle the turn as never started; when `execAgent` finally returns, its run
- * must be stopped rather than left spending on an ended Goal.
+ * A dispatch that returns after the owner settled its turn has a run nothing
+ * else will stop, so the dispatch stops it itself.
  */
 describe('GoalManagerService with a dispatch that returns after the owner settled the turn', () => {
-  it('interrupts the late run', async () => {
-    const graph = await service().create({
-      config: { manager: { maxTurns: 4 } },
-      createdByAgentId: agentId,
-      title: 'Stranded planning',
-    });
-    const goalId = graph.goal.id;
-    await db
-      .update(goals)
-      .set({ config: { manager: { maxTurns: 4 } } })
-      .where(eq(goals.id, goalId));
+  it('interrupts the late run of a closed goal', async () => {
+    const goalId = await managedGoal();
     const interrupt = vi
       .spyOn(AiAgentService.prototype, 'interruptTask')
       .mockResolvedValue({ success: true } as never);
     vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
-      // While this dispatch is still pending, the owner closes the Goal.
-      await ageTurn(goalId);
+      await editReceipt(goalId, { startedAt: hoursAgo(25) });
       expect((await service().close(goalId, 'achieved')).status).toBe('achieved');
-      return {
-        agentId: params.agentId!,
-        assistantMessageId: 'm',
-        autoStarted: true,
-        createdAt: new Date().toISOString(),
-        message: 'started',
-        operationId: 'op-stranded-late',
-        status: 'running',
-        success: true,
-        timestamp: new Date().toISOString(),
-        topicId: params.appContext!.topicId!,
-        userMessageId: 'u',
-      };
+      return started(params, 'op-stranded-late') as never;
     });
 
     await service().tick(goalId);
@@ -105,5 +131,47 @@ describe('GoalManagerService with a dispatch that returns after the owner settle
       expect.objectContaining({ operationId: 'op-stranded-late' }),
     );
     expect((await model().findById(goalId))!.status).toBe('achieved');
+  });
+
+  it('interrupts the late run once a newer turn replaced its receipt', async () => {
+    const goalId = await managedGoal();
+    const interrupt = vi
+      .spyOn(AiAgentService.prototype, 'interruptTask')
+      .mockResolvedValue({ success: true } as never);
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
+      await editReceipt(goalId, { startedAt: hoursAgo(25) });
+      await service().close(goalId, 'achieved');
+      // Reopened, and the next tick claimed a fresh turn.
+      await editReceipt(goalId, { consumed: false, token: 'newer-turn' });
+      return started(params, 'op-stranded-superseded') as never;
+    });
+
+    await service().tick(goalId);
+
+    expect(interrupt).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-stranded-superseded' }),
+    );
+  });
+
+  it('keeps an unconfirmed late run stoppable by pausing the closed goal', async () => {
+    const goalId = await managedGoal();
+    vi.spyOn(AiAgentService.prototype, 'interruptTask').mockResolvedValue({
+      deviceCancellationConfirmed: false,
+      success: true,
+    } as never);
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
+      await editReceipt(goalId, { startedAt: hoursAgo(25) });
+      await service().close(goalId, 'achieved');
+      return started(params, 'op-stranded-unconfirmed') as never;
+    });
+
+    await service().tick(goalId);
+
+    const goal = (await model().findById(goalId))!;
+    expect(goal.status).toBe('paused');
+    expect(goal.config!.managerState).toMatchObject({
+      consumed: false,
+      operationId: 'op-stranded-unconfirmed',
+    });
   });
 });

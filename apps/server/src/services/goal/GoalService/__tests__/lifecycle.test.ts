@@ -334,6 +334,7 @@ describe('GoalService', () => {
       const { goalId, service } = await strandedGoal(
         'stranded',
         new Date(Date.now() - 2 * 60 * 60_000),
+        { dispatchReturnedWithoutRun: true },
       );
       const interrupt = vi.spyOn(AiAgentService.prototype, 'interruptTask');
 
@@ -349,6 +350,7 @@ describe('GoalService', () => {
       const { goalId, service } = await strandedGoal(
         'late-run',
         new Date(Date.now() - 2 * 60 * 60_000),
+        { dispatchReturnedWithoutRun: true },
       );
       vi.spyOn(AgentOperationModel.prototype, 'findByTopicSourceMessage')
         .mockResolvedValueOnce(undefined)
@@ -367,6 +369,7 @@ describe('GoalService', () => {
       const { goalId, service } = await strandedGoal(
         'stranded-delete',
         new Date(Date.now() - 2 * 60 * 60_000),
+        { dispatchReturnedWithoutRun: true },
       );
 
       await service.delete(goalId);
@@ -385,6 +388,16 @@ describe('GoalService', () => {
       await expect(service.close(goalId, 'achieved')).rejects.toThrow(/not closed/);
       const goal = await new GoalModel(serverDB, userId).findById(goalId);
       expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
+
+    // Receipts recorded before the dispatch outcome was: the call may in
+    // principle still be pending, so only an age no request could reach counts.
+    it('settles a turn with no recorded dispatch outcome only once no request could still run it', async () => {
+      const recent = await strandedGoal('legacy-recent', new Date(Date.now() - 2 * 60 * 60_000));
+      await expect(recent.service.close(recent.goalId, 'achieved')).rejects.toThrow(/not closed/);
+
+      const old = await strandedGoal('legacy-old', new Date(Date.now() - 25 * 60 * 60_000));
+      expect((await old.service.close(old.goalId, 'achieved')).status).toBe('achieved');
     });
 
     it('still refuses while a main Agent turn without a run may be starting', async () => {
