@@ -306,6 +306,13 @@ export interface GoalManagerState {
    */
   dispatchNeverStarted?: boolean;
   /**
+   * Set when this turn's `execAgent` call failed and returned without an
+   * operation id. Unlike `dispatchNeverStarted` it does not prove no run exists,
+   * but the call is over, so no late operation id can still be recorded; an
+   * owner closing the Goal may settle the turn once it is past the turn timeout.
+   */
+  dispatchReturnedWithoutRun?: boolean;
+  /**
    * Consecutive turns that ended in an error without committing a plan. Reset by
    * a turn that commits a plan or ends without an error. Reaching the limit
    * pauses the Goal on the last error instead of re-dispatching an Agent that
