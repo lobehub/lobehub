@@ -1,9 +1,32 @@
 import type { TaskItem } from '@lobechat/types';
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import { taskDependencies, tasks } from '../../schemas/task';
+import { acceptances, verifyRuns } from '../../schemas/verify';
 import { notTrashed } from '../../utils/softDelete';
 import { depsOwnership, type TaskModelContext, taskOwnership } from './context';
+
+/**
+ * A completed dependency still blocks while the verifier rejected its delivery:
+ * the latest round of its task Acceptance settled `failed` / `errored` and no
+ * person has accepted the delivery since. Accepting it, or a later passing
+ * round, releases the dependents.
+ */
+const verifyRejected = sql`EXISTS (
+  SELECT 1 FROM ${acceptances}
+  WHERE ${acceptances.subjectType} = 'task'
+    AND ${acceptances.subjectId} = ${tasks.id}
+    AND ${acceptances.status} <> 'accepted'
+    AND (
+      SELECT ${verifyRuns.status} FROM ${verifyRuns}
+      WHERE ${verifyRuns.acceptanceId} = ${acceptances.id}
+      ORDER BY ${verifyRuns.roundIndex} DESC NULLS LAST
+      LIMIT 1
+    ) IN ('failed', 'errored')
+)`;
+
+/** The dependency has not cleared its dependents: unfinished, or finished on a rejected delivery. */
+const dependencyBlocks = or(ne(tasks.status, 'completed'), verifyRejected);
 
 export const removeDependency = async (
   ctx: TaskModelContext,
@@ -56,7 +79,7 @@ export const areAllDependenciesCompleted = async (
       and(
         eq(taskDependencies.taskId, taskId),
         eq(taskDependencies.type, 'blocks'),
-        ne(tasks.status, 'completed'),
+        dependencyBlocks,
         // A dependency sitting in the recycle bin no longer blocks: it is
         // treated as removed, the way the hard delete's FK cascade removed it.
         notTrashed(tasks.isDeleted),
@@ -101,7 +124,7 @@ export const getUnlockedTasksForMany = async (
       and(
         inArray(taskDependencies.taskId, dependentIds),
         eq(taskDependencies.type, 'blocks'),
-        ne(tasks.status, 'completed'),
+        dependencyBlocks,
         // A dependency sitting in the recycle bin no longer blocks: it is
         // treated as removed, the way the hard delete's FK cascade removed it.
         notTrashed(tasks.isDeleted),
