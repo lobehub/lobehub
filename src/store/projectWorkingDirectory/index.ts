@@ -103,6 +103,10 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
   /** Refetch a project's conversations after a change made elsewhere, e.g. a new main agent. */
   refreshProjectTopics: (projectId: string) => Promise<void>;
+  /** Repoint a directory at another device location; its conversations follow it. */
+  relocateDirectory: (...args: ServiceParams<'relocate'>) => Promise<ServiceData<'relocate'>>;
+  /** Remove a directory from a project; its conversations stay in the project. */
+  removeDirectory: (projectId: string, id: string) => Promise<void>;
   /** Create or rename an environment. */
   saveEnvironment: (
     ...args: ServiceParams<'saveEnvironment'>
@@ -229,6 +233,31 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       await Promise.all([
         projectTopics.revalidate(projectId),
         directoryTopics.revalidate(),
+        environmentTopics.revalidate(),
+      ]);
+    },
+    relocateDirectory: async (input) => {
+      const result = await projectWorkingDirectoryService.relocate(input);
+      await Promise.all([
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(input.projectId),
+        // The directory's conversations now point at the new location.
+        projectTopics.revalidate(input.projectId),
+        directoryTopics.revalidate(),
+        environmentTopics.revalidate(),
+        environments.revalidate(),
+        environments.revalidate(input.projectId),
+      ]);
+      return result.data;
+    },
+    removeDirectory: async (projectId, id) => {
+      await projectWorkingDirectoryService.remove({ id, projectId });
+      await Promise.all([
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
+        // The removal cleared the directory binding on its conversations.
+        projectTopics.revalidate(projectId),
+        directoryTopics.revalidate(id),
         environmentTopics.revalidate(),
       ]);
     },

@@ -3,6 +3,20 @@ export default {
   'settings.reuseEnvironmentDescription':
     'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
   'settings.startDirectoryConversation': 'New topic here',
+  'settings.editDirectory': 'Edit folder',
+  'settings.editDirectoryBusy':
+    'A topic is running in this folder. Wait for it to finish and try again.',
+  'settings.editDirectoryOtherEnvironment':
+    'This folder already belongs to another environment. Choose a different folder or device.',
+  'settings.editDirectoryDescription':
+    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+  'settings.editDirectoryFailed': 'Could not update the folder',
+  'settings.removeDirectory': 'Remove folder',
+  'settings.removeDirectoryConfirmDescription':
+    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+  'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
+  'settings.removeDirectoryFailed':
+    'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
   'settings.configureDirectory': 'Add a working directory',
   'settings.reuseEnvironment': 'Add an existing environment to this project',
   'settings.addDirectoryFailed': 'Could not add working directory',
@@ -14,8 +28,8 @@ export default {
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
   'settings.workLocations': 'Working directories',
-  'settings.directoryDescription':
-    'Choose a folder and start a topic. The Agent will work with files in that folder on the connected device.',
+  'settings.directoryListDescription':
+    'Device folders this project works in. Agents read and change files in them on that device.',
   'settings.environmentDescription':
     'Keep repository sources together in an environment, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
