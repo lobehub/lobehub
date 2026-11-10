@@ -3,12 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import UnitArtifacts from './UnitArtifacts';
 
+/**
+ * Regression: the panel opened outputs through the Work gallery's opener,
+ * which reaches the canvas modal; the share app serves this review without the
+ * canvas runtime, so its build failed to resolve `virtual:canvas-runtime`.
+ */
+it('does not reach the canvas modal', async () => {
+  const source = await import('./UnitArtifacts?raw');
+  expect(source.default).not.toMatch(/WorkGallery\/useOpenWork|CanvasModal/);
+});
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const openWork = vi.fn();
-vi.mock('@/features/WorkGallery/useOpenWork', () => ({ useOpenWork: () => openWork }));
+const navigate = vi.fn();
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => navigate,
+}));
 vi.mock('@/features/Work/WorkSummaryCard', () => ({
   default: ({
     item,
@@ -39,7 +51,14 @@ describe('UnitArtifacts', () => {
    * the two places.
    */
   it("lists a unit's outputs with the conversation's Work cards and opens them", () => {
-    const work = { id: 'work_1', title: 'Move inbox reads to replica' };
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const work = {
+      id: 'work_1',
+      resourceType: 'github_pull_request',
+      title: 'Move inbox reads to replica',
+      type: 'external',
+      url: 'https://github.com/lobehub/lobehub/pull/22737',
+    };
     render(
       <UnitArtifacts
         unit={unit({
@@ -52,7 +71,11 @@ describe('UnitArtifacts', () => {
     );
     // The compact flat row of the conversation's working sidebar, not the tall card.
     fireEvent.click(screen.getByText('work-card:inline:Move inbox reads to replica'));
-    expect(openWork).toHaveBeenCalledWith(work);
+    expect(open).toHaveBeenCalledWith(
+      'https://github.com/lobehub/lobehub/pull/22737',
+      '_blank',
+      'noopener,noreferrer',
+    );
   });
 
   /**
