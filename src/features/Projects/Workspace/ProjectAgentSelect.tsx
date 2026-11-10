@@ -38,11 +38,11 @@ const styles = stylex.create({
     flex: '1',
     minWidth: 0,
   },
-  // Shrinks before anything beside it does: in a narrow composer the agent's
-  // name is the one label that can lose characters and stay recognizable.
+  // In a narrow composer the name truncates, but never past the avatar and the
+  // chevron: below that the trigger would spill into its neighbours.
   trigger: {
-    minWidth: 0,
-    maxWidth: '200px',
+    minWidth: '56px',
+    maxWidth: '280px',
     paddingInlineStart: '6px',
     paddingInlineEnd: '8px',
   },

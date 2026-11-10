@@ -69,14 +69,16 @@ const styles = stylex.create({
   trayFrame: {
     paddingInline: '24px',
   },
-  // The left side gives way in a narrow window (the agent's name truncates);
-  // where the work happens, on the right, always stays whole.
+  // In a narrow window both names give way — the agent's and the repository's —
+  // but no control shrinks below its icon, so nothing spills into its neighbour.
   trayLeading: {
-    flex: '1',
-    minWidth: 0,
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
   },
   trayTrailing: {
-    flexShrink: 0,
+    flexShrink: 1,
+    minWidth: 0,
   },
   tray: {
     gap: '8px',

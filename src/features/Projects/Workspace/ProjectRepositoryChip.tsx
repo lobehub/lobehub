@@ -98,7 +98,7 @@ const ProjectRepositoryChip = ({
 
   return (
     <Tooltip title={t('overview.context.repository.tooltip')}>
-      <div>
+      <div {...stylex.props(styles.shrinkable)}>
         {disabled ? (
           chip
         ) : (
@@ -112,10 +112,18 @@ const ProjectRepositoryChip = ({
 };
 
 const styles = stylex.create({
+  // The repository's name is what gives way in a narrow tray; the icon stays.
+  shrinkable: {
+    minWidth: 0,
+  },
   // Body size and color: the tray says where the work happens, not a footnote.
   button: {
     borderWidth: 0,
     fontFamily: 'inherit',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
     fontSize: '13px',
     color: cssVar.colorText,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
