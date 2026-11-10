@@ -18,7 +18,7 @@ import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { omit } from 'es-toolkit/compat';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
-import { renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
+import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -158,6 +158,8 @@ const buildPluginMcpParams = (
   }
 
   if (connection?.type === 'stdio') {
+    // Match the install that produced `manifest.mcpParams`: args get the settings they ask for
+    if (connection.args) params.args = renderMcpArgs(connection.args, pluginSettings);
     params.env = {
       ...connection?.env,
       ...pluginSettings,
