@@ -85,6 +85,7 @@ describe('buildGoalManagerPrompt', () => {
       .map((line) => JSON.parse(line));
     expect(tasksSchemas.find((schema) => schema.rollout)?.rollout).toMatchObject({
       recipe: expect.any(String),
+      skillName: expect.any(String),
       units: expect.any(Array),
     });
   });

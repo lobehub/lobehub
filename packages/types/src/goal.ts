@@ -2,7 +2,7 @@ import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { GoalRolloutPolicy, GoalRolloutState } from './goalRollout';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus, VerifyCheckTally } from './verify';
-import type { WorkType } from './work';
+import type { WorkResourceType, WorkType } from './work';
 
 // ============================================
 // Goal — independent target entity (`goals` table)
@@ -759,6 +759,8 @@ export interface GoalGraphWorkVersionDisplay {
   mimeType?: string;
   /** Canonical resource identity — the document id an in-app link addresses. */
   resourceId: string | null;
+  /** What the Work is beyond its type, e.g. `github_pull_request`; draws its state glyph. */
+  resourceType?: WorkResourceType;
   status: string | null;
   title: string | null;
   type: WorkType;
