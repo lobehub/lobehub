@@ -130,7 +130,6 @@ export const FeatureFlagsSchema = z.object({
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
   onboarding_v2: FeatureFlagValue.optional(),
-  new_tier_plans: FeatureFlagValue.optional(),
   mobile_new_tier_sales: FeatureFlagValue.optional(),
   mobile_sandbox_grant: FeatureFlagValue.optional(),
   storage_overage: FeatureFlagValue.optional(),
@@ -252,7 +251,6 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   onboarding_v2: isDev,
   // Cloud-only grayscale for the new subscription tiers: off until an admin
   // publishes a whitelist (array of user IDs) or flips it to true.
-  new_tier_plans: false,
   mobile_new_tier_sales: false,
   // Server-only: Cloud lets a store sandbox purchase grant entitlement only for user IDs listed
   // explicitly; `true` and percentage rollout count as off, and it never reaches the client state.
@@ -333,7 +331,8 @@ export const mapFeatureFlagsEnvToState = (
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId, 'dev_dock'),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId, 'auth_captcha'),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId, 'onboarding_v2'),
-    enableNewTierPlans: evaluateFeatureFlag(config.new_tier_plans, userId, 'new_tier_plans'),
+    // Deprecated constant for released desktop clients; see IFeatureFlagsState.
+    enableNewTierPlans: true,
     enableMobileNewTierSales: evaluateFeatureFlag(
       config.mobile_new_tier_sales,
       userId,

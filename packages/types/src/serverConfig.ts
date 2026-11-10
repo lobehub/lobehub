@@ -45,14 +45,15 @@ export type IFeatureFlagsState = {
    */
   enableImLayout: boolean | undefined;
   /**
-   * New subscription tiers (`new_tier_plans`). Off by default: the plans page keeps
-   * selling the current tiers; listed users see and can buy the new tiers instead.
+   * @deprecated The new subscription tiers are always on. Kept as a constant
+   * `true` because released desktop clients still read it and fall back to the
+   * retired plans when it is missing. Remove once those clients are no longer
+   * supported.
    */
-  enableNewTierPlans: boolean | undefined;
+  enableNewTierPlans: true;
   /**
    * Rollout gate for buying the new tiers in the mobile app
-   * (`mobile_new_tier_sales`). Separate from `enableNewTierPlans`, which covers
-   * the web plans page.
+   * (`mobile_new_tier_sales`).
    */
   enableMobileNewTierSales: boolean | undefined;
   /**

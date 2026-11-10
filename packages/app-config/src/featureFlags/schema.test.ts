@@ -242,19 +242,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
-  it('should keep the new subscription tiers off by default and enable them for listed users', () => {
-    expect(DEFAULT_FEATURE_FLAGS.new_tier_plans).toBe(false);
-    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableNewTierPlans).toBe(
-      false,
-    );
-
-    const config = { new_tier_plans: ['tester-123'] };
-
-    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableNewTierPlans).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableNewTierPlans).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableNewTierPlans).toBe(false);
-  });
-
   it('should keep mobile new-tier sales off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.mobile_new_tier_sales).toBe(false);
     expect(
@@ -268,11 +255,9 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableMobileNewTierSales).toBe(false);
   });
 
-  it('should not let the web new-tier flag open mobile new-tier sales', () => {
-    const state = mapFeatureFlagsEnvToState({ new_tier_plans: true }, 'user-1');
-
-    expect(state.enableNewTierPlans).toBe(true);
-    expect(state.enableMobileNewTierSales).toBeUndefined();
+  it('should always report the new tiers as on for released clients that still read the flag', () => {
+    expect(mapFeatureFlagsEnvToState({}, 'user-1').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS).enableNewTierPlans).toBe(true);
   });
 
   it('should keep the mobile sandbox grant off by default and out of the client state', () => {
