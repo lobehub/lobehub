@@ -45,13 +45,13 @@ const getHeterogeneousAgentPresetEnv = (
  * presets, then the agent's own `env` on top. An entrypoint the agent cleared
  * is removed from the result, so an inherited one does not stand in for it.
  */
-export const getHeterogeneousAgentSpawnEnv = (
+export const getHeterogeneousAgentSpawnEnv = <T extends Record<string, string | undefined>>(
   agentType: string,
   agentEnv?: Readonly<Record<string, string>>,
-  inheritedEnv: Readonly<Record<string, string | undefined>> = {},
-): Record<string, string | undefined> =>
+  inheritedEnv?: T,
+): T =>
   dropClearedClaudeCodeEntrypoint({
     ...inheritedEnv,
     ...getHeterogeneousAgentPresetEnv(agentType, agentEnv),
     ...agentEnv,
-  });
+  } as T);
