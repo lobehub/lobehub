@@ -116,7 +116,15 @@ export const transformAnthropicStream = (
           return { data: chunk.content_block.text, id: context.id, type: 'data' };
         }
 
-        case 'server_tool_use':
+        case 'server_tool_use': {
+          // Server tools (web search, web fetch, code execution) run on Anthropic's side and
+          // their results arrive in this same response. They are not calls for the app to run.
+          context.anthropicServerToolBlocks ??= new Set();
+          context.anthropicServerToolBlocks.add(chunk.index);
+
+          return { data: chunk, id: context.id, type: 'data' };
+        }
+
         case 'tool_use': {
           const toolChunk = chunk.content_block;
 
@@ -198,6 +206,11 @@ export const transformAnthropicStream = (
         }
 
         case 'input_json_delta': {
+          // The input of a server tool call is not an argument of any app tool call.
+          if (context.anthropicServerToolBlocks?.has(chunk.index)) {
+            return { data: chunk, id: context.id, type: 'data' };
+          }
+
           const delta = chunk.delta.partial_json;
 
           const toolCall: StreamToolCallChunkData = {

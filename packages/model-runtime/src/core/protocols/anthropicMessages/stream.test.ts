@@ -759,6 +759,170 @@ describe('AnthropicStream', () => {
     ]);
   });
 
+  describe('server tools', () => {
+    // ROOT CAUSE:
+    //
+    // `server_tool_use` (Anthropic's native web search) shared the `tool_use` branch, so a
+    // search Anthropic had already run reached the app as a `web_search` tool call. No app
+    // tool has that name, so the agent rejected it and called the model again.
+    //
+    // Before: the search and its query were streamed as `tool_calls`.
+    // After: they pass through as `data`; app tool calls keep their own indexes.
+    const collectEvents = async (streams: any[], onToolsCalling = vi.fn()) => {
+      const protocolStream = AnthropicStream(createReadableStream(streams), {
+        callbacks: { onToolsCalling },
+      });
+      const decoder = new TextDecoder();
+      let text = '';
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        text += decoder.decode(chunk, { stream: true });
+      }
+
+      return text
+        .split('\n\n')
+        .filter(Boolean)
+        .map((block) => {
+          const lines = block.split('\n');
+          const event = lines.find((line) => line.startsWith('event: '))!.slice(7);
+          const data = JSON.parse(lines.find((line) => line.startsWith('data: '))!.slice(6));
+
+          return { data, event };
+        });
+    };
+
+    const webSearchBlocks = (start: number) => [
+      {
+        type: 'content_block_start',
+        index: start,
+        content_block: {
+          type: 'server_tool_use',
+          id: 'srvtoolu_01',
+          name: 'web_search',
+          input: {},
+        },
+      },
+      {
+        type: 'content_block_delta',
+        index: start,
+        delta: { type: 'input_json_delta', partial_json: '{"query": "lobehub"}' },
+      },
+      { type: 'content_block_stop', index: start },
+      {
+        type: 'content_block_start',
+        index: start + 1,
+        content_block: {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srvtoolu_01',
+          content: [{ type: 'web_search_result', title: 'LobeHub', url: 'https://lobehub.com' }],
+        },
+      },
+      { type: 'content_block_stop', index: start + 1 },
+    ];
+
+    it('does not report a native web search as a tool call', async () => {
+      const onToolsCalling = vi.fn();
+      const events = await collectEvents(
+        [
+          createMessageStart('msg_search', 'claude-sonnet-4-5', {
+            input_tokens: 10,
+            output_tokens: 1,
+          }),
+          ...webSearchBlocks(0),
+          { type: 'content_block_start', index: 2, content_block: { type: 'text', text: '' } },
+          {
+            type: 'content_block_delta',
+            index: 2,
+            delta: { type: 'text_delta', text: 'Found it.' },
+          },
+          {
+            type: 'content_block_delta',
+            index: 2,
+            delta: {
+              type: 'citations_delta',
+              citation: {
+                type: 'web_search_result_location',
+                title: 'LobeHub',
+                url: 'https://lobehub.com',
+              },
+            },
+          },
+          { type: 'content_block_stop', index: 2 },
+          {
+            type: 'message_delta',
+            delta: { stop_reason: 'end_turn', stop_sequence: null },
+            usage: { output_tokens: 20 },
+          },
+          { type: 'message_stop' },
+        ],
+        onToolsCalling,
+      );
+
+      expect(events.filter((e) => e.event === 'tool_calls')).toEqual([]);
+      expect(onToolsCalling).not.toHaveBeenCalled();
+      expect(events).toContainEqual({ data: 'Found it.', event: 'text' });
+      expect(events).toContainEqual({
+        data: { citations: [{ title: 'LobeHub', url: 'https://lobehub.com' }] },
+        event: 'grounding',
+      });
+      expect(events.at(-1)).toEqual({ data: 'message_stop', event: 'stop' });
+    });
+
+    it('keeps an app tool call after a web search at index 0 with only its own arguments', async () => {
+      const onToolsCalling = vi.fn();
+      const events = await collectEvents(
+        [
+          createMessageStart('msg_mixed', 'claude-sonnet-4-5', {
+            input_tokens: 10,
+            output_tokens: 1,
+          }),
+          ...webSearchBlocks(0),
+          {
+            type: 'content_block_start',
+            index: 2,
+            content_block: {
+              type: 'tool_use',
+              id: 'toolu_01',
+              name: 'realtime-weather____fetchCurrentWeather',
+              input: {},
+            },
+          },
+          {
+            type: 'content_block_delta',
+            index: 2,
+            delta: { type: 'input_json_delta', partial_json: '{"city": ' },
+          },
+          {
+            type: 'content_block_delta',
+            index: 2,
+            delta: { type: 'input_json_delta', partial_json: '"Hangzhou"}' },
+          },
+          { type: 'content_block_stop', index: 2 },
+          {
+            type: 'message_delta',
+            delta: { stop_reason: 'tool_use', stop_sequence: null },
+            usage: { output_tokens: 30 },
+          },
+        ],
+        onToolsCalling,
+      );
+
+      const toolCalls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
+
+      expect(toolCalls[0]).toEqual({
+        function: { arguments: '', name: 'realtime-weather____fetchCurrentWeather' },
+        id: 'toolu_01',
+        index: 0,
+        type: 'function',
+      });
+      expect(toolCalls.every((call) => call.index === 0)).toBe(true);
+      expect(toolCalls.map((call) => call.function.arguments).join('')).toBe(
+        '{"city": "Hangzhou"}',
+      );
+      expect(onToolsCalling).toHaveBeenCalledTimes(3);
+    });
+  });
   it('should handle un-normal block type', async () => {
     const streams = [
       createMessageStart('msg_01MNsLe7n1uVLtu6W8rCFujD', 'claude-3-7-sonnet-20250219', {

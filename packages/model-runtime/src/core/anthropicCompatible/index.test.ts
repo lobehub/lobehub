@@ -727,6 +727,47 @@ describe('createAnthropicCompatibleRuntime', () => {
     );
   });
 
+  it('should not report a native web search as a tool call when replaying a non-stream response', async () => {
+    const messagesCreate = vi.fn().mockResolvedValue({
+      content: [
+        {
+          id: 'srvtoolu_01',
+          input: { query: 'lobehub' },
+          name: 'web_search',
+          type: 'server_tool_use',
+        },
+        {
+          content: [{ title: 'LobeHub', type: 'web_search_result', url: 'https://lobehub.com' }],
+          tool_use_id: 'srvtoolu_01',
+          type: 'web_search_tool_result',
+        },
+        { text: 'Found it.', type: 'text' },
+      ],
+      id: 'msg_non_stream_search',
+      model: 'custom-model',
+      role: 'assistant',
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      type: 'message',
+      usage: { input_tokens: 12, output_tokens: 42 },
+    });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: createQuestionChatConfig(),
+      customClient: createCustomClientConfig(messagesCreate),
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+
+    const response = await runtime.chat({
+      messages: [{ content: 'Question', role: 'user' }],
+      model: 'custom-model',
+      stream: false,
+    });
+    const text = await response.text();
+
+    expect(text).not.toContain('event: tool_calls');
+    expect(text).toContain('event: text\ndata: "Found it."');
+  });
   it('should keep the real output tokens when replaying a non-stream response as a stream', async () => {
     const messagesCreate = vi.fn().mockResolvedValue({
       content: [{ text: 'Answer', type: 'text' }],
