@@ -6,6 +6,8 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LOADING_FLAT } from '@/const/message';
+
 import ContentBlock from './ContentBlock';
 import { isEmptyBlock } from './groupChain';
 
@@ -358,6 +360,27 @@ describe('AssistantGroup ContentBlock', () => {
     // gap slot in the block list and visibly push the next sibling down.
     const { container } = render(
       <ContentBlock assistantId="assistant-1" content="" id="block-1" />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows the running placeholder for the turn-start step', () => {
+    render(<ContentBlock assistantId="assistant-1" content={LOADING_FLAT} id="block-1" />);
+
+    expect(screen.getByText('message content')).toBeInTheDocument();
+  });
+
+  it('renders nothing for a later step that only holds the running placeholder', () => {
+    // Earlier output (e.g. a settled tool card) is already on screen and the
+    // composer status tray reports the run, so a second running line is noise.
+    const { container } = render(
+      <ContentBlock
+        hideStepLoading
+        assistantId="assistant-1"
+        content={LOADING_FLAT}
+        id="block-2"
+      />,
     );
 
     expect(container).toBeEmptyDOMElement();

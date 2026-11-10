@@ -10,7 +10,7 @@ import type { OperationStatus } from '@/store/chat/slices/operation/types';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import type { AssistantContentBlock } from '@/types/index';
 
-import { messageStateSelectors, useConversationStore } from '../../../store';
+import { inputSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
 import { formatReasoningDuration } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
@@ -97,6 +97,10 @@ const Group = memo<GroupChildrenProps>(
         ),
       isEqual,
     );
+    // The composer tray already reports a running turn; without one (goal
+    // supervision, channel reply panel, thread portal) the in-bubble lines are
+    // the only running signal and must stay.
+    const hasOpStatusTray = useConversationStore(inputSelectors.opStatusTrayMounted);
     const allBlocks = useMemo(() => chains.flatMap((chain) => chain.blocks), [chains]);
     const blockIds = useMemo(() => new Set(allBlocks.map((block) => block.id)), [allBlocks]);
     /** A stale group projection must receive persisted finish types before empty-block filtering. */
@@ -166,6 +170,7 @@ const Group = memo<GroupChildrenProps>(
       defaultWorkflowExpandLevel,
       disableEditing,
       enableProcessFold,
+      hideStepLoading: hasOpStatusTray,
       messageIndex,
     };
 
@@ -256,7 +261,7 @@ const Group = memo<GroupChildrenProps>(
             {foldProcess && renderChain(view, splits[index]!.finalSegments, 'final')}
           </Fragment>
         ))}
-        {!foldProcess && lastView.showTailRunningIndicator && (
+        {!foldProcess && !hasOpStatusTray && lastView.showTailRunningIndicator && (
           <ContentLoading id={lastView.id} startTime={lastBlockCreatedAt} />
         )}
       </Flexbox>

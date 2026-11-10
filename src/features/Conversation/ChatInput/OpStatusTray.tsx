@@ -246,6 +246,14 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
   const { t } = useTranslation(['chat', 'opStatusTray']);
   const context = useConversationStore(contextSelectors.context);
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
+  const setOpStatusTrayMounted = useConversationStore((s) => s.setOpStatusTrayMounted);
+
+  // Tell the message list a composer tray reports running turns here, so it
+  // can drop its redundant in-bubble running lines.
+  useEffect(() => {
+    setOpStatusTrayMounted(true);
+    return () => setOpStatusTrayMounted(false);
+  }, [setOpStatusTrayMounted]);
 
   const operationState = useChatStore((s) => {
     const ops = operationSelectors.getOperationsByContext(context)(s);

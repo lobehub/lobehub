@@ -12,6 +12,7 @@ import Group from './Group';
 
 let mockIsCollapsed = false;
 let mockIsGenerating = false;
+let mockOpStatusTrayMounted = false;
 let mockCreatingIds = new Set<string>();
 let mockDbMessages: {
   createdAt?: Date | number | string | null;
@@ -44,6 +45,9 @@ vi.mock('../../AgentCouncil/components/CouncilList', () => ({
 }));
 
 vi.mock('../../../store', () => ({
+  inputSelectors: {
+    opStatusTrayMounted: (s: { opStatusTrayMounted?: boolean }) => !!s.opStatusTrayMounted,
+  },
   messageStateSelectors: {
     isAssistantGroupItemGenerating: () => () => mockIsGenerating,
     isMessageCollapsed: () => () => mockIsCollapsed,
@@ -51,7 +55,7 @@ vi.mock('../../../store', () => ({
     isMessageGenerating: () => () => mockIsGenerating,
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
-    selector({ dbMessages: mockDbMessages }),
+    selector({ dbMessages: mockDbMessages, opStatusTrayMounted: mockOpStatusTrayMounted }),
 }));
 
 vi.mock('./SteerMessage', () => ({
@@ -129,6 +133,7 @@ vi.mock('./GroupItem', () => ({
     domId,
     error,
     hasToolsOverride,
+    hideStepLoading,
     id,
     isFirstBlock,
     tools,
@@ -139,11 +144,13 @@ vi.mock('./GroupItem', () => ({
     domId?: string;
     error?: unknown;
     hasToolsOverride?: boolean;
+    hideStepLoading?: boolean;
     id: string;
     isFirstBlock?: boolean;
     tools?: unknown[];
   }) => (
     <div
+      data-hide-step-loading={String(!!hideStepLoading)}
       data-testid="answer-segment"
       data-block={JSON.stringify({
         content,
@@ -200,6 +207,7 @@ describe('Group', () => {
     cleanup();
     mockIsCollapsed = false;
     mockIsGenerating = false;
+    mockOpStatusTrayMounted = false;
     mockCreatingIds = new Set();
     mockDbMessages = [];
     mockOperations = [];
@@ -648,6 +656,40 @@ describe('Group', () => {
     );
 
     expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
+  it('leaves the running signal to the composer tray when one is mounted', () => {
+    mockIsGenerating = true;
+    mockOpStatusTrayMounted = true;
+    render(
+      <Group
+        isLatestItem
+        blocks={[blk(completedToolInput()), blk({ content: LOADING_FLAT, id: 'block-2' })]}
+        id="assistant-1"
+        messageIndex={0}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('answer-segment').map((el) => el.dataset.hideStepLoading)).toEqual(
+      ['false', 'true'],
+    );
+  });
+
+  it('keeps later steps running placeholders without a composer tray', () => {
+    mockIsGenerating = true;
+    render(
+      <Group
+        isLatestItem
+        blocks={[blk(completedToolInput()), blk({ content: LOADING_FLAT, id: 'block-2' })]}
+        id="assistant-1"
+        messageIndex={0}
+      />,
+    );
+
+    expect(screen.getAllByTestId('answer-segment').map((el) => el.dataset.hideStepLoading)).toEqual(
+      ['false', 'false'],
+    );
   });
 
   it('does not add a tail indicator when the inline segment ends on a LOADING_FLAT placeholder', () => {

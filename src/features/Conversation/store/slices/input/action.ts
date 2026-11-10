@@ -43,6 +43,9 @@ export interface InputAction {
    */
   setEditor: (editor: any) => void;
 
+  /** Record whether an OpStatusTray is mounted for this conversation. */
+  setOpStatusTrayMounted: (mounted: boolean) => void;
+
   /** Arm (or, with `undefined`, disarm) a deferred send. */
   setScheduledSendAt: (runAt?: string) => void;
 
@@ -128,6 +131,11 @@ export const inputSlice: StateCreator<State & InputAction, [], [], InputAction> 
     set({ editor });
     // Sync to ChatStore's mainInputEditor for error recovery in sendMessage
     useChatStore.setState({ mainInputEditor: editor });
+  },
+
+  setOpStatusTrayMounted: (mounted) => {
+    if (get().opStatusTrayMounted === mounted) return;
+    set({ opStatusTrayMounted: mounted });
   },
 
   setScheduledSendAt: (runAt) => {

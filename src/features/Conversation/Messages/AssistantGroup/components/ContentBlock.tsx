@@ -35,6 +35,7 @@ const ContentBlock = memo<ContentBlockProps>(
     disableEditing,
     disableMarkdownStreaming,
     hasToolsOverride,
+    hideStepLoading,
     metadata,
     projectionKey,
     showTaskCompletionNotice,
@@ -70,7 +71,11 @@ const ContentBlock = memo<ContentBlockProps>(
     const hasTools = !!tools?.length;
     const showReasoning = hasRenderableReasoning(reasoning) || (!reasoning && isReasoning);
     const hasContent = !!content && content !== LOADING_FLAT;
-    const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
+    // A step that only holds the LOADING_FLAT placeholder renders a "…is
+    // running" line. Past the turn's first step the composer status tray
+    // already shows the run is working, so skip it there.
+    const showStepLoading = content === LOADING_FLAT && !hideStepLoading;
+    const showMessageContent = hasContent || showStepLoading || hasTools;
 
     // The store owns the whole decision (resume a hetero session, continue the
     // group in place, or replace the turn) because only it can guarantee a

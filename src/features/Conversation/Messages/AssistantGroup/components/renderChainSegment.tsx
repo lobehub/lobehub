@@ -17,6 +17,8 @@ export interface ChainSegmentRenderOptions {
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
   disableEditing?: boolean;
   enableProcessFold?: boolean;
+  /** Hide later steps' running placeholders; see `RenderableAssistantContentBlock.hideStepLoading`. */
+  hideStepLoading?: boolean;
   messageIndex: number;
 }
 
@@ -43,7 +45,13 @@ export const renderChainSegment = (
   options: ChainSegmentRenderOptions,
 ): ReactNode => {
   const { contentId, id, isGenerating, lastBlockId, segments } = view;
-  const { defaultWorkflowExpandLevel, disableEditing, enableProcessFold, messageIndex } = options;
+  const {
+    defaultWorkflowExpandLevel,
+    disableEditing,
+    enableProcessFold,
+    hideStepLoading,
+    messageIndex,
+  } = options;
   const index = segments.indexOf(segment);
 
   if (segment.kind === 'workflow') {
@@ -60,6 +68,7 @@ export const renderChainSegment = (
             assistantId={id}
             contentId={contentId}
             disableEditing={disableEditing}
+            hideStepLoading={hideStepLoading && (index > 0 || blockIndex > 0)}
             key={item.renderKey ?? `${id}.workflow-inline.${index}.${blockIndex}`}
             messageIndex={messageIndex}
           />
@@ -114,6 +123,7 @@ export const renderChainSegment = (
       assistantId={id}
       contentId={contentId}
       disableEditing={disableEditing}
+      hideStepLoading={hideStepLoading && index > 0}
       key={item.renderKey ?? `${id}.${item.id}.${index}`}
       messageIndex={messageIndex}
     />
