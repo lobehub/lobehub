@@ -128,7 +128,10 @@ const receiveOnlyMessage = () => 'This address can only receive mail. Upgrade to
  * Every send goes through {@link AgentAccountService.send}, so a person is held
  * to the same lifecycle, permission, capability and provider-quota checks as
  * the agent. The relay gates in the tool runtime are not applied: they guard
- * against a prompt-injected model, and here a person is writing.
+ * against a prompt-injected model, and here a person is writing. That trust
+ * is the caller's to establish: the mail router only lets an interactive
+ * sign-in send (`isInteractiveSendOrigin`), never an API key, CLI or agent
+ * token, so this must not be reached from anything an agent drives.
  */
 export class AgentMailboxService {
   readonly drafts: AgentMailDraftModel;

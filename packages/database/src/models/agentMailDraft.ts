@@ -167,6 +167,19 @@ export class AgentMailDraftModel {
     return row?.value ?? 0;
   };
 
+  /** Drafts of each of these addresses in one query; addresses without any are left out. */
+  countByAccount = async (
+    accountIds: string[],
+  ): Promise<{ accountId: string; drafts: number }[]> => {
+    if (accountIds.length === 0) return [];
+
+    return this.db
+      .select({ accountId: agentMailDrafts.accountId, drafts: count() })
+      .from(agentMailDrafts)
+      .where(and(this.ownership(), inArray(agentMailDrafts.accountId, accountIds)))
+      .groupBy(agentMailDrafts.accountId);
+  };
+
   /** The agents owning these drafts, for the permission check before a write. */
   listAgentIds = async (ids: string[]): Promise<string[]> => {
     if (ids.length === 0) return [];

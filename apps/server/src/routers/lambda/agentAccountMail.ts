@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentMailModel } from '@/database/models/agentMail';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -12,6 +13,7 @@ import { AgentAccountService, isAgentAccountError } from '@/server/services/agen
 import { AgentAccountError } from '@/server/services/agentIdentity/errors';
 import { AgentMailboxService } from '@/server/services/agentIdentity/mailbox';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 /**
@@ -43,6 +45,72 @@ const mailProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
 });
 
 const mailWriteProcedure = mailProcedure.use(withScopedPermission('agent:update'));
+
+/** Mail read through the deployment's full-text search provider. */
+const mailSearchProcedure = mailProcedure.use(async (opts) => {
+  const workspaceId = opts.ctx.workspaceId ?? undefined;
+  const ftsSearchRepo = await createFtsSearchRepo({
+    db: opts.ctx.serverDB,
+    usage: 'agent_mail_search',
+    userId: opts.ctx.userId,
+    workspaceId,
+  });
+
+  return opts.next({
+    ctx: {
+      mailSearch: new AgentMailModel(
+        opts.ctx.serverDB,
+        opts.ctx.userId,
+        workspaceId,
+        ftsSearchRepo,
+      ),
+    },
+  });
+});
+
+/**
+ * First-party apps a person signs into (desktop, mobile). Their OIDC tokens
+ * stand for that person at the keyboard, like a browser session does.
+ */
+const INTERACTIVE_OIDC_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile']);
+
+interface SendOriginContext {
+  actingAgentId?: string | null;
+  apiKeyScopes?: string[] | null;
+  oidcAuth?: { purpose?: unknown } | null;
+  oidcClientId?: string;
+  spendOrigin?: unknown;
+}
+
+/**
+ * Whether this request is a person writing in a LobeHub app: a browser
+ * session, or the desktop / mobile app's sign-in.
+ *
+ * Sending here skips the agent's relay gates (the checks that stop a
+ * prompt-injected model from relaying another sender's link, token or code),
+ * because a person is choosing what to write. That only holds when a person is
+ * at the keyboard. API keys, the `lh` CLI and operation tokens are what agents
+ * run with, and a server-side caller acts for an agent; none of them may send
+ * through this route, or an agent could route around its own gates.
+ */
+export const isInteractiveSendOrigin = (ctx: SendOriginContext): boolean => {
+  if (ctx.actingAgentId || ctx.spendOrigin) return false;
+  if (ctx.apiKeyScopes !== undefined) return false;
+  if (!ctx.oidcAuth) return true;
+  if (ctx.oidcAuth.purpose === 'hetero-operation') return false;
+
+  return !!ctx.oidcClientId && INTERACTIVE_OIDC_CLIENTS.has(ctx.oidcClientId);
+};
+
+const mailSendProcedure = mailWriteProcedure.use(async (opts) => {
+  if (!isInteractiveSendOrigin(opts.ctx as SendOriginContext)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Mail can only be sent here from a signed-in LobeHub app.',
+    });
+  }
+  return opts.next();
+});
 
 const TRPC_CODE_OF: Partial<Record<AgentAccountError['code'], TRPCError['code']>> = {
   account_not_found: 'NOT_FOUND',
@@ -166,8 +234,13 @@ export const agentAccountMailRouter = router({
       return ctx.mailbox.mail.listConversations(input);
     }),
 
-  /** Subject, sender, recipients and body, across everything not trashed. */
-  search: mailProcedure
+  /**
+   * Subject, sender, recipients and body, across everything not trashed, as
+   * conversations built from the matching mails. `truncated` says the search
+   * read only its best matches. A search provider failure is an error, never
+   * an empty result.
+   */
+  search: mailSearchProcedure
     .input(
       scopeInput.extend({
         before: cursorSchema.optional(),
@@ -177,7 +250,30 @@ export const agentAccountMailRouter = router({
     )
     .query(async ({ ctx, input }) => {
       await assertCanSee(ctx, input.agentId);
-      return ctx.mailbox.mail.listConversations(input);
+      return ctx.mailSearch.searchConversations(input);
+    }),
+
+  /**
+   * Unread inbox mail and drafts of several addresses at once, for an address
+   * list. Every requested id is answered; one out of the caller's scope reads
+   * as zero.
+   */
+  accountCounts: mailProcedure
+    .input(z.object({ accountIds: z.array(z.string().uuid()).min(1).max(100) }))
+    .query(async ({ ctx, input }) => {
+      const accountIds = [...new Set(input.accountIds)];
+      const [unread, drafts] = await Promise.all([
+        ctx.mailbox.mail.countUnreadByAccount(accountIds),
+        ctx.mailbox.drafts.countByAccount(accountIds),
+      ]);
+      const unreadOf = new Map(unread.map((row) => [row.accountId, row.unread]));
+      const draftsOf = new Map(drafts.map((row) => [row.accountId, row.drafts]));
+
+      return accountIds.map((accountId) => ({
+        accountId,
+        drafts: draftsOf.get(accountId) ?? 0,
+        unread: unreadOf.get(accountId) ?? 0,
+      }));
     }),
 
   counts: mailProcedure.input(scopeInput).query(async ({ ctx, input }) => {
@@ -259,8 +355,8 @@ export const agentAccountMailRouter = router({
       };
     }),
 
-  /** Write, reply, reply-all or forward as a person. */
-  send: mailWriteProcedure
+  /** Write, reply, reply-all or forward as a person; see {@link isInteractiveSendOrigin}. */
+  send: mailSendProcedure
     .input(
       z.object({
         accountId: z.string().uuid(),
@@ -338,7 +434,7 @@ export const agentAccountMailRouter = router({
         return { count: await ctx.mailbox.drafts.delete(input.ids) };
       }),
 
-    send: mailWriteProcedure
+    send: mailSendProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) =>
         ctx.mailbox.sendDraft(input.id).catch((error: unknown) => mapMailError(error, 'send')),

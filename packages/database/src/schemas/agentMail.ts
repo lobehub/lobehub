@@ -11,16 +11,6 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * The relay checks' view of a purged mail: `text` is the whole mail compacted to
- * letters and digits, `secrets` the links, tokens and mixed runs found in it.
- * Stored when the content is wiped, so the row keeps refusing to be relayed.
- */
-export interface AgentMailRelayGuard {
-  secrets: string[];
-  text: string;
-}
-
-/**
  * Mail an agent's mail account received or sent — one row per message.
  *
  * Everything mail-specific lives here: addressing, subject, body, the RFC
@@ -100,8 +90,10 @@ export const agentMails = pgTable(
     /** Moved to the trash; restoring clears it. */
     trashedAt: timestamptz('trashed_at'),
     /**
-     * Permanently deleted: content is wiped but the row stays, so delivery
-     * idempotency, wake budgets and relay checks keep counting it.
+     * Permanently deleted: subject, body, names, recipients, attachments and
+     * codes are wiped. The row stays, with the sender and thread keys, so
+     * delivery idempotency and wake budgets keep counting it; the relay checks
+     * no longer see what it said.
      */
     purgedAt: timestamptz('purged_at'),
     /**
@@ -109,15 +101,6 @@ export const agentMails = pgTable(
      * restored while it is being destroyed on the provider.
      */
     purgeClaimedAt: timestamptz('purge_claimed_at'),
-    /**
-     * What the relay checks read out of `subject` and `text`, taken before a
-     * purge wipes them: the whole mail compacted to letters and digits, and the
-     * secrets extracted from it. Without it, purging a message from another
-     * sender would delete the evidence that stops an unattended reply from
-     * relaying its link or token to somebody else.
-     */
-    relayGuard: jsonb('relay_guard').$type<AgentMailRelayGuard>(),
-
     ...timestamps,
   },
   (t) => [

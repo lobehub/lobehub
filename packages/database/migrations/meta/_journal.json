@@ -1491,6 +1491,13 @@
       "when": 1794296581452,
       "tag": "0212_workspace_member_config",
       "breakpoints": true
+    },
+    {
+      "idx": 213,
+      "version": "7",
+      "when": 1794330757664,
+      "tag": "0213_agent_mail_mailbox",
+      "breakpoints": true
     }
   ],
   "version": "6"

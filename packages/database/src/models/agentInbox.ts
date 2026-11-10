@@ -138,6 +138,12 @@ const summaryColumns = {
   createdAt: agentInboxMessages.createdAt,
   from: agentInboxMessages.sender,
   id: agentInboxMessages.id,
+  markedUnread: sql<boolean>`exists (
+    select 1 from ${agentMails}
+    where ${agentInboxMessages.sourceType} = 'mail'
+      and ${agentMails.id} = ${agentInboxMessages.sourceId}
+      and ${agentMails.markedUnreadAt} is not null
+  )`,
   preview: agentInboxMessages.preview,
   readAt: agentInboxMessages.readAt,
   receivedAt: agentInboxMessages.receivedAt,
@@ -498,7 +504,52 @@ export class AgentInboxModel {
       )
       .returning({ id: agentInboxMessages.id });
 
-    return rows.length;
+    // "All read" also answers a person's request to see mail unread, or the
+    // mailbox would keep counting what the inbox now shows as read.
+    const cleared = await this.db
+      .update(agentMails)
+      .set({ markedUnreadAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          isNotNull(agentMails.markedUnreadAt),
+          inArray(
+            agentMails.id,
+            this.db
+              .select({ id: agentInboxMessages.sourceId })
+              .from(agentInboxMessages)
+              .where(
+                and(
+                  eq(agentInboxMessages.sourceType, 'mail'),
+                  eq(agentInboxMessages.agentId, agentId),
+                  accountId ? eq(agentInboxMessages.accountId, accountId) : undefined,
+                  this.ownership(),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ mailId: agentMails.id });
+
+    // A mail can be both unread and marked unread; count each item once.
+    const touched = new Set(rows.map((row) => row.id));
+    const markedOnly =
+      cleared.length > 0
+        ? await this.db
+            .select({ id: agentInboxMessages.id })
+            .from(agentInboxMessages)
+            .where(
+              and(
+                eq(agentInboxMessages.sourceType, 'mail'),
+                inArray(
+                  agentInboxMessages.sourceId,
+                  cleared.map((row) => row.mailId),
+                ),
+              ),
+            )
+        : [];
+    for (const row of markedOnly) touched.add(row.id);
+
+    return touched.size;
   };
 
   // --------------- Reads (credential-free, always) ---------------

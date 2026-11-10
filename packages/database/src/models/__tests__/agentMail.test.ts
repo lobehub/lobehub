@@ -147,14 +147,13 @@ describe('AgentMailModel', () => {
     ).toBeUndefined();
   });
 
-  it('keeps refusing to relay a secret after the mail that carried it is purged', async () => {
-    // Codes alone are not the whole secret surface: a reset link rides in the
-    // link and its token, which no code extraction keeps.
+  it('stops covering a mail once it is purged: deleting means deleting', async () => {
     const { mail: stored } = await AgentMailModel.record(
       serverDB,
       mail({
+        codes: ['839201'],
         providerMessageId: 'msg_purged',
-        text: 'Reset your password at https://service.com/reset?token=AB12CD34EF5678',
+        text: 'Reset your password at https://service.com/reset?token=AB12CD34EF5678 code 839201',
       }),
       { userId },
     );
@@ -173,34 +172,26 @@ describe('AgentMailModel', () => {
     expect(
       await model.findSecretRepeatedFromOtherSender({ ...window, compactText: reply }),
     ).toEqual({ from: 'login@service.com' });
+    expect(await model.listCodesFromOtherSenders(window)).toEqual([
+      { code: '839201', from: 'login@service.com' },
+    ]);
 
-    // Purging wipes the content for good…
     await model.moveToTrash([stored.id]);
     expect(await model.purge([stored.id])).toBe(1);
 
     const [purged] = await serverDB
-      .select({ purgedAt: agentMails.purgedAt, text: agentMails.text })
+      .select({ codes: agentMails.codes, purgedAt: agentMails.purgedAt, text: agentMails.text })
       .from(agentMails)
       .where(eq(agentMails.id, stored.id));
-    expect(purged.text).toBe('');
+    expect(purged).toMatchObject({ codes: [], text: '' });
     expect(purged.purgedAt).not.toBeNull();
 
-    // …but the reply checks still see what it said: deleting a mail must not
-    // become the way to relay its link or token to another sender.
-    expect(await model.findTextFromOtherSender({ ...window, candidates })).toEqual({
-      from: 'login@service.com',
-    });
+    // Nothing of what it said is kept, so the relay checks no longer see it.
+    expect(await model.findTextFromOtherSender({ ...window, candidates })).toBeUndefined();
     expect(
       await model.findSecretRepeatedFromOtherSender({ ...window, compactText: reply }),
-    ).toEqual({ from: 'login@service.com' });
-
-    // A reply that shares nothing with it is still allowed through.
-    expect(
-      await model.findSecretRepeatedFromOtherSender({
-        ...window,
-        compactText: 'nothingincommonhere',
-      }),
     ).toBeUndefined();
+    expect(await model.listCodesFromOtherSenders(window)).toEqual([]);
   });
 
   it('answers no secret when there is nothing to look for', async () => {

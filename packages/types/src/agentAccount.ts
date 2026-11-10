@@ -227,7 +227,13 @@ export type AgentInboxMessageSummary = Pick<
   | 'sourceType'
   | 'subject'
   | 'threadKey'
->;
+> & {
+  /**
+   * A person asked to see this mail as unread. Kept apart from `readAt`, which
+   * wakes key off: show the item unread when `readAt` is null or this is set.
+   */
+  markedUnread: boolean;
+};
 
 /**
  * The inbox as one glance: how much is waiting. Injected into the model's

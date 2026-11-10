@@ -16,14 +16,18 @@ import {
   isNotNull,
   isNull,
   lt,
+  notExists,
   or,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
+import type { FtsSearchCandidateSource } from '../repositories/ftsSearch/types';
 import type { AgentMailItem, NewAgentMail } from '../schemas';
-import { agentInboxMessages, agentMails } from '../schemas';
+import { agentInboxMessages, agentMails, signals } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { agentUsableBy } from '../utils/agent-access';
+import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../utils/bm25';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -74,11 +78,53 @@ export interface ListAgentMailConversationsParams {
   accountId?: string;
   agentId: string;
   before?: AgentMailCursor;
-  /** Omitted with a `query`: everything that is not trashed. */
+  /** Omitted with `mailIds`: everything that is not trashed. */
   folder?: AgentMailFolder;
   limit?: number;
-  /** Substring of the subject, sender, recipients or body. */
-  query?: string;
+  /**
+   * Narrows the view to these mails — a search's matches. Conversations are
+   * then built from the matching mails only.
+   */
+  mailIds?: string[];
+}
+
+export interface SearchAgentMailConversationsParams {
+  accountId?: string;
+  agentId: string;
+  before?: AgentMailCursor;
+  limit?: number;
+  /** Words looked for in the subject, sender, recipients and body. */
+  query: string;
+}
+
+export interface SearchAgentMailConversationsResult {
+  items: Awaited<ReturnType<AgentMailModel['listConversations']>>;
+  /**
+   * The search read only its best {@link AGENT_MAIL_SEARCH_POOL} matches and
+   * there were more; refining the words finds the rest.
+   */
+  truncated: boolean;
+}
+
+/** How many matching mails one search reads, best first; its pages are built from them. */
+export const AGENT_MAIL_SEARCH_POOL = 200;
+
+/** BM25 fields of `agent_mails_bm25_idx`; recipients are its JSON fields. */
+const BM25_MAIL_FIELDS = [
+  'subject',
+  'from_address',
+  'from_name',
+  'text',
+  'to.address',
+  'to.name',
+  'cc.address',
+  'cc.name',
+];
+
+/** One address's announced numbers, for the address list. */
+export interface AgentMailAccountCounts {
+  accountId: string;
+  unread: number;
 }
 
 /** What is enough to delete a message's provider-side copy. */
@@ -101,36 +147,38 @@ const inboxItemOfMail = and(
  */
 const isUnread = sql<boolean>`(${agentMails.markedUnreadAt} is not null or (${agentMails.direction} = 'inbound' and ${agentInboxMessages.readAt} is null))`;
 
-/** A mail's conversation: its thread within the address, or the mail alone. */
-const conversationKey = sql`${agentMails.accountId}, coalesce(${agentMails.threadKey}, ${agentMails.id}::text)`;
+/** A later mail of the same conversation, when looking for each one's newest. */
+const newerMails = alias(agentMails, 'newer_mails');
 
-/**
- * Must stay identical to `agent_mails_search_trgm_idx`, or the index stops
- * matching and every search scans.
- */
-const searchableText = sql`lower(coalesce(${agentMails.subject}, '') || ' ' || ${agentMails.fromAddress} || ' ' || coalesce(${agentMails.fromName}, '') || ' ' || ${agentMails.to}::text || ' ' || ${agentMails.cc}::text || ' ' || ${agentMails.text})`;
+type AgentMailTable = typeof agentMails | typeof newerMails;
 
-const escapeLike = (value: string) => value.replaceAll(/[%_\\]/g, '\\$&');
-
-const folderFilter = (folder: AgentMailFolder | undefined) => {
+const folderFilter = (folder: AgentMailFolder | undefined, t: AgentMailTable = agentMails) => {
   switch (folder) {
     case 'inbox': {
-      return and(eq(agentMails.direction, 'inbound'), isNull(agentMails.trashedAt));
+      return and(eq(t.direction, 'inbound'), isNull(t.trashedAt));
     }
     case 'sent': {
-      return and(eq(agentMails.direction, 'outbound'), isNull(agentMails.trashedAt));
+      return and(eq(t.direction, 'outbound'), isNull(t.trashedAt));
     }
     case 'starred': {
-      return and(isNotNull(agentMails.starredAt), isNull(agentMails.trashedAt));
+      return and(isNotNull(t.starredAt), isNull(t.trashedAt));
     }
     case 'trash': {
-      return isNotNull(agentMails.trashedAt);
+      return isNotNull(t.trashedAt);
     }
     default: {
-      return isNull(agentMails.trashedAt);
+      return isNull(t.trashedAt);
     }
   }
 };
+
+/** Which of a table's mails a list shows, short of ownership. */
+const viewFilter = (params: ListAgentMailConversationsParams, t: AgentMailTable = agentMails) =>
+  and(
+    isNull(t.purgedAt),
+    folderFilter(params.folder, t),
+    params.mailIds ? inArray(t.id, params.mailIds) : undefined,
+  );
 
 /**
  * How long a purge holds a mail while its provider copy is deleted. A live purge
@@ -145,18 +193,13 @@ const purgeClaimFree = () =>
     lt(agentMails.purgeClaimedAt, sql`now() - make_interval(secs => ${PURGE_CLAIM_LEASE_SECONDS})`),
   );
 
-/** A recipient list reduced to its addresses, for what a purge must keep. */
-const bareAddresses = (column: typeof agentMails.to | typeof agentMails.cc) =>
-  sql`(select coalesce(jsonb_agg(jsonb_build_object('address', recipient->>'address')), '[]'::jsonb) from jsonb_array_elements(${column}) as recipient)`;
-
 /** Lowercased and trimmed, the way `from_address` is stored and compared. */
 export const normalizeMailAddress = (address: string): string => address.trim().toLowerCase();
 
 /**
  * The secrets a mail carries: links, long tokens, and runs of six or more
- * letters and digits that mix both — lowercased, separators stripped. Read from
- * `subject` and `text` while they still exist, so a purge can keep the material
- * {@link AgentMailModel.findSecretRepeatedFromOtherSender} needs.
+ * letters and digits that mix both — lowercased, separators stripped. See
+ * {@link AgentMailModel.findSecretRepeatedFromOtherSender}.
  */
 const secretSource = (subject: typeof agentMails.subject, text: typeof agentMails.text) => {
   const source = sql`coalesce(${subject}, '') || ' ' || ${text}`;
@@ -175,18 +218,6 @@ const secretSource = (subject: typeof agentMails.subject, text: typeof agentMail
 };
 
 /**
- * Everything both relay checks need, taken in one expression so a purge can
- * keep it after wiping `subject` and `text`: the mail compacted to letters and
- * digits (what `findTextFromOtherSender` matches candidates in), and the secrets
- * it carried (what `findSecretRepeatedFromOtherSender` looks for meanwhile).
- */
-const relayGuardOf = (subject: typeof agentMails.subject, text: typeof agentMails.text) =>
-  sql`jsonb_build_object(
-    'text', lower(regexp_replace(coalesce(${subject}, '') || ' ' || ${text}, '[^0-9A-Za-z]', '', 'g')),
-    'secrets', coalesce((select jsonb_agg(distinct s.secret) from (${secretSource(subject, text)}) as s), '[]'::jsonb)
-  )`;
-
-/**
  * Mail an agent's mail accounts received or sent.
  *
  * Inbound mail is recorded by the inbound edge (unscoped, before any user is
@@ -199,10 +230,22 @@ export class AgentMailModel {
   private userId: string;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
+
+  /**
+   * `ftsSearchCandidateSource` is the deployment's full-text search
+   * (`createFtsSearchRepo`); only {@link searchConversations} needs it.
+   */
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private ownership = () => {
@@ -276,7 +319,8 @@ export class AgentMailModel {
    * agent's own words are not another sender's secret.
    *
    * `candidates` must already be normalised the same way (lowercased, non
-   * alphanumerics removed).
+   * alphanumerics removed). A purged mail has no subject or body left, so it
+   * no longer counts.
    */
   findTextFromOtherSender = async (params: {
     agentId: string;
@@ -299,9 +343,7 @@ export class AgentMailModel {
           or(
             ...params.candidates.map(
               (candidate) =>
-                // A purged mail has no subject or body left; what it said is in
-                // `relay_guard`, so deleting it cannot quietly lift this check.
-                sql`(strpos(lower(regexp_replace(coalesce(${agentMails.subject}, '') || ' ' || ${agentMails.text}, '[^0-9A-Za-z]', '', 'g')), ${candidate}) > 0 or strpos(coalesce(${agentMails.relayGuard}->>'text', ''), ${candidate}) > 0)`,
+                sql`strpos(lower(regexp_replace(coalesce(${agentMails.subject}, '') || ' ' || ${agentMails.text}, '[^0-9A-Za-z]', '', 'g')), ${candidate}) > 0`,
             ),
           ),
         ),
@@ -315,7 +357,8 @@ export class AgentMailModel {
   /**
    * Every distinct code extracted from inbound mail sent by someone other than
    * `recipient` at or after `since`, with its sender. The whole window is read in
-   * one query (codes only), so a flood of later mail cannot hide one.
+   * one query (codes only), so a flood of later mail cannot hide one. A purged
+   * mail's codes are wiped with it.
    */
   listCodesFromOtherSenders = async (params: {
     agentId: string;
@@ -350,7 +393,7 @@ export class AgentMailModel {
    * a link carrying it as a parameter), the stripped text still contains it.
    *
    * `compactText` must be the outgoing text lowercased with non alphanumerics
-   * removed.
+   * removed. A purged mail has no subject or body left, so it no longer counts.
    */
   findSecretRepeatedFromOtherSender = async (params: {
     agentId: string;
@@ -361,8 +404,7 @@ export class AgentMailModel {
     if (params.compactText.length === 0) return undefined;
 
     // Each kind of secret is matched on its own, so a long fragment does not
-    // hide the shorter token inside it. A purged mail has no subject or body
-    // left: the secrets read out of it before the wipe live in `relay_guard`.
+    // hide the shorter token inside it.
     const secrets = secretSource(agentMails.subject, agentMails.text);
 
     const [row] = await this.db
@@ -375,16 +417,9 @@ export class AgentMailModel {
           eq(agentMails.direction, 'inbound'),
           gte(agentMails.deliveredAt, params.since),
           sql`${agentMails.fromAddress} <> ${normalizeMailAddress(params.recipient)}`,
-          sql`(
-            exists (
-              select 1 from (${secrets}) as s
-              where length(s.secret) >= 6 and strpos(${params.compactText}, s.secret) > 0
-            )
-            or exists (
-              select 1
-              from jsonb_array_elements_text(coalesce(${agentMails.relayGuard}->'secrets', '[]'::jsonb)) as g(secret)
-              where length(g.secret) >= 6 and strpos(${params.compactText}, g.secret) > 0
-            )
+          sql`exists (
+            select 1 from (${secrets}) as s
+            where length(s.secret) >= 6 and strpos(${params.compactText}, s.secret) > 0
           )`,
         ),
       )
@@ -438,51 +473,24 @@ export class AgentMailModel {
   // --------------- Mailbox (what a person files and reads) ---------------
 
   /**
-   * One folder (or a search) as conversations, newest first: each row is the
-   * newest mail of its conversation inside the view, with how many mails the
-   * view holds and whether any is unread or starred. Trash sorts by when it was
-   * thrown away, so what was just binned is on top.
+   * One folder (or a search's matches) as conversations, newest first: each row
+   * is the newest mail of its conversation inside the view, with how many mails
+   * the view holds and whether any is unread or starred. Trash sorts by when it
+   * was thrown away, so what was just binned is on top.
+   *
+   * A page costs its own size, not the folder's: the newest mails of their
+   * conversations are walked off the folder index from the cursor down (each
+   * checked against its thread through `agent_mails_account_thread_idx`), and
+   * the counts are then taken for those conversations only.
    */
   listConversations = async (params: ListAgentMailConversationsParams) => {
-    const sortColumn = params.folder === 'trash' ? agentMails.trashedAt : agentMails.deliveredAt;
-    const keyword = params.query?.trim();
+    if (params.mailIds?.length === 0) return [];
 
-    const ranked = this.db
-      .select({
-        anyStarred:
-          sql<boolean>`bool_or(${agentMails.starredAt} is not null) over (partition by ${conversationKey})`.as(
-            'any_starred',
-          ),
-        anyUnread: sql<boolean>`bool_or(${isUnread}) over (partition by ${conversationKey})`.as(
-          'any_unread',
-        ),
-        mailCount: sql<number>`(count(*) over (partition by ${conversationKey}))::int`.as(
-          'mail_count',
-        ),
-        mailId: sql<string>`${agentMails.id}`.as('mail_id'),
-        position:
-          sql<number>`row_number() over (partition by ${conversationKey} order by ${sortColumn} desc, ${agentMails.id} desc)`.as(
-            'position',
-          ),
-        sortAt: sql<Date>`${sortColumn}`.mapWith(agentMails.deliveredAt).as('sort_at'),
-      })
-      .from(agentMails)
-      .leftJoin(agentInboxMessages, inboxItemOfMail)
-      .where(
-        and(
-          this.ownership(),
-          eq(agentMails.agentId, params.agentId),
-          params.accountId ? eq(agentMails.accountId, params.accountId) : undefined,
-          isNull(agentMails.purgedAt),
-          folderFilter(params.folder),
-          keyword
-            ? sql`${searchableText} like ${`%${escapeLike(keyword.toLowerCase())}%`}`
-            : undefined,
-        ),
-      )
-      .as('ranked');
+    const trash = params.folder === 'trash';
+    const sortOf = (t: AgentMailTable) => (trash ? t.trashedAt : t.deliveredAt);
+    const sortColumn = sortOf(agentMails);
 
-    return this.db
+    const heads = await this.db
       .select({
         accountId: agentMails.accountId,
         agentId: agentMails.agentId,
@@ -491,34 +499,173 @@ export class AgentMailModel {
         fromName: agentMails.fromName,
         hasAttachments: sql<boolean>`jsonb_array_length(${agentMails.attachments}) > 0`,
         id: agentMails.id,
-        isStarred: ranked.anyStarred,
-        isUnread: ranked.anyUnread,
-        mailCount: ranked.mailCount,
+        isStarred: sql<boolean>`${agentMails.starredAt} is not null`,
+        isUnread,
         preview: sql<string>`left(${agentMails.text}, 200)`,
-        sortAt: ranked.sortAt,
+        sortAt: sql<Date>`${sortColumn}`.mapWith(agentMails.deliveredAt),
         subject: agentMails.subject,
         threadKey: agentMails.threadKey,
         to: agentMails.to,
         trashedAt: agentMails.trashedAt,
       })
-      .from(ranked)
-      .innerJoin(agentMails, eq(agentMails.id, sql`${ranked.mailId}`))
+      .from(agentMails)
+      .leftJoin(agentInboxMessages, inboxItemOfMail)
       .where(
         and(
-          eq(ranked.position, 1),
-          params.before
-            ? or(
-                lt(ranked.sortAt, params.before.sortAt),
-                and(
-                  eq(ranked.sortAt, params.before.sortAt),
-                  sql`${ranked.mailId} < ${params.before.id}::uuid`,
+          this.ownership(),
+          eq(agentMails.agentId, params.agentId),
+          params.accountId ? eq(agentMails.accountId, params.accountId) : undefined,
+          viewFilter(params),
+          // The newest of its conversation in this view: nothing in the same
+          // thread sorts after it. Unthreaded mail is a conversation of one.
+          or(
+            isNull(agentMails.threadKey),
+            notExists(
+              this.db
+                .select({ id: newerMails.id })
+                .from(newerMails)
+                .where(
+                  and(
+                    eq(newerMails.accountId, agentMails.accountId),
+                    eq(newerMails.threadKey, agentMails.threadKey),
+                    viewFilter(params, newerMails),
+                    sql`(${sortOf(newerMails)}, ${newerMails.id}) > (${sortColumn}, ${agentMails.id})`,
+                  ),
                 ),
-              )
+            ),
+          ),
+          params.before
+            ? sql`(${sortColumn}, ${agentMails.id}) < (${params.before.sortAt.toISOString()}::timestamptz, ${params.before.id}::uuid)`
             : undefined,
         ),
       )
-      .orderBy(desc(ranked.sortAt), desc(sql`${ranked.mailId}`))
+      .orderBy(desc(sortColumn), desc(agentMails.id))
       .limit(params.limit ?? 30);
+
+    const threaded = heads.filter((head) => head.threadKey);
+    if (threaded.length === 0) return heads.map((head) => ({ ...head, mailCount: 1 }));
+
+    // Same view, these conversations only.
+    const totals = await this.db
+      .select({
+        accountId: agentMails.accountId,
+        anyStarred: sql<boolean>`bool_or(${agentMails.starredAt} is not null)`,
+        anyUnread: sql<boolean>`bool_or(${isUnread})`,
+        mailCount: sql<number>`count(*)::int`,
+        threadKey: agentMails.threadKey,
+      })
+      .from(agentMails)
+      .leftJoin(agentInboxMessages, inboxItemOfMail)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            ...threaded.map((head) =>
+              and(
+                eq(agentMails.accountId, head.accountId),
+                eq(agentMails.threadKey, head.threadKey!),
+              ),
+            ),
+          ),
+          viewFilter(params),
+        ),
+      )
+      .groupBy(agentMails.accountId, agentMails.threadKey);
+
+    const totalOf = new Map(totals.map((row) => [`${row.accountId}\n${row.threadKey}`, row]));
+
+    return heads.map((head) => {
+      const total = head.threadKey
+        ? totalOf.get(`${head.accountId}\n${head.threadKey}`)
+        : undefined;
+      if (!total) return { ...head, mailCount: 1 };
+
+      return {
+        ...head,
+        isStarred: total.anyStarred,
+        isUnread: total.anyUnread,
+        mailCount: total.mailCount,
+      };
+    });
+  };
+
+  /**
+   * Search everything not trashed, as conversations built from the matching
+   * mails. The deployment's search provider picks the best
+   * {@link AGENT_MAIL_SEARCH_POOL} matches; scope, visibility and paging are
+   * then applied here, so the provider never decides what a caller may see.
+   * A provider failure is thrown, never answered with a cruder search.
+   */
+  searchConversations = async (
+    params: SearchAgentMailConversationsParams,
+  ): Promise<SearchAgentMailConversationsResult> => {
+    const text = params.query.trim();
+    if (!text) return { items: [], truncated: false };
+
+    const { ids, truncated } = await this.findSearchMatches(params, text);
+    if (ids.length === 0) return { items: [], truncated };
+
+    const items = await this.listConversations({
+      accountId: params.accountId,
+      agentId: params.agentId,
+      before: params.before,
+      limit: params.limit,
+      mailIds: ids,
+    });
+
+    return { items, truncated };
+  };
+
+  private findSearchMatches = async (
+    params: SearchAgentMailConversationsParams,
+    text: string,
+  ): Promise<{ ids: string[]; truncated: boolean }> => {
+    const source = this.ftsSearchCandidateSource;
+    if (!source) throw new Error('Agent mail search needs the full-text search repository');
+
+    if (source.ftsSearchCandidateEnabled) {
+      const result = await source.ftsSearchCandidates({
+        entity: 'agentMails',
+        filters: { mailScope: { accountId: params.accountId, agentId: params.agentId } },
+        pagination: { limit: AGENT_MAIL_SEARCH_POOL },
+        query: { text },
+      });
+
+      // Providers over-fetch past the pool, so only a total above what came
+      // back means matches were dropped.
+      return {
+        ids: result.candidates.map((candidate) => candidate.id),
+        truncated: result.total > result.candidates.length,
+      };
+    }
+
+    // pg_search answers candidates inline, from `agent_mails_bm25_idx`.
+    const query = normalizeBm25MatchQuery(text, SAFE_BM25_QUERY_OPTIONS);
+    const rows = await this.db
+      .select({ id: agentMails.id })
+      .from(agentMails)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentMails.agentId, params.agentId),
+          params.accountId ? eq(agentMails.accountId, params.accountId) : undefined,
+          isNull(agentMails.trashedAt),
+          isNull(agentMails.purgedAt),
+          sql`${agentMails.id} @@@ paradedb.boolean(should => ARRAY[${sql.join(
+            BM25_MAIL_FIELDS.map(
+              (field) => sql`paradedb.match(${field}, ${query}, conjunction_mode => true)`,
+            ),
+            sql`, `,
+          )}])`,
+        ),
+      )
+      .orderBy(sql`paradedb.score(${agentMails.id}) desc`)
+      .limit(AGENT_MAIL_SEARCH_POOL + 1);
+
+    return {
+      ids: rows.slice(0, AGENT_MAIL_SEARCH_POOL).map((row) => row.id),
+      truncated: rows.length > AGENT_MAIL_SEARCH_POOL,
+    };
   };
 
   /** How much the tabs announce: unread mail in the inbox. */
@@ -541,6 +688,30 @@ export class AgentMailModel {
     return row?.value ?? 0;
   };
 
+  /**
+   * Unread inbox mail of each of these addresses in one query, for an address
+   * list. Addresses out of the caller's scope, or with nothing unread, are left
+   * out.
+   */
+  countUnreadByAccount = async (accountIds: string[]): Promise<AgentMailAccountCounts[]> => {
+    if (accountIds.length === 0) return [];
+
+    return this.db
+      .select({ accountId: agentMails.accountId, unread: count() })
+      .from(agentMails)
+      .leftJoin(agentInboxMessages, inboxItemOfMail)
+      .where(
+        and(
+          this.ownership(),
+          inArray(agentMails.accountId, accountIds),
+          isNull(agentMails.purgedAt),
+          folderFilter('inbox'),
+          isUnread,
+        ),
+      )
+      .groupBy(agentMails.accountId);
+  };
+
   /** One mail, unless it is purged or out of the caller's scope. */
   findById = async (id: string) => {
     const [row] = await this.db
@@ -557,12 +728,36 @@ export class AgentMailModel {
     return row;
   };
 
+  /** The mail an id opens: the mail's own id, or its inbox item's. */
+  private findSeed = async (id: string) => {
+    const [row] = await this.db
+      .select({
+        accountId: agentMails.accountId,
+        id: agentMails.id,
+        threadKey: agentMails.threadKey,
+      })
+      .from(agentMails)
+      .leftJoin(agentInboxMessages, inboxItemOfMail)
+      .where(
+        and(
+          or(eq(agentMails.id, id), eq(agentInboxMessages.id, id)),
+          isNull(agentMails.purgedAt),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return row;
+  };
+
   /**
-   * The conversation a mail belongs to, oldest first. Trash and the other
-   * views are kept apart: opening a trashed mail shows only what was trashed.
+   * The conversation a mail belongs to, oldest first. `id` is the mail's or its
+   * inbox item's, so the inbox can open a conversation straight from its row.
+   * Trash and the other views are kept apart: opening a trashed mail shows only
+   * what was trashed.
    */
   listConversation = async (params: { folder?: AgentMailFolder; id: string }) => {
-    const seed = await this.findById(params.id);
+    const seed = await this.findSeed(params.id);
     if (!seed) return [];
 
     return this.db
@@ -811,15 +1006,21 @@ export class AgentMailModel {
       .limit(params.limit);
 
   /**
-   * Wipe the content, keep the row. Deleting it would reset wake budgets and let
-   * a provider retry deliver the mail afresh. `from_address`, the thread keys and
-   * `codes` stay because delivery idempotency and the relay checks read them.
-   * `relay_guard` keeps what the relay checks need out of `subject` and `text`
-   * — codes are only the digit-shaped secrets — so purging a message cannot
-   * turn an unattended reply into a way to relay its link or token.
-   * A sent mail also keeps its `To` / `Cc` addresses, names dropped: whether the
-   * agent wrote to someone in a thread decides how that person's reply wakes it
-   * ({@link hasSentInThreadTo}), and purging must not change that.
+   * Wipe what the mail said and who it was to, keep the row. Deleting it would
+   * reset wake budgets and let a provider retry deliver the mail afresh, so
+   * `from_address`, the provider and RFC ids and the thread key stay.
+   *
+   * Nothing else is kept: subject, body, names, recipients, attachments and
+   * extracted codes all go. Deleting means deleting, so from then on the relay
+   * checks ({@link findTextFromOtherSender}, {@link listCodesFromOtherSenders},
+   * {@link findSecretRepeatedFromOtherSender}) no longer see this mail, and a
+   * purged sent mail no longer counts as the agent having written to its
+   * recipients in that thread ({@link hasSentInThreadTo}).
+   *
+   * The inbox item's title and preview go too, and so does the raw webhook
+   * payload of the signal the mail arrived as, which carries its own copy of
+   * the subject, snippet, recipients and codes — blanked the way the payload
+   * retention sweep does it.
    */
   purge = async (ids: string[]): Promise<number> => {
     if (ids.length === 0) return 0;
@@ -830,16 +1031,14 @@ export class AgentMailModel {
         .set({
           attachments: [],
           bcc: [],
-          cc: sql`case when ${agentMails.direction} = 'outbound' then ${bareAddresses(agentMails.cc)} else '[]'::jsonb end`,
+          cc: [],
+          codes: [],
           fromName: null,
           purgedAt: new Date(),
-          // Read before `subject` and `text` are wiped in the same statement:
-          // the relay checks keep refusing to relay what this mail said.
-          relayGuard: relayGuardOf(agentMails.subject, agentMails.text),
           replyTo: [],
           subject: null,
           text: '',
-          to: sql`case when ${agentMails.direction} = 'outbound' then ${bareAddresses(agentMails.to)} else '[]'::jsonb end`,
+          to: [],
           updatedAt: new Date(),
         })
         .where(
@@ -850,8 +1049,16 @@ export class AgentMailModel {
             this.ownership(),
           ),
         )
-        .returning({ id: agentMails.id });
+        .returning({ id: agentMails.id, signalId: agentMails.signalId });
       if (rows.length === 0) return 0;
+
+      const signalIds = rows.flatMap((row) => (row.signalId ? [row.signalId] : []));
+      if (signalIds.length > 0) {
+        await tx
+          .update(signals)
+          .set({ payload: {}, payloadPurgedAt: new Date() })
+          .where(and(inArray(signals.id, signalIds), isNull(signals.payloadPurgedAt)));
+      }
 
       await tx
         .update(agentInboxMessages)

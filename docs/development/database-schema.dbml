@@ -773,12 +773,18 @@ table agent_mails {
   from_name text
   to jsonb [not null, default: `[]`]
   cc jsonb [not null, default: `[]`]
+  bcc jsonb [not null, default: `[]`]
   reply_to jsonb [not null, default: `[]`]
   subject text
   text text [not null, default: '']
   attachments jsonb [not null, default: `[]`]
   codes jsonb [not null, default: `[]`]
   delivered_at "timestamp with time zone" [not null]
+  starred_at "timestamp with time zone"
+  marked_unread_at "timestamp with time zone"
+  trashed_at "timestamp with time zone"
+  purged_at "timestamp with time zone"
+  purge_claimed_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -789,6 +795,36 @@ table agent_mails {
     (agent_id, delivered_at) [name: 'agent_mails_agent_delivered_at_idx']
     signal_id [name: 'agent_mails_signal_id_idx']
     user_id [name: 'agent_mails_user_id_idx']
+    (account_id, direction, delivered_at) [name: 'agent_mails_account_folder_idx']
+    (workspace_id, agent_id, direction, delivered_at) [name: 'agent_mails_workspace_agent_folder_idx']
+    (account_id, trashed_at) [name: 'agent_mails_account_trashed_idx']
+    (account_id, delivered_at) [name: 'agent_mails_account_starred_idx']
+  }
+}
+
+table agent_mail_drafts {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  account_id uuid [not null]
+  mode text [not null, default: 'compose']
+  source_mail_id uuid
+  to jsonb [not null, default: `[]`]
+  cc jsonb [not null, default: `[]`]
+  bcc jsonb [not null, default: `[]`]
+  subject text
+  text text [not null, default: '']
+  sending_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, source_mail_id, mode) [name: 'agent_mail_drafts_account_source_mode_unique', unique]
+    (account_id, updated_at) [name: 'agent_mail_drafts_account_updated_at_idx']
+    (agent_id, updated_at) [name: 'agent_mail_drafts_agent_updated_at_idx']
+    user_id [name: 'agent_mail_drafts_user_id_idx']
   }
 }
 

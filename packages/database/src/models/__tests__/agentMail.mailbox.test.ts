@@ -3,12 +3,23 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentAccounts, agentInboxMessages, agentMails, agents, users } from '../../schemas';
+import { FtsSearchRepo } from '../../repositories/ftsSearch';
+import { PgLikeFtsSearchBackend } from '../../repositories/ftsSearch/pgLike';
+import {
+  agentAccounts,
+  agentInboxMessages,
+  agentMails,
+  agents,
+  signals,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentAccountModel } from '../agentAccount';
 import { AgentInboxModel } from '../agentInbox';
 import type { RecordAgentMailParams } from '../agentMail';
-import { AgentMailModel } from '../agentMail';
+import { AGENT_MAIL_SEARCH_POOL, AgentMailModel } from '../agentMail';
+import { AgentMailDraftModel } from '../agentMailDraft';
+import { SignalModel } from '../signal';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'mailbox-model-user';
@@ -134,6 +145,56 @@ describe('folders', () => {
     expect(page2.map((row) => row.id)).toEqual([first.id]);
   });
 
+  it('pages whole conversations, so a thread is never split across pages', async () => {
+    const older = await seed({ threadKey: 'thread-a' });
+    const lone = await seed();
+    const newest = await seed({ threadKey: 'thread-a' });
+    await model.setStarred([older.id], true);
+
+    const page1 = await model.listConversations({ agentId, folder: 'inbox', limit: 1 });
+    const last = page1.at(-1)!;
+    const page2 = await model.listConversations({
+      agentId,
+      before: { id: last.id, sortAt: last.sortAt },
+      folder: 'inbox',
+      limit: 1,
+    });
+    const page3 = await model.listConversations({
+      agentId,
+      before: { id: page2[0].id, sortAt: page2[0].sortAt },
+      folder: 'inbox',
+      limit: 1,
+    });
+
+    expect(page1).toMatchObject([{ id: newest.id, isStarred: true, mailCount: 2 }]);
+    expect(page2).toMatchObject([{ id: lone.id, isStarred: false, mailCount: 1 }]);
+    expect(page3).toEqual([]);
+  });
+
+  it('builds a conversation from the mails in the view only', async () => {
+    const kept = await seed({ threadKey: 'thread-b' });
+    const binned = await seed({ threadKey: 'thread-b' });
+    await model.moveToTrash([binned.id]);
+
+    expect(await model.listConversations({ agentId, folder: 'inbox' })).toMatchObject([
+      { id: kept.id, mailCount: 1 },
+    ]);
+    expect(await model.listConversations({ agentId, folder: 'trash' })).toMatchObject([
+      { id: binned.id, mailCount: 1 },
+    ]);
+  });
+
+  it('narrows the view to the given mails', async () => {
+    const hit = await seed({ threadKey: 'thread-c' });
+    await seed({ threadKey: 'thread-c' });
+    await seed();
+
+    expect(await model.listConversations({ agentId, mailIds: [hit.id] })).toMatchObject([
+      { id: hit.id, mailCount: 1 },
+    ]);
+    expect(await model.listConversations({ agentId, mailIds: [] })).toEqual([]);
+  });
+
   it('shows nothing to a user outside the scope', async () => {
     const mail = await seed();
     const stranger = new AgentMailModel(serverDB, otherUserId);
@@ -147,31 +208,129 @@ describe('folders', () => {
 });
 
 describe('search', () => {
-  it('matches subject, sender, recipients and body, case-insensitively', async () => {
-    const bySubject = await seed({ subject: 'Quarterly INVOICE' });
-    const bySender = await seed({ fromAddress: 'billing@acme.io', fromName: 'Acme' });
-    const byBody = await seed({ text: 'the zebra crossing' });
-    const byRecipient = await seed({
+  const pgLikeSearch = (forUserId = userId) =>
+    new AgentMailModel(
+      serverDB,
+      forUserId,
+      undefined,
+      new FtsSearchRepo(serverDB, forUserId, undefined, undefined, {
+        backend: new PgLikeFtsSearchBackend(serverDB, { userId: forUserId }),
+        ftsSearchCandidateEnabled: true,
+      }),
+    );
+
+  const seedFindable = async () => ({
+    byBody: await seed({ text: 'the zebra crossing' }),
+    byRecipient: await seed({
       direction: 'outbound',
       fromAddress: 'agent@lobe.id',
-      to: [{ address: 'carol@corp.dev' }],
-    });
+      to: [{ address: 'carol@corp.dev', name: 'Carol Danvers' }],
+    }),
+    bySender: await seed({ fromAddress: 'billing@acme.io', fromName: 'Acme' }),
+    bySubject: await seed({ subject: 'Quarterly INVOICE' }),
+  });
+
+  it('matches subject, sender, recipients and body, case-insensitively', async () => {
+    const { byBody, byRecipient, bySender, bySubject } = await seedFindable();
+    const search = pgLikeSearch();
     const find = async (query: string) =>
-      (await model.listConversations({ agentId, query })).map((row) => row.id);
+      (await search.searchConversations({ agentId, query })).items.map((row) => row.id);
 
     expect(await find('invoice')).toEqual([bySubject.id]);
     expect(await find('ACME.IO')).toEqual([bySender.id]);
     expect(await find('zebra')).toEqual([byBody.id]);
     expect(await find('carol@corp')).toEqual([byRecipient.id]);
+    expect(await find('Danvers')).toEqual([byRecipient.id]);
   });
 
-  it('leaves trash out and treats wildcards literally', async () => {
+  it('matches recipient values, never the JSON around them', async () => {
+    await seed({ to: [{ address: 'dave@x.io' }] });
+
+    const result = await pgLikeSearch().searchConversations({ agentId, query: 'address' });
+
+    expect(result).toEqual({ items: [], truncated: false });
+  });
+
+  it('leaves trash out, treats wildcards literally and keeps to the scope', async () => {
     const binned = await seed({ text: 'needle' });
     await model.moveToTrash([binned.id]);
-    await seed({ text: 'plain' });
+    const live = await seed({ text: 'needle in plain sight' });
 
-    expect(await model.listConversations({ agentId, query: 'needle' })).toEqual([]);
-    expect(await model.listConversations({ agentId, query: '%' })).toEqual([]);
+    const search = pgLikeSearch();
+    expect(
+      (await search.searchConversations({ agentId, query: 'needle' })).items.map((row) => row.id),
+    ).toEqual([live.id]);
+    expect((await search.searchConversations({ agentId, query: '%' })).items).toEqual([]);
+    expect(
+      (await pgLikeSearch(otherUserId).searchConversations({ agentId, query: 'needle' })).items,
+    ).toEqual([]);
+  });
+
+  it('builds conversations from the matching mails only', async () => {
+    await seed({ text: 'unrelated', threadKey: 'search-thread' });
+    const hit = await seed({ text: 'the pelican brief', threadKey: 'search-thread' });
+
+    const { items } = await pgLikeSearch().searchConversations({ agentId, query: 'pelican' });
+
+    expect(items).toMatchObject([{ id: hit.id, mailCount: 1 }]);
+  });
+
+  it('fails loudly instead of searching some other way', async () => {
+    await seed({ text: 'anything' });
+
+    await expect(model.searchConversations({ agentId, query: 'anything' })).rejects.toThrow(
+      'Agent mail search needs the full-text search repository',
+    );
+
+    const broken = new AgentMailModel(serverDB, userId, undefined, {
+      ftsSearchCandidateEnabled: true,
+      ftsSearchCandidates: async () => {
+        throw new Error('elasticsearch unreachable');
+      },
+    });
+    await expect(broken.searchConversations({ agentId, query: 'anything' })).rejects.toThrow(
+      'elasticsearch unreachable',
+    );
+  });
+
+  it('says when the provider dropped matches past the pool', async () => {
+    const mail = await seed({ text: 'pooled' });
+    const capped = new AgentMailModel(serverDB, userId, undefined, {
+      ftsSearchCandidateEnabled: true,
+      ftsSearchCandidates: async () => ({
+        candidates: [{ id: mail.id, score: 1 }],
+        total: AGENT_MAIL_SEARCH_POOL + 50,
+      }),
+    });
+
+    expect(await capped.searchConversations({ agentId, query: 'pooled' })).toMatchObject({
+      items: [{ id: mail.id }],
+      truncated: true,
+    });
+  });
+
+  describe.skipIf(process.env.TEST_SERVER_DB !== '1')('with pg_search', () => {
+    // pg_search keeps candidate mode off and answers from agent_mails_bm25_idx.
+    const pgSearch = () =>
+      new AgentMailModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: false,
+        ftsSearchCandidates: async () => {
+          throw new Error('candidate mode is off under pg_search');
+        },
+      });
+
+    it('matches subject, sender, recipients and body through the BM25 index', async () => {
+      const { byBody, byRecipient, bySender, bySubject } = await seedFindable();
+      const binned = await seed({ text: 'zebra stripes' });
+      await model.moveToTrash([binned.id]);
+      const find = async (query: string) =>
+        (await pgSearch().searchConversations({ agentId, query })).items.map((row) => row.id);
+
+      expect(await find('invoice')).toEqual([bySubject.id]);
+      expect(await find('acme')).toEqual([bySender.id]);
+      expect(await find('zebra')).toEqual([byBody.id]);
+      expect(await find('carol')).toEqual([byRecipient.id]);
+    });
   });
 });
 
@@ -206,6 +365,63 @@ describe('read state', () => {
 
     expect((await model.findById(mail.id))?.isUnread).toBe(false);
     expect(await model.countUnread({ agentId })).toBe(0);
+  });
+
+  it('counts unread mail and drafts of many addresses in one call', async () => {
+    const other = await new AgentAccountModel(serverDB, userId).create({
+      agentId,
+      capabilities: { receive: true, send: true },
+      identifier: 'second@lobe.id',
+      kind: 'mail',
+      provider: 'agent-mail',
+    });
+    await seed();
+    await seed();
+    const read = await seed({ accountId: other.id });
+    await seed({ accountId: other.id });
+    await model.markRead([read.id]);
+    await new AgentMailDraftModel(serverDB, userId).create({
+      accountId: other.id,
+      agentId,
+      mode: 'compose',
+    });
+
+    const unread = await model.countUnreadByAccount([accountId, other.id]);
+    expect(unread.sort((a, b) => b.unread - a.unread)).toEqual([
+      { accountId, unread: 2 },
+      { accountId: other.id, unread: 1 },
+    ]);
+    expect(
+      await new AgentMailDraftModel(serverDB, userId).countByAccount([accountId, other.id]),
+    ).toEqual([{ accountId: other.id, drafts: 1 }]);
+    expect(
+      await new AgentMailModel(serverDB, otherUserId).countUnreadByAccount([accountId]),
+    ).toEqual([]);
+    expect(await model.countUnreadByAccount([])).toEqual([]);
+  });
+
+  it('flags a manually unread mail on the inbox summary and clears it on mark all read', async () => {
+    const inbox = new AgentInboxModel(serverDB, userId);
+    const marked = await seed();
+    const unread = await seed();
+    await model.markRead([marked.id]);
+    await model.markUnread([marked.id, unread.id]);
+
+    const itemIdOf = new Map(
+      await Promise.all(
+        [marked.id, unread.id].map(async (id) => [id, (await inboxRow(id)).id] as const),
+      ),
+    );
+    const summaries = await inbox.listSummaries({ agentId });
+    const flagOf = (mailId: string) =>
+      summaries.find((row) => row.id === itemIdOf.get(mailId))?.markedUnread;
+    expect(flagOf(marked.id)).toBe(true);
+    expect(flagOf(unread.id)).toBe(true);
+
+    // Two items: one still unread *and* marked unread, one only marked.
+    expect(await inbox.markAllRead(agentId)).toBe(2);
+    expect(await model.countUnread({ agentId })).toBe(0);
+    expect((await inbox.listSummaries({ agentId })).every((row) => !row.markedUnread)).toBe(true);
   });
 
   it('counts sent mail as read until asked otherwise', async () => {
@@ -266,6 +482,22 @@ describe('bulk and conversations', () => {
     expect(rows.map((row) => row.id)).toEqual([first.id, reply.id]);
   });
 
+  it('opens a conversation from its inbox item id too', async () => {
+    const first = await seed({ threadKey: 'thread-inbox' });
+    const second = await seed({ threadKey: 'thread-inbox' });
+    const [item] = await serverDB
+      .select({ id: agentInboxMessages.id })
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.sourceId, second.id));
+
+    const rows = await model.listConversation({ id: item.id });
+
+    expect(rows.map((row) => row.id)).toEqual([first.id, second.id]);
+    expect(
+      await new AgentMailModel(serverDB, otherUserId).listConversation({ id: item.id }),
+    ).toEqual([]);
+  });
+
   it('reads a mail with no thread as a conversation of one', async () => {
     const mail = await seed();
     await seed();
@@ -296,11 +528,24 @@ describe('purge', () => {
     expect((await model.findById(mail.id))?.purgedAt).toBeNull();
   });
 
-  it('wipes the content but keeps the row and what the checks read', async () => {
+  it('wipes subject, body, recipients and codes, keeping only what idempotency needs', async () => {
+    const { signal } = await SignalModel.record(
+      serverDB,
+      {
+        accountId,
+        agentId,
+        externalId: `evt_purge_${counter}`,
+        payload: { data: { message: { codes: ['839201'], subject: 'secret' } } },
+        source: 'agent-mail',
+        type: 'message.received',
+      },
+      { userId },
+    );
     const mail = await seed({
       cc: [{ address: 'c@x.io' }],
       codes: ['839201'],
       fromName: 'Alice',
+      signalId: signal.id,
       subject: 'secret',
       text: 'secret body',
     });
@@ -310,8 +555,9 @@ describe('purge', () => {
 
     const [row] = await serverDB.select().from(agentMails).where(eq(agentMails.id, mail.id));
     expect(row).toMatchObject({
+      bcc: [],
       cc: [],
-      codes: ['839201'],
+      codes: [],
       fromAddress: 'alice@example.com',
       fromName: null,
       providerMessageId: mail.providerMessageId,
@@ -326,6 +572,11 @@ describe('purge', () => {
       .from(agentInboxMessages)
       .where(eq(agentInboxMessages.sourceId, mail.id));
     expect(item).toMatchObject({ preview: null, sender: 'alice@example.com', title: null });
+
+    // The webhook payload is a second copy of the subject and codes.
+    const [stored] = await serverDB.select().from(signals).where(eq(signals.id, signal.id));
+    expect(stored.payload).toEqual({});
+    expect(stored.payloadPurgedAt).not.toBeNull();
   });
 
   it('disappears from every view and cannot be restored', async () => {
@@ -359,7 +610,7 @@ describe('purge', () => {
     expect(await model.claimForPurge([mail.id])).toEqual([]);
   });
 
-  it('keeps who a purged sent mail went to, so replies still wake the agent', async () => {
+  it('forgets who a purged sent mail went to', async () => {
     const sent = await seed({
       cc: [{ address: 'carol@x.io', name: 'Carol' }],
       direction: 'outbound',
@@ -371,8 +622,9 @@ describe('purge', () => {
     await model.purge([sent.id]);
 
     const [row] = await serverDB.select().from(agentMails).where(eq(agentMails.id, sent.id));
-    expect(row.to).toEqual([{ address: 'bob@x.io' }]);
-    expect(row.cc).toEqual([{ address: 'carol@x.io' }]);
+    expect(row.to).toEqual([]);
+    expect(row.cc).toEqual([]);
+    // A reply from them no longer counts as answering the agent in that thread.
     for (const address of ['bob@x.io', 'carol@x.io']) {
       expect(
         await AgentMailModel.hasSentInThreadTo(serverDB, {
@@ -380,7 +632,7 @@ describe('purge', () => {
           address,
           threadKey: 'purged-thread',
         }),
-      ).toBe(true);
+      ).toBe(false);
     }
   });
 

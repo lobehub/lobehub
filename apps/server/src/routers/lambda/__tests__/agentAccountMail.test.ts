@@ -43,6 +43,7 @@ vi.mock('@/server/services/agentIdentity', async () => ({
 
 const mail = vi.hoisted(() => ({
   countUnread: vi.fn(async () => 3),
+  countUnreadByAccount: vi.fn(async (): Promise<any[]> => []),
   expandToConversations: vi.fn(async () => ['expanded']),
   listAgentIds: vi.fn(async () => ['agt']),
   listConversation: vi.fn(async () => []),
@@ -57,6 +58,7 @@ const mail = vi.hoisted(() => ({
 }));
 const drafts = vi.hoisted(() => ({
   count: vi.fn(async () => 2),
+  countByAccount: vi.fn(async (): Promise<any[]> => []),
   create: vi.fn(async (params: any) => ({ id: 'd', ...params })),
   delete: vi.fn(async (ids: string[]) => ids.length),
   findById: vi.fn(async (): Promise<any> => undefined),
@@ -77,13 +79,27 @@ vi.mock('@/server/services/agentIdentity/mailbox', () => ({
   }),
 }));
 
-const { agentAccountMailRouter } = await import('../agentAccountMail');
+const createFtsSearchRepo = vi.hoisted(() => vi.fn(async () => ({ provider: 'fts' })));
+vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo }));
 
-const caller = () =>
+const searchConversations = vi.hoisted(() =>
+  vi.fn(async (): Promise<any> => ({ items: [], truncated: false })),
+);
+const AgentMailModel = vi.hoisted(() =>
+  vi.fn(function () {
+    return { searchConversations };
+  }),
+);
+vi.mock('@/database/models/agentMail', () => ({ AgentMailModel }));
+
+const { agentAccountMailRouter, isInteractiveSendOrigin } = await import('../agentAccountMail');
+
+const caller = (auth: Record<string, unknown> = {}) =>
   agentAccountMailRouter.createCaller({
     serverDB: {},
     userId: 'user-1',
     workspaceId: 'ws-1',
+    ...auth,
   } as any);
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -115,14 +131,48 @@ describe('views', () => {
     expect(mail.listConversations).not.toHaveBeenCalled();
   });
 
-  it('searches', async () => {
-    await caller().search({ agentId: 'agt', query: ' invoice ' });
+  it('searches through the deployment full-text search', async () => {
+    searchConversations.mockResolvedValueOnce({ items: [{ id }], truncated: true });
 
-    expect(mail.listConversations).toHaveBeenCalledWith({ agentId: 'agt', query: 'invoice' });
+    await expect(caller().search({ agentId: 'agt', query: ' invoice ' })).resolves.toEqual({
+      items: [{ id }],
+      truncated: true,
+    });
+
+    expect(createFtsSearchRepo).toHaveBeenCalledWith({
+      db: {},
+      usage: 'agent_mail_search',
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+    });
+    expect(AgentMailModel).toHaveBeenCalledWith({}, 'user-1', 'ws-1', { provider: 'fts' });
+    expect(searchConversations).toHaveBeenCalledWith({ agentId: 'agt', query: 'invoice' });
+  });
+
+  it('surfaces a search provider failure instead of an empty result', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    searchConversations.mockRejectedValueOnce(new Error('elasticsearch unreachable'));
+
+    await expect(caller().search({ agentId: 'agt', query: 'invoice' })).rejects.toThrow();
+    consoleError.mockRestore();
   });
 
   it('counts unread and drafts', async () => {
     await expect(caller().counts({ agentId: 'agt' })).resolves.toEqual({ drafts: 2, unread: 3 });
+  });
+
+  it('counts many addresses in one call, answering every id', async () => {
+    const other = '33333333-3333-4333-8333-333333333333';
+    mail.countUnreadByAccount.mockResolvedValueOnce([{ accountId, unread: 4 }]);
+    drafts.countByAccount.mockResolvedValueOnce([{ accountId: other, drafts: 1 }]);
+
+    await expect(
+      caller().accountCounts({ accountIds: [accountId, other, accountId] }),
+    ).resolves.toEqual([
+      { accountId, drafts: 0, unread: 4 },
+      { accountId: other, drafts: 1, unread: 0 },
+    ]);
+    expect(mail.countUnreadByAccount).toHaveBeenCalledWith([accountId, other]);
   });
 
   it('reads a conversation', async () => {
@@ -248,6 +298,32 @@ describe('send', () => {
 
     expect(error).toMatchObject({ code: trpcCode, message: 'shown to a person' });
     expect(((error as TRPCError).cause as AgentAccountError).data).toEqual({ code });
+  });
+
+  it.each([
+    ['an API key', { apiKeyScopes: null }],
+    ['the lh CLI', { oidcAuth: { sub: 'user-1' }, oidcClientId: 'lobehub-cli' }],
+    [
+      'an agent operation token',
+      { oidcAuth: { purpose: 'hetero-operation', sub: 'user-1' }, oidcClientId: 'lobehub-desktop' },
+    ],
+    ['a server-side caller acting for an agent', { actingAgentId: 'agt' }],
+  ])('refuses to send for %s, which is how agents call in', async (_, auth) => {
+    // An operation token is already turned away by the auth middleware.
+    expect(isInteractiveSendOrigin(auth)).toBe(false);
+    await expect(caller(auth).send(input)).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller(auth).drafts.send({ id })).rejects.toBeInstanceOf(TRPCError);
+    expect(mailbox.send).not.toHaveBeenCalled();
+    expect(mailbox.sendDraft).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a browser session', {}],
+    ['the desktop app', { oidcAuth: { sub: 'user-1' }, oidcClientId: 'lobehub-desktop' }],
+    ['the mobile app', { oidcAuth: { sub: 'user-1' }, oidcClientId: 'lobehub-mobile' }],
+  ])('sends for %s, where a person is writing', async (_, auth) => {
+    expect(isInteractiveSendOrigin(auth)).toBe(true);
+    await expect(caller(auth).send(input)).resolves.toMatchObject({ mailId: 'm' });
   });
 
   it('keeps an unexpected failure sanitized', async () => {
