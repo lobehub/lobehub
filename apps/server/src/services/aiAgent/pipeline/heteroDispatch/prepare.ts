@@ -4,6 +4,7 @@ import {
   appendAttachedFilesToPrompt,
   collectHeteroAttachedFiles,
   isLocalHeterogeneousType,
+  resolveDispatchedClaudeCodeEntrypoint,
 } from '@lobechat/heterogeneous-agents';
 import {
   CHANNEL_INSTRUCTIONS,
@@ -279,6 +280,13 @@ export const prepareHeteroRun = async (
   const heteroParams = {
     agentType: heteroType,
     assistantMessageId,
+    // The one setting that travels from the agent's env to wherever the run
+    // lands: forwarding the whole env would let an agent's author set arbitrary
+    // variables on a member's device.
+    claudeCodeEntrypoint:
+      heteroType === 'claude-code' && heterogeneousProvider?.type === heteroType
+        ? resolveDispatchedClaudeCodeEntrypoint(heterogeneousProvider.env)
+        : undefined,
     githubToken,
     imageList: heteroImageList,
     jwt: operationJwt,

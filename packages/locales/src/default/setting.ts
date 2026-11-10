@@ -553,6 +553,12 @@ export default {
   'heterogeneousStatus.command.label': 'Launch Command',
   'heterogeneousStatus.command.placeholder': 'Command name or absolute path',
   'heterogeneousStatus.detecting': 'Detecting {{name}} CLI...',
+  'heterogeneousStatus.entrypoint.desc':
+    'Tell Claude Code that it is launched by {{name}}, to avoid the doubled usage that unattended runs are charged.',
+  'heterogeneousStatus.entrypoint.label': 'Launch Source',
+  'heterogeneousStatus.entrypoint.risk':
+    "High risk: this changes how the client identifies itself to Anthropic. We can't tell how Anthropic monitors it, and your account may be restricted or banned. Turn it on at your own risk.",
+  'heterogeneousStatus.entrypoint.switch': 'Report a custom launch source',
   'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',
   'heterogeneousStatus.unavailable': '{{name}} CLI not found. Please install or configure it.',
