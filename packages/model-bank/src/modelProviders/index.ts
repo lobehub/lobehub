@@ -292,15 +292,28 @@ export const isProviderFetchOnClient = (
   return config?.fetchOnClient ?? false;
 };
 
-/** Loopback and RFC 1918 IPv4 hosts; `0.0.0.0` names this host. */
+/**
+ * Loopback, RFC 1918, link-local (`169.254/16`) and shared-address
+ * (`100.64/10`, CGNAT and Tailscale) IPv4 hosts; `0.0.0.0` names this host.
+ */
 const isPrivateIPv4 = (ip: string) => {
   if (ip === '0.0.0.0') return true;
 
   const parts = ip.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
   if (!parts) return false;
   const [a, b] = [Number(parts[1]), Number(parts[2])];
-  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  return (
+    a === 127 ||
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
 };
+
+/** Names only a local resolver answers: mDNS `.local` and the private-use TLDs. */
+const LOCAL_NAME_SUFFIXES = ['.localhost', '.local', '.lan', '.internal', '.home.arpa'];
 
 /**
  * Loopback (`::1`), unique-local (`fc00::/7`), link-local (`fe80::/10`) and
@@ -325,8 +338,9 @@ const isPrivateIPv6 = (hostname: string) => {
 };
 
 /**
- * Loopback, `localhost`, RFC 1918, unique-local and link-local hosts:
- * addresses a cloud server cannot reach.
+ * Loopback, `localhost`, private and link-local addresses, local-only names
+ * and single-label hosts (`http://dev-box:8000`): hosts a cloud server cannot
+ * reach.
  */
 const isPrivateNetworkUrl = (url: string) => {
   let hostname: string;
@@ -335,10 +349,11 @@ const isPrivateNetworkUrl = (url: string) => {
   } catch {
     return false;
   }
-  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
   if (hostname.startsWith('[') && hostname.endsWith(']')) return isPrivateIPv6(hostname);
+  if (/^[\d.]+$/.test(hostname)) return isPrivateIPv4(hostname);
 
-  return isPrivateIPv4(hostname);
+  const name = hostname.replace(/\.$/, '');
+  return !name.includes('.') || LOCAL_NAME_SUFFIXES.some((suffix) => name.endsWith(suffix));
 };
 
 /**

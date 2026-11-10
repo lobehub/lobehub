@@ -115,6 +115,13 @@ describe('isProviderDeviceOnly', () => {
       'http://[fe80::1]:8000/v1',
       'http://[::ffff:127.0.0.1]:1234/v1',
       'http://[::ffff:c0a8:102]:8000/v1',
+      'http://169.254.1.2:8000/v1',
+      'http://100.101.102.103:11434/v1',
+      'http://dev-box.local:8000/v1',
+      'http://gpu.lan:8000/v1',
+      'http://llm.internal/v1',
+      'http://nas.home.arpa:8000/v1',
+      'http://dev-box:8000/v1',
     ]) {
       const keyVaults = { apiKey: 'k', baseURL };
       expect(isProviderDeviceOnly('my-llm', { fetchOnClient: true, keyVaults })).toBe(true);
@@ -125,8 +132,11 @@ describe('isProviderDeviceOnly', () => {
     }
 
     for (const baseURL of [
-      // Public IPv4 outside RFC 1918, a public IPv6 host and a hostname.
+      // Public IPv4 just outside the private ranges, a public IPv6 host and hostnames.
       'http://172.32.0.1/v1',
+      'http://169.255.0.1/v1',
+      'http://100.128.0.1/v1',
+      'https://local.example.com/v1',
       'http://[2001:db8::1]:8000/v1',
       'https://api.example.com/v1',
     ]) {
