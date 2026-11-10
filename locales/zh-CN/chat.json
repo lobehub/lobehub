@@ -1648,6 +1648,8 @@
   "input.addAiPrefillUnsupported": "当前模型不支持以助理消息结尾发送，请在其后继续添加一条用户消息再发送。",
   "input.addUser": "添加一条用户消息",
   "input.agentModeUnsupportedModel": "当前模型不支持 Agentic 工具调用，建议切换为具备 Agent 能力的模型以获得最佳体验。",
+  "input.agentRunFeeUnfunded.desc": "每次助理运行都会收取运行费，使用自己的 API Key 也不例外。充值或升级套餐后再发送。",
+  "input.agentRunFeeUnfunded.title": "额度不足以支付助理运行费",
   "input.agentSlugMoved": "该链接现在指向另一个助理，正在切换，打开后请重试。输入框中的草稿会保留。",
   "input.agentSlugUnconfirmed": "暂时无法确认该链接对应的助理，请检查网络后重试。",
   "input.concurrencyLimit.desc": "等其中一个结束后再发送。",
