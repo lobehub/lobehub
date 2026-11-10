@@ -8,6 +8,11 @@ import { AgentRuntimeErrorType } from '../../../types/error';
 import { isErrorCausedByContentFilter } from '../../../utils/isErrorCausedByContentFilter';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIUsage } from '../../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -17,9 +22,7 @@ import type {
 } from '../protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
   createFirstErrorHandleTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
@@ -757,7 +760,8 @@ export const OpenAIStream = (
           streamStack,
         }),
       )
-      .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createModelEventTransformer((c) => c, streamStack))
+      .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createSSEEncoder())
   );
 };
