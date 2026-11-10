@@ -43,11 +43,13 @@ const SendErrorAlert = memo<SendErrorAlertProps>(({ errorMessage, onClose }) => 
   // The title says what stopped the send; the line under it says what to do.
   // As a single sentence the two overflowed the row and stranded a word on the
   // second line.
-  const description = isConcurrencyLimit
-    ? t('input.concurrencyLimit.desc')
-    : isRunFeeUnfunded
-      ? t('input.agentRunFeeUnfunded.desc')
-      : undefined;
+  const description =
+    business.description ??
+    (isConcurrencyLimit
+      ? t('input.concurrencyLimit.desc')
+      : isRunFeeUnfunded
+        ? t('input.agentRunFeeUnfunded.desc')
+        : undefined);
 
   // Same bottom gap and edges as the other notices above the composer, so two
   // of them stack at an even rhythm and line up with the input.

@@ -983,6 +983,16 @@ export default {
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
   'input.agentRunFeeUnfunded.desc':
     'Each agent run carries a fee, even on your own API key. Top up or upgrade your plan, then send again.',
+  'input.agentRunFeeUnfunded.descOverflow':
+    'Each agent run carries a fee, even on your own API key. Your balance covers it: use your balance, then send again.',
+  'input.agentRunFeeUnfunded.descSubscribe':
+    'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
+  'input.agentRunFeeUnfunded.descTopUp':
+    'Each agent run carries a fee, even on your own API key. Top up, then send again.',
+  'input.agentRunFeeUnfunded.descUpgrade':
+    "Each agent run carries a fee, even on your own API key. Your monthly balance limit is used up, so a top-up can't pay it. Upgrade your plan, then send again.",
+  'input.agentRunFeeUnfunded.descWait':
+    'Each agent run carries a fee, even on your own API key. Your monthly balance limit is used up. Send again once it resets.',
   'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
