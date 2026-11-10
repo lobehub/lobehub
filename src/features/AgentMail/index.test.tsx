@@ -244,17 +244,18 @@ describe('AgentMail', () => {
 
   it('gives the whole page to the offer instead of an empty inbox and reader', async () => {
     service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
     page();
 
     expect(await screen.findByText('identity.empty.title')).toBeInTheDocument();
     expect(screen.getByText('@lobe.id')).toBeInTheDocument();
     expect(screen.queryByText('identity.inbox.title')).not.toBeInTheDocument();
     expect(screen.queryByText('identity.inbox.detail.placeholder')).not.toBeInTheDocument();
-    expect(service.listInbox).not.toHaveBeenCalled();
   });
 
   it('keeps the action unavailable until a prefix is typed', async () => {
     service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
     page();
 
     await screen.findByText('identity.empty.title');
@@ -270,6 +271,7 @@ describe('AgentMail', () => {
 
   it('shows a refused opening inside the form and clears it on the next edit', async () => {
     service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
     service.provision.mockRejectedValue(new Error('prefix is taken'));
     page();
 
@@ -287,15 +289,36 @@ describe('AgentMail', () => {
   it('leaves the page when the deployment cannot open a mailbox and the agent has none', async () => {
     server.providers = [];
     service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
     page();
 
     expect(await screen.findByText('profile page')).toBeInTheDocument();
+  });
+
+  it('keeps mail from a released address readable instead of the full-page offer', async () => {
+    service.list.mockResolvedValue([]);
+    page('/agent/agt_1/mail/msg_a');
+
+    expect(await screen.findByText('For A')).toBeInTheDocument();
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    expect(screen.queryByText('identity.empty.title')).not.toBeInTheDocument();
+    expect(screen.getByText('identity.empty.open')).toBeInTheDocument();
+  });
+
+  it('does not leave the page while retained mail exists and no provider is configured', async () => {
+    server.providers = [];
+    service.list.mockResolvedValue([]);
+    page();
+
+    expect(await screen.findByText('For A')).toBeInTheDocument();
+    expect(screen.queryByText('profile page')).not.toBeInTheDocument();
   });
 
   it('does not leave the page while the server config is still loading', async () => {
     server.loaded = false;
     server.providers = [];
     service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
     page();
 
     await waitFor(() => expect(service.list).toHaveBeenCalled());
@@ -320,6 +343,10 @@ describe('AgentMail', () => {
 
   it('opens the first mailbox and moves on to it', async () => {
     service.list.mockResolvedValueOnce([]);
+    // No mail before the first address; the new address then has its own.
+    service.listInbox.mockImplementation(async ({ accountId }: { accountId?: string }) =>
+      accountId ? [row('msg_a', 'For A')] : [],
+    );
     service.provision.mockResolvedValue(account('acc_a', 'a@lobe.id'));
     page();
 
@@ -337,6 +364,7 @@ describe('AgentMail', () => {
 
   it('states the absence to a read-only viewer without offering to open one', async () => {
     service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
     page('/agent/agt_1/mail', true);
 
     expect(await screen.findByText('identity.empty.readOnly')).toBeInTheDocument();

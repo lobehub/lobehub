@@ -4,6 +4,7 @@ import {
   ActionIcon,
   createModal,
   DropdownMenu,
+  Empty,
   Flexbox,
   Icon,
   Skeleton,
@@ -78,10 +79,6 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
   if (error && !data) return failure;
   if (isLoading && !data) return <Skeleton height={44} width={'100%'} />;
 
-  if (!current) return failure ?? null;
-
-  const channel = channelOf(current);
-
   const openAdd = () => {
     if (!openable) return;
     const modal = createModal({
@@ -102,6 +99,16 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
       width: 400,
     });
   };
+
+  // Mail kept from a released address is still listed below; offer a new
+  // address beside it instead of hiding that mail behind the full-page offer.
+  if (!current) {
+    if (failure || !openable || disabled) return failure ?? null;
+
+    return <Empty title={t('identity.empty.open')} variant={'dashed'} onClick={openAdd} />;
+  }
+
+  const channel = channelOf(current);
 
   const switchItems = [
     ...accounts.map((account) => ({

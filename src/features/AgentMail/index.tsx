@@ -20,7 +20,7 @@ import MailboxCard from './MailboxCard';
 import MailboxEmptyState from './MailboxEmptyState';
 import MailSplitView, { MailNavHeader } from './MailSplitView';
 import { identityStyles } from './styles';
-import { useMailbox, useOpenableChannel } from './useAgentIdentity';
+import { useAgentInbox, useMailbox, useOpenableChannel } from './useAgentIdentity';
 
 const styles = StyleSheet.create({
   body: {
@@ -51,10 +51,17 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
   const mailPath = urlJoin('/agent', agentId, 'mail');
+  const noAddress = !!mailbox.data && !mailbox.current;
+  // Releasing an address keeps the mail it received, so "no address" is not
+  // "no mail": only an empty, successfully read inbox counts as nothing to show.
+  // Same key as the inbox list below, so this adds no request of its own.
+  const retained = useAgentInbox(noAddress ? agentId : '');
+  const noMail = noAddress && !retained.error && retained.data?.length === 0;
+  const checkingMail = noAddress && !retained.error && !retained.data;
   // Nothing to read and nothing this deployment could open, so there is no page.
   // Until the server config has loaded, an empty provider list is only the
   // default (a cold desktop start), not the deployment saying it has none.
-  const unavailable = configLoaded && !!mailbox.data && !mailbox.current && !openable;
+  const unavailable = configLoaded && noMail && !openable;
 
   useEffect(() => {
     if (unavailable) navigate(urlJoin('/agent', agentId, 'profile'), { replace: true });
@@ -89,15 +96,20 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   // With no address there is nothing to list or read, so the offer takes the
   // whole page. Waits for a successful read: a failure must not look like "none".
-  const emptyState = mailbox.data && !mailbox.current && openable && (
-    <Center flex={1} padding={24} style={{ minHeight: 0 }}>
-      <MailboxEmptyState
-        agentId={agentId}
-        channel={openable}
-        disabled={disabled}
-        onProvisioned={mailbox.mutate}
-      />
-    </Center>
+  const emptyState = checkingMail ? (
+    <Center flex={1} />
+  ) : (
+    noMail &&
+    openable && (
+      <Center flex={1} padding={24} style={{ minHeight: 0 }}>
+        <MailboxEmptyState
+          agentId={agentId}
+          channel={openable}
+          disabled={disabled}
+          onProvisioned={mailbox.mutate}
+        />
+      </Center>
+    )
   );
 
   return (
