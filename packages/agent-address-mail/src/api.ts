@@ -94,10 +94,13 @@ const stripTrailingSlashes = (url: string) => {
  */
 /** A non-2xx answer from the Agent Mail REST API, with its HTTP status kept. */
 export class LobeMailApiError extends Error {
+  /** The service's machine-readable reason (`upgrade_required`, …), when it sent one. */
+  readonly code?: string;
   readonly status: number;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
+    this.code = code;
     this.name = 'LobeMailApiError';
     this.status = status;
   }
@@ -128,8 +131,10 @@ export class LobeMailApiClient {
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       let detail = body;
+      let code: string | undefined;
       try {
         const parsed = JSON.parse(body) as EmailApiError;
+        code = parsed.error?.code;
         detail = parsed.error?.message || parsed.error?.code || body;
         // A 422 only says "Invalid request"; the issues name the field at fault.
         const issues = parsed.error?.issues
@@ -144,6 +149,7 @@ export class LobeMailApiClient {
         `Agent Mail ${init.method ?? 'GET'} ${path} failed: ${response.status}${
           detail ? ` — ${detail}` : ''
         }`,
+        code,
       );
     }
 
@@ -223,6 +229,9 @@ export class LobeMailApiClient {
     }
   };
 
+  deleteMessage = (id: string): Promise<void> =>
+    this.request<void>(`/v1/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
   replyToMessage = (
     id: string,
     input: { html?: string; replyAll?: boolean; text?: string },
@@ -256,9 +265,45 @@ export class LobeMailApiClient {
     }
   };
 
+  /**
+   * Download an attachment for re-sending it. Unlike {@link downloadAttachment},
+   * only an attachment the provider no longer holds (404 / 410) resolves to
+   * `null`; any other failure throws, so a forward is never sent short of an
+   * attachment that merely failed to load.
+   */
+  fetchAttachment = async (
+    messageId: string,
+    index: number,
+  ): Promise<null | { buffer: Buffer; contentType?: string }> => {
+    const path = `/v1/messages/${encodeURIComponent(messageId)}/attachments/${index}`;
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      throw new LobeMailApiError(
+        response.status,
+        `Agent Mail GET ${path} failed: ${response.status}`,
+      );
+    }
+
+    return {
+      buffer: Buffer.from(await response.arrayBuffer()),
+      contentType: response.headers.get('content-type') ?? undefined,
+    };
+  };
+
   sendMessage = (
     inboxId: string,
-    input: { html?: string; subject: string; text?: string; to: string },
+    input: {
+      attachments?: { content: string; contentType?: string; filename: string }[];
+      bcc?: string[];
+      cc?: string[];
+      html?: string;
+      subject: string;
+      text?: string;
+      to: string | string[];
+    },
   ): Promise<EmailMessageDetail> =>
     this.request<EmailMessageDetail>(`/v1/inboxes/${encodeURIComponent(inboxId)}/messages`, {
       // The send route takes a recipient list and rejects a bare address with a 422.

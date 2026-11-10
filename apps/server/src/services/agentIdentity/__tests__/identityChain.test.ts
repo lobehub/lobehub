@@ -219,7 +219,7 @@ describe('Agent identity chain — end to end over loopback', () => {
       to: 'human@example.com',
     });
     transcript.push(`5. send(mail) -> providerMessageId=${sent.providerMessageId}`);
-    expect(sent).toEqual({ providerMessageId: 'msg_out_e2e' });
+    expect(sent).toMatchObject({ providerMessageId: 'msg_out_e2e' });
 
     // 6. Deliver a signed inbound webhook: resolve → verify → normalize.
     const body = JSON.stringify({

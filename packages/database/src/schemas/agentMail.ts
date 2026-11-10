@@ -1,4 +1,5 @@
 import type { AgentMailAddress, AgentMailAttachment, AgentMailDirection } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -8,6 +9,16 @@ import { agentAccounts } from './agentAccount';
 import { signals } from './signal';
 import { users } from './user';
 import { workspaces } from './workspace';
+
+/**
+ * The relay checks' view of a purged mail: `text` is the whole mail compacted to
+ * letters and digits, `secrets` the links, tokens and mixed runs found in it.
+ * Stored when the content is wiped, so the row keeps refusing to be relayed.
+ */
+export interface AgentMailRelayGuard {
+  secrets: string[];
+  text: string;
+}
 
 /**
  * Mail an agent's mail account received or sent — one row per message.
@@ -63,6 +74,8 @@ export const agentMails = pgTable(
     fromName: text('from_name'),
     to: jsonb('to').$type<AgentMailAddress[]>().notNull().default([]),
     cc: jsonb('cc').$type<AgentMailAddress[]>().notNull().default([]),
+    /** Blind copies of a sent mail; inbound mail never reveals them. */
+    bcc: jsonb('bcc').$type<AgentMailAddress[]>().notNull().default([]),
     replyTo: jsonb('reply_to').$type<AgentMailAddress[]>().notNull().default([]),
 
     subject: text('subject'),
@@ -76,6 +89,35 @@ export const agentMails = pgTable(
     /** When the provider received it (inbound) or accepted it for sending (outbound). */
     deliveredAt: timestamptz('delivered_at').notNull(),
 
+    /** Mailbox state, shared by everyone who can see this agent's mail. */
+    starredAt: timestamptz('starred_at'),
+    /**
+     * A person asked to see this as unread. Separate from the inbox's `read_at`
+     * on purpose: wakes and digests key off `read_at`, and clearing it would
+     * make an already-handled mail wake the agent again.
+     */
+    markedUnreadAt: timestamptz('marked_unread_at'),
+    /** Moved to the trash; restoring clears it. */
+    trashedAt: timestamptz('trashed_at'),
+    /**
+     * Permanently deleted: content is wiped but the row stays, so delivery
+     * idempotency, wake budgets and relay checks keep counting it.
+     */
+    purgedAt: timestamptz('purged_at'),
+    /**
+     * Lease taken before the provider copy is deleted, so the mail cannot be
+     * restored while it is being destroyed on the provider.
+     */
+    purgeClaimedAt: timestamptz('purge_claimed_at'),
+    /**
+     * What the relay checks read out of `subject` and `text`, taken before a
+     * purge wipes them: the whole mail compacted to letters and digits, and the
+     * secrets extracted from it. Without it, purging a message from another
+     * sender would delete the evidence that stops an unattended reply from
+     * relaying its link or token to somebody else.
+     */
+    relayGuard: jsonb('relay_guard').$type<AgentMailRelayGuard>(),
+
     ...timestamps,
   },
   (t) => [
@@ -87,6 +129,20 @@ export const agentMails = pgTable(
     index('agent_mails_agent_delivered_at_idx').on(t.agentId, t.deliveredAt),
     index('agent_mails_signal_id_idx').on(t.signalId),
     index('agent_mails_user_id_idx').on(t.userId),
+    // Folder reads of one address: inbox and sent, newest first.
+    index('agent_mails_account_folder_idx')
+      .on(t.accountId, t.direction, t.deliveredAt)
+      .where(sql`${t.trashedAt} is null and ${t.purgedAt} is null`),
+    // The same reads across a workspace agent's addresses.
+    index('agent_mails_workspace_agent_folder_idx')
+      .on(t.workspaceId, t.agentId, t.direction, t.deliveredAt)
+      .where(sql`${t.trashedAt} is null and ${t.purgedAt} is null`),
+    index('agent_mails_account_trashed_idx')
+      .on(t.accountId, t.trashedAt)
+      .where(sql`${t.trashedAt} is not null and ${t.purgedAt} is null`),
+    index('agent_mails_account_starred_idx')
+      .on(t.accountId, t.deliveredAt)
+      .where(sql`${t.starredAt} is not null and ${t.trashedAt} is null and ${t.purgedAt} is null`),
   ],
 );
 

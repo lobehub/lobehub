@@ -271,7 +271,22 @@ export interface AgentAccountContext {
 
 /** A message the agent sends from one of its accounts. */
 export interface AgentAccountOutboundMessage {
+  /** Further `To` recipients beyond {@link to}, for transports that take several. */
+  additionalTo?: string[];
   attachments?: AgentAccountAttachment[];
+  /** Blind copies, for transports that have them. */
+  bcc?: string[];
+  /** Copies, for transports that have them. */
+  cc?: string[];
+  /** Which of those attachments to carry, by index. Omitted means all of them. */
+  forwardAttachmentIndexes?: number[];
+  /**
+   * Provider-side id of the message being forwarded, whose attachments go out
+   * with this send. The message must live in the sending account's inbox.
+   */
+  forwardAttachmentsOf?: string;
+  /** With {@link replyToProviderMessageId}: answer every recipient, not just the sender. */
+  replyAll?: boolean;
   /**
    * Provider-side message id this send answers — the `providerMessageId` of the
    * inbound message being replied to. A transport that threads by id (mail's
@@ -284,6 +299,20 @@ export interface AgentAccountOutboundMessage {
   /** Reply within this thread when the provider supports it. */
   threadKey?: string;
   to: string;
+}
+
+/** What a provider accepted. The RFC headers are present when its transport has them. */
+export interface AgentAccountSendResult {
+  /**
+   * The attachments the provider actually carried, as descriptors. A forward
+   * sends bytes the provider already holds, so this is the only place the
+   * sender can learn what went out and file it under Sent.
+   */
+  attachments?: AgentMailAttachment[];
+  inReplyTo?: string | null;
+  messageId?: string | null;
+  providerMessageId: string;
+  references?: string[];
 }
 
 /**
@@ -389,8 +418,14 @@ export interface AgentAccountInboundEvent {
 export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountKind> {
   /** What the account can do — declared here and persisted onto the account. */
   readonly capabilities: AgentAccountCapabilities;
+  /**
+   * Delete one message's provider-side copy. Idempotent: a message already gone
+   * resolves. Optional: a provider that stores no messages has nothing to delete.
+   */
+  deleteMessage?: (ref: AgentAccountRef, providerMessageId: string) => Promise<void>;
   /** The account kind this provider issues. */
   readonly kind: K;
+
   /** Normalize a verified delivery into the transport-neutral message. */
   normalizeInbound: (
     event: AgentAccountInboundEvent,
@@ -425,7 +460,7 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
   send: (
     ref: AgentAccountRef,
     message: AgentAccountOutboundMessage,
-  ) => Promise<{ providerMessageId: string }>;
+  ) => Promise<AgentAccountSendResult>;
 
   /**
    * Verify the signature over the raw body and recognise replays. Returns

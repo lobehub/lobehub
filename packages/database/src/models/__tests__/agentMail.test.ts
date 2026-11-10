@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentAccounts, agents, users } from '../../schemas';
+import { agentAccounts, agentMails, agents, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentAccountModel } from '../agentAccount';
 import { AgentInboxModel } from '../agentInbox';
@@ -143,6 +143,62 @@ describe('AgentMailModel', () => {
         ...window,
         compactText: 'ab12cd',
         recipient: 'login@service.com',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps refusing to relay a secret after the mail that carried it is purged', async () => {
+    // Codes alone are not the whole secret surface: a reset link rides in the
+    // link and its token, which no code extraction keeps.
+    const { mail: stored } = await AgentMailModel.record(
+      serverDB,
+      mail({
+        providerMessageId: 'msg_purged',
+        text: 'Reset your password at https://service.com/reset?token=AB12CD34EF5678',
+      }),
+      { userId },
+    );
+    const model = new AgentMailModel(serverDB, userId);
+    const window = {
+      agentId,
+      recipient: 'evil@example.com',
+      since: new Date('2026-10-01T00:00:00Z'),
+    };
+    const candidates = ['httpsservicecomresettokenab12cd34ef5678'];
+    const reply = 'surehereyougoab12cd34ef5678thanks';
+
+    expect(await model.findTextFromOtherSender({ ...window, candidates })).toEqual({
+      from: 'login@service.com',
+    });
+    expect(
+      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: reply }),
+    ).toEqual({ from: 'login@service.com' });
+
+    // Purging wipes the content for good…
+    await model.moveToTrash([stored.id]);
+    expect(await model.purge([stored.id])).toBe(1);
+
+    const [purged] = await serverDB
+      .select({ purgedAt: agentMails.purgedAt, text: agentMails.text })
+      .from(agentMails)
+      .where(eq(agentMails.id, stored.id));
+    expect(purged.text).toBe('');
+    expect(purged.purgedAt).not.toBeNull();
+
+    // …but the reply checks still see what it said: deleting a mail must not
+    // become the way to relay its link or token to another sender.
+    expect(await model.findTextFromOtherSender({ ...window, candidates })).toEqual({
+      from: 'login@service.com',
+    });
+    expect(
+      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: reply }),
+    ).toEqual({ from: 'login@service.com' });
+
+    // A reply that shares nothing with it is still allowed through.
+    expect(
+      await model.findSecretRepeatedFromOtherSender({
+        ...window,
+        compactText: 'nothingincommonhere',
       }),
     ).toBeUndefined();
   });

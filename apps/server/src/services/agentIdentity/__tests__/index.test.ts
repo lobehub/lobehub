@@ -391,7 +391,7 @@ describe('AgentAccountService — actions', () => {
 
     await expect(
       service.send(created.id, { subject: 'Re: Hello', text: 'hi back', to: 'human@example.com' }),
-    ).resolves.toEqual({ providerMessageId: 'msg_out_1' });
+    ).resolves.toMatchObject({ providerMessageId: 'msg_out_1' });
   });
 
   it('refuses to send from a revoked account', async () => {
@@ -612,7 +612,7 @@ describe('AgentAccountService — actions', () => {
     assertCanPerformResourceAction.mockImplementation(async () => {});
     await expect(
       member.send(created.id, { text: 'hi back', to: 'human@example.com' }),
-    ).resolves.toEqual({ providerMessageId: 'msg_out_1' });
+    ).resolves.toMatchObject({ providerMessageId: 'msg_out_1' });
 
     await serverDB.delete(agentAccounts);
     await serverDB.delete(agents).where(eq(agents.id, useAgentId));

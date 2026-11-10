@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -218,7 +218,12 @@ describe('AgentMail', () => {
 
     fireEvent.click(await screen.findByText('menu:identity.release'));
     const [{ onOk }] = ui.confirmModal.mock.calls[0] as unknown as [{ onOk: () => Promise<void> }];
-    await onOk();
+    // The confirmation resolves asynchronously: releasing revalidates the list and
+    // the navigation off the message lands in the same commit, so the updates have
+    // to be flushed before the routing is asserted.
+    await act(async () => {
+      await onOk();
+    });
 
     expect(service.revoke).toHaveBeenCalledWith('acc_a');
     expect(await screen.findByText('preview of For B')).toBeInTheDocument();

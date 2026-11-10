@@ -92,6 +92,18 @@ const mailOfItem = and(
   eq(agentMails.id, agentInboxMessages.sourceId),
 );
 
+/**
+ * The item's mail has not been trashed or purged. A person's filing, so only
+ * the paths that hand mail to the agent or list it for a person use it — the
+ * relay and reply checks must see trashed mail, or trashing would defeat them.
+ */
+const mailNotDiscarded = sql`not exists (
+  select 1 from ${agentMails}
+  where ${agentMails.id} = ${agentInboxMessages.sourceId}
+    and ${agentInboxMessages.sourceType} = 'mail'
+    and (${agentMails.trashedAt} is not null or ${agentMails.purgedAt} is not null)
+)`;
+
 const entryColumns = {
   accountId: agentInboxMessages.accountId,
   agentId: agentInboxMessages.agentId,
@@ -275,6 +287,8 @@ export class AgentInboxModel {
         and(
           eq(agentInboxMessages.id, id),
           isNull(agentInboxMessages.readAt),
+          // A provider retry of mail already trashed must not wake the agent.
+          mailNotDiscarded,
           or(
             isNull(agentInboxMessages.wakeClaimedAt),
             lt(
@@ -309,6 +323,8 @@ export class AgentInboxModel {
       eq(agentInboxMessages.accountId, params.accountId),
       isNull(agentInboxMessages.readAt),
       gte(agentInboxMessages.receivedAt, params.since),
+      // Deferred, then trashed before the flush: the person already dismissed it.
+      mailNotDiscarded,
       or(
         isNull(agentInboxMessages.wakeClaimedAt),
         lt(
@@ -497,6 +513,8 @@ export class AgentInboxModel {
      * shares a timestamp.
      */
     before?: { id: string; receivedAt: Date };
+    /** Leave out mail a person trashed or purged. */
+    excludeDiscarded?: boolean;
     limit?: number;
     /** Only items received at or after this instant. */
     receivedAfter?: Date;
@@ -519,6 +537,7 @@ export class AgentInboxModel {
     if (params?.receivedAfter)
       conditions.push(gte(agentInboxMessages.receivedAt, params.receivedAfter));
     if (params?.unreadOnly) conditions.push(isNull(agentInboxMessages.readAt));
+    if (params?.excludeDiscarded) conditions.push(mailNotDiscarded);
 
     return this.selectEntries()
       .where(and(...conditions))
@@ -549,7 +568,7 @@ export class AgentInboxModel {
    * read away.
    */
   listSummaries = async (params?: Parameters<AgentInboxModel['list']>[0]) => {
-    const conditions = [this.ownership()];
+    const conditions = [this.ownership(), mailNotDiscarded];
     if (params?.before) {
       const { id, receivedAt } = params.before;
       conditions.push(
@@ -592,6 +611,7 @@ export class AgentInboxModel {
           eq(agentInboxMessages.agentId, agentId),
           accountId ? eq(agentInboxMessages.accountId, accountId) : undefined,
           isNull(agentInboxMessages.readAt),
+          mailNotDiscarded,
           this.ownership(),
         ),
       );
@@ -621,6 +641,7 @@ export class AgentInboxModel {
       // receivedAt predates the cursor (webhook delay, clock skew) still arrived
       // after it and must be seen by the poll.
       gt(agentInboxMessages.createdAt, params.since),
+      mailNotDiscarded,
       this.ownership(),
     ];
     if (params.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
@@ -645,7 +666,13 @@ export class AgentInboxModel {
     const [row] = await db
       .select({ value: count() })
       .from(agentInboxMessages)
-      .where(and(eq(agentInboxMessages.agentId, agentId), isNull(agentInboxMessages.readAt)));
+      .where(
+        and(
+          eq(agentInboxMessages.agentId, agentId),
+          isNull(agentInboxMessages.readAt),
+          mailNotDiscarded,
+        ),
+      );
 
     return row?.value ?? 0;
   };

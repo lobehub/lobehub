@@ -24,3 +24,14 @@ export type AgentMailDirection = (typeof AGENT_MAIL_DIRECTIONS)[number];
 /** What an agent inbox item points at. Mail is the first source; others join without a migration. */
 export const AGENT_INBOX_SOURCE_TYPES = ['mail'] as const;
 export type AgentInboxSourceType = (typeof AGENT_INBOX_SOURCE_TYPES)[number];
+
+/**
+ * The mail views a person files mail into. Drafts are not here: they are not
+ * mail yet and live in their own table. `starred` is a view over the others.
+ */
+export const AGENT_MAIL_FOLDERS = ['inbox', 'sent', 'starred', 'trash'] as const;
+export type AgentMailFolder = (typeof AGENT_MAIL_FOLDERS)[number];
+
+/** What a draft or a person's send does: open a conversation or answer one. */
+export const AGENT_MAIL_COMPOSE_MODES = ['compose', 'reply', 'replyAll', 'forward'] as const;
+export type AgentMailComposeMode = (typeof AGENT_MAIL_COMPOSE_MODES)[number];

@@ -20,7 +20,10 @@ import type {
   AgentAccountProvisionInput,
   AgentAccountProvisionResult,
   AgentAccountRef,
+  AgentAccountSendResult,
+  AgentMailAttachment,
 } from '@lobechat/types';
+import pMap from 'p-map';
 
 import { AgentAccountError } from '../errors';
 
@@ -122,7 +125,21 @@ export const createAgentMailProvider = (
   const replyInOwningInbox = async (
     ref: AgentAccountRef,
     providerMessageId: string,
-    body: { html: string; text: string },
+    body: { html: string; replyAll?: boolean; text: string },
+  ): Promise<EmailMessageDetail> => {
+    await assertInOwningInbox(ref, providerMessageId);
+
+    return client.replyToMessage(providerMessageId, body);
+  };
+
+  /**
+   * One deployment key spans every inbox, so a provider message id alone
+   * authorizes nothing: it is resolved first and refused unless it lives in the
+   * inbox of the account acting on it.
+   */
+  const assertInOwningInbox = async (
+    ref: AgentAccountRef,
+    providerMessageId: string,
   ): Promise<EmailMessageDetail> => {
     const inboxId = inboxIdOf(ref);
     const target = await client.getMessage(providerMessageId);
@@ -134,7 +151,60 @@ export const createAgentMailProvider = (
       );
     }
 
-    return client.replyToMessage(providerMessageId, body);
+    return target;
+  };
+
+  /**
+   * The bytes of a forwarded message's attachments, plus the descriptors that
+   * describe them once they are out. One the provider no longer holds is
+   * skipped: its retention can be shorter than the mail's life here. Any other
+   * download failure fails the whole send.
+   */
+  const loadForwardedAttachments = async (
+    ref: AgentAccountRef,
+    providerMessageId: string,
+    indexes?: number[],
+  ): Promise<{
+    descriptors: AgentMailAttachment[];
+    payloads: { content: string; contentType?: string; filename: string }[];
+  }> => {
+    const source = await assertInOwningInbox(ref, providerMessageId);
+    const wanted = (source.attachments ?? []).filter(
+      (attachment) => !indexes || indexes.includes(attachment.index),
+    );
+
+    // An email can carry an arbitrary number of attachments and every one of
+    // them is a separate download, so the fan-out is capped instead of opening
+    // as many sockets as the message has parts.
+    const loaded = await pMap(
+      wanted,
+      async (attachment) => {
+        // Only an attachment past the provider's retention is left out; a
+        // transient failure throws, and the forward fails without sending.
+        const bytes = await client.fetchAttachment(providerMessageId, attachment.index);
+        if (!bytes) return undefined;
+        const contentType = attachment.contentType || bytes.contentType;
+        const filename = attachment.filename ?? `attachment-${attachment.index}`;
+
+        return {
+          descriptor: {
+            contentType,
+            filename,
+            index: attachment.index,
+            size: bytes.buffer.length,
+          } satisfies AgentMailAttachment,
+          payload: { content: bytes.buffer.toString('base64'), contentType, filename },
+        };
+      },
+      { concurrency: 4 },
+    );
+
+    const kept = loaded.filter((item): item is NonNullable<typeof item> => !!item);
+
+    return {
+      descriptors: kept.map((item) => item.descriptor),
+      payloads: kept.map((item) => item.payload),
+    };
   };
 
   return {
@@ -215,7 +285,7 @@ export const createAgentMailProvider = (
     send: async (
       ref: AgentAccountRef,
       message: AgentAccountOutboundMessage,
-    ): Promise<{ providerMessageId: string }> => {
+    ): Promise<AgentAccountSendResult> => {
       // An agent's reply is Markdown; email is HTML. Render both bodies from
       // the same token walk so the `text/html` part and its `text/plain`
       // alternative never disagree about the content — the plain-text half is
@@ -230,16 +300,70 @@ export const createAgentMailProvider = (
       // `sendMessage` would open a second conversation carrying the same subject
       // and drop the human's thread. `threadKey` is the RFC root key, which is
       // not a message id, so it cannot address the reply.
+      // A forward carries bytes the provider already holds, so they are loaded
+      // once here and their descriptors ride back on the result: the caller
+      // files the mail under Sent and has nothing else to learn them from.
+      const forwarded = message.forwardAttachmentsOf
+        ? await loadForwardedAttachments(
+            ref,
+            message.forwardAttachmentsOf,
+            message.forwardAttachmentIndexes,
+          )
+        : undefined;
+
       const detail = message.replyToProviderMessageId
-        ? await replyInOwningInbox(ref, message.replyToProviderMessageId, { html, text })
+        ? await replyInOwningInbox(ref, message.replyToProviderMessageId, {
+            html,
+            ...(message.replyAll ? { replyAll: true } : {}),
+            text,
+          })
         : await client.sendMessage(inboxIdOf(ref), {
+            ...(forwarded ? { attachments: forwarded.payloads } : {}),
+            ...(message.bcc?.length ? { bcc: message.bcc } : {}),
+            ...(message.cc?.length ? { cc: message.cc } : {}),
             html,
             subject: message.subject ?? '',
             text,
-            to: message.to,
+            // The send route takes a list; a bare string is refused with a 400.
+            to: [message.to, ...(message.additionalTo ?? [])],
           });
 
-      return { providerMessageId: messageIdOf(detail) };
+      // The provider numbers the outgoing parts when it assembles the sent
+      // message: filtering out a requested attachment, or leaving out one past
+      // retention, shifts every index after it. File the descriptors it minted
+      // rather than the source ones, or Sent advertises download keys the new
+      // message does not have and re-forwarding from them silently drops parts.
+      // A response that carries no attachment list is the only case where the
+      // loaded descriptors are still the best answer.
+      const sentAttachments = forwarded
+        ? detail.attachments?.length
+          ? detail.attachments.map(({ contentType, filename, index, size }) => ({
+              contentType,
+              filename: filename ?? undefined,
+              index,
+              size,
+            }))
+          : forwarded.descriptors
+        : undefined;
+
+      return {
+        ...(sentAttachments ? { attachments: sentAttachments } : {}),
+        inReplyTo: detail.inReplyTo,
+        messageId: detail.messageId,
+        providerMessageId: messageIdOf(detail),
+        references: detail.references ?? undefined,
+      };
+    },
+
+    deleteMessage: async (ref: AgentAccountRef, providerMessageId: string): Promise<void> => {
+      try {
+        await assertInOwningInbox(ref, providerMessageId);
+        await client.deleteMessage(providerMessageId);
+      } catch (error) {
+        // Purging is idempotent: a message already gone is what was asked for.
+        if (error instanceof LobeMailApiError && error.status === 404) return;
+        throw error;
+      }
     },
 
     resolveInboundIdentifier: (request: AgentAccountInboundRequest): string | undefined => {

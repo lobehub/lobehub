@@ -12,6 +12,7 @@ export * from './agentInboxMessage';
 export * from './agentIntervention';
 export * from './agentLabel';
 export * from './agentMail';
+export * from './agentMailDraft';
 export * from './agentOperations';
 export * from './agentQuota';
 export * from './agentShare';

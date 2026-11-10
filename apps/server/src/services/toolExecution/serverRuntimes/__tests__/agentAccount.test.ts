@@ -3,6 +3,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AgentMailModel } from '@/database/models/agentMail';
 import { agentInboxMessages, agentMails } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentAccountService } from '@/server/services/agentIdentity';
@@ -203,6 +204,33 @@ describe('agent-account server runtime', () => {
 
     const again = await runtime().readInbox({});
     expect(again.content).toBe('No messages.');
+  });
+
+  it('readInbox leaves out mail a person trashed, even when asked for all', async () => {
+    await record();
+    await record({ providerMessageId: 'msg_kept', text: 'still here' });
+    const [trashed] = await serverDB
+      .select({ id: agentMails.id })
+      .from(agentMails)
+      .where(eq(agentMails.providerMessageId, 'msg_1'));
+    await new AgentMailModel(serverDB, userId).moveToTrash([trashed.id]);
+
+    const result = await runtime().readInbox({ unreadOnly: false });
+
+    expect(fencedEntries(result.content).map((entry) => entry.text)).toEqual(['still here']);
+  });
+
+  it('waitForMessage does not hand back mail a person trashed', async () => {
+    await record({ receivedAt: new Date() });
+    const [trashed] = await serverDB
+      .select({ id: agentMails.id })
+      .from(agentMails)
+      .where(eq(agentMails.providerMessageId, 'msg_1'));
+    await new AgentMailModel(serverDB, userId).moveToTrash([trashed.id]);
+
+    const result = await runtime().waitForMessage({ timeoutMs: 1_000 });
+
+    expect(result.content).toContain('timed-out');
   });
 
   it('readInbox cannot be closed from inside by a crafted message', async () => {

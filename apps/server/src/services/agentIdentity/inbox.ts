@@ -2,6 +2,7 @@ import type {
   AgentAccountInboundMessage,
   AgentInboxSummary,
   AgentMailAddress,
+  AgentMailAttachment,
 } from '@lobechat/types';
 
 import type { AgentInboxEntry } from '@/database/models/agentInbox';
@@ -173,8 +174,13 @@ export class AgentInboxService {
    */
   recordSentMail = (params: {
     account: { agentId: string; id: string; identifier: string; provider: string };
+    attachments?: AgentMailAttachment[];
+    bcc?: AgentMailAddress[];
+    cc?: AgentMailAddress[];
     inReplyTo?: string | null;
+    messageId?: string | null;
     providerMessageId: string;
+    references?: string[];
     subject?: string | null;
     text: string;
     threadKey?: string | null;
@@ -185,12 +191,17 @@ export class AgentInboxService {
       {
         accountId: params.account.id,
         agentId: params.account.agentId,
+        attachments: params.attachments,
+        bcc: params.bcc,
+        cc: params.cc,
         deliveredAt: new Date(),
         direction: 'outbound',
         fromAddress: params.account.identifier,
         inReplyTo: params.inReplyTo,
+        messageId: params.messageId,
         provider: params.account.provider,
         providerMessageId: params.providerMessageId,
+        references: params.references,
         subject: params.subject,
         text: params.text,
         threadKey: params.threadKey,

@@ -15,6 +15,8 @@ import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdenti
 import { agentAccountSettingsSchema } from '@/server/services/agentIdentity/wake/config';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
+import { agentAccountMailRouter } from './agentAccountMail';
+
 /**
  * Agent accounts — the identity assets an agent owns (mail / wallet / service)
  * and the credentials some of them carry.
@@ -329,6 +331,9 @@ export const agentAccountRouter = router({
       }
       return { id: revoked, success: true as const };
     }),
+
+  /** A person's mailbox over these accounts: views, filing, drafts and sending. */
+  mail: agentAccountMailRouter,
 
   /**
    * The agent's inbox: what its accounts have received.

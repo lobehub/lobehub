@@ -109,3 +109,20 @@ export const checkInboundEmail = (params: {
 
   return { ignored: false };
 };
+
+/**
+ * The outbound half of the guard: mail addressed to the inbox itself or to a
+ * bounce daemon only ever comes back as the traffic {@link checkInboundEmail}
+ * drops. Returns the first address that must not be written to.
+ */
+export const findLoopingRecipient = (params: {
+  inboxAddress: string;
+  recipients: string[];
+}): string | undefined => {
+  const self = params.inboxAddress.trim().toLowerCase();
+
+  return params.recipients.find((recipient) => {
+    const address = recipient.trim().toLowerCase();
+    return address === self || BOUNCE_SENDER.test(address);
+  });
+};

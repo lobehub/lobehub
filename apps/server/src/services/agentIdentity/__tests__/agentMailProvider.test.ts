@@ -47,7 +47,14 @@ const mailDetail = (overrides: Partial<EmailMessageDetail> = {}): EmailMessageDe
 
 /** Minimal stand-in for the Agent Mail REST surface the provider touches. */
 const createMailFetch = (
-  options: { detail?: Partial<EmailMessageDetail>; raw?: null | string } = {},
+  options: {
+    /** Bytes served for `GET /v1/messages/msg_in_1/attachments/<index>`; absent is retention. */
+    attachmentBytes?: Record<number, Response>;
+    detail?: Partial<EmailMessageDetail>;
+    raw?: null | string;
+    /** What the provider answers with when the outbound send lands. */
+    sent?: Partial<EmailMessageDetail>;
+  } = {},
 ) => {
   const calls: Array<{ body?: unknown; method: string; path: string }> = [];
 
@@ -71,7 +78,13 @@ const createMailFetch = (
       return new Response(null, { status: 204 });
     }
     if (method === 'POST' && pathname === '/v1/inboxes/inb_1/messages') {
-      return json(mailDetail({ direction: 'outbound', id: 'msg_out_1' }));
+      return json(mailDetail({ direction: 'outbound', id: 'msg_out_1', ...options.sent }));
+    }
+    if (method === 'GET' && pathname.startsWith('/v1/messages/msg_in_1/attachments/')) {
+      const index = Number(pathname.slice(pathname.lastIndexOf('/') + 1));
+      // Anything the test did not hand bytes for is past the provider's
+      // retention, which the forward path skips instead of failing.
+      return options.attachmentBytes?.[index] ?? new Response('', { status: 410 });
     }
     if (method === 'POST' && pathname === '/v1/messages/msg_in_1/reply') {
       return json(mailDetail({ direction: 'outbound', id: 'msg_out_reply_1' }));
@@ -552,7 +565,7 @@ describe('agent-mail provider — outbound', () => {
       to: 'human@example.com',
     });
 
-    expect(result).toEqual({ providerMessageId: 'msg_out_1' });
+    expect(result).toMatchObject({ providerMessageId: 'msg_out_1' });
     const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
     expect(send?.body).toMatchObject({
       html: '<p>hi back</p>',
@@ -573,7 +586,7 @@ describe('agent-mail provider — outbound', () => {
       to: 'human@example.com',
     });
 
-    expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
+    expect(result).toMatchObject({ providerMessageId: 'msg_out_reply_1' });
     expect(calls.some((c) => c.path === '/v1/inboxes/inb_1/messages')).toBe(false);
     expect(calls).toContainEqual({
       body: { html: '<p><strong>thanks</strong></p>', text: 'thanks' },
@@ -600,6 +613,97 @@ describe('agent-mail provider — outbound', () => {
     expect(body?.html).not.toContain('**');
     expect(body?.text).toBe('Done. See the docs (https://lobehub.com/docs)\n\n- one\n- two');
     expect(body?.text).not.toContain('**');
+  });
+
+  it('answers within the thread when the caller names the message it replies to', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    const result = await provider.send(ref(), {
+      replyToProviderMessageId: 'msg_in_1',
+      text: 'hi back',
+      to: 'human@example.com',
+    });
+
+    // The reply route inherits the recipients and threads the message; going
+    // through `sendMessage` would start a second conversation with the same
+    // subject instead of answering the human in theirs.
+    expect(calls.filter((call) => call.method === 'POST')).toEqual([
+      {
+        body: { html: '<p>hi back</p>', text: 'hi back' },
+        method: 'POST',
+        path: '/v1/messages/msg_in_1/reply',
+      },
+    ]);
+    expect(result).toMatchObject({ providerMessageId: 'msg_out_reply_1' });
+  });
+
+  it('files the attachment keys the provider minted for the sent message, not the source ones', async () => {
+    // The source carries two parts and the caller forwards only the second, so
+    // the outgoing message holds a single part at index 0. Filing the source
+    // descriptor would store index 1 for a message that has no such part, and a
+    // later forward from that key would silently drop the file.
+    const { calls, fetchImpl } = createMailFetch({
+      attachmentBytes: {
+        1: new Response(new Uint8Array([1, 2, 3]), {
+          headers: { 'content-type': 'application/pdf' },
+        }),
+      },
+      detail: {
+        attachments: [
+          { contentType: 'image/png', filename: 'logo.png', index: 0, size: 9 },
+          { contentType: 'application/pdf', filename: 'invoice.pdf', index: 1, size: 3 },
+        ],
+      },
+      sent: {
+        attachments: [
+          { contentType: 'application/pdf', filename: 'invoice.pdf', index: 0, size: 3 },
+        ],
+      },
+    });
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    const result = await provider.send(ref(), {
+      forwardAttachmentIndexes: [1],
+      forwardAttachmentsOf: 'msg_in_1',
+      subject: 'Fwd: Hello',
+      text: 'see attached',
+      to: 'human@example.com',
+    });
+
+    expect(result.attachments).toEqual([
+      { contentType: 'application/pdf', filename: 'invoice.pdf', index: 0, size: 3 },
+    ]);
+    const send = calls.find(
+      (call) => call.method === 'POST' && call.path === '/v1/inboxes/inb_1/messages',
+    );
+    expect(send?.body).toMatchObject({
+      attachments: [{ contentType: 'application/pdf', filename: 'invoice.pdf' }],
+    });
+  });
+
+  it('falls back to the loaded descriptors when the send answers without an attachment list', async () => {
+    const { fetchImpl } = createMailFetch({
+      attachmentBytes: {
+        0: new Response(new Uint8Array([7]), { headers: { 'content-type': 'text/csv' } }),
+      },
+      detail: {
+        attachments: [{ contentType: 'text/csv', filename: 'rows.csv', index: 0, size: 1 }],
+      },
+      sent: { attachments: [] },
+    });
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    const result = await provider.send(ref(), {
+      forwardAttachmentsOf: 'msg_in_1',
+      subject: 'Fwd: Hello',
+      text: 'see attached',
+      to: 'human@example.com',
+    });
+
+    expect(result.attachments).toEqual([
+      { contentType: 'text/csv', filename: 'rows.csv', index: 0, size: 1 },
+    ]);
   });
 });
 
@@ -634,6 +738,6 @@ describe('agent-mail provider — reply ownership', () => {
         path: '/v1/messages/msg_in_1/reply',
       },
     ]);
-    expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
+    expect(result).toMatchObject({ providerMessageId: 'msg_out_reply_1' });
   });
 });

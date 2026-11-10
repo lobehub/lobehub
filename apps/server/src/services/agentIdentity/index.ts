@@ -7,6 +7,7 @@ import type {
   AgentAccountKind,
   AgentAccountOutboundMessage,
   AgentAccountRef,
+  AgentAccountSendResult,
   AgentAccountSettings,
 } from '@lobechat/types';
 
@@ -386,7 +387,7 @@ export class AgentAccountService {
   send = async (
     accountId: string,
     message: AgentAccountOutboundMessage,
-  ): Promise<{ providerMessageId: string }> => {
+  ): Promise<AgentAccountSendResult> => {
     const account = await this.requireActiveAccount(accountId);
     // Sending is a *use* of the agent, not an edit of it. The account row is
     // scoped to the workspace and carries no visibility of its own, so the
@@ -403,6 +404,24 @@ export class AgentAccountService {
     const credential = await this.model.getCredential(accountId);
 
     return provider.send(this.toRef(account, credential), message);
+  };
+
+  /**
+   * Delete a message's provider-side copy. Nothing to do once the address is
+   * released (that purged its mail) or its provider is gone from this
+   * deployment. Answers for the account's own row, so the caller must already
+   * have proved it may purge this mail.
+   */
+  deleteProviderMessage = async (accountId: string, providerMessageId: string): Promise<void> => {
+    const account = await this.model.findById(accountId);
+    if (!account || !ROUTING_KEY_HELD_STATUSES.includes(account.status)) return;
+    if (!this.options.registry.has(account.provider)) return;
+
+    const provider = this.options.registry.get(account.provider);
+    if (!provider.deleteMessage) return;
+
+    const credential = await this.model.getCredential(accountId);
+    await provider.deleteMessage(this.toRef(account, credential), providerMessageId);
   };
 
   /**
@@ -498,7 +517,7 @@ export class AgentAccountService {
    * `use` without holding `edit` — so this cannot reuse {@link assertCanEditAgent}.
    * Outside a workspace visibility alone is ownership, exactly as there.
    */
-  private assertCanUseAgent = async (agentId: string): Promise<void> => {
+  assertCanUseAgent = async (agentId: string): Promise<void> => {
     const workspaceId = this.options.workspaceId;
     const userId = this.userId;
     await assertAgentUsableBy(this.db, agentId, { userId, workspaceId });

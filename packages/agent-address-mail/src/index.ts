@@ -18,6 +18,7 @@ export {
   parseAgentMailSignature,
   verifyAgentMailSignature,
 } from './api';
+export { findLoopingRecipient } from './loop-guard';
 export {
   checkInboundEmail,
   type IgnoreDecision,

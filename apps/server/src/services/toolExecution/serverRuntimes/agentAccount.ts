@@ -322,6 +322,9 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         const rows = await inbox.list({
           accountId,
           agentId: requireAgentId(),
+          // What a person threw away stays away from the model. The reply and
+          // relay checks read without this, so trashing cannot switch them off.
+          excludeDiscarded: true,
           limit,
           unreadOnly: args?.unreadOnly ?? true,
         });
