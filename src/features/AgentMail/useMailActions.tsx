@@ -15,26 +15,20 @@ import { useTranslation } from 'react-i18next';
 
 import { agentAccountService, type AgentMailTarget } from '@/services/agentAccount';
 
-import { type MailPatch, mailWriteActions, queueRowWrite } from './mailWrites';
+import {
+  chunk,
+  type MailPatch,
+  mailWriteActions,
+  MAX_IDS_PER_WRITE,
+  queueRowWrite,
+  UNDO_WINDOW_MS,
+} from './mailWrites';
 import { mailFolderOf, type MailListItem, type MailView } from './useMailList';
-
-/** What the undo toast and the spec's undo window promise. */
-const UNDO_WINDOW_MS = 8000;
-/** The server's cap on ids per write. */
-const MAX_IDS_PER_WRITE = 200;
 
 interface WriteResult<R> {
   failed: MailListItem[];
   values: R[];
 }
-
-const chunk = <T,>(items: T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-};
 
 const unreadInbound = (items: MailListItem[]) =>
   items.filter((item) => item.isUnread && item.direction === 'inbound').length;

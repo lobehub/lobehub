@@ -1,6 +1,6 @@
 import type { AgentMailFolder } from '@lobechat/types';
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import useSWRImmutable from 'swr/immutable';
 
 import { agentAccountService } from '@/services/agentAccount';
@@ -8,7 +8,9 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { IDENTITY_CHANNELS } from './const';
-import { readMailMessage } from './useMailList';
+import { idsToMarkReadOnOpen } from './conversation';
+import { chunk, MAX_IDS_PER_WRITE } from './mailWrites';
+import { mailConversationKey } from './useMailList';
 
 /** The channel to offer; one this deployment cannot fulfil would only fail on click. */
 export const useOpenableChannel = () => {
@@ -25,21 +27,25 @@ export const useAgentAccounts = (agentId: string) =>
   useSWR(accountsKey(agentId), ([, id]) => agentAccountService.list({ agentId: id }));
 
 /**
- * A message reached through its URL rather than a list row: read it and clear
- * its unread mark before the list and count load, so neither shows it as unread.
+ * A conversation reached through its URL rather than a list row: clear what
+ * opening it shows as unread before the list and count load, so neither shows
+ * it as unread. Answers the conversation as it now stands.
  */
 const openMessageFromUrl = async (id: string, folder?: AgentMailFolder) => {
-  const message = await readMailMessage(id, folder);
-  if (!message || message.readAt) return message;
+  const conversation = await agentAccountService.getMailConversation({ folder, id });
+  const unread = new Set(idsToMarkReadOnOpen(conversation));
 
   try {
-    await agentAccountService.markMailRead({ ids: [message.id] });
+    await Promise.all(
+      chunk([...unread], MAX_IDS_PER_WRITE).map((ids) => agentAccountService.markMailRead({ ids })),
+    );
   } catch (error) {
-    // The message still opens; a failed read-mark only affects the dot.
+    // The conversation still opens; a failed read-mark only affects the dot.
     console.error('[AgentIdentity] mark read failed', error);
+    return conversation;
   }
 
-  return message;
+  return conversation.map((mail) => (unread.has(mail.id) ? { ...mail, isUnread: false } : mail));
 };
 
 /**
@@ -53,12 +59,19 @@ export const useMailbox = (agentId: string, messageId?: string, folder?: AgentMa
   const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
   const [selectedId, select] = useState<string>();
   // Immutable: one open is one read, so a focus refetch must not stamp it again.
+  const { mutate: mutateCache } = useSWRConfig();
   const openMessage = useSWRImmutable(
     !selectedId && messageId ? ['agent-mail-open-message', messageId, folder] : null,
-    ([, id, view]) => openMessageFromUrl(id, view),
+    async ([, id, view]) => {
+      const conversation = await openMessageFromUrl(id, view);
+      // Seeded so the reading pane starts from the read it just made, rather
+      // than reading again and marking the same mails a second time.
+      await mutateCache(mailConversationKey(id, view), conversation, { revalidate: false });
+      return { accountId: conversation[0]?.accountId };
+    },
   );
   const accounts = (data ?? []).filter((account) => account.status !== 'revoked');
-  const preferredId = selectedId ?? openMessage.data?.accountId ?? undefined;
+  const preferredId = selectedId ?? openMessage.data?.accountId;
 
   return {
     accounts,
