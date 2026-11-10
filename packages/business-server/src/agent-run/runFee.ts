@@ -18,10 +18,12 @@ export interface SettleAgentRunFeeParams {
  * settled when it ends. The default never charges; a deployment that bills
  * runs overrides these four functions.
  *
- * Hold runs before the turn writes any row. A deployment that refuses a run
- * the user cannot pay for throws a `TRPCError` whose message is
- * `ChatErrorType.InsufficientBudgetForAgentRunFee`; the turn then writes
- * nothing, and the message stays in the composer under a notice that says why.
+ * Hold runs before the turn writes any row, and before Desktop spawns an
+ * external agent it runs locally. A deployment that refuses a run the user
+ * cannot pay for throws a `TRPCError` whose message is
+ * `ChatErrorType.InsufficientBudgetForAgentRunFee`, holding nothing: a server
+ * turn then writes nothing and the message stays in the composer under a
+ * notice that says why, and Desktop does not start the CLI.
  */
 export const holdAgentRunFee = async (_params: HoldAgentRunFeeParams): Promise<void> => {};
 

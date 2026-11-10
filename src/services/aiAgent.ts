@@ -311,6 +311,19 @@ class AiAgentService {
     return await lambdaClient.aiAgent.getServerDefaultHeterogeneousCapability.query();
   }
 
+  /** Holds the run fee of an external agent this desktop spawns itself. */
+  async beginLocalHeteroRunFee(params: { topicId?: string }, options?: { signal?: AbortSignal }) {
+    return await lambdaClient.aiAgent.beginLocalHeteroRunFee.mutate(params, options);
+  }
+
+  /** Charges or gives back that fee once the run ends. */
+  async finishLocalHeteroRunFee(params: {
+    feeId: string;
+    reason: 'done' | 'error' | 'interrupted';
+  }) {
+    return await lambdaClient.aiAgent.finishLocalHeteroRunFee.mutate(params);
+  }
+
   /**
    * Execute a single Agent task.
    * Returns the operationId needed to connect to the Agent Gateway.

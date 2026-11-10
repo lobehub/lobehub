@@ -205,6 +205,8 @@ export const runHeterogeneousFromExistingMessage = async (
     /** Non-image attachments from the original user message — forwarded to the CLI as download links */
     attachedFiles?: HeteroAttachedFileRef[];
     context: ConversationContext;
+    /** Continues a run that already paid its agent fee, so this one holds none. */
+    continuesRun?: boolean;
     heterogeneousProvider: HeterogeneousProviderConfig;
     /** Image attachments from the original user message — forwarded to the CLI for vision support */
     imageList?: ChatImageItem[];
@@ -302,6 +304,7 @@ export const runHeterogeneousFromExistingMessage = async (
     assistantMessageId: assistantMsg.id,
     attachedFiles: attachedFiles?.length ? attachedFiles : undefined,
     context,
+    continuesRun: params.continuesRun,
     heterogeneousProvider: effectiveHeterogeneousProvider,
     imageList: imageList?.length ? imageList : undefined,
     message: prompt,
