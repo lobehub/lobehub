@@ -1,7 +1,12 @@
 import { QUOTA_LIMITED_RUN_STATUS, TRANSIENT_FAILED_RUN_STATUS } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
-import { lastAnsweredGateAt, lastGateAnsweredToWait, planMachineRecovery } from './machineRecovery';
+import {
+  lastAnsweredGateAt,
+  lastGateAnsweredToWait,
+  MAX_QUOTA_RETRIES,
+  planMachineRecovery,
+} from './machineRecovery';
 import { QUOTA_RESET_MARGIN_MS } from './recoveryPolicy';
 
 const MINUTE = 60 * 1000;
@@ -84,6 +89,26 @@ describe('planMachineRecovery', () => {
         taskUpdatedAt: FAILED_AT,
       });
       expect(plan.action).toBe('wait');
+    });
+
+    it('holds after the retries are spent when a person chose to wait for the reset', () => {
+      const runs = Array.from({ length: MAX_QUOTA_RETRIES + 1 }, (_, i) =>
+        run(QUOTA_LIMITED_RUN_STATUS, new Date(FAILED_AT.getTime() - i * HOUR)),
+      );
+      const plan = (holdUntilReset: boolean) =>
+        planMachineRecovery({
+          error: SESSION_LIMIT,
+          holdUntilReset,
+          now: new Date(FAILED_AT.getTime() + MINUTE),
+          runs,
+          taskUpdatedAt: FAILED_AT,
+        });
+
+      expect(plan(false).action).toBe('gate');
+      expect(plan(true)).toMatchObject({
+        action: 'wait',
+        retryAt: new Date(RESET_AT.getTime() + QUOTA_RESET_MARGIN_MS),
+      });
     });
 
     it('asks at once when the limit resets more than a day away', () => {

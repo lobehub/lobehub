@@ -111,7 +111,10 @@ const nextQuotaRetryAt = (
  */
 export const planMachineRecovery = (params: {
   error: string | null | undefined;
-  /** A person chose to wait this limit out, however far off its reset is. */
+  /**
+   * A person chose to wait this limit out, however far off its reset is and
+   * however many retries the schedule already spent.
+   */
   holdUntilReset?: boolean;
   now: Date;
   runs: readonly RunLike[];
@@ -149,7 +152,9 @@ export const planMachineRecovery = (params: {
             : `Usage limit: ${trimError(error)}. Retried ${retries} time(s) over ${spentFor} and the limit still applies. Check the plan or switch the agent to another account or provider`,
       };
     }
-    if (retries >= MAX_QUOTA_RETRIES) {
+    // The owner's wait covers both bounds: it was answered after them, often on
+    // the very gate the spent retries opened.
+    if (!params.holdUntilReset && retries >= MAX_QUOTA_RETRIES) {
       return {
         action: 'gate',
         reason: `Usage limit: ${trimError(error)}. Retried ${retries} time(s) over ${spentFor} and the limit still applies. Check the plan or switch the agent to another account or provider`,
