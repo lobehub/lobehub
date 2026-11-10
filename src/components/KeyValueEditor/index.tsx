@@ -1,4 +1,6 @@
-import { ActionIcon, Button, createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import fastDeepEqual from 'fast-deep-equal';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { type CSSProperties } from 'react';
@@ -11,31 +13,20 @@ import { FormInput } from '@/components/FormInput';
 import { type KeyValueItem } from './utils';
 import { localListToRecord, recordToLocalList } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    position: relative;
-
-    width: 100%;
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  input: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  row: css`
-    margin-block-end: 8px;
-
-    &:last-child {
-      margin-block-end: 0;
-    }
-  `,
-  title: css`
-    margin-block-end: 8px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    position: 'relative',
+    width: '100%',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  input: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+  row: { marginBlockEnd: { 'default': '8px', ':last-child': '0' } },
+  title: { marginBlockEnd: '8px', color: cssVar.colorTextTertiary },
+});
 
 export interface KeyValueEditorProps {
   addButtonText?: string;
@@ -137,8 +128,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     const duplicateKeys = getDuplicateKeys(items);
 
     return (
-      <div className={styles.container} style={style}>
-        <Flexbox horizontal className={styles.title} gap={8}>
+      <div className={stylex.props(styles.container).className} style={style}>
+        <Flexbox horizontal className={stylex.props(styles.title).className} gap={8}>
           <Flexbox flex={1}>{keyPlaceholder || t('KeyValueEditor.keyPlaceholder')}</Flexbox>
           <Flexbox flex={2}>{valuePlaceholder || t('KeyValueEditor.valuePlaceholder')}</Flexbox>
           <Flexbox style={{ width: 30 }} />
@@ -150,7 +141,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
               <Flexbox
                 horizontal
                 align="flex-start"
-                className={styles.row}
+                className={stylex.props(styles.row).className}
                 gap={8}
                 key={item.id}
                 width={'100%'}
@@ -158,7 +149,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                 <Flexbox flex={1} style={{ position: 'relative' }}>
                   <FormInput
                     aria-invalid={isDuplicate || undefined}
-                    className={styles.input}
+                    className={stylex.props(styles.input).className}
                     data-invalid={isDuplicate || undefined}
                     disabled={disabled}
                     placeholder={keyPlaceholder || t('KeyValueEditor.keyPlaceholder')}
@@ -181,7 +172,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                 </Flexbox>
                 <Flexbox flex={2}>
                   <FormInput
-                    className={styles.input}
+                    className={stylex.props(styles.input).className}
                     disabled={disabled}
                     placeholder={valuePlaceholder || t('KeyValueEditor.valuePlaceholder')}
                     value={item.value}

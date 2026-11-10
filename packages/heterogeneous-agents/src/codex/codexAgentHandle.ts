@@ -1,5 +1,6 @@
 import { PassThrough } from 'node:stream';
 
+import type { AskUserBridge } from '../askUser';
 import type { AgentPromptInput } from '../protocol';
 import { createEventQueue } from '../spawn/agentEventQueue';
 import { buildCodexLobeHubContextArgs, createCodexJwtFile } from '../spawn/codexShellEnv';
@@ -18,6 +19,7 @@ import { pickCodexRunProvenance } from './environment';
 export interface CodexAgentHandleOptions {
   /** Existing provider arguments; unsupported policies are rejected, never weakened. */
   args: string[];
+  askUserBridge?: AskUserBridge;
   /** Caller version sent in the native initialize handshake. */
   clientVersion: string;
   /** Resolved, validated Codex executable path. */
@@ -145,6 +147,7 @@ export const createCodexAgentHandle = async (
   };
   options.onStartupControl?.({ cancel });
   const turnOptions = {
+    askUserBridge: options.askUserBridge,
     // Keep the already materialized user input and attachment paths unchanged.
     input: buildCodexAppServerInput(input),
     onRawMessage: (line: string) => options.onRawStdout?.(Buffer.from(line)),

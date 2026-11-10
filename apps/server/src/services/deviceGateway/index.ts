@@ -401,6 +401,10 @@ export class DeviceGateway {
     return projectFiles.listProjectSkills(this.clientGetter, ...args);
   }
 
+  listClaudeCodeMemory(...args: DeviceRpcArgs<typeof projectFiles.listClaudeCodeMemory>) {
+    return projectFiles.listClaudeCodeMemory(this.clientGetter, ...args);
+  }
+
   listGitRemoteBranches(...args: DeviceRpcArgs<typeof gitRead.listGitRemoteBranches>) {
     return gitRead.listGitRemoteBranches(this.clientGetter, ...args);
   }

@@ -1,9 +1,13 @@
-import type { ExperienceListParams, ExperienceListResult } from '@lobechat/types';
+import type {
+  ExperienceListParams,
+  ExperienceListResult,
+  UserMemoryExperience,
+  UserMemoryExperienceInsert,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
 import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
-import type { NewUserMemoryExperience, UserMemoryExperience } from '../../schemas';
 import { userMemories, userMemoriesExperiences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
@@ -29,7 +33,7 @@ export class UserMemoryExperienceModel {
     return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
-  create = async (params: Omit<NewUserMemoryExperience, 'userId'>) => {
+  create = async (params: Omit<UserMemoryExperienceInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesExperiences)
       .values({ ...params, userId: this.userId })

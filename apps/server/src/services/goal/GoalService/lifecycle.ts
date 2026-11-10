@@ -1,11 +1,12 @@
 import type { GoalGraphSnapshot, GoalItem, GoalStatus, TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalRepository } from '@/database/repositories/goal';
 
+import { assertGoalNotArchived } from '../archiveGuard';
 import { GoalAssignmentService } from '../assignment';
 import { GOAL_ACCEPTANCE_TASK_TITLE, TERMINAL_NODE_STATUSES } from '../decideNextMove';
 import { GoalManagerService } from '../manager';
@@ -54,7 +55,7 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
   if (managed || supervised) {
     // Fence new claims before cancellation, then read the latest claimed turn.
     await ctx.db.transaction(async (db) => {
-      const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+      const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
       const current = await model.lockById(goalId);
       if (current && current.status !== 'paused') {
         await model.updateStatus(goalId, 'paused');
@@ -101,7 +102,7 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
 
   if (managed || supervised) {
     return ctx.db.transaction(async (db) => {
-      const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+      const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
       const current = await model.lockById(goalId);
       if (
         current &&
@@ -156,6 +157,8 @@ export const transitionStatus = async (
 
 export const pause = async (ctx: GoalServiceContext, goalId: string) => {
   const graph = await ctx.requireGraph(goalId);
+  // An archived goal is done with (completed or canceled); pausing would reopen it out of sight.
+  assertGoalNotArchived(graph.goal);
   // A draft never ran; pausing it would let a later resume skip `start`.
   if (graph.goal.status === 'draft') throw draftNotStarted(goalId);
   // From here the pause is the person's, so no later measurement lifts it.
@@ -182,6 +185,8 @@ export const restart = async (
   options?: { agentId?: string },
 ): Promise<{ goal: GoalItem; restartedTaskIds: string[] }> => {
   const graph = await ctx.requireGraph(goalId);
+  // Restarting resets Tasks and resumes the goal; an archived one stays put.
+  assertGoalNotArchived(graph.goal);
   const assignment = new GoalAssignmentService(ctx.db, ctx.userId, ctx.workspaceId);
   if (options?.agentId) await assignment.assertUsableForGoal(graph.goal, options.agentId);
 
@@ -284,9 +289,10 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
   // Tasks back to `backlog` and they would dispatch again. Reopening an ended
   // goal still works — that resume reads the ended status itself.
   return ctx.db.transaction(async (tx) => {
-    const model = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    assertGoalNotArchived(current);
     // Only `start` launches a draft: it settles the creating run's planning
     // turn and checks who may launch it, which a plain status flip skips.
     if (current.status === 'draft') throw draftNotStarted(goalId);
@@ -325,8 +331,12 @@ export const close = async (
   // the close cannot start a Task after the scan below. The pause is the
   // person's, so no measurement lifts it if the close is refused later on.
   await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
+    // An archived goal's status is frozen until it is restored; refuse before
+    // interrupting anything. (`updateStatus` refuses it too, should an archive
+    // land after this lock is released.)
+    if (current) assertGoalNotArchived(current);
     // Only a goal that can still dispatch needs fencing.
     if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
     await model.updateStatus(goalId, 'paused');
@@ -428,7 +438,7 @@ export const close = async (
   // would leave that run spending on a goal reading "ended".
   const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
   const goal = await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     if (!['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) {

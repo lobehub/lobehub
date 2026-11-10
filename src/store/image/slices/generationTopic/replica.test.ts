@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The image generation topic list is a `@lobechat/replica` resource whose view
+ * The image generation topic list is a `local-replica` resource whose view
  * is the image store's `generationTopics` field: the persisted projection paints
  * while the network confirms it, an unchanged response keeps the array
  * reference, a cache-scope switch drops the previous identity's topics before

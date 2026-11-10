@@ -115,16 +115,6 @@ describe('PanelContent', () => {
       expect(screen.getAllByText('Mocked Menu')).toHaveLength(1);
       expect(screen.getByText('Logout')).toBeInTheDocument();
     });
-
-    it('should render SignInBlock when user is not signed in', () => {
-      act(() => {
-        useUserStore.setState({ isSignedIn: false });
-      });
-
-      renderWithRouter(<PanelContent closePopover={closePopover} />);
-
-      expect(screen.getByText('Mocked SignInBlock')).toBeInTheDocument();
-    });
   });
 
   it('should render Menu with main items', () => {

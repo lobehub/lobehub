@@ -9,6 +9,11 @@ import {
   resolveExecutionPlan,
   resolveToolMode,
 } from '@/helpers/executionTarget';
+import {
+  findWakeableManagedDevices,
+  wakeManagedDevice,
+} from '@/server/services/deviceGateway/managedDeviceWake';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { shareGateGrantsCloudSandbox } from '../../shareGate';
 import type { ExecRunContext } from '../../types';
@@ -58,6 +63,7 @@ export const resolveDevicePlan = async (
     | 'localDeviceId'
     | 'requestedDeviceId'
     | 'requestTrigger'
+    | 'requireDevice'
   >,
   devices: {
     boundDeviceId?: string | null;
@@ -72,8 +78,21 @@ export const resolveDevicePlan = async (
     localDeviceId,
     requestTrigger,
     requestedDeviceId,
+    requireDevice,
   } = input;
   const { boundDeviceId, gatewayConfigured, onlineDevices } = devices;
+  const onlineDeviceIds = onlineDevices.map((device) => device.deviceId);
+
+  // A bound managed cloud device that is offline is woken instead of leaving
+  // the run unrouted. Only the ids the resolver can bind are candidates.
+  const wakeableDevices =
+    gatewayConfigured && canUseDevice
+      ? await findWakeableManagedDevices(
+          { db: deps.db, userId: deps.userId, workspaceId: deps.workspaceId },
+          [requestedDeviceId, agentConfig.agencyConfig?.boundDeviceId, localDeviceId],
+          onlineDeviceIds,
+        )
+      : [];
 
   const executionPlan = resolveExecutionPlan({
     agencyConfig: agentConfig.agencyConfig,
@@ -81,36 +100,38 @@ export const resolveDevicePlan = async (
     chatConfig: agentConfig.chatConfig ?? undefined,
     clientExecutionAvailable: gatewayConfigured,
     localDeviceId,
-    onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
+    onlineDeviceIds,
     requestedDeviceId,
     sandboxFallback: shareGate ? shareGateGrantsCloudSandbox(shareGate) : false,
     trigger: requestTrigger,
+    wakeableDeviceIds: wakeableDevices.map((device) => device.deviceId),
   });
-  // A fixed device target must never degrade to the cloud sandbox or a
-  // different device. Persist a visible assistant error and fail the RPC
-  // before tool/runtime preparation so no operation can start elsewhere.
-  if (
-    isFixedDeviceTarget &&
-    boundDeviceId &&
-    resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
-    executionPlan.kind !== 'device'
-  ) {
+  const wakingDevice =
+    executionPlan.kind === 'device-wakeable'
+      ? wakeableDevices.find((device) => device.deviceId === executionPlan.deviceId)
+      : undefined;
+  if (wakingDevice) {
+    // Start the device after the response, without holding the request: the
+    // first step is an LLM call, and device tools wait for it (or answer
+    // `DEVICE_WAKING`) until it is online.
+    afterUnscoped(() => wakeManagedDevice(deps.userId, wakingDevice));
+    log('execAgent: waking managed device %s for this run', wakingDevice.deviceId);
+  }
+  // Persist a visible assistant error and fail the RPC before tool/runtime
+  // preparation, so no operation can start somewhere it must not run.
+  const failUnroutedDevice = async (deviceId: string, message: string, detail: string) => {
     const errorData: DeviceUnavailableErrorData = {
       code: 'DEVICE_NOT_FOUND',
-      deviceId: boundDeviceId,
+      deviceId,
       retryable: true,
       scope: deps.workspaceId ? 'workspace' : 'personal',
       ...(deps.workspaceId ? { workspaceId: deps.workspaceId } : {}),
     };
-    const detail =
-      executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline'
-        ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
-        : 'The device fixed by this agent is unavailable for this run. Ask an editor to check the agent device policy.';
     await deps.messageModel.update(assistantMessageId, {
       content: '',
       error: {
         body: { detail, ...errorData },
-        message: 'Fixed agent device unavailable',
+        message,
         type: 'ServerAgentRuntimeError',
       },
     });
@@ -119,6 +140,42 @@ export const resolveDevicePlan = async (
       code: 'PRECONDITION_FAILED',
       message: detail,
     });
+  };
+  const isChatMode = resolveToolMode(agentConfig.chatConfig ?? undefined) === 'chat';
+  const deviceOffline =
+    executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline';
+
+  // A waking managed device is still the run's device: it is not a degrade.
+  const routedToDevice =
+    executionPlan.kind === 'device' || executionPlan.kind === 'device-wakeable';
+
+  // A fixed device target must never degrade to the cloud sandbox or a
+  // different device.
+  if (isFixedDeviceTarget && boundDeviceId && !isChatMode && !routedToDevice) {
+    await failUnroutedDevice(
+      boundDeviceId,
+      'Fixed agent device unavailable',
+      deviceOffline
+        ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
+        : 'The device fixed by this agent is unavailable for this run. Ask an editor to check the agent device policy.',
+    );
+  }
+  // Nor may a device the request required (`lh topic send --new --device`):
+  // it can go offline between the caller's check and this routing, and the
+  // run would otherwise degrade to the cloud sandbox or another machine.
+  if (
+    requireDevice &&
+    requestedDeviceId &&
+    !isChatMode &&
+    !(routedToDevice && executionPlan.deviceId === requestedDeviceId)
+  ) {
+    await failUnroutedDevice(
+      requestedDeviceId,
+      'Required device unavailable',
+      deviceOffline
+        ? `Device ${requestedDeviceId} went offline before the run could start there. Bring it online and send again.`
+        : `This run cannot be routed to device ${requestedDeviceId}, so it was not started elsewhere.`,
+    );
   }
   // Device tools (local-system / remote-device proxy) only exist in a
   // device-capable session — `none` and `sandbox` sessions must never see
@@ -129,6 +186,9 @@ export const resolveDevicePlan = async (
   // physically stripped (here and in the engine walls) — the model must
   // follow the user's choice, never re-list or switch machines mid-run.
   const deviceLocked = isDeviceLockedPlan(executionPlan);
+  // A waking device is not bound here: operation prep would make device RPCs
+  // to it on the request path. The operation binds it instead (see
+  // `resolveOperationInitSlots`), so its tool calls reach it once it is online.
   const activeDeviceId = executionPlan.kind === 'device' ? executionPlan.deviceId : undefined;
   // Which principal pool the routed device lives in. A workspace run with a
   // per-user `local` override routes to the caller's PERSONAL
@@ -139,7 +199,7 @@ export const resolveDevicePlan = async (
   // `resolveRunWorkspaceId`.
   const activeDeviceScope = activeDeviceId
     ? onlineDevices.find((d) => d.deviceId === activeDeviceId)?.scope
-    : undefined;
+    : wakingDevice?.scope;
   log(
     'execAgent: execution plan → kind=%s deviceId=%s scope=%s',
     executionPlan.kind,

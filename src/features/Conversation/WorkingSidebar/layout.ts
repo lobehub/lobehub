@@ -1,6 +1,8 @@
 export const OVERVIEW_PANEL_WIDTH = 340;
 export const MIN_PANEL_WIDTH = 300;
 export const MAX_PANEL_WIDTH = 1200;
+// A canvas is a laid-out page; narrower than this it reflows into its mobile layout.
+export const CANVAS_MIN_WIDTH = 560;
 
 interface WorkingPanelPreference {
   showRightPanel?: boolean;

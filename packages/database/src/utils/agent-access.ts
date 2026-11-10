@@ -1,14 +1,48 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, type SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { agents } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from './workspace';
 
 interface AgentAccessCtx {
   userId: string;
   workspaceId?: string;
 }
+
+/** The same use-time scope for validation and reads that also need current Agent settings. */
+export const agentUsableByWhere = (agentId: string, ctx: AgentAccessCtx) =>
+  and(eq(agents.id, agentId), buildWorkspaceWhere(ctx, agents));
+
+/**
+ * The one predicate behind "may this caller use that agent": a public agent in
+ * the same workspace, or one the caller owns. Shared by the assertion below and
+ * by {@link agentUsableBy}, so the guard and the row filter cannot drift.
+ */
+const usableAgentWhere = (ctx: AgentAccessCtx) =>
+  buildWorkspaceWhere(ctx, {
+    isDeleted: agents.isDeleted,
+    userId: agents.userId,
+    visibility: agents.visibility,
+    workspaceId: agents.workspaceId,
+  });
+
+/**
+ * Row-level form of {@link assertAgentUsableBy}: restrict rows that hang off an
+ * agent (its accounts, its inbox) to agents the caller may use.
+ *
+ * Workspace ownership alone is not enough for such rows. They carry no
+ * `visibility` of their own, so `buildWorkspaceWhere` would show every member
+ * the rows of a colleague's *private* agent; the owning agent's visibility is
+ * what decides.
+ */
+export const agentUsableBy = (
+  db: LobeChatDatabase,
+  agentIdColumn: AnyPgColumn,
+  ctx: AgentAccessCtx,
+): SQL =>
+  inArray(agentIdColumn, db.select({ id: agents.id }).from(agents).where(usableAgentWhere(ctx)));
 
 /**
  * Assert that `ctx.userId` in `ctx.workspaceId` is allowed to use the agent —
@@ -24,24 +58,14 @@ interface AgentAccessCtx {
  * surface in sync with `buildWorkspaceWhere` semantics.
  */
 export async function assertAgentUsableBy(
-  db: LobeChatDatabase,
+  db: LobeChatDatabase | Transaction,
   agentId: string,
   ctx: AgentAccessCtx,
 ): Promise<void> {
   const rows = await db
     .select({ id: agents.id })
     .from(agents)
-    .where(
-      and(
-        eq(agents.id, agentId),
-        buildWorkspaceWhere(ctx, {
-          isDeleted: agents.isDeleted,
-          userId: agents.userId,
-          workspaceId: agents.workspaceId,
-          visibility: agents.visibility,
-        }),
-      ),
-    )
+    .where(agentUsableByWhere(agentId, ctx))
     .limit(1);
 
   if (rows.length === 0) {

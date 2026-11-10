@@ -1,8 +1,12 @@
 export * from './core/BaseAI';
+export {
+  type InlineImageNormalizer,
+  setInlineImageNormalizer,
+} from './core/contextBuilders/inlineImageBudget';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
 export { mergeModelRuntimeHooks } from './core/mergeHooks';
 export type { ModelRuntimeHooks } from './core/ModelRuntime';
-export { ModelRuntime } from './core/ModelRuntime';
+export { describeGenerateObjectError, ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
 export { StructuredOutputError } from './core/openaiCompatibleFactory/structuredOutput';
 export * from './core/RouterRuntime';
@@ -79,6 +83,7 @@ export { LobeStraicoAI } from './providers/straico';
 export { LobeStreamLakeAI } from './providers/streamlake';
 export { LobeSuperGrokAI } from './providers/superGrok';
 export { LobeTogetherAI } from './providers/togetherai';
+export { LobeTypeSafeAI } from './providers/typesafe';
 export { LobeVolcengineAI } from './providers/volcengine';
 export { LobeVolcengineCodingPlanAI } from './providers/volcengineCodingPlan';
 export { LobeXiaomiMiMoAI } from './providers/xiaomimimo';
@@ -87,6 +92,7 @@ export { LobeZeroOneAI } from './providers/zeroone';
 export { LobeZhipuAI } from './providers/zhipu';
 export * from './types';
 export * from './types/error';
+export { awaitFirstResponseChunk } from './utils/awaitFirstResponseChunk';
 export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';

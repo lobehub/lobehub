@@ -8,7 +8,12 @@ import { FileService } from '@/server/services/file';
 import { purgeVerifyRun } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
-import { resolveVerifyRun, verifyProcedure, verifyWriteProcedure } from './procedures';
+import {
+  assertOperationInScope,
+  resolveVerifyRun,
+  verifyProcedure,
+  verifyWriteProcedure,
+} from './procedures';
 import { checkItemSchema, verifyRunIdInputSchema } from './schemas';
 
 const runSourceSchema = z.enum(['agent', 'agent-testing']);
@@ -175,9 +180,11 @@ export const runsRouter = router({
         title: input.title,
       }),
     ),
-  getRun: verifyProcedure
-    .input(verifyRunIdInputSchema)
-    .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
+  getRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
+    const run = await ctx.runModel.findById(input.verifyRunId);
+    if (run) assertOperationInScope(ctx, run.operationId);
+    return run;
+  }),
   // Delete a whole verification session: the run row cascades to its check
   // results (→ their evidence) and its report via the schema FKs, and the
   // evidence files only this run referenced are purged from storage.

@@ -175,7 +175,7 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   /\b(?:npm|pnpm|yarn|bun|bunx)\s+run\s+check\b/i,
   // static analysis / build / CI gates
   /\btype[\s-]?check(?:s|ing)?\b/i,
-  /\b(?:tsc|tsgo|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
+  /\b(?:tsc|tsrs|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
   /\blint(?:s|ing)?\b/i,
   /\bcompiles?\s+(?:cleanly|without errors)\b/i,
   /\bbuild\s+(?:pass(?:es|ed)?|succeed(?:s|ed)?|(?:is\s+)?(?:green|clean))\b/i,
@@ -184,6 +184,34 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   // Chinese
   /单元测试|单测|集成测试|回归测试|类型检查|类型校验|测试覆盖率|代码覆盖率|静态检查|测试用例全部通过/,
 ];
+
+/**
+ * Round statuses past which a dispute can no longer change anything: the round
+ * has been judged (or handed to a repair round) and its Task driven, so a waiver
+ * written there would only rewrite metadata under a settled verdict.
+ */
+export const DISPUTE_SETTLED_RUN_STATUSES = [
+  'delivered',
+  'errored',
+  'failed',
+  'passed',
+  'repairing',
+] as const satisfies readonly VerifyRunStatus[];
+
+/** Why a builder disputes a check; see `VerifyCheckDisputeKind` in `@lobechat/types`. */
+export const VERIFY_DISPUTE_KINDS = ['invalid_criterion', 'missed_evidence'] as const;
+
+/**
+ * Whether a panel upheld the builder's `invalid_criterion` dispute on this check
+ * result, which waives it: the rollup, the Goal review and the failure summary
+ * stop counting it against the delivery. Takes the raw metadata bag so every
+ * layer reads the same field.
+ */
+export const isCheckWaivedByDispute = (metadata: unknown): boolean => {
+  const dispute = (metadata as { dispute?: { arbitration?: { outcome?: string }; kind?: string } })
+    ?.dispute;
+  return dispute?.kind === 'invalid_criterion' && dispute.arbitration?.outcome === 'upheld';
+};
 
 /**
  * Stored title of the synthesized holistic fallback check (one broad agent
@@ -230,8 +258,17 @@ export const acceptanceSubjectTypes = [
   'document',
   'standalone',
   'goal_gate',
+  'site',
 ] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -240,12 +277,23 @@ export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
  */
 /**
  * Who can see a verify artifact (a run's report page, an acceptance page)
- * beyond its creator. Personal-scope rows default to `public` (the page is
- * meant to be linked from PRs / reports); workspace-scope rows default to
- * `private` (org data stays member-gated until deliberately opened up).
+ * beyond its creator:
+ *
+ * - `public` — anyone holding the link.
+ * - `private` — the creator and members of the row's own workspace. In a
+ *   workspace this is "shared with the team", the default there.
+ * - `owner` — the creator alone, even inside a workspace.
+ *
+ * Personal-scope rows default to `public` (the page is meant to be linked from
+ * PRs / reports); workspace-scope rows default to `private`, so org data reaches
+ * every member without leaking past the workspace.
  */
-export const verifyVisibilities = ['private', 'public'] as const;
+export const verifyVisibilities = ['private', 'public', 'owner'] as const;
 export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+/** Whether a member of the row's workspace (not its creator) may read it. */
+export const isWorkspaceReadableVisibility = (visibility: VerifyVisibility) =>
+  visibility !== 'owner';
 
 export const acceptanceVisibilities = verifyVisibilities;
 export type AcceptanceVisibility = VerifyVisibility;
@@ -367,6 +415,9 @@ export const verifyEvidenceTypes = [
   'markdown',
   'dom_snapshot',
   'transcript',
+  // One command execution: a readable text payload plus structured execution
+  // facts, provenance and stdout / stderr / recording artifacts in metadata.
+  'terminal',
 ] as const;
 export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
 
@@ -441,6 +492,42 @@ export const runEvidenceGaps = (
     readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
     evidence,
   );
+/**
+ * Evidence whose payload is text a reader or model can take in directly. A
+ * `terminal` evidence belongs here because its payload is the text fallback of
+ * the execution, written for exactly the readers that have no player.
+ */
+export const verifyTextEvidenceTypes: ReadonlySet<string> = new Set([
+  'dom_snapshot',
+  'markdown',
+  'terminal',
+  'text',
+  'transcript',
+]);
+
+/**
+ * Every stored file an evidence row references: its own payload file, plus —
+ * for a `terminal` evidence — the stdout / stderr / output / recording files its
+ * record names. Anything that follows evidence to its files (library hiding,
+ * permanent purge) must use this, or those artifacts outlive their evidence.
+ * Reads ids leniently; the record itself was validated when it was stored.
+ */
+export const verifyEvidenceFileIds = (evidence: {
+  fileId?: string | null;
+  metadata?: unknown;
+  type: string;
+}): string[] => {
+  const ids = evidence.fileId ? [evidence.fileId] : [];
+  if (evidence.type !== 'terminal') return ids;
+  const artifacts = (evidence.metadata as { terminal?: { artifacts?: unknown } } | null | undefined)
+    ?.terminal?.artifacts;
+  if (!artifacts || typeof artifacts !== 'object') return ids;
+  for (const artifact of Object.values(artifacts as Record<string, unknown>)) {
+    const fileId = (artifact as { fileId?: unknown } | null)?.fileId;
+    if (typeof fileId === 'string' && fileId.length > 0) ids.push(fileId);
+  }
+  return [...new Set(ids)];
+};
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
@@ -518,6 +605,12 @@ export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | 
  */
 export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  // Only a `terminal` row may carry an execution record — on any other medium
+  // it would claim provenance no reader checks.
+  if (type !== 'terminal' && 'terminal' in metadata) {
+    const { terminal: _terminal, ...rest } = metadata as Record<string, unknown>;
+    return normalizeEvidenceMetadata(Object.keys(rest).length > 0 ? rest : null, type);
+  }
   if (!('chapters' in metadata)) return metadata;
   const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
   const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;

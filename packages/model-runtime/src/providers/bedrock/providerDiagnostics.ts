@@ -1,4 +1,4 @@
-import { toRecord } from '@lobechat/utils/object';
+import { toRecord } from '../../utils/object';
 
 import {
   appendProviderResponseEvent,

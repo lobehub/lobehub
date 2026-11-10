@@ -7,6 +7,7 @@ import type {
   LinearConnectorClient,
   LinearCycle,
   LinearIssue,
+  LinearListInput,
   LinearOrganization,
   LinearProject,
   LinearTeam,
@@ -183,7 +184,7 @@ export const createLinearMarketConnectorClient = ({
       );
       return { name: str(organization?.name) ?? '', urlKey: str(organization?.urlKey) };
     },
-    listRecentIssues: async ({ first, publicTeamsOnly } = {}) => {
+    listRecentIssues: async ({ first, publicTeamsOnly }: LinearListInput = {}) => {
       const data = await query('listRecentIssues', LINEAR_QUERIES.issues, {
         filter: publicTeamsOnly ? PUBLIC_FILTERS.issues : null,
         first: pageSize(first, DEFAULT_ISSUES),
@@ -209,7 +210,7 @@ export const createLinearMarketConnectorClient = ({
         ];
       });
     },
-    listRecentProjects: async ({ first, publicTeamsOnly } = {}) => {
+    listRecentProjects: async ({ first, publicTeamsOnly }: LinearListInput = {}) => {
       const data = await query('listRecentProjects', LINEAR_QUERIES.projects, {
         filter: publicTeamsOnly ? PUBLIC_FILTERS.projects : null,
         first: pageSize(first, DEFAULT_PROJECTS),
@@ -232,7 +233,7 @@ export const createLinearMarketConnectorClient = ({
         ];
       });
     },
-    listTeams: async ({ first, publicTeamsOnly } = {}) => {
+    listTeams: async ({ first, publicTeamsOnly }: LinearListInput = {}) => {
       const data = await query('listTeams', LINEAR_QUERIES.teams, {
         filter: publicTeamsOnly ? PUBLIC_FILTERS.teams : null,
         first: pageSize(first, DEFAULT_TEAMS),

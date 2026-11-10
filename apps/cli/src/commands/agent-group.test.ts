@@ -73,6 +73,15 @@ describe('agent-group command', () => {
   });
 
   describe('view', () => {
+    it('prints null instead of crashing for a missing group with --json', async () => {
+      mockTrpcClient.group.getGroupDetail.query.mockResolvedValue(null);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent-group', 'view', 'missing', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith('null');
+    });
+
     it('should view group details', async () => {
       mockTrpcClient.group.getGroupDetail.query.mockResolvedValue({
         agents: [{ id: 'a1', title: 'Agent 1' }],

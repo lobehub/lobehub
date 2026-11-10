@@ -6,8 +6,8 @@ import {
   Avatar,
   Block,
   Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Highlighter renders its pre without a slot
   createStaticStyles,
-  cx,
   Divider,
   Flexbox,
   Highlighter,
@@ -30,6 +30,14 @@ import { useDetailActionContext } from '../../DetailProvider';
 import { getSkillInstructionsUrl } from './getSkillInstructionsUrl';
 import VsCodeIcon from './VsCodeIcon';
 
+const fallback = createStaticStyles(({ css }) => ({
+  lite: css`
+    pre {
+      padding: 12px !important;
+    }
+  `,
+}));
+
 const Title = ({ children }: { children?: React.ReactNode }) => (
   <Text as={'h3'} fontSize={16} style={{ margin: 0, paddingInline: 8 }} weight={600}>
     {children}
@@ -46,14 +54,6 @@ enum PlatformType {
   LobeHub = 'lobehub',
   VsCode = 'vscode',
 }
-
-export const styles = createStaticStyles(({ css }) => ({
-  lite: css`
-    pre {
-      padding: 12px !important;
-    }
-  `,
-}));
 
 interface PlatformProps {
   downloadUrl?: string;
@@ -255,7 +255,7 @@ const Platform = memo<PlatformProps>(
             <Highlighter
               fullFeatured
               wrap
-              className={cx(lite && styles.lite)}
+              className={lite ? fallback.lite : undefined}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={'Agent prompt'}
               language={'bash'}
@@ -314,7 +314,7 @@ const Platform = memo<PlatformProps>(
             {lite && <Divider dashed />}
             <Highlighter
               fullFeatured
-              className={cx(lite && styles.lite)}
+              className={lite ? fallback.lite : undefined}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={t('skills.details.sidebar.installCommand')}
               language={'bash'}
@@ -326,7 +326,7 @@ const Platform = memo<PlatformProps>(
             {lite && <Divider dashed />}
             <Highlighter
               fullFeatured
-              className={cx(lite && styles.lite)}
+              className={lite ? fallback.lite : undefined}
               defaultExpand={false}
               fileName={t('skills.details.sidebar.directoryLayout')}
               language={'text'}

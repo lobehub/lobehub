@@ -21,6 +21,9 @@ describe('offline acceptance report commands', () => {
     process.exitCode = undefined;
     printed = [];
     vi.spyOn(console, 'log').mockImplementation((line) => printed.push(String(line)));
+    // This repository declares a project in `.agents/acceptance/config.json`;
+    // run outside it so the dry run does not look that project up.
+    vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
     vi.mocked(getTrpcClient).mockRejectedValue(new Error('No account configured'));
     dir = await mkdtemp(path.join(tmpdir(), 'lh-offline-report-'));
   });

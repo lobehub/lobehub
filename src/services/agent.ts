@@ -75,6 +75,8 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /** This desktop's gateway device, where the creator's direct Channel to a local Agent runs. */
+  localDeviceId?: string;
   /**
    * `private` keeps the agent visible only to its creator within the active
    * workspace; `public` (default) makes it visible to every member. The
@@ -129,8 +131,14 @@ class AgentService {
    * Get an agent by forkedFromIdentifier stored in params
    * @returns agent id if exists, null otherwise
    */
-  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
-    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({ forkedFromIdentifier });
+  getAgentByForkedFromIdentifier = async (
+    forkedFromIdentifier: string,
+    options?: { virtual?: boolean },
+  ): Promise<string | null> => {
+    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({
+      forkedFromIdentifier,
+      ...options,
+    });
   };
 
   /**
@@ -143,6 +151,7 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      localDeviceId: params.localDeviceId,
       visibility: params.visibility,
     });
   };

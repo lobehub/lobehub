@@ -1,3 +1,4 @@
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -7,8 +8,12 @@ import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 
-import { assertCanUseTopicTargets } from './conversationResourceGuard';
+import {
+  assertCanUseConversationTargets,
+  assertCanUseTopicTargets,
+} from './conversationResourceGuard';
 import { projectSharedTopicMessages } from './projectSharedTopicMessages';
+import { resolveContext } from './resolveContext';
 
 /**
  * Upper bound on rounds per `getMessagesByCursor` page. The scan itself is bounded
@@ -121,8 +126,18 @@ export const readMessagesByCursor = async (
   const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
   const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
 
+  const resolved = await resolveContext(
+    { ...queryParams, agentId: queryParams.agentId ?? undefined },
+    ctx.serverDB,
+    ctx.userId,
+    wsId,
+  );
+  await assertCanUseConversationTargets(
+    { db: ctx.serverDB, userId: ctx.userId, workspaceId: wsId },
+    [resolved],
+  );
   const page = await messageModel.queryTopicMessagesByCursor(
-    { ...queryParams, direction, topicId },
+    { ...queryParams, ...resolved, direction, topicId },
     {
       postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
     },
@@ -130,7 +145,10 @@ export const readMessagesByCursor = async (
 
   // Same rule as `getMessages`: only the caller knows whether this page is
   // rendered or fed to a model, so projection is opt-in per read.
-  return projectToolPayloads
-    ? { ...page, direction, messages: projectToolViewModels(page.messages) }
-    : { ...page, direction };
+  const messages = page.messages.map(omitToolWorkRegistration);
+  return {
+    ...page,
+    direction,
+    messages: projectToolPayloads ? projectToolViewModels(messages) : messages,
+  };
 };

@@ -10,7 +10,7 @@ import {
   classifyHeteroProcessFailure,
   isHeteroStatusGuideErrorData,
 } from '@lobechat/heterogeneous-agents/processFailure';
-import { ThreadStatus } from '@lobechat/types';
+import { type ChatMessageError, ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -22,10 +22,12 @@ import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { shouldRecordGatewayError } from '@/server/modules/AgentRuntime/gatewayErrorRecord';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
@@ -94,6 +96,20 @@ export interface HeterogeneousFinishParams {
 }
 
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
+
+/**
+ * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
+ * publishes the run's end after clearing the topic's running marker, and an
+ * earlier end lets a client reconnect on that marker and complete the run twice.
+ * A stop stays published because a CLI that exits 0 reports it to heteroFinish
+ * as `success`, so this event is the only signal that the user stopped the run.
+ */
+const isCleanRuntimeEnd = (event: AgentStreamEvent): boolean => {
+  if (event.type !== 'agent_runtime_end') return false;
+
+  const reason = (event.data as { reason?: string } | undefined)?.reason;
+  return !reason || reason === 'success' || reason === 'complete';
+};
 
 /**
  * Older or partially upgraded `lh hetero exec` producers can flatten an
@@ -297,10 +313,15 @@ export class HeterogeneousAgentService {
       );
     }
     for (const event of unpublished) {
-      // Each event already carries operationId; pass through unchanged so the
-      // wire shape on the WS side is identical to gateway-driven runs.
+      if (isCleanRuntimeEnd(event)) {
+        this.persistenceHandler.markEventPublished(operationId, event);
+        continue;
+      }
+      // Each event already carries operationId; the wire shape matches
+      // gateway-driven runs, which also name the step's assistant row on
+      // `stream_start` (see `publishData`).
       await this.streamEventManager.publishStreamEvent(operationId, {
-        data: event.data,
+        data: this.persistenceHandler.publishData(operationId, event),
         stepIndex: event.stepIndex,
         type: event.type,
       });
@@ -489,6 +510,27 @@ export class HeterogeneousAgentService {
       }
     }
 
+    // The gateway files an errored run on its error board from this event alone, so
+    // it carries the same `errorType` / `reasonDetail` / `recordError` contract as
+    // the LLM runtime's end event. Without them every CLI failure, including a
+    // user's own Claude Code / Codex session limit, was filed as an empty row.
+    const endData = {
+      agentType,
+      error,
+      operationId,
+      reason: result,
+      sessionId,
+      ...(result === 'error' && {
+        errorType: error?.type,
+        reasonDetail: error?.message,
+        recordError: shouldRecordGatewayError({
+          error: error as Pick<ChatMessageError, 'attribution' | 'countAsFailure'> | undefined,
+          errorType: error?.type,
+          provider: agentType,
+        }),
+      }),
+    };
+
     if (staleActiveOperationId) {
       log(
         'heteroFinish: settle stale finish topic=%s op=%s; current operation is %s',
@@ -509,13 +551,7 @@ export class HeterogeneousAgentService {
         log('heteroFinish: failed to settle stale operation row (non-fatal): %O', err);
       }
       await this.streamEventManager.publishStreamEvent(operationId, {
-        data: {
-          agentType,
-          error,
-          operationId,
-          reason: result,
-          sessionId,
-        },
+        data: endData,
         stepIndex: 0,
         type: 'agent_runtime_end',
       });
@@ -542,13 +578,7 @@ export class HeterogeneousAgentService {
     // if the CLI stream missed it. A stale callback that belongs to neither the
     // root operation nor one of its children returns above.
     await this.streamEventManager.publishStreamEvent(operationId, {
-      data: {
-        agentType,
-        error,
-        operationId,
-        reason: result,
-        sessionId,
-      },
+      data: endData,
       stepIndex: 0,
       type: 'agent_runtime_end',
     });
@@ -729,7 +759,13 @@ export class HeterogeneousAgentService {
     // Follow-ups the user queued behind this run start as the next turn here,
     // as they do when a native run ends. The completion above released the
     // topic, which the next turn has to claim. A failed run leaves its queue
-    // to the user.
+    // to the user. Messages typed into the session that it never picked up go
+    // back to the queue first, so they are among them.
+    if (steerScope) {
+      await releaseHeteroSteers(operationId).catch((err) => {
+        log('heteroFinish: returning undelivered steer messages failed: %O', err);
+      });
+    }
     if (result === 'success' && steerScope) await this.startQueuedFollowUp(operationId, steerScope);
   }
 

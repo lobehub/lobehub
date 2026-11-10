@@ -1,3 +1,4 @@
+import type { StreamStartParentMessage } from '@lobechat/agent-gateway-client';
 import type { MainAgentRunState } from '@lobechat/heterogeneous-agents';
 
 import type { MessageModel } from '@/database/models/message';
@@ -42,6 +43,20 @@ export interface OperationState {
   publishedKeys: Set<string>;
   /** User message answered by this operation, checked against its topic/thread before stamping. */
   sourceUserMessageId?: string;
+  /** Steer user messages written in this run, by id (see `streamStartParentMessages`). */
+  steerMessages: Map<string, StreamStartParentMessage>;
+  /**
+   * Assistant row each main-agent `stream_start` resolved to, keyed by
+   * `eventKey`. Read when the event is published (stamped as
+   * `assistantMessage.id`) and dropped once its XADD succeeds.
+   */
+  streamStartAssistantIds: Map<string, string>;
+  /**
+   * Steer user message a main-agent `stream_start` opened its reply under,
+   * keyed by `eventKey`, stamped as `parentMessage` when the event is
+   * published so the client shows the message without a refetch.
+   */
+  streamStartParentMessages: Map<string, StreamStartParentMessage>;
   /** Isolation thread that owns this heterogeneous run, when applicable. */
   threadId: string | undefined;
   /**

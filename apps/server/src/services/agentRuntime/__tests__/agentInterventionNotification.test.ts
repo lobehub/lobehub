@@ -233,7 +233,7 @@ describe('buildRuntimeInterventionNotification', () => {
     expect(result?.systemActionEligibility).toBe('review_only');
   });
 
-  it('lets only the card resolve the secure credential form', async () => {
+  it('keeps approve on the durable secure credential form row for its card', async () => {
     const credsForm = {
       apiName: 'requestCredsInput',
       arguments: '{"key":"openai","name":"OpenAI","type":"kv-env","fieldNames":["OPENAI_API_KEY"]}',
@@ -254,6 +254,10 @@ describe('buildRuntimeInterventionNotification', () => {
     });
 
     expect(result?.items[0]).toMatchObject({
+      // The card approves the durable row after saving the secret, so
+      // `approve_tool` must be stored (dropping it 403'd every card submit).
+      // Review withholds approve for this shape in the Cloud resolution
+      // service; edit and remember never apply to the form.
       allowedActions: ['approve_tool', 'reject_continue', 'stop'],
       interactionKind: 'tool_approval',
       surface: 'form',

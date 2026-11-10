@@ -31,6 +31,7 @@ import {
 import {
   getReviewSummaryState,
   GIT_REVIEW_MAX_PERSISTED_BYTES,
+  gitLinkedPRKey,
   gitLinkedPRResource,
   gitPullRequestActivityResource,
   gitPullRequestDetailResource,
@@ -613,6 +614,61 @@ describe('Review / PR tab replicas', () => {
 
       expect(gitService.getLinkedPullRequest).not.toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
+    });
+
+    // Regression: SWR settles a request still in flight when its key goes null
+    // through the latest callbacks, which closed over null params, so a slow
+    // `gh` lookup that failed after the read was disabled threw
+    // "Cannot destructure property 'branch' of null" from `gitLinkedPRKey`.
+    it('settles a lookup that fails after the read is disabled', async () => {
+      let reject!: (error: unknown) => void;
+      vi.mocked(gitService.getLinkedPullRequest).mockImplementation(
+        () => new Promise((_resolve, rejectLookup) => (reject = rejectLookup)),
+      );
+      const linkedPR = useGitReviewStore.getState().slices.linkedPR;
+      // Earlier never-resolving reads stay pending on the shared slice.
+      const pendingBefore = linkedPR.debugPendingSyncRequests();
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+
+      try {
+        const { rerender } = renderHook(
+          ({ isGithub }) => useFetchGitLinkedPR('device-1', '/repo', 'feat/x', isGithub),
+          { initialProps: { isGithub: true }, wrapper },
+        );
+        await waitFor(() => expect(gitService.getLinkedPullRequest).toHaveBeenCalled());
+
+        rerender({ isGithub: false });
+        await act(async () => reject(new Error('gh pr list timed out')));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(unhandled).not.toHaveBeenCalled();
+        expect(linkedPR.debugPendingSyncRequests()).toBe(pendingBefore);
+      } finally {
+        process.off('unhandledRejection', unhandled);
+      }
+    });
+  });
+
+  describe('linked PR key', () => {
+    it('shares the composer row when a topic has no recorded PR, and splits it when it has one', () => {
+      const composer = { branch: 'feat/x', deviceId: 'device-1', path: '/repo' };
+
+      expect(gitLinkedPRKey({ ...composer, pullRequestNumber: undefined })).toBe(
+        gitLinkedPRKey(composer),
+      );
+      // A topic that recorded PR #7 asks `gh` about that PR, not "the PR of
+      // this branch": its answer must not land on the composer's row.
+      expect(gitLinkedPRKey({ ...composer, pullRequestNumber: 7 })).not.toBe(
+        gitLinkedPRKey(composer),
+      );
+      expect(gitLinkedPRResource.syncKey!({ ...composer, pullRequestNumber: 7 })).toEqual([
+        'device:gitLinkedPR',
+        'device-1',
+        '/repo',
+        'feat/x',
+        7,
+      ]);
     });
   });
 });

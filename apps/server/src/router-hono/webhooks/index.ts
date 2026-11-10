@@ -10,6 +10,7 @@ import { logtoWebhook } from './handlers/logto';
 import { memoryExtractionWebhook } from './handlers/memoryExtraction';
 import { memoryExtractionBenchmarkLocomo } from './handlers/memoryExtractionBenchmarkLocomo';
 import { memoryUserMemoryChatTopicCancel } from './handlers/memoryUserMemoryChatTopicCancel';
+import { memoryUserMemoryConsolidation } from './handlers/memoryUserMemoryConsolidation';
 import { memoryUserMemoryPersonaUpdateWriting } from './handlers/memoryUserMemoryPersonaUpdateWriting';
 import { videoWebhook } from './handlers/video';
 import { memoryWebhookAuth } from './middlewares/memoryWebhookAuth';
@@ -27,6 +28,7 @@ app.post(
   memoryWebhookAuth(),
   memoryExtractionBenchmarkLocomo,
 );
+app.post('/memory-user-memory/consolidation', memoryWebhookAuth(), memoryUserMemoryConsolidation);
 app.post(
   '/memory-user-memory/persona/update-writing',
   memoryWebhookAuth(),

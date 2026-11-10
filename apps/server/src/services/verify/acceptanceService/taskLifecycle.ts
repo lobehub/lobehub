@@ -1,7 +1,13 @@
 import debug from 'debug';
+import { eq } from 'drizzle-orm';
 
+import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { acceptances } from '@/database/schemas';
+import type { AcceptanceItem } from '@/database/schemas/verify';
+import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
+import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { TaskService } from '@/server/services/task';
 
 import type { AcceptanceServiceDeps } from './deps';
@@ -13,25 +19,76 @@ const log = debug('lobe-server:verify-acceptance');
  * accept (e.g. the round failed but the user accepted anyway) and when an
  * ingested round delivers. Best-effort: a task error must not undo the
  * recorded acceptance.
+ *
+ * `callerOperationId` is the Agent Run that published the delivery. When that
+ * run is the task's own running topic, completion is deferred to the end of
+ * the run instead of interrupting it mid-tool-call (the agent would read the
+ * interrupt as a refused command and stop). A later completion of the same
+ * delivery (accept, merged PR) keeps waiting for the run already pending.
  */
 export const completeTaskSubject = async (
   deps: AcceptanceServiceDeps,
   subjectId: string,
+  callerOperationId?: string,
 ): Promise<void> => {
   try {
     const taskModel = new TaskModel(deps.db, deps.userId, deps.workspaceId);
     const task = await taskModel.resolve(subjectId);
     if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) return;
+    const operationId = callerOperationId ?? pendingCompletionOperation(task);
 
     // TaskService cascades checkpoint / sibling rollup / downstream unlock —
     // the same completion path settle.ts drives on a passed verify.
-    await new TaskService(deps.db, deps.userId, deps.workspaceId).updateStatus({
+    const result = await new TaskService(deps.db, deps.userId, deps.workspaceId).updateStatus({
       id: task.id,
+      ...(operationId ? { operationId } : {}),
       status: 'completed',
     });
-    log('acceptance → task %s completed', task.id);
+    if (result.completionDeferred)
+      log('acceptance → task %s completes when run %s ends', task.id, operationId);
+    else log('acceptance → task %s completed', task.id);
   } catch (error) {
     log('completeTaskSubject failed (non-fatal): %O', error);
+  }
+};
+
+/** The run a deferred completion waits for — see {@link completeTaskSubject}. */
+const pendingCompletionOperation = (task: { context?: unknown }) =>
+  (task.context as { completion?: { requestedByOperationId?: string | null } } | null)?.completion
+    ?.requestedByOperationId ?? undefined;
+
+export const resolveRepairComments = async (
+  deps: AcceptanceServiceDeps,
+  delivery: Pick<AcceptanceItem, 'id' | 'metadata'>,
+) => {
+  try {
+    // Written only by the feedback handoff, never by user input such as Task config.
+    const link = delivery.metadata?.repairSource;
+    if (!link) return;
+    const source = await deps.db.query.acceptances.findFirst({
+      where: eq(acceptances.id, link.acceptanceId),
+    });
+    if (!source) return;
+    const latest = source.metadata?.repair;
+    const handedOff = link.commentIds ?? (latest?.id === link.requestId ? latest.commentIds : []);
+
+    // Same rule as resolving a thread by hand: reviewers close any handed-off
+    // thread, everyone else only the threads they opened.
+    const access = await resolveReviewAccess(deps.db, deps.actorUserId, source.id);
+    if (!access) return;
+    const comments = new AcceptanceCommentModel(deps.db);
+    const rows = new Map((await comments.listByAcceptance(source.id)).map((row) => [row.id, row]));
+    const rootIds = new Set(handedOff.map((id) => rows.get(id)?.parentCommentId ?? id));
+    const ids = [...rootIds].filter((id) => {
+      const root = rows.get(id);
+      return root && (access.can.moderate || root.authorUserId === deps.actorUserId);
+    });
+
+    const resolved = await comments.resolveRoots(source.id, ids, deps.actorUserId);
+    if (resolved.length) notifyAcceptance(source.id, 'comments', deps.actorUserId);
+    log('acceptance %s resolved %d handed-off comments', delivery.id, resolved.length);
+  } catch (error) {
+    log('acceptance %s comment resolve failed: %O', delivery.id, error);
   }
 };
 
@@ -60,12 +117,14 @@ export const resolveLifecycleTask = async (deps: AcceptanceServiceDeps, subjectI
  *
  * @returns `completed` when the task now reads completed, `rejected` when a
  * reject won, `skipped` when the task does not follow the acceptance or could
- * not be completed.
+ * not be completed — including a completion deferred to the end of
+ * `callerOperationId`'s run (see {@link completeTaskSubject}).
  */
 export const completeTaskForDelivery = async (
   deps: AcceptanceServiceDeps,
   acceptanceId: string,
   subjectId: string,
+  callerOperationId?: string,
 ): Promise<'completed' | 'rejected' | 'skipped'> => {
   try {
     const task = await resolveLifecycleTask(deps, subjectId);
@@ -75,19 +134,25 @@ export const completeTaskForDelivery = async (
     if (before?.status === 'rejected') return 'rejected';
     if (before?.status !== 'delivered') return 'skipped';
 
-    await completeTaskSubject(deps, task.id);
+    await completeTaskSubject(deps, task.id, callerOperationId);
     // `completeTaskSubject` is best-effort and swallows its own failures (e.g. a
     // running operation that could not be interrupted). Only a task that really
     // reads completed counts — anything else lets the caller fall back.
     const written = await new TaskModel(deps.db, deps.userId, deps.workspaceId).findById(task.id);
-    if (written?.status !== 'completed') return 'skipped';
+    // A completion deferred to the caller's run is re-checked like a written
+    // one: a reject that read the task before the deferral had nothing to withdraw.
+    const deferred =
+      written?.status === 'running' &&
+      !!callerOperationId &&
+      pendingCompletionOperation(written) === callerOperationId;
+    if (written?.status !== 'completed' && !deferred) return 'skipped';
 
     const after = await deps.acceptanceModel.findPolicyById(acceptanceId);
     if (after?.status === 'rejected') {
       await reopenRejectedTaskSubject(deps, task.id);
       return 'rejected';
     }
-    return 'completed';
+    return deferred ? 'skipped' : 'completed';
   } catch (error) {
     log('completeTaskForDelivery failed (non-fatal): %O', error);
     return 'skipped';
@@ -98,21 +163,37 @@ export const completeTaskForDelivery = async (
  * Rejecting a delivery reopens the task it completed, so the task is not left
  * reading "done" while its repair is pending. Only a completed task moves —
  * one the user already paused, canceled or restarted keeps its own state.
+ *
+ * A delivery from the task's own run is completed only once that run ends
+ * (see {@link completeTaskSubject}); a reject landing before then withdraws
+ * the pending completion, so the run ends the way an undelivered one would.
  */
 export const reopenRejectedTaskSubject = async (
   deps: AcceptanceServiceDeps,
   subjectId: string,
 ): Promise<void> => {
   try {
-    const task = await resolveLifecycleTask(deps, subjectId);
+    let task = await resolveLifecycleTask(deps, subjectId);
+    const taskModel = new TaskModel(deps.db, deps.userId, deps.workspaceId);
+
+    if (task?.status === 'running') {
+      const pending = pendingCompletionOperation(task);
+      if (!pending) return;
+
+      if (await taskModel.withdrawCompletionRequest(task.id, pending)) {
+        log(
+          'acceptance rejected → task %s pending completion by run %s withdrawn',
+          task.id,
+          pending,
+        );
+        return;
+      }
+      // The run consumed the request first and completed the task: reopen it.
+      task = await taskModel.findById(task.id);
+    }
     if (task?.status !== 'completed') return;
 
-    await new TaskModel(deps.db, deps.userId, deps.workspaceId).updateStatusIfCurrent(
-      task.id,
-      'completed',
-      'paused',
-      { completedAt: null },
-    );
+    await taskModel.updateStatusIfCurrent(task.id, 'completed', 'paused', { completedAt: null });
     log('acceptance rejected → task %s reopened as paused', task.id);
   } catch (error) {
     log('reopenRejectedTaskSubject failed (non-fatal): %O', error);

@@ -1,6 +1,6 @@
 import { defineReplica } from '@/libs/replica';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import type { KnowledgeBaseItem } from '@/types/knowledgeBase';
+import type { AgentKnowledgeSpaceItem, KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 /**
  * Workspace-scoped visibility of a KB. `private` rows are visible to their
@@ -53,6 +53,22 @@ export const knowledgeBaseItemResource = defineReplica<
 >({
   key: (id) => id,
   name: 'knowledgeBaseItem',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** The only entry of the agent space list: the replica scope already isolates workspaces. */
+export const AGENT_SPACE_LIST_KEY = 'all';
+
+/** Agents' dedicated libraries, a surface of their own next to the user's libraries. */
+export const agentSpaceListResource = defineReplica<
+  typeof AGENT_SPACE_LIST_KEY,
+  AgentKnowledgeSpaceItem[],
+  AgentKnowledgeSpaceItem[]
+>({
+  fetcher: () => knowledgeBaseService.getAgentSpaces(),
+  key: (key) => key,
+  name: 'agentSpaceList',
   storage: 'indexedDB',
   version: 1,
 });

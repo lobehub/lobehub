@@ -1,4 +1,6 @@
 import { deriveWorktreePath } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { z } from 'zod';
 
 import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -7,6 +9,23 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
 import { deviceProcedure } from './procedures';
+
+const log = debug('lobe-server:device-git');
+
+/** A device's home directory rarely changes; reuse a recent system-info read. */
+const WORKTREE_HOME_MAX_AGE_MS = 10 * 60 * 1000;
+
+/**
+ * A gateway read that resolved to `undefined` (gateway unconfigured, device
+ * offline, RPC failed). Thrown rather than mapped to `[]` or `null`: `[]` is
+ * indistinguishable from a real empty list, and released clients expect an
+ * array, so only a procedure error keeps both old and new clients correct.
+ */
+const requireDeviceAnswer = <T>(result: T | undefined, what: string): T => {
+  if (result === undefined)
+    throw new TRPCError({ code: 'BAD_GATEWAY', message: `The device could not list ${what}.` });
+  return result;
+};
 
 export const gitRouter = router({
   /**
@@ -156,7 +175,9 @@ export const gitRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
-      return result ?? [];
+      // `[]` is a real answer (an unborn repo); a device that could not answer
+      // is an error, never an empty list a client could cache over its copy.
+      return requireDeviceAnswer(result, 'branches');
     }),
   /**
    * Checkout (or create) a branch in a directory on a remote device, via the
@@ -250,10 +271,15 @@ export const gitRouter = router({
    * Add a linked worktree on a fresh branch in a directory's repository on a
    * remote device, via the device's `addGitWorktree` RPC.
    *
-   * The target directory is derived here from the trusted `path` + `branch`
-   * (a `<repo>-<branch>` sibling) rather than accepted from the request, so a
-   * crafted web call can't ask the device to check out at an arbitrary absolute
-   * path — the branch is folded to `-` in the folder name, so it can't traverse.
+   * The target directory is derived here from the trusted `sourcePath` (the
+   * repo's main checkout, falling back to `path` for released clients) and
+   * `branch` — `<home>/.lobehub/worktrees/<repoKey>/<branch>`, with `<home>`
+   * from the device's reported `homePath` — rather than accepted from the
+   * request, so a crafted web call can't ask the device to check out at an
+   * arbitrary absolute path: the branch is folded to `-` in the folder name, so
+   * it can't traverse. A device that does not report its home falls back to the
+   * `<repo>-<branch>` sibling layout. The path is always absolute, so released
+   * clients that run `git worktree add` verbatim keep working.
    */
   addGitWorktree: deviceProcedure
     .input(
@@ -261,18 +287,34 @@ export const gitRouter = router({
         branch: z.string(),
         deviceId: z.string(),
         path: z.string(),
+        /** The repo's main checkout, which keys the folder; `path` may be a linked worktree. */
+        sourcePath: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      deviceGateway.addGitWorktree({
+    .mutation(async ({ ctx, input }) => {
+      const systemInfo = await deviceGateway.queryDeviceSystemInfo(
+        ctx.userId,
+        input.deviceId,
+        ctx.workspaceId,
+        { maxAgeMs: WORKTREE_HOME_MAX_AGE_MS },
+      );
+      const homeDir = systemInfo?.homePath;
+      if (!homeDir)
+        log('addGitWorktree: no homePath for deviceId=%s, using sibling layout', input.deviceId);
+      // `sourcePath` only names and hashes the central folder; the sibling
+      // fallback places the checkout next to its key, so it keeps keying on
+      // `path`, the repo git actually runs in, rather than on a client string.
+      const keyPath = homeDir ? input.sourcePath || input.path : input.path;
+
+      return deviceGateway.addGitWorktree({
         branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-        worktreePath: deriveWorktreePath(input.path, input.branch),
-      }),
-    ),
+        worktreePath: deriveWorktreePath(keyPath, input.branch, { homeDir }),
+      });
+    }),
   /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
@@ -397,7 +439,8 @@ export const gitRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
-      return result ?? [];
+      // `[]` is a real answer (no `origin`); a device that could not answer is an error.
+      return requireDeviceAnswer(result, 'remote branches');
     }),
   /**
    * Repo-relative paths of dirty working-tree files for a directory on a remote

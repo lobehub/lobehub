@@ -1,3 +1,4 @@
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import type { Span } from '@lobechat/observability-otel/api';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { buildInvokeAgentResultAttributes } from '@lobechat/observability-otel/modules/agent-runtime';
@@ -7,6 +8,7 @@ import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorFo
 
 import { CriticalAgentInterventionPersistenceError } from '../../CompletionLifecycle';
 import { logToolCallPc } from '../../formalObservation';
+import { StepOwnershipLostError } from '../executionErrors';
 import type { AgentRuntimeServiceContext } from '../types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -19,7 +21,8 @@ export type StepFailureDeps = Pick<
 /**
  * A step threw. Record it on the span, persist the error state, settle the
  * completion lifecycle and finalize the trace, then rethrow — except a failed
- * intervention Review publication, which keeps the run parked for the retry.
+ * intervention Review publication, which keeps the run parked for the retry,
+ * and a lost step lock, which leaves the run to whoever owns it now.
  */
 export async function failStep(
   deps: StepFailureDeps,
@@ -39,6 +42,14 @@ export async function failStep(
     stepStartAt: number;
   },
 ): Promise<never> {
+  // Losing the lock says nothing about the run, only that this attempt may not
+  // commit. Settling it as an error here would end it under its new owner; the
+  // queue redelivers the step instead and the claim decides who runs it.
+  if (error instanceof StepOwnershipLostError) {
+    log('[%s][%d] Step lock lost before commit; leaving the run as it is', operationId, stepIndex);
+    throw error;
+  }
+
   const isInterventionPersistenceFailure =
     error instanceof CriticalAgentInterventionPersistenceError;
   invokeAgentSpan.recordException(error as Error);
@@ -96,6 +107,7 @@ export async function failStep(
     finalStateWithError = {
       ...errorState!,
       error: formattedError,
+      llmCalls: getLlmCallCount(errorState),
       metadata: {
         ...errorState?.metadata,
         externalRetryCount,

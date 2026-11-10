@@ -68,6 +68,33 @@ const rect = { height: 0.2, width: 0.3, x: 0.1, y: 0.1 };
 
 describe('AcceptanceCommentModel', () => {
   describe('create', () => {
+    it('stores independent video times in metadata and preserves retry identity and other facts', async () => {
+      const input = {
+        acceptanceId,
+        anchor: { checkItemId: 'c2', evidenceId, rect, time: { start: 2.5 } },
+        authorUserId: reviewer,
+        clientId: 'video-frame',
+        content: 'first frame',
+        metadata: { origin: 'reviewer' },
+      };
+      const { comment } = await model.create(input);
+      expect(comment.metadata).toEqual({
+        origin: 'reviewer',
+        evidenceAnchor: { time: { start: 2.5 } },
+      });
+      const second = await model.create({
+        ...input,
+        anchor: { ...input.anchor, time: { start: 6 } },
+        clientId: 'another-video-frame',
+      });
+      const retry = await model.create(input);
+      expect(retry.isDuplicate).toBe(true);
+      expect(retry.comment.id).toBe(comment.id);
+      expect((await model.findById(comment.id))?.metadata).toEqual(comment.metadata);
+      expect(second.comment.metadata).toMatchObject({ evidenceAnchor: { time: { start: 6 } } });
+      expect(await model.listByAcceptance(acceptanceId)).toHaveLength(2);
+    });
+
     it('writes a global comment with the round it was written against', async () => {
       const { comment, isDuplicate } = await model.create({
         acceptanceId,
@@ -219,6 +246,50 @@ describe('AcceptanceCommentModel', () => {
       expect(second.comment.id).toBe(first.comment.id);
       expect(second.comment.content).toBe('once');
       expect(await model.listByAcceptance(acceptanceId)).toHaveLength(1);
+    });
+  });
+
+  describe('access requests', () => {
+    const request = (clientId: string, status = 'pending') =>
+      model.create({
+        acceptanceId,
+        authorUserId: reviewer,
+        clientId,
+        content: 'let me collaborate',
+        kind: 'access_request',
+        metadata: { accessRequest: { permission: 'collaborate', status: status as any } },
+      });
+
+    const standingRows = () =>
+      serverDB
+        .select()
+        .from(acceptanceComments)
+        .where(eq(acceptanceComments.kind, 'access_request'));
+
+    it('keeps one standing request when two tabs ask at once', async () => {
+      const [first, second] = await Promise.all([request('tab-a'), request('tab-b')]);
+
+      expect(await standingRows()).toHaveLength(1);
+      expect(first.comment.id).toBe(second.comment.id);
+      expect([first.isDuplicate, second.isDuplicate].sort()).toEqual([false, true]);
+    });
+
+    it('hands back a granted request instead of opening another', async () => {
+      const { comment: granted } = await request('earlier', 'granted');
+
+      const again = await request('later');
+
+      expect(again).toMatchObject({ comment: { id: granted.id }, isDuplicate: true });
+      expect(await standingRows()).toHaveLength(1);
+    });
+
+    it('opens a new request once the last one was declined', async () => {
+      await request('earlier', 'declined');
+
+      const again = await request('later');
+
+      expect(again.isDuplicate).toBe(false);
+      expect(await standingRows()).toHaveLength(2);
     });
   });
 

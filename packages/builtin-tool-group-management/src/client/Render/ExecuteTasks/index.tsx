@@ -1,17 +1,24 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Accordion, Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from '@lobehub/ui';
+import {
+  Accordion,
+  Block,
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Text,
+  useTheme,
+} from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams } from '../../../types';
+import { MemberTaskDetail, MemberTaskTitle, useMemberAnchors } from '../../MemberProgress';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   assignee: css`
@@ -58,10 +65,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 /**
  * ExecuteTasks Render component for Group Management tool
- * Accordion-style task list with expandable instruction and assignee on the right
+ * Accordion-style task list with expandable instruction and assignee on the right.
+ * A server-run call also shows each member's status, and expanding a task shows
+ * what that member did in its own thread.
  */
 const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, string>>(
-  ({ args, content }) => {
+  ({ args, content, toolCallId }) => {
     const { t } = useTranslation('tool');
     const theme = useTheme();
     const { tasks } = args || {};
@@ -83,6 +92,8 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
       }));
     }, [tasks, groupAgents]);
 
+    const anchors = useMemberAnchors(toolCallId);
+
     if (!tasksWithAgents.length && !resultContent) return null;
 
     return (
@@ -95,9 +106,11 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
             items={tasksWithAgents.map((task, index) => ({
               action: (
                 <div className={styles.assignee}>
-                  <Avatar
-                    avatar={task.agent?.avatar || DEFAULT_AVATAR}
+                  <AgentAvatar
+                    agentId={task.agentId}
+                    avatar={task.agent?.avatar}
                     background={task.agent?.backgroundColor || theme.colorBgContainer}
+                    name={task.agent?.title}
                     shape={'circle'}
                     size={20}
                   />
@@ -105,18 +118,25 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
                 </div>
               ),
               alwaysShowAction: true,
-              children: task.instruction && (
-                <Block padding={12} style={{ marginTop: 8 }} variant={'filled'}>
-                  <Text className={styles.instruction}>{task.instruction}</Text>
-                </Block>
+              children: (task.instruction || anchors[index]) && (
+                <Flexbox gap={12} style={{ marginTop: 8 }}>
+                  {task.instruction && (
+                    <Block padding={12} variant={'filled'}>
+                      <Text className={styles.instruction}>{task.instruction}</Text>
+                    </Block>
+                  )}
+                  {anchors[index] && <MemberTaskDetail anchor={anchors[index]} />}
+                </Flexbox>
               ),
               key: task.agentId || String(index),
               title: (
                 <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
                   <span className={styles.index}>{index + 1}.</span>
-                  <Text className={styles.taskTitle} weight={500}>
-                    {task.title || 'Task'}
-                  </Text>
+                  <MemberTaskTitle anchor={anchors[index]}>
+                    <Text className={styles.taskTitle} weight={500}>
+                      {task.title || 'Task'}
+                    </Text>
+                  </MemberTaskTitle>
                 </Flexbox>
               ),
             }))}

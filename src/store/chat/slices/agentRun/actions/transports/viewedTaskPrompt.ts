@@ -25,12 +25,14 @@ export const buildViewedTaskPrompt = (
     const tasks = viewedList?.items ?? [];
     return buildTaskListPrompt({
       defaultAssigneeAgentId,
+      filtered: taskState.activeTaskListFiltered,
       tasks,
       total: viewedList?.total || tasks.length,
     });
   }
 
-  const task = taskState.taskDetailMap[viewedTask.taskId];
+  const task =
+    taskState.taskDetailMap[taskState.taskRefIndex[viewedTask.taskId] ?? viewedTask.taskId];
   if (task) return buildTaskDetailPrompt({ defaultAssigneeAgentId, task });
 };
 

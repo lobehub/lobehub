@@ -53,6 +53,21 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
+const createSkillServerState = (
+  lobehubSkillServers: typeof initialLobehubSkillStoreState.lobehubSkillServers = [],
+) => ({
+  lobehubSkillServers,
+  lobehubSkillLoadingIds: new Set<string>(),
+  lobehubSkillExecutingToolIds: new Set<string>(),
+});
+
+const createConnectedLinearServer = () => ({
+  identifier: 'linear',
+  name: 'Linear',
+  isConnected: true,
+  status: LobehubSkillStatus.CONNECTED,
+});
+
 const createSWRWrapper = () => {
   const value = { dedupingInterval: 0, provider: () => new Map() };
 
@@ -67,11 +82,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       const mockResponse = {
@@ -101,11 +112,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillExecutingToolIds: new Set(),
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillServers: [],
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
@@ -136,11 +143,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillExecutingToolIds: new Set(),
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillServers: [],
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
@@ -170,11 +173,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillExecutingToolIds: new Set(),
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillServers: [],
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
@@ -203,11 +202,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillExecutingToolIds: new Set(),
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillServers: [],
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectCallTool.mutate).mockResolvedValue({
@@ -236,11 +231,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       let resolvePromise: (value: any) => void;
@@ -324,11 +315,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectCallTool.mutate).mockRejectedValue(
@@ -355,11 +342,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       const mockResponse = {
@@ -398,11 +381,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       const mockResponse = {
@@ -428,18 +407,16 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
+        useToolStore.setState(
+          createSkillServerState([
             {
               identifier: 'linear',
               name: 'Linear',
               isConnected: false,
               status: LobehubSkillStatus.NOT_CONNECTED,
             },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+          ]),
+        );
       });
 
       const mockResponse = {
@@ -472,11 +449,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       let resolvePromise: (value: any) => void;
@@ -506,11 +479,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectGetStatus.query).mockRejectedValue(
@@ -589,18 +558,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState([createConnectedLinearServer()]));
       });
 
       act(() => {
@@ -621,11 +579,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       act(() => {
@@ -643,8 +597,8 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
+        useToolStore.setState(
+          createSkillServerState([
             {
               identifier: 'linear',
               name: 'Linear',
@@ -652,10 +606,8 @@ describe('lobehubSkillStore actions', () => {
               status: LobehubSkillStatus.CONNECTED,
               tokenExpiresAt: '2024-01-01T00:00:00Z',
             },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+          ]),
+        );
       });
 
       const mockResponse = {
@@ -684,18 +636,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState([createConnectedLinearServer()]));
       });
 
       const mockResponse = {
@@ -715,11 +656,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectRefresh.mutate).mockRejectedValue(
@@ -740,18 +677,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState([createConnectedLinearServer()]));
       });
 
       const mockTools = {
@@ -777,11 +703,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       await act(async () => {
@@ -796,18 +718,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState([createConnectedLinearServer()]));
       });
 
       vi.mocked(toolsClient.market.connectListTools.query).mockRejectedValue(
@@ -828,24 +739,17 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
+        useToolStore.setState(
+          createSkillServerState([
+            createConnectedLinearServer(),
             {
               identifier: 'github',
               name: 'GitHub',
               isConnected: true,
               status: LobehubSkillStatus.CONNECTED,
             },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+          ]),
+        );
       });
 
       vi.mocked(toolsClient.market.connectRevoke.mutate).mockResolvedValue({} as any);
@@ -865,18 +769,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState([createConnectedLinearServer()]));
       });
 
       let resolvePromise: (value: any) => void;
@@ -906,18 +799,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState([createConnectedLinearServer()]));
       });
 
       vi.mocked(toolsClient.market.connectRevoke.mutate).mockRejectedValue(
@@ -931,17 +813,18 @@ describe('lobehubSkillStore actions', () => {
       // Server should still be in state after error
       expect(result.current.lobehubSkillServers).toHaveLength(1);
       expect(result.current.lobehubSkillLoadingIds.has('linear')).toBe(false);
+      // The reason stays on the row, so the settings list can show it in place.
+      expect(result.current.lobehubSkillErrors.linear).toMatchObject({
+        action: 'remove',
+        message: 'Revoke failed',
+      });
     });
   });
 
   describe('useFetchLobehubSkillConnections', () => {
     it('should not fetch when disabled', async () => {
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectListConnections.query).mockClear();
@@ -957,11 +840,7 @@ describe('lobehubSkillStore actions', () => {
 
     it('should not fetch when user is not signed in', async () => {
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
         useUserStore.setState({ isSignedIn: false });
       });
 
@@ -978,11 +857,7 @@ describe('lobehubSkillStore actions', () => {
 
     it('should sync the connections into the replica view when enabled', async () => {
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
         useUserStore.setState({ isSignedIn: true });
       });
 
@@ -1091,11 +966,7 @@ describe('lobehubSkillStore actions', () => {
       const { result } = renderHook(() => useToolStore());
 
       act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
+        useToolStore.setState(createSkillServerState());
       });
 
       vi.mocked(toolsClient.market.connectGetStatus.query).mockResolvedValue({

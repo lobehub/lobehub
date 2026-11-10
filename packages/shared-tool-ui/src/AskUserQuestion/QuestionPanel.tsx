@@ -1,45 +1,31 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { OptionCard } from '../components';
 import type { AskUserQuestionItem } from './types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Per-question "write your own" input — sits as the last row in the option
-  // stack, carrying the next sequential number so it reads as one more choice
-  // rather than a separate control.
-  customRow: css`
-    margin-block-start: 2px;
-
-    /* Align the chip under the option number chips (OptionCard padding-inline);
-       the input itself runs to the option cards' right edge, flush with the
-       submit button below. */
-    padding-inline-start: 12px;
-  `,
-  // Mirrors OptionCard's `optionIndex` chip so the free-text row's number reads
-  // identically to the numbered options above it.
-  index: css`
-    flex-shrink: 0;
-
-    box-sizing: border-box;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 22px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  customRow: { marginBlockStart: '2px', paddingInlineStart: '12px' },
+  index: {
+    flexShrink: 0,
+    boxSizing: 'border-box',
+    width: '22px',
+    height: '22px',
+    borderRadius: '6px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontWeight: 600,
+    lineHeight: '22px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface QuestionPanelProps {
   /** The picked option id(s), falling back to labels for legacy options. */
@@ -135,8 +121,13 @@ export const QuestionPanel = memo<QuestionPanelProps>(
           })}
           {/* Last item: let the user write their own answer for this question.
               Numbered as the next option so it reads as one more choice. */}
-          <Flexbox horizontal align="center" className={styles.customRow} gap={12}>
-            <span className={styles.index}>{question.options.length + 1}</span>
+          <Flexbox
+            horizontal
+            align="center"
+            className={stylex.props(styles.customRow).className}
+            gap={12}
+          >
+            <span {...stylex.props(styles.index)}>{question.options.length + 1}</span>
             <TextArea
               autoSize={{ maxRows: 4, minRows: 1 }}
               disabled={disabled}

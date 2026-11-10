@@ -16,6 +16,7 @@ import AssigneeProfileAvatar from '../AssigneeProfileAvatar';
 import { coordinatorNodeTitleKey } from '../coordinatorCopy';
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
+import { TASK_HOLD_VISUALS } from '../taskHold';
 import { useElapsed } from '../useElapsed';
 import { experimentStatusVisual } from './experimentStatus';
 
@@ -206,7 +207,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-color: ${cssVar.colorPrimaryBorder};
   `,
   stale: css`
-    border-color: ${cssVar.colorErrorBorder};
+    border-color: ${cssVar.colorWarningBorder};
   `,
   subtitle: css`
     overflow: hidden;
@@ -259,12 +260,9 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
       icon: TASK_STATUS_VISUALS.paused.icon,
       text: t('goalProcess.tag.needsDecision'),
     };
-  if (stale)
-    return {
-      color: TASK_STATUS_VISUALS.failed.color,
-      icon: TASK_STATUS_VISUALS.failed.icon,
-      text: t('goalProcess.tag.lost'),
-    };
+  if (stale) return { ...TASK_HOLD_VISUALS.stalled, text: t('goalProcess.tag.stalled') };
+  if (view.quotaRetryAt)
+    return { ...TASK_HOLD_VISUALS.waitingQuota, text: t('goalProcess.tag.waitingQuota') };
   // Running renders the same animated ring the frontier and home surfaces use.
   if (running)
     return { color: TASK_STATUS_VISUALS.running.color, text: t('goalProcess.node.running') };

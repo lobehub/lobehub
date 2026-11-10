@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The experiment list and detail are `@lobechat/replica` resources whose views
+ * The experiment list and detail are `local-replica` resources whose views
  * are the eval store's flat `experimentList` / `experimentDetailMap` fields.
  * These tests pin the fetch orchestration and the write paths (create / update
  * / delete) at the boundary: which service call each action makes and that the

@@ -1,35 +1,23 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Button, createStaticStyles, Icon, Popover } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import DeviceHoverPanel from '@/features/DeviceManager/DeviceHoverPanel';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { isDevicePresenceUnknown } from '@/store/device';
 
+import DeviceDetailPopover from './DeviceDetailPopover';
+import { getDeviceOptionState } from './deviceOptionState';
 import { handleDeviceRowKeyDown } from './deviceRowKeyDown';
 import OptionRow from './OptionRow';
 
-const styles = createStaticStyles(({ css }) => ({
-  reconnectButton: css`
-    min-height: 18px;
-    padding-block: 0;
-    padding-inline: 2px;
-    font-size: 11px;
-  `,
-}));
-
-/** Long enough that sweeping the pointer down the list doesn't flash a panel per row. */
-const DETAIL_OPEN_DELAY_MS = 300;
-
-/**
- * Rows sit ~5px inside the menu edge, so the default 6px offset leaves the
- * panels touching. 12px matches the model provider submenu (~7px visible gap).
- */
-const DETAIL_SIDE_OFFSET = 12;
+const styles = stylex.create({
+  reconnectButton: { minHeight: '18px', paddingBlock: '0', paddingInline: '2px', fontSize: '11px' },
+});
 
 interface DeviceOptionRowProps {
   active: boolean;
@@ -44,8 +32,7 @@ interface DeviceOptionRowProps {
 
 /**
  * One device in the execution environment picker. Hovering it opens the
- * device's details beside the menu — offline rows too, since "why can't I pick
- * this" is exactly when the specs and last-seen time matter.
+ * device's details beside the menu.
  */
 const DeviceOptionRow = ({
   active,
@@ -59,24 +46,20 @@ const DeviceOptionRow = ({
   const { t } = useTranslation('chat');
   // A row restored from the persisted list is neither online nor offline yet.
   const presenceUnknown = isDevicePresenceUnknown(device);
+  const { offlineLabelKey, reconnectLabelKey, selectable, showReconnect } = getDeviceOptionState(
+    device,
+    { presenceUnknown },
+  );
 
   return (
-    <Popover
-      arrow={false}
-      content={<DeviceHoverPanel device={device} />}
-      openDelay={DETAIL_OPEN_DELAY_MS}
-      placement={'rightTop'}
-      positionerProps={{ sideOffset: DETAIL_SIDE_OFFSET }}
-      styles={{ content: { padding: 4 } }}
-      trigger={'hover'}
-    >
+    <DeviceDetailPopover device={device}>
       <div
         data-testid={`device-option-${device.deviceId}`}
-        onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !device.online, onSelect })}
+        onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !selectable, onSelect })}
       >
         <OptionRow
           active={active}
-          disabled={!device.online}
+          disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
           label={device.friendlyName || device.hostname || device.deviceId}
           tags={tags}
@@ -86,7 +69,7 @@ const DeviceOptionRow = ({
                 t('heteroAgent.executionTarget.gatewayDesc')
               ) : (
                 <ExecutionTargetDeviceStatus
-                  offlineLabel={t('heteroAgent.executionTarget.offline')}
+                  offlineLabel={t(offlineLabelKey)}
                   online={device.online}
                   unknown={presenceUnknown}
                   unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
@@ -95,9 +78,9 @@ const DeviceOptionRow = ({
                   })}
                 />
               )}
-              {device.online || presenceUnknown ? null : (
+              {showReconnect ? (
                 <Button
-                  className={styles.reconnectButton}
+                  className={stylex.props(styles.reconnectButton).className}
                   icon={<Icon icon={RefreshCwIcon} size={10} />}
                   loading={reconnecting}
                   size={'small'}
@@ -107,15 +90,15 @@ const DeviceOptionRow = ({
                     onReconnect();
                   }}
                 >
-                  {t('heteroAgent.executionTarget.reconnect')}
+                  {t(reconnectLabelKey)}
                 </Button>
-              )}
+              ) : null}
             </>
           }
           onClick={onSelect}
         />
       </div>
-    </Popover>
+    </DeviceDetailPopover>
   );
 };
 

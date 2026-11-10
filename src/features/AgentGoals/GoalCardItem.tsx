@@ -8,8 +8,10 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
 import GoalAgentLabel from './GoalAgentLabel';
+import GoalArchivedMark from './GoalArchivedMark';
 import GoalItemMoreButton from './GoalItemMoreButton';
 import { goalItemPath } from './goalItemPath';
+import GoalPrivateMark from './GoalPrivateMark';
 import { GoalProgress } from './GoalProgress';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import type { GoalItemProps } from './types';
@@ -76,6 +78,8 @@ export const GoalCardItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
               <Text ellipsis fontSize={15} weight={600}>
                 {goal.title}
               </Text>
+              <GoalPrivateMark goal={goal} />
+              <GoalArchivedMark goal={goal} />
             </Flexbox>
             {goal.requirement && goal.requirement !== goal.title && (
               <Text ellipsis fontSize={12} type={'secondary'}>

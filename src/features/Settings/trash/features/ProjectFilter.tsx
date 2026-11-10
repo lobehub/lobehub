@@ -1,8 +1,17 @@
 'use client';
 
 import type { TrashProjectFilter } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
-import { controlHeight, Select, type SelectOptions, Text } from '@lobehub/ui';
+import {
+  controlHeight,
+  cssVar,
+  Flexbox,
+  Icon,
+  Select,
+  type SelectOptions,
+  Text,
+} from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FolderKanbanIcon, LockIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,19 +30,14 @@ import {
  * that track's height (`controlHeight.middle`), radius and surface while
  * keeping the small control's 12px text. Open / hover feedback stays.
  */
-const styles = createStaticStyles(({ css }) => ({
-  trigger: css`
-    min-height: ${controlHeight.middle}px;
-    border-color: ${cssVar.colorFillQuaternary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgLayout};
-
-    &:hover {
-      border-color: ${cssVar.colorBorderSecondary};
-      background: ${cssVar.colorBgLayout};
-    }
-  `,
-}));
+const styles = stylex.create({
+  trigger: {
+    borderColor: { 'default': sxVar.colorFillQuaternary, ':hover': sxVar.colorBorderSecondary },
+    borderRadius: sxVar.borderRadiusLG,
+    backgroundColor: sxVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+});
 
 interface ProjectFilterProps {
   error?: unknown;
@@ -104,13 +108,13 @@ export const ProjectFilter = ({
       <Select
         showSearch
         aria-label={t('trash.filter.project.label')}
-        className={styles.trigger}
+        className={stylex.props(styles.trigger).className}
         loading={!projects && isValidating}
         options={options}
         popupMatchSelectWidth={280}
         prefix={FolderKanbanIcon}
         size={'small'}
-        style={{ maxWidth: 260, minWidth: 160 }}
+        style={{ maxWidth: 260, minHeight: controlHeight.middle, minWidth: 160 }}
         // Not `virtual`: the virtual list counts the whole project group as one
         // row and crashes once search shrinks the options; search is the way
         // through a long list.

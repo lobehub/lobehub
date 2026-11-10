@@ -9,6 +9,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
@@ -50,8 +51,9 @@ export const lifecycleRouter = router({
       return ctx.agentModel.countAgents(input);
     }),
   /**
-   * Create a new agent with session
-   * Returns the created agent ID and session ID
+   * Create a standalone agent, with the creator's direct Channel to it while Channels are on
+   * (none for a hidden `virtual` agent).
+   * Returns the created agent ID.
    */
   createAgent: agentProcedure
     .use(withScopedPermission('agent:create'))
@@ -59,55 +61,25 @@ export const lifecycleRouter = router({
       z.object({
         config: CreateAgentSchema.optional(),
         groupId: z.string().optional(),
+        /** The caller's own desktop, where a direct Channel to a local Agent runs. */
+        localDeviceId: z.string().min(1).optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // Creating inside a Category has to land in that Category. The folder's
-      // visibility decides the new agent's, rather than the other way round:
-      // the sidebar resolves a public agent's folder only against public
-      // folders (and a private agent's only against private ones), so a
-      // default-public agent created from a private Category would render in
-      // Ungrouped — for its creator too. The "New Agent" action inside a
-      // private Category sends only `{ groupId }`, so this is the normal path,
-      // not a crafted one. An explicit conflicting `visibility` is refused
-      // rather than silently overridden.
-      const folderVisibility = input.groupId
-        ? await ctx.agentModel.getAssignableSessionGroupVisibility(input.groupId)
-        : undefined;
-
-      if (folderVisibility && input.visibility && input.visibility !== folderVisibility)
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `A ${input.visibility} agent cannot be created in a ${folderVisibility} folder`,
-        });
-
-      const agent = await ctx.agentModel.create({
-        ...input.config,
-        // The DB-layer AgentItem (packages/database/src/schemas/agent.ts) is
-        // intentionally still typed `plugins?: string[]` — the JSONB column
-        // itself isn't widened, only the domain-level `@lobechat/types`
-        // shapes. Bridges the tri-state object shape through.
-        plugins: input.config?.plugins as unknown as string[] | undefined,
-        sessionGroupId: input.groupId,
-        // Router-level `visibility` wins over any nested config value so the
-        // sidebar's "Create in Private" entry can't be overridden by a stale
-        // default config.
-        ...(input.visibility || folderVisibility
-          ? { visibility: input.visibility ?? folderVisibility }
-          : {}),
+      const { localDeviceId, ...params } = input;
+      const result = await ctx.agentService.createAgent(params);
+      // A hidden (virtual) copy, such as a Market agent run from an @ mention, is
+      // never a conversation of its own, so it gets no direct Channel.
+      if (params.config?.virtual) return result;
+      await createAgentDirectChannel({
+        agentId: result.agentId,
+        db: ctx.serverDB,
+        localDeviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
-
-      if (ctx.workspaceId && agent.visibility !== 'private') {
-        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
-          'agent',
-          agent.id,
-          DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
-          ctx.userId,
-        );
-      }
-
-      return { agentId: agent.id };
+      return result;
     }),
   /**
    * Create an agent without session.
@@ -188,10 +160,13 @@ export const lifecycleRouter = router({
     .input(
       z.object({
         forkedFromIdentifier: z.string(),
+        virtual: z.boolean().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier);
+      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier, {
+        virtual: input.virtual,
+      });
     }),
   /**
    * Get an agent by marketIdentifier

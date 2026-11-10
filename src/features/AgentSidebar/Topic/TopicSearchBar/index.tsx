@@ -5,6 +5,7 @@ import { useUnmount } from 'ahooks';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useSidebarTopicSearch } from '@/hooks/useSidebarTopicSearch';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 
@@ -14,12 +15,8 @@ const TopicSearchBar = memo<{ onClear?: () => void }>(({ onClear }) => {
   const [tempValue, setTempValue] = useState('');
   const [searchKeyword, setSearchKeywords] = useState('');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const [activeAgentId, useSearchTopics] = useChatStore((s) => [
-    s.activeAgentId,
-    s.useSearchTopics,
-  ]);
 
-  useSearchTopics(searchKeyword, { agentId: activeAgentId });
+  useSidebarTopicSearch(searchKeyword);
 
   useUnmount(() => {
     useChatStore.setState({ inSearchingMode: false, isSearchingTopic: false });

@@ -1,3 +1,4 @@
+import { describeScopedNotFound } from './api/workspace';
 import { hydrateJwtFromFile } from './auth/envJwt';
 import { reportDaemonStartupError } from './daemon/manager';
 import { createProgram } from './program';
@@ -9,7 +10,8 @@ hydrateJwtFromFile();
 void createProgram()
   .parseAsync(process.argv, { from: 'node' })
   .catch(async (error: unknown) => {
-    const message = formatError(error);
+    const hint = describeScopedNotFound(error);
+    const message = hint ? `${formatError(error)}. ${hint}` : formatError(error);
     await reportDaemonStartupError(message);
     log.error(message);
     process.exit(1);

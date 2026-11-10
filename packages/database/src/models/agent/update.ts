@@ -346,7 +346,7 @@ export const updateConfig = async (
       graph: _legacyGraph,
       enableGraphMode: _legacyEnableGraphMode,
       ...restChatConfig
-    } = (mergedValue.chatConfig ?? {}) as Record<string, unknown>;
+    } = { ...mergedValue.chatConfig } as Record<string, unknown>;
     mergedValue.chatConfig = restChatConfig as AgentItem['chatConfig'];
   }
 
@@ -362,19 +362,6 @@ export const updateConfig = async (
   );
 
   await ctx.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
-
-  // Final cleanup: ensure no undefined or null values enter the database
-  if (mergedValue.params) {
-    const params = mergedValue.params as Record<string, any>;
-    Object.keys(params).forEach((key) => {
-      if (params[key] === undefined) {
-        delete params[key];
-      }
-    });
-    if (Object.keys(params).length === 0) {
-      mergedValue.params = undefined;
-    }
-  }
 
   // Timestamp fields are left to Drizzle's $onUpdate.
   touchedColumns.delete('updatedAt');

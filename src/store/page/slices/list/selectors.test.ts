@@ -123,4 +123,30 @@ describe('listSelectors — replica-backed reads', () => {
 
     expect(listSelectors.getDocumentById('same-page')(state)?.title).toBe('From list');
   });
+
+  it('resolves a page that only a Docs sidebar section has loaded', () => {
+    // Fresh Docs load: the section rendered the row, the flat list has not.
+    const state = createState([], {
+      pageSectionMap: {
+        mine: [doc('section-only', 'private', { title: 'Section only' })],
+      },
+    });
+
+    expect(listSelectors.getDocumentById('section-only')(state)?.title).toBe('Section only');
+  });
+
+  it('prefers the list and by-id copies over a section row', () => {
+    const state = createState([doc('everywhere', 'private', { title: 'From list' })], {
+      pageDetailMap: { 'deep-link': doc('deep-link', 'private', { title: 'From detail' }) },
+      pageSectionMap: {
+        mine: [
+          doc('everywhere', 'private', { title: 'From section' }),
+          doc('deep-link', 'private', { title: 'From section' }),
+        ],
+      },
+    });
+
+    expect(listSelectors.getDocumentById('everywhere')(state)?.title).toBe('From list');
+    expect(listSelectors.getDocumentById('deep-link')(state)?.title).toBe('From detail');
+  });
 });

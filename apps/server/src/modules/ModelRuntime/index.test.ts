@@ -747,11 +747,12 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeMoonshotAI);
     });
 
-    it('Qwen AI provider: with apikey', async () => {
+    it('Qwen AI provider: with apikey and default endpoint', async () => {
       const jwtPayload: ClientSecretPayload = { apiKey: 'user-qwen-key' };
       const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Qwen, jwtPayload);
       expect(runtime).toBeInstanceOf(ModelRuntime);
       expect(runtime['_runtime']).toBeInstanceOf(LobeQwenAI);
+      expect(runtime['_runtime'].baseURL).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
     });
 
     it('Vertex AI provider: with service account json', async () => {
@@ -1025,16 +1026,6 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime']).toBeInstanceOf(LobeQwenAI);
     });
 
-    it('Qwen AI provider: without endpoint', async () => {
-      const jwtPayload: ClientSecretPayload = { apiKey: 'user-qwen-key' };
-      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Qwen, jwtPayload);
-
-      // 假设 LobeQwenAI 是 Qwen 提供者的实现类
-      expect(runtime['_runtime']).toBeInstanceOf(LobeQwenAI);
-      // endpoint 不存在，应返回 DEFAULT_BASE_URL
-      expect(runtime['_runtime'].baseURL).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1');
-    });
-
     it('Bedrock AI provider: without apikey', async () => {
       const jwtPayload = {};
       const runtime = await initModelRuntimeWithUserPayload(ModelProvider.Bedrock, jwtPayload);
@@ -1159,13 +1150,8 @@ describe('initModelRuntimeWithUserPayload method', () => {
       expect(runtime['_runtime'].baseURL).toBe('http://custom-comfyui:8188');
     });
 
-    it('Unknown Provider', async () => {
-      const jwtPayload = {};
-      const runtime = await initModelRuntimeWithUserPayload('unknown', jwtPayload);
-
-      // 根据实际实现，你可能需要检查是否返回了默认的 runtime 实例，或者是否抛出了异常
-      // 例如，如果默认使用 OpenAI:
-      expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+    it('Unknown Provider: requires user credentials', () => {
+      expect(() => initModelRuntimeWithUserPayload('unknown', {})).toThrow();
     });
   });
 });

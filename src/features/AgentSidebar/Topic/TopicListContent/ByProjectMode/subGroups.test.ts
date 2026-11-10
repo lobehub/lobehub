@@ -48,6 +48,20 @@ describe('groupProjectTopics', () => {
     ]);
   });
 
+  it('lists available devices without topics as empty sections before the unknown one', () => {
+    const groups = groupProjectTopics(
+      [createTopic('t1', { projectWorkingDirectoryId: 'dir-b' }), createTopic('t2')],
+      'byDevice',
+      { availableDeviceIds: ['mac', 'linux'], field: 'updatedAt', resolveDeviceId },
+    );
+
+    expect(ids(groups)).toEqual([
+      ['device:linux', ['t1']],
+      ['device:mac', []],
+      [UNKNOWN_DEVICE_SUB_GROUP_ID, ['t2']],
+    ]);
+  });
+
   it('sections by status, counting client-side streaming as running', () => {
     const groups = groupProjectTopics(
       [

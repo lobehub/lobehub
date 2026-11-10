@@ -27,6 +27,10 @@ window.addEventListener('vite:preloadError', (event) => {
   }
 });
 
+// No index.html in this app, so the StyleX unplugin cannot inject its dev CSS;
+// load it from the Vite dev server instead. Production CSS is linked by root.tsx.
+if (import.meta.env.DEV) void import('virtual:lobe-stylex-dev-css');
+
 startTransition(() => {
   hydrateRoot(
     document,

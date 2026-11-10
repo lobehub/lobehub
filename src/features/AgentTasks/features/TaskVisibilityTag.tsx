@@ -1,5 +1,13 @@
-import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  type MenuInfo,
+  Spin,
+  Tooltip,
+} from '@lobehub/ui';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';

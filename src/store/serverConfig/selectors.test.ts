@@ -56,6 +56,20 @@ describe('serverConfigSelectors', () => {
     });
   });
 
+  describe('enableManagedCloudDevice', () => {
+    it('is off by default and on only when the flag resolves to true', () => {
+      expect(
+        serverConfigSelectors.enableManagedCloudDevice(initServerConfigStore({}).getState()),
+      ).toBe(false);
+      const on = initServerConfigStore({
+        featureFlags: {
+          ...mapFeatureFlagsEnvToState({ ...DEFAULT_FEATURE_FLAGS, managed_cloud_device: true }),
+        },
+      });
+      expect(serverConfigSelectors.enableManagedCloudDevice(on.getState())).toBe(true);
+    });
+  });
+
   describe('enableGatewayMode', () => {
     it('should return true when gateway mode is enabled', () => {
       const store = initServerConfigStore({
@@ -110,30 +124,6 @@ describe('serverConfigSelectors', () => {
       const result = serverConfigSelectors.enabledTelemetryChat(store.getState());
 
       expect(result).toBe(false);
-    });
-  });
-
-  describe('widgetSandboxEnforcesNetworkHosts', () => {
-    it('is true only when the sandbox runs in allowlist mode', () => {
-      const enforced = initServerConfigStore({
-        serverConfig: { aiProvider: {}, telemetry: {}, widgetSandboxNetworkFormat: 'allowlist' },
-      });
-      expect(serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(enforced.getState())).toBe(
-        true,
-      );
-
-      // The deployed Worker's boolean format — and an unset format, which
-      // defaults to it — cannot limit egress to the declared hosts.
-      const booleanFormat = initServerConfigStore({
-        serverConfig: { aiProvider: {}, telemetry: {}, widgetSandboxNetworkFormat: 'boolean' },
-      });
-      expect(
-        serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(booleanFormat.getState()),
-      ).toBe(false);
-      const unset = initServerConfigStore({
-        serverConfig: { aiProvider: {}, telemetry: {} },
-      });
-      expect(serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(unset.getState())).toBe(false);
     });
   });
 });

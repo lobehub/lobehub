@@ -1,27 +1,60 @@
 import path from 'node:path';
 
 import { OFFICIAL_CLOUD_URL, OFFICIAL_URL } from '@lobechat/const/url';
+import type {
+  ConnectorOAuthIpc,
+  ConnectorOAuthRequest,
+  ConnectorOAuthResult,
+} from '@lobechat/electron-client-ipc/types';
 import { BrowserWindow } from 'electron';
 
 import { preloadDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
-import { CONNECTOR_OAUTH_RESULT_CHANNEL, type ConnectorOAuthResult } from '~common/connectorOAuth';
+import { CONNECTOR_OAUTH_RESULT_CHANNEL } from '~common/connectorOAuth';
 
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:ConnectorOAuthCtr');
 
-export default class ConnectorOAuthCtr extends ControllerModule {
+interface PendingAuthorization {
+  cancel: () => void;
+  canceled: boolean;
+}
+
+export default class ConnectorOAuthCtr extends ControllerModule implements ConnectorOAuthIpc {
   static override readonly groupName = 'connectorOAuth';
 
+  #pendingAuthorizations = new Map<string, PendingAuthorization>();
+
   @IpcMethod()
-  async authorize(params: {
-    authorizationUrl: string;
-    connectorId: string;
-  }): Promise<ConnectorOAuthResult> {
+  async authorize(params: ConnectorOAuthRequest): Promise<ConnectorOAuthResult> {
+    const pending: PendingAuthorization = {
+      cancel: () => {
+        pending.canceled = true;
+      },
+      canceled: false,
+    };
+    if (params.requestId) this.#pendingAuthorizations.set(params.requestId, pending);
+    try {
+      return await this.#authorizeWindow(params, pending);
+    } finally {
+      if (params.requestId) this.#pendingAuthorizations.delete(params.requestId);
+    }
+  }
+
+  @IpcMethod()
+  async cancel({ requestId }: { requestId: string }): Promise<void> {
+    this.#pendingAuthorizations.get(requestId)?.cancel();
+  }
+
+  async #authorizeWindow(
+    params: ConnectorOAuthRequest,
+    pending: PendingAuthorization,
+  ): Promise<ConnectorOAuthResult> {
     const authorizationUrl = new URL(params.authorizationUrl);
     const remoteUrl = await this.app.getController(RemoteServerConfigCtr).getRemoteServerUrl();
+    if (pending.canceled) return 'dismissed';
     const remoteOrigin = new URL(remoteUrl).origin;
     // Official API and app origins differ; self-hosted servers trust only their own origin.
     const callbackOrigins = [OFFICIAL_CLOUD_URL, OFFICIAL_URL].includes(remoteOrigin)
@@ -74,6 +107,10 @@ export default class ConnectorOAuthCtr extends ControllerModule {
         parent.removeListener('closed', onParentClosed);
         if (!popup.isDestroyed()) popup.destroy();
         resolve(result);
+      };
+      pending.cancel = () => {
+        pending.canceled = true;
+        finish('dismissed');
       };
       const onParentClosed = () => finish('dismissed');
       const timer = setTimeout(() => finish('timeout'), 5 * 60_000);

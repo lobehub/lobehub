@@ -43,10 +43,13 @@ const TaskExecutionConfig = memo(() => {
 
   if (!assigneeAgentId) return null;
 
+  // Keyed per task: a "not following" state with nothing picked yet belongs to
+  // the task it was set on, not to the next one opened in this view.
   return (
     <TaskExecutionControls
       assigneeAgentId={assigneeAgentId}
       disabled={!canEditTask}
+      key={taskId}
       value={execution}
       onChange={handleChange}
     />

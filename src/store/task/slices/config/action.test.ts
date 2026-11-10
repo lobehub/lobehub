@@ -10,6 +10,7 @@ import { taskDetailRefreshes } from '../detail/testUtils';
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    find: vi.fn(),
     markBriefRead: vi.fn(),
     resolveBrief: vi.fn(),
     runReview: vi.fn(),
@@ -40,8 +41,12 @@ const mockDetail = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(taskService.find).mockImplementation(
+    async (id) => ({ data: { id, identifier: id }, success: true }) as never,
+  );
   useTaskStore.setState({
     activeTaskId: 'T-1',
+    taskRefIndex: {},
     taskDetailMap: { 'T-1': { ...mockDetail } },
   });
 });

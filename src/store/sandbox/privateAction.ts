@@ -1,4 +1,5 @@
 import { createReplicaSlice, recordLens } from '@/libs/replica';
+import { environmentService } from '@/services/environment';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 import type { StoreSetter } from '@/store/types';
 
@@ -56,7 +57,7 @@ export class SandboxPrivateAction {
     this.environments = createReplicaSlice(sandboxEnvironmentsResource, {
       actionPrefix: 'sandboxEnvironments',
       fetcher: async () => {
-        const { environments } = await sandboxStorageService.listEnvironments();
+        const { environments } = await environmentService.listEnvironments();
         return environments.map(toPickerEnvironment);
       },
       get,

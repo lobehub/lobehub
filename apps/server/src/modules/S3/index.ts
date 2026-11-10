@@ -6,6 +6,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   paginateListParts,
   PutObjectCommand,
   S3Client,
@@ -125,6 +126,18 @@ export class S3 {
     return results.at(-1)!;
   }
 
+  /**
+   * Up to `limit` keys under `prefix`, in the bucket's lexical order — one
+   * page, never the whole listing, so a caller sweeping a prefix stays bounded.
+   */
+  public async listFileKeys(prefix: string, limit = 1000): Promise<string[]> {
+    const response = await this.client.send(
+      new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: limit, Prefix: prefix }),
+    );
+
+    return (response.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
+  }
+
   public async getFileContent(key: string, byteLength?: number): Promise<string> {
     const boundedLength = byteLength ? Math.max(1, Math.floor(byteLength)) : undefined;
     const command = new GetObjectCommand({
@@ -182,12 +195,19 @@ export class S3 {
     return upload.url;
   }
 
+  /**
+   * A presigned PUT for one object. `private` signs it without the public-read
+   * ACL `S3_SET_ACL` otherwise applies — for a transient copy that must only be
+   * reachable through a short-lived signed GET.
+   */
   public async createPreSignedUpload(
     key: string,
     contentLength?: number,
+    options?: { private?: boolean },
   ): Promise<PreSignedUpload> {
+    const publicRead = this.setAcl && !options?.private;
     const command = new PutObjectCommand({
-      ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
+      ACL: publicRead ? PUBLIC_READ_ACL_HEADER : undefined,
       Bucket: this.bucket,
       ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       Key: key,
@@ -196,7 +216,7 @@ export class S3 {
     const url = await getSignedUrl(this.presignClient, command, { expiresIn: 3600 });
 
     return {
-      headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
+      headers: publicRead ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
       url,
     };
   }

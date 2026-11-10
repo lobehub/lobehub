@@ -29,6 +29,14 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   // `createAdvance` / `createPause`, and the two memory DELETEs both reduce to
   // `delete` (colliding into `delete2`), so each needs an explicit name.
   'DELETE /api/v1/memories': 'deleteAll',
+  // Agent identity assets under `/agents/{id}/accounts`: the mechanical rule
+  // pluralizes the collection noun (`createAccounts`, `getAccounts`,
+  // `updateAccountsCredential`), but each call acts on exactly one account.
+  'POST /api/v1/agents/{id}/accounts': 'createAccount',
+  'GET /api/v1/agents/{id}/accounts/{accountId}': 'getAccount',
+  'PATCH /api/v1/agents/{id}/accounts/{accountId}': 'updateAccount',
+  'PUT /api/v1/agents/{id}/accounts/{accountId}/credential': 'updateAccountCredential',
+  'DELETE /api/v1/agents/{id}/accounts/{accountId}': 'deleteAccount',
   'DELETE /api/v1/memories/{category}/{id}': 'deleteEntry',
   'GET /api/v1/memories/{category}': 'listCategory',
   'GET /api/v1/notifications/counts': 'getCounts',
@@ -42,6 +50,11 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'POST /api/v1/notifications/{id}/archive': 'archive',
   'POST /api/v1/signals/source-events': 'emit',
   'POST /api/v1/signals/trigger': 'trigger',
+  // Starting a run is a verb; the `{method} {path}` rule would call it `createRuns`.
+  'POST /api/v1/tasks/{id}/runs': 'run',
+  // Chat-group roster edits read as verbs, not `createMembers` / `deleteMembers`.
+  'DELETE /api/v1/chat-groups/{id}/members': 'removeMembers',
+  'POST /api/v1/chat-groups/{id}/members': 'addMembers',
   // IM channel: `send` / `sync` / `markRead` read like a messaging client;
   // push tokens are keyed by device, so PUT/DELETE are register/unregister.
   'DELETE /api/v1/push-tokens/{deviceId}': 'unregister',

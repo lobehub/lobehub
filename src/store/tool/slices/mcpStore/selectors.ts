@@ -31,7 +31,8 @@ const isPluginInstallLoading = (id: string) => (s: ToolStoreState) => s.pluginIn
 
 const getMCPInstallProgress = (id: string) => (s: ToolStoreState) => s.mcpInstallProgress[id];
 
-const isMCPInstalling = (id: string) => (s: ToolStoreState) => !!s.mcpInstallProgress[id];
+const isMCPInstalling = (id: string) => (s: ToolStoreState) =>
+  !!s.mcpInstallProgress[id] && s.mcpInstallProgress[id].step !== 'Error';
 
 const getPluginById = (id: string) => (s: ToolStoreState) => {
   return loadedPluginItems(s).find((i) => i.identifier === id);

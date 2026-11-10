@@ -78,6 +78,25 @@ describe('useReviewPatches', () => {
     );
   });
 
+  it('keeps the last diff without reading while the review tab is inactive', async () => {
+    vi.mocked(gitService.getGitWorkingTreePatches).mockResolvedValue({
+      patches: [{ path: 'kept.ts' }],
+    } as any);
+    const { result, rerender } = renderHook(
+      ({ active }) => useReviewPatches('/kept-repo', 'unstaged', undefined, undefined, active),
+      { initialProps: { active: true }, wrapper },
+    );
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    const data = result.current.data;
+    const reads = vi.mocked(gitService.getGitWorkingTreePatches).mock.calls.length;
+
+    rerender({ active: false });
+    expect(result.current.data).toBe(data);
+    expect(result.current.isLoading).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(gitService.getGitWorkingTreePatches).toHaveBeenCalledTimes(reads);
+  });
+
   it('does not request local git patches from a web client without a target device', async () => {
     platform.isDesktop = false;
 

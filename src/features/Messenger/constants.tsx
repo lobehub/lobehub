@@ -1,15 +1,9 @@
 import { Discord, IMessage, Slack, Telegram, WeChat } from '@lobehub/ui/icons';
 import type { ReactNode } from 'react';
 
-export type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat' | 'linq';
+import type { MessengerPlatform } from './platforms';
 
-export const SUPPORTED_MESSENGER_PLATFORMS = [
-  { id: 'telegram', name: 'Telegram' },
-  { id: 'slack', name: 'Slack' },
-  { id: 'discord', name: 'Discord' },
-  { id: 'wechat', name: 'WeChat' },
-  { id: 'linq', name: 'iMessage' },
-] as const satisfies readonly { id: MessengerPlatform; name: string }[];
+export { type MessengerPlatform, SUPPORTED_MESSENGER_PLATFORMS } from './platforms';
 
 export const PLATFORM_TAB_ICONS: Record<MessengerPlatform, ReactNode> = {
   discord: <Discord.Color size={16} />,

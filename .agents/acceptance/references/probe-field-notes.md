@@ -603,9 +603,15 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   });
   await d.updateDeviceCwd(did, entry, { setDefault: false }); // so the entry exists → sourcePath resolves
   ```
-  Create a throwaway agent with `agent().createAgent({ title })` and delete it afterwards with
-  `session().removeSession(agentId)` (there is no `deleteAgent` on the agent store) plus
-  `device().removeDeviceWorkingDir(did, path)` — otherwise the fixture cwd lingers in the real account.
+  Create a throwaway agent with `agent().createAgent({ title })`. Afterwards, clean up both the agent
+  and its device working directory:
+  ```js
+  await window.__LOBE_STORES.home().removeAgent(agentId);
+  await window.__LOBE_STORES.device().removeDeviceWorkingDir(did, path);
+  ```
+  Agent deletion lives on the home store and refreshes the agent list and evicts its message cache.
+  Removing the device working directory separately prevents the fixture cwd from lingering in the real
+  account.
 - **Identify icons precisely**: lucide renders `svg.lucide.lucide-git-fork`. Several git icons live in the
   same bar (the dir picker's `DirIcon` is `git-branch`, the review toggle is `git-compare`), so scope the
   assertion to the trigger: `document.querySelector('[role=button][aria-label="Worktrees"]') svg`, and

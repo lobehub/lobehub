@@ -53,7 +53,10 @@ export interface GitLinkedPRSummary {
  * symmetric: both transports expose the same granular git operations.
  */
 class GitService {
-  /** Local branches of a working directory. */
+  /**
+   * Local branches of a working directory. A remote device that cannot answer
+   * rejects; `[]` is a real answer (an unborn repo).
+   */
   listGitBranches({
     deviceId,
     path,
@@ -140,15 +143,18 @@ class GitService {
     branch,
     deviceId,
     path,
+    sourcePath,
     worktreePath,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
+    /** The repo's main checkout; the server keys the target folder on it. */
+    sourcePath?: string;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
     return deviceId
-      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path })
+      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path, sourcePath })
       : electronGitService.addGitWorktree({ branch, path, worktreePath });
   }
 
@@ -379,7 +385,10 @@ class GitService {
       : electronGitService.getGitBranchDiff({ baseRef, path });
   }
 
-  /** Remote branches (`refs/remotes/origin/*`) of a working directory. */
+  /**
+   * Remote branches (`refs/remotes/origin/*`) of a working directory. A remote
+   * device that cannot answer rejects; `[]` is a real answer (no `origin`).
+   */
   listGitRemoteBranches({
     deviceId,
     path,

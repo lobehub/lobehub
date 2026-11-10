@@ -5,10 +5,14 @@ import type {
 import { partitionAssistantGroupBlocks } from '@lobechat/conversation-flow';
 
 import { LOADING_FLAT } from '@/const/message';
-import type { AssistantContentBlock } from '@/types/index';
+import type {
+  AssistantContentBlock,
+  ChatToolPayloadWithResult,
+  MessageSignal,
+} from '@/types/index';
 
 import { areWorkflowToolsComplete } from '../toolDisplayNames';
-import { isImageBearingTool } from '../toolRenderRules';
+import { isBreakoutTool, isImageBearingTool } from '../toolRenderRules';
 import type { GroupRenderSegment } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 
@@ -178,8 +182,19 @@ export const isEmptyBlock = (block: RenderableAssistantContentBlock) =>
   !block.reasoning &&
   !block.metadata?.finishType;
 
-const toRenderableBlock = (block: AssistantGroupSemanticBlock): RenderableAssistantContentBlock => {
-  if (!block.projection) return block;
+const toRenderableBlock = (
+  block: AssistantGroupSemanticBlock,
+  isBreakout: (tool: ChatToolPayloadWithResult) => boolean,
+): RenderableAssistantContentBlock => {
+  if (!block.projection) {
+    // A lone tool that breaks out (an MCP App view, a produced image) renders
+    // inline under the key it will keep once a later tool splits the step into
+    // runs (`${block.id}__${tool.id}`), so its view isn't remounted then
+    const [tool, ...rest] = block.tools ?? [];
+    return tool && rest.length === 0 && isBreakout(tool)
+      ? { ...block, renderKey: `${block.id}__${tool.id}${WORKFLOW_DOM_ID_SUFFIX}` }
+      : block;
+  }
 
   const suffix = block.projection === 'answer' ? ANSWER_DOM_ID_SUFFIX : WORKFLOW_DOM_ID_SUFFIX;
   const key = `${block.projectionKey ?? block.id}${suffix}`;
@@ -193,11 +208,41 @@ const toRenderableBlock = (block: AssistantGroupSemanticBlock): RenderableAssist
   };
 };
 
-const toRenderSegments = (segments: AssistantGroupSegment[]): GroupRenderSegment[] =>
-  segments.map((segment) =>
+/**
+ * A step a finished background task woke is preceded by a notice naming that
+ * task. One step can render as several projections (answer + workflow, or one
+ * per tool run), so only the first one in render order carries the notice.
+ */
+const markTaskCompletionNotices = (segments: GroupRenderSegment[]): GroupRenderSegment[] => {
+  const noticed = new Set<string>();
+  const mark = (block: RenderableAssistantContentBlock): RenderableAssistantContentBlock => {
+    const signal = block.metadata?.signal as MessageSignal | undefined;
+    if (signal?.type !== 'task-completion' || noticed.has(block.id)) return block;
+
+    noticed.add(block.id);
+    return { ...block, showTaskCompletionNotice: true };
+  };
+
+  return segments.map((segment) =>
     segment.kind === 'answer'
-      ? { block: toRenderableBlock(segment.block), kind: 'answer' }
-      : { ...segment, blocks: segment.blocks.map(toRenderableBlock) },
+      ? { ...segment, block: mark(segment.block) }
+      : { ...segment, blocks: segment.blocks.map(mark) },
+  );
+};
+
+const toRenderSegments = (
+  segments: AssistantGroupSegment[],
+  isBreakout: (tool: ChatToolPayloadWithResult) => boolean,
+): GroupRenderSegment[] =>
+  markTaskCompletionNotices(
+    segments.map((segment) =>
+      segment.kind === 'answer'
+        ? { block: toRenderableBlock(segment.block, () => false), kind: 'answer' }
+        : {
+            ...segment,
+            blocks: segment.blocks.map((block) => toRenderableBlock(block, isBreakout)),
+          },
+    ),
   );
 
 export const withMarkdownStreamingState = (
@@ -244,17 +289,23 @@ export const hasPendingIntervention = (blocks: RenderableAssistantContentBlock[]
 
 export const buildChainView = (
   chain: GroupChainInput,
-  state: { hasActiveOperation: boolean; isGenerating: boolean },
+  state: {
+    /** Runtime flag `mcp_apps`: MCP App views break out of collapsed runs too. */
+    enableMcpApps?: boolean;
+    hasActiveOperation: boolean;
+    isGenerating: boolean;
+  },
 ): GroupChainView => {
   const { isGenerating } = state;
+  const isBreakout = state.enableMcpApps ? isBreakoutTool : isImageBearingTool;
   const partitioned = partitionAssistantGroupBlocks(chain.blocks, {
-    isBreakoutTool: isImageBearingTool,
+    isBreakoutTool: isBreakout,
     isGenerating,
     toolsPhaseComplete: isGenerating
       ? areWorkflowToolsComplete(chain.blocks.flatMap((block) => block.tools ?? []))
       : undefined,
   });
-  const segments = toRenderSegments(partitioned.segments);
+  const segments = toRenderSegments(partitioned.segments, isBreakout);
 
   // When the turn ends on an inline single-tool segment whose tool already
   // settled but the run is still generating (waiting on the next step), the

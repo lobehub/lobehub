@@ -330,20 +330,6 @@ describe('BaseContentSearch', () => {
     });
   });
 
-  describe('checkToolAvailable', () => {
-    it('should return true for nodejs', async () => {
-      const available = await contentSearch.checkToolAvailable('nodejs');
-
-      expect(available).toBe(true);
-    });
-
-    it('should return false for other tools', async () => {
-      const available = await contentSearch.checkToolAvailable('rg');
-
-      expect(available).toBe(false);
-    });
-  });
-
   describe('setToolDetector', () => {
     it('should set the tool detector manager', () => {
       const mockManager = {} as any;

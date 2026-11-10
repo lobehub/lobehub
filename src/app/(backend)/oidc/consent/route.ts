@@ -1,4 +1,3 @@
-import { acceptanceIdFromReviewResource } from '@lobechat/const';
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
@@ -6,17 +5,19 @@ import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
-import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
+import { describeReviewTarget } from '@/server/services/acceptanceReview/reviewTarget';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
 
-const canReview = async (userId: string | null | undefined, resource: unknown) => {
-  const acceptanceId = acceptanceIdFromReviewResource(
-    Array.isArray(resource) ? resource[0] : resource,
-  );
-  if (!userId || !acceptanceId) return false;
-  return Boolean(await resolveReviewAccess(await getServerDB(), userId, acceptanceId));
+const reviewTargetOf = async (resource: unknown) => {
+  const { userId } = await getUserAuth();
+  return describeReviewTarget(await getServerDB(), userId, resource);
+};
+
+const WRONG_ORIGIN = {
+  error: 'wrong_origin',
+  error_description: 'Open this acceptance from its preview address',
 };
 
 export async function POST(request: NextRequest) {
@@ -57,8 +58,18 @@ export async function POST(request: NextRequest) {
     }
 
     const { prompt } = details;
+    const reviewTarget =
+      prompt.name === 'consent' && isAcceptanceReviewClient(details.params.client_id as string)
+        ? await reviewTargetOf(details.params.resource)
+        : undefined;
     let result;
-    if (consent === 'accept') {
+    if (
+      reviewTarget?.allowed === false &&
+      reviewTarget.kind === 'acceptance' &&
+      reviewTarget.reason === 'wrongOrigin'
+    ) {
+      result = WRONG_ORIGIN;
+    } else if (consent === 'accept') {
       log(`User accepted the request, Handling 'login' prompt`);
       const { userId } = await getUserAuth();
       log('Obtained userId: %s', userId);
@@ -73,10 +84,7 @@ export async function POST(request: NextRequest) {
         // 1. Get necessary IDs
         const clientId = details.params.client_id as string;
 
-        if (
-          isAcceptanceReviewClient(clientId) &&
-          !(await canReview(userId, details.params.resource))
-        ) {
+        if (reviewTarget?.allowed === false) {
           const denied = await oidcService.getInteractionResult(uid, {
             error: 'access_denied',
             error_description: 'No access to this acceptance',

@@ -1,15 +1,18 @@
-# Structured Report Rounds (`lh acceptance run ingest`)
+# Structured Report Rounds (`lh acceptance run ingest` / `render`)
 
 Every round is a **structured report round**: a self-contained directory that
-`lh acceptance run ingest` uploads as one immutable verification round. You
+`lh acceptance run ingest` uploads as one immutable verification round, or that
+`lh acceptance run render` turns into the local acceptance page when this machine
+is not signed in ([Local reports](../SKILL.md#local-reports-when-not-signed-in)). You
 author the checks here, which is the usual case; when a verify plan was handed to
 you, the same directory is keyed by its check item ids and ingested into the
 plan's round ([plan-format.md](./plan-format.md)). The
 acceptance page renders itself from `result.json`: provenance, the overall
 conclusion, and the check list from `plan[]` paired with `cases[]`, each with
 its evidence inline — **images render as figures, before/after pairs render
-under tinted comparison bands**. A chat-only summary or a bare markdown report
-never gets that rendering; the structured round does.
+under tinted comparison bands**. The local `report.html` is the same page. A
+chat-only summary or a bare markdown report never gets that rendering; the
+structured round does.
 
 ## Contents
 
@@ -46,30 +49,11 @@ Run it from the repository root. It is the only supported way to create a round
 directory by hand: it keeps the whole tree out of `git status` before the first
 `result.json` or screenshot exists.
 
-```bash
-# A. first external-project round — creates a standalone acceptance.
-# It has no subject yet, so group it under `standalone-<slug>` until the
-# returned acceptance id gives the tree its permanent name.
-REPORT_DIR=$(new_round standalone-checkout-flow first-pass)
-lh acceptance run ingest "$REPORT_DIR" \
-  --requirement "<one-sentence business goal>" --json
-
-# Re-verification after a fix — a NEW round on the SAME acceptance.
-REPORT_DIR=$(new_round standalone-checkout-flow repair)
-lh acceptance run ingest "$REPORT_DIR" --acceptance "$ACCEPTANCE_ID" --json
-
-# Attach to a subject you were told to use — a Task, Topic, or Document.
-# Group the round under that same subject so the tree and the page agree.
-REPORT_DIR=$(new_round topic-tpc_xxx first-pass)
-lh acceptance run ingest "$REPORT_DIR" --subject topic:tpc_xxx --json
-
-# B. atomic fallback — create the round first, then submit into it with --run
-RUN=$(lh acceptance run create --title "…" --goal "…" --json | jq -r .id)
-lh acceptance run result submit --run "$RUN" --item "$CHECK_ITEM_ID" …
-```
-
-Prefer **A**: per-criterion submits without a plan produce checks with no
-declared intent, so the page has nothing to pair the outcome against.
+Use the CLI's ingest help to select the supported flags for the intended path:
+first standalone publication records the durable requirement; repairs append to
+the same acceptance; an explicitly supplied subject is preserved. Prefer one
+structured ingest with declared checks over per-item submissions without a plan.
+`acceptance run create` creates a round, not the Acceptance ID used by flows.
 
 For a flow-first plan without an acceptance yet, use
 [`lh acceptance create`](../SKILL.md#optional-user-journey-flows) before publishing
@@ -87,7 +71,9 @@ Rounds live under `.acceptances/`, grouped by the delivery they belong to:
 ├── .gitignore                     # `*` — the whole tree stays out of git
 └── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x
     │                              # standalone-<slug> until an acceptance id exists
-    ├── acceptance.json            # which acceptance these rounds belong to
+    ├── acceptance.json            # which acceptance these rounds belong to (CLI-written)
+    ├── report.html                # local mode: the rendered page of every round
+    ├── reviews.json               # local mode: the reader's saved decisions
     └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
         ├── result.json            # THE report — the page renders from this
         ├── proposal.md            # what this round delivers, posted to the discussion
@@ -126,17 +112,21 @@ supersedes? }`.
    vanishing — cut coverage in the open.
    Every item is an outcome the reader can judge — never a programmatic gate
    ([what is not an acceptance check](#what-is-not-an-acceptance-check)).
-   **Copy the shapes in this file rather than reconstructing them**: a
+   **Use an acquired CLI schema or the linked report schema rather than reconstructing it**: a
    plausible-but-wrong nested shape parses as JSON, is dropped on ingest, and
    the round publishes green with its evidence silently degraded. Read every
    ingest warning as a failed publish.
    Before executing the **first round only**, send the draft for
    [acceptance-checker plan review](acceptance-checker.md) and save the agreed plan and
    requirement mapping after resolving material gaps. In follow-up rounds the
-   primary carries the agreed plan forward and inspects it itself.
+   execution owner carries the agreed plan forward using its existing context.
 2. **Collect evidence into `assets/` as you test.** Screenshots must be
-   **visually verified with the Read tool before being cited** — never cite an
-   image you haven't looked at. For metrics, time series, model or benchmark
+   **visually verified by their designated inspector before supporting a pass**.
+   In the first round this is normally the checker; the runner captures and
+   indexes images without pre-reviewing them, then incorporates its attributable
+   inspection records. Inspect each artifact version once, reusing its findings
+   for the cases it supports. File presence or captions are not inspection.
+   For metrics, time series, model or benchmark
    comparisons, distributions, matrices, and tables, use native Acceptance
    structured visualizations: put review-sized values in `cases[].datasets`,
    declare the view in `cases[].visualizations`, and retain the raw CSV/JSON,
@@ -176,16 +166,21 @@ supersedes? }`.
    expand the file list. It checks the report and artifacts, without reopening requirements
    or expanding into code review. State repairs and affected cases in plain language). Resolve
    findings and record review limitations in the narrative tail before declaring
-   a pass. The primary publishes; the acceptance-checker does not operate the product or
-   upload results.
+   a pass. The primary coordinates findings and authorizes publication; the same
+   runner publishes and returns actual uploaded coverage and links. The primary
+   does not reread unchanged reports or evidence to repeat the workers' checks.
+   The acceptance-checker does not operate the product or upload results.
 
    ```bash
    lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
+   # local mode: render instead; same round directory, nothing uploaded
+   lh acceptance run render "$REPORT_DIR" --json
    ```
 
-   On the first ingest, add `--requirement "<one-sentence business goal>"`.
+   On the first ingest or render, add `--requirement "<one-sentence business goal>"`.
    Describe the durable goal of the whole acceptance, not this round's narrower
-   implementation scope.
+   implementation scope. Never edit `acceptance.json`, `reviews.json` or
+   `report.html` by hand: the CLI owns them, and a render rewrites the page.
 
    Grouping needs nothing from you: the command attaches the round to the
    conversation it was invoked from when it can, and otherwise creates a
@@ -197,173 +192,28 @@ supersedes? }`.
    `acceptanceUrl` verbatim in the final reply; do not add the `roundUrl` the
    command also returns.
    Never reconstruct the host, path, or round query: the CLI resolves the
-   configured server, including self-hosted installations. See
+   configured server, including self-hosted installations. A render returns
+   `reportUrl` instead, the page's `file://` link. See
    [Final handoff](../SKILL.md#final-handoff-mandatory).
 
 ## result.json schema
 
-Every `cases[].evidence` file entry must use `{ "path": "...", "description": "..." }`.
-Describe the file's contents and relevance to the criterion, following the
-[shared description requirements](evidence.md#file-versus-inline-content).
-Do not copy the legacy bare-path form: ingestion accepts it for compatibility,
-but its filename fallback does not satisfy the description requirement.
+The current CLI exposes `lh acceptance run schema` (JSON Schema),
+`schema --example --surface <surface>` (an unexecuted draft), and
+`validate <reportDir>` (offline diagnostics). Learn any unknown options from the
+relevant help once. Local validation does not inspect media, check account
+language, or establish remote plan membership; `ingest --dry-run` remains the
+account-aware preflight.
 
-```json
-{
-  "cases": [
-    {
-      "id": "1",
-      "category": "Task hierarchy",
-      "name": "task tree returns nested children",
-      "surface": "cli",
-      "status": "pass",
-      "observation": "root returned 3 nested children, depth 2",
-      "evidence": [
-        {
-          "path": "assets/task-tree.txt",
-          "description": "Task tree command output showing the root and its 3 nested children at depth 2."
-        }
-      ]
-    },
-    {
-      "id": "2",
-      "category": "Model quality",
-      "name": "candidate model improves average precision",
-      "surface": "cli",
-      "status": "pass",
-      "observation": "average precision improved from 0.742 to 0.796",
-      "evidence": [
-        {
-          "path": "assets/evaluation.json",
-          "description": "Evaluation results comparing baseline and candidate average precision, including the observed change from 0.742 to 0.796."
-        }
-      ],
-      "datasets": [
-        {
-          "id": "model-metrics",
-          "fields": [
-            { "key": "metric", "type": "string" },
-            { "key": "baseline", "type": "number" },
-            { "key": "candidate", "type": "number" }
-          ],
-          "rows": [{ "metric": "Average precision", "baseline": 0.742, "candidate": 0.796 }]
-        }
-      ],
-      "visualizations": [
-        {
-          "id": "model-comparison",
-          "type": "metric-comparison",
-          "version": 1,
-          "dataset": "model-metrics",
-          "title": "Model quality comparison",
-          "encoding": {
-            "label": "metric",
-            "before": "baseline",
-            "after": "candidate"
-          }
-        }
-      ]
-    }
-  ],
-  "createdAt": "2026-06-11T15:30:00+08:00",
-  "entry": "<cli> task list --tree",
-  "plan": [
-    {
-      "id": "1",
-      "title": "task tree returns nested children",
-      "category": "Task hierarchy",
-      "verifier": "program",
-      "method": "<cli> task list --tree against a 3-level fixture",
-      "expected": "root shows 3 nested children at depth 2",
-      "requiredEvidence": ["text"]
-    },
-    {
-      "id": "2",
-      "title": "candidate model improves average precision",
-      "category": "Model quality",
-      "verifier": "program",
-      "method": "Evaluate the baseline and candidate on the same held-out dataset",
-      "expected": "candidate average precision exceeds the baseline",
-      "requiredEvidence": ["text"]
-    }
-  ],
-  "summary": {
-    "total": 2,
-    "passed": 2,
-    "failed": 0,
-    "blocked": 0,
-    "verdict": "pass",
-    "conclusion": "Both checks passed: the task tree returned the expected hierarchy, and the candidate model improved average precision from 0.742 to 0.796."
-  },
-  "surfaces": ["cli"],
-  "title": "Verify task hierarchy and model quality"
-}
-```
-
-Optional fields: `branch` / `commit` / `pullRequest` (provenance line; when
-`branch` is set without `pullRequest`, ingest asks `gh` for the PR),
-`summary.score` (0–100, only when the verdict has a subjective component),
-`subject` (usually passed via `--subject` instead).
+For an older CLI without these commands, acquire
+[the report payload schema](report-schema.md#minimal-round-payload) once when
+constructing `result.json`; do not load it during environment discovery or review.
 
 ### Structured visualizations
 
-A case containing reviewable structured data should provide `datasets[]` plus
-`visualizations[]`. Supported version-1 renderers are `metric-comparison`,
-`line-chart`, `bar-chart`, `scatter-plot`, `heatmap`, and `table`. Each
-visualization references one dataset by `id` and maps declared fields through
-`encoding`.
-
-Inline datasets use declared `fields[]` and object `rows[]`; keep them to a
-review-sized summary. Retain raw benchmark results, CSV/JSON, traces, profiles,
-and vectors in `evidence`: the visualization is a decision aid, not a replacement
-for the audit trail. Do not merely upload a data file and expect Acceptance to
-infer a chart; declare both the dataset and visualization explicitly.
-
-Native renderers are the default because they preserve machine-readable values,
-accessibility, theme adaptation, and consistent comparison semantics. Generate a
-static chart only when none of the supported renderers can faithfully represent
-the result, and explain that limitation in the case observation.
-
-Every visualization requires unique non-empty `id`, `type`, `dataset`, and
-`version: 1`; `dataset` must reference a declared dataset id. `title` and
-`context` are optional non-empty strings. Every encoding field name below must
-reference a field declared by that dataset.
-
-| Renderer            | Required encoding                                              | Optional encoding                                                                         |
-| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `metric-comparison` | `label`, `before`, `after`                                     | `beforeSamples`, `afterSamples`, `direction`, `statistic`, `target`, `unit`               |
-| `line-chart`        | `x`, non-empty `series[]`; each series requires `field`        | series `label`, series `style` (`muted` \| `primary` \| `accent`), `xLabel`, `yLabel`     |
-| `bar-chart`         | `category`, non-empty `series[]`; each series requires `field` | series `label`, `valueLabel`                                                              |
-| `scatter-plot`      | `x`, `y`                                                       | `color`, `label`, `xLabel`, `yLabel`                                                      |
-| `heatmap`           | `x`, `y`, `value`                                              | none                                                                                      |
-| `table`             | none; `encoding` itself may be omitted                         | non-empty `columns[]`; `highlights[]` entries require `field` and `mode` (`min` \| `max`) |
-
-One shape for every renderer — `id`, `type`, `version: 1`, `dataset`, and an
-`encoding` whose field names are keys of that dataset (see the `line-chart`
-below; the other types differ only in the encoding keys listed above):
-
-```json
-{
-  "dataset": "training",
-  "encoding": {
-    "x": "step",
-    "series": [
-      { "field": "baselineLoss", "label": "Baseline", "style": "muted" },
-      { "field": "candidateLoss", "label": "Candidate", "style": "primary" }
-    ],
-    "xLabel": "Step",
-    "yLabel": "Loss"
-  },
-  "id": "loss-over-time",
-  "type": "line-chart",
-  "version": 1
-}
-```
-
-Dataset field `type` is one of `boolean`, `category`, `number`, `string`, or
-`temporal`; field keys and dataset/view ids must be unique. Rows may contain only
-declared keys with string, number, boolean, or null values. The combined inline
-row limit is 10,000.
+For dataset/chart outcomes, read only the
+[structured visualization schema](report-schema.md#structured-visualizations).
+Ordinary screenshot cases do not load these examples.
 
 ### Closed vocabularies — the pipeline acts on these, they are not labels
 

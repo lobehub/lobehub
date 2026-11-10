@@ -5,7 +5,7 @@ import { memoryListKey } from '../../utils/replica';
 import { type PreferenceListData, type PreferenceListSort } from './projection';
 
 /**
- * The preference list is a `@lobechat/replica` paged resource with one page set
+ * The preference list is a `local-replica` paged resource with one page set
  * per search / sort (`preferenceListEntries`). The long-standing flat fields
  * (`preferenceListData`, `preferences`, `preferencesTotal`, `preferencesPage`,
  * `preferencesHasMore`, `preferencesInit`) mirror the active query's entry so every

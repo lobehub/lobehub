@@ -106,6 +106,7 @@ export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set([
 });
 export const codeBuddyExecutor = new HeteroCliExecutor('codebuddy', new Set(['Bash']));
 export const codexExecutor = new HeteroCliExecutor('codex', new Set(['command_execution']));
+export const copilotExecutor = new HeteroCliExecutor('copilot', new Set(['execute']));
 export const cursorExecutor = new HeteroCliExecutor('cursor', new Set(['shellToolCall']));
 // Droid's ACP shell tool name is not a documented protocol guarantee. Keep this
 // hook inert rather than guessing and recording unrelated tool calls.

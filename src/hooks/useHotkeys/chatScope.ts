@@ -36,6 +36,20 @@ export const useToggleTerminalPanelHotkey = (enabled: boolean = isDesktop) => {
   });
 };
 
+/**
+ * Replaces the browser's find, which cannot see the virtualized message list:
+ * the topic search in the working sidebar reads the whole history instead.
+ * Callers turn it on only once a topic exists to search.
+ */
+export const useFindInTopicHotkey = (enabled: boolean) => {
+  const openWorkingSidebar = useGlobalStore((s) => s.openWorkingSidebar);
+
+  return useHotkeyById(HotkeyEnum.FindInTopic, () => openWorkingSidebar('search'), {
+    enableOnContentEditable: true,
+    enabled,
+  });
+};
+
 // Note: useRegenerateMessageHotkey has been moved to ConversationStore
 // Note: useDeleteAndRegenerateMessageHotkey has been moved to ConversationStore
 // Note: useDeleteLastMessageHotkey has been moved to ConversationStore

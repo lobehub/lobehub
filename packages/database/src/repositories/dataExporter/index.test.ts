@@ -392,6 +392,21 @@ describe('DataExporterRepos', () => {
       expect(result.messagePlugins.map((plugin) => plugin.id)).toEqual([testIds.messageId]);
     });
 
+    it('should correlate the message-ref visitor filter on the parent message id', () => {
+      // An uncorrelated `id IN (SELECT id FROM messages …)` under the OR runs as
+      // a hashed SubPlan over the whole messages table in production. The
+      // filter must look up each row's own parent message instead.
+      const repo = new DataExporterRepos(db, userId) as any;
+      const condition = repo.buildShareVisitorCondition(
+        { column: 'id', via: 'messageRef' },
+        messagePlugins,
+      );
+      const { sql } = db.select().from(messagePlugins).where(condition).toSQL();
+
+      expect(sql).toContain('"messages"."id" = "message_plugins"."id"');
+      expect(sql).not.toMatch(/"message_plugins"\."id" in \(select/i);
+    });
+
     it('should export data for a different user', async () => {
       // Create another user
       const anotherUserId = 'another-user-id';

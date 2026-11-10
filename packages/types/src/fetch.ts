@@ -16,6 +16,7 @@ export const ChatErrorType = {
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
+  AgentConcurrencyLimitExceeded: 'AgentConcurrencyLimitExceeded', // The user already has as many agent runs in flight as allowed — recovers when one finishes
 
   InvalidUserKey: 'InvalidUserKey', // is not valid User key
   CreateMessageError: 'CreateMessageError',
@@ -30,6 +31,7 @@ export const ChatErrorType = {
   SystemTimeNotMatchError: 'SystemTimeNotMatchError',
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
   DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
+  DeviceResponseTimeout: 'DeviceResponseTimeout', // Run reached the device, which did not answer in time
 
   // ******* Desktop Backend-Proxy Network Errors ******* //
   // Emitted by the Electron backend proxy when the upstream fetch fails at the

@@ -1,6 +1,7 @@
 'use client';
 
 import type { EditedFileEntry } from '@lobechat/builtin-tools/fileEditScan';
+import type { OperationEditedFile } from '@lobechat/builtin-tools/operationArtifacts';
 import {
   FilePathDisplay,
   getFileLanguage,
@@ -9,7 +10,9 @@ import {
   KindDot,
   LineStats,
 } from '@lobechat/shared-tool-ui/components';
-import { Button, Center, createStaticStyles, cx, Flexbox, PatchDiff, Text } from '@lobehub/ui';
+import { Button, Center, Flexbox, PatchDiff, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowUpRightIcon,
   ChevronDownIcon,
@@ -22,7 +25,7 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 
-import { type OperationEditedFile, summarizeEditedFilesTotals } from './deriveEditedFiles';
+import { summarizeEditedFilesTotals } from './deriveEditedFiles';
 import { useOpenEditedFile } from './useOpenEditedFile';
 
 export const SINGLE_EDITED_FILE_ICON_SIZE = 40;
@@ -39,160 +42,145 @@ const toggleOnKey = (toggle: () => void) => (event: KeyboardEvent<HTMLDivElement
   }
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    overflow: hidden;
-
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  header: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-  `,
-  headerIcon: css`
-    flex-shrink: 0;
-
-    width: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
-    height: ${AGGREGATE_EDITED_FILE_ICON_SIZE}px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  singleHeader: css`
-    position: relative;
-    padding-block: 8px;
-    padding-inline: 12px;
-
-    &:hover [data-view-changes],
-    &:focus-within [data-view-changes] {
-      pointer-events: auto;
-      transform: translateX(0);
-      opacity: 1;
-    }
-  `,
-  singleHeaderClickable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  singleTitle: css`
-    min-width: 0;
-    font-size: 14px;
-    font-weight: 500;
-  `,
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  header: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+  },
+  headerIcon: {
+    flexShrink: 0,
+    width: `${AGGREGATE_EDITED_FILE_ICON_SIZE}px`,
+    height: `${AGGREGATE_EDITED_FILE_ICON_SIZE}px`,
+    borderRadius: '8px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  singleHeader: {
+    position: 'relative',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+  },
+  singleHeaderClickable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  singleTitle: {
+    minWidth: '0',
+    fontSize: '14px',
+    fontWeight: 500,
+  },
   /**
    * The action slides *over* the line stats instead of displacing them, so the
    * `+N -M` column stays put on hover. The two stacked gradients composite to
    * exactly the hovered row colour (fill over elevated), which is why the
    * opaque end shows no seam against the row behind it.
    */
-  viewChanges: css`
-    pointer-events: none;
+  viewChanges: {
+    position: 'absolute',
+    insetBlockStart: 0,
+    insetBlockEnd: 0,
+    insetInlineEnd: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingInlineStart: '56px',
+    paddingInlineEnd: '12px',
+    pointerEvents: {
+      'default': 'none',
+      [stylex.when.ancestor(':hover')]: 'auto',
+      [stylex.when.ancestor(':focus-within')]: 'auto',
+      '@media (hover: none)': 'auto',
+    },
+    transform: {
+      default: null,
+      [stylex.when.ancestor(':hover')]: 'translateX(0)',
+      [stylex.when.ancestor(':focus-within')]: 'translateX(0)',
+    },
+    opacity: {
+      'default': 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+      '@media (hover: none)': 1,
+    },
+    backgroundImage: `linear-gradient(to left, ${cssVar.colorFillQuaternary} 62%, transparent), linear-gradient(to left, ${cssVar.colorBgElevated} 62%, transparent)`,
+    transition: `opacity 160ms ${cssVar.motionEaseOut}`,
+  },
+  viewChangesButton: {
+    height: '22px',
+    padding: '0',
+    color: cssVar.colorTextSecondary,
+  },
+  viewChangesVisible: {
+    pointerEvents: 'auto',
+    opacity: 1,
+  },
+  chevron: {
+    flexShrink: 0,
+    color: cssVar.colorTextTertiary,
+  },
+  title: {
+    minWidth: '0',
+    fontSize: '14px',
+    fontWeight: 500,
+  },
+  stats: {
+    fontWeight: 500,
+  },
+  list: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  showMore: {
+    cursor: 'pointer',
+    paddingBlock: '7px',
+    paddingInline: '12px',
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  row: {
+    position: 'relative',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+  },
+  rowMain: {
+    minHeight: '24px',
+  },
+  rowClickable: {
+    cursor: 'pointer',
+    borderRadius: '6px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  path: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    alignItems: 'center',
+    minWidth: '0',
+  },
+  patch: {
+    overflow: 'hidden',
+    marginBlockStart: '6px',
+    paddingInlineStart: '18px',
+  },
+});
 
-    position: absolute;
-    inset-block: 0;
-    inset-inline-end: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-
-    padding-inline: 56px 12px;
-
-    opacity: 0;
-    background:
-      linear-gradient(to left, ${cssVar.colorFillQuaternary} 62%, transparent),
-      linear-gradient(to left, ${cssVar.colorBgElevated} 62%, transparent);
-
-    transition: opacity 160ms ${cssVar.motionEaseOut};
-
-    @media (hover: none) {
-      pointer-events: auto;
-      opacity: 1;
-    }
-  `,
-  viewChangesButton: css`
-    height: 22px;
-    padding: 0;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  viewChangesVisible: css`
-    pointer-events: auto;
-    opacity: 1;
-  `,
-  chevron: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    min-width: 0;
-    font-size: 14px;
-    font-weight: 500;
-  `,
-  stats: css`
-    font-weight: 500;
-  `,
-  list: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  showMore: css`
-    cursor: pointer;
-
-    padding-block: 7px;
-    padding-inline: 12px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  row: css`
-    position: relative;
-    padding-block: 6px;
-    padding-inline: 12px;
-
-    &:hover [data-view-changes],
-    &:focus-within [data-view-changes] {
-      pointer-events: auto;
-      transform: translateX(0);
-      opacity: 1;
-    }
-  `,
-  rowMain: css`
-    min-height: 24px;
-  `,
-  rowClickable: css`
-    cursor: pointer;
-    border-radius: 6px;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  path: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  patch: css`
-    overflow: hidden;
-    margin-block-start: 6px;
-    padding-inline-start: 18px;
-  `,
-}));
+const marker = stylex.defaultMarker();
 
 const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ entry, onOpen }) => {
   const { t } = useTranslation('chat');
@@ -207,12 +195,14 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
   const clickable = !!handleRowClick;
 
   return (
-    <Flexbox className={cx(styles.row, clickable && styles.rowClickable)}>
+    <Flexbox
+      className={stylex.props(styles.row, clickable && styles.rowClickable, marker).className}
+    >
       <Flexbox
         horizontal
         align={'center'}
         aria-expanded={onOpen ? undefined : hasDiff ? expanded : undefined}
-        className={styles.rowMain}
+        className={stylex.props(styles.rowMain).className}
         gap={10}
         role={clickable ? 'button' : undefined}
         tabIndex={clickable ? 0 : undefined}
@@ -220,23 +210,23 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
         onKeyDown={handleRowClick ? toggleOnKey(handleRowClick) : undefined}
       >
         <KindDot kind={entry.kind} />
-        <div className={styles.path}>
+        <div {...stylex.props(styles.path)}>
           <FilePathDisplay filePath={entry.path} />
         </div>
         <LineStats
           hideZeroDeltas
-          className={styles.stats}
+          className={stylex.props(styles.stats).className}
           linesAdded={entry.linesAdded}
           linesDeleted={entry.linesDeleted}
         />
         {onOpen && hasDiff && (
           <div
             data-view-changes
-            className={cx(styles.viewChanges, expanded && styles.viewChangesVisible)}
+            {...stylex.props(styles.viewChanges, expanded && styles.viewChangesVisible)}
           >
             <Button
               aria-expanded={expanded}
-              className={styles.viewChangesButton}
+              className={stylex.props(styles.viewChangesButton).className}
               size={'small'}
               type={'text'}
               // Enter/Space on the button must not bubble into the row's own
@@ -254,13 +244,13 @@ const EditedFileRow = memo<{ entry: EditedFileEntry; onOpen?: () => void }>(({ e
         {!onOpen &&
           hasDiff &&
           (expanded ? (
-            <ChevronDownIcon className={styles.chevron} size={14} />
+            <ChevronDownIcon className={stylex.props(styles.chevron).className} size={14} />
           ) : (
-            <ChevronRightIcon className={styles.chevron} size={14} />
+            <ChevronRightIcon className={stylex.props(styles.chevron).className} size={14} />
           ))}
       </Flexbox>
       {hasDiff && expanded && (
-        <div className={styles.patch}>
+        <div {...stylex.props(styles.patch)}>
           {entry.diffTexts.map((patch, index) => (
             <PatchDiff
               fileName={fileName}
@@ -299,42 +289,55 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
     const fileName = getFileName(entry.path);
     const { displayPath } = getFilePathDisplayInfo(entry.path);
     const language = getFileLanguage(entry.path);
+    // Same fallback as a list row: a file nothing can read back (e.g. written
+    // outside the working directory) still opens its diff snapshot, and one
+    // with neither says so instead of swallowing the click.
+    const handleClick = onOpen ?? (hasDiff ? () => setShowDiff((prev) => !prev) : undefined);
 
     return (
-      <Flexbox className={styles.card}>
+      <Flexbox className={stylex.props(styles.card).className}>
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.singleHeader, onOpen && styles.singleHeaderClickable)}
+          aria-expanded={onOpen ? undefined : hasDiff ? showDiff : undefined}
           gap={10}
-          role={onOpen ? 'button' : undefined}
-          tabIndex={onOpen ? 0 : undefined}
-          onClick={onOpen}
-          onKeyDown={onOpen ? toggleOnKey(onOpen) : undefined}
+          role={handleClick ? 'button' : undefined}
+          tabIndex={handleClick ? 0 : undefined}
+          className={
+            stylex.props(styles.singleHeader, handleClick && styles.singleHeaderClickable, marker)
+              .className
+          }
+          onClick={handleClick}
+          onKeyDown={handleClick ? toggleOnKey(handleClick) : undefined}
         >
           <FileIcon
             fileName={getEditedFileIconName(entry.path)}
             size={SINGLE_EDITED_FILE_ICON_SIZE}
           />
           <Flexbox flex={1} gap={2}>
-            <Text ellipsis className={styles.singleTitle}>
+            <Text ellipsis className={stylex.props(styles.singleTitle).className}>
               {t('editedFiles.singleTitle', { path: displayPath })}
             </Text>
             <LineStats
               hideZeroDeltas
-              className={styles.stats}
+              className={stylex.props(styles.stats).className}
               linesAdded={entry.linesAdded}
               linesDeleted={entry.linesDeleted}
             />
           </Flexbox>
+          {!handleClick && (
+            <Text fontSize={12} type={'secondary'}>
+              {t('editedFiles.previewUnavailable')}
+            </Text>
+          )}
           {hasDiff && (
             <div
               data-view-changes
-              className={cx(styles.viewChanges, showDiff && styles.viewChangesVisible)}
+              {...stylex.props(styles.viewChanges, showDiff && styles.viewChangesVisible)}
             >
               <Button
                 aria-expanded={showDiff}
-                className={styles.viewChangesButton}
+                className={stylex.props(styles.viewChangesButton).className}
                 icon={<ArrowUpRightIcon size={14} />}
                 iconPosition={'end'}
                 size={'small'}
@@ -353,7 +356,7 @@ const SingleEditedFileCard = memo<{ entry: EditedFileEntry; onOpen?: () => void 
           )}
         </Flexbox>
         {hasDiff && showDiff && (
-          <div className={styles.patch}>
+          <div {...stylex.props(styles.patch)}>
             {entry.diffTexts.map((patch, index) => (
               <PatchDiff
                 fileName={fileName}
@@ -396,24 +399,29 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
   const toggleShowAll = () => setShowAll((prev) => !prev);
 
   return (
-    <Flexbox className={styles.card}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={10}>
-        <Center className={styles.headerIcon}>
+    <Flexbox className={stylex.props(styles.card).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={10}
+      >
+        <Center className={stylex.props(styles.headerIcon).className}>
           <FilePenLineIcon size={20} />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis className={styles.title}>
+          <Text ellipsis className={stylex.props(styles.title).className}>
             {t('editedFiles.title', { count: entries.length })}
           </Text>
           <LineStats
             hideZeroDeltas
-            className={styles.stats}
+            className={stylex.props(styles.stats).className}
             linesAdded={totals.linesAdded}
             linesDeleted={totals.linesDeleted}
           />
         </Flexbox>
       </Flexbox>
-      <Flexbox className={styles.list}>
+      <Flexbox className={stylex.props(styles.list).className}>
         {visible.map((entry) => (
           <EditedFileRow entry={entry} key={entry.path} onOpen={getOpenAction(entry)} />
         ))}
@@ -422,7 +430,7 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
             horizontal
             align={'center'}
             aria-expanded={showAll}
-            className={styles.showMore}
+            className={stylex.props(styles.showMore).className}
             gap={6}
             role={'button'}
             tabIndex={0}
@@ -433,9 +441,9 @@ const EditedFilesCard = memo<EditedFilesCardProps>(({ entries }) => {
               ? t('editedFiles.showLess')
               : t('editedFiles.showMore', { count: hiddenCount })}
             {showAll ? (
-              <ChevronUpIcon className={styles.chevron} size={14} />
+              <ChevronUpIcon className={stylex.props(styles.chevron).className} size={14} />
             ) : (
-              <ChevronDownIcon className={styles.chevron} size={14} />
+              <ChevronDownIcon className={stylex.props(styles.chevron).className} size={14} />
             )}
           </Flexbox>
         )}

@@ -17,18 +17,20 @@ interface ToolbarProps {
   /** Shown while the open conversation has no titled topic. @default the side chat's title */
   fallbackTitle?: string;
   onCollapse: () => void;
-  /** Hand a new conversation to another panel, after the topic is cleared. */
-  onNewTopic?: () => void;
-  /** Open a topic picked from history. @default switch this panel to it */
-  onSelectTopic?: (topicId: string) => void;
+  /**
+   * The conversation is bound to the goal (its supervision record): no new
+   * conversation and no history, so the panel can never leave that topic.
+   */
+  topicLocked?: boolean;
 }
 
 /**
  * Topic title + topic menu, then new-conversation + history — laid out like the
  * agent conversation header. Shared by the side chat and the supervision record
- * so both goal-page conversations carry the same header.
+ * so both goal-page conversations carry the same header; the record locks it to
+ * its topic.
  */
-const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, onNewTopic, onSelectTopic }) => {
+const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) => {
   const { t } = useTranslation('chat');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
@@ -63,6 +65,7 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, onNewTopic, onS
               fav={currentTopic.favorite}
               status={currentTopic.status}
               topicId={currentTopic.id}
+              topicLocked={topicLocked}
               topicTitle={currentTopic.title}
             />
           )}
@@ -70,67 +73,66 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, onNewTopic, onS
       }
       right={
         <>
-          <ActionIcon
-            icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            title={t('goalChat.newTopic')}
-            onClick={() => {
-              // Clear first: the side chat keeps the agent's open topic when it
-              // mounts, so a hand-off would otherwise land back on this one.
-              void switchTopic(null);
-              onNewTopic?.();
-            }}
-          />
-          <Popover
-            open={isLoadingTopics ? false : topicPopoverOpen}
-            placement="bottomRight"
-            trigger="click"
-            content={
-              hasTopics ? (
-                <Flexbox
-                  gap={4}
-                  padding={8}
-                  style={{
-                    maxHeight: '50vh',
-                    overflowY: 'auto',
-                    width: '100%',
-                  }}
-                >
-                  {topics!.map((topic) => (
-                    <TopicItem
-                      active={topic.id === activeTopicId}
-                      agentId={agentId}
-                      fav={topic.favorite}
-                      key={topic.id}
-                      status={topic.status}
-                      topicId={topic.id}
-                      topicTitle={topic.title}
-                      onClose={() => setTopicPopoverOpen(false)}
-                      onTopicChange={(id) => (onSelectTopic ? onSelectTopic(id) : switchTopic(id))}
-                    />
-                  ))}
-                </Flexbox>
-              ) : (
-                <Flexbox padding={16}>
-                  <Text type={'secondary'}>{t('goalChat.noTopics')}</Text>
-                </Flexbox>
-              )
-            }
-            styles={{
-              content: {
-                padding: 0,
-                width: 240,
-              },
-            }}
-            onOpenChange={setTopicPopoverOpen}
-          >
-            <ActionIcon
-              disabled={isLoadingTopics}
-              icon={Clock3Icon}
-              loading={isLoadingTopics}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            />
-          </Popover>
+          {!topicLocked && (
+            <>
+              <ActionIcon
+                icon={PlusIcon}
+                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                title={t('goalChat.newTopic')}
+                onClick={() => switchTopic(null)}
+              />
+              <Popover
+                open={isLoadingTopics ? false : topicPopoverOpen}
+                placement="bottomRight"
+                trigger="click"
+                content={
+                  hasTopics ? (
+                    <Flexbox
+                      gap={4}
+                      padding={8}
+                      style={{
+                        maxHeight: '50vh',
+                        overflowY: 'auto',
+                        width: '100%',
+                      }}
+                    >
+                      {topics!.map((topic) => (
+                        <TopicItem
+                          active={topic.id === activeTopicId}
+                          agentId={agentId}
+                          fav={topic.favorite}
+                          key={topic.id}
+                          status={topic.status}
+                          topicId={topic.id}
+                          topicTitle={topic.title}
+                          onClose={() => setTopicPopoverOpen(false)}
+                          onTopicChange={(id) => switchTopic(id)}
+                        />
+                      ))}
+                    </Flexbox>
+                  ) : (
+                    <Flexbox padding={16}>
+                      <Text type={'secondary'}>{t('goalChat.noTopics')}</Text>
+                    </Flexbox>
+                  )
+                }
+                styles={{
+                  content: {
+                    padding: 0,
+                    width: 240,
+                  },
+                }}
+                onOpenChange={setTopicPopoverOpen}
+              >
+                <ActionIcon
+                  disabled={isLoadingTopics}
+                  icon={Clock3Icon}
+                  loading={isLoadingTopics}
+                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                />
+              </Popover>
+            </>
+          )}
           <ActionIcon
             icon={PanelRightCloseIcon}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}

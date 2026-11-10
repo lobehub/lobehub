@@ -20,7 +20,7 @@ vi.mock('@/database/models/task', () => ({
     constructor(_db: unknown, userId: string, workspaceId?: string) {
       mocks.taskScopes.push([userId, workspaceId]);
     }
-    resolveMany = mocks.resolveTasks;
+    resolveRefs = mocks.resolveTasks;
   },
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -50,9 +50,9 @@ describe('AcceptanceService.listWithSubjects', () => {
       },
     ];
     const query = vi.fn().mockResolvedValue(rows);
-    mocks.resolveTasks.mockResolvedValue([
-      { id: 'recent', identifier: 'T-1', name: 'Recent report' },
-    ]);
+    mocks.resolveTasks.mockResolvedValue({
+      byRef: new Map([['recent', { id: 'recent', identifier: 'T-1', name: 'Recent report' }]]),
+    });
     mocks.resolveTopics.mockResolvedValue([{ id: 'older', title: 'Needle report' }]);
     mocks.resolveDocuments.mockResolvedValue([]);
     const service = new AcceptanceService({} as any, 'user-1') as any;
@@ -119,7 +119,9 @@ describe('AcceptanceService.listWithSubjects', () => {
 
   it('resolves foreign rows in a fixed number of reads however many owners a page spans', async () => {
     mocks.resolveTasks.mockReset();
-    mocks.resolveTasks.mockResolvedValue([{ id: 'mine', identifier: 'T-1', name: 'Task mine' }]);
+    mocks.resolveTasks.mockResolvedValue({
+      byRef: new Map([['mine', { id: 'mine', identifier: 'T-1', name: 'Task mine' }]]),
+    });
     mocks.resolveTopics.mockResolvedValue([]);
     mocks.resolveDocuments.mockResolvedValue([]);
     mocks.taskScopes.length = 0;
@@ -166,6 +168,44 @@ describe('AcceptanceService.listWithSubjects', () => {
     expect(
       result.map(({ subject }: { subject: { title: string | null } }) => subject.title),
     ).toEqual(['Task mine', 'Task theirs-0', 'Topic theirs-1', 'X-3', null]);
+  });
+
+  it("resolves a teammate's workspace row through the unscoped read", async () => {
+    mocks.resolveTasks.mockReset();
+    mocks.resolveTasks.mockResolvedValue({
+      byRef: new Map([['mine', { id: 'mine', identifier: 'T-1', name: 'Task mine' }]]),
+    });
+    mocks.resolveTopics.mockResolvedValue([]);
+    mocks.resolveDocuments.mockResolvedValue([]);
+    mocks.taskScopes.length = 0;
+
+    const rows = [
+      { id: 'a', subjectId: 'mine', subjectType: 'task', userId: 'user-1', workspaceId: 'ws-1' },
+      // The teammate's private task is invisible to the caller's scoped TaskModel.
+      { id: 'b', subjectId: 'theirs', subjectType: 'task', userId: 'user-2', workspaceId: 'ws-1' },
+    ];
+    const db = {
+      query: {
+        documents: { findMany: vi.fn().mockResolvedValue([]) },
+        tasks: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ id: 'theirs', identifier: 'T-2', name: 'Task theirs' }]),
+        },
+        topics: { findMany: vi.fn().mockResolvedValue([]) },
+      },
+    };
+    const service = new AcceptanceService(db as any, 'user-1', 'ws-1') as any;
+    service.acceptanceModel = { query: vi.fn().mockResolvedValue(rows) };
+    service.latestCheckCounts = vi.fn().mockResolvedValue(new Map());
+    service.resolveProjects = vi.fn().mockResolvedValue(new Map());
+
+    const result = await service.listWithSubjects({ q: 'theirs', scope: 'all' });
+
+    expect(mocks.resolveTasks).toHaveBeenCalledWith(['mine']);
+    expect(
+      result.map(({ subject }: { subject: { title: string | null } }) => subject.title),
+    ).toEqual(['Task theirs']);
   });
 
   it('reads check counts for rows of any owner in two batched queries', async () => {

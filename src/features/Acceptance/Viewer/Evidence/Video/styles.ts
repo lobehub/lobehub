@@ -2,6 +2,48 @@ import type { VerifyEvidenceChapterKind } from '@lobechat/types';
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css }) => ({
+  player: css`
+    &:fullscreen {
+      display: flex;
+      flex-direction: column;
+      border-radius: 0;
+    }
+
+    &:fullscreen > [data-video-controls] {
+      flex: none;
+    }
+
+    &:fullscreen > [data-acceptance-video-stage] {
+      container-type: size;
+      flex: 1;
+      align-items: center;
+
+      min-width: 0;
+      min-height: 0;
+    }
+
+    &:fullscreen > [data-acceptance-video-stage] > .lobe-video__frame {
+      flex: none;
+      width: min(100cqw, calc(100cqh * var(--acceptance-video-aspect)));
+      max-width: none;
+      height: min(100cqh, calc(100cqw / var(--acceptance-video-aspect)));
+    }
+  `,
+  stage: css`
+    display: flex;
+    justify-content: center;
+  `,
+  frame: css`
+    max-width: var(--acceptance-video-frame-width);
+  `,
+  // Keep stepping and fullscreen visible on a phone; the frame is also named on its comment card.
+  compactControls: css`
+    @media (width <= 767px) {
+      .lobe-video__frame-number {
+        display: none;
+      }
+    }
+  `,
   overlay: css`
     position: absolute;
     inset: 0;
@@ -39,6 +81,50 @@ export const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
 
     background: ${cssVar.colorError};
+  `,
+  /**
+   * A comment region, drawn exactly like the region on a screenshot
+   * (`Evidence/Annotation` and `ScreenshotTiles`): a 2px box with two rings —
+   * the dark one separates it from a light frame, the light one from a dark
+   * frame — in the annotation colour (`colorError`) unless the caller passes
+   * the colour the screenshot overlay uses for the same comment.
+   */
+  mark: css`
+    pointer-events: none;
+
+    position: absolute;
+
+    border: 2px solid ${cssVar.colorError};
+    border-radius: 4px;
+
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 45%),
+      inset 0 0 0 1px rgb(255 255 255 / 45%);
+  `,
+  /** The screenshot's numbered badge: 18px disc on the box's top-left corner. */
+  markBadge: css`
+    position: absolute;
+    inset-block-start: -9px;
+    inset-inline-start: -9px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    color: ${cssVar.colorTextLightSolid};
+
+    background: ${cssVar.colorError};
+  `,
+  /** Selected reads the way an opened screenshot note does: a light outline on its disc. */
+  markBadgeActive: css`
+    outline: 2px solid ${cssVar.colorTextLightSolid};
   `,
   draft: css`
     pointer-events: none;
