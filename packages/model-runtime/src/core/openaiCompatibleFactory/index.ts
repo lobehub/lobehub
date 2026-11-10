@@ -62,6 +62,7 @@ import { listOpenAICompatibleModels } from './models';
 import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
+export { isResponseFormatUnsupportedError } from '../protocols/openaiChatCompletions/generateObject';
 export * from '../protocols/openaiChatCompletions/nonStreamToStream';
 export * from '../protocols/openaiResponses/nonStreamToStream';
 export * from './createVideo';
@@ -71,7 +72,6 @@ export type {
   CustomClientOptions,
   OpenAICompatibleFactoryOptions,
 } from './factoryOptions';
-export { isResponseFormatUnsupportedError } from './generateObject';
 export { CHAT_MODELS_BLOCK_LIST } from './models';
 
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>(
