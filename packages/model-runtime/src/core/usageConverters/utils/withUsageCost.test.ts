@@ -56,8 +56,19 @@ describe('withUsageCost', () => {
   it('warns when pricing resolution produced issues instead of silently pricing $0', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    // No options supplied, so the ttl lookup cannot resolve its key.
-    const result = withUsageCost(writeUsage, lookupPricing);
+    // No options supplied and no `5m` price to fall back to (a missing ttl defaults to `5m`
+    // only when the card lists that price), so the ttl lookup cannot resolve its key.
+    const pricing: Pricing = {
+      units: [
+        {
+          lookup: { prices: { '1h': 2 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    };
+    const result = withUsageCost(writeUsage, pricing);
 
     expect(result.cost).toBe(0);
     expect(warn).toHaveBeenCalledTimes(1);
