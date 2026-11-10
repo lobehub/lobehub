@@ -31,10 +31,10 @@ const EMBEDDED_IMAGE = /^data:image\/(?:gif|jpe?g|png|webp)[,;]/i;
 
 /**
  * The only `url()` CSS keeps: an inline raster image, quoted or not, whose
- * payload cannot hide a quote, a parenthesis or a second function.
+ * payload cannot hide a quote, a parenthesis or a second function. Tested on
+ * trimmed text, with no two quantifiers sharing characters, so it stays linear.
  */
-const EMBEDDED_CSS_IMAGE =
-  /^\s*(["']?)data:image\/(?:gif|jpe?g|png|webp);base64,[\d+/=a-z\s]*\1\s*$/i;
+const EMBEDDED_CSS_IMAGE = /^(["']?)data:image\/(?:gif|jpe?g|png|webp);base64,[\d+/=a-z]*\1$/i;
 
 /**
  * CSS functions that fetch what they name, or read an attribute (which is how
@@ -119,7 +119,8 @@ const removeFetchingAtRules = (css: string) => {
 
   for (const match of css.matchAll(FETCHING_AT_RULE)) {
     if (match.index < cursor) continue;
-    output += css.slice(cursor, match.index);
+    // A space, not nothing: `@imp@import x;ort` must not join into `@import`.
+    output += `${css.slice(cursor, match.index)} `;
     cursor = atRuleEnd(css, match.index) + 1;
   }
 
@@ -136,7 +137,7 @@ const removeFetchingFunctions = (css: string) => {
     const open = match.index + match[0].length - 1;
     const close = closingIndex(css, open, ')');
     const isUrl = /^url\s*\($/i.test(match[0]);
-    const kept = isUrl && EMBEDDED_CSS_IMAGE.test(css.slice(open + 1, close));
+    const kept = isUrl && EMBEDDED_CSS_IMAGE.test(css.slice(open + 1, close).trim());
 
     output +=
       css.slice(cursor, match.index) + (kept ? css.slice(match.index, close + 1) : ' none ');
@@ -159,7 +160,14 @@ export const sanitizeMailCss = (css: string): string => {
     // A space, not nothing: `u/**/rl(` must not join into `url(`.
     .replaceAll(/\/\*[\s\S]*?(?:\*\/|$)/g, ' ');
 
-  return removeFetchingFunctions(removeFetchingAtRules(flat));
+  // Removing never joins text into a new rule or function, as every cut leaves
+  // a space; the loop is the backstop should that ever stop holding.
+  let current = flat;
+  for (;;) {
+    const next = removeFetchingFunctions(removeFetchingAtRules(current));
+    if (next === current) return next;
+    current = next;
+  }
 };
 
 export interface SanitizedMailHtml {

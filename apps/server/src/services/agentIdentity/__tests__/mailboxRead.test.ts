@@ -96,6 +96,9 @@ describe('readHtml', () => {
 
     fetchImpl.mockResolvedValueOnce(Response.json({}, { status: 404 }));
     expect(await service().readHtml('mail_1')).toEqual({ status: 'expired' });
+
+    fetchImpl.mockResolvedValueOnce(Response.json({}, { status: 410 }));
+    expect(await service().readHtml('mail_1')).toEqual({ status: 'expired' });
   });
 
   it('reports a provider outage as failed, so the reader can retry', async () => {

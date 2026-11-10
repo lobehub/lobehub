@@ -145,6 +145,15 @@ describe('sanitizeMailCss', () => {
     ['escaped image-set', 'a{background:image-\\73 et("https://evil.test/a.png" 1x)}'],
     ['comment splitting url', 'a{background:u/**/rl(https://evil.test/a.png)}'],
     ['url in a comment-joined at-rule', '@im/**/port url(https://evil.test/x.css);'],
+    ['@import rejoined around a removed @import', '@imp@import x;ort "https://evil.test/x.css";'],
+    ['@import rejoined twice', '@imp@imp@import;ort;ort "https://evil.test/x.css";'],
+    ['@import rejoined through an escape', '@\\69mp@import x;ort "https://evil.test/x.css";'],
+    [
+      '@font-face rejoined around a removed @import',
+      '@font-@import x;face{src:url(//evil.test/f)}',
+    ],
+    ['\\40-escaped @import', '\\40 import url(https://evil.test/x.css);'],
+    ['\\40-escaped @font-face', '\\40 font-face{src:url(https://evil.test/f.woff)}'],
     ['nested url', 'a{background:url(url(https://evil.test/a.png))}'],
     ['unclosed url', 'a{background:url(https://evil.test/a.png'],
     [
@@ -172,6 +181,14 @@ describe('sanitizeMailCss', () => {
   it('keeps an inline raster image', () => {
     expect(sanitizeMailCss(`a{background:url(${PNG})}`)).toBe(`a{background:url(${PNG})}`);
     expect(sanitizeMailCss(`a{background:url("${PNG}")}`)).toBe(`a{background:url("${PNG}")}`);
+  });
+
+  it('stays linear on a long payload that almost matches an inline image', () => {
+    const css = `a{background:url(data:image/png;base64,${' '.repeat(200_000)}!)}`;
+    const started = performance.now();
+
+    expect(sanitizeMailCss(css)).toBe('a{background: none }');
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   it('cannot spell a closing style tag', () => {

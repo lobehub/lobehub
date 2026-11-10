@@ -167,7 +167,9 @@ export const createAgentMailProvider = (
     try {
       return await assertInOwningInbox(ref, providerMessageId);
     } catch (error) {
-      if (error instanceof LobeMailApiError && error.status === 404) return undefined;
+      if (error instanceof LobeMailApiError && (error.status === 404 || error.status === 410)) {
+        return undefined;
+      }
       if (error instanceof AgentAccountError && error.code === 'reply_target_not_owned') {
         console.warn('[agentMail] message %s is outside its account inbox', providerMessageId);
         return undefined;
