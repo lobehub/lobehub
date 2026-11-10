@@ -4,14 +4,21 @@ import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
-  getInboxMessage: vi.fn(),
-  getInboxUnreadCount: vi.fn(),
+  deleteMailDrafts: vi.fn(),
+  getMailConversation: vi.fn(),
+  getMailAccountCounts: vi.fn(),
   list: vi.fn(),
-  listInbox: vi.fn(),
+  listMail: vi.fn(),
+  listMailDrafts: vi.fn(),
   markAllInboxRead: vi.fn(),
-  markInboxRead: vi.fn(),
+  markMailRead: vi.fn(),
+  markMailUnread: vi.fn(),
   provision: vi.fn(),
+  restoreMail: vi.fn(),
   revoke: vi.fn(),
+  searchMail: vi.fn(),
+  setMailStarred: vi.fn(),
+  trashMail: vi.fn(),
 }));
 vi.mock('@/services/agentAccount', () => ({ agentAccountService: service }));
 
@@ -44,6 +51,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   confirmModal: ui.confirmModal,
   createModal: ui.createModal,
+  toast: toastApi,
   DropdownMenu: ({
     children,
     items,
@@ -64,6 +72,11 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
   ),
 }));
 
+const toastApi = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(() => ({ close: vi.fn() })),
+}));
+
 const { default: AgentMail } = await import('./index');
 const { default: AddMailboxForm } = await import('./AddMailboxForm');
 const { IDENTITY_CHANNELS } = await import('./const');
@@ -79,15 +92,42 @@ const account = (id: string, identifier: string) => ({
   status: 'active',
 });
 
-const row = (id: string, subject: string) => ({
+const row = (id: string, subject: string, extra: Record<string, unknown> = {}) => ({
+  accountId: id === 'msg_b' ? 'acc_b' : 'acc_a',
   agentId: 'agt_1',
-  createdAt: new Date(),
-  from: `${id}@x.com`,
+  direction: 'inbound',
+  fromAddress: `${id}@x.com`,
+  fromName: null,
+  hasAttachments: false,
   id,
+  isStarred: false,
+  isUnread: true,
+  mailCount: 1,
   preview: `preview of ${subject}`,
-  readAt: null,
-  receivedAt: new Date(),
+  sortAt: new Date(),
   subject,
+  threadKey: null,
+  to: [{ address: 'a@lobe.id' }],
+  trashedAt: null,
+  ...extra,
+});
+
+const mail = (id: string, extra: Record<string, unknown> = {}) => ({
+  accountId: 'acc_a',
+  agentId: 'agt_1',
+  attachments: [],
+  codes: [],
+  createdAt: new Date(),
+  deliveredAt: new Date(),
+  fromAddress: `${id}@x.com`,
+  fromName: null,
+  id,
+  isUnread: true,
+  subject: 'Opened',
+  text: `Full body of ${id}`,
+  threadKey: null,
+  to: [{ address: 'agent@lobe.id' }],
+  ...extra,
 });
 
 const page = (path = '/agent/agt_1/mail', disabled = false) =>
@@ -111,17 +151,20 @@ beforeEach(() => {
   server.providers = ['agent-mail'];
   server.loaded = true;
   service.list.mockResolvedValue([account('acc_a', 'a@lobe.id'), account('acc_b', 'b@lobe.id')]);
-  service.listInbox.mockImplementation(async ({ accountId }: { accountId?: string }) =>
+  service.listMail.mockImplementation(async ({ accountId }: { accountId?: string }) =>
     accountId === 'acc_b' ? [row('msg_b', 'For B')] : [row('msg_a', 'For A')],
   );
-  service.getInboxUnreadCount.mockResolvedValue(1);
-  service.markInboxRead.mockResolvedValue({ count: 1 });
-  service.getInboxMessage.mockImplementation(async (id: string) => ({
-    ...row(id, 'Opened'),
-    attachments: [],
-    text: `Full body of ${id}`,
-    to: 'agent@lobe.id',
-  }));
+  service.listMailDrafts.mockResolvedValue([]);
+  service.searchMail.mockResolvedValue({ items: [row('msg_hit', 'Search hit')], truncated: false });
+  service.getMailAccountCounts.mockImplementation(async (accountIds: string[]) =>
+    accountIds.map((accountId) => ({ accountId, drafts: 0, unread: 1 })),
+  );
+  service.markMailRead.mockResolvedValue({ count: 1 });
+  service.markMailUnread.mockResolvedValue({ count: 1 });
+  service.setMailStarred.mockResolvedValue({ count: 1 });
+  service.trashMail.mockResolvedValue({ count: 1, ids: ['msg_a'] });
+  service.restoreMail.mockResolvedValue({ count: 1 });
+  service.getMailConversation.mockImplementation(async ({ id }: { id: string }) => [mail(id)]);
 });
 
 describe('AgentMail', () => {
@@ -130,8 +173,8 @@ describe('AgentMail', () => {
 
     await screen.findByText('preview of For A');
 
-    expect(service.getInboxMessage).not.toHaveBeenCalled();
-    expect(service.markInboxRead).not.toHaveBeenCalled();
+    expect(service.getMailConversation).not.toHaveBeenCalled();
+    expect(service.markMailRead).not.toHaveBeenCalled();
   });
 
   it('reads a picked message beside the list, without a modal', async () => {
@@ -145,34 +188,33 @@ describe('AgentMail', () => {
       'aria-current',
       'true',
     );
-    expect(service.markInboxRead).toHaveBeenCalledWith(['msg_a']);
+    expect(service.markMailRead).toHaveBeenCalledWith({
+      conversationIn: 'inbox',
+      ids: ['msg_a'],
+    });
   });
 
   it('switches the list, the count and the open message to the chosen mailbox', async () => {
     page('/agent/agt_1/mail/msg_a');
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByText('menu:b@lobe.id'));
+    fireEvent.click(await screen.findByText(/menu:b@lobe.id/));
 
     expect(await screen.findByText('preview of For B')).toBeInTheDocument();
     expect(screen.queryByText('preview of For A')).not.toBeInTheDocument();
     expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument();
-    expect(service.getInboxUnreadCount).toHaveBeenCalledWith('agt_1', 'acc_b');
+    // One request answers every address, so switching asks for nothing new.
+    expect(service.getMailAccountCounts).toHaveBeenCalledTimes(1);
+    expect(service.getMailAccountCounts).toHaveBeenCalledWith(['acc_a', 'acc_b']);
   });
 
   it('restores the mailbox of a message opened straight from its URL', async () => {
-    service.getInboxMessage.mockResolvedValue({
-      ...row('msg_b', 'For B'),
-      accountId: 'acc_b',
-      attachments: [],
-      text: 'Full body of msg_b',
-      to: 'b@lobe.id',
-    });
+    service.getMailConversation.mockResolvedValue([mail('msg_b', { accountId: 'acc_b' })]);
     page('/agent/agt_1/mail/msg_b');
 
     expect(await screen.findByText('preview of For B')).toBeInTheDocument();
     expect(screen.queryByText('preview of For A')).not.toBeInTheDocument();
-    expect(service.listInbox).not.toHaveBeenCalledWith(
+    expect(service.listMail).not.toHaveBeenCalledWith(
       expect.objectContaining({ accountId: 'acc_a' }),
     );
   });
@@ -181,26 +223,20 @@ describe('AgentMail', () => {
     page('/agent/agt_1/mail/msg_a');
 
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
-    await waitFor(() => expect(service.markInboxRead).toHaveBeenCalledWith(['msg_a']));
-    expect(service.markInboxRead).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] }));
+    expect(service.markMailRead).toHaveBeenCalledTimes(1);
     // The list and count load after the mark, so neither shows it as unread.
-    expect(service.markInboxRead.mock.invocationCallOrder[0]).toBeLessThan(
-      service.listInbox.mock.invocationCallOrder[0],
+    expect(service.markMailRead.mock.invocationCallOrder[0]).toBeLessThan(
+      service.listMail.mock.invocationCallOrder[0],
     );
   });
 
   it('does not re-stamp a read message opened from its URL', async () => {
-    service.getInboxMessage.mockResolvedValue({
-      ...row('msg_a', 'For A'),
-      attachments: [],
-      readAt: new Date(),
-      text: 'Full body of msg_a',
-      to: 'a@lobe.id',
-    });
+    service.getMailConversation.mockResolvedValue([mail('msg_a', { isUnread: false })]);
     page('/agent/agt_1/mail/msg_a');
 
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
-    expect(service.markInboxRead).not.toHaveBeenCalled();
+    expect(service.markMailRead).not.toHaveBeenCalled();
   });
 
   it('asks for confirmation before releasing the mailbox on screen', async () => {
@@ -241,7 +277,7 @@ describe('AgentMail', () => {
 
   it('offers to open an address when the agent has none', async () => {
     service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
+    service.listMail.mockResolvedValue([]);
     page();
 
     expect(await screen.findByText('identity.empty.open')).toBeInTheDocument();
@@ -254,7 +290,7 @@ describe('AgentMail', () => {
 
   it('keeps the action unavailable until a prefix is typed', async () => {
     service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
+    service.listMail.mockResolvedValue([]);
     page();
 
     await screen.findByText('identity.empty.title');
@@ -270,7 +306,7 @@ describe('AgentMail', () => {
 
   it('shows a refused opening inside the form and clears it on the next edit', async () => {
     service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
+    service.listMail.mockResolvedValue([]);
     service.provision.mockRejectedValue(new Error('prefix is taken'));
     page();
 
@@ -288,7 +324,7 @@ describe('AgentMail', () => {
   it('leaves the page when the deployment cannot open a mailbox and the agent has none', async () => {
     server.providers = [];
     service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
+    service.listMail.mockResolvedValue([]);
     page();
 
     expect(await screen.findByText('profile page')).toBeInTheDocument();
@@ -317,7 +353,7 @@ describe('AgentMail', () => {
     server.loaded = false;
     server.providers = [];
     service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
+    service.listMail.mockResolvedValue([]);
     page();
 
     await waitFor(() => expect(service.list).toHaveBeenCalled());
@@ -343,7 +379,7 @@ describe('AgentMail', () => {
   it('opens the first mailbox and moves on to it', async () => {
     service.list.mockResolvedValueOnce([]);
     // No mail before the first address; the new address then has its own.
-    service.listInbox.mockImplementation(async ({ accountId }: { accountId?: string }) =>
+    service.listMail.mockImplementation(async ({ accountId }: { accountId?: string }) =>
       accountId ? [row('msg_a', 'For A')] : [],
     );
     service.provision.mockResolvedValue(account('acc_a', 'a@lobe.id'));
@@ -363,7 +399,7 @@ describe('AgentMail', () => {
 
   it('states the absence to a read-only viewer without offering to open one', async () => {
     service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
+    service.listMail.mockResolvedValue([]);
     page('/agent/agt_1/mail', true);
 
     expect(await screen.findByText('identity.empty.readOnly')).toBeInTheDocument();
@@ -408,6 +444,105 @@ describe('AgentMail', () => {
 
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
     expect(ui.createModal).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentMail list', () => {
+  const firstRow = () => screen.findByRole('button', { name: 'msg_a@x.com — For A' });
+  const within = async (label: string) =>
+    (await firstRow()).querySelector(`[aria-label="${label}"]`) as HTMLElement;
+
+  it('lists the view named in the URL', async () => {
+    service.listMail.mockResolvedValue([row('msg_s', 'Sent one', { direction: 'outbound' })]);
+    page('/agent/agt_1/mail?folder=sent');
+
+    expect(await screen.findByText('preview of Sent one')).toBeInTheDocument();
+    expect(service.listMail).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acc_a', folder: 'sent' }),
+    );
+  });
+
+  it('searches from the URL and tells no results from a failure', async () => {
+    service.searchMail.mockResolvedValueOnce({ items: [], truncated: false });
+    page('/agent/agt_1/mail?q=nothing');
+
+    expect(await screen.findByText('identity.mailbox.search.empty')).toBeInTheDocument();
+    expect(screen.queryByText('identity.mailbox.search.failed')).not.toBeInTheDocument();
+  });
+
+  it('says when a search stopped at its best matches', async () => {
+    service.searchMail.mockResolvedValueOnce({
+      items: [row('msg_hit', 'Search hit')],
+      truncated: true,
+    });
+    page('/agent/agt_1/mail?q=invoice');
+
+    expect(await screen.findByText('preview of Search hit')).toBeInTheDocument();
+    expect(screen.getByText('identity.mailbox.search.truncated')).toBeInTheDocument();
+    expect(service.searchMail).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acc_a', query: 'invoice' }),
+    );
+  });
+
+  it('shows a failed view as a failure, never as empty', async () => {
+    service.listMail.mockRejectedValue(new Error('down'));
+    page();
+
+    expect(await screen.findByText('identity.mailbox.loadFailed')).toBeInTheDocument();
+    expect(screen.queryByText('identity.mailbox.empty.inbox')).not.toBeInTheDocument();
+  });
+
+  it('removes a trashed row at once and undoes exactly what was trashed', async () => {
+    // The server moved the conversation's other mail too, but one was already in the trash.
+    service.trashMail.mockResolvedValue({ count: 2, ids: ['msg_a', 'msg_a_reply'] });
+    page();
+
+    fireEvent.click(await within('identity.mailbox.action.delete'));
+
+    await waitFor(() => expect(screen.queryByText('preview of For A')).not.toBeInTheDocument());
+    const [options] = toastApi.success.mock.calls[0] as unknown as [
+      { actions: { onClick: () => void }[] },
+    ];
+    options.actions[0].onClick();
+    await waitFor(() =>
+      expect(service.restoreMail).toHaveBeenCalledWith({ ids: ['msg_a', 'msg_a_reply'] }),
+    );
+    expect(service.trashMail).toHaveBeenCalledWith({ conversationIn: 'inbox', ids: ['msg_a'] });
+  });
+
+  it('rolls a failed star back and offers a retry', async () => {
+    service.setMailStarred.mockRejectedValue(new Error('nope'));
+    page();
+
+    fireEvent.click(await within('identity.mailbox.action.star'));
+
+    await waitFor(() => expect(toastApi.error).toHaveBeenCalledTimes(1));
+    expect(await within('identity.mailbox.action.star')).toBeInTheDocument();
+    expect(toastApi.error.mock.calls[0][0]).toMatchObject({
+      actions: [{ label: 'identity.mailbox.retry' }],
+      title: 'identity.mailbox.failed.star',
+    });
+  });
+
+  it('shows the bulk toolbar once a row is selected, and clears it after acting', async () => {
+    page();
+
+    const box = (await firstRow()).querySelector('[role="checkbox"]')!;
+    fireEvent.click(box.parentElement!);
+
+    expect(await screen.findByText('identity.mailbox.bulk.selected')).toBeInTheDocument();
+    // The toolbar sits above the rows, so its button comes first.
+    fireEvent.click(screen.getAllByRole('button', { name: 'identity.mailbox.action.markRead' })[0]);
+
+    await waitFor(() =>
+      expect(service.markMailRead).toHaveBeenCalledWith({
+        conversationIn: 'inbox',
+        ids: ['msg_a'],
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('identity.mailbox.bulk.selected')).not.toBeInTheDocument(),
+    );
   });
 });
 

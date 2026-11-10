@@ -17,6 +17,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentAccountView } from '@/services/agentAccount';
+import { formatShortenNumber } from '@/utils/format';
 
 import AddMailboxForm from './AddMailboxForm';
 import { IDENTITY_CHANNELS, isChannelAccount, KIND_ICONS } from './const';
@@ -24,6 +25,7 @@ import InlineError from './InlineError';
 import { identityStyles } from './styles';
 import { type Mailbox, useOpenableChannel } from './useAgentIdentity';
 import { useAccountActions } from './useIdentityActions';
+import { useMailCounts } from './useMailList';
 
 /**
  * Only a state that differs from the working default is worth a label. Released
@@ -56,6 +58,7 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
   const { t } = useTranslation(['setting', 'common']);
   const { accounts, current, data, error, isLoading, mutate } = mailbox;
   const openable = useOpenableChannel();
+  const { data: counts } = useMailCounts(accounts.map((account) => account.id));
   const { release } = useAccountActions({
     agentId,
     onChanged: () => {
@@ -115,7 +118,9 @@ const MailboxCard = memo<MailboxCardProps>(({ agentId, disabled, mailbox, onSwit
       icon:
         account.id === current.id ? Check : (channelOf(account)?.icon ?? KIND_ICONS[account.kind]),
       key: account.id,
-      label: account.identifier,
+      label: counts?.[account.id]?.unread
+        ? `${account.identifier} (${formatShortenNumber(counts[account.id].unread)})`
+        : account.identifier,
       onClick: () => onSwitch(account.id),
     })),
     ...(openable && !disabled

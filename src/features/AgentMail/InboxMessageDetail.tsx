@@ -1,5 +1,6 @@
 'use client';
 
+import type { AgentMailFolder } from '@lobechat/types';
 import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -7,11 +8,13 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineError from './InlineError';
-import { useInboxMessage } from './useAgentIdentity';
+import { useMailMessage } from './useMailList';
 
 dayjs.extend(relativeTime);
 
 export interface InboxMessageDetailProps {
+  /** The view it was opened from; trashed mail is only reachable through trash. */
+  folder?: AgentMailFolder;
   id: string;
 }
 
@@ -41,9 +44,9 @@ const formatAttachmentSize = (bytes?: number): string | undefined => {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
-const InboxMessageDetail = memo<InboxMessageDetailProps>(({ id }) => {
+const InboxMessageDetail = memo<InboxMessageDetailProps>(({ folder, id }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, mutate } = useInboxMessage(id);
+  const { data, error, isLoading, mutate } = useMailMessage(id, folder);
 
   // A failed read must say so: a skeleton that never resolves reads as "still
   // loading" forever.
@@ -55,6 +58,14 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(({ id }) => {
           summary={t('identity.inbox.detail.loadFailed')}
           onRetry={() => void mutate()}
         />
+      </Flexbox>
+    );
+  }
+
+  if (data === null) {
+    return (
+      <Flexbox padding={4}>
+        <Text type={'secondary'}>{t('identity.inbox.detail.gone')}</Text>
       </Flexbox>
     );
   }

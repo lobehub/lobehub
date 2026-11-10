@@ -24,15 +24,13 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 }));
 
 const { IDENTITY_CHANNELS } = await import('./const');
-const { useAccountActions, useInboxActions } = await import('./useIdentityActions');
+const { useAccountActions } = await import('./useIdentityActions');
 
 const mailChannel = IDENTITY_CHANNELS.find((channel) => channel.kind === 'mail')!;
 /** The mail channel with the prefix preference switched off. */
 const unprefixableChannel = { ...mailChannel, prefixable: false };
 
 const mailAccount = { id: 'acc_mail', identifier: 'research@lobe.id' } as any;
-const unreadMessage = { id: 'msg_1', readAt: null } as any;
-const readMessage = { id: 'msg_2', readAt: new Date('2026-10-02T02:00:00Z') } as any;
 
 const lastConfirm = () => ui.confirmModal.mock.calls.at(-1)![0] as { onOk: () => Promise<void> };
 
@@ -93,48 +91,6 @@ describe('useAccountActions', () => {
     await lastConfirm().onOk();
 
     expect(service.revoke).toHaveBeenCalledWith('acc_mail');
-    expect(onChanged).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('useInboxActions', () => {
-  const onOpen = vi.fn();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    service.markAllInboxRead.mockResolvedValue({ count: 1 });
-    service.markInboxRead.mockResolvedValue({ count: 1 });
-  });
-
-  it('opens an unread message and clears its unread mark', async () => {
-    const onChanged = vi.fn();
-    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged, onOpen }));
-
-    await result.current.openMessage(unreadMessage);
-
-    expect(onOpen).toHaveBeenCalledWith('msg_1');
-    expect(service.markInboxRead).toHaveBeenCalledWith(['msg_1']);
-    expect(onChanged).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not re-stamp a message that was already read', async () => {
-    const onChanged = vi.fn();
-    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged, onOpen }));
-
-    await result.current.openMessage(readMessage);
-
-    expect(onOpen).toHaveBeenCalledWith('msg_2');
-    expect(service.markInboxRead).not.toHaveBeenCalled();
-    expect(onChanged).not.toHaveBeenCalled();
-  });
-
-  it('clears the whole inbox and revalidates', async () => {
-    const onChanged = vi.fn();
-    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged, onOpen }));
-
-    await result.current.markAllRead();
-
-    expect(service.markAllInboxRead).toHaveBeenCalledWith('agt_1', undefined);
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 });

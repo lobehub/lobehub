@@ -2,6 +2,7 @@ import type {
   AgentAccountKind,
   AgentInboxMessage,
   AgentInboxMessageSummary,
+  AgentMailFolder,
 } from '@lobechat/types';
 import type { inferRouterOutputs } from '@trpc/server';
 
@@ -10,6 +11,30 @@ import type { LambdaRouter } from '@/server/routers/lambda';
 
 type AgentAccountRouterOutputs = inferRouterOutputs<LambdaRouter>['agentAccount'];
 type InboxRow = AgentAccountRouterOutputs['inbox']['get'];
+type MailRouterOutputs = AgentAccountRouterOutputs['mail'];
+
+/** One conversation as a mail view lists it, represented by its newest mail. */
+export type AgentMailConversationRow = MailRouterOutputs['list'][number];
+/** One mail of an opened conversation. */
+export type AgentMailRow = MailRouterOutputs['conversation'][number];
+export type AgentMailDraftRow = MailRouterOutputs['drafts']['list'][number];
+
+export interface AgentMailScope {
+  accountId?: string;
+  agentId: string;
+}
+
+export interface AgentMailPageParams extends AgentMailScope {
+  /** Keyset cursor: the last row of the previous page. */
+  before?: { id: string; sortAt: Date };
+  limit?: number;
+}
+
+/** The mails a write covers. With `conversationIn`, each id stands for its conversation in that view. */
+export interface AgentMailTarget {
+  conversationIn?: AgentMailFolder;
+  ids: string[];
+}
 
 /**
  * One identity account as the control plane returns it. Derived from the router
@@ -107,6 +132,46 @@ class AgentAccountService {
 
   markAllInboxRead = (agentId: string, accountId?: string) =>
     lambdaClient.agentAccount.inbox.markAllRead.mutate({ accountId, agentId });
+
+  // --------------- Mailbox ---------------
+
+  listMail = (params: AgentMailPageParams & { folder: AgentMailFolder }) =>
+    lambdaClient.agentAccount.mail.list.query(params);
+
+  searchMail = (params: AgentMailPageParams & { query: string }) =>
+    lambdaClient.agentAccount.mail.search.query(params);
+
+  /** Unread mail and drafts of several addresses in one request. */
+  getMailAccountCounts = (accountIds: string[]) =>
+    lambdaClient.agentAccount.mail.accountCounts.query({ accountIds });
+
+  getMailConversation = (params: { folder?: AgentMailFolder; id: string }) =>
+    lambdaClient.agentAccount.mail.conversation.query(params);
+
+  markMailRead = (target: AgentMailTarget) =>
+    lambdaClient.agentAccount.mail.markRead.mutate(target);
+
+  markMailUnread = (target: AgentMailTarget) =>
+    lambdaClient.agentAccount.mail.markUnread.mutate(target);
+
+  setMailStarred = (target: AgentMailTarget, starred: boolean) =>
+    lambdaClient.agentAccount.mail.setStarred.mutate({ ...target, starred });
+
+  trashMail = (target: AgentMailTarget) => lambdaClient.agentAccount.mail.trash.mutate(target);
+
+  restoreMail = (target: AgentMailTarget) => lambdaClient.agentAccount.mail.restore.mutate(target);
+
+  purgeMail = (target: AgentMailTarget) => lambdaClient.agentAccount.mail.purge.mutate(target);
+
+  emptyMailTrash = (accountId: string) =>
+    lambdaClient.agentAccount.mail.emptyTrash.mutate({ accountId });
+
+  listMailDrafts = (
+    params: AgentMailScope & { before?: { id: string; updatedAt: Date }; limit?: number },
+  ) => lambdaClient.agentAccount.mail.drafts.list.query(params);
+
+  deleteMailDrafts = (ids: string[]) =>
+    lambdaClient.agentAccount.mail.drafts.delete.mutate({ ids });
 }
 
 export const agentAccountService = new AgentAccountService();
