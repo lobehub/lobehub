@@ -377,7 +377,7 @@
     "brotli-wasm": "^3.0.1",
     "buffer.js": "npm:buffer@^6.0.3",
     "chat": "~4.38.0",
-    "chroma-js": "^3.2.0",
+    "chroma-js": "^3.3.0",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cookie": "^1.1.1",
