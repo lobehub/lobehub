@@ -28,10 +28,38 @@ const CEPA_LAYERS: LayersEnum[] = [LayersEnum.Context, LayersEnum.Preference, La
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic';
 
+/**
+ * Whether this delivery belongs to a banned user and reports to no tracked task.
+ *
+ * Runs before the first persisted step, so it must not throw: a throw there makes Upstash
+ * re-enqueue the run. Any read failure falls through to the normal path, whose extraction steps
+ * check the ban again.
+ */
+const isUntrackedRunOfBannedUser = async (payload: unknown): Promise<boolean> => {
+  try {
+    const input = (payload ?? {}) as Partial<MemoryExtractionPayloadInput> & { userId?: string };
+    const userId = input.userIds?.[0] ?? input.userId;
+    if (!userId || (input.asyncTaskId && input.userInitiated)) return false;
+    return await UserModel.isBanned(await getServerDB(), userId);
+  } catch {
+    return false;
+  }
+};
+
 export const processTopicHandler = async (context: WorkflowContext<MemoryExtractionPayloadInput>) =>
   upstashWorkflowTracer.startActiveSpan(
     'workflow:memory-user-memory:process-topic',
     async (span) => {
+      // A banned user's untracked run ends on its first delivery, before any persisted step, so
+      // it never queues a continuation on the shared process-topic flow-control key. Draining a
+      // banned account's backlog otherwise floods that key, which every user's extraction shares.
+      if (await isUntrackedRunOfBannedUser(context.requestPayload)) {
+        span.setStatus({ code: SpanStatusCode.OK });
+        // Outside the try/finally below, so this path ends its own span.
+        span.end();
+        return { message: 'User is banned, skipping memory extraction.', skipped: true };
+      }
+
       await ensureWorkflowStarted(context, WORKFLOW_PATH);
 
       const payload = normalizeMemoryExtractionPayload(context.requestPayload || {});
@@ -69,14 +97,10 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
 
         // Runs already queued when the account was banned must not reach the model.
         // NOTICE: A plain read, not a step: a new persisted step would change the replay sequence
-        // and fail runs already in flight with `Incompatible step name`.
+        // and fail runs already in flight with `Incompatible step name`. A tracked run keeps its
+        // steps and still reports progress, or its task never ends; the extraction steps below
+        // check the ban inside their callbacks.
         const isBanned = async () => UserModel.isBanned(await getServerDB(), userId);
-        // A tracked run keeps its steps and still reports progress, or its task never ends; the
-        // extraction steps below re-check the ban inside their callbacks instead.
-        if (!(payload.asyncTaskId && payload.userInitiated) && (await isBanned())) {
-          span.setStatus({ code: SpanStatusCode.OK });
-          return { message: 'User is banned, skipping memory extraction.', skipped: true };
-        }
 
         if (payload.asyncTaskId) {
           // NOTICE: Cooperative cascading cancellation for the workflow tree.

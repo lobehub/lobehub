@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStepRunner } from '@/server/workflows/testing/stepContext';
 
 import { processTopicHandler } from '../processTopic';
+import { checkGuard, ensureWorkflowStarted } from '../runGuard';
 
 const mocks = vi.hoisted(() => ({
   incrementProgress: vi.fn(),
   isBanned: vi.fn(),
+  spanEnd: vi.fn(),
   createExecutor: vi.fn(),
   extractTopic: vi.fn(),
   isHourlyMemoryExtractionCancellationRequested: vi.fn(),
@@ -20,7 +22,7 @@ vi.mock('@lobechat/observability-otel/modules/upstash-workflow', () => ({
   tracer: {
     startActiveSpan: vi.fn(function (_name: string, callback: (span: unknown) => unknown) {
       return callback({
-        end: vi.fn(),
+        end: mocks.spanEnd,
         recordException: vi.fn(),
         setAttributes: vi.fn(),
         setStatus: vi.fn(),
@@ -123,6 +125,12 @@ describe('processTopicHandler hourly task behavior', () => {
 
     await expect(processTopicHandler(context as never)).resolves.toMatchObject({ skipped: true });
 
+    // Ends before any persisted step, so nothing is queued on the shared flow-control key. The
+    // startup helpers are mocked, so assert they were never reached rather than `context.run`.
+    expect(ensureWorkflowStarted).not.toHaveBeenCalled();
+    expect(checkGuard).not.toHaveBeenCalled();
+    expect(context.run).not.toHaveBeenCalled();
+    expect(mocks.spanEnd).toHaveBeenCalledTimes(1);
     expect(mocks.extractTopic).not.toHaveBeenCalled();
   });
 
