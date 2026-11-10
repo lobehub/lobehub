@@ -64,6 +64,15 @@ export const FeatureFlagsSchema = z.object({
   agent_deferred_init: FeatureFlagValue.optional(),
 
   /**
+   * Keep the immutable per-operation tool set out of the agent state blob that
+   * is rewritten at every step; it is written once to its own Redis key and
+   * re-attached on load. Off: the blob keeps its inline copy. Server only;
+   * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0|1` overrides it. Array values are
+   * user ids (the operation's owner).
+   */
+  agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -215,6 +224,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
   agent_deferred_init: false,
+  agent_runtime_strip_operation_toolset: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -283,6 +293,11 @@ export const mapFeatureFlagsEnvToState = (
       config.agent_deferred_init,
       userId,
       'agent_deferred_init',
+    ),
+    enableStripOperationToolset: evaluateFeatureFlag(
+      config.agent_runtime_strip_operation_toolset,
+      userId,
+      'agent_runtime_strip_operation_toolset',
     ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),

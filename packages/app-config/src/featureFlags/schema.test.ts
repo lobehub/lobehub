@@ -538,4 +538,30 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableChannels).toBe(true);
     expect(mappedState.enableDashboard).toBe(false);
   });
+
+  describe('agent_runtime_strip_operation_toolset', () => {
+    it('is off by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);
+      expect(
+        mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableStripOperationToolset,
+      ).toBe(false);
+    });
+
+    it('maps true to enabled for every user', () => {
+      const config = { agent_runtime_strip_operation_toolset: true };
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(true);
+    });
+
+    it('maps a user allowlist to the listed users only', () => {
+      const config = FeatureFlagsSchema.parse({
+        agent_runtime_strip_operation_toolset: ['user-1'],
+      });
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableStripOperationToolset).toBe(false);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
+    });
+  });
 });

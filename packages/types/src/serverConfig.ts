@@ -89,6 +89,12 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /**
+   * Keep the immutable `operationToolSet` out of the per-step agent state blob
+   * and in its own Redis key (`agent_runtime_strip_operation_toolset`). Server
+   * only; `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET` (`0` / `1`) overrides it.
+   */
+  enableStripOperationToolset: boolean | undefined;
   /** Hover previews of a topic's final answer (`topic_preview`). */
   enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
