@@ -1,16 +1,22 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
+  createMailDraft: vi.fn(),
+  deleteMailDrafts: vi.fn(),
   downloadMailAttachment: vi.fn(),
+  getMailDraft: vi.fn(),
   getMailConversation: vi.fn(),
   getMailHtml: vi.fn(),
   markMailRead: vi.fn(),
   markMailUnread: vi.fn(),
   restoreMail: vi.fn(),
+  sendMail: vi.fn(),
+  sendMailDraft: vi.fn(),
   setMailStarred: vi.fn(),
   trashMail: vi.fn(),
+  updateMailDraft: vi.fn(),
 }));
 const AttachmentDownloadError = vi.hoisted(
   () =>
@@ -30,6 +36,9 @@ const ui = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastSuccess: vi.fn((_options: unknown) => ({ close: vi.fn() })),
 }));
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => vi.fn(),
+}));
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   confirmModal: ui.confirmModal,
@@ -38,22 +47,34 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 
 const { default: InboxMessageDetail } = await import('./InboxMessageDetail');
 const { useMailWritesStore } = await import('./mailWrites');
+const { default: MailComposer } = await import('./MailComposer');
+const { DRAFT_SAVE_DELAY_MS } = await import('./compose');
 
 const fresh = (node: React.ReactNode) =>
   render(<SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{node}</SWRConfig>);
 
 const detailProps = {
   accountId: 'acc_1',
-  accounts: [{ id: 'acc_1', status: 'active' }] as never,
+  accounts: [
+    {
+      capabilities: { receive: true, send: true },
+      id: 'acc_1',
+      identifier: 'agent@lobe.id',
+      status: 'active',
+    },
+  ] as never,
+  agentId: 'agt_1',
   hasNext: true,
   hasPrevious: false,
   onBack: vi.fn(),
+  onComposeChange: vi.fn(),
   onEmptied: vi.fn(),
   onGoToTrash: vi.fn(),
   onNext: vi.fn(),
   onPrevious: vi.fn(),
   onReseated: vi.fn(),
   onRestored: vi.fn(),
+  onViewSent: vi.fn(),
   refresh: vi.fn(async () => undefined),
 };
 
@@ -68,6 +89,7 @@ const mailRow = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   inboxMessageId: id,
   isUnread: false,
+  replyTo: [],
   starredAt: null,
   subject: 'Hello',
   text: `body of ${id}`,
@@ -371,6 +393,105 @@ describe('InboxMessageDetail', () => {
   });
 });
 
+describe('InboxMessageDetail replies', () => {
+  const draftRow = (extra: Record<string, unknown> = {}) => ({
+    accountId: 'acc_1',
+    bcc: [],
+    cc: [],
+    id: 'draft_1',
+    mode: 'reply',
+    sourceMailId: 'in',
+    subject: null,
+    text: '',
+    to: [],
+    updatedAt: new Date('2026-10-02T00:00:00Z'),
+    ...extra,
+  });
+
+  beforeEach(() => {
+    service.createMailDraft.mockImplementation(async (input) => draftRow(input));
+    service.deleteMailDrafts.mockResolvedValue({ count: 1 });
+  });
+
+  it('answers the newest received mail inline, below the conversation', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mailRow('in', { fromAddress: 'lin@partner.example' }),
+      mailRow('out', { direction: 'outbound', fromAddress: 'agent@lobe.id' }),
+    ]);
+    const onComposeChange = vi.fn();
+    fresh(<InboxMessageDetail {...detailProps} id={'in'} onComposeChange={onComposeChange} />);
+
+    fireEvent.click(await screen.findByTestId('mail-action-reply'));
+
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(service.createMailDraft).toHaveBeenCalledWith({
+        accountId: 'acc_1',
+        mode: 'reply',
+        sourceMailId: 'in',
+      }),
+    );
+    // The draft id goes to the URL, so a reload resumes the reply.
+    await waitFor(() => expect(onComposeChange).toHaveBeenCalledWith('draft_1'));
+    const chips = await screen.findAllByTestId('recipient-chip');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['lin@partner.example']);
+  });
+
+  it('cannot reply to a conversation that only holds sent mail', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mailRow('out', { direction: 'outbound', fromAddress: 'agent@lobe.id' }),
+    ]);
+    fresh(<InboxMessageDetail {...detailProps} id={'out'} />);
+
+    expect(await screen.findByTestId('mail-action-reply')).toBeDisabled();
+    expect(screen.getByTestId('mail-action-reply-all')).toBeDisabled();
+    expect(screen.getByTestId('mail-action-forward')).toBeEnabled();
+  });
+
+  it('keeps the answers visible but disabled for an address that only receives', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    fresh(
+      <InboxMessageDetail
+        {...detailProps}
+        id={'in'}
+        accounts={
+          [
+            {
+              capabilities: { receive: true, send: false },
+              id: 'acc_1',
+              identifier: 'agent@lobe.id',
+              status: 'active',
+            },
+          ] as never
+        }
+      />,
+    );
+
+    const reply = await screen.findByTestId('mail-action-reply');
+    expect(reply).toBeDisabled();
+    expect(screen.getByTestId('mail-action-forward')).toBeDisabled();
+  });
+
+  it('resumes the reply draft the URL names', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    service.getMailDraft.mockResolvedValue(draftRow({ text: 'Half written' }));
+    fresh(<InboxMessageDetail {...detailProps} composeId={'draft_1'} id={'in'} />);
+
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Half written'),
+    );
+    expect(service.createMailDraft).not.toHaveBeenCalled();
+  });
+
+  it('offers no answers in the trash', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    fresh(<InboxMessageDetail {...detailProps} folder={'trash'} id={'in'} />);
+    await screen.findByTestId('mail-action-restore');
+    expect(screen.queryByTestId('mail-action-reply')).toBeNull();
+  });
+});
+
 describe('InboxMessageDetail attachments', () => {
   const withAttachments = () =>
     service.getMailConversation.mockResolvedValue([
@@ -444,5 +565,481 @@ describe('InboxMessageDetail attachments', () => {
 
     expect(await screen.findByText('identity.inbox.detail.attachmentFailed')).toBeInTheDocument();
     expect(first.querySelector('button')).not.toBeDisabled();
+  });
+});
+
+const composerAccount = (extra: Record<string, unknown> = {}) =>
+  ({
+    agentId: 'agt_1',
+    capabilities: { receive: true, send: true },
+    displayName: 'Scout',
+    id: 'acc_a',
+    identifier: 'scout@lobe.id',
+    kind: 'mail',
+    provider: 'agent-mail',
+    status: 'active',
+    ...extra,
+  }) as never;
+
+const composerSource = (extra: Record<string, unknown> = {}) =>
+  ({
+    accountId: 'acc_a',
+    attachments: [],
+    cc: [{ address: 'ops@team.example' }],
+    deliveredAt: new Date('2026-11-10T08:00:00Z'),
+    direction: 'inbound',
+    fromAddress: 'lin@partner.example',
+    fromName: 'Lin',
+    id: 'mail_1',
+    replyTo: [],
+    subject: 'Q3 plan',
+    text: 'Final plan attached.',
+    to: [{ address: 'scout@lobe.id' }, { address: 'zhou@team.example' }],
+    ...extra,
+  }) as never;
+
+const composerDraft = (extra: Record<string, unknown> = {}) => ({
+  accountId: 'acc_a',
+  bcc: [],
+  cc: [],
+  id: 'draft_1',
+  mode: 'compose',
+  sourceMailId: null,
+  subject: null,
+  text: '',
+  to: [],
+  updatedAt: new Date('2026-11-10T08:00:00Z'),
+  ...extra,
+});
+
+const composerRefresh = vi.fn(() => Promise.resolve());
+
+const setupComposer = (props: Record<string, unknown> = {}) => {
+  const onClose = vi.fn();
+  const onViewSent = vi.fn();
+  const view = render(
+    <MailComposer
+      account={composerAccount()}
+      agentId={'agt_1'}
+      mode={'compose'}
+      refresh={composerRefresh}
+      onClose={onClose}
+      onViewSent={onViewSent}
+      {...props}
+    />,
+  );
+  return { ...view, onClose, onViewSent };
+};
+
+const typeRecipient = (label: string, value: string) => {
+  const input = screen.getByLabelText(label);
+  fireEvent.change(input, { target: { value } });
+  fireEvent.blur(input);
+};
+
+const failure = (code: string, message = 'refused') =>
+  Object.assign(new Error(message), { data: { errorData: { code } } });
+
+describe('MailComposer', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    for (const fn of [
+      service.createMailDraft,
+      service.deleteMailDrafts,
+      service.sendMail,
+      service.sendMailDraft,
+      service.updateMailDraft,
+    ])
+      fn.mockReset();
+    ui.toastError.mockClear();
+    ui.toastSuccess.mockClear();
+    composerRefresh.mockClear();
+    localStorage.clear();
+    service.createMailDraft.mockImplementation(async (input) =>
+      composerDraft({ ...input, id: 'draft_1' }),
+    );
+    service.updateMailDraft.mockImplementation(async (id, content) =>
+      composerDraft({ ...content, id }),
+    );
+    service.deleteMailDrafts.mockResolvedValue({ count: 1 });
+    service.sendMailDraft.mockResolvedValue({ mailId: 'sent_1', providerMessageId: 'p1' });
+    service.sendMail.mockResolvedValue({ mailId: 'sent_1', providerMessageId: 'p1' });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('MailComposer — new mail', () => {
+    it('saves the draft after a pause, keeps saving edits, then sends it once', async () => {
+      const { onClose, onViewSent } = setupComposer();
+
+      typeRecipient('identity.compose.to', 'Lin <lin@partner.example>');
+      fireEvent.change(screen.getByLabelText('identity.compose.subject'), {
+        target: { value: 'Hello' },
+      });
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'First line' },
+      });
+      expect(service.createMailDraft).not.toHaveBeenCalled();
+
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+      expect(service.createMailDraft).toHaveBeenCalledWith({
+        accountId: 'acc_a',
+        bcc: [],
+        cc: [],
+        mode: 'compose',
+        sourceMailId: undefined,
+        subject: 'Hello',
+        text: 'First line',
+        to: [{ address: 'lin@partner.example', name: 'Lin' }],
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId('mail-save-state')).toHaveTextContent(
+          'identity.compose.save.saved',
+        ),
+      );
+
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'First line\nSecond line' },
+      });
+      fireEvent.click(screen.getByTestId('mail-send'));
+
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalledWith('draft_1'));
+      // The edit made just before sending is saved first, so the mail carries it.
+      expect(service.updateMailDraft).toHaveBeenCalledWith(
+        'draft_1',
+        expect.objectContaining({ text: 'First line\nSecond line' }),
+      );
+      expect(service.updateMailDraft.mock.invocationCallOrder[0]).toBeLessThan(
+        service.sendMailDraft.mock.invocationCallOrder[0],
+      );
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      const sentToast = ui.toastSuccess.mock.calls.at(-1)![0] as {
+        actions: { label: string; onClick: () => void }[];
+        title: string;
+      };
+      expect(sentToast.title).toBe('identity.compose.sent.title');
+      sentToast.actions[0].onClick();
+      expect(onViewSent).toHaveBeenCalledWith({ mailId: 'sent_1', providerMessageId: 'p1' });
+    });
+
+    it('marks a bad address on its chip and refuses to send', async () => {
+      setupComposer();
+      typeRecipient('identity.compose.to', 'good@partner.example, not-an-address');
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), { target: { value: 'Hi' } });
+
+      const chips = screen.getAllByTestId('recipient-chip');
+      expect(chips[0]).not.toHaveAttribute('aria-invalid');
+      expect(chips[1]).toHaveAttribute('aria-invalid', 'true');
+
+      fireEvent.click(screen.getByTestId('mail-send'));
+      await waitFor(() => expect(ui.toastError).toHaveBeenCalled());
+      expect(service.sendMailDraft).not.toHaveBeenCalled();
+      expect(service.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('saves the draft without a malformed address, which stays marked on screen', async () => {
+      setupComposer();
+      typeRecipient('identity.compose.to', 'good@partner.example, bad-address');
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), { target: { value: 'Hi' } });
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+
+      expect(service.createMailDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ to: [{ address: 'good@partner.example' }] }),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId('mail-save-state')).toHaveTextContent(
+          'identity.compose.save.saved',
+        ),
+      );
+      expect(screen.getAllByTestId('recipient-chip')[1]).toHaveAttribute('aria-invalid', 'true');
+      // Only this browser holds the malformed one, so its copy outlives the save.
+      expect(
+        JSON.parse(localStorage.getItem('lobe-agent-mail:draft:agt_1:acc_a:draft_1')!).fields.to,
+      ).toHaveLength(2);
+    });
+
+    it('keeps Send disabled with a reason until there is a recipient and a body', () => {
+      setupComposer();
+      expect(screen.getByTestId('mail-send')).toBeDisabled();
+      expect(screen.getByText('identity.compose.disabled.recipient')).toBeInTheDocument();
+      typeRecipient('identity.compose.to', 'a@b.com');
+      expect(screen.getByText('identity.compose.disabled.body')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), { target: { value: 'x' } });
+      expect(screen.getByTestId('mail-send')).toBeEnabled();
+    });
+
+    it('asks before sending without a subject', async () => {
+      setupComposer();
+      typeRecipient('identity.compose.to', 'a@b.com');
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), { target: { value: 'x' } });
+      fireEvent.click(screen.getByTestId('mail-send'));
+
+      expect(ui.confirmModal).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'identity.compose.noSubject.title' }),
+      );
+      expect(service.sendMailDraft).not.toHaveBeenCalled();
+      act(() => ui.confirmModal.mock.calls[0][0].onOk());
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalledWith('draft_1'));
+    });
+
+    it('shows Cc and Bcc only when asked', () => {
+      setupComposer();
+      expect(screen.queryByLabelText('identity.compose.cc')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText('identity.compose.showCopies'));
+      expect(screen.getByLabelText('identity.compose.cc')).toBeInTheDocument();
+      expect(screen.getByLabelText('identity.compose.bcc')).toBeInTheDocument();
+    });
+
+    it('restores what this browser kept when a save never reached the server', async () => {
+      localStorage.setItem(
+        'lobe-agent-mail:draft:agt_1:acc_a:new',
+        JSON.stringify({
+          fields: { bcc: [], cc: [], subject: 'Kept', text: 'Typed offline', to: [] },
+          savedAt: Date.now(),
+        }),
+      );
+      setupComposer();
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Typed offline'),
+      );
+      expect(screen.getByLabelText('identity.compose.subject')).toHaveValue('Kept');
+      // …and saves it to the server on its own.
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+      expect(service.createMailDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Typed offline' }),
+      );
+    });
+
+    it('keeps the content and offers a retry when saving fails', async () => {
+      service.createMailDraft.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      setupComposer();
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'Do not lose me' },
+      });
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('mail-save-state')).toHaveTextContent(
+          'identity.compose.save.failed',
+        ),
+      );
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Do not lose me');
+      expect(
+        JSON.parse(localStorage.getItem('lobe-agent-mail:draft:agt_1:acc_a:new')!).fields.text,
+      ).toBe('Do not lose me');
+
+      fireEvent.click(screen.getByTestId('mail-save-state'));
+      await waitFor(() => expect(service.createMailDraft).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(screen.getByTestId('mail-save-state')).toHaveTextContent(
+          'identity.compose.save.saved',
+        ),
+      );
+    });
+
+    it('saves silently on close', async () => {
+      const { onClose, unmount } = setupComposer();
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'Later' },
+      });
+      fireEvent.click(screen.getByLabelText('identity.compose.close'));
+      expect(onClose).toHaveBeenCalled();
+      unmount();
+      await waitFor(() =>
+        expect(service.createMailDraft).toHaveBeenCalledWith(
+          expect.objectContaining({ text: 'Later' }),
+        ),
+      );
+    });
+  });
+
+  describe('MailComposer — sending states', () => {
+    const fill = () => {
+      typeRecipient('identity.compose.to', 'a@b.com');
+      fireEvent.change(screen.getByLabelText('identity.compose.subject'), {
+        target: { value: 'S' },
+      });
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'Body' },
+      });
+    };
+
+    it('locks the form while sending and keeps everything after a failure', async () => {
+      let reject!: (error: unknown) => void;
+      service.sendMailDraft.mockImplementation(
+        () =>
+          new Promise((_, fail) => {
+            reject = fail;
+          }),
+      );
+      const { onClose } = setupComposer();
+      fill();
+      fireEvent.click(screen.getByTestId('mail-send'));
+
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalledTimes(1));
+      expect(screen.getByLabelText('identity.compose.body')).toHaveAttribute('readonly');
+      expect(screen.getByTestId('mail-send')).toHaveTextContent('identity.compose.sending');
+      // A second click while sending sends nothing more.
+      fireEvent.click(screen.getByTestId('mail-send'));
+      expect(service.sendMailDraft).toHaveBeenCalledTimes(1);
+
+      await act(async () => reject(failure('send_failed')));
+      await waitFor(() =>
+        expect(screen.getByTestId('mail-send-failure')).toHaveTextContent(
+          'identity.compose.error.failed',
+        ),
+      );
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Body');
+      expect(screen.getByLabelText('identity.compose.body')).not.toHaveAttribute('readonly');
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('says a receive-only address cannot send, and says so up front the next time', async () => {
+      service.sendMailDraft.mockRejectedValue(failure('send_disabled'));
+      const first = setupComposer();
+      fill();
+      fireEvent.click(screen.getByTestId('mail-send'));
+      await waitFor(() => expect(screen.getByTestId('mail-send-failure')).toBeInTheDocument());
+      expect(screen.getByTestId('mail-send-block')).toHaveTextContent(
+        'identity.compose.block.receiveOnly',
+      );
+      first.unmount();
+
+      setupComposer();
+      expect(screen.getByTestId('mail-send-block')).toBeInTheDocument();
+      fill();
+      expect(screen.getByTestId('mail-send')).toBeDisabled();
+    });
+
+    it('blocks an address that only receives before anything is written', () => {
+      setupComposer({ account: composerAccount({ capabilities: { receive: true, send: false } }) });
+      expect(screen.getByTestId('mail-send-block')).toHaveTextContent(
+        'identity.compose.block.receiveOnly',
+      );
+      fill();
+      expect(screen.getByTestId('mail-send')).toBeDisabled();
+    });
+  });
+
+  describe('MailComposer — replies and forwards', () => {
+    it('opens the one draft for this reply, with the original’s recipients and a quote', async () => {
+      setupComposer({ inline: true, mode: 'replyAll', source: composerSource() });
+
+      await waitFor(() =>
+        expect(service.createMailDraft).toHaveBeenCalledWith({
+          accountId: 'acc_a',
+          mode: 'replyAll',
+          sourceMailId: 'mail_1',
+        }),
+      );
+      const chips = await screen.findAllByTestId('recipient-chip');
+      expect(chips.map((chip) => chip.textContent)).toEqual([
+        'Lin <lin@partner.example>',
+        'zhou@team.example',
+        'ops@team.example',
+      ]);
+      expect(screen.getByLabelText('identity.compose.subject')).toHaveValue('Re: Q3 plan');
+      expect(screen.getByLabelText('identity.compose.subject')).toHaveAttribute('readonly');
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue(
+        '\n\nidentity.compose.quoteHeader\n> Final plan attached.',
+      );
+    });
+
+    it('removes a reply draft nobody wrote in when closed', async () => {
+      const { onClose } = setupComposer({ inline: true, mode: 'reply', source: composerSource() });
+      await screen.findAllByTestId('recipient-chip');
+      fireEvent.click(screen.getByLabelText('identity.compose.close'));
+      expect(onClose).toHaveBeenCalled();
+      await waitFor(() => expect(service.deleteMailDrafts).toHaveBeenCalledWith(['draft_1']));
+    });
+
+    it('resumes what was written last time instead of starting over', async () => {
+      service.createMailDraft.mockResolvedValue(
+        composerDraft({
+          id: 'draft_9',
+          mode: 'reply',
+          sourceMailId: 'mail_1',
+          text: 'Half an answer',
+        }),
+      );
+      setupComposer({ inline: true, mode: 'reply', source: composerSource() });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Half an answer'),
+      );
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'Half an answer, finished' },
+      });
+      fireEvent.click(screen.getByTestId('mail-send'));
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalledWith('draft_9'));
+      // A reply never stores a subject: the server answers under the original's.
+      expect(service.updateMailDraft).toHaveBeenCalledWith(
+        'draft_9',
+        expect.objectContaining({ subject: null, text: 'Half an answer, finished' }),
+      );
+      expect(ui.confirmModal).not.toHaveBeenCalled();
+    });
+
+    it('forwards with Fwd:, the quote, and only the attachments left in', async () => {
+      setupComposer({
+        inline: true,
+        mode: 'forward',
+        source: composerSource({
+          attachments: [
+            { filename: 'plan.pdf', index: 0 },
+            { filename: 'budget.csv', index: 1 },
+          ],
+        }),
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.subject')).toHaveValue('Fwd: Q3 plan'),
+      );
+      expect(
+        (screen.getByLabelText('identity.compose.body') as HTMLTextAreaElement).value,
+      ).toContain('---------- Forwarded message ---------');
+      expect(screen.getAllByTestId('compose-attachment')).toHaveLength(2);
+
+      typeRecipient('identity.compose.to', 'boss@corp.example');
+      fireEvent.click(screen.getAllByLabelText('identity.compose.removeAttachment')[0]);
+      fireEvent.click(screen.getByTestId('mail-send'));
+
+      await waitFor(() =>
+        expect(service.sendMail).toHaveBeenCalledWith(
+          expect.objectContaining({
+            accountId: 'acc_a',
+            forwardAttachmentIndexes: [1],
+            mode: 'forward',
+            sourceMailId: 'mail_1',
+            subject: 'Fwd: Q3 plan',
+            to: [{ address: 'boss@corp.example' }],
+          }),
+        ),
+      );
+      expect(service.sendMailDraft).not.toHaveBeenCalled();
+      await waitFor(() => expect(service.deleteMailDrafts).toHaveBeenCalledWith(['draft_1']));
+    });
+
+    it('sends a forward that keeps every attachment through its draft', async () => {
+      setupComposer({
+        inline: true,
+        mode: 'forward',
+        source: composerSource({ attachments: [{ filename: 'plan.pdf', index: 0 }] }),
+      });
+      await screen.findAllByTestId('compose-attachment');
+      typeRecipient('identity.compose.to', 'boss@corp.example');
+      fireEvent.click(screen.getByTestId('mail-send'));
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalledWith('draft_1'));
+      expect(service.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('cannot send a reply whose original is gone, and says why', async () => {
+      setupComposer({ draft: composerDraft({ mode: 'reply', text: 'Orphan' }), mode: 'reply' });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Orphan'),
+      );
+      expect(screen.getByTestId('mail-send')).toBeDisabled();
+      expect(screen.getByText('identity.compose.error.targetGone')).toBeInTheDocument();
+    });
   });
 });

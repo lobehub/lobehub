@@ -1,7 +1,9 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Center, Flexbox } from '@lobehub/ui';
+import { PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 import { useSWRConfig } from 'swr';
 import urlJoin from 'url-join';
@@ -15,6 +17,8 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { StyleSheet } from '@/utils/styles';
 
+import { SEND_BLOCK_KEYS, sendBlockOf } from './compose';
+import ComposePane, { NEW_COMPOSE } from './ComposePane';
 import {
   type ConversationNeighbors,
   findNeighbors,
@@ -24,9 +28,11 @@ import InboxMessageDetail, { type InboxMessageDetailProps } from './InboxMessage
 import InboxSection from './InboxSection';
 import MailboxCard from './MailboxCard';
 import MailboxEmptyState from './MailboxEmptyState';
+import { SendBlockNotice } from './MailComposer';
 import MailSplitView, { MailNavHeader } from './MailSplitView';
 import { identityStyles } from './styles';
 import { useMailbox, useOpenableChannel } from './useAgentIdentity';
+import type { SentMail } from './useComposer';
 import {
   mailCountsKey,
   mailFolderOf,
@@ -60,6 +66,7 @@ interface AgentMailProps {
  * whole page.
  */
 const MailPage = ({ agentId, disabled }: AgentMailProps) => {
+  const { t } = useTranslation('setting');
   const { messageId } = useParams<{ messageId?: string }>();
   const navigate = useWorkspaceAwareNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -167,10 +174,44 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   const closeMessage = () => navigate(`${mailPath}${search && `?${search}`}`, { replace: true });
 
+  /** The URL's `compose`: which draft is open, so a reload resumes it. */
+  const withCompose = (id?: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (id) params.set('compose', id);
+    else params.delete('compose');
+    const next = params.toString();
+    return next && `?${next}`;
+  };
+
+  // A new mail is keyed `new` until its first save names it. Swapping in that
+  // id must not remount the composer the person is typing in.
+  const [createdDraftId, setCreatedDraftId] = useState<string>();
+  const paneComposeId = composeId && composeId === createdDraftId ? NEW_COMPOSE : composeId;
+
+  const startCompose = () => {
+    setCreatedDraftId(undefined);
+    navigate(`${mailPath}${withCompose(NEW_COMPOSE)}`, { replace: Boolean(composeId) });
+  };
+
+  const closeCompose = () => {
+    setCreatedDraftId(undefined);
+    navigate(`${messageId ? urlJoin(mailPath, messageId) : mailPath}${withCompose()}`, {
+      replace: true,
+    });
+  };
+
+  const viewSent = (sent: SentMail) =>
+    navigate(`${sent.mailId ? urlJoin(mailPath, sent.mailId) : mailPath}?folder=sent`);
+
+  const sendBlock = mailbox.current ? sendBlockOf(mailbox.current) : undefined;
+  const [, setBlockEpoch] = useState(0);
+
   const detailProps: Omit<InboxMessageDetailProps, 'id'> = {
     accountId: mailbox.current?.id,
     listRowId: neighbors.rowId,
     accounts: mailbox.accounts,
+    agentId,
+    composeId,
     deferRead: Boolean((location.state as { deferRead?: boolean } | null)?.deferRead),
     disabled,
     folder,
@@ -178,6 +219,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     hasNext: Boolean(neighbors.nextId) || (Boolean(neighbors.rowId) && list.hasMore),
     hasPrevious: Boolean(neighbors.previousId),
     onBack: closeMessage,
+    onComposeChange: (id) =>
+      navigate(`${urlJoin(mailPath, messageId ?? '')}${withCompose(id)}`, { replace: true }),
     onEmptied: () => {
       // A wide screen moves on to the next conversation; a phone returns to the list.
       const target = mobile ? undefined : nextSelectionAfterRemoval(neighbors);
@@ -189,6 +232,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     onPrevious: () => void stepTo('previousId'),
     onReseated: landOn,
     onRestored: openById,
+    onViewSent: viewSent,
     refresh,
   };
 
@@ -215,12 +259,81 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   // Waits for the URL open to settle, so the pane starts from the read it seeded.
   // Keyed by view too: Inbox and Trash hold different mails of one conversation.
-  const detail = messageId && mailbox.data && (
-    <InboxMessageDetail {...detailProps} id={messageId} key={`${folder}:${messageId}`} />
+  const composePane = !messageId && paneComposeId && mailbox.data && (
+    <ComposePane
+      accounts={mailbox.accounts}
+      agentId={agentId}
+      composeId={paneComposeId}
+      currentAccount={mailbox.current}
+      key={paneComposeId}
+      refresh={refresh}
+      onClose={closeCompose}
+      onReopenDraft={(id) => navigate(`${mailPath}${withCompose(id)}`, { replace: true })}
+      onViewSent={viewSent}
+      onDraftCreated={(id) => {
+        setCreatedDraftId(id);
+        navigate(`${mailPath}${withCompose(id)}`, { replace: true });
+      }}
+      onOpenConversation={(sourceMailId, draftId) =>
+        navigate(`${urlJoin(mailPath, sourceMailId)}${withCompose(draftId)}`, { replace: true })
+      }
+    />
+  );
+
+  const detail =
+    (messageId && mailbox.data && (
+      <InboxMessageDetail {...detailProps} id={messageId} key={`${folder}:${messageId}`} />
+    )) ||
+    composePane;
+
+  // Kept when the address cannot send, disabled, so the ability stays visible.
+  const composeLabel = t('identity.compose.action.compose');
+  const composeTitle = sendBlock ? t(SEND_BLOCK_KEYS[sendBlock]) : composeLabel;
+  const composeAction =
+    !disabled &&
+    mailbox.current &&
+    (mobile ? (
+      <ActionIcon
+        aria-label={composeLabel}
+        data-testid={'mail-compose'}
+        disabled={Boolean(sendBlock)}
+        icon={PenLine}
+        title={composeTitle}
+        onClick={startCompose}
+      />
+    ) : (
+      <Button
+        data-testid={'mail-compose'}
+        disabled={Boolean(sendBlock)}
+        icon={PenLine}
+        size={'small'}
+        title={composeTitle}
+        type={'primary'}
+        onClick={startCompose}
+      >
+        {composeLabel}
+      </Button>
+    ));
+
+  // Always on screen under the address, not behind a tooltip a phone cannot hover.
+  const sendNotice = !disabled && mailbox.current && sendBlock && (
+    <SendBlockNotice
+      account={mailbox.current}
+      block={sendBlock}
+      onLifted={() => setBlockEpoch((value) => value + 1)}
+    />
   );
 
   const mailboxCard = (
-    <MailboxCard agentId={agentId} disabled={disabled} mailbox={mailbox} onSwitch={switchMailbox} />
+    <Flexbox gap={8}>
+      <MailboxCard
+        agentId={agentId}
+        disabled={disabled}
+        mailbox={mailbox}
+        onSwitch={switchMailbox}
+      />
+      {sendNotice}
+    </Flexbox>
   );
   // Waits for the addresses, read successfully, so the list never flashes every
   // address's mail first: without them `accountId` would mean all of them.
@@ -269,6 +382,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
         <>
           <NavHeader
             left={<AgentBreadcrumb agentId={agentId} />}
+            right={composeAction}
             // `relative` anchors the absolutely-centered switcher below.
             style={{ position: 'relative' }}
             styles={{
@@ -279,6 +393,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           >
             <AgentProfileTabs active={'mail'} agentId={agentId} />
           </NavHeader>
+
           {emptyState || (
             <Flexbox flex={1} style={styles.body} width={'100%'}>
               <WideScreenContainer>
@@ -296,10 +411,17 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           {emptyState}
         </>
       ) : (
-        <MailSplitView detail={detail} inbox={inbox} mailbox={mailboxCard} messageId={messageId} />
+        <MailSplitView
+          action={composeAction}
+          composing={Boolean(composePane)}
+          detail={detail}
+          inbox={inbox}
+          mailbox={mailboxCard}
+          messageId={messageId}
+        />
       )}
       {/* Laid over the list instead of replacing it, so back returns to the same scroll. */}
-      {mobile && messageId && (
+      {mobile && (messageId || composePane) && (
         <Flexbox className={identityStyles.mobileDetail}>
           <NavHeader />
           <Flexbox flex={1} padding={16} style={styles.body} width={'100%'}>
