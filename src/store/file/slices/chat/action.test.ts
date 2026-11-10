@@ -8,6 +8,7 @@ import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { withLocalMediaPreview } from '@/utils/localMediaPreview';
 
 import { useFileStore as useStore } from '../../store';
 
@@ -421,6 +422,35 @@ describe('useFileStore:chat', () => {
     expect(uploadWithProgress).toHaveBeenCalledWith(
       expect.objectContaining({ conversationAgentId: AGENT_ID }),
     );
+  });
+
+  it('uploadChatFiles keeps rendering an uploaded image from its local preview', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:local-shot');
+
+    const { result } = renderHook(() => useStore());
+    const uploadWithProgress = vi
+      .fn()
+      .mockResolvedValue({ id: 'file-img', url: 'https://s3.example.com/shot.gif' });
+
+    act(() => {
+      useStore.setState({
+        chatUploadFileListByContext: {},
+        uploadWithProgress: uploadWithProgress as any,
+      });
+    });
+
+    await act(async () => {
+      await result.current.uploadChatFiles(
+        CONTEXT_KEY,
+        [new File(['gif'], 'shot.gif', { type: 'image/gif' })],
+        AGENT_ID,
+      );
+    });
+
+    // The server-confirmed message carries the remote URL for the same file id.
+    const [item] = withLocalMediaPreview([{ id: 'file-img', url: 'https://s3.example.com/x' }]);
+    expect(item.url).toBe('blob:local-shot');
   });
 
   it('uploadChatFiles should allow any file type for heterogeneous agents', async () => {
