@@ -5,6 +5,11 @@ import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
 import type { ChatStreamCallbacks } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { convertAnthropicUsage } from '../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from './events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -14,12 +19,11 @@ import type {
 } from './protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
   createFirstErrorHandleTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
 } from './protocol';
+import { recordProviderReportedCost } from './providerReportedCost';
 
 export const transformAnthropicStream = (
   chunk: Anthropic.MessageStreamEvent,
@@ -316,15 +320,17 @@ export const AnthropicStream = (
   stream: Stream<Anthropic.MessageStreamEvent> | ReadableStream,
   { callbacks, inputStartAt, enableStreaming = true, payload }: AnthropicStreamOptions = {},
 ) => {
-  const streamStack: StreamContext = { id: '' };
+  const streamStack: StreamContext = { id: '', pricingOptions: payload?.pricingOptions };
 
   const readableStream =
     stream instanceof ReadableStream
       ? stream
       : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
-  const transformWithPayload: typeof transformAnthropicStream = (chunk, ctx) =>
-    transformAnthropicStream(chunk, ctx, payload);
+  const transformWithPayload: typeof transformAnthropicStream = (chunk, ctx) => {
+    recordProviderReportedCost(streamStack, chunk);
+    return transformAnthropicStream(chunk, ctx, payload);
+  };
 
   return readableStream
     .pipeThrough(createFirstErrorHandleTransformer(undefined, payload?.provider))
@@ -335,6 +341,14 @@ export const AnthropicStream = (
         streamStack,
       }),
     )
-    .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }));
+    .pipeThrough(
+      /**
+       * A Messages stream always ends with `message_delta` + `message_stop`. Some relays close the
+       * connection mid-response without either; without this flag the truncated output was
+       * treated as a normal completion, so half-written tool arguments got executed.
+       */
+      createModelEventTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
+    )
+    .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+    .pipeThrough(createSSEEncoder());
 };

@@ -4,7 +4,7 @@ import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/typ
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
-import { agentService } from '@/services/agent';
+import { agentDocumentService } from '@/services/agentDocument';
 import { messageService } from '@/services/message';
 import { notebookService } from '@/services/notebook';
 import { sandboxStorageService } from '@/services/sandboxStorage';
@@ -83,6 +83,11 @@ export const createBrowserContextFactProviders = ({
   groupId,
   shareVisitor,
 }: BrowserContextFactSource = {}): ContextFactProviders => ({
+  findAgentDocument: async (targetAgentId, documentId) => {
+    const doc = await agentDocumentService.readDocument({ agentId: targetAgentId, id: documentId });
+    return doc ? { content: doc.content, title: doc.title } : null;
+  },
+
   findTopic: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
     if (!topic) return null;
@@ -214,9 +219,9 @@ export const createBrowserContextFactProviders = ({
       name: provider.name,
     })),
 
-  // The prefetched list is reused when present so sending never waits on it.
-  listRecentAgents: async (limit) =>
-    getAgentStoreState().availableAgents ?? (await agentService.queryAgents({ limit })),
+  // The local copy is reused when present so sending never waits on it; after
+  // the agents change it is fetched fresh.
+  listRecentAgents: () => getAgentStoreState().getAvailableAgents(),
 
   // Non-recommended builtins are uninstalled by default; the builder must
   // not present them as installed and pin unusable identifiers.

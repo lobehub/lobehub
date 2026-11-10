@@ -109,6 +109,42 @@ describe('getValidToken', () => {
   });
 
   /**
+   * A socket reconnect races the journal catch-up it triggers. Both used to spend the same rotating
+   * refresh token, the loser came back `invalid_grant`, and a passing disconnect was then reported
+   * as a dead login.
+   */
+  it('refreshes once when two callers race on the same rotating token', async () => {
+    vi.mocked(loadCredentials).mockReturnValue(expiredCredentials('stored-refresh-token'));
+
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(fetch).mockImplementation(async () => {
+      await gate;
+      return {
+        json: vi.fn().mockResolvedValue({
+          access_token: 'new-access-token',
+          expires_in: 3600,
+          refresh_token: 'rotated-token',
+          token_type: 'Bearer',
+        }),
+        ok: true,
+      } as any;
+    });
+
+    const first = getValidToken();
+    const second = getValidToken();
+    release();
+
+    const [a, b] = await Promise.all([first, second]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(a).toMatchObject({ credentials: { refreshToken: 'rotated-token' }, status: 'ok' });
+    expect(b).toBe(a);
+  });
+
+  /**
    * The regression this classification exists for: a refresh that never got an answer used to be
    * indistinguishable from having no login at all, so every caller told the user to run `login`
    * and re-authenticate over what was usually a passing blip.
@@ -285,7 +321,26 @@ describe('describeTokenLookup', () => {
     expect(report?.fix).toContain('signing in again will not change the answer');
   });
 
-  it('leaves the caller its own wording when there is nothing to diagnose', () => {
-    expect(describeTokenLookup({ status: 'no-login' })).toBeUndefined();
+  describe('no login', () => {
+    beforeEach(() => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('leaves the caller its own wording when there is nothing to diagnose', () => {
+      expect(describeTokenLookup({ status: 'no-login' })).toBeUndefined();
+    });
+
+    /** An agent told only "run lh login" guessed at restarts and workspace ids instead. */
+    it('explains a missing login inside an agent run and hands the login to the user', () => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_1');
+
+      const report = describeTokenLookup({ status: 'no-login' });
+
+      expect(report?.detail).toContain('agent conversation');
+      expect(report?.fix).toContain("Ask the user to run 'lh login'");
+      expect(report?.fix).toContain('Do not run it yourself');
+    });
   });
 });

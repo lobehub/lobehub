@@ -6,6 +6,7 @@ import type {
   TrashItem,
   TrashProjectFilter,
   TrashResourceType,
+  TrashVisibility,
 } from '@lobechat/types';
 import {
   Avatar,
@@ -13,6 +14,7 @@ import {
   Center,
   confirmModal,
   controlHeight,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- LiteTable body rows and title cells take no className
   createStaticStyles,
   Empty,
   Flexbox,
@@ -22,6 +24,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -31,14 +35,16 @@ import { useTranslation } from 'react-i18next';
 
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePermission } from '@/hooks/usePermission';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import type { TrashViewFilter } from '@/services/trash';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import { trashSelectors, useTrashStore } from '@/store/trash';
 import { TrashEmptyScopeChangedError } from '@/store/trash/action';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import DeletedByCell, { DELETED_BY_TEXT_INSET } from './DeletedByCell';
 import { ProjectFilter } from './ProjectFilter';
 import {
   canEmptyTrashView,
@@ -54,39 +60,55 @@ dayjs.extend(relativeTime);
 const TRASH_LIST_BREAKPOINT = 800;
 const EMPTY_ITEMS: TrashItem[] = [];
 const EMPTY_COUNTS: TrashCountByType = {};
+const NAME_ICON_SIZE = 28;
+const NAME_ICON_GAP = 10;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    padding-block: 16px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
-  `,
-  /**
-   * Type chips on the small control height: with the track's 3px padding and
-   * 1px border the whole Segmented is `controlHeight.middle` tall, level with
-   * the project picker and the empty button beside it.
-   */
-  filterItem: css`
-    height: ${controlHeight.small}px;
-  `,
-  header: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
+const CARD_LAYOUT_QUERY = `@container (max-width: ${TRASH_LIST_BREAKPOINT}px)`;
 
-    padding-block-end: 16px;
-    padding-inline: 24px;
-  `,
-  muted: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  name: css`
-    width: 100%;
-    min-width: 0;
-  `,
+/**
+ * Type chips on the small control height: with the track's 3px padding and
+ * 1px border the whole Segmented is `controlHeight.middle` tall, level with
+ * the side switch, the project picker and the empty button beside it.
+ */
+const segmentedStyles = { item: { height: controlHeight.small } };
+
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    paddingBlock: '16px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  header: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlockEnd: '16px',
+    paddingInline: '24px',
+  },
+  muted: {
+    color: cssVar.colorTextSecondary,
+  },
+  name: {
+    width: '100%',
+    minWidth: 0,
+  },
+  title: {
+    overflow: 'hidden',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: { default: 'nowrap', [CARD_LAYOUT_QUERY]: 'normal' },
+    display: { default: null, [CARD_LAYOUT_QUERY]: '-webkit-box' },
+    WebkitBoxOrient: { default: null, [CARD_LAYOUT_QUERY]: 'vertical' },
+    WebkitLineClamp: { default: null, [CARD_LAYOUT_QUERY]: '2' },
+    overflowWrap: { default: null, [CARD_LAYOUT_QUERY]: 'anywhere' },
+  },
+});
+
+const fallback = createStaticStyles(({ css }) => ({
   table: css`
     @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
       tbody tr {
@@ -98,24 +120,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
-  title: css`
-    overflow: hidden;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-
-      overflow-wrap: anywhere;
-      white-space: normal;
-    }
-  `,
 }));
 
-const TrashList = () => {
+interface TrashListProps {
+  /** A workspace bin: split into its public and private sides. */
+  isWorkspace?: boolean;
+}
+
+/** A column header that starts where its cells' text does, past a leading icon or avatar. */
+const InsetTitle = ({ children, inset }: { children: string; inset: number }) => (
+  <span style={{ paddingInlineStart: inset }}>{children}</span>
+);
+
+const TrashList = ({ isWorkspace = false }: TrashListProps) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
@@ -150,7 +167,17 @@ const TrashList = () => {
   const projectsEnabled = useUserStore(labPreferSelectors.enableProjects);
   const selectedProjectId = useTrashStore(trashSelectors.activeProjectId(scope));
   const projectId: TrashProjectFilter = projectsEnabled ? selectedProjectId : undefined;
-  const filter: TrashViewFilter = { projectId, resourceType: activeType };
+  const visibility = useTrashStore(trashSelectors.activeVisibility(isWorkspace));
+  const filter: TrashViewFilter = { projectId, resourceType: activeType, visibility };
+  const countFilter = { projectId, visibility };
+
+  // The public side lists every member's deletions: each row is managed by
+  // whoever deleted it, and by owners and admins, who alone may empty it.
+  const userId = useUserStore(userProfileSelectors.userId);
+  const { allowed: isManager } = usePermission('manage_settings');
+  const isPublicSide = visibility === 'public';
+  const canManageItem = (item: TrashItem) =>
+    !isPublicSide || isManager || (item.deletedByUserId ?? item.userId) === userId;
 
   // The live project list of this scope is the only source of project options.
   const projectSync = useProjectStore((s) => s.useFetchProjectList)(projectsEnabled);
@@ -163,12 +190,12 @@ const TrashList = () => {
   // The active view's local-first page: first frame paints from storage.
   const list = useTrashStore(trashSelectors.currentList(filter));
   const isEmpty = useTrashStore(trashSelectors.isEmpty(filter));
-  const counts = useTrashStore(trashSelectors.countByType(projectId));
+  const counts = useTrashStore(trashSelectors.countByType(countFilter));
   const storedFilterCount = useTrashStore(trashSelectors.filterCount(filter));
-  const storedTotal = useTrashStore(trashSelectors.totalCount(projectId));
+  const storedTotal = useTrashStore(trashSelectors.totalCount(countFilter));
 
   const { error, isValidating, revalidate } = useFetchTrash(canFetch, filter);
-  const countSync = useFetchTrashCount(canFetch, projectId);
+  const countSync = useFetchTrashCount(canFetch, countFilter);
 
   // The server refuses a project that was deleted or whose access was revoked;
   // re-read the project list so the picker drops it as well.
@@ -249,10 +276,15 @@ const TrashList = () => {
       okButtonProps: { danger: true },
       okText: t('trash.actions.purge'),
       onOk: async () => {
+        let outcome: Awaited<ReturnType<typeof purge>>;
         try {
-          await purge([item.id]);
+          outcome = await purge([item.id]);
         } catch {
           reportFailure();
+          return;
+        }
+        if (outcome.blocked.length > 0) {
+          toast.warning(t('trash.purge.blocked', { count: outcome.blocked.length }));
           return;
         }
         toast.success(t('trash.purge.success'));
@@ -284,8 +316,9 @@ const TrashList = () => {
       okButtonProps: { danger: true },
       okText: emptyLabel(view, count),
       onOk: async () => {
+        let blocked: number;
         try {
-          await emptyTrash(view);
+          ({ blocked } = await emptyTrash(view));
         } catch (error) {
           if (error instanceof TrashEmptyScopeChangedError || isScopeChangedError(error)) {
             toast.error(t('trash.emptyStopped.scopeChanged'));
@@ -295,6 +328,10 @@ const TrashList = () => {
           } else {
             reportFailure();
           }
+          return;
+        }
+        if (blocked > 0) {
+          toast.warning(t('trash.purge.blocked', { count: blocked }));
           return;
         }
         toast.success(t('trash.purge.success'));
@@ -317,19 +354,24 @@ const TrashList = () => {
         const avatar = item.meta?.avatar;
         const title = item.title || t('trash.untitled');
         return (
-          <Flexbox horizontal align={'center'} className={styles.name} gap={10}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.name).className}
+            gap={NAME_ICON_GAP}
+          >
             {avatar ? (
               <Avatar
                 avatar={avatar}
                 background={item.meta?.backgroundColor ?? undefined}
-                size={28}
+                size={NAME_ICON_SIZE}
                 style={{ flexShrink: 0 }}
               />
             ) : (
               <Center
-                height={28}
+                height={NAME_ICON_SIZE}
                 style={{ borderRadius: 6, flex: 'none', opacity: 0.7 }}
-                width={28}
+                width={NAME_ICON_SIZE}
               >
                 <Icon icon={TypeIcon} size={18} />
               </Center>
@@ -337,7 +379,7 @@ const TrashList = () => {
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               <Text
                 as={'span'}
-                className={styles.title}
+                className={stylex.props(styles.title).className}
                 tabIndex={0}
                 ellipsis={{
                   rows: cardLayout ? 2 : undefined,
@@ -364,7 +406,9 @@ const TrashList = () => {
           </Flexbox>
         );
       },
-      title: t('trash.columns.name'),
+      title: (
+        <InsetTitle inset={NAME_ICON_SIZE + NAME_ICON_GAP}>{t('trash.columns.name')}</InsetTitle>
+      ),
       width: 'clamp(320px, 36cqw, 420px)',
     },
     {
@@ -375,21 +419,37 @@ const TrashList = () => {
     {
       key: 'deletedAt',
       render: (item) => (
-        <span className={styles.muted} title={dayjs(item.deletedAt).format('YYYY-MM-DD HH:mm')}>
+        <span
+          {...stylex.props(styles.muted)}
+          title={dayjs(item.deletedAt).format('YYYY-MM-DD HH:mm')}
+        >
           {dayjs(item.deletedAt).fromNow()}
         </span>
       ),
       title: t('trash.columns.deletedAt'),
     },
+    ...(isPublicSide
+      ? [
+          {
+            key: 'deletedBy',
+            listLabel: t('trash.columns.deletedBy'),
+            render: (item: TrashItem) => <DeletedByCell userId={item.deletedByUserId} />,
+            title: (
+              <InsetTitle inset={DELETED_BY_TEXT_INSET}>{t('trash.columns.deletedBy')}</InsetTitle>
+            ),
+          },
+        ]
+      : []),
     {
       key: 'expiresAt',
-      render: (item) => <span className={styles.muted}>{expiresLabel(item.expiresAt)}</span>,
+      render: (item) => <span {...stylex.props(styles.muted)}>{expiresLabel(item.expiresAt)}</span>,
       title: t('trash.columns.expiresIn'),
     },
     {
       key: 'actions',
       listSlot: 'actions',
       render: (item) => {
+        if (!canManageItem(item)) return null;
         const busy = loadingIds.includes(item.id);
         return (
           <Flexbox horizontal gap={4} onClick={(e) => e.stopPropagation()}>
@@ -429,19 +489,35 @@ const TrashList = () => {
   };
 
   return (
-    <div className={styles.container} ref={containerRef}>
-      <div className={styles.header}>
+    <div {...stylex.props(styles.container)} ref={containerRef}>
+      <div {...stylex.props(styles.header)}>
         <Flexbox horizontal align={'center'} gap={8} style={{ flexWrap: 'wrap', minWidth: 0 }}>
+          {visibility && (
+            <Segmented
+              size={'small'}
+              styles={segmentedStyles}
+              value={visibility}
+              options={[
+                { label: t('trash.side.public'), value: 'public' },
+                { label: t('trash.side.private'), value: 'private' },
+              ]}
+              onChange={(value) =>
+                // Each side has its own types, so the type filter starts over.
+                changeFilter({ projectId, visibility: value as TrashVisibility })
+              }
+            />
+          )}
           <Segmented
-            classNames={{ item: styles.filterItem }}
             options={typeOptions}
             size={'small'}
             style={{ flexWrap: 'wrap', maxWidth: '100%' }}
+            styles={segmentedStyles}
             value={activeType ?? 'all'}
             onChange={(value) =>
               changeFilter({
                 projectId,
                 resourceType: value === 'all' ? undefined : (value as TrashResourceType),
+                visibility,
               })
             }
           />
@@ -452,24 +528,28 @@ const TrashList = () => {
               projects={projects}
               unavailable={projectUnavailable}
               value={projectId}
-              onChange={(next) => changeFilter({ projectId: next, resourceType: activeType })}
               onOpen={() => void refreshProjectList()}
               onRetry={() => void refreshProjectList()}
+              onChange={(next) =>
+                changeFilter({ projectId: next, resourceType: activeType, visibility })
+              }
             />
           )}
         </Flexbox>
-        <Button
-          danger
-          disabled={!canEmpty}
-          icon={Trash2Icon}
-          size={mobile ? 'small' : undefined}
-          onClick={handleEmpty}
-        >
-          {emptyLabel(filter, filterCount)}
-        </Button>
+        {(!isPublicSide || isManager) && (
+          <Button
+            danger
+            disabled={!canEmpty}
+            icon={Trash2Icon}
+            size={mobile ? 'small' : undefined}
+            onClick={handleEmpty}
+          >
+            {emptyLabel(filter, filterCount)}
+          </Button>
+        )}
       </div>
       <LiteTable
-        className={styles.table}
+        className={fallback.table}
         columns={columns}
         dataSource={items}
         listBreakpoint={TRASH_LIST_BREAKPOINT}

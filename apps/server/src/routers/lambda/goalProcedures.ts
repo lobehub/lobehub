@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { GoalModel } from '@/database/models/goal';
+import { GoalArchivedError } from '@/database/models/goalArchive';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
+import { GoalSubscriptionService } from '@/server/services/goal/subscriptions';
 
 /** Procedures and helpers shared by `goalRouter` and its spread-in procedure groups. */
 export const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
@@ -21,6 +23,11 @@ export const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
         opts.ctx.userId,
         opts.ctx.workspaceId ?? undefined,
       ),
+      goalSubscriptionService: new GoalSubscriptionService(
+        opts.ctx.serverDB,
+        opts.ctx.userId,
+        opts.ctx.workspaceId ?? undefined,
+      ),
     },
   }),
 );
@@ -29,6 +36,8 @@ export const idInput = z.object({ id: z.string() });
 
 export function mapGoalError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
+  if (error instanceof GoalArchivedError)
+    throw new TRPCError({ cause: error, code: 'PRECONDITION_FAILED', message: error.message });
   console.error(`[goal:${operation}]`, error);
   throw new TRPCError({
     cause: error,

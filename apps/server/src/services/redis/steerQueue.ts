@@ -103,7 +103,11 @@ local function joinBatch(expiry, items)
   return tostring(expiry) .. SEP .. table.concat(items, SEP)
 end
 local function pushFront(qkey, items)
+  if #items == 0 then return end
   for i = #items, 1, -1 do redis.call('LPUSH', qkey, unbind(items[i])) end
+  -- A drain that took the whole list deleted the queue key; the push recreated
+  -- it without a TTL, and an abandoned follow-up must still expire.
+  redis.call('EXPIRE', qkey, ${QUEUE_TTL_SECONDS})
 end
 local function reclaimLapsed(qkey, pkey, now)
   local all = redis.call('HGETALL', pkey)
@@ -148,6 +152,57 @@ return length
 
 /** KEYS[1] = queue */
 const LIST_SCRIPT = `return redis.call('LRANGE', KEYS[1], 0, -1)`;
+
+/**
+ * Waiting entries and those in drained batches, read in one step so an entry
+ * moving between the two is never missed. A batch whose lease lapsed goes back
+ * to the queue first: nothing is delivering it any more.
+ *
+ * KEYS[1] = queue; KEYS[2] = drained batches; ARGV[1] = now ms.
+ * Returns `{ waiting, delivering }`.
+ */
+const SNAPSHOT_SCRIPT = `${LUA_HELPERS}
+reclaimLapsed(KEYS[1], KEYS[2], tonumber(ARGV[1]))
+local delivering = {}
+for _, batch in ipairs(redis.call('HVALS', KEYS[2])) do
+  local _, items = splitBatch(batch)
+  for _, item in ipairs(items) do table.insert(delivering, item) end
+end
+return { redis.call('LRANGE', KEYS[1], 0, -1), delivering }
+`;
+
+/**
+ * Where one entry is, in one step — and with ARGV[2] = 'remove', takes it out
+ * when it is still waiting. Returns `removed`, `queued`, `delivering` (a run
+ * took it and has not settled), `taken` (delivered) or `absent`.
+ *
+ * A batch whose lease lapsed goes back to the queue first, as in a drain.
+ *
+ * KEYS[1] = queue; KEYS[2] = taken ids; KEYS[3] = drained batches;
+ * ARGV[1] = id; ARGV[2] = 'remove' | 'peek'; ARGV[3] = now ms
+ */
+const ENTRY_STATE_SCRIPT = `${LUA_HELPERS}
+reclaimLapsed(KEYS[1], KEYS[3], tonumber(ARGV[3]))
+for _, item in ipairs(redis.call('LRANGE', KEYS[1], 0, -1)) do
+  if header(item) == ARGV[1] then
+    if ARGV[2] == 'remove' then
+      redis.call('LREM', KEYS[1], 1, item)
+      return 'removed'
+    end
+    return 'queued'
+  end
+end
+for _, batch in ipairs(redis.call('HVALS', KEYS[3])) do
+  local _, items = splitBatch(batch)
+  for _, item in ipairs(items) do
+    if header(item) == ARGV[1] then return 'delivering' end
+  end
+end
+if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then return 'taken' end
+return 'absent'
+`;
+
+export type SteerQueueEntryState = 'absent' | 'delivering' | 'queued' | 'removed' | 'taken';
 
 /**
  * Entries a run would take: queued ones it owns, plus any in a lapsed batch
@@ -254,6 +309,15 @@ end
 return #returned
 `;
 
+const RENEW_SCRIPT = `${LUA_HELPERS}
+local batch = redis.call('HGET', KEYS[1], ARGV[1])
+if not batch then return 0 end
+local _, items = splitBatch(batch)
+redis.call('HSET', KEYS[1], ARGV[1], joinBatch(tonumber(ARGV[2]), items))
+redis.call('EXPIRE', KEYS[1], ARGV[3])
+return 1
+`;
+
 const keyOf = (scope: SteerQueueScope) =>
   RedisKeys.agentSteer.followUps(scope.userId, scope.topicId, scope.threadId);
 
@@ -296,9 +360,10 @@ const parseEntries = <T extends SteerQueueEntry>(raw: unknown): T[] => {
  * settles goes back to the queue when its lease lapses, so a crash, a lost
  * response or an outage between the two never loses an accepted follow-up.
  *
- * `append` returns `undefined` when the follow-up was definitely not stored: the
- * caller then tells the client to send the message itself, as it did before
- * this queue.
+ * `append` returns `notStored` when it took back a write whose command failed —
+ * definitely not stored, so the client sends the message itself, as it did
+ * before this queue — and `undefined` without a Redis client. Redis is a
+ * deployment requirement, so that is an outage, where the state is unknown.
  */
 export const steerQueue = {
   /**
@@ -345,7 +410,7 @@ export const steerQueue = {
       // Nothing to take back: the write never landed, or a drain already took
       // it and may be starting it. Only a removal proves "not stored".
       if (removed === 0) throw new SteerQueueWriteUnknownError(error);
-      return;
+      return 'notStored' as const;
     }
   },
 
@@ -408,6 +473,60 @@ export const steerQueue = {
   },
 
   /**
+   * Extends a drained batch's lease, for a delivery the run is still holding
+   * (a message sent into a live agent session it has not picked up yet).
+   *
+   * @returns false when the batch is gone (settled, or already lapsed back)
+   * @throws when Redis is unavailable — the lease then lapses as usual
+   */
+  async renew(scope: SteerQueueScope, drainId: string): Promise<boolean> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to renew queued follow-ups');
+
+    const renewed = await redis.eval<unknown>(
+      RENEW_SCRIPT,
+      1,
+      drainedKeyOf(scope),
+      drainId,
+      Date.now() + PROCESSING_LEASE_MS,
+      QUEUE_TTL_SECONDS,
+    );
+    return Number(renewed) === 1;
+  },
+
+  /**
+   * Records a follow-up a heterogeneous run took into its live session, until
+   * the agent picks it up (see {@link RedisKeys.agentSteer.heteroDeliveries}).
+   */
+  async putHeteroDelivery(operationId: string, messageId: string, delivery: unknown) {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to record a delivered follow-up');
+
+    const key = RedisKeys.agentSteer.heteroDeliveries(operationId);
+    await redis.hset(key, messageId, JSON.stringify(delivery));
+    await redis.expire(key, QUEUE_TTL_SECONDS);
+  },
+
+  /** The deliveries a heterogeneous run still holds, by user message id. */
+  async listHeteroDeliveries<T>(operationId: string): Promise<Record<string, T>> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to read delivered follow-ups');
+
+    const raw = (await redis.hgetall(RedisKeys.agentSteer.heteroDeliveries(operationId))) ?? {};
+    return Object.fromEntries(
+      Object.entries(raw).map(([id, value]) => [id, JSON.parse(String(value)) as T]),
+    );
+  },
+
+  /** Drops a delivery record once it is settled. */
+  async removeHeteroDelivery(operationId: string, messageId: string): Promise<void> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to settle a delivered follow-up');
+
+    await redis.hdel(RedisKeys.agentSteer.heteroDeliveries(operationId), messageId);
+  },
+
+  /**
    * The runs the waiting entries are bound to (unbound ones excluded), so a
    * caller can tell which of them ended. `total` also counts entries in drained
    * batches, so a lapsed one is still drained back. Zero when nothing waits.
@@ -458,6 +577,56 @@ export const steerQueue = {
     if (!redis) return [];
 
     return parseEntries<T>(await redis.eval<unknown>(LIST_SCRIPT, 1, keyOf(scope)));
+  },
+
+  /**
+   * The entries not delivered yet, read atomically: `waiting` ones, and
+   * `delivering` ones a drain took that are not settled — on their way into a
+   * run, or back to the queue should that fail. A lapsed batch is returned to
+   * the queue first.
+   *
+   * @throws when Redis is unavailable — an outage is not an empty queue
+   */
+  async snapshot<T extends SteerQueueEntry>(
+    scope: SteerQueueScope,
+  ): Promise<{ delivering: T[]; waiting: T[] }> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to read queued follow-ups');
+
+    const raw = await redis.eval<unknown>(
+      SNAPSHOT_SCRIPT,
+      2,
+      keyOf(scope),
+      drainedKeyOf(scope),
+      Date.now(),
+    );
+    const [waiting, delivering] = Array.isArray(raw) ? raw : [];
+    return { delivering: parseEntries<T>(delivering), waiting: parseEntries<T>(waiting) };
+  },
+
+  /**
+   * Where one entry is (see {@link SteerQueueEntryState}); with `remove`, takes
+   * it out in the same step when it is still waiting. `undefined` without Redis:
+   * then nothing about it is known.
+   */
+  async entryState(
+    scope: SteerQueueScope,
+    id: string,
+    options?: { remove?: boolean },
+  ): Promise<SteerQueueEntryState | undefined> {
+    const redis = await getClient();
+    if (!redis) return;
+
+    return (await redis.eval<string>(
+      ENTRY_STATE_SCRIPT,
+      3,
+      keyOf(scope),
+      takenKeyOf(scope),
+      drainedKeyOf(scope),
+      id,
+      options?.remove ? 'remove' : 'peek',
+      Date.now(),
+    )) as SteerQueueEntryState;
   },
 
   /**

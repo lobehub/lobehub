@@ -1,7 +1,17 @@
 'use client';
 
-import { createStaticStyles, cssVar, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, Text, useModalContext } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  Empty,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { Search, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -26,131 +36,108 @@ const SETTLED_STATUSES = new Set(['accepted', 'closed']);
  */
 const TARGET_WINDOW = 200;
 
-const styles = createStaticStyles(({ css }) => ({
-  search: css`
-    display: flex;
-    gap: 7px;
-    align-items: center;
-
-    height: 32px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-
-    svg {
-      flex: none;
-      color: ${cssVar.colorTextQuaternary};
-    }
-
-    input {
-      width: 100%;
-      min-width: 0;
-      border: none;
-
-      font-size: 13px;
-      color: ${cssVar.colorText};
-
-      background: none;
-      outline: none;
-    }
-  `,
-  list: css`
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    min-height: 120px;
-    max-height: 320px;
-    padding-block: 4px;
-  `,
-  option: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    align-items: flex-start;
-
-    padding-block: 7px;
-    padding-inline: 10px;
-    border: 1px solid transparent;
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    background: none;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  optionActive: css`
-    border-color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      background: ${cssVar.colorPrimaryBg};
-    }
-  `,
-  optionDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.45;
-
-    &:hover {
-      background: none;
-    }
-  `,
-  optionTitle: css`
-    overflow: hidden;
-    display: block;
-
-    width: 100%;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  optionSub: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  empty: css`
-    padding-block: 28px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  errorState: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 20px;
-  `,
-  retryBtn: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorTextTertiary};
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  search: {
+    display: 'flex',
+    gap: '7px',
+    alignItems: 'center',
+    height: '32px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  searchIcon: { flex: 'none', color: cssVar.colorTextQuaternary },
+  searchInput: {
+    width: '100%',
+    minWidth: '0',
+    borderStyle: 'none',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outline: 'none',
+  },
+  list: {
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minHeight: '120px',
+    maxHeight: '320px',
+    paddingBlock: '4px',
+  },
+  option: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    alignItems: 'flex-start',
+    paddingBlock: '7px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: cssVar.borderRadius,
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  optionActive: {
+    borderColor: cssVar.colorPrimary,
+    backgroundColor: { 'default': cssVar.colorPrimaryBg, ':hover': cssVar.colorPrimaryBg },
+  },
+  optionDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.45,
+    backgroundColor: { 'default': 'transparent', ':hover': 'transparent' },
+  },
+  /* Disabled wins on hover, but an active row keeps its tint at rest. */
+  optionActiveDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.45,
+    backgroundColor: { 'default': cssVar.colorPrimaryBg, ':hover': 'transparent' },
+  },
+  optionTitle: {
+    overflow: 'hidden',
+    display: 'block',
+    width: '100%',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  optionSub: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  empty: {
+    paddingBlock: '28px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  errorState: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    alignItems: 'center',
+    paddingBlock: '20px',
+  },
+  retryBtn: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorTextTertiary },
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const titleOf = (item: AcceptanceListItem) => item.subject.title || item.subjectId;
 
@@ -202,9 +189,10 @@ const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
         })}
       </Text>
 
-      <label className={styles.search}>
-        <Icon icon={Search} size={13} />
+      <label {...stylex.props(styles.search)}>
+        <Icon className={stylex.props(styles.searchIcon).className} icon={Search} size={13} />
         <input
+          {...stylex.props(styles.searchInput)}
           autoFocus
           placeholder={translate('acceptance.workspace.merge.searchPlaceholder')}
           type={'search'}
@@ -216,20 +204,20 @@ const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
       {error ? (
         // A failed list read must not read as "there is nothing to merge into":
         // the two states lead to opposite conclusions about the delivery.
-        <div className={styles.errorState}>
+        <div {...stylex.props(styles.errorState)}>
           <Empty
             description={translate('workspace.loadError')}
             icon={TriangleAlert}
             title={translate('workspace.loadErrorTitle')}
           />
-          <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
+          <button {...stylex.props(styles.retryBtn)} type={'button'} onClick={() => void mutate()}>
             {translate('workspace.retry')}
           </button>
         </div>
       ) : isLoading ? (
         <SkeletonList rows={4} />
       ) : candidates.length === 0 ? (
-        <div className={styles.empty}>
+        <div {...stylex.props(styles.empty)}>
           {translate(
             others.length === 0
               ? 'acceptance.workspace.merge.noCandidates'
@@ -238,7 +226,7 @@ const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
           )}
         </div>
       ) : (
-        <div className={styles.list}>
+        <div {...stylex.props(styles.list)}>
           {candidates.map((item) => {
             const settled = SETTLED_STATUSES.has(item.status);
             return (
@@ -246,17 +234,16 @@ const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
                 disabled={settled}
                 key={item.id}
                 type={'button'}
-                className={[
+                {...stylex.props(
                   styles.option,
-                  item.id === targetId ? styles.optionActive : '',
-                  settled ? styles.optionDisabled : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
+                  item.id === targetId && styles.optionActive,
+                  settled &&
+                    (item.id === targetId ? styles.optionActiveDisabled : styles.optionDisabled),
+                )}
                 onClick={() => setTargetId(item.id)}
               >
-                <span className={styles.optionTitle}>{titleOf(item)}</span>
-                <span className={styles.optionSub}>
+                <span {...stylex.props(styles.optionTitle)}>{titleOf(item)}</span>
+                <span {...stylex.props(styles.optionSub)}>
                   {item.checkCount == null
                     ? translate(`acceptance.status.${item.status}` as any)
                     : translate('acceptance.workspace.checkCount', { count: item.checkCount })}

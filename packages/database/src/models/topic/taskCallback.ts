@@ -188,7 +188,8 @@ export const repairAgentInterventionContinuation = async (
         metadata: {
           ...existing.metadata,
           runningOperation,
-          ...(ownsReservation || !hasLiveReservation ? { taskCallbackReservation: null } : {}),
+          // A live reservation this caller does not own already returned 'conflict'.
+          taskCallbackReservation: null,
         },
         updatedAt: new Date(),
       })

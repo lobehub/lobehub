@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { Outlet } from 'react-router';
 
@@ -21,13 +22,13 @@ const DesktopDiscoverDetailLayout = memo(() => {
     <>
       <Header />
       <Flexbox
-        className={styles.mainContainer}
+        className={stylex.props(styles.mainContainer).className}
         height={'100%'}
         id={SCROLL_PARENT_ID}
         width={'100%'}
       >
         <WideScreenContainer
-          className={styles.contentContainer}
+          className={stylex.props(styles.contentContainer).className}
           gap={32}
           minWidth={MAX_WIDTH}
           paddingBlock={16}
@@ -39,7 +40,7 @@ const DesktopDiscoverDetailLayout = memo(() => {
           <RouteSkeletonChromeProvider>
             <Outlet />
           </RouteSkeletonChromeProvider>
-          <div className={styles.spacer} />
+          <div {...stylex.props(styles.spacer)} />
           <Footer />
         </WideScreenContainer>
       </Flexbox>

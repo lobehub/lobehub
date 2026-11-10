@@ -259,6 +259,25 @@ export interface AgentRunRequestMessage {
   args?: string[];
   /** Seed assistant message that receives terminal state from the CLI run. */
   assistantMessageId?: string;
+  /**
+   * Claude Code subscription account the agent is routed to (its pin, or its
+   * auto-balanced pool best-first). The device maps it to a local login and
+   * spawns with that login's `CLAUDE_CONFIG_DIR`; a pinned account it holds no
+   * login for rejects the run. Optional — omitted for unbound agents, other
+   * agent types and older servers; an older device ignores it.
+   */
+  claudeAccountRouting?: {
+    candidates: Array<{ externalAccountId: string; name?: string }>;
+    mode: 'balanced' | 'pinned';
+  };
+  /**
+   * Entrypoint name the agent asked Claude Code to report instead of its
+   * headless default. The device validates it and sets it on the spawned CLI.
+   * An empty string means the agent turned the setting off, so the device
+   * clears an entrypoint it inherited. Optional — omitted when the agent never
+   * set it; an older device ignores it.
+   */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch

@@ -3,9 +3,14 @@ import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
-import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
-import { loadSettings, normalizeUrl, saveSettings } from '../settings';
+import {
+  describeDeviceGateway,
+  describeDeviceGatewayFailure,
+  rememberGatewayOverride,
+  resolveCliDeviceGateway,
+} from '../device/gatewayEndpoint';
 import { log, setVerbose } from '../utils/logger';
+import { warnStaleConnectors } from './connectStatus';
 
 /**
  * `status` answers one question — does the gateway accept this machine. When it
@@ -36,27 +41,35 @@ export function registerStatusCommand(program: Command) {
     .action(async (options: StatusOptions) => {
       if (options.verbose) setVerbose(true);
 
-      const auth = await resolveToken(options);
-      const settings = loadSettings();
-      const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
+      // This probe opens its own connection, so a pass says nothing about the code a
+      // running connector executes. Flag that first; it must never block the probe.
+      await warnStaleConnectors().catch((error) =>
+        log.debug(`Connector version check skipped: ${(error as Error).message}`),
+      );
 
-      if (!gatewayUrl && settings?.serverUrl) {
-        log.error(
-          `Current login uses custom --server ${settings?.serverUrl}. Please also provide '--gateway <url>' for the device gateway.`,
-        );
+      const auth = await resolveToken(options);
+      // Same resolution as `connect`, against the server this token belongs to.
+      const gateway = await resolveCliDeviceGateway({
+        override: options.gateway,
+        serverUrl: auth.serverUrl,
+      });
+
+      if (!gateway.ok) {
+        const { detail, fix } = describeDeviceGatewayFailure(gateway, auth.serverUrl);
+        log.error(`FAILED - ${detail}`);
+        log.error(fix);
         process.exit(1);
         throw new Error('process.exit');
       }
 
-      if (options.gateway && gatewayUrl) {
-        saveSettings({ ...settings, gatewayUrl });
-      }
+      rememberGatewayOverride(auth.serverUrl, gateway.endpoint);
+      log.info(`Gateway: ${describeDeviceGateway(gateway.endpoint)}`);
 
       const timeout = Number.parseInt(options.timeout || '10000', 10);
 
       const client = new GatewayClient({
         autoReconnect: false,
-        gatewayUrl: gatewayUrl || OFFICIAL_GATEWAY_URL,
+        gatewayUrl: gateway.endpoint.url,
         logger: log,
         serverUrl: auth.serverUrl,
         // Status is a one-shot probe, not a serving connection.

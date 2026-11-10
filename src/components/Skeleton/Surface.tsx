@@ -1,7 +1,9 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Grid } from '@lobehub/ui';
+import { Flexbox, Grid } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ComponentType } from 'react';
 
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
@@ -15,26 +17,28 @@ interface SurfaceSkeletonProps {
   variant?: SurfaceSkeletonVariant;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  editor: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  row: css`
-    min-height: 64px;
-    padding-block: 16px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  editor: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: { minHeight: '64px', paddingBlock: '16px' },
+});
 
 const HeaderSkeleton = () => (
   <Flexbox
@@ -53,7 +57,7 @@ const HeaderSkeleton = () => (
 const ListSkeleton = () => (
   <Flexbox gap={12} padding={16}>
     {Array.from({ length: 5 }).map((_, index) => (
-      <Flexbox className={styles.card} gap={10} key={index} padding={16}>
+      <Flexbox className={stylex.props(styles.card).className} gap={10} key={index} padding={16}>
         <Flexbox horizontal align={'center'} gap={8}>
           <SkeletonBar height={24} radius={'50%'} width={24} />
           <SkeletonBar height={14} width={96 + (index % 3) * 24} />
@@ -76,11 +80,11 @@ const FormSkeleton = () => (
       <Flexbox>
         {Array.from({ length: 3 }).map((_, index) => (
           <Flexbox key={index}>
-            {index > 0 && <div className={styles.divider} />}
+            {index > 0 && <div {...stylex.props(styles.divider)} />}
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.row}
+              className={stylex.props(styles.row).className}
               gap={24}
               justify={'space-between'}
             >
@@ -138,7 +142,7 @@ const DetailSkeleton = () => (
 const EditorSkeleton = () => (
   <Flexbox align={'center'} flex={1} padding={'32px 24px'}>
     <Flexbox
-      className={styles.editor}
+      className={stylex.props(styles.editor).className}
       gap={20}
       padding={'32px 40px 96px'}
       width={'min(760px, 100%)'}

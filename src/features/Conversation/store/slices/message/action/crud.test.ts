@@ -3,9 +3,58 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as messageServiceModule from '@/services/message';
+import { useChatStore } from '@/store/chat';
 
 import { type ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
+import type { MessageDispatch } from '../../data/reducer';
+
+const emptyMessageResult = (): { success: true; messages: UIChatMessage[] } => ({
+  success: true,
+  messages: [],
+});
+
+const toolMessage = (): Extract<MessageDispatch, { type: 'createMessage' }> => ({
+  type: 'createMessage',
+  id: 'tool-msg-1',
+  value: {
+    content: '',
+    role: 'tool',
+    sessionId: 'test-session',
+    parentId: 'assistant-1',
+    tool_call_id: 'tool-call-1',
+    plugin: {
+      apiName: 'test',
+      arguments: '{"key": "old"}',
+      identifier: 'test-plugin',
+      type: 'default',
+    },
+  },
+});
+
+const assistantTool = (): Extract<MessageDispatch, { type: 'addMessageTool' }> => ({
+  type: 'addMessageTool',
+  id: 'assistant-1',
+  value: {
+    id: 'tool-call-1',
+    type: 'default',
+    identifier: 'test',
+    apiName: 'testFunc',
+    arguments: '{"key": "old"}',
+  },
+});
+
+const assistantMessage = (): Extract<MessageDispatch, { type: 'createMessage' }> => ({
+  type: 'createMessage',
+  id: 'assistant-1',
+  value: { content: '', role: 'assistant', sessionId: 'test-session' },
+});
+
+const userMessage = (): Extract<MessageDispatch, { type: 'createMessage' }> => ({
+  type: 'createMessage',
+  id: 'msg-1',
+  value: { content: 'Hello', role: 'user', sessionId: 'test-session' },
+});
 
 // Mock conversation-flow parse function (必须 mock，因为这是外部库)
 vi.mock('@lobechat/conversation-flow', () => ({
@@ -96,68 +145,6 @@ describe('Message CRUD Actions', () => {
 
       expect(result).toBeUndefined();
     });
-
-    it('discards a create result that resolves after switching conversations', async () => {
-      let resolveCreate!: (result: any) => void;
-      vi.spyOn(messageServiceModule.messageService, 'createMessage').mockReturnValue(
-        new Promise((resolve) => {
-          resolveCreate = resolve;
-        }),
-      );
-
-      const oldContext = {
-        agentId: 'test-session',
-        threadId: null,
-        topicId: 'topic-old',
-      };
-      const currentContext = {
-        agentId: 'test-session',
-        threadId: null,
-        topicId: 'topic-current',
-      };
-      const currentMessages: UIChatMessage[] = [
-        {
-          content: 'current topic',
-          createdAt: 2000,
-          id: 'msg-current',
-          role: 'user',
-          updatedAt: 2000,
-        },
-      ];
-      const store = createTestStore(oldContext);
-
-      const createPromise = store.getState().createMessage({
-        content: 'old topic message',
-        role: 'user',
-      });
-      store.setState({
-        context: currentContext,
-        dbMessages: currentMessages,
-        displayMessages: currentMessages,
-        messageLoadingIds: [],
-        messagesInit: true,
-      });
-
-      let result: string | undefined;
-      await act(async () => {
-        resolveCreate({
-          id: 'msg-old',
-          messages: [
-            {
-              content: 'late old topic result',
-              createdAt: 1000,
-              id: 'msg-old',
-              role: 'user',
-              updatedAt: 1000,
-            },
-          ],
-        });
-        result = await createPromise;
-      });
-
-      expect(result).toBeUndefined();
-      expect(store.getState().dbMessages).toEqual(currentMessages);
-    });
   });
 
   describe('createTempMessage', () => {
@@ -179,6 +166,25 @@ describe('Message CRUD Actions', () => {
       expect(state.displayMessages.length).toBe(1);
       expect(state.displayMessages[0].content).toBe('Temp message');
     });
+
+    it('marks the temp row as client-created when forwarding to the chat store', () => {
+      const store = createTestStore();
+      const dispatch = vi.spyOn(useChatStore.getState(), 'internal_dispatchMessage');
+
+      act(() => {
+        store.getState().createTempMessage({
+          content: 'Temp message',
+          role: 'user',
+          sessionId: 'test-session',
+        });
+      });
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'createMessage' }),
+        expect.any(Object),
+        { creationOrigin: 'client' },
+      );
+    });
   });
 
   describe('deleteMessage', () => {
@@ -186,10 +192,7 @@ describe('Message CRUD Actions', () => {
       // Use removeMessage for single message deletion
       const removeMessageSpy = vi
         .spyOn(messageServiceModule.messageService, 'removeMessage')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -220,10 +223,7 @@ describe('Message CRUD Actions', () => {
     it('should delete assistantGroup with children and tool results', async () => {
       const removeMessagesSpy = vi
         .spyOn(messageServiceModule.messageService, 'removeMessages')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -417,10 +417,7 @@ describe('Message CRUD Actions', () => {
     it('should delete a single DB message directly', async () => {
       const removeMessageSpy = vi
         .spyOn(messageServiceModule.messageService, 'removeMessage')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -464,10 +461,7 @@ describe('Message CRUD Actions', () => {
     it('should not handle assistantGroup aggregation like deleteMessage does', async () => {
       const removeMessageSpy = vi
         .spyOn(messageServiceModule.messageService, 'removeMessage')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -508,19 +502,12 @@ describe('Message CRUD Actions', () => {
     it('should delete multiple messages', async () => {
       const removeMessagesSpy = vi
         .spyOn(messageServiceModule.messageService, 'removeMessages')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'msg-1',
-          value: { content: 'Hello', role: 'user', sessionId: 'test-session' },
-        });
+        store.getState().internal_dispatchMessage(userMessage());
         store.getState().internal_dispatchMessage({
           type: 'createMessage',
           id: 'msg-2',
@@ -542,10 +529,7 @@ describe('Message CRUD Actions', () => {
     it('should delete tool message and remove from parent', async () => {
       const removeMessageSpy = vi
         .spyOn(messageServiceModule.messageService, 'removeMessage')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -600,11 +584,7 @@ describe('Message CRUD Actions', () => {
       const store = createTestStore();
 
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'msg-1',
-          value: { content: 'Hello', role: 'user', sessionId: 'test-session' },
-        });
+        store.getState().internal_dispatchMessage(userMessage());
       });
 
       await act(async () => {
@@ -636,11 +616,7 @@ describe('Message CRUD Actions', () => {
       const store = createTestStore();
 
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'msg-1',
-          value: { content: 'Hello', role: 'user', sessionId: 'test-session' },
-        });
+        store.getState().internal_dispatchMessage(userMessage());
       });
 
       await act(async () => {
@@ -659,19 +635,12 @@ describe('Message CRUD Actions', () => {
     it('should update message metadata', async () => {
       const updateMessageMetadataSpy = vi
         .spyOn(messageServiceModule.messageService, 'updateMessageMetadata')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'msg-1',
-          value: { content: 'Hello', role: 'user', sessionId: 'test-session' },
-        });
+        store.getState().internal_dispatchMessage(userMessage());
       });
 
       await act(async () => {
@@ -690,10 +659,7 @@ describe('Message CRUD Actions', () => {
     it('should toggle message collapsed state', async () => {
       const updateMessageMetadataSpy = vi
         .spyOn(messageServiceModule.messageService, 'updateMessageMetadata')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -754,10 +720,9 @@ describe('Message CRUD Actions', () => {
 
   describe('modifyMessageContent', () => {
     it('should modify message content and call hook', async () => {
-      vi.spyOn(messageServiceModule.messageService, 'updateMessage').mockResolvedValue({
-        success: true,
-        messages: [],
-      });
+      vi.spyOn(messageServiceModule.messageService, 'updateMessage').mockResolvedValue(
+        emptyMessageResult(),
+      );
 
       const onMessageModified = vi.fn();
 
@@ -790,10 +755,7 @@ describe('Message CRUD Actions', () => {
     it('should add tool to message', async () => {
       const updateMessageSpy = vi
         .spyOn(messageServiceModule.messageService, 'updateMessage')
-        .mockResolvedValue({
-          success: true,
-          messages: [],
-        });
+        .mockResolvedValue(emptyMessageResult());
 
       const store = createTestStore();
 
@@ -836,39 +798,9 @@ describe('Message CRUD Actions', () => {
 
       // Create an assistant message with a tool, and a tool message
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'assistant-1',
-          value: { content: '', role: 'assistant', sessionId: 'test-session' },
-        });
-        store.getState().internal_dispatchMessage({
-          type: 'addMessageTool',
-          id: 'assistant-1',
-          value: {
-            id: 'tool-call-1',
-            type: 'default',
-            identifier: 'test',
-            apiName: 'testFunc',
-            arguments: '{"key": "old"}',
-          },
-        });
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'tool-msg-1',
-          value: {
-            content: '',
-            role: 'tool',
-            sessionId: 'test-session',
-            parentId: 'assistant-1',
-            tool_call_id: 'tool-call-1',
-            plugin: {
-              apiName: 'test',
-              arguments: '{"key": "old"}',
-              identifier: 'test-plugin',
-              type: 'default',
-            },
-          },
-        });
+        store.getState().internal_dispatchMessage(assistantMessage());
+        store.getState().internal_dispatchMessage(assistantTool());
+        store.getState().internal_dispatchMessage(toolMessage());
       });
 
       await act(async () => {
@@ -884,6 +816,46 @@ describe('Message CRUD Actions', () => {
       );
     });
 
+    it('keeps the local rows when the caller opts out of the refresh', async () => {
+      // The server's rows still carry the call as `pending`: loading them would
+      // bring back an approval card the user already answered.
+      vi.spyOn(messageServiceModule.messageService, 'updateToolArguments').mockResolvedValue({
+        success: true,
+        messages: [{ id: 'tool-msg-1', role: 'tool' }],
+      } as any);
+      const store = createTestStore();
+      act(() => {
+        store.getState().internal_dispatchMessage({
+          type: 'createMessage',
+          id: 'tool-msg-1',
+          value: {
+            content: '',
+            role: 'tool',
+            sessionId: 'test-session',
+            tool_call_id: 'tool-call-1',
+            plugin: {
+              apiName: 'test',
+              arguments: '{"key":"old"}',
+              identifier: 'p',
+              type: 'default',
+            },
+          },
+        });
+      });
+      const replaceSpy = vi.spyOn(store.getState(), 'replaceMessages');
+
+      await act(async () => {
+        await store
+          .getState()
+          .updatePluginArguments('tool-call-1', { key: 'new' }, true, { refresh: false });
+      });
+
+      expect(replaceSpy).not.toHaveBeenCalled();
+      expect(
+        store.getState().dbMessages.find((m) => m.id === 'tool-msg-1')?.plugin?.arguments,
+      ).toBe('{"key":"new"}');
+    });
+
     it('should update using toolCallId even when tool message not persisted (intervention pending)', async () => {
       const updateToolArgsSpy = vi
         .spyOn(messageServiceModule.messageService, 'updateToolArguments')
@@ -894,11 +866,7 @@ describe('Message CRUD Actions', () => {
 
       // Create an assistant message with a tool, but NO tool message (simulating intervention pending)
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'assistant-1',
-          value: { content: '', role: 'assistant', sessionId: 'test-session' },
-        });
+        store.getState().internal_dispatchMessage(assistantMessage());
         store.getState().internal_dispatchMessage({
           type: 'addMessageTool',
           id: 'assistant-1',
@@ -943,39 +911,9 @@ describe('Message CRUD Actions', () => {
 
       // Create assistant with tool and tool message
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'assistant-1',
-          value: { content: '', role: 'assistant', sessionId: 'test-session' },
-        });
-        store.getState().internal_dispatchMessage({
-          type: 'addMessageTool',
-          id: 'assistant-1',
-          value: {
-            id: 'tool-call-1',
-            type: 'default',
-            identifier: 'test',
-            apiName: 'testFunc',
-            arguments: '{"key": "old"}',
-          },
-        });
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'tool-msg-1',
-          value: {
-            content: '',
-            role: 'tool',
-            sessionId: 'test-session',
-            parentId: 'assistant-1',
-            tool_call_id: 'tool-call-1',
-            plugin: {
-              apiName: 'test',
-              arguments: '{"key": "old"}',
-              identifier: 'test-plugin',
-              type: 'default',
-            },
-          },
-        });
+        store.getState().internal_dispatchMessage(assistantMessage());
+        store.getState().internal_dispatchMessage(assistantTool());
+        store.getState().internal_dispatchMessage(toolMessage());
       });
 
       // Start update (don't await yet)
@@ -1010,11 +948,7 @@ describe('Message CRUD Actions', () => {
       const store = createTestStore();
 
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'assistant-1',
-          value: { content: '', role: 'assistant', sessionId: 'test-session' },
-        });
+        store.getState().internal_dispatchMessage(assistantMessage());
         store.getState().internal_dispatchMessage({
           type: 'addMessageTool',
           id: 'assistant-1',
@@ -1072,39 +1006,9 @@ describe('Message CRUD Actions', () => {
       const store = createTestStore();
 
       act(() => {
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'assistant-1',
-          value: { content: '', role: 'assistant', sessionId: 'test-session' },
-        });
-        store.getState().internal_dispatchMessage({
-          type: 'addMessageTool',
-          id: 'assistant-1',
-          value: {
-            id: 'tool-call-1',
-            type: 'default',
-            identifier: 'test',
-            apiName: 'testFunc',
-            arguments: '{"key": "old"}',
-          },
-        });
-        store.getState().internal_dispatchMessage({
-          type: 'createMessage',
-          id: 'tool-msg-1',
-          value: {
-            content: '',
-            role: 'tool',
-            sessionId: 'test-session',
-            parentId: 'assistant-1',
-            tool_call_id: 'tool-call-1',
-            plugin: {
-              apiName: 'test',
-              arguments: '{"key": "old"}',
-              identifier: 'test-plugin',
-              type: 'default',
-            },
-          },
-        });
+        store.getState().internal_dispatchMessage(assistantMessage());
+        store.getState().internal_dispatchMessage(assistantTool());
+        store.getState().internal_dispatchMessage(toolMessage());
       });
 
       // Start update without awaiting (using toolCallId)

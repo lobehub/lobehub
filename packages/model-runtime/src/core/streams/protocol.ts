@@ -1,18 +1,14 @@
-import type {
-  ChatCitationItem,
-  ModelPerformance,
-  ModelReasoningResponseItem,
-  ModelUsage,
-} from '@lobechat/types';
+import type { ChatCitationItem, ModelPerformance, ModelUsage } from '@lobechat/types';
 import type { Pricing } from 'model-bank';
 
-import { parseToolCalls } from '../../helpers';
-import type { ChatStreamCallbacks, OnFinishData, UsageMissingDiagnostics } from '../../types';
+import type { ChatStreamCallbacks, UsageMissingDiagnostics } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import type { SignatureScope } from '../../utils/signatureScope';
 import { nanoid } from '../../utils/uuid';
 import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
+import type { ModelStreamEvent } from './events';
+import { createStreamCallbackDispatcher } from './events';
 
 export type ChatPayloadForTransformStream = {
   apiMode?: UsageMissingDiagnostics['apiMode'];
@@ -31,6 +27,10 @@ export type ChatPayloadForTransformStream = {
 export interface StreamContext {
   chunkIndex?: number;
   id: string;
+  /** Options used to price `usage.cost`, forwarded so hooks can reprice the same usage. */
+  pricingOptions?: ComputeChatCostOptions;
+  /** Latest USD charge the upstream provider reported in a chunk. Server-side only. */
+  providerReportedCost?: number;
   /**
    * As pplx citations is in every chunk, but we only need to return it once
    * this flag is used to check if the pplx citation is returned,and then not return it again.
@@ -78,31 +78,6 @@ export interface StreamContext {
   usage?: ModelUsage;
   usageMissingDiagnostics?: UsageMissingDiagnostics;
 }
-
-export const setOpenAIChatCompletionUsageMissingDiagnostics = (
-  streamContext: StreamContext,
-  payload: ChatPayloadForTransformStream | undefined,
-  {
-    finishReason,
-    responseId,
-  }: {
-    finishReason?: string | null;
-    responseId?: string;
-  },
-) => {
-  streamContext.usageMissingDiagnostics = {
-    apiMode: 'chat_completions',
-    chunkIndex: streamContext.chunkIndex,
-    finishReason,
-    hasUsageMetadata: false,
-    includeUsageRequested: payload?.includeUsageRequested,
-    model: payload?.model,
-    provider: payload?.provider,
-    responseId,
-    source: 'openai_chat_completions',
-    terminalEventType: 'chat.completion.chunk',
-  };
-};
 
 export interface StreamProtocolChunk {
   data: any;
@@ -397,259 +372,35 @@ export const convertIterableToStream = <T>(
 };
 
 /**
- * Create a transformer to convert the response into an SSE format
+ * Fire callbacks for a stream that is already SSE text. Pipelines built from model events
+ * should use `createEventCallbacksTransformer` instead.
  */
-export const createSSEProtocolTransformer = (
-  transformer: (chunk: any, stack: StreamContext) => StreamProtocolChunk | StreamProtocolChunk[],
-  streamStack?: StreamContext,
-  options?: { requireTerminalEvent?: boolean },
-) => {
-  let hasTerminalEvent = false;
-  const requireTerminalEvent = Boolean(options?.requireTerminalEvent);
-
-  return new TransformStream({
-    flush(controller) {
-      // If the upstream closes without sending a terminal event, emit a final error event
-      if (requireTerminalEvent && !hasTerminalEvent) {
-        const id = streamStack?.id || 'stream_end';
-        const data = {
-          body: { name: 'Stream parsing error', reason: 'unexpected_end' },
-          message: 'Stream ended unexpectedly',
-          name: 'Stream parsing error',
-          type: 'StreamChunkError',
-        };
-        controller.enqueue(`id: ${id}\n`);
-        controller.enqueue(`event: error\n`);
-        controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
-      }
-    },
-    transform: (chunk, controller) => {
-      const result = transformer(chunk, streamStack || { id: '' });
-
-      const buffers = Array.isArray(result) ? result : [result];
-
-      buffers.forEach(({ type, id, data }) => {
-        controller.enqueue(`id: ${id}\n`);
-        controller.enqueue(`event: ${type}\n`);
-        controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
-
-        // mark terminal when receiving any of these events
-        if (type === 'stop' || type === 'usage' || type === 'error') hasTerminalEvent = true;
-      });
-    },
-  });
-};
-
 export function createCallbacksTransformer(
   cb: ChatStreamCallbacks | undefined,
   options?: { streamStack?: StreamContext },
 ) {
   const textEncoder = new TextEncoder();
-  let aggregatedText = '';
-  let aggregatedThinking: string | undefined = undefined;
-  let reasoningSignature: string | undefined;
-  const reasoningResponseItems: ModelReasoningResponseItem[] = [];
-  let usage: ModelUsage | undefined;
-  let speed: ModelPerformance | undefined;
-  let grounding: any;
-  let toolsCalling: any;
-  let streamError: any;
-  let finishReason: string | undefined;
-  // Track base64 images for accumulation
-  const base64Images: Array<{ data: string; id: string }> = [];
-
+  const dispatcher = createStreamCallbackDispatcher(cb, options);
   let currentType = '' as unknown as StreamProtocolChunk['type'];
-  const callbacks = cb || {};
 
   return new TransformStream<string, Uint8Array>({
-    async flush(): Promise<void> {
-      /**
-       * Non-streaming Responses conversion emits reasoning items without summary
-       * deltas, so derive visible thinking text from the item summaries whenever
-       * nothing was streamed — otherwise the summary would persist but never render.
-       */
-      const responseItemsThinking = reasoningResponseItems
-        .flatMap(({ summary }) => summary ?? [])
-        .map(({ text }) => text)
-        .filter(Boolean)
-        .join('\n');
-      const reasoningContent = aggregatedThinking || responseItemsThinking || undefined;
-
-      const data: OnFinishData = {
-        error: streamError,
-        finishReason,
-        grounding,
-        speed,
-        text: aggregatedText,
-        thinking: reasoningContent,
-        toolsCalling,
-        usage,
-      };
-      if (reasoningContent || reasoningSignature || reasoningResponseItems.length > 0) {
-        data.reasoning = {
-          content: reasoningContent,
-          responseItems: reasoningResponseItems.length > 0 ? reasoningResponseItems : undefined,
-          signature: reasoningSignature,
-        };
-      }
-      const usageMissingDiagnostics = usage
-        ? undefined
-        : options?.streamStack?.usageMissingDiagnostics;
-      if (usageMissingDiagnostics) data.usageMissingDiagnostics = usageMissingDiagnostics;
-
-      if (callbacks.onCompletion) {
-        await callbacks.onCompletion(data);
-      }
-
-      if (callbacks.onFinal) {
-        await callbacks.onFinal(data);
-      }
-    },
+    flush: () => dispatcher.finish(),
 
     async start(): Promise<void> {
-      if (callbacks.onStart) await callbacks.onStart();
+      await dispatcher.start();
     },
 
     async transform(chunk: string, controller): Promise<void> {
       controller.enqueue(textEncoder.encode(chunk));
 
-      // track the type of the chunk
       if (chunk.startsWith('event:')) {
         currentType = chunk.split('event:')[1].trim() as unknown as StreamProtocolChunk['type'];
-      }
-      // if the message is a data chunk, handle the callback
-      else if (chunk.startsWith('data:')) {
-        // `base64_image` payloads are raw data-URIs (`data:image/png;base64,...`)
-        // and `reasoning_response_item` payloads carry arbitrary model-authored
-        // summary text — both can contain `data:` themselves, which the legacy
-        // `split('data:')[1]` corrupts (it splits on the embedded marker too).
-        // Strip only the leading field marker for those types; every other event
-        // type keeps the original split path unchanged for compatibility.
-        const content =
-          currentType === 'base64_image' || currentType === 'reasoning_response_item'
-            ? chunk.slice('data:'.length).trim()
-            : chunk.split('data:')[1].trim();
+      } else if (chunk.startsWith('data:')) {
+        // Strip only the leading field marker: any payload can contain `data:` itself
+        // (model text, tool arguments, data URIs).
+        const data = safeParseJSON(chunk.slice('data:'.length).trim());
 
-        const data = safeParseJSON(content) as any;
-
-        if (!data) return;
-
-        switch (currentType) {
-          case 'text': {
-            aggregatedText += data;
-            await callbacks.onText?.(data);
-            break;
-          }
-
-          case 'reasoning': {
-            if (!aggregatedThinking) {
-              aggregatedThinking = '';
-            }
-
-            aggregatedThinking += data;
-            await callbacks.onThinking?.(data);
-            break;
-          }
-
-          case 'reasoning_signature': {
-            if (typeof data === 'string') reasoningSignature = data;
-            break;
-          }
-
-          case 'reasoning_response_item': {
-            reasoningResponseItems.push(data as ModelReasoningResponseItem);
-            break;
-          }
-
-          case 'base64_image': {
-            // Real providers (google/openai image streams) serialize `data` as a
-            // raw data-URI string; wrap it into an image item, mirroring
-            // fetch-sse's client-side parser so both paths share one contract.
-            // Tolerate the legacy `{ image, images }` object shape too, so any
-            // existing consumer keeps working.
-            const image =
-              typeof data === 'string'
-                ? { data, id: `tmp_img_${nanoid()}` }
-                : (data as { image: { data: string; id: string } }).image;
-            base64Images.push(image);
-            await callbacks.onBase64Image?.({
-              image,
-              images: base64Images,
-            });
-            break;
-          }
-
-          case 'content_part': {
-            // data format: StreamPartChunkData
-            const partData = data as StreamPartChunkData;
-            await callbacks.onContentPart?.({
-              content: partData.content,
-              mimeType: partData.mimeType,
-              partType: partData.partType,
-              thoughtSignature: partData.thoughtSignature,
-            });
-            break;
-          }
-
-          case 'reasoning_part': {
-            // data format: StreamPartChunkData
-            const partData = data as StreamPartChunkData;
-            await callbacks.onReasoningPart?.({
-              content: partData.content,
-              mimeType: partData.mimeType,
-              partType: partData.partType,
-              thoughtSignature: partData.thoughtSignature,
-            });
-            break;
-          }
-
-          case 'usage': {
-            usage = data;
-            await callbacks.onUsage?.(data);
-            break;
-          }
-
-          case 'speed': {
-            speed = data;
-            break;
-          }
-
-          case 'grounding': {
-            grounding = data;
-            await callbacks.onGrounding?.(data);
-            break;
-          }
-
-          case 'tool_calls': {
-            if (!toolsCalling) toolsCalling = [];
-            toolsCalling = parseToolCalls(toolsCalling, data);
-
-            await callbacks.onToolsCalling?.({ chunk: data, toolsCalling });
-            break;
-          }
-
-          case 'stop': {
-            // Provider's terminal finishReason (e.g. Google's RECITATION / MAX_TOKENS,
-            // OpenAI's length, Anthropic's end_turn). Capture so downstream consumers
-            // can detect soft interrupts where content is empty but tokens were billed.
-            //
-            // Some providers emit multiple stop chunks per stream — Anthropic sends
-            // `message_delta` (carrying the real `stop_reason` like `end_turn` /
-            // `max_tokens` / `tool_use`) followed by a `message_stop` sentinel.
-            // Keep the FIRST non-empty value so the meaningful reason is not
-            // clobbered by the trailing sentinel.
-            if (typeof data === 'string' && data && !finishReason) {
-              finishReason = data;
-            }
-            break;
-          }
-
-          case 'error': {
-            streamError = data;
-            await callbacks.onError?.(data);
-            break;
-          }
-        }
+        await dispatcher.dispatch({ data, type: currentType } as ModelStreamEvent);
       }
     },
   });
@@ -746,7 +497,7 @@ const hasEffectiveOutput = (chunk: StreamProtocolChunk): boolean => {
 
 /**
  * Create a middleware to calculate the token generate speed
- * @requires createSSEProtocolTransformer
+ * @requires createSSEEncoder
  */
 export const createTokenSpeedCalculator = (
   transformer: (chunk: any, stack: StreamContext) => StreamProtocolChunk | StreamProtocolChunk[],

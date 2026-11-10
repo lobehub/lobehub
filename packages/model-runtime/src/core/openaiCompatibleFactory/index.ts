@@ -2,18 +2,13 @@ import type { ChatModelCard } from '@lobechat/types';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import debug from 'debug';
-import type { AiFullModelCard, AiModelType } from 'model-bank';
+import type { AiModelType } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
-import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { ErrorClassifier, refineErrorCode } from '../../errors';
-import {
-  isGPTProResponsesModel,
-  isResponsesAPIModel,
-  supportsGPTResponsesReasoningEffortNone,
-} from '../../providers/openai/modelId';
+import { isResponsesAPIModel } from '../../providers/openai/modelId';
 import type {
   ASROptions,
   ASRPayload,
@@ -21,7 +16,6 @@ import type {
   ChatCompletionErrorPayload,
   ChatCompletionTool,
   ChatMethodOptions,
-  ChatStreamCallbacks,
   ChatStreamPayload,
   Embeddings,
   EmbeddingsOptions,
@@ -31,21 +25,16 @@ import type {
   TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../../types';
-import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
-import type {
-  CreateImageMethodOptions,
-  CreateImagePayload,
-  CreateImageResponse,
-} from '../../types/image';
+import type { CreateImageMethodOptions, CreateImagePayload } from '../../types/image';
 import type {
   CreateVideoPayload,
   CreateVideoResult,
   HandleCreateVideoWebhookPayload,
-  HandleCreateVideoWebhookResult,
   PollVideoStatusResult,
   VideoGenerationCapabilities,
 } from '../../types/video';
+import { respondJsonAfterStream } from '../../utils/consumeStream';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -58,7 +47,6 @@ import { detectModelProvider } from '../../utils/modelParse';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
   assertContextWithinWindow,
-  type AssertContextWithinWindowOptions,
   ContextExceededPreFlightError,
 } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
@@ -83,6 +71,19 @@ import {
 import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
+import { createDecision } from './decide';
+import type {
+  ChatCompletionCreateParamsWithPromptCacheKey,
+  ConstructorOptions,
+  LobeClientOptions,
+  OpenAICompatibleFactoryOptions,
+  OpenAIExtraParams,
+  ResponseCreateParamsWithPromptCacheKey,
+} from './factoryOptions';
+import {
+  getGenerateObjectReasoningParams,
+  getGenerateObjectResponsesReasoningParams,
+} from './generateObjectReasoning';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 import {
   initializeOpenAIDiagnostics,
@@ -102,9 +103,16 @@ import {
   parseStructuredToolArguments,
   StructuredOutputError,
 } from './structuredOutput';
+import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
 export * from './createVideo';
+export type {
+  CreateImageOptions,
+  CreateVideoOptions,
+  CustomClientOptions,
+  OpenAICompatibleFactoryOptions,
+} from './factoryOptions';
 export * from './nonStreamToStream';
 
 /**
@@ -136,219 +144,6 @@ export const CHAT_MODELS_BLOCK_LIST = [
   'dall-e',
 ];
 
-// OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
-// passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
-type LobeClientOptions = Omit<ClientOptions, 'apiKey'> & { apiKey?: string };
-type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions &
-  ModelIdMappingOptions &
-  T;
-type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
-type ChatCompletionCreateParamsWithPromptCacheKey = Omit<
-  OpenAI.ChatCompletionCreateParamsNonStreaming,
-  'reasoning_effort'
-> &
-  Pick<OpenAIExtraParams, 'prompt_cache_key'> &
-  Pick<GenerateObjectPayload, 'reasoning_effort'>;
-type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effort' | 'thinking'>;
-type ResponseCreateParamsWithPromptCacheKey = (
-  OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams
-) &
-  OpenAIExtraParams;
-// Exclude openai's own `provider` (added in openai SDK 6.45.0 as `provider?: Provider`
-// for its third-party-provider feature) — otherwise intersecting it with our
-// `provider: string` collapses to `Provider & string`, breaking every call site
-// that passes a plain provider id string.
-export type CreateImageOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
-  ModelIdMappingOptions & {
-    apiKey: string;
-    provider: string;
-  };
-
-const getGenerateObjectReasoningParams = ({
-  reasoning_effort,
-  thinking,
-}: GenerateObjectReasoningParams) => ({
-  // `thinking` is a Lobe runtime abstraction, not a generic OpenAI-compatible API field.
-  // Use it here only to suppress `reasoning_effort`; providers that support thinking
-  // must translate it via `generateObject.handlePayload`.
-  ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
-});
-
-const getGenerateObjectResponsesReasoningParams = ({
-  model,
-  reasoning_effort,
-  thinking,
-}: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPTProResponsesModel(model)) {
-    return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
-  }
-
-  if (thinking?.type === 'disabled') {
-    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
-  }
-
-  return reasoning_effort && reasoning_effort !== 'max'
-    ? { reasoning: { effort: reasoning_effort } }
-    : {};
-};
-
-// See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
-export type CreateVideoOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
-  ModelIdMappingOptions & {
-    apiKey: string;
-    provider: string;
-  };
-
-export interface CustomClientOptions<T extends Record<string, any> = any> {
-  createChatCompletionStream?: (
-    client: any,
-    payload: ChatStreamPayload,
-    instance: any,
-  ) => ReadableStream<any>;
-  createClient?: (options: ConstructorOptions<T>) => any;
-}
-
-export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = any> {
-  apiKey?: string;
-  baseURL?: string;
-  chatCompletion?: {
-    /**
-     * When set, the factory runs a pre-flight token estimate against the
-     * provided model list before dispatching to upstream. If the estimated
-     * prompt tokens strictly exceed the model's context window, the
-     * request is aborted with a structured `ExceededContextWindow` error
-     * — see .
-     *
-     * This is for providers like NVIDIA / DeepSeek where the harness does
-     * not cap `max_tokens` itself but we still want to fail fast on doomed
-     * requests instead of round-tripping to the upstream just to get a
-     * 400 back. Providers that manage `max_tokens` themselves (e.g.
-     * MiniMax via `resolveSafeMaxTokens`) still benefit because the
-     * factory's centralised error handler converts the same error class.
-     */
-    contextPreFlight?: AssertContextWithinWindowOptions & {
-      models: AiFullModelCard[];
-    };
-    excludeUsage?: boolean;
-    forceImageBase64?: boolean;
-    forceVideoBase64?: boolean;
-    handleError?: (
-      error: any,
-      options: ConstructorOptions<T>,
-    ) => Omit<ChatCompletionErrorPayload, 'provider'> | undefined;
-    handlePayload?: (
-      payload: ChatStreamPayload,
-      options: ConstructorOptions<T>,
-    ) => OpenAI.ChatCompletionCreateParamsStreaming;
-    handleStream?: (
-      stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
-      options: {
-        callbacks?: ChatStreamCallbacks;
-        inputStartAt?: number;
-        payload?: ChatPayloadForTransformStream;
-      },
-    ) => ReadableStream;
-    handleStreamBizErrorType?: (error: {
-      message: string;
-      name: string;
-    }) => ILobeAgentRuntimeErrorType | undefined;
-    handleTransformResponseToStream?: (
-      data: OpenAI.ChatCompletion,
-    ) => ReadableStream<OpenAI.ChatCompletionChunk>;
-    noUserId?: boolean;
-    /** Convert internal audio_url parts to OpenAI input_audio (WAV/MP3 only). */
-    supportsAudioInput?: boolean;
-    /**
-     * If true, route chat requests to Responses API path directly
-     */
-    useResponse?: boolean;
-    /**
-     * Allow only some models to use Responses API by simple matching.
-     * If any string appears in model id or RegExp matches, Responses API is used.
-     */
-    useResponseModels?: Array<string | RegExp>;
-  };
-  constructorOptions?: ConstructorOptions<T>;
-  createImage?: (
-    payload: CreateImagePayload,
-    options: CreateImageOptions,
-  ) => Promise<CreateImageResponse>;
-  createVideo?: (
-    payload: CreateVideoPayload,
-    options: CreateVideoOptions,
-  ) => Promise<CreateVideoResult>;
-  customClient?: CustomClientOptions<T>;
-  debug?: {
-    chatCompletion: () => boolean;
-    responses?: () => boolean;
-  };
-  errorType?: {
-    bizError: ILobeAgentRuntimeErrorType;
-    invalidAPIKey: ILobeAgentRuntimeErrorType;
-  };
-  generateObject?: {
-    /**
-     * Transform schema before sending to the provider (e.g., filter unsupported properties)
-     */
-    handleSchema?: (schema: any) => any;
-    /**
-     * Transform Chat Completions payload before sending generateObject requests to the provider.
-     */
-    handlePayload?: (
-      payload: GenerateObjectPayload,
-      requestPayload: ChatCompletionCreateParamsWithPromptCacheKey,
-      options: ConstructorOptions<T>,
-    ) => ChatCompletionCreateParamsWithPromptCacheKey;
-    /**
-     * If true, route generateObject requests to Responses API path directly
-     */
-    useResponse?: boolean;
-    /**
-     * Allow only some models to use Responses API by simple matching.
-     * If any string appears in model id or RegExp matches, Responses API is used.
-     */
-    useResponseModels?: Array<string | RegExp>;
-    /**
-     * Use tool calling to simulate structured output for providers that don't support native structured output
-     */
-    useToolsCalling?: boolean;
-  };
-  handleCreateVideoWebhook?: (
-    payload: HandleCreateVideoWebhookPayload,
-    options: CreateVideoOptions,
-  ) => Promise<HandleCreateVideoWebhookResult>;
-  handlePollVideoStatus?: (
-    inferenceId: string,
-    options: CreateVideoOptions,
-  ) => Promise<PollVideoStatusResult>;
-  models?:
-    | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
-    | {
-        transformModel?: (model: OpenAI.Model) => ChatModelCard;
-      };
-  /**
-   * Additional provider-specific model patterns that support `prompt_cache_key`.
-   * OpenAI models are handled by the factory default; other providers must opt in.
-   */
-  promptCacheKeyModels?: Array<string | RegExp>;
-  provider: string;
-  responses?: {
-    handlePayload?: (
-      payload: ChatStreamPayload,
-      options: ConstructorOptions<T>,
-    ) => ChatStreamPayload;
-    prepareRequest?: (
-      payload: ResponseCreateParamsWithPromptCacheKey,
-      options: ConstructorOptions<T>,
-    ) => {
-      headers?: Record<string, string>;
-      payload: ResponseCreateParamsWithPromptCacheKey;
-    };
-  };
-  videoGenerationCapabilities?:
-    VideoGenerationCapabilities | ((model: string) => VideoGenerationCapabilities);
-}
-
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>({
   provider,
   baseURL: DEFAULT_BASE_URL,
@@ -363,6 +158,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   promptCacheKeyModels,
   createImage: customCreateImage,
   createVideo: customCreateVideo,
+  decide: decideConfig,
   videoGenerationCapabilities,
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
   handlePollVideoStatus: customHandlePollVideoStatus,
@@ -382,6 +178,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private subscriptionChannelId?: Promise<string>;
 
     baseURL!: string;
+    decide?: LobeRuntimeAI['decide'];
     protected _options: ConstructorOptions<T>;
 
     getVideoGenerationCapabilities(model: string): VideoGenerationCapabilities {
@@ -426,6 +223,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         );
       }
       this.logPrefix = `lobe-model-runtime:${this.id}`;
+
+      if (decideConfig) {
+        this.decide = (payload, decideOptions) =>
+          createDecision(this.client, payload, decideOptions, {
+            ...decideConfig,
+            handleError: (error) => this.handleError(error),
+            modelIdMappingOptions: this.modelIdMappingOptions,
+            provider: this.id,
+          });
+      }
     }
 
     /**
@@ -619,6 +426,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const promptCacheKey = this.resolvePromptCacheKey(model, user);
 
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
+    }
+
+    private async convertGenerateObjectMessages({ messages, model }: GenerateObjectPayload) {
+      return convertOpenAIMessages(messages as any, {
+        forceImageBase64: chatCompletion?.forceImageBase64,
+        forceVideoBase64: chatCompletion?.forceVideoBase64,
+        model,
+        thoughtSignatureScope: await this.getSignatureScope(
+          this.getMappedModelId(model),
+          'thought_signature',
+          'chat_completions',
+        ),
+      });
     }
 
     private handleGenerateObjectPayload(
@@ -914,17 +734,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           options?.signal,
         );
 
-        if (responseMode === 'json') {
-          log('returning JSON response mode');
-          return Response.json(response);
-        }
-
         log('transforming non-streaming response to stream');
+        // Snapshot first: provider transform handlers may rewrite the completion in place
+        const jsonBody = responseMode === 'json' ? structuredClone(response) : undefined;
         const transformHandler =
           chatCompletion?.handleTransformResponseToStream || transformResponseToStream;
         const stream = transformHandler(response as unknown as OpenAI.ChatCompletion);
 
-        return StreamingResponse(
+        const streamingResponse = StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
                 callbacks: streamOptions.callbacks,
@@ -936,6 +753,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             headers: options?.headers,
           },
         );
+        if (jsonBody) return await respondJsonAfterStream(streamingResponse, jsonBody);
+        return streamingResponse;
       } catch (error) {
         throw this.handleError(error);
       }
@@ -1094,7 +913,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       options: GenerateObjectOptions | undefined,
       usagePayload: Parameters<typeof convertOpenAIUsage>[1],
     ) {
-      const { messages, schema, model } = payload;
+      const { schema, model } = payload;
 
       // Apply schema transformation if configured
       const processedSchema = generateObjectConfig?.handleSchema
@@ -1116,7 +935,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         this.withMappedRequestModel(
           this.handleGenerateObjectPayload(payload, {
             ...getGenerateObjectReasoningParams(payload),
-            messages,
+            messages: await this.convertGenerateObjectMessages(payload),
             model,
             ...this.resolvePromptCacheKeyParams(model, options?.user),
             tool_choice: { function: { name: tool.function.name }, type: 'function' },
@@ -1251,7 +1070,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             this.withMappedRequestModel(
               this.handleGenerateObjectPayload(payload, {
                 ...getGenerateObjectReasoningParams(payload),
-                messages,
+                messages: await this.convertGenerateObjectMessages(payload),
                 model,
                 response_format: { json_schema: processedSchema, type: 'json_schema' },
                 ...this.resolvePromptCacheKeyParams(model, options?.user),
@@ -1334,25 +1153,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
-      const log = debug(`${this.logPrefix}:textToSpeech`);
-      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
-      log(
-        'textToSpeech called with input length: %d, voice: %s',
-        payload.input?.length || 0,
-        payload.voice,
-      );
-
-      try {
-        const mp3 = await this.client.audio.speech.create(requestPayload as any, {
-          headers: options?.headers,
-          signal: options?.signal,
-        });
-        const buffer = await mp3.arrayBuffer();
-        log('generated audio with size: %d bytes', buffer.byteLength);
-        return buffer;
-      } catch (error) {
-        throw this.handleError(error);
-      }
+      return createOpenAICompatibleSpeech(this.client, payload, options, {
+        handleError: (error) => this.handleError(error),
+        logPrefix: this.logPrefix,
+        provider: this.id,
+        requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+      });
     }
 
     /**
@@ -1593,7 +1399,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         max_tokens,
         ...res
       } = responses?.handlePayload
-        ? (responses?.handlePayload(payload, this._options) as ChatStreamPayload)
+        ? (responses.handlePayload(payload, this._options) as ChatStreamPayload)
         : payload;
       const requestModel =
         this.withMappedRequestModel({ model: res.model }, usageModel).model ?? usageModel;
@@ -1841,17 +1647,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
 
       log('calling chat.completions.create for tool calling');
-      const thoughtSignatureScope = await this.getSignatureScope(
-        requestModel,
-        'thought_signature',
-        'chat_completions',
-      );
-      const msgs = await convertOpenAIMessages(messages as any, {
-        forceImageBase64: chatCompletion?.forceImageBase64,
-        forceVideoBase64: chatCompletion?.forceVideoBase64,
-        model,
-        thoughtSignatureScope,
-      });
+      const msgs = await this.convertGenerateObjectMessages(payload);
 
       const res = await this.client.chat.completions.create(
         this.withMappedRequestModel(

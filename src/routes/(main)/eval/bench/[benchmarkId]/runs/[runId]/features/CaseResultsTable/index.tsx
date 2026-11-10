@@ -2,10 +2,13 @@
 
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Badge,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   Select,
   Table,

@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 const modalConfirmMock = vi.hoisted(() => vi.fn());
 const openTopicInNewWindowMock = vi.hoisted(() => vi.fn());
@@ -161,20 +166,20 @@ describe('Conversation header action menu', () => {
     expect(copiedText).toBe('topic-1');
     expect(document.querySelector('textarea')).toBeNull();
   });
-  it('includes the desktop popup-window action for the active topic', () => {
+  it('reuses the sidebar open-in-new-window action for the active topic', () => {
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 
     const { result } = renderHook(() => useMenu());
 
     const popupItem = result.current
       .menuItems()
-      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeDefined();
     if (!isActionItem(popupItem)) {
       throw new Error('Expected popup menu item to be a clickable action item');
     }
-    expect(popupItem?.label).toBe('topic:inPopup.title');
+    expect(popupItem?.label).toBe('topic:actions.openInNewWindow');
 
     act(() => {
       popupItem?.onClick?.();
@@ -190,7 +195,7 @@ describe('Conversation header action menu', () => {
 
     const popupItem = result.current
       .menuItems()
-      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeUndefined();
   });
@@ -230,5 +235,48 @@ describe('Conversation header action menu', () => {
       threadId: undefined,
       topicId: 'topic-1',
     });
+  });
+
+  it('leads the topic-actions group with Share only when the caller provides it', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    const onShare = vi.fn();
+    const keysOf = (items: unknown[]) =>
+      items.map((item) => (isActionItem(item) ? item.key : undefined)).filter(Boolean);
+
+    const { result: personal } = renderHook(() => useMenu());
+    expect(keysOf(personal.current.menuItems())).not.toContain('share');
+
+    const { result } = renderHook(() => useMenu({ share: { disabled: true, onClick: onShare } }));
+    const items = result.current.menuItems();
+    const keys = keysOf(items);
+    expect(keys.slice(keys.indexOf('share'), keys.indexOf('share') + 2)).toEqual([
+      'share',
+      'copyWorkingDirectory',
+    ]);
+
+    const shareItem = items.find((item) => isActionItem(item) && item.key === 'share');
+    expect(shareItem).toMatchObject({ disabled: true, label: 'common:share' });
+    if (!isActionItem(shareItem)) throw new Error('Expected share action');
+    shareItem.onClick?.();
+    expect(onShare).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Favorites for the open topic beside Pin, without the hotkey', () => {
+    const { result } = renderHook(() => useMenu());
+
+    const keys = result.current
+      .menuItems()
+      .map((item) => (item && 'key' in item ? item.key : undefined));
+    expect(keys.slice(0, 2)).toEqual(['favorite', 'toggleFavorite']);
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/agent/agent-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
   });
 });

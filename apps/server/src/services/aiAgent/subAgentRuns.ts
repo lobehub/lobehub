@@ -9,7 +9,12 @@ import type {
   ThreadMetadata,
   UserInterventionConfig,
 } from '@lobechat/types';
-import { isAgentOperationInFlight, ThreadStatus, ThreadType } from '@lobechat/types';
+import {
+  isAgentOperationInFlight,
+  RequestTrigger,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
@@ -27,8 +32,8 @@ import {
   createGroupActionMemberBridgeHook,
   createSubAgentBridgeHook,
   createThreadHooks,
-  pickThreadUsageBaseline,
-  type ThreadUsageBaseline,
+  pickThreadCarryOver,
+  type ThreadCarryOver,
 } from './hooks/threadRunHooks';
 import type { InternalExecAgentParams } from './types';
 
@@ -47,6 +52,13 @@ export interface SubAgentRunDeps {
 }
 
 export interface ExecAgentThreadRunOptions {
+  /**
+   * Detached `callSubAgent({ runInBackground })` run. Its placeholder already
+   * holds the start receipt the parent read, so the thread hooks must not
+   * replace it with the answer, and nobody is listening on the parent's
+   * channel for live progress.
+   */
+  background?: boolean;
   /**
    * Override the default sub-agent completion bridge with a custom hook
    * (e.g. the group-action member bridge for isolated executeAgentTask(s)).
@@ -111,13 +123,14 @@ type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
  * previous run is still going. The final compare-and-set claim makes
  * concurrent follow-ups to one sub-agent race-safe.
  *
- * Returns the usage the thread accumulated so far; the claim and every later
- * write of this run carry it forward instead of resetting the totals.
+ * Returns what the thread carries (its spawning tool call and the usage it
+ * accumulated so far); the claim and every later write of this run carry it
+ * forward instead of resetting it.
  */
 const claimSubAgentThread = async (
   deps: SubAgentRunDeps,
   params: { agentId: string; startedAt: string; threadId: string; topicId: string },
-): Promise<{ error: string } | { thread: ThreadRow; usageBaseline: ThreadUsageBaseline }> => {
+): Promise<{ error: string } | { thread: ThreadRow; carryOver: ThreadCarryOver }> => {
   const { agentId, startedAt, threadId, topicId } = params;
   const thread = await deps.threadModel.findById(threadId);
 
@@ -153,14 +166,14 @@ const claimSubAgentThread = async (
 
   if (stillRunning) return { error: busyError };
 
-  const usageBaseline = pickThreadUsageBaseline(previousMetadata);
+  const carryOver = pickThreadCarryOver(previousMetadata);
   const claimed = await deps.threadModel.claimForRun(
     thread.id,
     { operationId: previousOperationId ?? null, status: thread.status },
-    { ...usageBaseline, startedAt },
+    { ...carryOver, startedAt },
   );
 
-  return claimed ? { thread, usageBaseline } : { error: busyError };
+  return claimed ? { thread, carryOver } : { error: busyError };
 };
 
 /**
@@ -201,7 +214,7 @@ export const execAgentThreadRun = async (
   const startedAt = new Date().toISOString();
   const continueThreadId = 'threadId' in params ? params.threadId : undefined;
   let thread: ThreadRow;
-  let usageBaseline: ThreadUsageBaseline = {};
+  let carryOver: ThreadCarryOver = {};
 
   if (continueThreadId) {
     // 1-2. Continue an earlier callSubAgent thread: claim it (→ processing).
@@ -238,7 +251,7 @@ export const execAgentThreadRun = async (
     }
 
     thread = claim.thread;
-    usageBaseline = claim.usageBaseline;
+    carryOver = claim.carryOver;
     log('%s: continuing thread %s', options.logScope, thread.id);
   } else {
     // 1. Create Thread for isolated agent execution
@@ -258,9 +271,14 @@ export const execAgentThreadRun = async (
     thread = created;
     log('%s: created thread %s', options.logScope, thread.id);
 
+    // The spawning tool call marks the thread as a sub-agent in the UI; it rides
+    // along on every later metadata write.
+    const sourceToolCallId = 'sourceToolCallId' in params ? params.sourceToolCallId : undefined;
+    if (sourceToolCallId) carryOver = { sourceToolCallId };
+
     // 2. Update Thread status to processing with startedAt timestamp
     await deps.threadModel.update(thread.id, {
-      metadata: { startedAt },
+      metadata: { ...carryOver, startedAt },
       status: ThreadStatus.Processing,
     });
   }
@@ -276,7 +294,8 @@ export const execAgentThreadRun = async (
     startedAt,
     hasCompletionBridge ? undefined : parentMessageId,
     options.logScope,
-    usageBaseline,
+    carryOver,
+    { updateSourceMessage: !options.background },
   );
   // For the virtual sub-agent path, also register the completion bridge that
   // backfills the parent's placeholder tool message and resumes the parked
@@ -300,10 +319,20 @@ export const execAgentThreadRun = async (
   // original entry point (chat / bot / cli / eval / …). Lookup is best-effort
   // — a missing parent row falls back to undefined and the column stays null.
   let inheritedTrigger: string | undefined;
+  // A tab that dispatches a direct @mention passes its own client-local
+  // operation id, which has no server row. The child must not record it as its
+  // parent: gateway authorization only admits a child whose recorded parent is
+  // a live server run, so the child would fail with UNAUTHORIZED.
+  let recordedParentOperationId = parentOperationId;
   if (parentOperationId) {
     try {
       const parentOp = await deps.agentOperationModel.findById(parentOperationId);
       inheritedTrigger = parentOp?.trigger ?? undefined;
+      if (!parentOp) {
+        recordedParentOperationId = undefined;
+        // Only the chat UI dispatches from a tab-local operation.
+        inheritedTrigger = RequestTrigger.Chat;
+      }
     } catch (error) {
       log('%s: failed to read parent operation trigger: %O', options.logScope, error);
     }
@@ -314,9 +343,17 @@ export const execAgentThreadRun = async (
   // members are excluded — their whole stream is already mirrored onto the
   // supervisor's channel via `mirrorToOperationId`.
   const subAgentProgress =
-    options.resumeParentOnComplete && parentOperationId && options.orchestrationRole !== 'member'
+    options.resumeParentOnComplete &&
+    parentOperationId &&
+    options.orchestrationRole !== 'member' &&
+    !options.background
       ? { parentOperationId, toolMessageId: parentMessageId }
       : undefined;
+
+  // Eval inheritance (see `ExecVirtualSubAgentParams.eval`): the child keeps
+  // the attempt's prompt context, runtime and step cap, and its dialogue stays
+  // out of Agent Signal like the parent's.
+  const inheritedEval = 'eval' in params ? params.eval : undefined;
 
   const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
     groupId,
@@ -327,6 +364,7 @@ export const execAgentThreadRun = async (
     isSubAgent: options.isSubAgent,
     orchestrationRole: options.orchestrationRole,
     subAgentProgress,
+    ...(inheritedEval && { suppressSignal: true }),
     threadId: thread.id,
     topicId,
   };
@@ -343,12 +381,15 @@ export const execAgentThreadRun = async (
       autoStart: true,
       chatConfigOverride: options.chatConfig,
       deviceId: options.deviceId,
+      ...(inheritedEval?.context && { evalContext: inheritedEval.context }),
+      ...(inheritedEval?.runtime && { evalRuntime: inheritedEval.runtime }),
       hooks,
       ...(options.llmExecutor && { llmExecutor: options.llmExecutor }),
       localDeviceId: options.localDeviceId,
+      ...(inheritedEval?.maxSteps && { maxSteps: inheritedEval.maxSteps }),
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,
-      parentOperationId,
+      parentOperationId: recordedParentOperationId,
       prompt: instruction,
       provider: options.provider,
       trigger: inheritedTrigger,
@@ -360,7 +401,7 @@ export const execAgentThreadRun = async (
     await deps.threadModel
       .update(thread.id, {
         metadata: {
-          ...usageBaseline,
+          ...carryOver,
           completedAt: new Date().toISOString(),
           error: String(error),
           startedAt,
@@ -386,8 +427,10 @@ export const execAgentThreadRun = async (
   );
 
   // 5. Store operationId in Thread metadata
-  await deps.threadModel.update(thread.id, {
-    metadata: { ...usageBaseline, operationId: result.operationId, startedAt },
+  await deps.threadModel.attachRunOperation(thread.id, {
+    ...carryOver,
+    operationId: result.operationId,
+    startedAt,
   });
 
   // 6. If operation failed to start, update thread status
@@ -395,7 +438,7 @@ export const execAgentThreadRun = async (
     const completedAt = new Date().toISOString();
     await deps.threadModel.update(thread.id, {
       metadata: {
-        ...usageBaseline,
+        ...carryOver,
         completedAt,
         duration: Date.now() - new Date(startedAt).getTime(),
         error: result.error,
@@ -436,6 +479,9 @@ export const execAgentThreadRun = async (
     operationId: result.operationId,
     success: result.success ?? false,
     threadId: thread.id,
+    // The child's own gateway ticket: a tab that dispatched it has no server
+    // run whose channel would carry the child's progress, so it subscribes here.
+    ...(result.token && { token: result.token }),
   };
 };
 

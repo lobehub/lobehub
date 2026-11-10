@@ -1,20 +1,19 @@
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { agentDocuments, documents } from '../../../schemas';
+import { nonNull } from '../../utils/rows';
 import type { AgentDocument } from '../types';
 import { agentDocOwnership, type AgentDocumentContext } from './context';
 import { findByDocumentId } from './queries';
 import type { AgentDocumentQueryOptions } from './types';
 import { buildDeletedAtFilters, normalizeListOffset, toAgentDocument } from './utils';
 
-export async function listByParentIds(
+async function listByParentIds(
   ctx: AgentDocumentContext,
   agentId: string,
   parentIds: string[],
   options?: AgentDocumentQueryOptions,
 ): Promise<AgentDocument[]> {
-  if (parentIds.length === 0) return [];
-
   const results = await ctx.db
     .select({ doc: documents, settings: agentDocuments })
     .from(agentDocuments)
@@ -60,7 +59,8 @@ export async function countChildrenByParentIds(
     .groupBy(documents.parentId);
 
   return new Map(
-    rows.flatMap((row) => (row.parentId ? [[row.parentId, Number(row.count)] as const] : [])),
+    // The WHERE clause (inArray / isNotNull on parent_id) never yields a NULL parent.
+    rows.map((row) => [nonNull(row.parentId, 'documents.parent_id'), Number(row.count)] as const),
   );
 }
 

@@ -5,6 +5,7 @@ import { Option } from 'commander';
 import { createPublicLambdaClient } from '../../../api/client';
 import { outputJson } from '../../../utils/format';
 import { installAction, type InstallOptions, withInstallOptions } from '../install';
+import { renderReportAction, withRenderReportOptions } from '../local/render';
 import { DECISIONS } from '../utils';
 import {
   evidenceDeleteAction,
@@ -115,6 +116,14 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
         'Ingest a local agent-testing report (result.json + report.md + proposal.md + assets) as a new round',
       ),
   ).action(ingestReportAction);
+
+  withRenderReportOptions(
+    run
+      .command('render <reportDir>')
+      .description(
+        'Render a local round and every earlier round of its acceptance into one offline report.html — no login, nothing uploaded',
+      ),
+  ).action(renderReportAction);
 
   withRunCreateOptions(
     run.command('create').description('Create a standalone round (verification session)'),

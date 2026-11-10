@@ -5,7 +5,11 @@ import type {
   GroupedTopic,
   TimeGroupId,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import {
+  agentDisplayName,
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+} from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -14,7 +18,8 @@ import isYesterday from 'dayjs/plugin/isYesterday';
 dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 
-const getTopicGroupId = (timestamp: number): TimeGroupId => {
+/** Time bucket of a timestamp: today, yesterday, this week, this month, a month or a year. */
+export const getTimeGroupId = (timestamp: number): TimeGroupId => {
   const date = dayjs(timestamp);
   const now = dayjs();
 
@@ -47,8 +52,8 @@ const getTopicGroupId = (timestamp: number): TimeGroupId => {
   return `${date.year()}`;
 };
 
-// Ensure group sorting
-const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
+/** Orders time buckets newest first: the fixed buckets, then months and years. */
+export const sortTimeGroups = <T extends { id: string }>(groups: T[]): T[] => {
   const orderMap = new Map<string, number>([
     ['today', 0],
     ['yesterday', 1],
@@ -93,7 +98,7 @@ const groupTopicsByField = (
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(getTopicSortTime(topic, field));
+    const groupId = getTimeGroupId(getTopicSortTime(topic, field));
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
@@ -107,7 +112,7 @@ const groupTopicsByField = (
     id,
   }));
 
-  return sortGroups(result);
+  return sortTimeGroups(result);
 };
 
 export const groupTopicsByTime = (topics: ChatTopic[]) => groupTopicsByField(topics, 'createdAt');
@@ -199,18 +204,31 @@ export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string 
  *   deliberate, not inferred from a directory), then directory-derived groups,
  *   then `no-project`; each tier keeps most-recent-activity order.
  * - Basenames for unique projects and distinguishing path suffixes for collisions.
+ *   The same folder on several machines is one name; each of those groups
+ *   carries its `deviceId` so the renderer can tell them apart.
+ *
+ * `localDeviceIds` are the device identities this machine is registered
+ * under (its personal device first, then its workspace device): a folder used
+ * through any of them is the same folder on disk, so it forms one group keyed
+ * by the first id.
  */
 export const groupTopicsByProject = (
   topics: ChatTopic[],
   field: 'createdAt' | 'updatedAt',
+  { localDeviceIds }: { localDeviceIds?: readonly string[] } = {},
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const groupsMap = new Map<string, { children: ChatTopic[]; paths: Set<string> }>();
+  const groupsMap = new Map<
+    string,
+    { children: ChatTopic[]; deviceId?: string; paths: Set<string> }
+  >();
+  const canonicalDeviceId = (deviceId: string | undefined) =>
+    deviceId && localDeviceIds?.includes(deviceId) ? localDeviceIds[0] : deviceId;
 
   for (const topic of topics) {
     const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
-    const deviceId = topic.metadata?.boundDeviceId;
+    const deviceId = canonicalDeviceId(topic.metadata?.boundDeviceId);
     const id = topic.projectId
       ? `${PROJECT_ID_GROUP_PREFIX}${topic.projectId}`
       : topic.projectWorkingDirectoryId
@@ -225,6 +243,8 @@ export const groupTopicsByProject = (
     } else {
       groupsMap.set(id, {
         children: [topic],
+        // Only a folder group is tied to one machine by its id.
+        deviceId: id.startsWith(PROJECT_GROUP_PREFIX) ? deviceId : undefined,
         paths: normalized ? new Set([normalized]) : new Set(),
       });
     }
@@ -236,10 +256,20 @@ export const groupTopicsByProject = (
   }
 
   // Count suffixes once so an expanding project list does not compare every pair
-  // of paths. A merged project group contributes each of its directories once.
+  // of paths. Each distinct path counts once, however many groups show it: a
+  // folder seen on several machines is told apart by its device, and a project
+  // registering the same folder by its project name — not by a longer path.
   const suffixCounts = new Map<string, number>();
+  const folderGroupsByPath = new Map<string, number>();
+  for (const [id, { paths }] of groupsMap) {
+    if (!id.startsWith(PROJECT_GROUP_PREFIX)) continue;
+    for (const path of paths) folderGroupsByPath.set(path, (folderGroupsByPath.get(path) ?? 0) + 1);
+  }
+  const countedPaths = new Set<string>();
   for (const { paths } of groupsMap.values()) {
     for (const path of paths) {
+      if (countedPaths.has(path)) continue;
+      countedPaths.add(path);
       const segments = path.split(/[/\\]+/).filter(Boolean);
       for (let depth = 1; depth <= segments.length; depth++) {
         const suffix = segments.slice(-depth).join('/');
@@ -248,7 +278,7 @@ export const groupTopicsByProject = (
     }
   }
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
-    ([id, { children, paths }]) => {
+    ([id, { children, deviceId, paths }]) => {
       // A merged project group spans directories; its most recently active
       // directory names the group. Groups without any path stay title-less and
       // let the renderer resolve the project name from its directory registry.
@@ -258,8 +288,11 @@ export const groupTopicsByProject = (
           : (children
               .map((topic) => getTopicWorkingDirectorySourcePath(topic))
               .find((path): path is string => !!path) ?? [...paths][0]);
+      const sharesPathWithAnotherMachine =
+        !!deviceId && !!primaryPath && (folderGroupsByPath.get(primaryPath) ?? 0) > 1;
       return {
         children,
+        ...(sharesPathWithAnotherMachine && { deviceId }),
         id,
         title:
           id === NO_PROJECT_GROUP_ID || !primaryPath
@@ -314,9 +347,10 @@ interface AgentAttributedTopic extends ChatTopic {
  *   multiple agents (e.g. the project topic list).
  *
  * Returns:
- * - `agent:{agentId}` groups sorted by most recent activity, titled from the
- *   first row's agent metadata, and a title-less `no-agent` bucket for rows
- *   without attribution (the renderer names those from its agent context).
+ * - `agent:{agentId}` groups sorted by most recent activity, titled with the
+ *   first row's agent display name (name, else title), and a title-less
+ *   `no-agent` bucket for rows without attribution (the renderer names those
+ *   from its agent context).
  */
 export const groupTopicsByAgent = (
   topics: AgentAttributedTopic[],
@@ -343,7 +377,10 @@ export const groupTopicsByAgent = (
     .map(([id, children]) => ({
       children,
       id,
-      title: children[0]?.agentTitle ?? children[0]?.agentName ?? undefined,
+      title: agentDisplayName({
+        name: children[0]?.agentName,
+        title: children[0]?.agentTitle,
+      }),
     }))
     .sort((a, b) => {
       const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
@@ -379,28 +416,42 @@ export interface TopicDeviceDirectory {
  *   `directories`.
  *
  * Returns:
- * - `device:{deviceId}` groups sorted by most recent activity, and a
+ * - `device:{deviceId}` groups sorted by most recent activity (this machine's
+ *   identities share the `device:` group of its first `localDeviceIds` entry), and a
  *   title-less `no-device` bucket for rows without any device attribution.
  *   Groups carry no title — the renderer names them from its directory and
  *   device registries.
  */
+/**
+ * The device a topic runs on: an explicit `metadata.boundDeviceId` wins, then
+ * the device of its project working directory. Shared by device grouping and
+ * the project sidebar's device filter so both attribute topics the same way.
+ */
+export const createTopicDeviceResolver = (directories?: ReadonlyArray<TopicDeviceDirectory>) => {
+  const deviceIdByDirectoryId = new Map(
+    (directories ?? []).map((directory) => [directory.id, directory.deviceId]),
+  );
+  return (topic: ChatTopic): string | undefined =>
+    topic.metadata?.boundDeviceId ??
+    (topic.projectWorkingDirectoryId
+      ? (deviceIdByDirectoryId.get(topic.projectWorkingDirectoryId) ?? undefined)
+      : undefined);
+};
+
 export const groupTopicsByDevice = (
   topics: ChatTopic[],
   field: 'createdAt' | 'updatedAt',
   directories?: ReadonlyArray<TopicDeviceDirectory>,
+  /** This machine's device identities (personal first): one machine, one group. */
+  { localDeviceIds }: { localDeviceIds?: readonly string[] } = {},
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const deviceIdByDirectoryId = new Map(
-    (directories ?? []).map((directory) => [directory.id, directory.deviceId]),
-  );
+  const resolveDeviceId = createTopicDeviceResolver(directories);
   const groupsMap = new Map<string, ChatTopic[]>();
   for (const topic of topics) {
-    const deviceId =
-      topic.metadata?.boundDeviceId ??
-      (topic.projectWorkingDirectoryId
-        ? deviceIdByDirectoryId.get(topic.projectWorkingDirectoryId)
-        : undefined);
+    const resolved = resolveDeviceId(topic);
+    const deviceId = resolved && localDeviceIds?.includes(resolved) ? localDeviceIds[0] : resolved;
     const id = deviceId ? `${DEVICE_GROUP_PREFIX}${deviceId}` : NO_DEVICE_GROUP_ID;
     const existing = groupsMap.get(id);
     if (existing) {
@@ -458,7 +509,7 @@ export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
  * server can't see) or persisted as `running` lands in `running`; then the
  * persisted status, defaulting to `active`.
  */
-const resolveStatusBucket = (
+export const resolveStatusBucket = (
   topic: ChatTopic,
   loadingTopicIds?: ReadonlySet<string>,
 ): TopicStatusBucket => {
@@ -503,4 +554,44 @@ export const groupTopicsByStatus = (
     children: groupsMap.get(status)!,
     id: status,
   }));
+};
+
+/** Status buckets a list can be narrowed to; archived work has its own toggle. */
+export const TOPIC_STATUS_FILTERS = ['pending', 'running', 'scheduled', 'active'] as const;
+export type TopicStatusFilter = (typeof TOPIC_STATUS_FILTERS)[number];
+
+/** `none` keeps the topics no device is attributed to. */
+export type TopicDeviceFilter = string | 'none';
+
+export interface TopicListFilter {
+  device?: TopicDeviceFilter;
+  status?: TopicStatusFilter;
+}
+
+/**
+ * Narrow a topic list by status bucket and device, using the same attribution
+ * as status and device grouping. An empty filter returns the list unchanged.
+ */
+export const filterTopics = (
+  topics: ChatTopic[],
+  filter: TopicListFilter,
+  {
+    directories,
+    loadingTopicIds,
+  }: {
+    directories?: ReadonlyArray<TopicDeviceDirectory>;
+    loadingTopicIds?: ReadonlySet<string>;
+  } = {},
+): ChatTopic[] => {
+  const { device, status } = filter;
+  if (!device && !status) return topics;
+  const resolveDeviceId = createTopicDeviceResolver(directories);
+  return topics.filter((topic) => {
+    if (status && resolveStatusBucket(topic, loadingTopicIds) !== status) return false;
+    if (device) {
+      const deviceId = resolveDeviceId(topic);
+      if (device === 'none' ? !!deviceId : deviceId !== device) return false;
+    }
+    return true;
+  });
 };

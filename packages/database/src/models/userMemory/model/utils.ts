@@ -36,7 +36,7 @@ export const isPGliteDatabase = (db: LobeChatDatabase) => {
     }
   ).$client;
 
-  return 'waitReady' in (client ?? {}) && 'dataDir' in (client ?? {});
+  return !!client && 'waitReady' in client && 'dataDir' in client;
 };
 
 export const buildTextSearchCondition = (params: {
@@ -68,5 +68,3 @@ export const buildTextSearchCondition = (params: {
 
   return conditions.length > 0 ? or(...conditions) : undefined;
 };
-
-const _pickSingleSearchType = (types?: string[]) => (types?.length === 1 ? types[0] : undefined);

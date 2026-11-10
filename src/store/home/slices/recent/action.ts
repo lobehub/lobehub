@@ -9,7 +9,7 @@ import {
 } from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { fileService } from '@/services/file';
-import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
+import { RECENT_CONVERSATION_TYPES, RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import type { HomeStore } from '@/store/home/store';
@@ -18,25 +18,19 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type RecentEntityRef, toRecentEntityRef } from './initialState';
 import {
-  type RecentFileCard,
-  recentFileListResource,
+  conversationRecentResource,
+  DOCS_HOME_LIMIT,
+  docsHomeListResource,
+  type DocsHomeRow,
+  type DocsHomeTab,
   recentListResource,
-  type RecentPageCard,
-  recentPageListResource,
-  type ResourceRecentParams,
-  toPersistedRecentFiles,
-  toRecentFileCard,
-  toRecentPageCard,
+  toDocsHomeRow,
 } from './projection';
 
 const n = setNamespace('recent');
 
 /** Rows in the "all recents" drawer. */
 export const ALL_RECENTS_LIMIT = 50;
-/** Cards in the resource home "Recent files" grid. */
-export const RESOURCE_RECENT_FILES_LIMIT = 8;
-/** Cards in the resource home "Recent pages" grid. */
-export const RESOURCE_RECENT_PAGES_LIMIT = 6;
 
 interface RenameRecentParams {
   id: string;
@@ -76,10 +70,10 @@ export class RecentActionImpl {
   readonly #set: Setter;
   /** Server writes per entity run in order; the newest optimistic title stays on top. */
   readonly #renameQueues = new Map<RecentEntityRef, Promise<unknown>>();
+  readonly #conversationRecents;
+  readonly #docsHome;
   readonly #recentList;
   readonly #recents;
-  readonly #resourceRecentFiles;
-  readonly #resourceRecentPages;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -93,29 +87,25 @@ export class RecentActionImpl {
       stateKey: 'recentListReplica',
       view: recordLens<HomeStore, RecentItem[]>('recentListMap'),
     });
-    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList]);
-    this.#resourceRecentFiles = createReplicaSlice(recentFileListResource, {
-      actionPrefix: n('resourceRecentFiles'),
-      fetcher: async ({ visibility }) =>
-        (await fileService.getRecentFiles(RESOURCE_RECENT_FILES_LIMIT, visibility)).map(
-          toRecentFileCard,
-        ),
+    this.#conversationRecents = createReplicaSlice(conversationRecentResource, {
+      actionPrefix: n('conversationRecents'),
+      entity: recentEntity,
+      // Topics only, with previews: the IM list shows the latest reply per row.
+      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_CONVERSATION_TYPES, true),
       get,
       set,
-      stateKey: 'resourceRecentFilesReplica',
-      toPersisted: toPersistedRecentFiles,
-      view: recordLens<HomeStore, RecentFileCard[]>('resourceRecentFilesMap'),
+      stateKey: 'conversationRecentReplica',
+      view: recordLens<HomeStore, RecentItem[]>('conversationRecentMap'),
     });
-    this.#resourceRecentPages = createReplicaSlice(recentPageListResource, {
-      actionPrefix: n('resourceRecentPages'),
-      fetcher: async ({ visibility }) =>
-        (await fileService.getRecentPages(RESOURCE_RECENT_PAGES_LIMIT, visibility)).map(
-          toRecentPageCard,
-        ),
+    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList, this.#conversationRecents]);
+    this.#docsHome = createReplicaSlice(docsHomeListResource, {
+      actionPrefix: n('docsHome'),
+      fetcher: async ({ tab }) =>
+        (await fileService.getDocsHomeItems(tab, DOCS_HOME_LIMIT)).map(toDocsHomeRow),
       get,
       set,
-      stateKey: 'resourceRecentPagesReplica',
-      view: recordLens<HomeStore, RecentPageCard[]>('resourceRecentPagesMap'),
+      stateKey: 'docsHomeReplica',
+      view: recordLens<HomeStore, DocsHomeRow[]>('docsHomeMap'),
     });
   }
 
@@ -146,7 +136,7 @@ export class RecentActionImpl {
 
   /** Revalidate every recents query of the active identity. */
   refreshRecents = async (): Promise<void> => {
-    await this.#recentList.revalidate();
+    await Promise.all([this.#recentList.revalidate(), this.#conversationRecents.revalidate()]);
   };
 
   /**
@@ -174,13 +164,21 @@ export class RecentActionImpl {
   useFetchAllRecents = (open: boolean): ReplicaSyncResult =>
     this.#recentList.useSync({ limit: ALL_RECENTS_LIMIT }, { enabled: open });
 
-  /** Resource home "Recent files". Read them with `homeRecentSelectors.resourceFiles`. */
-  useFetchResourceRecentFiles = (params: ResourceRecentParams): ReplicaSyncResult =>
-    this.#resourceRecentFiles.useSync(params);
+  /**
+   * Latest topic per owner for the IM conversation list. Read the rows with
+   * `homeRecentSelectors.conversationRecents`.
+   */
+  useFetchConversationRecents = (limit: number = ALL_RECENTS_LIMIT): ReplicaSyncResult =>
+    this.#conversationRecents.useSync({ limit }, { enabled: true });
 
-  /** Resource home "Recent pages". Read them with `homeRecentSelectors.resourcePages`. */
-  useFetchResourceRecentPages = (params: ResourceRecentParams): ReplicaSyncResult =>
-    this.#resourceRecentPages.useSync(params);
+  /** Refetch every loaded Docs home tab, e.g. after a page or file was added. */
+  refreshDocsHome = async (): Promise<void> => {
+    await this.#docsHome.revalidate();
+  };
+
+  /** The Docs home list for one tab. Read it with `homeRecentSelectors.docsHome`. */
+  useFetchDocsHome = (tab: DocsHomeTab, enabled: boolean = true): ReplicaSyncResult =>
+    this.#docsHome.useSync({ tab }, { enabled });
 
   /**
    * Sidebar recents. Asks for `limit + 1` rows to know whether "view all" is

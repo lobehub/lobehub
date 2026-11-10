@@ -10,7 +10,7 @@ import {
 } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
-import { mcpService } from '@/services/mcp';
+import { type LocalMcpTool, mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
@@ -89,11 +89,14 @@ const fetchAgentBoundConnectorList = (): Promise<AgentBoundConnector[]> =>
 const fetchAgentConnectorList = ({ agentId }: { agentId: string }): Promise<ConnectorWithTools[]> =>
   lambdaClient.connector.listByAgent.query({ agentId }) as unknown as Promise<ConnectorWithTools[]>;
 
+/** The base connector list's entry among the server-confirmed lists */
+const BASE_LIST_KEY = '#base';
+
 export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new ConnectorActionImpl(set, get, _api);
 
 /**
- * The connector slice is a set of `@lobechat/replica` resources: the base
+ * The connector slice is a set of `local-replica` resources: the base
  * list, the agent-bound aggregate and the per-agent buckets. The store fields
  * keep their historical shape (`connectors`, `agentBoundConnectors`,
  * `agentConnectors`) as the replica views, so every selector and consumer is
@@ -105,6 +108,9 @@ export class ConnectorActionImpl {
   /** One connector lives in the base list, the aggregate and per-agent buckets. */
   readonly #connectorRows;
   readonly #connectors;
+  /** `${scope}|${list}` entries the server answered in this session (not painted from storage) */
+  readonly #confirmed = new Set<string>();
+  readonly #confirming = new Map<string, Promise<void>>();
   readonly #get: () => ToolStore;
   readonly #set: Setter;
 
@@ -166,6 +172,11 @@ export class ConnectorActionImpl {
     this.#connectors.ensureScope(scope);
     this.#agentBoundConnectors.ensureScope(scope);
     this.#agentConnectors.ensureScope(scope);
+    // The lists were dropped with the scope, so were their confirmations:
+    // coming back to a scope must load its lists from the server again
+    for (const id of this.#confirmed) {
+      if (!id.startsWith(`${scope}|`)) this.#confirmed.delete(id);
+    }
   };
 
   /**
@@ -209,8 +220,12 @@ export class ConnectorActionImpl {
   fetchConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
     const pending = this.#connectors.fetch(LIST_PARAMS, { fresh: true });
-    if (!this.#get().isConnectorsInit) await this.#connectors.hydrate(LIST_PARAMS, scope);
-    await pending;
+    // Awaited together, so a request that fails while storage paints is still handled
+    const [, result] = await Promise.all([
+      this.#get().isConnectorsInit ? undefined : this.#connectors.hydrate(LIST_PARAMS, scope),
+      pending,
+    ]);
+    if (result.applied) this.#confirmed.add(`${scope}|${BASE_LIST_KEY}`);
   };
 
   /**
@@ -220,9 +235,18 @@ export class ConnectorActionImpl {
    * (delete / sync / permission reset) updates that list too. On base-only
    * pages `isAgentBoundInit` is false, so this stays a single query.
    */
+  /** Agents whose own connectors are loaded, so every write keeps them current. */
+  #loadedAgentIds = (): string[] => {
+    const init = this.#get().agentConnectorsInit;
+    return Object.keys(init).filter((agentId) => init[agentId]);
+  };
+
   #refreshConnectorLists = async (): Promise<void> => {
     const tasks = [this.fetchConnectors()];
     if (this.#get().isAgentBoundInit) tasks.push(this.fetchAgentBoundConnectors());
+    // The per-agent lists decide what a view's tool call needs (approval,
+    // availability), so they must not keep a connector's old state either
+    for (const agentId of this.#loadedAgentIds()) tasks.push(this.fetchAgentConnectors(agentId));
     await Promise.all(tasks);
   };
 
@@ -249,9 +273,58 @@ export class ConnectorActionImpl {
     const scope = cacheScope.get();
     const params = { agentId };
     const pending = this.#agentConnectors.fetch(params, { fresh: true });
-    if (!this.#get().agentConnectorsInit[agentId])
-      await this.#agentConnectors.hydrate(params, scope);
-    await pending;
+    // Awaited together, so a request that fails while storage paints is still handled
+    const [, result] = await Promise.all([
+      this.#get().agentConnectorsInit[agentId]
+        ? undefined
+        : this.#agentConnectors.hydrate(params, scope),
+      pending,
+    ]);
+    if (result.applied) this.#confirmed.add(`${scope}|${agentId}`);
+  };
+
+  /**
+   * Whether the base connector list (and `agentId`'s own, if given) came from
+   * the server in this cache scope. A list painted from storage is not: its
+   * permissions may be stale, so nothing that authorizes a call may trust it.
+   */
+  isConnectorListConfirmed = (agentId?: string): boolean => {
+    const scope = cacheScope.get();
+    return (
+      this.#confirmed.has(`${scope}|${BASE_LIST_KEY}`) &&
+      (!agentId || this.#confirmed.has(`${scope}|${agentId}`))
+    );
+  };
+
+  /**
+   * Load the connector lists from the server unless this cache scope already
+   * has, for callers that resolve an identifier the way an agent's runs do and
+   * act on what they find (a view's tool-call policy, its resource read): the
+   * base list, and `agentId`'s own tools if given. Joins a load in flight.
+   *
+   * `revalidate` loads them even when confirmed, for a caller that authorizes
+   * by them: a permission may have changed since, in another tab or by another
+   * workspace member.
+   */
+  ensureConfirmedConnectors = async (
+    agentId?: string,
+    { revalidate = false }: { revalidate?: boolean } = {},
+  ): Promise<void> => {
+    const confirm = (key: string, load: () => Promise<void>) => {
+      const id = `${cacheScope.get()}|${key}`;
+      if (!revalidate && this.#confirmed.has(id)) return;
+      let loading = this.#confirming.get(id);
+      if (!loading) {
+        loading = load().finally(() => this.#confirming.delete(id));
+        this.#confirming.set(id, loading);
+      }
+      return loading;
+    };
+
+    await Promise.all([
+      confirm(BASE_LIST_KEY, this.fetchConnectors),
+      agentId ? confirm(agentId, () => this.fetchAgentConnectors(agentId)) : undefined,
+    ]);
   };
 
   /** Copy a user connector into an agent-owned, independently editable row. */
@@ -312,7 +385,7 @@ export class ConnectorActionImpl {
   /**
    * Begin the OAuth authorization-code flow for a custom connector and return
    * the authorize URL for the caller to open in a popup. Resolves the client
-   * via pre-registration or DCR on the server.
+   * on the server: pre-registration, a Client ID Metadata Document, or DCR.
    */
   startConnectorOAuth = async (id: string): Promise<string> => {
     const { authorizationUrl } = await lambdaClient.connector.startOAuth.mutate({ id });
@@ -398,16 +471,19 @@ export class ConnectorActionImpl {
     const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
     if (!isStdio && !isLocalHttp) return false;
 
-    let api: Array<{ description?: string; name: string; parameters?: Record<string, unknown> }>;
+    // The full tool list, not a manifest: a manifest leaves out view-only
+    // tools, yet a view's call must find its tool synced.
+    let tools: LocalMcpTool[];
     if (isStdio) {
       if (!detail.mcpStdioConfig?.command) throw new Error('Connector is missing stdio config');
-      const manifest = await mcpService.getStdioMcpServerManifest({
-        args: detail.mcpStdioConfig.args ?? [],
-        command: detail.mcpStdioConfig.command,
-        env: detail.mcpStdioConfig.env ?? undefined,
-        name: detail.identifier,
+      tools = await mcpService.listLocalMcpTools({
+        stdio: {
+          args: detail.mcpStdioConfig.args ?? [],
+          command: detail.mcpStdioConfig.command,
+          env: detail.mcpStdioConfig.env ?? undefined,
+          name: detail.identifier,
+        },
       });
-      api = manifest.api ?? [];
     } else {
       const credentials = detail.credentials;
       const auth =
@@ -423,21 +499,18 @@ export class ConnectorActionImpl {
       const customHeaders = detail.metadata?.customHeaders as Record<string, string> | undefined;
       const headers =
         headerCreds || customHeaders ? { ...headerCreds, ...customHeaders } : undefined;
-      const manifest = await mcpService.getStreamableMcpServerManifest({
-        auth,
-        headers,
-        identifier: detail.identifier,
-        url: detail.mcpServerUrl!,
+      tools = await mcpService.listLocalMcpTools({
+        http: { auth, headers, name: detail.identifier, url: detail.mcpServerUrl! },
       });
-      api = manifest.api ?? [];
     }
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
-      tools: api.map((a) => ({
-        description: a.description,
-        inputSchema: a.parameters,
-        toolName: a.name,
+      tools: tools.map((tool) => ({
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        toolName: tool.name,
+        visibility: tool.visibility,
       })),
     });
     return true;
@@ -515,17 +588,22 @@ export class ConnectorActionImpl {
         tools: c.tools.map((t) => (t.id === toolId ? { ...t, permission } : t)),
       }));
 
-    const base = this.#connectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools);
-    const bound = this.#agentBoundConnectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools);
+    const overlays = [
+      this.#connectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools),
+      this.#agentBoundConnectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools),
+      // A loaded agent list may hold the same tool, and a view's tool call
+      // reads its permission there
+      ...this.#loadedAgentIds().map((agentId) =>
+        this.#agentConnectors.beginOptimistic(agentId, patchTools),
+      ),
+    ];
 
     try {
       await lambdaClient.connector.updateToolPermission.mutate({ permission, toolId });
-      base.commit();
-      bound.commit();
+      for (const overlay of overlays) overlay.commit();
     } catch {
       // Roll back the overlays, then rebuild from the server.
-      base.rollback();
-      bound.rollback();
+      for (const overlay of overlays) overlay.rollback();
       await this.#refreshConnectorLists();
     }
   };

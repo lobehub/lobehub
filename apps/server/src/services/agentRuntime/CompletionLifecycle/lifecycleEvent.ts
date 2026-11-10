@@ -1,10 +1,12 @@
 /**
  * The lifecycle event payload every completion consumer receives.
  */
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 
 import {
   formatErrorForState,
+  readDispatchErrorContext,
   readErrorBudgetContext,
 } from '@/server/modules/AgentRuntime/formatErrorForState';
 
@@ -106,11 +108,12 @@ export function buildLifecycleEvent(
       errorBudget: readErrorBudgetContext(formattedError),
       errorHeterogeneous: readHeterogeneousErrorContext(formattedError),
       errorDetail: state?.error,
+      errorDispatch: readDispatchErrorContext(formattedError),
       errorMessage: extractErrorMessage(state?.error) || String(state?.error || ''),
       errorType: formattedError?.type === undefined ? undefined : String(formattedError.type),
       finalState: state,
       lastAssistantContent,
-      llmCalls: state?.usage?.llm?.apiCalls,
+      llmCalls: getLlmCallCount(state),
       operationId,
       reason,
       status: state?.status || reason,

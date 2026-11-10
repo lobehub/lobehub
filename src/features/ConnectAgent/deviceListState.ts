@@ -1,3 +1,5 @@
+import type { DeviceListItem } from '@lobechat/types';
+
 export type DeviceListState = 'empty' | 'error' | 'loading' | 'ready';
 
 interface GetDeviceListStateOptions {
@@ -24,3 +26,10 @@ export const getDeviceListState = ({
   if (!isConfirmed) return error ? 'error' : 'loading';
   return 'empty';
 };
+
+/**
+ * Whether the picker would list this device: inside a workspace only the
+ * workspace's own devices are connectable.
+ */
+export const isListableDevice = (device: DeviceListItem, restrictToWorkspace: boolean) =>
+  !restrictToWorkspace || device.scope === 'workspace';

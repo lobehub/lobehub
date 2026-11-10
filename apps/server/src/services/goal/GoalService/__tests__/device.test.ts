@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { goals, tasks, taskTopics, topics } from '@/database/schemas';
@@ -18,7 +19,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { deviceGateway } from '../../../deviceGateway';
 import { TaskRunnerService } from '../../../taskRunner';
 import { MAX_QUOTA_RETRIES } from '../../machineRecovery';
-import { DEVICE_OFFLINE_GATE_REASON, MAX_DEVICE_OFFLINE_RETRIES } from '../../recoveryPolicy';
+import {
+  DEVICE_OFFLINE_GATE_REASON,
+  MAX_DEVICE_OFFLINE_RETRIES,
+  QUOTA_RESET_MARGIN_MS,
+} from '../../recoveryPolicy';
 import * as scheduler from '../../scheduler';
 import { LocalGoalScheduler } from '../../scheduler/impls';
 import { registerGoalServiceTestCleanup } from '../../testUtils';
@@ -468,6 +473,21 @@ describe('GoalService', () => {
       expect(after.goal.config?.supervisorState?.incidents ?? []).toHaveLength(0);
     });
 
+    it('tells the page when the held Task retries, so it does not read as lost', async () => {
+      // The held Task's run has ended and sends no heartbeat. Without the retry
+      // time the page judged it by heartbeat alone and called it lost.
+      const resetsAt = Date.now() + 2 * 60 * 60 * 1000;
+      const { created, graph, service } = await setup('Session limit on the page', resetsAt);
+      const nodeId = graph.nodes.find((node) => node.kind === 'task')!.id;
+
+      const snapshot = await service.graph(graph.goal.id);
+
+      expect(created.taskId).toBeDefined();
+      expect(snapshot.quotaRetryAt?.[nodeId]?.getTime()).toBe(
+        Math.floor(resetsAt / 1000) * 1000 + QUOTA_RESET_MARGIN_MS,
+      );
+    });
+
     // The refusal's text names the limit, so its runs are uncharged and the
     // attempt budget cannot end a window that keeps refusing. The uncharged
     // quota schedule does: once spent, a person is asked instead of another wait.
@@ -583,6 +603,72 @@ describe('GoalService machine failures', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  describe('answering a usage-limit gate', () => {
+    const WEEKLY_LIMIT = "You've hit your weekly limit · resets Oct 9, 5pm (America/New_York)";
+    const WEEKLY_RESET = new Date('2026-10-09T21:00:00.000Z');
+
+    const gated = async (title: string) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] });
+      vi.setSystemTime(new Date(FAILED_AT.getTime() + MINUTE));
+      const context = await setup(title);
+      await failRun(context.created.taskId!, QUOTA_LIMITED_RUN_STATUS, WEEKLY_LIMIT, FAILED_AT);
+      await context.service.tick(context.graph.goal.id);
+      const [decision] = (await context.service.graph(context.graph.goal.id)).decisions;
+      await new GoalGraphModel(serverDB, userId).updatePendingDecisionOptions(
+        context.graph.goal.id,
+        decision.id,
+        [
+          { effect: 'retry', id: 'switch_account', label: 'Switch account, run now' },
+          { effect: 'retry_after_reset', id: 'wait_reset', label: 'Wait for the reset' },
+        ],
+      );
+      return { ...context, decision, goalId: context.graph.goal.id };
+    };
+
+    // Regression: an option promising to wait could only say "retry", so the
+    // answer started a run straight into the same limit.
+    it('holds the Task until the reset when the owner chose to wait', async () => {
+      const { created, decision, goalId, runSpy, service, taskModel } = await gated('Wait');
+
+      await service.decide(goalId, decision.id, 'wait_reset');
+      const held = await service.tick(goalId);
+
+      expect(held.outcome).toBe('waiting_external');
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(await taskModel.findById(created.taskId!)).toMatchObject({
+        error: WEEKLY_LIMIT,
+        status: 'paused',
+      });
+      expect((await service.graph(goalId)).decisions.filter((d) => d.status === 'pending')).toEqual(
+        [],
+      );
+
+      vi.setSystemTime(new Date(WEEKLY_RESET.getTime() + QUOTA_RESET_MARGIN_MS + MINUTE));
+      await service.tick(goalId);
+
+      expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs at once when the limit is already gone by the time the owner chose to wait', async () => {
+      const { created, decision, goalId, runSpy, service, taskModel } = await gated('Gone');
+      await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Some other failure' });
+
+      await service.decide(goalId, decision.id, 'wait_reset');
+      await service.tick(goalId);
+
+      expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('still runs at once when the owner answered with a plain retry', async () => {
+      const { decision, goalId, runSpy, service } = await gated('Switch');
+
+      await service.decide(goalId, decision.id, 'switch_account');
+      await service.tick(goalId);
+
+      expect(runSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('waits for a usage limit to reset, then retries without charging the attempt', async () => {

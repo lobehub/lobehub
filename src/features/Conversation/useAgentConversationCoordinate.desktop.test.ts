@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';
+import { useProjectStore } from '@/store/project';
+import { PROJECT_LIST_KEY } from '@/store/project/projection';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { useAgentConversationCoordinate } from './useAgentConversationCoordinate.desktop';
@@ -69,6 +71,36 @@ describe('useAgentConversationCoordinate (desktop)', () => {
     const { result } = renderHook(() => useAgentConversationCoordinate());
 
     expect(result.current).toEqual(['agent-of-topic', 'tpc_1', null]);
+  });
+
+  /** @example A project opened by slug left the conversation without an agent, so it never loaded. */
+  it('resolves the agent when the project route carries its slug', () => {
+    route.params = { projectId: 'my-project', topicId: 'tpc_1' };
+    route.search = new URLSearchParams();
+    useProjectStore.setState(
+      {
+        projectListMap: { [PROJECT_LIST_KEY]: [{ id: 'prj_1', slug: 'my-project' } as never] },
+      },
+      false,
+    );
+    useProjectDirectoryStore.setState(
+      { projectTopicsMap: { prj_1: [{ agentId: 'agent-of-topic', id: 'tpc_1' } as never] } },
+      false,
+    );
+
+    const { result } = renderHook(() => useAgentConversationCoordinate());
+
+    expect(result.current).toEqual(['agent-of-topic', 'tpc_1', null]);
+  });
+
+  /** @example Review: on desktop the sidebar "+" draft had no agent, so its first send was a no-op. */
+  it('takes the agent of a blank project draft from its route', () => {
+    route.params = { projectId: 'prj_1' };
+    route.search = new URLSearchParams('agent=agent-of-draft&dir=pwd_1');
+
+    const { result } = renderHook(() => useAgentConversationCoordinate());
+
+    expect(result.current).toEqual(['agent-of-draft', null, null]);
   });
 
   it('keeps agent undefined for an unknown project topic instead of falling back to the global pointer', () => {

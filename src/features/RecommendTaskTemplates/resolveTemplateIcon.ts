@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiGithub } from '@icons-pack/react-simple-icons';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
 import type {
   TaskTemplate,
   TaskTemplateConnectorReference,
@@ -12,8 +12,7 @@ import { getProviderMeta } from './providerMeta';
 export type TemplateIconComponent = IconType | LucideIcon;
 
 export type TemplateIconSpec =
-  | { Comp: TemplateIconComponent; kind: 'component' }
-  | { kind: 'url'; src: string };
+  { Comp: TemplateIconComponent; kind: 'component' } | { kind: 'url'; src: string };
 
 const SELF_ICON_MAP: Record<TaskTemplateIcon, TemplateIconComponent> = {
   github: SiGithub,

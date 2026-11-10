@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildOperationInitRequest, type OperationInitRequest } from '../operationInit';
+import {
+  buildOperationInitRequest,
+  type OperationInitRequest,
+  rehydrateDetachedFileContent,
+  toPersistedInitRequest,
+} from '../operationInit';
 
 const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
   additionalPluginIds: ['lobe-task'],
@@ -22,14 +27,12 @@ const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
     },
   ] as any,
   attachedFileIds: ['file-1'],
-  botContext: { platform: 'discord' } as any,
-  botPlatformContext: { platformName: 'discord', supportsMarkdown: false } as any,
   disableLocalSystem: false,
   disableSelfFeedbackIntentTool: false,
   disableTools: false,
-  disabledPluginIds: ['lobe-web-browsing'],
-  discordContext: { guildId: 'guild-1' },
   ephemeralUserMessage: 'ephemeral',
+  evalAllowedTools: ['lobe-memory____search'],
+  evalMemory: { fixtureHash: 'fixture-hash', runId: 'eval-run', topicId: 'eval-topic' },
   exclusivePluginIds: undefined,
   files: [
     { content: new ArrayBuffer(8), mimeType: 'image/png', name: 'a.png' },
@@ -41,8 +44,8 @@ const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
   isFixedDeviceTarget: false,
   localDeviceId: 'device-1',
   mentionedAgents: [{ id: 'agt_2', name: 'Fox' }],
-  operationId: 'op-1',
   parentMessageId: 'msg-parent',
+  prompt: 'Hello',
   requestTrigger: 'chat' as any,
   requestedDeviceId: 'device-2',
   resumeApproval: undefined,
@@ -97,5 +100,63 @@ describe('buildOperationInitRequest', () => {
     const roundTripped = JSON.parse(JSON.stringify(request)) as OperationInitRequest;
 
     expect(roundTripped).toEqual(request);
+  });
+});
+
+describe('persisted init request', () => {
+  it('keeps the evaluation tool gate and isolated memory across deferred initialization', async () => {
+    const request = buildOperationInitRequest(fullInput());
+    // Exercise the Redis JSON wire format, not an in-process structured clone.
+    // eslint-disable-next-line unicorn/prefer-structured-clone
+    const persisted = JSON.parse(JSON.stringify(toPersistedInitRequest(request)));
+    const restored = await rehydrateDetachedFileContent(persisted, vi.fn());
+    expect(restored.evalAllowedTools).toEqual(request.evalAllowedTools);
+    expect(restored.evalMemory).toEqual(request.evalMemory);
+  });
+
+  const withDocuments = (): OperationInitRequest =>
+    buildOperationInitRequest({
+      ...fullInput(),
+      runAttachments: {
+        fileList: [
+          {
+            content: 'x'.repeat(1024),
+            fileType: 'application/pdf',
+            id: 'file-parsed',
+            name: 'a.pdf',
+            size: 1,
+            url: 'u',
+          },
+          { fileType: 'application/pdf', id: 'file-unparsed', name: 'b.pdf', size: 1, url: 'u' },
+        ] as any,
+        warnings: [],
+      },
+    });
+
+  // A parsed attachment can run to tens of MB; the state is one Redis write.
+  it('leaves parsed bodies in the documents table and records which ones', () => {
+    const persisted = toPersistedInitRequest(withDocuments());
+
+    expect(persisted.runAttachments.fileList?.every((file) => file.content === undefined)).toBe(
+      true,
+    );
+    expect(persisted.detachedFileContentIds).toEqual(['file-parsed']);
+  });
+
+  it('reads back only the bodies it detached', async () => {
+    const readFileContent = vi.fn(async (fileId: string) => `body of ${fileId}`);
+
+    const restored = await rehydrateDetachedFileContent(
+      toPersistedInitRequest(withDocuments()),
+      readFileContent,
+    );
+
+    expect(restored.runAttachments.fileList?.map((file) => file.content)).toEqual([
+      'body of file-parsed',
+      undefined,
+    ]);
+    // The file whose parse failed at turn setup must not be re-parsed here.
+    expect(readFileContent).toHaveBeenCalledTimes(1);
+    expect('detachedFileContentIds' in restored).toBe(false);
   });
 });

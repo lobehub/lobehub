@@ -8,6 +8,7 @@ import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { deviceService } from '@/services/device';
 import {
   type DeviceTunnelLink,
+  getDeviceTunnelStoreState,
   useFetchDeviceListeningPorts,
   useFetchDeviceTunnels,
 } from '@/store/device';
@@ -39,12 +40,29 @@ export const usePortTunnels = (options: {
   // "N to open" count subtracts already-exposed ports, and without the list it
   // would count a port that already has a link.
   const {
-    data: tunnels,
+    data: storedTunnels,
     error,
     isLoading,
     mutate,
   } = useFetchDeviceTunnels(deviceId, active || open);
   const detection = useFetchDeviceListeningPorts(deviceId, cwd, active);
+
+  // A link persisted last session may have expired since; the server drops it
+  // from the next read, the row must not offer it meanwhile.
+  const tunnels = useMemo(() => {
+    const now = Date.now();
+    return (storedTunnels ?? []).filter((link) => !link.expiresAt || link.expiresAt > now);
+  }, [storedTunnels]);
+
+  /**
+   * Whether the ports on screen are still listening is unknown until the
+   * device answers this session: the persisted probe paints, but reads as
+   * "checking", never as running. A device that cannot answer leaves nothing
+   * to offer.
+   */
+  const detectionConfirmed = detection.isConfirmed;
+  const detectionChecking = !detectionConfirmed && !detection.error;
+  const detectionData = detectionConfirmed || detectionChecking ? detection.data : undefined;
 
   /**
    * Detected ports minus the ones already exposed on this device. Only the
@@ -52,14 +70,14 @@ export const usePortTunnels = (options: {
    * of unrelated ports (databases, Docker, system services).
    */
   const { detected, others } = useMemo(() => {
-    const ports = detection.data?.ports ?? [];
-    const exposed = new Set((tunnels ?? []).map((link) => link.port));
+    const ports = detectionData?.ports ?? [];
+    const exposed = new Set(tunnels.map((link) => link.port));
     const fresh = ports.filter((p) => !exposed.has(p.port));
     return {
       detected: fresh.filter((p) => p.inProject),
       others: fresh.filter((p) => !p.inProject),
     };
-  }, [detection.data, tunnels]);
+  }, [detectionData, tunnels]);
 
   /**
    * Claim the tab while the click is still the browser's idea of user
@@ -131,7 +149,9 @@ export const usePortTunnels = (options: {
       setBusySlug(link.slug);
       try {
         await deviceService.revokeTunnel({ slug: link.slug });
-        await mutate();
+        // Written into the replica (and its storage) before the re-read, so a
+        // reload never paints the revoked link back.
+        getDeviceTunnelStoreState().removeTunnelLink(link.deviceId, link.slug);
         toast.success(t('workingPanel.overview.ports.revoked'));
       } catch {
         toast.error(t('workingPanel.overview.ports.revokeFailed'));
@@ -139,7 +159,7 @@ export const usePortTunnels = (options: {
         setBusySlug(undefined);
       }
     },
-    [mutate, t],
+    [t],
   );
 
   /** Expose a detected port and open it. */
@@ -149,6 +169,9 @@ export const usePortTunnels = (options: {
         toast.error(t('workingPanel.overview.ports.invalidPort'));
         return;
       }
+      // The ports on screen come from an earlier probe: one may have stopped
+      // since, and a link to it would open onto nothing. Wait for the device.
+      if (detectionChecking) return;
 
       const tab = reserveTab();
       if (!tab && !isDesktop) {
@@ -159,7 +182,7 @@ export const usePortTunnels = (options: {
       setCreatingPort(target);
       try {
         const link = await deviceService.createTunnel({ deviceId, port: target });
-        await mutate();
+        getDeviceTunnelStoreState().addTunnelLink(link);
         // Choosing a port means "let me see it" — open it without a second click.
         navigateTab(tab, link.openUrl);
         onOpened();
@@ -170,7 +193,7 @@ export const usePortTunnels = (options: {
         setCreatingPort(undefined);
       }
     },
-    [deviceId, mutate, navigateTab, onOpened, reserveTab, t],
+    [detectionChecking, deviceId, navigateTab, onOpened, reserveTab, t],
   );
 
   return {
@@ -179,17 +202,27 @@ export const usePortTunnels = (options: {
     creatingPort,
     detected,
     /** False when the device can't detect (offline, or a client that predates it). */
-    detectionAvailable: !!detection.data?.supported,
+    detectionAvailable: !!detectionData?.supported,
+    /** The ports shown come from an earlier probe; the device has not answered yet. */
+    detectionChecking,
     // Validating, not loading: a manual rescan keeps the old data and must still spin.
     detectionLoading: detection.isValidating,
     error,
     exposePort,
     isLoading,
+    /**
+     * The links could not be read and none are known: "couldn't ask" must not
+     * read as "nothing is open". With links already known, a failed refresh
+     * keeps them on screen (`refreshFailed`) — opening or revoking one is a
+     * separate call that may well succeed.
+     */
+    listFailed: !!error && tunnels.length === 0,
+    refreshFailed: !!error && tunnels.length > 0,
     openLink,
     refresh: mutate,
     refreshDetected: detection.mutate,
     otherPorts: others as DeviceListeningPort[],
     revokeLink,
-    tunnels: tunnels ?? [],
+    tunnels,
   };
 };

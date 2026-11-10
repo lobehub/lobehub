@@ -20,7 +20,11 @@ import { LEASE_EXPIRED_ERROR } from '../decideNextMove';
 import { isDeliverySettling } from '../deliverySettle';
 import { readDeviceDispatchStreak } from '../deviceDispatchStreak';
 import { classifyGoalFailure } from '../failureClass';
-import { lastAnsweredGateAt, planMachineRecovery } from '../machineRecovery';
+import {
+  lastAnsweredGateAt,
+  lastGateAnsweredToWait,
+  planMachineRecovery,
+} from '../machineRecovery';
 import {
   classifyRunFailure,
   countConsecutiveDeviceOfflineRuns,
@@ -249,7 +253,7 @@ export const resumeAbandonedTaskRecovery = async (
       ? 'Goal cost budget was exhausted after an operation was abandoned'
       : recovery.outcome === 'exhausted-rounds'
         ? 'Task attempt budget was exhausted after an operation was abandoned'
-        : 'Automatic recovery could not restart an abandoned operation';
+        : `Automatic recovery could not restart an abandoned operation${recovery.error ? `: ${recovery.error}` : ''}`;
   return ctx.gateOrTakeOver(graph, nodeId, task.id, reason, effects, {
     machine: recovery.outcome === 'spawn-failed',
   });
@@ -265,10 +269,19 @@ export const planMachineRecoveryFor = async (
 ) => {
   // A person's Retry restarts the schedule they overrode.
   const answeredAt = lastAnsweredGateAt(graph, nodeId);
-  const runs = (await ctx.taskTopicModel.findByTaskId(task.id)).filter(
-    (run) => !answeredAt || new Date(run.updatedAt) > answeredAt,
-  );
-  return planMachineRecovery({ error: task.error, now, runs, taskUpdatedAt: task.updatedAt });
+  const allRuns = await ctx.taskTopicModel.findByTaskId(task.id);
+  const runs = allRuns.filter((run) => !answeredAt || new Date(run.updatedAt) > answeredAt);
+  // "Wait for the reset" keeps the schedule running on the limited run it was
+  // answered about. It covers that one wait: a run refused again after it goes
+  // back to the ordinary bound, so a person hears about a limit that outlived it.
+  const holdUntilReset = runs.length === 0 && lastGateAnsweredToWait(graph, nodeId);
+  return planMachineRecovery({
+    error: task.error,
+    holdUntilReset,
+    now,
+    runs: holdUntilReset ? allRuns : runs,
+    taskUpdatedAt: task.updatedAt,
+  });
 };
 
 /**

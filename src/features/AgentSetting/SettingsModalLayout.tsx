@@ -1,18 +1,13 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  Tabs,
-  Text,
-  useModalContext,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Tabs, Text, useModalContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type LucideIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 export interface SettingsModalTabItem {
   icon?: LucideIcon;
@@ -22,6 +17,8 @@ export interface SettingsModalTabItem {
 
 export interface SettingsModalLayoutProps {
   activeTab?: string;
+  /** Set for an agent's settings: the header draws an agent avatar seeded by this id. */
+  agentId?: string;
   avatar: string;
   background?: string;
   children: ReactNode;
@@ -30,22 +27,26 @@ export interface SettingsModalLayoutProps {
   title: ReactNode;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  header: css`
-    flex-shrink: 0;
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  tabsBar: css`
-    flex-shrink: 0;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  header: {
+    flexShrink: 0,
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  tabsBar: {
+    flexShrink: 0,
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const SettingsModalLayout = memo<SettingsModalLayoutProps>(
-  ({ avatar, background, title, tabs, activeTab, onTabChange, children }) => {
+  ({ agentId, avatar, background, title, tabs, activeTab, onTabChange, children }) => {
     const { t } = useTranslation('common');
     const { close } = useModalContext();
 
@@ -57,9 +58,30 @@ const SettingsModalLayout = memo<SettingsModalLayoutProps>(
 
     return (
       <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
-        <Flexbox horizontal align={'center'} className={styles.header} justify={'space-between'}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.header).className}
+          justify={'space-between'}
+        >
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <Avatar avatar={avatar} background={background} shape={'square'} size={24} />
+            {agentId ? (
+              <AgentAvatar
+                agentId={agentId}
+                avatar={avatar}
+                background={background}
+                name={typeof title === 'string' ? title : undefined}
+                size={24}
+              />
+            ) : (
+              <Avatar
+                avatar={avatar}
+                background={background}
+                shape={'square'}
+                size={24}
+                title={typeof title === 'string' ? title : undefined}
+              />
+            )}
             <Text ellipsis weight={600}>
               {title}
             </Text>
@@ -68,7 +90,7 @@ const SettingsModalLayout = memo<SettingsModalLayoutProps>(
         </Flexbox>
 
         {tabItems && tabItems.length >= 2 && (
-          <Flexbox className={styles.tabsBar}>
+          <Flexbox className={stylex.props(styles.tabsBar).className}>
             <Tabs activeKey={activeTab} items={tabItems} onChange={onTabChange} />
           </Flexbox>
         )}

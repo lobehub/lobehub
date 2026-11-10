@@ -29,6 +29,9 @@ import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
+
+import { isAgentProfileRoute } from './isAgentProfileRoute';
 
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
@@ -37,16 +40,13 @@ const Nav = memo(() => {
   const params = useActiveRouteParams();
   const agentId = params.aid;
   const { pathname } = useActiveLocation();
-  // The profile entry now owns a group of sub-views — profile / channels /
-  // statistics — switched by a Segmented in the page header, so all three keep
-  // this entry lit instead of leaving the sidebar with nothing selected.
-  const isProfileActive =
-    pathname.includes('/profile') ||
-    pathname.includes('/channel') ||
-    pathname.endsWith('/statistics');
-  const isGoalsActive = pathname.endsWith('/goals');
+  // The profile entry owns a group of sub-views — profile / channels /
+  // statistics / share. On mobile they stay switched by a Segmented while this
+  // list remains in the drawer, so every one of them keeps this entry lit.
   // 下钻页 /self-evolving/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
   const isSelfLearningActive = pathname.includes('/self-evolving');
+  const isProfileActive = isAgentProfileRoute(pathname) && !isSelfLearningActive;
+  const isGoalsActive = pathname.endsWith('/goals');
   const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
@@ -54,15 +54,22 @@ const Nav = memo(() => {
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
+  const { canEditResource } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
+  // Only a server-confirmed edit denial hides the entry. `canEditResource` stays
+  // permissive while workspace access is loading, so the entry no longer drops
+  // out each time an agent is opened; the profile page itself is still guarded by
+  // `ResourceConfigAccessGate`.
+  const hideProfile = !isAgentEditable || !canEditContent || !canEditResource;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
+  // Self-evolving lives in the profile group; it stays here only where that group
+  // cannot reach it: members with no profile entry, and the mobile Segmented.
+  const showSelfLearningEntry = enableSelfLearning && (hideProfile || isMobileSurface());
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
@@ -111,7 +118,7 @@ const Nav = memo(() => {
           }}
         />
       )}
-      {enableSelfLearning && (
+      {showSelfLearningEntry && (
         <NavItem
           active={isSelfLearningActive}
           icon={DnaIcon}

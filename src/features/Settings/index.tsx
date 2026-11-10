@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useMatches, useParams } from 'react-router';
 
 import { SettingsTabs } from '@/store/global/initialState';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import SettingsContent from './features/SettingsContent';
 import { type LayoutProps } from './Layout/type';
@@ -32,9 +33,11 @@ const Layout = memo<LayoutProps>(() => {
     getSettingsTabFromMatches(matches) ||
     SettingsTabs.Profile;
 
-  return <SettingsContent activeTab={activeTab} mobile={false} />;
+  // The mobile settings layout already owns the header and back button; the
+  // mobile branch renders the tab body only.
+  return <SettingsContent activeTab={activeTab} mobile={isMobileSurface()} />;
 });
 
-Layout.displayName = 'DesktopSettingsLayout';
+Layout.displayName = 'SettingsLayout';
 
 export default Layout;

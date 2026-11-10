@@ -6,8 +6,6 @@ import type {
   ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
-import { serializePartsForStorage } from '@lobechat/utils/multimodalContent';
-import { sanitizeToolCallArguments } from '@lobechat/utils/sanitizeToolCallArguments';
 
 import { UsageCounter } from '../core/UsageCounter';
 import type { AgentRuntimeHost, LLMAttemptOutput } from '../transport';
@@ -17,8 +15,12 @@ import type {
   GeneralAgentCallLLMResultPayload,
   InstructionExecutionResult,
 } from '../types';
+import { serializePartsForStorage } from '../utils/multimodalContent';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 import {
   hasRepeatedToolCall,
+  hasToolCallBurst,
+  TOOL_CALL_BURST_LIMIT,
   TOOL_CALL_REPEAT_LIMIT,
   updateToolCallRepeatGuard,
 } from '../utils/toolCallRepeatGuard';
@@ -44,6 +46,8 @@ interface CallLlmMessageMetadata extends MessageMetadata {
 
 interface FinalizeCallLlmTurnInput {
   assistantMessageId: string;
+  /** Provider attempts spent on this call, including retries. */
+  attempts?: number;
   events: AgentEvent[];
   host: AgentRuntimeHost;
   model: string;
@@ -219,6 +223,7 @@ const persistFinalMessage = async ({
 
 const buildFinalState = ({
   assistantMessageId,
+  attempts,
   model,
   output,
   provider,
@@ -250,6 +255,7 @@ const buildFinalState = ({
 
   if (output.usage) {
     const { usage, cost } = UsageCounter.accumulateLLM({
+      apiCallsDelta: attempts ?? 1,
       cost: newState.cost,
       model,
       modelUsage: output.usage,
@@ -259,6 +265,11 @@ const buildFinalState = ({
 
     newState.usage = usage;
     if (cost) newState.cost = cost;
+  } else {
+    // A successful response may omit usage. The provider attempt still
+    // happened, so record it independently of token accumulation instead of
+    // dropping it from the LLM-call metric.
+    newState.usage = UsageCounter.accumulateAttempts(newState.usage, Math.max(attempts ?? 1, 1));
   }
 
   if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
@@ -276,6 +287,7 @@ const buildFinalState = ({
 
 export const finalizeCallLlmTurn = async ({
   assistantMessageId,
+  attempts,
   events,
   host,
   model,
@@ -288,7 +300,12 @@ export const finalizeCallLlmTurn = async ({
 }: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
   const { operation, transports } = host;
   const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
-  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  const repeated = hasRepeatedToolCall(repeatCounts);
+  // Same stop for a turn that asks for more calls than the burst limit: the
+  // calls differ, but nothing legitimate fans out that wide, and dispatching
+  // them would hit a real service once per call.
+  const stoppedByRepeatLimit =
+    output.finishReason !== 'abort' && (repeated || hasToolCallBurst(output.toolsCalling));
   // Carried on the state so the terminal reason can name this stop. Sticky once
   // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
   // its counts on those, which would otherwise erase the only trace of why the
@@ -302,7 +319,9 @@ export const finalizeCallLlmTurn = async ({
   const finalizedOutput = stoppedByRepeatLimit
     ? {
         ...output,
-        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        content: repeated
+          ? `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`
+          : `Stopped after ${output.toolsCalling.length} tool calls were requested in one turn (limit ${TOOL_CALL_BURST_LIMIT}).`,
         finishReason: 'tool_call_repeat_limit',
         toolCalls: [],
         toolsCalling: [],
@@ -363,6 +382,7 @@ export const finalizeCallLlmTurn = async ({
   });
   const newState = buildFinalState({
     assistantMessageId,
+    attempts,
     finalReasoning,
     model,
     output: finalizedOutput,

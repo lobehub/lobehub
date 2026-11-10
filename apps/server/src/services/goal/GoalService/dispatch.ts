@@ -84,6 +84,7 @@ export const createResponsibleTask = async (
     ).newTaskAssignment(graph.goal);
     task = await ctx.taskService.createTask({
       assigneeAgentId: assignment.assigneeAgentId,
+      assigneeUserId: assignment.assigneeUserId,
       config: {
         checkpoint: { topic: { after: false } },
         ...(planSkill ? { skills: [planSkillIdentifier(planSkill)] } : {}),
@@ -93,6 +94,9 @@ export const createResponsibleTask = async (
       instruction: ctx.buildTaskInstruction(graph, frontier.title, description),
       name: frontier.title,
       projectId: graph.goal.projectId ?? undefined,
+      // A private goal's Tasks stay with it: a public executor would otherwise
+      // publish them. A public goal leaves it to the agent, as any Task does.
+      ...(graph.goal.visibility === 'private' ? { visibility: 'private' as const } : {}),
     });
     // The terminal Goal-acceptance Task is gated on the goal's structured
     // criteria when it has them: the verify plan materializes exactly those

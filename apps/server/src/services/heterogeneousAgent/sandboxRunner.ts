@@ -2,7 +2,9 @@
 // fs-heavy machinery into the Next.js server bundle, and its dynamic
 // `process.cwd()`-rooted fs calls make Vercel's file tracing pull the whole
 // repo source tree into every serverless function (250 MB limit blowout).
+import { isPersistentSandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
+  buildClaudeCodeEntrypointEnv,
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
@@ -25,6 +27,8 @@ export interface SandboxRunParams {
    * the CLI can pass it through the heteroIngest payload, removing the need for the server
    * to re-read topic.metadata.runningOperation on every cold Lambda start. */
   assistantMessageId: string;
+  /** Entrypoint name the agent asked Claude Code to report instead of its headless default. */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /** GitHub OAuth token for cloning private repos. */
   githubToken?: string;
@@ -52,7 +56,7 @@ export interface SandboxRunParams {
    */
   sandbox?: Pick<
     SandboxSessionConfig,
-    'cwd' | 'environment' | 'mode' | 'specification' | 'workingDir'
+    'cwd' | 'environment' | 'initialization' | 'mode' | 'specification' | 'workingDir'
   >;
   /**
    * Optional context injected as a text block BEFORE the user's prompt.
@@ -168,13 +172,13 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   // consistent --cwd the session id stored in topic.metadata.heteroSessionId
   // can't be resolved on --resume after a page reload.
   //
-  // A persistent run gets NO --cwd: the execution plane starts every command
-  // inside the instance's directory, and where it mounts the workspace is its
+  // A persistent run (a drive folder or an environment directory) gets NO
+  // --cwd: the execution plane starts every command inside that directory, and where it mounts the workspace is its
   // business — a path spelled out here would be a second source of truth that
   // can only drift. `lh` falls back to its process cwd, which is that
   // directory, and it is the same one on every run of this topic, so session
   // files stay findable exactly as they do under /workspace.
-  const persistent = sandbox?.mode === 'persistent';
+  const persistent = isPersistentSandboxMode(sandbox?.mode);
   const cwd = params.cwd ?? (persistent ? undefined : '/workspace');
 
   // Build the `lh hetero exec` command string.
@@ -227,6 +231,11 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),
+    ...(agentType === 'claude-code'
+      ? Object.entries(buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)).map(
+          ([key, value]) => `${key}=${shellQuote(value)}`,
+        )
+      : []),
   ].join(' ');
   const shellArgs = args.map(shellQuote).join(' ');
   const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${envVars} ${shellArgs}`;
@@ -248,6 +257,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   const sandboxService = createSandboxService({
     marketService,
     sandboxCwd: sandbox?.cwd,
+    sandboxInitialization: sandbox?.initialization,
     sandboxInstanceId: sandbox?.environment,
     sandboxMode: sandbox?.mode,
     sandboxSpecification: sandbox?.specification,

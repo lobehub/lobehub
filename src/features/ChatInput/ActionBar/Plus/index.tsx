@@ -1,11 +1,12 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
+import { Icon, Popover, toast, Upload } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
-  ChevronRight,
   Cloud,
   FileUp,
   LibraryBig,
@@ -25,7 +26,6 @@ import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import {
@@ -38,6 +38,7 @@ import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useChatInputUpload } from '../../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -45,93 +46,68 @@ import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
 import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
+import SubmenuChevron from '../components/SubmenuChevron';
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useControls as useToolsControls } from '../Tools/useControls';
 
-const hotArea = css`
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-color: transparent;
-  }
-`;
-
-const activeLabel = css`
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100%;
-
-  color: inherit;
-
-  span {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`;
-
-const labelWithChip = css`
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-`;
-
-const countChip = css`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  min-width: 18px;
-  height: 18px;
-  padding-block: 0;
-  padding-inline: 6px;
-  border-radius: 9px;
-
-  font-size: 11px;
-  line-height: 18px;
-  color: ${cssVar.colorTextSecondary};
-
-  background: ${cssVar.colorFillSecondary};
-`;
-
-const gatewayModeInfoCard = css`
-  overflow: hidden;
-  width: 280px;
-  border-radius: 8px;
-
-  .cover {
-    display: block;
-
-    width: 100%;
-    height: 148px;
-
-    object-fit: cover;
-    background: ${cssVar.colorFillTertiary};
-  }
-
-  .body {
-    padding: 12px;
-  }
-
-  .title {
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.35;
-  }
-
-  .desc {
-    margin-block-start: 6px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  }
-`;
+const styles = stylex.create({
+  activeLabel: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    color: 'inherit',
+  },
+  activeLabelText: {
+    overflow: 'hidden',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  countChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '18px',
+    height: '18px',
+    paddingBlock: '0',
+    paddingInline: '6px',
+    borderRadius: '9px',
+    fontSize: '11px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  gatewayBody: { padding: '12px' },
+  gatewayCard: { overflow: 'hidden', width: '280px', borderRadius: '8px' },
+  gatewayCover: {
+    display: 'block',
+    width: '100%',
+    height: '148px',
+    objectFit: 'cover',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  gatewayDesc: {
+    marginBlockStart: '6px',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+  },
+  gatewayTitle: { fontSize: '14px', fontWeight: 600, lineHeight: 1.35 },
+  hotArea: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'transparent',
+    },
+  },
+  labelWithChip: { display: 'inline-flex', gap: '8px', alignItems: 'center' },
+});
 
 type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
   label?: ReactNode;
@@ -238,7 +214,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   // Goal creation is lab-gated while the product surface is being rolled out.
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
-  const upload = useFileStore((s) => s.uploadChatFiles);
+  const upload = useChatInputUpload();
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const defaultDisableGatewayMode = useUserStore(
@@ -311,8 +287,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
       active ? (
-        <div className={cx(activeLabel)}>
-          <span>{label}</span>
+        <div {...stylex.props(styles.activeLabel)}>
+          <span {...stylex.props(styles.activeLabelText)}>{label}</span>
           <Icon icon={CheckIcon} size={14} />
         </div>
       ) : (
@@ -321,24 +297,24 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
 
     const renderLabelWithCount = (label: string, count: number, prefix?: string) =>
       count > 0 || prefix ? (
-        <span className={cx(labelWithChip)}>
+        <span {...stylex.props(styles.labelWithChip)}>
           <span>{label}</span>
-          <span className={cx(countChip)}>{prefix ? `${prefix} | ${count}` : count}</span>
+          <span {...stylex.props(styles.countChip)}>{prefix ? `${prefix} | ${count}` : count}</span>
         </span>
       ) : (
         label
       );
 
     const gatewayModeInfo = (
-      <div className={cx(gatewayModeInfoCard)}>
+      <div {...stylex.props(styles.gatewayCard)}>
         <img
           alt=""
-          className="cover"
+          {...stylex.props(styles.gatewayCover)}
           src={imageUrl(isDark ? 'agent_gateway_dark.webp' : 'agent_gateway_light.webp')}
         />
-        <div className="body">
-          <div className="title">{t('gatewayMode.cardTitle')}</div>
-          <div className="desc">{t('gatewayMode.desc')}</div>
+        <div {...stylex.props(styles.gatewayBody)}>
+          <div {...stylex.props(styles.gatewayTitle)}>{t('gatewayMode.cardTitle')}</div>
+          <div {...stylex.props(styles.gatewayDesc)}>{t('gatewayMode.desc')}</div>
         </div>
       </div>
     );
@@ -383,7 +359,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
             }}
           >
-            <div className={cx(hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
+            <div {...stylex.props(styles.hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
           </Upload>
         ),
       },
@@ -401,7 +377,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               children: skillMenuItems,
               // Trailing chevron (replaces base-ui's default triangle submenu arrow,
               // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+              extra: <SubmenuChevron />,
               footer: skillMarketFooter,
               header: skillMarketHeader,
               icon: SkillsIcon,
@@ -489,7 +465,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
             ],
             // Trailing chevron (replaces base-ui's default triangle submenu arrow,
             // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
-            extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+            extra: <SubmenuChevron />,
             footer: canConfigureResource ? knowledgeFooter : undefined,
             icon: LibraryBig,
             key: 'attachments',
@@ -502,7 +478,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       : uploadItems;
 
     // Goal creation has one canonical entry: drop the goal chip at the head of
-    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
     const acceptanceItems: ActionDropdownMenuItems = enableGoals
       ? [

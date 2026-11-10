@@ -73,6 +73,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, disableEditing }) => {
       showTitle
       aboveMessage={null}
       actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
+      agentId={agentId ?? null}
       avatar={{ ...avatar, title }}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}

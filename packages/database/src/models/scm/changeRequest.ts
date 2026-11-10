@@ -9,10 +9,10 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
-import { scmChangeRequests, scmInstallations } from '../../schemas';
+import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 const ownedByScope = (scope: { userId: string; workspaceId?: string | null }) =>
@@ -146,6 +146,32 @@ export class ScmChangeRequestModel {
           eq(scmChangeRequests.provider, provider),
           eq(scmChangeRequests.repoFullName, repoFullName),
           eq(scmChangeRequests.number, number),
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
+  };
+
+  /**
+   * {@link findByIdentity} for a name typed by a person, e.g. a pasted PR URL:
+   * GitHub names are case-insensitive, while the row keeps the provider's
+   * canonical casing.
+   */
+  static findByIdentityIgnoringCase = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    repoFullName: string,
+    number: number,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const [row] = await db
+      .select()
+      .from(scmChangeRequests)
+      .where(
+        and(
+          eq(scmChangeRequests.provider, provider),
+          eq(scmChangeRequests.number, number),
+          sql`lower(${scmChangeRequests.repoFullName}) = ${repoFullName.toLowerCase()}`,
         ),
       )
       .limit(1);
@@ -352,8 +378,12 @@ export class ScmChangeRequestModel {
           params.eventKind !== 'reopened');
       const stale = !!existing && (outOfOrder || regressesLifecycle);
 
-      const headChanged =
-        !stale && !!params.headSha && !!existing && existing.headSha !== params.headSha;
+      // The incoming head sha when this upsert moves the head, otherwise null.
+      const newHeadSha =
+        !stale && params.headSha && existing && existing.headSha !== params.headSha
+          ? params.headSha
+          : null;
+      const headChanged = newHeadSha !== null;
       const links = params.links ?? {};
       const now = new Date();
 
@@ -409,26 +439,60 @@ export class ScmChangeRequestModel {
       const inherited = scopeMoved ? undefined : existing;
       const pick = <T>(incoming: T | null | undefined, stored: T | null | undefined): T | null =>
         (stale ? (stored ?? incoming) : (incoming ?? stored)) ?? null;
-      const linkValues = {
+      const linkValues: {
+        acceptanceId: string | SQL | null;
+        installationId: string | null;
+        taskId: string | null;
+        topicId: string | null;
+        workId: string | null;
+      } = {
         acceptanceId: pick(links.acceptanceId, inherited?.acceptanceId),
         installationId: links.installationId ?? existing?.installationId ?? null,
         taskId: pick(links.taskId, inherited?.taskId),
         topicId: pick(links.topicId, inherited?.topicId),
         workId: pick(links.workId, inherited?.workId),
       };
+
+      // Both link sources below are resolved before this transaction opens, so
+      // an unlink may have committed in between. Writing the acceptance anyway
+      // would put back a binding the user removed, and a later merge would
+      // accept a delivery from a pull request that no longer leads to it.
+      const stored = inherited?.acceptanceId ?? null;
+      if (!stale && links.acceptanceSource && links.acceptanceId) {
+        if (links.acceptanceSource === 'row-binding' && stored !== links.acceptanceId) {
+          // The resolver only echoed the binding the row carried. The locked
+          // row is the authority, and an unlink may have cleared it since.
+          linkValues.acceptanceId = stored;
+        } else if (stored !== links.acceptanceId) {
+          const handLinkHolds = sql`EXISTS (
+            SELECT 1 FROM ${acceptances} AS hand_link
+            WHERE hand_link.id = ${links.acceptanceId}::uuid
+              AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(
+                  COALESCE(hand_link.metadata -> 'pullRequests', '[]'::jsonb)
+                ) AS pr
+                WHERE pr ->> 'provider' = ${params.provider}
+                  AND pr ->> 'number' = ${String(params.number)}
+                  AND lower(pr ->> 'repoFullName') = ${params.repoFullName.toLowerCase()}
+              )
+          )`;
+          linkValues.acceptanceId = sql`CASE WHEN ${handLinkHolds} THEN ${links.acceptanceId}::uuid ELSE ${stored}::uuid END`;
+        }
+      }
       const ownerValues = scopeMoved
         ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
         : {};
 
-      const ciValues = headChanged
+      const ciValues = newHeadSha
         ? (() => {
             // Results reported before this push became the head belong to
             // the new commit, not to the one being replaced.
             const held = existing?.metadata?.pendingChecks;
-            const adopted = held && held.sha === params.headSha ? held.checks : null;
+            const adopted = held && held.sha === newHeadSha ? held.checks : null;
             return {
               checks: adopted,
-              ciHeadSha: params.headSha ?? null,
+              ciHeadSha: newHeadSha,
               ciStatus: adopted ? rollupCiStatus(adopted) : null,
             };
           })()
@@ -518,6 +582,46 @@ export class ScmChangeRequestModel {
       .where(eq(scmChangeRequests.id, id))
       .returning();
     return row;
+  };
+
+  /**
+   * Point the row at `acceptanceId` unless it already names another one,
+   * decided in the UPDATE itself so two acceptances claiming the same row at
+   * once cannot overwrite each other. Only the acceptance link moves, so
+   * {@link detachAcceptance} undoes it completely. Returns the row when this
+   * acceptance holds it.
+   */
+  static claimAcceptance = async (
+    db: LobeChatDatabase,
+    id: string,
+    acceptanceId: string,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const [row] = await db
+      .update(scmChangeRequests)
+      .set({ acceptanceId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          or(
+            isNull(scmChangeRequests.acceptanceId),
+            eq(scmChangeRequests.acceptanceId, acceptanceId),
+          ),
+        ),
+      )
+      .returning();
+    return row ?? null;
+  };
+
+  /** Clear the acceptance link, but only while it still points at `acceptanceId`. */
+  static detachAcceptance = async (
+    db: LobeChatDatabase,
+    id: string,
+    acceptanceId: string,
+  ): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({ acceptanceId: null, updatedAt: new Date() })
+      .where(and(eq(scmChangeRequests.id, id), eq(scmChangeRequests.acceptanceId, acceptanceId)));
   };
 
   /**

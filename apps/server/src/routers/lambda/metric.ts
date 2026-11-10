@@ -14,6 +14,7 @@ import { WidgetModel } from '@/database/models/widget';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { GoalSubscriptionService } from '@/server/services/goal/subscriptions';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -275,11 +276,27 @@ export const metricRouter = router({
           input.subjectId,
           input.keys,
         );
+        // Tracking Goals use the exact Widget series and history read by boards.
+        // Alias only the contract key; identity and values remain authoritative.
+        const bindings =
+          input.subjectType === 'goal'
+            ? await new GoalSubscriptionService(
+                ctx.serverDB,
+                ctx.userId,
+                ctx.workspaceId ?? undefined,
+              ).list(input.subjectId)
+            : [];
+        const mapped = input.keys.flatMap((key) => {
+          const binding = bindings.find((item) => item.subscription.binding.criterionKey === key);
+          if (binding) return binding.metric ? [{ ...binding.metric, key }] : [];
+          const own = series.find((item) => item.key === key);
+          return own ? [own] : [];
+        });
         const firstPoints = await ctx.metricModel.firstPointsByMetricIds(
-          series.map((item) => item.id),
+          mapped.map((item) => item.id),
         );
         const data = await Promise.all(
-          series.map(async (item) => ({
+          mapped.map(async (item) => ({
             config: item.config,
             firstPoint: firstPoints.get(item.id) ?? null,
             id: item.id,

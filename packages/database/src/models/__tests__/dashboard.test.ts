@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -142,6 +142,26 @@ describe('DashboardModel', () => {
       await expect(model.create({ projectId, title: 'x' })).rejects.toMatchObject({
         code: 'SCOPE_MISMATCH',
       });
+    });
+
+    it('refuses to place a widget whose workspace differs from the board', async () => {
+      const model = new DashboardModel(serverDB, userId, workspaceId);
+      const dashboard = await model.create({ title: 'Board' });
+      const foreign = await new WidgetModel(serverDB, userId, otherWorkspaceId).create({
+        title: 'Foreign widget',
+      });
+      // Simulate a widget read scope that drifts from the board's: the
+      // tenant check must still refuse the cross-workspace placement.
+      vi.spyOn(model as any, 'readableWidget').mockReturnValue(undefined);
+
+      await expect(model.addItem(dashboard.id, foreign.id)).rejects.toMatchObject({
+        code: 'SCOPE_MISMATCH',
+      });
+      const items = await serverDB
+        .select()
+        .from(dashboardItems)
+        .where(eq(dashboardItems.dashboardId, dashboard.id));
+      expect(items).toEqual([]);
     });
 
     it('rejects another user’s personal project and unknown ids as not found', async () => {
@@ -346,6 +366,43 @@ describe('DashboardModel', () => {
       expect(await model.removeItems(dashboard.id, [i2!.id])).toBe(1);
       expect(await model.removeItems(dashboard.id, [])).toBe(0);
       expect((await model.listItems(dashboard.id)).map((r) => r.widget.id)).toEqual([w1.id]);
+    });
+
+    it("lists each item with its widget's published view", async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const dashboard = await model.create({ title: 'Weather' });
+      const widgets = new WidgetModel(serverDB, userId);
+      const weather = await widgets.create({ title: 'Weather' });
+      const draftOnly = await widgets.create({ title: 'Draft only' });
+      await model.addItem(dashboard.id, weather.id);
+      await model.addItem(dashboard.id, draftOnly.id);
+
+      const view = {
+        layout: { type: 'text' as const, value: { bind: 'data.temp' } },
+        surface: 'rain',
+      };
+      const version = await widgets.createVersion(weather.id, {
+        outputType: 'data',
+        runtime: 'node',
+        script: 'console.log("{}")',
+        sourceType: 'agent',
+        view,
+      });
+      await widgets.publishVersion(weather.id, version!.id);
+      await widgets.createVersion(draftOnly.id, {
+        outputType: 'stat',
+        runtime: 'node',
+        script: '1',
+        sourceType: 'agent',
+        view: { chart: 'bar' },
+      });
+
+      const listed = await model.listItems(dashboard.id);
+
+      expect(listed.map((r) => [r.widget.title, r.view])).toEqual([
+        ['Weather', view],
+        ['Draft only', null],
+      ]);
     });
 
     it('refuses a new widget on a full board but still updates placed ones', async () => {

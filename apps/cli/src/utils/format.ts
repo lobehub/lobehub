@@ -15,6 +15,14 @@ export function timeAgo(date: Date | string): string {
   return `${seconds}s ago`;
 }
 
+/** Absolute local time (`2026-10-15 14:03`) for history listings, where "3d ago" loses the day. */
+export function formatTimestamp(date: Date | string): string {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '-';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
 /**
  * Counterpart to `timeAgo` for deadlines. `timeAgo` only formats the past, so
  * feeding it a future timestamp (an invitation expiry, a lease) renders a
@@ -65,7 +73,11 @@ export function truncate(str: string, maxWidth: number): string {
   return str;
 }
 
-export function printTable(rows: string[][], header: string[]) {
+/** A line break inside a cell (multi-line topic titles) would split its table row. */
+const singleLine = (cell: string) => cell.replaceAll(/\s*[\r\n]\s*/g, ' ');
+
+export function printTable(rawRows: string[][], header: string[]) {
+  const rows = rawRows.map((row) => row.map((cell) => singleLine(cell || '')));
   const allRows = [header, ...rows];
   const colWidths = header.map((_, i) => Math.max(...allRows.map((r) => displayWidth(r[i] || ''))));
 

@@ -14,6 +14,8 @@ import { createWithEqualityFn } from 'zustand/traditional';
 interface ComposerDraftBusState {
   /** A receiver with a live editor is mounted and will consume drafts. */
   attached: boolean;
+  /** The attached composer's key (see `conversationSelectors.composerKey`); set while attached. */
+  contextKey?: string;
   /**
    * The pending draft, cleared by the receiver once applied. `append` adds it
    * after what the user already typed instead of replacing it. A draft with a

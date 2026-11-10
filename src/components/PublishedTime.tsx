@@ -1,9 +1,12 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { type CSSProperties, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 const LAST_MODIFIED = new Date().toISOString();
 
@@ -27,14 +30,12 @@ const formatDate = (date: string, t: (key: string) => string, template?: string)
   return d.format(t('time.formatOtherYear'));
 };
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    time: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      letter-spacing: 0.02em;
-    `,
-  };
+const styles = stylex.create({
+  time: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    letterSpacing: '0.02em',
+  },
 });
 
 interface PublishedTimeProps {
@@ -42,17 +43,17 @@ interface PublishedTimeProps {
   date: string;
   style?: CSSProperties;
   template?: string;
+  xstyle?: stylex.StyleXStyles;
 }
-const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template }) => {
+const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template, xstyle }) => {
   const { t } = useTranslation('common');
   const time = formatDate(date, t as (key: string) => string, template);
 
   return (
     <time
       aria-label={'published-date'}
-      className={cx(styles.time, className)}
       dateTime={formatTime(date)}
-      style={style}
+      {...sx(styles.time, xstyle, className, style)}
     >
       {time}
     </time>

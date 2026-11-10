@@ -19,6 +19,14 @@ export interface HealthUsage {
   memoryPercent: number | null;
 }
 
+/**
+ * The newest reading: the charted metrics plus the disk, which moves too
+ * slowly to chart or to color the strip but still answers "is it filling up?".
+ */
+export interface LatestUsage extends HealthUsage {
+  diskPercent: number | null;
+}
+
 export interface HealthSlot extends HealthUsage {
   memoryUsedBytes: number | null;
   start: number;
@@ -27,7 +35,7 @@ export interface HealthSlot extends HealthUsage {
 
 export interface HealthTimeline {
   /** Newest reading of each metric, for the chart headers and the row preview. */
-  latest: HealthUsage | null;
+  latest: LatestUsage | null;
   /** Upper bound for the load chart — at least 100%, so an overloaded machine still fits. */
   loadCeiling: number;
   slots: HealthSlot[];
@@ -75,6 +83,8 @@ export const buildHealthTimeline = (series: DeviceMetricSeries): HealthTimeline 
     latest: newest
       ? {
           cpuPercent: newest.cpuPercent,
+          // A series cached before devices reported the disk has no such field.
+          diskPercent: newest.diskPercent ?? null,
           loadPercent: loadPercentOf(newest.load1, cpuCount),
           memoryPercent: newest.memoryPercent,
         }

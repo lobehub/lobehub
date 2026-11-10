@@ -8,9 +8,11 @@ import { getTrpcClient } from '../api/client';
 import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { registerAgentAccountCommand, registerAgentInboxCommand } from './agent/account';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
@@ -47,6 +49,8 @@ const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unkn
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
+  registerAgentAccountCommand(agent);
+  registerAgentInboxCommand(agent);
 
   // ── list ──────────────────────────────────────────────
 
@@ -77,7 +81,12 @@ export function registerAgentCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.agent(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -125,7 +134,10 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result, fields);
+          outputJson(
+            withUrl(result, await resolveUrlBuilder(client), resourcePath.agent(agentId)),
+            fields,
+          );
           return;
         }
 
@@ -312,7 +324,14 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result?.agent ?? result, fields);
+          outputJson(
+            withUrl(
+              result?.agent ?? result,
+              await resolveUrlBuilder(client),
+              resourcePath.agent(agentId),
+            ),
+            fields,
+          );
           return;
         }
 

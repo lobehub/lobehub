@@ -50,7 +50,7 @@ const SidebarBody = memo<{ itemKey: string }>(({ itemKey }) => {
       <AccordionHeader>
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('library.title')}
+            {t('docs.recentLibraries')}
           </Text>
         </AccordionTrigger>
         <div

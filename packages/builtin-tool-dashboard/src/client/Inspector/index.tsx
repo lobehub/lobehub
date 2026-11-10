@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,41 +11,44 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type {
   AddWidgetToDashboardState,
+  CreateDashboardState,
   DashboardApiNameType,
   DryRunWidgetState,
   GetWidgetRunsState,
+  ListWidgetPresetsState,
   RequestPublishState,
+  UpdateDashboardState,
   WidgetDraftState,
 } from '../../types';
 import { DashboardApiName, DashboardIdentifier } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    flex-shrink: 1;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  failed: css`
-    color: ${cssVar.colorError};
-    background: ${cssVar.colorErrorBg};
-  `,
-  succeeded: css`
-    color: ${cssVar.colorSuccess};
-    background: ${cssVar.colorSuccessBg};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    flexShrink: 1,
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  failed: {
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  succeeded: {
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+});
 
 type Props = BuiltinInspectorProps<Record<string, any>, any>;
 
@@ -56,17 +61,28 @@ const useChip = (apiName: DashboardApiNameType, props: Props): ReactNode => {
     case DashboardApiName.listDashboards: {
       return undefined;
     }
+    case DashboardApiName.createDashboard: {
+      const state = props.pluginState as CreateDashboardState | undefined;
+      return state?.title ?? args.title;
+    }
+    case DashboardApiName.listWidgetPresets: {
+      const state = props.pluginState as ListWidgetPresetsState | undefined;
+      return state ? String(state.presets.length) : undefined;
+    }
     case DashboardApiName.createWidgetDraft:
     case DashboardApiName.updateWidgetDraft: {
       const state = props.pluginState as WidgetDraftState | undefined;
-      return [args.title, state && `v${state.version}`].filter(Boolean).join(' · ') || undefined;
+      return (
+        [args.title ?? args.presetId, state && `v${state.version}`].filter(Boolean).join(' · ') ||
+        undefined
+      );
     }
     case DashboardApiName.dryRunWidget: {
       const state = props.pluginState as DryRunWidgetState | undefined;
       if (!state) return undefined;
       return (
         <span
-          className={cx(
+          {...stylex.props(
             styles.chip,
             state.status === 'succeeded' || state.status === 'partial'
               ? styles.succeeded
@@ -86,6 +102,10 @@ const useChip = (apiName: DashboardApiNameType, props: Props): ReactNode => {
     case DashboardApiName.addWidgetToDashboard: {
       const state = props.pluginState as AddWidgetToDashboardState | undefined;
       return state?.dashboardTitle ?? args.newDashboardTitle;
+    }
+    case DashboardApiName.updateDashboard: {
+      const state = props.pluginState as UpdateDashboardState | undefined;
+      return state?.title ?? args.title;
     }
     case DashboardApiName.getWidgetRuns: {
       const state = props.pluginState as GetWidgetRunsState | undefined;
@@ -108,7 +128,8 @@ const createInspector = (apiName: DashboardApiNameType) => {
         >
           {t(`builtins.${DashboardIdentifier}.apiName.${apiName}`)}
         </span>
-        {chip && (typeof chip === 'string' ? <span className={styles.chip}>{chip}</span> : chip)}
+        {chip &&
+          (typeof chip === 'string' ? <span {...stylex.props(styles.chip)}>{chip}</span> : chip)}
       </div>
     );
   });

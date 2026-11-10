@@ -1,14 +1,12 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinInspectorProps } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cx, useTheme } from '@lobehub/ui';
+import { Avatar, createStaticStyles, cx, Flexbox, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar, { isDefaultAgentAvatar } from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { shinyTextStyles } from '@/styles';
@@ -66,7 +64,11 @@ export const ExecuteAgentTasksInspector = memo<BuiltinInspectorProps<ExecuteTask
     const avatarItems = useMemo(
       () =>
         agents.map((agent) => ({
-          avatar: agent.avatar || DEFAULT_AVATAR,
+          avatar: isDefaultAgentAvatar(agent.avatar) ? (
+            <AgentAvatar agentId={agent.id} name={agent.title} size={24} />
+          ) : (
+            agent.avatar
+          ),
           background: agent.backgroundColor || theme.colorBgContainer,
           key: agent.id,
           title: agent.title || undefined,

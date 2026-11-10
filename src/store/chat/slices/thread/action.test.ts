@@ -103,6 +103,19 @@ const makeThread = (id: string, title: string, topicId = 'test-topic-id'): Threa
   userId: 'user-1',
 });
 
+const makeUpdateThread = (title: string): ThreadItem => ({
+  createdAt: new Date(),
+  id: 'thread-id',
+  lastActiveAt: new Date(),
+  sourceMessageId: 'msg-1',
+  status: ThreadStatus.Active,
+  title,
+  topicId: 'test-topic-id',
+  type: ThreadType.Continuation,
+  updatedAt: new Date(),
+  userId: 'user-1',
+});
+
 /** Fetch a topic's threads through the replica and wait until they are persisted. */
 const seedPersistedThreads = async (topicId: string, threads: ThreadItem[]) => {
   (threadService.getThreads as Mock).mockResolvedValueOnce(threads);
@@ -585,18 +598,7 @@ describe('thread action', () => {
     it('should generate and update thread title via AI', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      const mockThread: ThreadItem = {
-        createdAt: new Date(),
-        id: 'thread-id',
-        lastActiveAt: new Date(),
-        sourceMessageId: 'msg-1',
-        status: ThreadStatus.Active,
-        title: 'Old Title',
-        topicId: 'test-topic-id',
-        type: ThreadType.Continuation,
-        updatedAt: new Date(),
-        userId: 'user-1',
-      };
+      const mockThread: ThreadItem = makeUpdateThread('Old Title');
 
       act(() => {
         useChatStore.setState({
@@ -647,18 +649,7 @@ describe('thread action', () => {
     it('should show loading indicator during generation', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      const mockThread: ThreadItem = {
-        createdAt: new Date(),
-        id: 'thread-id',
-        lastActiveAt: new Date(),
-        sourceMessageId: 'msg-1',
-        status: ThreadStatus.Active,
-        title: 'Old Title',
-        topicId: 'test-topic-id',
-        type: ThreadType.Continuation,
-        updatedAt: new Date(),
-        userId: 'user-1',
-      };
+      const mockThread: ThreadItem = makeUpdateThread('Old Title');
 
       act(() => {
         useChatStore.setState({
@@ -688,18 +679,7 @@ describe('thread action', () => {
     it('should revert title on error', async () => {
       const { result } = renderHook(() => useChatStore());
 
-      const mockThread: ThreadItem = {
-        createdAt: new Date(),
-        id: 'thread-id',
-        lastActiveAt: new Date(),
-        sourceMessageId: 'msg-1',
-        status: ThreadStatus.Active,
-        title: 'Old Title',
-        topicId: 'test-topic-id',
-        type: ThreadType.Continuation,
-        updatedAt: new Date(),
-        userId: 'user-1',
-      };
+      const mockThread: ThreadItem = makeUpdateThread('Old Title');
 
       act(() => {
         useChatStore.setState({
@@ -754,20 +734,7 @@ describe('thread action', () => {
         useChatStore.setState({
           activeTopicId: 'test-topic-id',
           threadMaps: {
-            'test-topic-id': [
-              {
-                createdAt: new Date(),
-                id: 'thread-id',
-                lastActiveAt: new Date(),
-                sourceMessageId: 'msg-1',
-                status: ThreadStatus.Active,
-                title: 'Old Title',
-                topicId: 'test-topic-id',
-                type: ThreadType.Continuation,
-                updatedAt: new Date(),
-                userId: 'user-1',
-              },
-            ],
+            'test-topic-id': [makeUpdateThread('Old Title')],
           },
         });
       });
@@ -882,18 +849,7 @@ describe('thread action', () => {
     it('should update threadMaps with reducer result', () => {
       const { result } = renderHook(() => useChatStore());
 
-      const mockThread: ThreadItem = {
-        createdAt: new Date(),
-        id: 'thread-id',
-        lastActiveAt: new Date(),
-        sourceMessageId: 'msg-1',
-        status: ThreadStatus.Active,
-        title: 'Old Title',
-        topicId: 'test-topic-id',
-        type: ThreadType.Continuation,
-        updatedAt: new Date(),
-        userId: 'user-1',
-      };
+      const mockThread: ThreadItem = makeUpdateThread('Old Title');
 
       act(() => {
         useChatStore.setState({
@@ -921,18 +877,7 @@ describe('thread action', () => {
     it('should not update if result is the same', () => {
       const { result } = renderHook(() => useChatStore());
 
-      const mockThread: ThreadItem = {
-        createdAt: new Date(),
-        id: 'thread-id',
-        lastActiveAt: new Date(),
-        sourceMessageId: 'msg-1',
-        status: ThreadStatus.Active,
-        title: 'Title',
-        topicId: 'test-topic-id',
-        type: ThreadType.Continuation,
-        updatedAt: new Date(),
-        userId: 'user-1',
-      };
+      const mockThread: ThreadItem = makeUpdateThread('Title');
 
       act(() => {
         useChatStore.setState({

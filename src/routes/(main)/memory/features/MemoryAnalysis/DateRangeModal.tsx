@@ -1,11 +1,11 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
   DayjsDateRangePicker as DateRangePicker,
   type DayjsDateRangeValue,
+  Flexbox,
   type ModalInstance,
   Text,
   toast,

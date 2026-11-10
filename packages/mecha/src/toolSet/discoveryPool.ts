@@ -91,6 +91,8 @@ export interface DiscoveryPoolRequest {
    * (e.g. agent-management drops `callAgent` inside a sub-agent run).
    */
   manifestContext?: BuiltinToolResolveContext;
+  /** The page agent edits the open page through the conversation sandbox. */
+  pageScope?: boolean;
 }
 
 export interface DiscoveryPool {
@@ -148,7 +150,8 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
   const deviceCapable = request.deviceCapable ?? false;
   // Auto mode lets the model choose the sandbox or the routed device per
   // call, so the sandbox stays discoverable there too.
-  const cloudSandboxAllowed = runtimeMode === 'cloud' || executionTarget === 'auto';
+  const cloudSandboxAllowed =
+    runtimeMode === 'cloud' || executionTarget === 'auto' || !!request.pageScope;
   if (!cloudSandboxAllowed) delete manifestMap[CloudSandboxManifest.identifier];
   // A `none` / `sandbox` run behind a gateway must not expose device tools:
   // "no device" means NO device, not "no device yet". Without a gateway the

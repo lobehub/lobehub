@@ -1,19 +1,21 @@
 'use client';
 
-import type { TaskExecutionConfig } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskLabelRef } from '@lobechat/types';
 import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
   Block,
   Button,
+  confirmModal,
   cssVar,
   Flexbox,
+  Icon,
   Text,
   toast,
   useModalContext,
 } from '@lobehub/ui';
-import { Minimize2, Paperclip, X } from 'lucide-react';
+import { Minimize2, Paperclip, TagIcon, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,9 +25,14 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -38,9 +45,13 @@ import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useDefaultMemberAssignee } from '../shared/useDefaultMemberAssignee';
+import { useEscapeDiscardGuard } from '../shared/useEscapeDiscardGuard';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import { hasUnsavedTaskDraft } from './hasUnsavedTaskDraft';
 import ScheduleChip from './ScheduleChip';
 import {
   createDefaultScheduleDraft,
@@ -51,6 +62,8 @@ import { useTitleEnterToInstruction } from './useTitleEnterToInstruction';
 
 export interface CreateTaskContentProps {
   agentId?: string;
+  /** Initial labels, e.g. the label column of a board grouped by a label group. */
+  defaultLabelIds?: string[];
   /** Initial priority, e.g. the Kanban priority column the modal was opened from. */
   defaultPriority?: number;
   /**
@@ -58,7 +71,7 @@ export interface CreateTaskContentProps {
    * agent-scoped task list where every task belongs to that agent.
    */
   lockAssignee?: boolean;
-  onCreated?: (task: { agentId?: string; identifier: string; name?: string }) => void;
+  onCreated?: (task: { id: string; agentId?: string; identifier: string; name?: string }) => void;
   projectId?: string;
   /**
    * Creates a scheduled task: the form gains a schedule chip and the task is
@@ -75,6 +88,7 @@ export interface CreateTaskContentProps {
 const CreateTaskContent = memo<CreateTaskContentProps>(
   ({
     agentId,
+    defaultLabelIds,
     defaultPriority = 0,
     lockAssignee,
     onCreated,
@@ -94,8 +108,32 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(defaultPriority);
+    const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+    const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+    const [labels, setLabels] = useState<TaskLabelRef[]>(() =>
+      resolveTaskLabelRefs(getTaskStoreState().taskLabels, defaultLabelIds),
+    );
+    // Opened before the registry loaded (a cold start on a label-grouped
+    // list): hold the column's labels until they can be resolved, instead of
+    // filtering them against an empty registry and losing them.
+    const pendingDefaultLabelIdsRef = useRef(
+      getTaskStoreState().taskLabelsInit ? undefined : defaultLabelIds,
+    );
+    useEffect(() => {
+      const pending = pendingDefaultLabelIdsRef.current;
+      if (!isLabelsInit || !pending?.length) return;
+      pendingDefaultLabelIdsRef.current = undefined;
+      // Keep anything the user already picked meanwhile.
+      setLabels((current) =>
+        current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+      );
+    }, [isLabelsInit, labelRegistry]);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
-    const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+    // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
+    const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
+    const { defaultMemberAssignee, isDefaultMemberPending } = useDefaultMemberAssignee();
+    const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
+    const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
     // Where this task will run, if not simply wherever the assignee runs.
     // Undefined = inherit, and then nothing is sent, so an untouched modal
     // creates exactly the task it always did.
@@ -116,7 +154,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     // A private agent is the stronger constraint, so drop an incompatible member.
     useEffect(() => {
       if (isPrivateAgent) {
-        if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+        if (isOtherMemberAssignee) setMemberChoice(undefined);
         if (visibility === 'public') setVisibility('private');
         return;
       }
@@ -147,7 +185,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       );
     }, []);
     const handleMemberChange = useCallback((nextUserId: string | null) => {
-      setAssigneeUserId(nextUserId ?? undefined);
+      setMemberChoice(nextUserId);
     }, []);
 
     const handleInline = useCallback(() => {
@@ -166,7 +204,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     }, [editor]);
 
     const handleSubmit = useCallback(async () => {
-      if (!canCreateTask) return;
+      if (!canCreateTask || isMemberPending) return;
       const instruction = instructionRef.current.trim();
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
       if (!instruction && !title.trim() && !hasFiles) return;
@@ -186,6 +224,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...(isScheduled ? toScheduledCreateParams(scheduleDraft, config) : { config }),
           editorData: editorJson,
           instruction: instruction || title.trim(),
+          ...pickedLabelIds(labels, pendingDefaultLabelIdsRef.current),
           name: title.trim() || undefined,
           priority: priority || undefined,
           projectId,
@@ -196,6 +235,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         if (result) {
           close();
           onCreated?.({
+            id: result.id,
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
             name: result.name ?? undefined,
@@ -213,7 +253,9 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       execution,
       createTask,
       editor,
+      isMemberPending,
       isScheduled,
+      labels,
       onCreated,
       priority,
       projectId,
@@ -238,8 +280,33 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const handleTitleKeyDown = useTitleEnterToInstruction(editor);
 
+    // Escape is easy to hit by accident, so it asks before throwing away a
+    // filled-in task; an empty modal still closes straight away.
+    const rootRef = useRef<HTMLDivElement>(null);
+    useEscapeDiscardGuard(rootRef, {
+      hasUnsavedInput: () =>
+        hasUnsavedTaskDraft({
+          editorJson: editor?.getDocument?.('json'),
+          instruction: instructionRef.current,
+          title,
+        }),
+      onEscape: () =>
+        confirmModal({
+          cancelText: t('createTask.discardConfirm.cancel'),
+          content: t('createTask.discardConfirm.content'),
+          okButtonProps: { danger: true },
+          okText: t('createTask.discardConfirm.ok'),
+          onOk: close,
+          title: t('createTask.discardConfirm.title'),
+        }),
+    });
+
+    // An image pasted into the instruction finishes uploading later; without
+    // this, that update would move the caret back from the title mid-typing.
+    const handleTitleFocus = useCallback(() => releaseEditorSelection(editor), [editor]);
+
     return (
-      <Flexbox flex={1} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
+      <Flexbox flex={1} ref={rootRef} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
         <Flexbox
           horizontal
           align={'center'}
@@ -265,6 +332,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               padding: '4px 0',
             }}
             onChange={(e) => setTitle(e.target.value)}
+            onFocus={handleTitleFocus}
             onKeyDown={handleTitleKeyDown}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
@@ -275,7 +343,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 onClick={handleInline}
               />
             )}
-            <ActionIcon icon={X} onClick={close} />
+            <ActionIcon icon={X} title={t('close', { ns: 'common' })} onClick={close} />
           </Flexbox>
         </Flexbox>
 
@@ -286,6 +354,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         <div style={{ minHeight: 0, overflowY: 'auto' }}>
           <div style={{ minHeight: 144, padding: '0 24px' }}>
             <EditorCanvas
+              blockImageCaretGuard
               disabled={!canCreateTask}
               editor={editor}
               floatingToolbar={false}
@@ -336,6 +405,28 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector
@@ -453,7 +544,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           </Flexbox>
 
           <Button
-            disabled={!canCreateTask || isCreating}
+            disabled={!canCreateTask || isCreating || isMemberPending}
             loading={isCreating}
             shape={'round'}
             size={'small'}

@@ -1,8 +1,18 @@
+import { ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations, agents, chatGroups, sessions, topics, users } from '../../../schemas';
+import {
+  agentOperations,
+  agents,
+  chatGroups,
+  messages,
+  sessions,
+  threads,
+  topics,
+  users,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import * as topicModule from '../../topic';
 import { TopicModel } from '../../topic';
@@ -61,6 +71,7 @@ const PUBLIC_METHODS = [
   'getCronTopicsGroupedByCronJob',
   'isRunningOperationAlive',
   'listTopicsForMemoryExtractor',
+  'markRead',
   'patchRunningOperation',
   'purge',
   'query',
@@ -238,6 +249,35 @@ describe('TopicModel - characterization', () => {
       expect(await topicModel.restore([])).toEqual([]);
       expect(await topicModel.findTrashedByIds([])).toEqual([]);
       expect(await topicModel.purge([])).toEqual([]);
+    });
+
+    it('keeps subagent threads while trashed and purges them with the topic', async () => {
+      await serverDB.insert(threads).values({
+        id: 'subagent-thread',
+        metadata: { sourceToolCallId: 'toolu_1' },
+        topicId: 'agent-topic',
+        type: ThreadType.Isolation,
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        id: 'subagent-message',
+        role: 'assistant',
+        threadId: 'subagent-thread',
+        topicId: 'agent-topic',
+        userId,
+      });
+      const threadIds = async () =>
+        (await serverDB.select({ id: threads.id }).from(threads)).map((row) => row.id);
+      const messageIds = async () =>
+        (await serverDB.select({ id: messages.id }).from(messages)).map((row) => row.id);
+
+      await topicModel.softDelete(['agent-topic'], { deletedAt });
+      expect(await threadIds()).toEqual(['subagent-thread']);
+      expect(await messageIds()).toEqual(['subagent-message']);
+
+      expect(await topicModel.purge(['agent-topic'])).toEqual(['agent-topic']);
+      expect(await threadIds()).toEqual([]);
+      expect(await messageIds()).toEqual([]);
     });
 
     it('batchDeleteIncludingTrashed removes trashed rows too', async () => {

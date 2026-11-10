@@ -21,10 +21,24 @@ export const RedisKeyNamespace = {
    */
   AGENT_SIGNAL: 'agent-signal',
   /**
+   * Leases on the agent runs a user has in flight, used to cap how many run at once.
+   */
+  AGENT_RUN: 'agentRun',
+  /**
    * Follow-ups a user queued behind a running agent turn ("steer"). The server
    * drains them into the next turn itself when the running one hands back.
    */
   AGENT_STEER: 'agentSteer',
+  /**
+   * Agent identity keys — replay claims for agent-account provider webhooks,
+   * shared by every instance that may receive a delivery.
+   */
+  AGENT_IDENTITY: 'agent-identity',
+  /**
+   * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
+   * silent-wake budget and the per-channel wake scheduler.
+   */
+  BOT_WAKE: 'bot-wake',
   /**
    * AI generation related keys (agent welcome, placeholders, etc.)
    */
@@ -89,6 +103,70 @@ export const RedisKeys = {
       `nightly_topics:v1:${userId}:${localDate}`,
   },
   /**
+   * Bot-wake scope — see {@link RedisKeyNamespace.BOT_WAKE}. `{key}` is a channel or thread key
+   * built by the bot-wake scenario (`platform:applicationId:channel[:thread]`).
+   */
+  botWake: {
+    /**
+     * Classifier calls one bot made in one UTC hour.
+     * Full key: bot-wake:classifier_calls:v1:{applicationId}:{utcHour}
+     */
+    classifierCalls: (applicationId: string, utcHour: string): string =>
+      `classifier_calls:v1:${applicationId}:${utcHour}`,
+    /**
+     * Who spoke last in one channel or thread, the follow-up window and the silent-wake count.
+     * Full key: bot-wake:channel:v1:{key}
+     */
+    channel: (key: string): string => `channel:v1:${key}`,
+    /**
+     * The wake a bot already decided to start for one message, kept while the message is parked
+     * so its replay runs on that decision instead of judging the message a second time.
+     * Full key: bot-wake:initiation:v1:{applicationId}:{messageId}
+     */
+    initiation: (applicationId: string, messageId: string): string =>
+      `initiation:v1:${applicationId}:${messageId}`,
+    /**
+     * Set once a message has engaged a bot: it @-mentioned the bot when sent, the bot replied to
+     * it, or an edit already woke the bot on it. An edit that newly @-mentions the bot wakes it only
+     * while this key is absent, so one message never wakes the same bot twice.
+     * Full key: bot-wake:edit_wake:v1:{applicationId}:{messageId}
+     */
+    editWake: (applicationId: string, messageId: string): string =>
+      `edit_wake:v1:${applicationId}:${messageId}`,
+    /**
+     * The last messages said in one channel or thread, shared by every bot listening there, so it
+     * carries no application id.
+     * Full key: bot-wake:conversation_log:v1:{key}
+     */
+    conversationLog: (key: string): string => `conversation_log:v1:${key}`,
+    /**
+     * Wake scheduler state machine of one channel.
+     * Full key: bot-wake:scheduler:v1:{key}
+     */
+    scheduler: (key: string): string => `scheduler:v1:${key}`,
+    /**
+     * Short lock held while one writer updates a channel's scheduler state.
+     * Full key: bot-wake:scheduler_lock:v1:{key}
+     */
+    schedulerLock: (key: string): string => `scheduler_lock:v1:${key}`,
+  },
+  /**
+   * Run lease scope — see {@link RedisKeyNamespace.AGENT_RUN}.
+   */
+  agentRun: {
+    /**
+     * One user's in-flight run leases (field = holder id, value = expiry in ms).
+     * Full key: agentRun:run_slots:v1:{userId}
+     */
+    runSlots: (userId: string): string => `run_slots:v1:${userId}`,
+    /**
+     * Whether one operation's `onComplete` delivery is settling or has settled
+     * its Task run, so a redelivery is not applied a second time.
+     * Full key: agentRun:task_run_delivery:v1:{operationId}
+     */
+    taskRunDelivery: (operationId: string): string => `task_run_delivery:v1:${operationId}`,
+  },
+  /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
    */
   agentSteer: {
@@ -121,6 +199,24 @@ export const RedisKeys = {
      * Full key: agentSteer:thread_start:v1:{threadId}
      */
     threadStartFence: (threadId: string): string => `thread_start:v1:${threadId}`,
+    /**
+     * Follow-ups a heterogeneous run (Claude Code) took into its live session
+     * and has not picked up yet (field = user message id). Their drained batch
+     * stays leased until the agent replays the message.
+     * Full key: agentSteer:hetero_deliveries:v1:{operationId}
+     */
+    heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+  },
+  /**
+   * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
+   */
+  agentIdentity: {
+    /**
+     * Replay claim on one provider webhook delivery.
+     * Full key: agent-identity:webhook_event:v1:{provider}:{eventId}
+     */
+    webhookEvent: (provider: string, eventId: string): string =>
+      `webhook_event:v1:${provider}:${eventId}`,
   },
   /**
    * AI generation scope - for AI-generated content like welcome messages
@@ -151,7 +247,11 @@ export const RedisKeys = {
    * Lobechat core scope - for application-level caching
    */
   lobechat: {
-    // Add lobechat scope keys here as needed
+    /**
+     * Digest of the body the last projection of a page's collaboration room wrote.
+     * Full key: lobechat:page_projection:v1:{documentId}
+     */
+    pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.
@@ -186,9 +286,12 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
+  agentRun: RedisKeyNamespace.AGENT_RUN,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,

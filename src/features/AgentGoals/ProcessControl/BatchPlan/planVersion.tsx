@@ -28,8 +28,11 @@ PlanVersionProvider.displayName = 'GoalPlanVersionProvider';
 export const usePlanVersionSelection = () => use(PlanVersionContext);
 
 export interface PlanVersion {
-  /** `SKILL.md` as kept, frontmatter included. */
-  content: string;
+  /**
+   * The plan's text, for a batch from before the plan became a skill. A skill
+   * version's package is read on demand (`useSkillVersion`).
+   */
+  content?: string;
   revision: number;
 }
 
@@ -48,13 +51,19 @@ export const usePlanVersions = (graph: GoalGraphView, model: BatchModel) => {
   );
   const kept = [...(skill?.versions ?? [])].sort((a, b) => a.version - b.version);
   const versions: PlanVersion[] = kept.length
-    ? kept.map((version) => ({ content: version.content, revision: version.version }))
+    ? kept.map((version) => ({ revision: version.version }))
     : model.rounds
         .filter((item) => item.templateId)
         .map((item: BatchRound) => ({
           content: (item.templateId && graph.byId[item.templateId]?.node.description) || '',
           revision: item.planVersion,
         }));
-  // A skill's scripts are its latest set; versions keep `SKILL.md` alone.
-  return { files: skill?.files ?? [], isLoading: !!planSkill && isLoading, versions };
+  // The skill's current files, for a version that did not keep its own.
+  return {
+    files: skill?.files ?? [],
+    isLoading: !!planSkill && isLoading,
+    // Whose versions to read: only once the skill has listed them.
+    skillId: kept.length ? planSkill?.id : undefined,
+    versions,
+  };
 };

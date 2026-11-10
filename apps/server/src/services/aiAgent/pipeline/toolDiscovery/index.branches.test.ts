@@ -10,11 +10,13 @@
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as MechaModule from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import {
   buildConnectorOwnershipPrompt,
@@ -50,12 +52,38 @@ vi.mock('@/database/models/chatGroup', () => ({
     getGroupAgentsWithMeta = vi.fn(async () => chatGroupState.roster);
   },
 }));
+const { projectState } = vi.hoisted(() => ({
+  projectState: {
+    coordinatorAgentId: 'coordinator-1' as string | null,
+    inboxAgentId: 'lobe-ai',
+    knowledgeBaseIds: [] as string[],
+  },
+}));
+vi.mock('@/database/models/project', () => ({
+  ProjectModel: class {
+    findById = vi.fn(async (id: string) => ({
+      coordinatorAgentId: projectState.coordinatorAgentId,
+      id,
+    }));
+    getEnabledKnowledgeBaseIds = vi.fn(async () => projectState.knowledgeBaseIds);
+    // A cleared main agent reads back as LobeAI.
+    resolveCoordinatorAgents = vi.fn(async (items: Array<{ coordinatorAgentId: string | null }>) =>
+      items.map((item) => ({
+        ...item,
+        coordinatorAgentId: item.coordinatorAgentId ?? projectState.inboxAgentId,
+      })),
+    );
+  },
+}));
 const { connectorToolState } = vi.hoisted(() => ({
   connectorToolState: { tools: [] as Array<{ permission: string; toolName: string }> },
 }));
 // Permission patching builds its own model rather than using `deps`.
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: class {
+    static forEvaluation() {
+      return new this();
+    }
     queryByConnector = vi.fn(async () => connectorToolState.tools);
   },
 }));
@@ -183,6 +211,9 @@ const lastEngineOptions = () =>
 beforeEach(() => {
   deviceGatewayState.isConfigured = false;
   chatGroupState.roster = [];
+  projectState.coordinatorAgentId = 'coordinator-1';
+  projectState.inboxAgentId = 'lobe-ai';
+  projectState.knowledgeBaseIds = [];
   vi.mocked(getScopedOnlineDevices).mockReset().mockResolvedValue([]);
   vi.mocked(collectBorrowedConnectors).mockReset().mockReturnValue([]);
   vi.mocked(buildConnectorOwnershipPrompt).mockReset().mockReturnValue('');
@@ -313,11 +344,42 @@ describe('discoverTools — turn-scoped builtins', () => {
     expect(result.agentPlugins).toContain(LobeAgentManifest.identifier);
   });
 
+  it('gives a project coordinator the task tool and the project knowledge', async () => {
+    projectState.coordinatorAgentId = 'agent-1';
+    projectState.knowledgeBaseIds = ['kb-project'];
+
+    const result = await run({ appContext: { projectId: 'project-1' } }).promise;
+
+    expect(result.agentPlugins).toContain(TaskIdentifier);
+    expect(lastEngineOptions().hasEnabledKnowledgeBases).toBe(true);
+  });
+
+  it('gives LobeAI the task tool in a project whose main agent was cleared', async () => {
+    // The run agent is LobeAI: a cleared main agent resolves to it.
+    projectState.coordinatorAgentId = null;
+    projectState.inboxAgentId = 'agent-1';
+
+    const result = await run({ appContext: { projectId: 'project-1' } }).promise;
+
+    expect(result.agentPlugins).toContain(TaskIdentifier);
+  });
+
+  it('lets a project member search project knowledge without delegating work', async () => {
+    projectState.knowledgeBaseIds = ['kb-project'];
+
+    const result = await run({ appContext: { projectId: 'project-1' } }).promise;
+
+    expect(result.agentPlugins).not.toContain(TaskIdentifier);
+    expect(lastEngineOptions().hasEnabledKnowledgeBases).toBe(true);
+  });
+
   it('adds nothing turn-scoped for a plain text turn', async () => {
     const result = await run().promise;
 
     expect(result.agentPlugins).not.toContain(MessageToolIdentifier);
     expect(result.agentPlugins).not.toContain(LobeAgentManifest.identifier);
+    expect(result.agentPlugins).not.toContain(TaskIdentifier);
+    expect(lastEngineOptions().hasEnabledKnowledgeBases).toBe(false);
     expect(result.operationAgentGroup).toBeUndefined();
   });
 });
@@ -520,4 +582,55 @@ describe('discoverTools — oversized knowledge files', () => {
 
     expect(lastEngineOptions().hasOversizedFiles).toBe(false);
   });
+});
+
+describe('discoverTools — exact eval mock bindings', () => {
+  it.each(['notion', 'lobe-web-browsing'])(
+    'replaces ordinary manifests for bound alias %s and skips identifier resolution',
+    async (alias) => {
+      const snapshots = {
+        [alias]: {
+          connectorId: 'fixed-uuid',
+          datasetId: 'dataset',
+          fingerprint: 'fixed-contract',
+          transport: 'mcp' as const,
+        },
+      };
+      const resolve = vi
+        .spyOn(AgentEvalConnectorService.prototype, 'resolveBindings')
+        .mockResolvedValue({
+          manifests: [{ ...skillManifest(alias), type: 'mcp' } as never],
+          snapshots,
+        });
+      const requested: string[] = [];
+      try {
+        const result = await run({
+          agentConfig: { plugins: [alias] },
+          connectorResolve: (ids) => {
+            requested.push(...ids);
+            return [];
+          },
+          input: { evalConnectorSnapshots: snapshots },
+          installedPlugins: [
+            {
+              identifier: alias,
+              manifest: {
+                ...skillManifest(alias),
+                api: [{ name: 'realAccountWrite', parameters: {} }],
+              },
+            },
+          ],
+        }).promise;
+        expect(requested).not.toContain(alias);
+        expect(
+          result.toolManifestMap[alias].api.map((tool: { name: string }) => tool.name),
+        ).toEqual(['doThing']);
+        expect(JSON.stringify(result.toolManifestMap[alias])).not.toMatch(
+          /mcpParams|realAccountWrite/,
+        );
+      } finally {
+        resolve.mockRestore();
+      }
+    },
+  );
 });

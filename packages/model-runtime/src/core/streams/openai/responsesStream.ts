@@ -5,6 +5,11 @@ import type { Stream } from 'openai/streaming';
 import { AgentRuntimeErrorType } from '../../../types/error';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIResponseUsage } from '../../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -14,12 +19,11 @@ import type {
 } from '../protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
   createFirstErrorHandleTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
 } from '../protocol';
+import { recordProviderReportedCost } from '../providerReportedCost';
 import type { OpenAIStreamOptions } from './openai';
 
 const toResponsesError = (error: { code?: string | null; message?: string | null }) =>
@@ -351,8 +355,10 @@ export const OpenAIResponsesStream = (
       : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   // use closure to pass payload to transformOpenAIStream
-  const transformWithPayload: typeof transformOpenAIStream = (chunk, streamContext) =>
-    transformOpenAIStream(chunk, streamContext, payload);
+  const transformWithPayload: typeof transformOpenAIStream = (chunk, streamContext) => {
+    recordProviderReportedCost(streamStack, chunk);
+    return transformOpenAIStream(chunk, streamContext, payload);
+  };
 
   return (
     readableStream
@@ -367,7 +373,8 @@ export const OpenAIResponsesStream = (
           streamStack,
         }),
       )
-      .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createModelEventTransformer((c) => c, streamStack))
+      .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createSSEEncoder())
   );
 };

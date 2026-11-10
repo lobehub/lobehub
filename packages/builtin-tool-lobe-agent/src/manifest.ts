@@ -256,6 +256,11 @@ export const LobeAgentManifest: BuiltinToolManifest = {
               'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Leave empty (or omit) to start a new sub-agent; never invent an id.',
             type: 'string',
           },
+          runInBackground: {
+            description:
+              'Optional. Start the sub-agent and get control back immediately instead of waiting for it. Use it only when you have other independent work to do meanwhile, or when the user should not wait on this result. The result arrives later as a new message (waking you up if your turn has ended) — never poll or wait for it. Default is false: wait for the result in this turn.',
+            type: 'boolean',
+          },
           ...(isDesktop && {
             runInClient: {
               description:

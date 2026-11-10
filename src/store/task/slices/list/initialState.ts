@@ -16,9 +16,12 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
-export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status';
+/** `label:<groupId>` boards one column per label of that label group, plus "no label". */
+export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status' | `label:${string}`;
 
 export interface TaskListSliceState {
+  /** The viewed list is narrowed by the page's filter, so it is not every task. */
+  activeTaskListFiltered?: boolean;
   /**
    * The list the Tasks page is showing (`taskListMap` key) — what the task
    * manager agent sees as "the viewed list".

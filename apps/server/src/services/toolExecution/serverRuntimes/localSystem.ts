@@ -5,6 +5,10 @@ import {
 } from '@lobechat/builtin-tool-local-system';
 
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
+import {
+  awaitManagedDeviceForToolCall,
+  isDeviceUnreachableResult,
+} from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
@@ -128,11 +132,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // CLI would resolve to the device credentials' PERSONAL scope, which is
         // how a workspace agent ends up unable to find (or edit) itself. Set on
         // every command, so an `lh` reached indirectly (`bash -lc 'lh …'`, a
-        // script, a Makefile) inherits the scope too. The model's own `env`
-        // wins: it may be deliberately overriding the scope.
+        // script, a Makefile) inherits the scope too. The run id travels with
+        // it: `lh goal plan` and the other run-attributed commands need it. The
+        // model's own `env` wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
           finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
-          const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
+          const lhEnv = buildDeviceLhEnv({
+            operationId: context.operationId,
+            workspaceId: await getContentWorkspaceId(),
+          });
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
 
           // The sandbox decision belongs to the run's owner, not to the model:
@@ -153,24 +161,40 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
-        const result = await executeAuthorizedDeviceToolCall(
-          context.serverDB,
-          {
-            deviceId: context.activeDeviceId!,
-            operationId: context.operationId,
-            userId: context.userId!,
-            // Workspace devices live under the `workspace:<id>` principal in
-            // the gateway, so the relay needs the workspaceId to address the
-            // right DO pool. Personal device runs resolve to undefined.
-            workspaceId: await getDeviceWorkspaceId(),
-          },
-          {
-            apiName: api.name,
-            arguments: JSON.stringify(finalArgs),
-            identifier: LocalSystemIdentifier,
-          },
-          context.executionTimeoutMs,
-        );
+        const deviceWorkspaceId = await getDeviceWorkspaceId();
+        const execute = () =>
+          executeAuthorizedDeviceToolCall(
+            context.serverDB,
+            {
+              deviceId: context.activeDeviceId!,
+              operationId: context.operationId,
+              userId: context.userId!,
+              // Workspace devices live under the `workspace:<id>` principal in
+              // the gateway, so the relay needs the workspaceId to address the
+              // right DO pool. Personal device runs resolve to undefined.
+              workspaceId: deviceWorkspaceId,
+            },
+            {
+              apiName: api.name,
+              arguments: JSON.stringify(finalArgs),
+              identifier: LocalSystemIdentifier,
+            },
+            context.executionTimeoutMs,
+          );
+        let result = await execute();
+
+        // A managed cloud device that is asleep or still starting is woken and
+        // waited for briefly. Nothing ran on it, so the call is sent once more
+        // when it comes online; otherwise the model is told to retry rather
+        // than to ask the user to reconnect a machine.
+        if (isDeviceUnreachableResult(result) && context.serverDB) {
+          const managed = await awaitManagedDeviceForToolCall(
+            { db: context.serverDB, userId: context.userId!, workspaceId: deviceWorkspaceId },
+            context.activeDeviceId!,
+          );
+          if (managed === 'online') result = await execute();
+          else if (managed) return withoutDeviceReplay(managed);
+        }
 
         return withoutDeviceReplay(result);
       };

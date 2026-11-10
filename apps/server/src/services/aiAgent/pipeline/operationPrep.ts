@@ -1,27 +1,33 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
-import { buildGoalOverviewContext, getWorkingDirEffectivePath } from '@lobechat/types';
+import type {
+  EvalMemoryReference,
+  LobeAgentAgencyConfig,
+  WorkspaceInitResult,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
-import { GoalGraphModel } from '@/database/models/goalGraph';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
+import { applyEvalGateToToolSet } from '../evalGate';
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
 import { applyShareGateToToolSet } from '../shareGate';
@@ -33,8 +39,10 @@ import type {
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
+import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
+import { buildViewedGoalOverview } from './viewedGoalContext';
 import { buildViewedTaskContextPrompt } from './viewedTaskContext';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -181,6 +189,10 @@ export interface OperationPrepInput {
   disabledPluginIds: string[];
   discovery: ToolDiscoveryResult;
   ephemeralUserMessage?: string;
+  /** The only tools an eval attempt may see or call (case environment + infrastructure). */
+  evalAllowedTools?: string[];
+  /** Isolated Memory scope of an eval trial; persona is read from it, never the caller. */
+  evalMemory?: EvalMemoryReference;
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
   loadHistoryMessages: () => Promise<any[]>;
@@ -228,11 +240,17 @@ const resolveWorkspaceInit = async (
   params: {
     activeDeviceId: string | undefined;
     agencyConfig?: LobeAgentAgencyConfig;
+    /**
+     * The device is not online yet (a managed cloud device that is waking).
+     * The bound directory still resolves from the persisted rows, but the
+     * device is never scanned: only a cached scan is served.
+     */
+    deviceWaking?: boolean;
     topicId: string;
   },
 ): Promise<ResolvedWorkspaceInit> => {
   const empty: WorkspaceInitResult = { instructions: [], skills: [] };
-  const { activeDeviceId, agencyConfig, topicId } = params;
+  const { activeDeviceId, agencyConfig, deviceWaking, topicId } = params;
   if (!activeDeviceId) return { workspace: empty };
 
   try {
@@ -287,6 +305,8 @@ const resolveWorkspaceInit = async (
     const cached = workingDirs.find(
       (dir) => dir.path === boundCwd || getWorkingDirEffectivePath(dir) === boundCwd,
     );
+
+    if (deviceWaking) return { ...resolved, workspace: cached?.workspace ?? empty };
 
     if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
       log('execAgent: reusing cached workspace init for %s', boundCwd);
@@ -422,6 +442,7 @@ export const prepareOperation = async (
     shareGate,
     topicId,
     userMessageId,
+    userMessageMetadata,
   } = ctx;
   const {
     botPlatformContext,
@@ -441,11 +462,7 @@ export const prepareOperation = async (
     activeDeviceId,
     activeDeviceScope,
     agentPlugins,
-    builtinModels,
-    composioManifests,
-    connectorManifests,
     executionPlan,
-    lobehubSkillManifests,
     onlineDevices,
     toolsEngine,
     toolsResult,
@@ -521,10 +538,21 @@ export const prepareOperation = async (
   // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
   let userMemory: ServerUserMemoryConfig | undefined;
 
+  // An eval attempt reads its persona from its own Memory entries (the case
+  // fixture's), never the caller's. Checking the reference sits outside the
+  // best-effort persona fetch: a foreign reference must fail the attempt.
+  const evalPersona = input.evalMemory
+    ? await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).getPersonaDocument(
+        input.evalMemory,
+        { threadId: appContext?.threadId, topicId },
+      )
+    : undefined;
+
   if (globalMemoryEnabled) {
     try {
-      const personaModel = new UserPersonaModel(deps.db, deps.userId);
-      const persona = await personaModel.getLatestPersonaDocument();
+      const persona = input.evalMemory
+        ? evalPersona
+        : await new UserPersonaModel(deps.db, deps.userId).getLatestPersonaDocument();
 
       if (persona?.persona) {
         userMemory = {
@@ -566,12 +594,16 @@ export const prepareOperation = async (
   // - videoList: video-capable models render these as video parts
   // - audioList: audio-capable models render these as audio parts
   // - fileList: MessageContentProcessor injects content via filesPrompts() XML
+  // - metadata: the row's persisted metadata, so injectors that read attached
+  //   content (selections, local file snapshots) see this turn as they will
+  //   see it in history
   const userMessage = {
     audioList: runAttachments.audioList,
     content: ephemeralUserMessage ?? prompt,
     fileList: runAttachments.fileList,
     id: userMessageId,
     imageList: runAttachments.imageList,
+    ...(userMessageMetadata && { metadata: userMessageMetadata }),
     role: 'user' as const,
     videoList: runAttachments.videoList,
   };
@@ -619,6 +651,24 @@ export const prepareOperation = async (
         tools,
       },
       shareGate,
+    );
+  }
+
+  // Eval attempts stay inside the case's environment the same way: whatever
+  // discovery merged in (always-on builtins, every plugin the account holds
+  // for other cases) is pruned to the attempt's allowlist here, so neither the
+  // first step nor a later `lobe-activator` call can reach past it.
+  if (input.evalAllowedTools) {
+    applyEvalGateToToolSet(
+      {
+        activatableToolIds,
+        enabledToolIds: toolsResult.enabledToolIds,
+        executorMap: discovery.toolExecutorMap,
+        manifestMap: discovery.toolManifestMap,
+        sourceMap: discovery.toolSourceMap,
+        tools,
+      },
+      input.evalAllowedTools,
     );
   }
 
@@ -685,37 +735,25 @@ export const prepareOperation = async (
     }
   }
 
-  // Tasks side conversation: the viewed task (or just the assignee defaults).
-  const taskManagerPrompt = await buildViewedTaskContextPrompt(deps, appContext, input.taskId);
-  if (taskManagerPrompt) {
+  // Page-scoped context (the viewed task or goal) and the project the run is in.
+  // Delegation rules name the task tool, so they follow its presence in the final set.
+  const [taskManagerPrompt, goalOverview, projectPrompt] = await Promise.all([
+    buildViewedTaskContextPrompt(deps, appContext, input.taskId),
+    buildViewedGoalOverview(deps, appContext),
+    buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
+      coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
+    }),
+  ]);
+  if (taskManagerPrompt || goalOverview || projectPrompt) {
     initialContext = {
       ...initialContext,
       initialContext: {
         ...initialContext.initialContext,
-        taskManager: { contextPrompt: taskManagerPrompt },
+        ...(goalOverview && { goalOverview }),
+        ...(projectPrompt && { projectContext: { contextPrompt: projectPrompt } }),
+        ...(taskManagerPrompt && { taskManager: { contextPrompt: taskManagerPrompt } }),
       },
     };
-  }
-
-  // Goal-page side conversation: mirror the client executor's injection so
-  // server-run agents also answer progress questions from the live graph.
-  if (appContext?.viewedGoal?.goalId) {
-    try {
-      const snapshot = await new GoalGraphModel(deps.db, deps.userId, deps.workspaceId).getGraph(
-        appContext.viewedGoal.goalId,
-      );
-      if (snapshot) {
-        initialContext = {
-          ...initialContext,
-          initialContext: {
-            ...initialContext.initialContext,
-            goalOverview: buildGoalOverviewContext(snapshot),
-          },
-        };
-      }
-    } catch (error) {
-      log('execAgent: failed to build goal overview context: %O', error);
-    }
   }
 
   // Persist the @-mentioned agents into the runtime initialContext so the
@@ -740,9 +778,14 @@ export const prepareOperation = async (
   // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
   // path) flows through; the directory tree is enumerated lazily, keeping the
   // op-param payload small.
+  // A waking managed device is not bound yet (see `resolveDevicePlan`), but
+  // its directory is known from the persisted rows, and the run will reach it.
+  const wakingDeviceId =
+    executionPlan?.kind === 'device-wakeable' ? executionPlan.deviceId : undefined;
   const workspaceInit = await resolveWorkspaceInit(deps, {
-    activeDeviceId,
+    activeDeviceId: activeDeviceId ?? wakingDeviceId,
     agencyConfig: agentConfig.agencyConfig ?? undefined,
+    deviceWaking: !activeDeviceId && !!wakingDeviceId,
     topicId,
   });
 
@@ -765,7 +808,7 @@ export const prepareOperation = async (
     config: workspaceInit.boundCwdConfig,
     currentDeviceId: workspaceInit.topicDeviceId,
     currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
-    deviceId: activeDeviceId,
+    deviceId: activeDeviceId ?? wakingDeviceId,
     topicId,
   });
 
@@ -804,11 +847,16 @@ export const prepareOperation = async (
   // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
   const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
   let expertise;
-  try {
-    const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
-    expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
-  } catch (error) {
-    console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+  // Learned expertise is the caller's account state. An eval attempt sees only
+  // what its case declares, so it is left out (its write side, Agent Signal,
+  // is suppressed on eval turns as well).
+  if (ctx.trigger !== RequestTrigger.Eval) {
+    try {
+      const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
+      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
+    } catch (error) {
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+    }
   }
 
   return {

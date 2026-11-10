@@ -3,9 +3,11 @@
  * skills) and publish-asset copies.
  */
 import type {
+  DeviceClaudeCodeMemoryRunEnv,
   DeviceCopyAssetForPublishResult,
   DeviceDirectoryBrowseResult,
   DeviceExternalAssetForPublishResult,
+  DeviceListClaudeCodeMemoryResult,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
   DeviceProjectDirectoryListResult,
@@ -341,6 +343,47 @@ export async function listProjectSkills(
     return result.data;
   } catch (error) {
     log('listProjectSkills: error for deviceId=%s — %O', deviceId, error);
+    return undefined;
+  }
+}
+
+/**
+ * Claude Code's auto memory (`~/.claude/projects/<key>/memory`) for a project
+ * on a remote device via the `listClaudeCodeMemory` device RPC — the workspace
+ * panel's Memory tab in device mode. Returns `undefined` when the gateway is
+ * unconfigured, the device is offline, or the call fails (including a client
+ * too old to know the method).
+ */
+export async function listClaudeCodeMemory(
+  getClient: DeviceClientGetter,
+  params: {
+    deviceId: string;
+    /** The agent's own `CLAUDE_CONFIG_DIR` / `CLAUDE_CODE_PROJECT_DIR_NAME`. */
+    env?: DeviceClaudeCodeMemoryRunEnv;
+    scope: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  },
+): Promise<DeviceListClaudeCodeMemoryResult | undefined> {
+  const { userId, deviceId, env, scope, timeout = 30_000, workspaceId } = params;
+  const client = getClient();
+  if (!client) return undefined;
+
+  try {
+    const result = await client.invokeRpc<DeviceListClaudeCodeMemoryResult>(
+      { deviceId, timeout, userId, workspaceId },
+      { method: 'listClaudeCodeMemory', params: { env, scope } },
+    );
+
+    if (!result.success || !result.data) {
+      log('listClaudeCodeMemory: failed for deviceId=%s — %s', deviceId, result.error);
+      return undefined;
+    }
+
+    return result.data;
+  } catch (error) {
+    log('listClaudeCodeMemory: error for deviceId=%s — %O', deviceId, error);
     return undefined;
   }
 }

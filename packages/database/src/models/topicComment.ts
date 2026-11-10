@@ -30,6 +30,7 @@ import type { TopicCommentAnchorPreview, TopicCommentItem } from '../schemas/top
 import { topicCommentMentions, topicComments } from '../schemas/topicComment';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { notTrashed } from '../utils/softDelete';
+import { countOf, nonNull } from './utils/rows';
 
 export const TOPIC_COMMENT_WORKSPACE_REQUIRED =
   'Topic comments are workspace-scoped; a workspaceId is required';
@@ -661,12 +662,12 @@ export class TopicCommentModel {
 
       if (!comment || comment.deletedAt) return false;
 
-      const [structuralReplies] = await tx
-        .select({ total: count() })
+      const structuralReplies = await tx
+        .select({ count: count() })
         .from(topicComments)
         .where(eq(topicComments.parentCommentId, id));
 
-      if ((structuralReplies?.total ?? 0) > 0) {
+      if (countOf(structuralReplies, 'the structural reply count') > 0) {
         await tx
           .update(topicComments)
           .set({ content: '', deletedAt: new Date(), editorData: null, updatedAt: new Date() })
@@ -688,12 +689,12 @@ export class TopicCommentModel {
           .limit(1);
 
         if (parent?.deletedAt) {
-          const [siblings] = await tx
-            .select({ total: count() })
+          const siblings = await tx
+            .select({ count: count() })
             .from(topicComments)
             .where(eq(topicComments.parentCommentId, parent.id));
 
-          if ((siblings?.total ?? 0) === 0)
+          if (countOf(siblings, 'the sibling reply count') === 0)
             await tx.delete(topicComments).where(eq(topicComments.id, parent.id));
         }
       }
@@ -853,7 +854,7 @@ export class TopicCommentModel {
 
     const replyCountByRootId = new Map<string, number>();
     for (const row of replyCountRows) {
-      if (row.parentCommentId) replyCountByRootId.set(row.parentCommentId, row.total);
+      replyCountByRootId.set(nonNull(row.parentCommentId, 'inArray(parent_comment_id)'), row.total);
     }
 
     return {
@@ -931,8 +932,8 @@ export class TopicCommentModel {
       eq(topicComments.workspaceId, workspaceId),
     );
 
-    const [totalRow] = await this.db
-      .select({ total: count() })
+    const totalRows = await this.db
+      .select({ count: count() })
       .from(topicComments)
       .where(and(scope, isNull(topicComments.deletedAt), isNull(topicComments.moderatedAt)));
 
@@ -966,7 +967,7 @@ export class TopicCommentModel {
       countByMessage: Object.fromEntries(
         byMessage.map((row) => [row.messageId as string, row.messageCount]),
       ),
-      total: totalRow?.total ?? 0,
+      total: countOf(totalRows, 'the topic comment count'),
     };
   }
 
@@ -1024,7 +1025,7 @@ export const purgeExpiredTopicCommentModeration = async (
       .from(topicComments)
       .where(inArray(topicComments.parentCommentId, candidateIds));
     const idsWithChildren = new Set(
-      children.flatMap(({ parentCommentId }) => (parentCommentId ? [parentCommentId] : [])),
+      children.map(({ parentCommentId }) => nonNull(parentCommentId, 'inArray(parent_comment_id)')),
     );
     const tombstoneIds = candidateIds.filter((id) => idsWithChildren.has(id));
     const hardDeleteIds = candidateIds.filter((id) => !idsWithChildren.has(id));

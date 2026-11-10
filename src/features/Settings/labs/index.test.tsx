@@ -115,23 +115,25 @@ describe('Labs settings page', () => {
     expect(within(splitView).getByText('stage.alpha.label')).toBeDefined();
   });
 
+  it('puts the self-evolving usage note on its own line below the description', () => {
+    renderPage();
+
+    const desc = screen.getByText('features.selfLearning.desc');
+    const note = screen.getByText('features.selfLearning.note');
+    expect(note).not.toBe(desc);
+    expect(desc.nextElementSibling).toBe(note);
+  });
+
   it('renders the OAuth Apps lab toggle', () => {
     renderPage();
 
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
-  it('renders Integrations as an alpha lab toggle', () => {
+  it('does not render released Integrations as a lab toggle', () => {
     renderPage();
 
-    const integrations = screen.getByText('features.integrations.title');
-    expect(within(integrations).getByText('stage.alpha.label')).toBeDefined();
-  });
-
-  it('renders the topic acceptance (tray) lab toggle', () => {
-    renderPage();
-
-    expect(screen.getByText('features.goals.title')).toBeDefined();
+    expect(screen.queryByText('features.integrations.title')).toBeNull();
   });
 
   it('does not render released task verify as a lab toggle', () => {
@@ -165,15 +167,9 @@ describe('Labs settings page', () => {
     );
   });
 
-  it('shows the workspace group only to users with workspace access', () => {
-    renderPage();
-    expect(screen.queryByText('group.workspace')).toBeNull();
-    expect(screen.queryByText('features.workspaceOnboarding.title')).toBeNull();
-    cleanup();
-
+  it('does not render an empty workspace group', () => {
     renderPage({ enableWorkspace: true });
-    expect(screen.getByText('group.workspace')).toBeDefined();
-    expect(screen.getByText('features.workspaceOnboarding.title')).toBeDefined();
+    expect(screen.queryByText('group.workspace')).toBeNull();
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
@@ -182,8 +178,8 @@ describe('Labs settings page', () => {
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();
 
-    const inputMarkdown = screen.getByText('features.inputMarkdown.title');
-    expect(within(inputMarkdown).getByText('stage.beta.label')).toBeDefined();
+    const goals = screen.getByText('features.goals.title');
+    expect(within(goals).getByText('stage.beta.label')).toBeDefined();
   });
 
   it('explains what each stage means via the tag tooltip', () => {

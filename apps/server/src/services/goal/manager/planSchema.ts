@@ -38,7 +38,7 @@ const goalAskSchema = z
               .regex(/^[\w-]{1,40}$/),
             label: z.string().trim().min(1).max(120),
             description: z.string().trim().max(600).optional(),
-            effect: z.enum(['retry', 'retire']).optional(),
+            effect: z.enum(['retry', 'retire', 'retry_after_reset']).optional(),
           })
           .strict(),
       )

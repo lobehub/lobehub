@@ -44,6 +44,34 @@ describe('buildConnectorManifest', () => {
       buildConnectorManifest({ identifier: 'x', isEnabled: true, name: 'x', tools: [] }),
     ).toBeUndefined();
   });
+
+  it('leaves out tools whose MCP Apps visibility excludes the model', () => {
+    const built = buildConnectorManifest({
+      identifier: 'dashboard',
+      isEnabled: true,
+      name: 'Dashboard',
+      tools: [
+        { metadata: { visibility: ['model', 'app'] }, permission: 'auto', toolName: 'show' },
+        { metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'load_page' },
+        { metadata: { visibility: ['model'] }, permission: 'auto', toolName: 'export' },
+        { metadata: null, permission: 'auto', toolName: 'legacy' },
+      ],
+    })!;
+
+    expect(built.api.map((a) => a.name)).toEqual(['show', 'export', 'legacy']);
+    expect(built.meta.description).toBe('Dashboard connector with 3 tools');
+  });
+
+  it('builds nothing when every tool is for views only', () => {
+    expect(
+      buildConnectorManifest({
+        identifier: 'dashboard',
+        isEnabled: true,
+        name: 'Dashboard',
+        tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'load_page' }],
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('patchManifestWithPermissions', () => {

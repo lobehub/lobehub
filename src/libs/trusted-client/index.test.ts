@@ -89,4 +89,26 @@ describe('generateTrustedClientToken', () => {
     const [payload] = vi.mocked(createTrustedClientToken).mock.calls[0];
     expect(payload).not.toHaveProperty('sandboxStorage');
   });
+
+  // Market sizes the account's one-shot run concurrency from this claim, so it
+  // must be signed — and absent unless a plan grants something.
+  it('signs the sandbox run concurrency claim only when one is granted', () => {
+    generateTrustedClientToken({ sandboxRun: { maxConcurrency: 5 }, userId: 'user_real' });
+
+    expect(createTrustedClientToken).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxRun: { maxConcurrency: 5 } }),
+      'client-secret',
+    );
+    expect(buildTrustedClientPayload).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sandboxRun: expect.anything() }),
+    );
+
+    vi.mocked(createTrustedClientToken).mockClear();
+    generateTrustedClientToken({ sandboxRun: null, userId: 'user_real' });
+    generateTrustedClientToken({ userId: 'user_real' });
+
+    for (const [payload] of vi.mocked(createTrustedClientToken).mock.calls) {
+      expect(payload).not.toHaveProperty('sandboxRun');
+    }
+  });
 });

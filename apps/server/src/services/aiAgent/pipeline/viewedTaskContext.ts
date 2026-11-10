@@ -2,7 +2,9 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { buildTaskDetailPrompt, buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import debug from 'debug';
 
+import { TaskModel } from '@/database/models/task';
 import { TaskDetailService } from '@/server/services/task/detail';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
 
 import type { InternalExecAgentParams } from '../types';
 
@@ -33,11 +35,15 @@ export const buildViewedTaskContextPrompt = async (
 
   if (taskId) {
     try {
+      const viewedTask = await resolveTaskOrThrow(
+        new TaskModel(deps.db, deps.userId, deps.workspaceId),
+        taskId,
+      );
       const task = await new TaskDetailService(
         deps.db,
         deps.userId,
         deps.workspaceId,
-      ).getTaskDetail(taskId);
+      ).getTaskDetail(viewedTask.id);
       if (task) return buildTaskDetailPrompt({ defaultAssigneeAgentId, task });
     } catch (error) {
       log('failed to load viewed task %s: %O', taskId, error);

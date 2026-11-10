@@ -56,7 +56,7 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
       icon={<Download size={14} />}
       loading={loading}
       size="small"
-      style={{ alignSelf: 'flex-start', marginBlockStart: 4 }}
+      style={{ alignSelf: 'flex-start', marginBlockEnd: 12 }}
       type="default"
       disabled={
         disabled || !channelAccessToken?.trim() || isMaskedBotCredential(channelAccessToken)

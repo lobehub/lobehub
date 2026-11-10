@@ -373,3 +373,51 @@ describe('buildDiscussionTimeline', () => {
     expect(timeline.map((entry) => entry.kind)).toEqual(['region']);
   });
 });
+
+describe('access requests', () => {
+  const request = (overrides: Partial<AcceptanceCommentItem> = {}) =>
+    item({
+      accessRequest: { permission: 'reject', status: 'pending' },
+      content: 'C2 still overlaps',
+      kind: 'access_request',
+      ...overrides,
+    });
+
+  it('is its own turn, answered in place, while replies to it stay messages', () => {
+    const root = request({ id: 'req' });
+    const reply = item({ id: 'reply', parentCommentId: 'req' });
+
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      rounds: [],
+      threads: groupCommentThreads([root, reply]),
+    });
+
+    expect(timeline.map((entry) => entry.kind)).toEqual(['accessRequest', 'message']);
+    expect(timeline[0]).toMatchObject({ kind: 'accessRequest', request: { id: 'req' } });
+    expect(timeline[1]).toMatchObject({ comment: { id: 'reply' } });
+  });
+
+  it('drops a withdrawn request but keeps what people said to it', () => {
+    const root = request({ deletedAt: new Date(), id: 'gone' });
+    const reply = item({ id: 'reply', parentCommentId: 'gone' });
+
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      rounds: [],
+      threads: groupCommentThreads([root, reply]),
+    });
+
+    expect(timeline.map((entry) => entry.kind)).toEqual(['message']);
+  });
+
+  it('counts a request as a contribution to the discussion', () => {
+    expect(
+      countDiscussionMessages({
+        approvals: [],
+        rounds: [],
+        threads: groupCommentThreads([request()]),
+      }),
+    ).toBe(1);
+  });
+});

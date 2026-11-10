@@ -1,15 +1,7 @@
 import { isDesktop } from '@lobechat/const';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Popover,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Button, cx, Flexbox, Icon, Popover, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LexicalEditor } from 'lexical';
 import { $createNodeSelection, $setSelection, CLICK_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
 import { ExternalLink, EyeIcon, FolderOpen } from 'lucide-react';
@@ -18,6 +10,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { useTopicRemoteDeviceId } from '@/features/LocalFile/useTopicRemoteDeviceId';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { localFileService } from '@/services/electron/localFileService';
@@ -27,7 +20,6 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { parseLocalFileHref } from '../../../Conversation/Markdown/plugins/LocalFileLink/parse';
-import { TAG_MARGIN_INLINE_END } from '../constants';
 import { getFileExtension } from '../MentionMenu/localFileDisplay';
 
 const PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
@@ -42,99 +34,83 @@ const PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
   'webp',
 ]);
 
-const styles = createStaticStyles(({ css }) => ({
-  actionBar: css`
-    flex-wrap: wrap;
-    max-width: 320px;
-  `,
-  label: css`
-    overflow: hidden;
-    align-self: baseline;
-
-    min-width: 0;
-
-    font-weight: 400;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  path: css`
-    max-width: 360px;
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-all;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  popover: css`
-    max-width: 392px;
-  `,
-  previewFrame: css`
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: min(360px, 72vw);
-    max-height: 240px;
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  previewImage: css`
-    display: block;
-    max-width: 100%;
-    max-height: 240px;
-    object-fit: contain;
-  `,
-  tag: css`
-    cursor: default;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    box-sizing: border-box;
-    max-width: min(240px, 100%);
-    height: 24px;
-    margin-inline-end: ${TAG_MARGIN_INLINE_END}px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: inherit;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-    vertical-align: baseline;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &.selected {
-      outline: 2px solid ${cssVar.colorInfo};
-      outline-offset: 1px;
-    }
-  `,
-  thumbnail: css`
-    flex-shrink: 0;
-
-    width: 16px;
-    height: 16px;
-    border-radius: ${cssVar.borderRadiusXS};
-
-    object-fit: cover;
-    background: ${cssVar.colorFillQuaternary};
-    box-shadow: inset 0 0 0 1px ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  actionBar: { flexWrap: 'wrap', maxWidth: '320px' },
+  label: {
+    overflow: 'hidden',
+    alignSelf: 'baseline',
+    minWidth: '0',
+    fontWeight: 400,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  path: {
+    maxWidth: '360px',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    wordBreak: 'break-all',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  popover: { maxWidth: '392px' },
+  previewFrame: {
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 'min(360px, 72vw)',
+    maxHeight: '240px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  previewImage: { display: 'block', maxWidth: '100%', maxHeight: '240px', objectFit: 'contain' },
+  // `.selected` is added by the editor's selection observer, so it is matched as a
+  // same-element class.
+  tag: {
+    cursor: 'default',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    boxSizing: 'border-box',
+    maxWidth: 'min(240px, 100%)',
+    height: '24px',
+    // TAG_MARGIN_INLINE_END (../constants) — StyleX cannot fold an imported constant.
+    marginInlineEnd: '4px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: 'inherit',
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+    verticalAlign: 'baseline',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineStyle: { 'default': null, ':is(.selected)': 'solid' },
+    outlineWidth: { 'default': null, ':is(.selected)': '2px' },
+    outlineColor: { 'default': null, ':is(.selected)': cssVar.colorInfo },
+    outlineOffset: { 'default': null, ':is(.selected)': '1px' },
+  },
+  thumbnail: {
+    flexShrink: 0,
+    width: '16px',
+    height: '16px',
+    borderRadius: cssVar.borderRadiusXS,
+    objectFit: 'cover',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    boxShadow: `inset 0 0 0 1px ${cssVar.colorFillSecondary}`,
+  },
+});
 
 export interface LocalFileTagData {
   isDirectory?: boolean;
@@ -215,7 +191,12 @@ const LocalFileTagTrigger = memo<LocalFileTagTriggerProps>(
     }, [editor, nodeKey, onClick]);
 
     return (
-      <Tag {...rest} className={cx(styles.tag, className)} ref={setSpanRef} title={title}>
+      <Tag
+        {...rest}
+        className={cx(stylex.props(styles.tag).className, className)}
+        ref={setSpanRef}
+        title={title}
+      >
         {children}
       </Tag>
     );
@@ -228,6 +209,9 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  // Off desktop the file lives on the topic's device and is read over the
+  // device RPC while it is online; desktop keeps local IPC.
+  const remoteDeviceId = useTopicRemoteDeviceId();
 
   const parsed = useMemo(
     () => parseLocalFileHref(file.path, { workingDirectory }),
@@ -235,7 +219,8 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   );
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
-  const canPreview = isDesktop && !file.isDirectory && !!parsed?.workingDirectory;
+  const canPreview =
+    (isDesktop || !!remoteDeviceId) && !file.isDirectory && !!parsed?.workingDirectory;
   const canRenderImagePreview = canPreview && isPreviewableImageFile(file);
 
   const { data: imagePreview } = useClientDataSWR<LocalFilePreview>(
@@ -243,6 +228,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
       ? localFileKeys.preview({
           accept: 'image',
           allowExternalFile: allowExternalFilePreview || undefined,
+          deviceId: remoteDeviceId,
           filePath: parsed.filePath,
           workingDirectory: parsed.workingDirectory,
         })
@@ -251,6 +237,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
       projectFileService.getLocalFilePreview({
         accept: 'image',
         allowExternalFile: allowExternalFilePreview || undefined,
+        deviceId: remoteDeviceId,
         path: parsed!.filePath,
         workingDirectory: parsed!.workingDirectory,
       }),
@@ -279,11 +266,12 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
 
       openLocalFile({
         allowExternalFilePreview,
+        deviceId: remoteDeviceId,
         filePath: parsed.filePath,
         workingDirectory: parsed.workingDirectory,
       });
     },
-    [allowExternalFilePreview, openLocalFile, parsed],
+    [allowExternalFilePreview, openLocalFile, parsed, remoteDeviceId],
   );
 
   const handleOpen = useCallback(
@@ -303,32 +291,41 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   );
 
   const content = (
-    <Flexbox className={styles.popover} gap={10} onClick={(event) => event.stopPropagation()}>
+    <Flexbox
+      className={stylex.props(styles.popover).className}
+      gap={10}
+      onClick={(event) => event.stopPropagation()}
+    >
       {imageSrc && (
-        <div className={styles.previewFrame}>
+        <div {...stylex.props(styles.previewFrame)}>
           <img
             alt={file.name}
-            className={styles.previewImage}
+            {...stylex.props(styles.previewImage)}
             data-testid="local-file-image-hover-preview"
             draggable={false}
             src={imageSrc}
           />
         </div>
       )}
-      <Text className={styles.path}>{file.path}</Text>
-      {isDesktop && (
-        <Flexbox horizontal className={styles.actionBar} gap={6}>
+      <Text className={stylex.props(styles.path).className}>{file.path}</Text>
+      {(isDesktop || canPreview) && (
+        <Flexbox horizontal className={stylex.props(styles.actionBar).className} gap={6}>
           {canPreview && (
             <Button icon={<Icon icon={EyeIcon} />} size={'small'} onClick={handlePreview}>
               {t('workingPanel.documents.preview')}
             </Button>
           )}
-          <Button icon={<Icon icon={ExternalLink} />} size={'small'} onClick={handleOpen}>
-            {t('workingPanel.files.open')}
-          </Button>
-          <Button icon={<Icon icon={FolderOpen} />} size={'small'} onClick={handleReveal}>
-            {t('workingPanel.files.showInSystem')}
-          </Button>
+          {/* Open / Show in Folder are Electron IPC: nothing to call off desktop. */}
+          {isDesktop && (
+            <>
+              <Button icon={<Icon icon={ExternalLink} />} size={'small'} onClick={handleOpen}>
+                {t('workingPanel.files.open')}
+              </Button>
+              <Button icon={<Icon icon={FolderOpen} />} size={'small'} onClick={handleReveal}>
+                {t('workingPanel.files.showInSystem')}
+              </Button>
+            </>
+          )}
         </Flexbox>
       )}
     </Flexbox>
@@ -345,7 +342,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
         {imageSrc ? (
           <img
             alt=""
-            className={styles.thumbnail}
+            {...stylex.props(styles.thumbnail)}
             data-testid="local-file-image-preview"
             draggable={false}
             src={imageSrc}
@@ -358,7 +355,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
             variant={'raw'}
           />
         )}
-        <span className={styles.label}>{file.name}</span>
+        <span {...stylex.props(styles.label)}>{file.name}</span>
       </LocalFileTagTrigger>
     </Popover>
   );

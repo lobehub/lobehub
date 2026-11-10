@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from '.';
 
+const createToolUseEvent = (
+  messageId: string,
+  toolId: string,
+  toolName: string,
+  input: unknown,
+) => ({
+  message: {
+    id: messageId,
+    content: [{ id: toolId, input, name: toolName, type: 'tool_use' }],
+  },
+  type: 'assistant',
+});
+
 describe('ClaudeCodeAdapter', () => {
   describe('run cost', () => {
     // CC restores the session's cost tally on `--resume`, so `total_cost_usd`
@@ -831,13 +844,7 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
 
       const chunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -873,20 +880,9 @@ describe('ClaudeCodeAdapter', () => {
         ],
       };
 
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            {
-              id: 'tu_aq_1',
-              input: askInput,
-              name: 'mcp__lobe_cc__ask_user_question',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(
+        createToolUseEvent('msg_1', 'tu_aq_1', 'mcp__lobe_cc__ask_user_question', askInput),
+      );
 
       const chunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -908,13 +904,7 @@ describe('ClaudeCodeAdapter', () => {
     it('emits tool_result event with content for user tool_result block', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const events = adapter.adapt({
         message: {
@@ -939,20 +929,9 @@ describe('ClaudeCodeAdapter', () => {
     it('aligns tool_end with the server shape — carries payload + result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            {
-              id: 't1',
-              input: { command: 'git worktree add ../wt' },
-              name: 'Bash',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_1', 't1', 'Bash', { command: 'git worktree add ../wt' }),
+      );
 
       const events = adapter.adapt({
         message: {
@@ -980,13 +959,7 @@ describe('ClaudeCodeAdapter', () => {
     it('handles array-shaped tool_result content', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Bash', {}));
 
       const events = adapter.adapt({
         message: {
@@ -1012,13 +985,7 @@ describe('ClaudeCodeAdapter', () => {
     it('marks isError when tool_result is_error is true', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const events = adapter.adapt({
         message: {
@@ -1232,15 +1199,7 @@ describe('ClaudeCodeAdapter', () => {
     it('joins tool_reference blocks into newline-separated tool names', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            { id: 'ts1', input: { query: 'linear' }, name: 'ToolSearch', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'ts1', 'ToolSearch', { query: 'linear' }));
 
       const events = adapter.adapt({
         message: {
@@ -1280,15 +1239,7 @@ describe('ClaudeCodeAdapter', () => {
     it('mixes tool_reference with text blocks in a single tool_result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            { id: 'ts1', input: { query: 'search' }, name: 'ToolSearch', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'ts1', 'ToolSearch', { query: 'search' }));
 
       const events = adapter.adapt({
         message: {
@@ -1314,13 +1265,7 @@ describe('ClaudeCodeAdapter', () => {
     it('skips tool_reference entries with no tool_name', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'ts1', input: { query: 'x' }, name: 'ToolSearch', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'ts1', 'ToolSearch', { query: 'x' }));
 
       const events = adapter.adapt({
         message: {
@@ -1356,13 +1301,7 @@ describe('ClaudeCodeAdapter', () => {
     it('renders image blocks as a non-empty placeholder and preserves base64 on pluginState.images', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'r1', input: { file_path: 'x.png' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'r1', 'Read', { file_path: 'x.png' }));
 
       const events = adapter.adapt({
         message: {
@@ -1398,13 +1337,7 @@ describe('ClaudeCodeAdapter', () => {
     it('falls back to generic label when media_type is missing', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'r1', input: { file_path: 'x' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'r1', 'Read', { file_path: 'x' }));
 
       const events = adapter.adapt({
         message: {
@@ -1429,13 +1362,7 @@ describe('ClaudeCodeAdapter', () => {
   describe('TodoWrite pluginState synthesis', () => {
     const driveTodoWrite = (adapter: ClaudeCodeAdapter, input: unknown, toolId = 't1') => {
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: toolId, input, name: 'TodoWrite', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', toolId, 'TodoWrite', input));
       const events = adapter.adapt({
         message: {
           content: [
@@ -1495,13 +1422,7 @@ describe('ClaudeCodeAdapter', () => {
     it('does not set pluginState for non-TodoWrite tools', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
       const events = adapter.adapt({
         message: {
           content: [{ content: 'ok', tool_use_id: 't1', type: 'tool_result' }],
@@ -1519,20 +1440,11 @@ describe('ClaudeCodeAdapter', () => {
       // live todo UI with changes that never actually happened.
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            {
-              id: 't1',
-              input: { todos: [{ activeForm: 'A', content: 'a', status: 'pending' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_1', 't1', 'TodoWrite', {
+          todos: [{ activeForm: 'A', content: 'a', status: 'pending' }],
+        }),
+      );
       const events = adapter.adapt({
         message: {
           content: [
@@ -1553,20 +1465,11 @@ describe('ClaudeCodeAdapter', () => {
 
       // Cache must still be drained — a later TodoWrite on a new id should
       // synthesize only from its own args, not inherit the failed one.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            {
-              id: 't2',
-              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_2', 't2', 'TodoWrite', {
+          todos: [{ activeForm: 'B', content: 'b', status: 'completed' }],
+        }),
+      );
       const next = adapter.adapt({
         message: {
           content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
@@ -1587,20 +1490,11 @@ describe('ClaudeCodeAdapter', () => {
 
       // Second TodoWrite on a new tool_use id — should resynthesize from its
       // own args, not leak from the prior cache.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            {
-              id: 't2',
-              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_2', 't2', 'TodoWrite', {
+          todos: [{ activeForm: 'B', content: 'b', status: 'completed' }],
+        }),
+      );
       const events = adapter.adapt({
         message: {
           content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
@@ -1624,13 +1518,7 @@ describe('ClaudeCodeAdapter', () => {
       msgId: string,
       opts?: { isError?: boolean },
     ) => {
-      adapter.adapt({
-        message: {
-          id: msgId,
-          content: [{ id: toolId, input, name: 'TaskCreate', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent(msgId, toolId, 'TaskCreate', input));
       const events = adapter.adapt({
         message: {
           content: [
@@ -1669,13 +1557,7 @@ describe('ClaudeCodeAdapter', () => {
       msgId: string,
       opts?: { isError?: boolean },
     ) => {
-      adapter.adapt({
-        message: {
-          id: msgId,
-          content: [{ id: toolId, input, name: 'TaskUpdate', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent(msgId, toolId, 'TaskUpdate', input));
       const events = adapter.adapt({
         message: {
           content: [
@@ -1706,13 +1588,7 @@ describe('ClaudeCodeAdapter', () => {
       resultContent: string,
       msgId: string,
     ) => {
-      adapter.adapt({
-        message: {
-          id: msgId,
-          content: [{ id: toolId, input: {}, name: 'TaskList', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent(msgId, toolId, 'TaskList', {}));
       const events = adapter.adapt({
         message: {
           content: [{ content: resultContent, tool_use_id: toolId, type: 'tool_result' }],
@@ -2093,15 +1969,7 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
 
       // 1. Assistant issues a tool_use under msg_1.
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'tu_1', 'Bash', { command: 'mock command' }));
 
       // 2. Tool returns.
       adapter.adapt({
@@ -2144,15 +2012,7 @@ describe('ClaudeCodeAdapter', () => {
 
       // Second turn (NEW id) — opened by a real newStep, so the reducer's
       // currentMainMessageId becomes msg_2. This turn issues a tool_use.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_2', 'tu_1', 'Bash', { command: 'mock command' }));
       adapter.adapt({
         message: {
           content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
@@ -2359,13 +2219,7 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
 
       // Start a tool call without providing result
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const events = adapter.flush();
       expect(events).toHaveLength(1);
@@ -2381,13 +2235,7 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       adapter.flush();
       // Second flush should be empty
@@ -2480,26 +2328,14 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
 
       // First tool_use block of msg_1
-      const e1 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e1 = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
       const chunk1 = e1.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
       expect(chunk1!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
 
       // Second tool_use block on the SAME message.id — must carry both t1 + t2
-      const e2 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't2', input: { cmd: 'ls' }, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e2 = adapter.adapt(createToolUseEvent('msg_1', 't2', 'Bash', { cmd: 'ls' }));
       const chunk2 = e2.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
@@ -2510,21 +2346,9 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
-      const e2 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e2 = adapter.adapt(createToolUseEvent('msg_1', 't2', 'Bash', {}));
 
       const starts = e2.filter((e) => e.type === 'tool_start');
       expect(starts).toHaveLength(1);
@@ -2535,23 +2359,11 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       // Same tool_use id re-sent — cumulative list must not duplicate it,
       // and tool_start must not fire again.
-      const e2 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e2 = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const chunk = e2.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -2564,21 +2376,9 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(createToolUseEvent('msg_2', 't2', 'Bash', {}));
 
       const chunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -2734,13 +2534,7 @@ describe('ClaudeCodeAdapter', () => {
       // Same message.id continues with a tool_use block — tool_use never streams
       // as delta (input_json_delta would be partial JSON), so handleAssistant
       // remains the source of truth for tool invocations.
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
 
       const toolsChunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -3330,370 +3124,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
       const end = events.find((e) => e.type === 'tool_end');
       expect(end!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
-    });
-  });
-
-  // ────────────────────────────────────────────────────
-  // external signal detection (Monitor task callbacks)
-  // ────────────────────────────────────────────────────
-  describe('external signal detection ()', () => {
-    const init = (adapter: ClaudeCodeAdapter) => {
-      adapter.adapt({
-        model: 'claude-sonnet-4-6',
-        session_id: 'sess_1',
-        subtype: 'init',
-        type: 'system',
-      });
-    };
-
-    const ccUser = (toolCallId: string, content: string) => ({
-      message: {
-        content: [{ content, tool_use_id: toolCallId, type: 'tool_result' }],
-      },
-      type: 'user',
-    });
-    const ccMessageStart = (msgId: string) => ({
-      event: { message: { id: msgId, model: 'claude-sonnet-4-6' }, type: 'message_start' },
-      type: 'stream_event',
-    });
-    const ccTaskStarted = (taskId: string, toolUseId: string) => ({
-      session_id: 'sess_1',
-      subtype: 'task_started',
-      task_id: taskId,
-      tool_use_id: toolUseId,
-      type: 'system',
-    });
-    const ccTaskNotification = (taskId: string) => ({
-      session_id: 'sess_1',
-      subtype: 'task_notification',
-      task_id: taskId,
-      type: 'system',
-    });
-
-    /**
-     * Real-world Monitor flow recorded from `claude -p` against the
-     * Monitor skill:
-     *   1. LLM emits Monitor tool_use → adapter notes the name
-     *   2. CC emits `system task_started` (Monitor registers as a task)
-     *   3. user event with tool_result (initial "Monitor started" ack)
-     *   4. Assistant turn opens, LLM writes confirmation toolless reply
-     *   5. RESULT — turn ends, no new user input arrives
-     *   6. SYSTEM init + assistant message_start — Monitor's stdout
-     *      pushed and CC re-invoked the LLM. THIS turn is a signal callback.
-     */
-    it('attaches externalSignal when a new turn opens without user input while a task is active', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // Step 0: Monitor tool_use
-      adapter.adapt({
-        message: {
-          content: [
-            { id: 'toolu_mon', input: { shell: 'every 1s' }, name: 'Monitor', type: 'tool_use' },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-
-      // CC registers the long-running task
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-
-      // Initial tool_result (LLM's natural follow-up turn — NOT a signal callback)
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-
-      // Step 1: natural confirmation turn — opens AFTER the user event,
-      // so it consumes `hasUnhandledUserInput` and is NOT signal-tagged.
-      const confirm = adapter.adapt(ccMessageStart('msg_02'));
-      const confirmStart = confirm.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(confirmStart!.data.externalSignal).toBeUndefined();
-
-      // Step 2: Monitor pushed an event → CC re-invokes the LLM without
-      // any new user message. A signal callback.
-      const cb1 = adapter.adapt(ccMessageStart('msg_03'));
-      const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(cb1Start!.data.externalSignal).toEqual({
-        sequence: 1,
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'tool-stdout',
-      });
-    });
-
-    // Regression (P2): on the BATCH path, when the post-tool confirmation REUSES
-    // the Monitor tool's message.id, the forced split must still consume
-    // `hasUnhandledUserInput` (armed by the tool_result). Otherwise the stale
-    // flag survives and the next callback turn — opened while the task is active
-    // with no new user input — fails the `!hasUnhandledUserInput` signal check,
-    // leaving the first stdout callback untagged.
-    it('still tags the next callback after a forced post-tool split reuses the tool id (batch Monitor flow)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // Monitor tool_use under msg_01 (batch: an `assistant` event, not a delta).
-      adapter.adapt({
-        message: {
-          content: [
-            { id: 'toolu_mon', input: { shell: 'every 1s' }, name: 'Monitor', type: 'tool_use' },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      // tool_result → arms hasUnhandledUserInput.
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-
-      // Confirmation turn REUSES msg_01 → forced post-tool split. It is the
-      // natural follow-up to the tool_result, so it carries no signal AND must
-      // consume hasUnhandledUserInput.
-      const confirm = adapter.adapt({
-        message: {
-          id: 'msg_01',
-          content: [{ text: 'mock monitoring confirmation', type: 'text' }],
-        },
-        type: 'assistant',
-      });
-      const confirmStart = confirm.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(confirmStart).toBeDefined();
-      expect(confirmStart!.data.externalSignal).toBeUndefined();
-
-      // Monitor pushes an event → CC re-invokes with a NEW id and no new user
-      // input. This callback must be signal-tagged — only true once the forced
-      // split cleared the stale flag.
-      const cb1 = adapter.adapt({
-        message: { id: 'msg_02', content: [{ text: 'mock callback turn', type: 'text' }] },
-        type: 'assistant',
-      });
-      const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(cb1Start!.data.externalSignal).toEqual({
-        sequence: 1,
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'tool-stdout',
-      });
-    });
-
-    it('keeps tagging consecutive signal callbacks with incrementing sequence', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation turn (no signal)
-
-      const sequences: (number | undefined)[] = [];
-      for (let i = 3; i <= 5; i++) {
-        const ev = adapter.adapt(ccMessageStart(`msg_0${i}`));
-        const start = ev.find((e) => e.type === 'stream_start' && e.data?.newStep);
-        sequences.push(start!.data.externalSignal?.sequence);
-      }
-      expect(sequences).toEqual([1, 2, 3]);
-    });
-
-    it('tags the post-task summary turn with `task-completion` after `task_notification`', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation (no signal)
-
-      // One signal callback while task is alive
-      const cb1 = adapter.adapt(ccMessageStart('msg_03'));
-      expect(
-        cb1.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toEqual({
-        sequence: 1,
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'tool-stdout',
-      });
-
-      // Task ends
-      adapter.adapt(ccTaskNotification('task_1'));
-
-      // Next turn — task ended, but the post-task summary keeps the
-      // source-tool lineage so MessageCollector can render it inside
-      // the same AssistantGroup as the preceding callbacks.
-      const after = adapter.adapt(ccMessageStart('msg_04'));
-      expect(
-        after.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toEqual({
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'task-completion',
-      });
-
-      // The completion tag is one-shot — a subsequent turn (e.g. if CC
-      // spawned another LLM call) must not inherit it.
-      const followUp = adapter.adapt(ccMessageStart('msg_05'));
-      expect(
-        followUp.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('treats SDK background Bash completion notification as task-completion lineage', () => {
-      const adapter = new ClaudeCodeSdkAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [
-            {
-              id: 'toolu_bash',
-              input: { command: 'sleep 1 && echo done', run_in_background: true },
-              name: 'Bash',
-              type: 'tool_use',
-            },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_bash'));
-      adapter.adapt(ccUser('toolu_bash', 'Background command started'));
-
-      const firstResult = adapter.adapt({
-        is_error: false,
-        result: 'Background command started',
-        type: 'result',
-      });
-      expect(firstResult.map((e) => e.type)).toEqual(['stream_end']);
-
-      adapter.adapt(ccTaskNotification('task_1'));
-
-      const completion = adapter.adapt(ccMessageStart('msg_02'));
-      expect(
-        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toEqual({
-        sourceToolCallId: 'toolu_bash',
-        sourceToolName: 'Bash',
-        type: 'task-completion',
-      });
-    });
-
-    /**
-     * Real-world regression (recorded on tpc_joZS2mksoY5L): a slow `git commit`
-     * (running a lint-staged hook) makes CC track the Bash call as a task and
-     * emit `task_started` + `task_notification` back-to-back, with NO out-of-band
-     * callback turn in between, immediately followed by the tool_result. That is
-     * an inline synchronous tool, not a Monitor-style long-running task — the next
-     * turn is the normal main-chain continuation and must NOT be tagged
-     * `task-completion` (doing so mis-anchors it and drops it from the rendered
-     * chain).
-     */
-    it('does NOT tag the next turn when a task started and ended with no callbacks (inline tool)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // A Bash `git commit` tool_use.
-      adapter.adapt({
-        message: {
-          content: [
-            {
-              id: 'toolu_commit',
-              input: { command: 'git commit' },
-              name: 'Bash',
-              type: 'tool_use',
-            },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-
-      // CC tracks the slow commit as a task, then notifies completion
-      // back-to-back — NO callback turn opened while it was alive.
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_commit'));
-      adapter.adapt(ccTaskNotification('task_1'));
-
-      // The commit's tool_result is consumed inline by the next turn.
-      adapter.adapt(ccUser('toolu_commit', 'committed'));
-
-      // Next turn is plain continuation — must carry NO externalSignal.
-      const next = adapter.adapt(ccMessageStart('msg_02'));
-      expect(
-        next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('clears unconsumed task-completion lineage on `result`', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02'));
-      // A signal callback fires while the task is alive (callbackCount > 0), so
-      // `task_notification` genuinely arms pendingTaskCompletion — otherwise (an
-      // inline tool with no callbacks) nothing is armed and this test would pass
-      // vacuously, no longer guarding the `result` clear path.
-      adapter.adapt(ccMessageStart('msg_03'));
-      adapter.adapt(ccTaskNotification('task_1'));
-      // Run ends before the summary turn fires (unusual but possible).
-      adapter.adapt({ result: 'ok', type: 'result', usage: undefined });
-
-      // A later turn (e.g. follow-up user message) must NOT inherit
-      // the unconsumed task-completion lineage — `result` dropped it.
-      const next = adapter.adapt(ccMessageStart('msg_04'));
-      expect(
-        next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('does NOT trigger from subagent inner user events', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // Main agent fires Monitor, then registers task
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation (no signal)
-
-      // Subagent inner tool_result fires WITH parent_tool_use_id — must
-      // NOT reset hasUnhandledUserInput; the next main-chain turn is
-      // still a signal callback.
-      adapter.adapt({
-        message: {
-          content: [{ content: 'inner', tool_use_id: 'toolu_inner', type: 'tool_result' }],
-        },
-        parent_tool_use_id: 'toolu_other',
-        type: 'user',
-      });
-
-      const ev = adapter.adapt(ccMessageStart('msg_03'));
-      expect(
-        ev.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeDefined();
     });
   });
 });

@@ -142,6 +142,24 @@ afterEach(() => {
 });
 
 describe('environment stop between tool steps', () => {
+  it('intercepts a native tool before the real executor or client dispatch', async () => {
+    const fixture = setup([
+      {
+        id: 'eval-contract',
+        type: 'beforeToolCall',
+        handler: async (event) => {
+          (event as any).mock({ content: 'Frozen fixture response', success: true });
+        },
+      },
+    ]);
+    await fixture.step([
+      { ...call(), identifier: 'lobe-web-browsing', apiName: 'search', executor: 'server' },
+    ]);
+    expect(fixture.execute).not.toHaveBeenCalled();
+    expect(dispatchClient).not.toHaveBeenCalled();
+    expect(JSON.stringify(fixture.rows)).toContain('Frozen fixture response');
+  });
+
   it('does not launch another server tool after the persisted interrupt, before local polling catches up', async () => {
     const controller = new AbortController();
     const fixture = setup([], controller.signal);
@@ -173,4 +191,25 @@ describe('environment stop between tool steps', () => {
       expect(dispatchClient).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('what a server tool learns about the run', () => {
+  it('hands the tool who in the IM conversation asked for the run', async () => {
+    const fixture = setup([]);
+    const bot = {
+      applicationId: 'app-1',
+      isOwner: false,
+      platform: 'discord',
+      platformThreadId: 'discord:g1:c1',
+      senderExternalUserId: 'stranger-id',
+    };
+    fixture.state.principal = { actor: { bot } };
+
+    await fixture.step();
+
+    expect(fixture.execute).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ botContext: bot }),
+    );
+  });
 });

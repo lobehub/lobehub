@@ -5,8 +5,11 @@ import { Check, MessageSquare, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { comparisonMedia } from '../../Report/EvidenceComparisonCard';
+import { useOptionalAcceptanceScope } from '../AcceptanceScope';
+import { commentAnchorId } from '../Comments/anchor';
 import { FLOATING_ACTION_HOST } from './FloatingCommentAction';
-import type { EvidenceOverlay } from './overlay';
+import { type EvidenceOverlay, overlayColor } from './overlay';
 import {
   annotationInSlice,
   isPortraitScreenshot,
@@ -14,6 +17,7 @@ import {
   screenshotSlices,
   screenshotTileWidth,
 } from './screenshotSlices';
+import { useImageThreads } from './useImageThreads';
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -252,9 +256,7 @@ const OverlayRect = memo<OverlayRectProps>(
   ({ annotation, index, numbered, onToggle, opened, rect }) => {
     // A settled region keeps its place but drops its author's colour: an
     // answered note should not compete with an open one for attention.
-    const color = annotation.resolved
-      ? cssVar.colorTextQuaternary
-      : (annotation.color ?? cssVar.colorError);
+    const color = overlayColor(annotation);
     const label = annotation.label ?? index + 1;
     return (
       <div
@@ -346,13 +348,12 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
     const [natural, setNatural] = useState(
       fileWidth && fileHeight ? { height: fileHeight, width: fileWidth } : undefined,
     );
-    const [openedNote, setOpenedNote] = useState<number>();
+    const scope = useOptionalAcceptanceScope();
+    const { openedNote, toggleNote, close } = useImageThreads(annotations, scope?.embedded);
 
     const slices = natural ? screenshotSlices(natural.width, natural.height) : undefined;
     const numbered =
       (annotations?.length ?? 0) > 1 || annotations?.some((item) => item.label !== undefined);
-    const toggleNote = (index: number) =>
-      setOpenedNote((current) => (current === index ? undefined : index));
     const opened = openedNote === undefined ? undefined : annotations?.[openedNote];
 
     const rememberSize = (event: { currentTarget: HTMLImageElement }) => {
@@ -368,6 +369,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
     const note = opened && (
       <div
         className={styles.note}
+        id={opened.threadId ? commentAnchorId(opened.threadId) : undefined}
         style={{ insetBlockStart: `${Math.min(Math.max(opened.rect.y, 0), 0.62) * 100}%` }}
       >
         {/*
@@ -380,7 +382,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
           className={styles.noteClose}
           title={t('acceptance.comments.collapseThread')}
           type={'button'}
-          onClick={() => setOpenedNote(undefined)}
+          onClick={close}
         >
           <Icon icon={X} size={12} />
         </button>
@@ -412,9 +414,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
             title={annotation.authorName}
             type={'button'}
             style={{
-              background: annotation.resolved
-                ? cssVar.colorTextQuaternary
-                : (annotation.color ?? cssVar.colorError),
+              background: overlayColor(annotation),
               insetBlockStart: `${Math.min(Math.max(annotation.rect.y, 0), 0.86) * 100}%`,
             }}
             onClick={() => toggleNote(index)}
@@ -449,6 +449,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
         >
           <Image
             alt={alt}
+            {...(flat ? comparisonMedia.image : undefined)}
             loading={'lazy'}
             src={src}
             style={flat ? { borderRadius: 0 } : undefined}
@@ -484,6 +485,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
               >
                 <Image
                   alt={alt}
+                  {...(flat ? comparisonMedia.image : undefined)}
                   height={'100%'}
                   loading={'lazy'}
                   maxHeight={'none'}
@@ -534,6 +536,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
       >
         <Image
           alt={alt}
+          {...(flat ? comparisonMedia.image : undefined)}
           loading={'lazy'}
           maxHeight={'none'}
           maxWidth={'none'}

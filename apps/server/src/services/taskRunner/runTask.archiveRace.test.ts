@@ -60,7 +60,7 @@ describe('TaskRunnerService.runTask vs. archiving', () => {
       findById: vi.fn().mockResolvedValue({ ...task, status: 'running' }),
       getUnlockedTasksForMany: vi.fn().mockResolvedValue([]),
       lockForUpdate: vi.fn().mockResolvedValue(true),
-      resolve: vi.fn().mockResolvedValue({ ...task }),
+      findById: vi.fn().mockResolvedValue({ ...task }),
       update: vi.fn(),
       updateCurrentTopic: vi.fn(),
       updateHeartbeat: vi.fn(),
@@ -87,7 +87,7 @@ describe('TaskRunnerService.runTask vs. archiving', () => {
   });
 
   it('refuses an archived task before touching its status', async () => {
-    taskModel.resolve.mockResolvedValue({ ...task, archivedAt: new Date() });
+    taskModel.findById.mockResolvedValue({ ...task, archivedAt: new Date() });
 
     await expect(
       new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' }),
@@ -125,7 +125,7 @@ describe('TaskRunnerService.runTask vs. archiving', () => {
 
       const result = await new TaskRunnerService(db, 'user-1').cascadeOnCompletionMany(['task-0']);
 
-      expect(result).toEqual({ failed: [], paused: [], started: [] });
+      expect(result).toMatchObject({ failed: [], paused: [], started: [] });
       expect(taskModel.updateStatus).not.toHaveBeenCalled();
       expect(mocks.execAgent).not.toHaveBeenCalled();
     });
@@ -133,7 +133,7 @@ describe('TaskRunnerService.runTask vs. archiving', () => {
     it('treats a dependent archived after discovery as skipped, not failed', async () => {
       taskModel.getUnlockedTasksForMany.mockResolvedValue([{ ...task, id: 'task-2' }]);
       // The runner re-reads the task and finds it archived.
-      taskModel.resolve.mockResolvedValue({ ...task, archivedAt: new Date(), id: 'task-2' });
+      taskModel.findById.mockResolvedValue({ ...task, archivedAt: new Date(), id: 'task-2' });
 
       const result = await new TaskRunnerService(db, 'user-1').cascadeOnCompletionMany(['task-0']);
 

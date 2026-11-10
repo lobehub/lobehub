@@ -1,7 +1,9 @@
+import { agentDisplayName } from '@lobechat/types';
 import { Avatar } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
+import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
 import { type SharedTopicData } from '@/types/topic';
 
@@ -17,7 +19,7 @@ const TopicAvatar = memo<TopicAvatarProps>(({ data, size = 28 }) => {
   const groupAvatars = useMemo(() => {
     if (!isGroup || !data.groupMeta?.members) return [];
     return data.groupMeta.members.map((member) => ({
-      avatar: member.avatar || DEFAULT_AVATAR,
+      avatar: member.avatar || undefined,
       backgroundColor: member.backgroundColor || undefined,
     }));
   }, [isGroup, data.groupMeta?.members]);
@@ -26,16 +28,18 @@ const TopicAvatar = memo<TopicAvatarProps>(({ data, size = 28 }) => {
 
   if (isInboxAgent) return <Avatar avatar={DEFAULT_INBOX_AVATAR} size={size} />;
 
-  if (data.agentMeta?.avatar)
-    return (
-      <Avatar
-        avatar={data.agentMeta.avatar}
-        background={data.agentMeta.backgroundColor || undefined}
-        size={size}
-      />
-    );
+  if (isGroup) return null;
 
-  return null;
+  return (
+    <AgentAvatar
+      agentId={data.agentId}
+      avatar={data.agentMeta?.avatar}
+      background={data.agentMeta?.backgroundColor || undefined}
+      name={agentDisplayName(data.agentMeta) || undefined}
+      shape={'circle'}
+      size={size}
+    />
+  );
 });
 
 TopicAvatar.displayName = 'TopicAvatar';

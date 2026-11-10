@@ -1,42 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { skillFileTree, skillVersionContent } from './skillVersions';
+import { unreadableVersions } from './skillVersions';
 
-describe('skillVersionContent', () => {
-  it('reads a kept version whole, frontmatter included', () => {
-    const versions = [{ content: '---\nname: plan\n---\nv2 body', version: 2 }];
-    expect(skillVersionContent(versions, 2)).toBe('---\nname: plan\n---\nv2 body');
-    expect(skillVersionContent(versions, 3)).toBeUndefined();
+vi.mock('@/services/userSkill', () => ({ userSkillService: {} }));
+
+describe('unreadableVersions', () => {
+  const error = new Error('storage down');
+
+  // A failed read has to surface: it must not read as still loading.
+  it('names a version that failed with nothing to show', () => {
+    const failed = { error };
+    expect(unreadableVersions([{ body: '# v1' }, failed])).toEqual([failed]);
   });
 
-  it('has nothing to offer when the payload carries no versions', () => {
-    expect(skillVersionContent(undefined, 1)).toBeUndefined();
-  });
-});
-
-describe('skillFileTree', () => {
-  it('nests a skill’s files into folders, folders first', () => {
-    expect(
-      skillFileTree([
-        { content: 'b', path: 'scripts/rollback.sql' },
-        { content: 'notes', path: 'README.md' },
-        { content: 'a', path: 'scripts/check.sh' },
-      ]),
-    ).toEqual([
-      {
-        children: [
-          { content: 'a', name: 'check.sh', path: 'scripts/check.sh', type: 'file' },
-          { content: 'b', name: 'rollback.sql', path: 'scripts/rollback.sql', type: 'file' },
-        ],
-        name: 'scripts',
-        path: 'scripts',
-        type: 'directory',
-      },
-      { content: 'notes', name: 'README.md', path: 'README.md', type: 'file' },
-    ]);
+  it('leaves out one still loading', () => {
+    expect(unreadableVersions([{}])).toEqual([]);
   });
 
-  it('is empty for a skill with no files', () => {
-    expect(skillFileTree(undefined)).toEqual([]);
+  it('leaves out one whose text survived a failed refresh', () => {
+    expect(unreadableVersions([{ body: '', error }])).toEqual([]);
   });
 });

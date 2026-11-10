@@ -7,8 +7,6 @@ import {
   Button,
   Center,
   Checkbox,
-  createStaticStyles,
-  cssVar,
   DraggablePanel,
   DraggablePanelContainer,
   DropdownMenu,
@@ -18,6 +16,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useDebounce } from 'ahooks';
 import isEqual from 'fast-deep-equal';
 import {
@@ -34,19 +34,21 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { AcceptanceStatusOverride } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useVerifyStore } from '@/store/verify';
+import { sx } from '@/styles/sx';
 
 import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
-import { acceptanceHomePath } from '../Viewer/routes';
+import { acceptanceHomePath, useAcceptanceRouteBase } from '../Viewer/routes';
 import type { AcceptanceStatusAction } from '../Viewer/statusActions';
 import AcceptanceBatchBar from './AcceptanceBatchBar';
 import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
@@ -64,6 +66,7 @@ import {
   resetAcceptanceListFacets,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
+import AcceptanceScopeSwitcher from './AcceptanceScopeSwitcher';
 import {
   acceptanceBatchTargets,
   acceptanceProjectTargets,
@@ -81,7 +84,7 @@ import {
   expandedAcceptanceGroupKeys,
   groupAcceptanceList,
   nextCollapsedGroupKeys,
-  normalizeAcceptanceGroupMode,
+  resolveAcceptanceGroupMode,
   shouldRenderAcceptanceGroups,
 } from './groupAcceptanceList';
 import { useAcceptanceListFilterMenu } from './useAcceptanceListFilterMenu';
@@ -104,176 +107,146 @@ const EMPTY_FILTER_KEYS = {
   completed: 'acceptance.workspace.filters.empty.completed',
 } as const satisfies Record<Exclude<AcceptanceListFilter, 'all'>, string>;
 
-const styles = createStaticStyles(({ css }) => ({
-  panel: css`
-    height: 100%;
-    background: ${cssVar.colorBgLayout};
-  `,
-  head: css`
-    flex: none;
-    padding-block: 14px 6px;
-    padding-inline: 12px;
-  `,
-  headWithBrand: css`
-    flex: none;
-    padding-block: 0 6px;
-    padding-inline: 12px;
-  `,
-  titleRow: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-inline: 4px;
-  `,
-  titleRowWithBrand: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    min-height: 48px;
-    padding-inline: 4px;
-  `,
-  collapseBtn: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  search: css`
-    display: flex;
-    gap: 7px;
-    align-items: center;
-
-    height: 32px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-
-    svg {
-      flex: none;
-      color: ${cssVar.colorTextQuaternary};
-    }
-
-    input {
-      width: 100%;
-      min-width: 0;
-      border: none;
-
-      font-size: 13px;
-      color: ${cssVar.colorText};
-
-      background: none;
-      outline: none;
-
-      &::placeholder {
-        color: ${cssVar.colorTextQuaternary};
-      }
-    }
-  `,
-  searchRow: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    margin-block: 8px 4px;
-    margin-inline: 4px;
-
-    > label {
-      flex: 1;
-      min-width: 0;
-    }
-  `,
-  filterButton: css`
-    flex: none;
-  `,
-  selectionRow: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    margin-block: 2px 4px;
-    margin-inline: 4px;
-
-    font-size: 12px;
-  `,
-  searchEmpty: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-
-    padding-block: 24px;
-    padding-inline: 12px;
-  `,
-  searchEmptyMsg: css`
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
-    word-break: break-word;
-  `,
-  list: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    padding-block: 6px 16px;
-    padding-inline: 8px;
-  `,
-  groupList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  groupTitle: css`
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  emptyState: css`
-    height: 100%;
-    min-height: 240px;
-    padding-block: 24px;
-    padding-inline: 16px;
-  `,
-  retryBtn: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorTextTertiary};
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  panel: {
+    height: '100%',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  head: {
+    flex: 'none',
+    paddingBlockStart: '14px',
+    paddingBlockEnd: '6px',
+    paddingInline: '12px',
+  },
+  headWithBrand: {
+    flex: 'none',
+    paddingBlockStart: 0,
+    paddingBlockEnd: '6px',
+    paddingInline: '12px',
+  },
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingInline: '4px',
+  },
+  titleRowWithBrand: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: '48px',
+    paddingInline: '4px',
+  },
+  collapseBtn: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '26px',
+    height: '26px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  search: {
+    display: 'flex',
+    gap: '7px',
+    alignItems: 'center',
+    /* The only child label of the search row: it takes the row's free width. */
+    flex: '1',
+    minWidth: '0',
+    height: '32px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  searchIcon: { flex: 'none', color: cssVar.colorTextQuaternary },
+  searchInput: {
+    'width': '100%',
+    'minWidth': '0',
+    'borderStyle': 'none',
+    'fontSize': '13px',
+    'color': cssVar.colorText,
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'outline': 'none',
+    '::placeholder': { color: cssVar.colorTextQuaternary },
+  },
+  searchRow: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    marginBlockStart: '8px',
+    marginBlockEnd: '4px',
+    marginInline: '4px',
+  },
+  filterButton: { flex: 'none' },
+  selectionRow: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    marginBlockStart: '2px',
+    marginBlockEnd: '4px',
+    marginInline: '4px',
+    fontSize: '12px',
+  },
+  searchEmpty: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    alignItems: 'flex-start',
+    paddingBlock: '24px',
+    paddingInline: '12px',
+  },
+  searchEmptyMsg: {
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextTertiary,
+    wordBreak: 'break-word',
+  },
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '16px',
+    paddingInline: '8px',
+  },
+  groupList: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  groupTitle: {
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    fontSize: '14px',
+    color: cssVar.colorTextSecondary,
+  },
+  emptyState: {
+    height: '100%',
+    minHeight: '240px',
+    paddingBlock: '24px',
+    paddingInline: '16px',
+  },
+  retryBtn: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorTextTertiary },
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface AcceptanceListPanelProps extends ReportPanelExpand {
   headerLeading?: ReactNode;
@@ -303,7 +276,8 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
   ({ expand, headerLeading, hosted, isNarrow, projectActionItems, projectId, setExpand }) => {
     const { t } = useTranslation('verify');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
+    const routeBase = useAcceptanceRouteBase();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
     const [query, setQuery] = useState('');
@@ -336,7 +310,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       source,
     } = effectiveAcceptanceListFacets(facets, projectId);
     const listQuery = { projectId: listProjectId, scope, source };
-    const groupMode = normalizeAcceptanceGroupMode(storedGroupMode);
+    const groupMode = resolveAcceptanceGroupMode(storedGroupMode, projectId);
     const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
     const trimmedQuery = query.trim();
     const searching = Boolean(debouncedQuery);
@@ -605,7 +579,12 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
-            const redirect = acceptanceRedirectAfterDelete(acceptanceId, targets, failedIds);
+            const redirect = acceptanceRedirectAfterDelete(
+              acceptanceId,
+              targets,
+              failedIds,
+              routeBase,
+            );
             if (redirect) navigate(redirect, { replace: true });
             await settleBatch(targets, [], failedIds);
             reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
@@ -618,7 +597,10 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     // Grouping by project already names it in the header; every other mode has
     // to carry it on the row or the affiliation is simply not on screen.
-    const showRowProject = groupMode !== 'project';
+    // Inside a project every row belongs to it, so naming the project again is noise.
+    const showRowProject = !projectId && groupMode !== 'project';
+    // "Created by me" makes every row the viewer's own, so the avatar adds nothing.
+    const showRowCreator = scope !== 'created';
 
     const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items)
       .filter((item) => item.canManage)
@@ -694,9 +676,9 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     const body = (
       <>
-        <div className={headerLeading ? styles.headWithBrand : styles.head}>
+        <div {...stylex.props(headerLeading ? styles.headWithBrand : styles.head)}>
           {!hosted && (
-            <div className={headerLeading ? styles.titleRowWithBrand : styles.titleRow}>
+            <div {...stylex.props(headerLeading ? styles.titleRowWithBrand : styles.titleRow)}>
               <Flexbox
                 horizontal
                 align={'center'}
@@ -715,10 +697,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <Text ellipsis strong style={{ fontSize: 15, minWidth: 0 }}>
                   {t('acceptance.workspace.title')}
                 </Text>
+                {!projectId && <AcceptanceScopeSwitcher />}
               </Flexbox>
               <button
                 aria-label={t('workspace.collapse')}
-                className={styles.collapseBtn}
+                {...stylex.props(styles.collapseBtn)}
                 title={t('workspace.collapse')}
                 type={'button'}
                 onClick={() => setExpand(false)}
@@ -727,10 +710,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               </button>
             </div>
           )}
-          <div className={styles.searchRow}>
-            <label className={styles.search}>
-              <Icon icon={Search} size={13} />
+          <div {...stylex.props(styles.searchRow)}>
+            <label {...stylex.props(styles.search)}>
+              <Icon className={stylex.props(styles.searchIcon).className} icon={Search} size={13} />
               <input
+                {...stylex.props(styles.searchInput)}
                 placeholder={t('workspace.search')}
                 type={'search'}
                 value={query}
@@ -740,7 +724,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             <DropdownMenu items={filterItems} placement={'bottomRight'}>
               <ActionIcon
                 active={filter !== 'all' || facetsNarrowed}
-                className={styles.filterButton}
+                className={stylex.props(styles.filterButton).className}
                 icon={ListFilter}
                 size={'small'}
                 title={t('acceptance.workspace.filters.title')}
@@ -749,7 +733,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             <DropdownMenu items={overflowItems} placement={'bottomRight'}>
               <ActionIcon
                 active={selecting}
-                className={styles.filterButton}
+                className={stylex.props(styles.filterButton).className}
                 icon={MoreHorizontal}
                 size={'small'}
                 title={t('acceptance.workspace.actions.more')}
@@ -757,7 +741,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             </DropdownMenu>
           </div>
           {selecting && (
-            <div className={styles.selectionRow}>
+            <div {...stylex.props(styles.selectionRow)}>
               <Checkbox
                 checked={selectAllState === 'all'}
                 disabled={selectableItems.length === 0}
@@ -783,13 +767,17 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
           {error ? (
             // A failed fetch must read as an error with a retry — never as an
             // empty "no acceptances" page.
-            <Center className={styles.emptyState} gap={12}>
+            <Center className={stylex.props(styles.emptyState).className} gap={12}>
               <Empty
                 description={t('workspace.loadError')}
                 icon={TriangleAlert}
                 title={t('workspace.loadErrorTitle')}
               />
-              <button className={styles.retryBtn} type={'button'} onClick={() => void mutate()}>
+              <button
+                {...stylex.props(styles.retryBtn)}
+                type={'button'}
+                onClick={() => void mutate()}
+              >
                 {t('workspace.retry')}
               </button>
             </Center>
@@ -799,8 +787,8 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             emptyVariant === 'filtered' ? (
               // A zero-result FILTER must read as "no match for this query",
               // never as the first-run empty state.
-              <div className={styles.searchEmpty}>
-                <span className={styles.searchEmptyMsg}>
+              <div {...stylex.props(styles.searchEmpty)}>
+                <span {...stylex.props(styles.searchEmptyMsg)}>
                   {trimmedQuery
                     ? t('acceptance.workspace.filters.noSearchResults', { query: trimmedQuery })
                     : facetsNarrowed
@@ -810,7 +798,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                         : t(EMPTY_FILTER_KEYS[filter])}
                 </span>
                 <button
-                  className={styles.retryBtn}
+                  {...stylex.props(styles.retryBtn)}
                   type={'button'}
                   onClick={() => {
                     setQuery('');
@@ -822,7 +810,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 </button>
               </div>
             ) : (
-              <Center className={styles.emptyState}>
+              <Center className={stylex.props(styles.emptyState).className}>
                 {/* The dashed circle is the acceptance "awaiting" glyph
                       (AcceptanceStatusPill) — the domain's own mark, not the
                       generic inbox. */}
@@ -834,7 +822,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               </Center>
             )
           ) : (
-            <div className={styles.list} style={selecting ? { userSelect: 'none' } : undefined}>
+            <div {...sx(styles.list, selecting ? { userSelect: 'none' } : undefined)}>
               {showGroups ? (
                 <Accordion
                   gap={4}
@@ -857,7 +845,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                         </DropdownMenu>
                       ) : undefined,
                     title: (
-                      <span className={styles.groupTitle}>
+                      <span {...stylex.props(styles.groupTitle)}>
                         {/* The folder reads as "project"; a status or age
                               bucket is not a folder and must not wear one. */}
                         {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
@@ -868,12 +856,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                       </span>
                     ),
                     children: (
-                      <div className={styles.groupList}>
+                      <div {...stylex.props(styles.groupList)}>
                         {group.items.map((item) => (
                           <AcceptanceRow
                             active={item.id === acceptanceId}
                             item={item}
                             key={item.id}
+                            showCreator={showRowCreator}
                             showProject={showRowProject}
                             onChanged={mutate}
                             {...rowSelectionProps(item)}
@@ -894,6 +883,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                     active={item.id === acceptanceId}
                     item={item}
                     key={item.id}
+                    showCreator={showRowCreator}
                     showProject={showRowProject}
                     onChanged={mutate}
                     {...rowSelectionProps(item)}
@@ -935,7 +925,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     return (
       <DraggablePanel
-        className={styles.panel}
+        className={stylex.props(styles.panel).className}
         defaultSize={{ width: panelWidth }}
         expand={expand}
         maxWidth={PANEL_MAX}

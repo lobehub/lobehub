@@ -27,6 +27,7 @@ import {
   type SubAgentsBatchResultPayload,
 } from '../types';
 import {
+  buildEmptyArgsToolContent,
   EMPTY_ARGS_TOOL_CONTENT,
   EMPTY_ARGS_TOOL_REASON,
   partitionEmptyArgumentsCalls,
@@ -278,8 +279,7 @@ export class GeneralChatAgent implements Agent {
 
       if (dynamicPolicy !== undefined) {
         if (dynamicPolicy === 'never') toolsToExecute.push(toolCalling);
-        else if (approvalMode === 'allow-list' && allowList.includes(toolKey))
-          toolsToExecute.push(toolCalling);
+        else if (allowList.includes(toolKey)) toolsToExecute.push(toolCalling);
         else toolsNeedingIntervention.push(toolCalling);
         continue;
       }
@@ -304,8 +304,11 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Phase 7: User config is 'manual' (default), use tool's own config
-      if (staticPolicy === 'never') {
+      // Phase 7: User config is 'manual' (default), use tool's own config —
+      // except for tools the user approved with "don't ask again for similar
+      // actions", which joined the allow-list. Calls that must always ask
+      // never reach here (handled above).
+      if (staticPolicy === 'never' || allowList.includes(toolKey)) {
         toolsToExecute.push(toolCalling);
       } else {
         toolsNeedingIntervention.push(toolCalling);
@@ -679,6 +682,9 @@ export class GeneralChatAgent implements Agent {
             instructions.push({
               payload: {
                 blockedContent: EMPTY_ARGS_TOOL_CONTENT,
+                blockedContentByCallId: Object.fromEntries(
+                  emptyArgsCalls.map((call) => [call.id, buildEmptyArgsToolContent(call)]),
+                ),
                 blockedReason: EMPTY_ARGS_TOOL_REASON,
                 parentMessageId,
                 toolsCalling: emptyArgsCalls,

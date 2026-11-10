@@ -21,6 +21,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { VERIFY_PLAN_MODEL_CONFIG } from './modelConfig';
+import { resolveVerifyResponseLanguage } from './responseLanguage';
 import { RawGeneratedCriteriaSchema } from './schema';
 
 const log = debug('lobe-server:verify-plan-generator');
@@ -178,6 +179,7 @@ export class VerifyPlanGeneratorService {
         ...chainVerifyPlan({
           context: params.context,
           goal: params.goal,
+          language: await resolveVerifyResponseLanguage(this.db, this.userId),
           maxCriteria,
         }),
         ...VERIFY_PLAN_MODEL_CONFIG,
@@ -327,6 +329,7 @@ export class VerifyPlanGeneratorService {
       context: params.context,
       existingTitles: params.existingTitles,
       goal: params.goal,
+      language: await resolveVerifyResponseLanguage(this.db, this.userId),
       maxCriteria: params.maxCriteria,
     });
 

@@ -22,9 +22,20 @@ export {
   buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
+export {
+  scheduleVerifyOnCompletion,
+  VERIFY_ON_OPERATION_COMPLETE_PATH,
+  type VerifyOnOperationCompletePayload,
+} from './completionDispatch';
 export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
-export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
+export {
+  createEvidenceFileResolver,
+  type EvidenceFileMeta,
+  resolveEvidenceFiles,
+  type TerminalArtifactLink,
+} from './evidenceFiles';
+export { prepareEvidenceRows } from './evidenceIntake';
 export { evidenceTypeForStoredFile } from './evidenceMedium';
 export {
   type ExecuteVerifyParams,
@@ -60,4 +71,6 @@ export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
 export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
 export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
+export { resolveEvidenceMetadata } from './terminalEvidence';
+export { releaseUndeliveredRound } from './undeliveredRound';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

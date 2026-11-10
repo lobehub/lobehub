@@ -9,6 +9,7 @@ import { type WorkflowContext } from '@upstash/workflow';
 import { WorkflowAbort, WorkflowNonRetryableError } from '@upstash/workflow';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { UserModel } from '@/database/models/user';
 import { getServerDB } from '@/database/server';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
@@ -64,6 +65,17 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
         if (!payload.sources.includes(MemorySourceType.ChatTopic)) {
           span.setStatus({ code: SpanStatusCode.OK });
           return { message: 'Source not supported in topic workflow.' };
+        }
+
+        // Runs already queued when the account was banned must not reach the model.
+        // NOTICE: A plain read, not a step: a new persisted step would change the replay sequence
+        // and fail runs already in flight with `Incompatible step name`.
+        const isBanned = async () => UserModel.isBanned(await getServerDB(), userId);
+        // A tracked run keeps its steps and still reports progress, or its task never ends; the
+        // extraction steps below re-check the ban inside their callbacks instead.
+        if (!(payload.asyncTaskId && payload.userInitiated) && (await isBanned())) {
+          span.setStatus({ code: SpanStatusCode.OK });
+          return { message: 'User is banned, skipping memory extraction.', skipped: true };
         }
 
         if (payload.asyncTaskId) {
@@ -131,21 +143,23 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          await runStep(context, stepName, () =>
-            executor.extractTopic({
-              asyncTaskId: payload.asyncTaskId,
-              forceAll: payload.forceAll,
-              forceTopics: payload.forceTopics,
-              from: payload.from,
-              layers,
-              reportProgress: false,
-              source: MemorySourceType.ChatTopic,
-              to: payload.to,
-              topicId,
-              userId,
-              userInitiated: payload.userInitiated,
-              workspaceId: payload.workspaceId,
-            }),
+          await runStep(context, stepName, async () =>
+            (await isBanned())
+              ? undefined
+              : executor.extractTopic({
+                  asyncTaskId: payload.asyncTaskId,
+                  forceAll: payload.forceAll,
+                  forceTopics: payload.forceTopics,
+                  from: payload.from,
+                  layers,
+                  reportProgress: false,
+                  source: MemorySourceType.ChatTopic,
+                  to: payload.to,
+                  topicId,
+                  userId,
+                  userInitiated: payload.userInitiated,
+                  workspaceId: payload.workspaceId,
+                }),
           );
         }
         {
@@ -212,21 +226,23 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
               return guard.response;
             }
 
-            await runStep(context, stepName, () =>
-              executor.extractTopic({
-                asyncTaskId: payload.asyncTaskId,
-                forceAll: payload.forceAll,
-                forceTopics: payload.forceTopics,
-                from: payload.from,
-                layers,
-                reportProgress: false,
-                source: MemorySourceType.ChatTopic,
-                to: payload.to,
-                topicId,
-                userId,
-                userInitiated: payload.userInitiated,
-                workspaceId: payload.workspaceId,
-              }),
+            await runStep(context, stepName, async () =>
+              (await isBanned())
+                ? undefined
+                : executor.extractTopic({
+                    asyncTaskId: payload.asyncTaskId,
+                    forceAll: payload.forceAll,
+                    forceTopics: payload.forceTopics,
+                    from: payload.from,
+                    layers,
+                    reportProgress: false,
+                    source: MemorySourceType.ChatTopic,
+                    to: payload.to,
+                    topicId,
+                    userId,
+                    userInitiated: payload.userInitiated,
+                    workspaceId: payload.workspaceId,
+                  }),
             );
           }
         }

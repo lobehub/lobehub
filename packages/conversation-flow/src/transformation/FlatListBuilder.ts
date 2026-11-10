@@ -1,12 +1,20 @@
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
-import { toTime } from '../utils/timestamp';
-
 import { isInThreadScope } from '../indexing';
 import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
+import { toTime } from '../utils/timestamp';
 import type { BranchResolver } from './BranchResolver';
 import type { MessageCollector } from './MessageCollector';
+import { isToollessSignalTurn } from './MessageCollector';
 import type { MessageTransformer } from './MessageTransformer';
+
+/**
+ * Metadata that describes one step rather than the whole group: a finish
+ * reason belongs to its own response block, and a wake-up's signal names the
+ * task that woke that step. Hoisting either to the first block would show a
+ * terminal notice or a task-completion notice beside the wrong step.
+ */
+const PER_BLOCK_METADATA_KEYS = new Set(['finishType', 'signal']);
 
 /**
  * Whether a message was authored by the group's supervisor agent.
@@ -330,15 +338,6 @@ export class FlatListBuilder {
           allMessages,
         );
 
-        // Post-task-summary turns () — toolless siblings of
-        // the callbacks under the same tool_result, tagged with
-        // `signal.type === 'task-completion'`. Belong inside the same
-        // AssistantGroup, rendered AFTER the SignalCallbacks accordion.
-        const taskCompletionMessages = this.messageCollector.collectFlatTaskCompletions(
-          allToolMessages,
-          allMessages,
-        );
-
         // A broadcast turn renders its members as one in-bubble council block.
         // Gather them before building the group so they embed inside it.
         const council = this.collectCouncilMembers(allToolMessages, allMessages, processedIds);
@@ -349,7 +348,6 @@ export class FlatListBuilder {
           assistantChain,
           allToolMessages,
           signalBlocks,
-          taskCompletionMessages,
           council?.members,
         );
         flatList.push(groupMessage);
@@ -359,9 +357,6 @@ export class FlatListBuilder {
         allToolMessages.forEach((m) => processedIds.add(m.id));
         for (const block of signalBlocks) {
           for (const cb of block.callbacks) processedIds.add(cb.id);
-        }
-        for (const completion of taskCompletionMessages) {
-          processedIds.add(completion.id);
         }
 
         // Surface the supervisor's post-council reply (attached to one member).
@@ -593,7 +588,6 @@ export class FlatListBuilder {
       assistantChain,
       allToolMessages,
       undefined,
-      undefined,
       council?.members,
     );
     flatList.push(groupMessage);
@@ -624,7 +618,11 @@ export class FlatListBuilder {
     processedIds: Set<string>,
     allMessages: Message[],
   ): FlatListWork {
-    const lastAssistant = assistantChain.at(-1);
+    // A text-only wake-up never hosts the run's next step, so a run ending on
+    // one is continued from the step before it.
+    const lastAssistant =
+      assistantChain.findLast((assistant) => !isToollessSignalTurn(assistant)) ??
+      assistantChain.at(-1);
     if (lastAssistant) {
       this.suppressInactiveExplicitContinuations(lastAssistant, allToolMessages, processedIds);
     }
@@ -632,7 +630,7 @@ export class FlatListBuilder {
     yield this.continueGroupMemberReplies(assistantChain, flatList, processedIds, allMessages);
 
     const parentIds = [
-      ...(lastAssistant ? [lastAssistant.id] : []),
+      ...this.messageCollector.collectFollowUpHostIds(assistantChain, lastAssistant),
       ...allToolMessages.map((toolMessage) => toolMessage.id),
     ];
 
@@ -723,18 +721,14 @@ export class FlatListBuilder {
     const tail = assistantChain.at(-1);
     if (!tail) return;
 
-    for (const assistant of assistantChain.slice(0, -1)) {
+    for (const [index, assistant] of assistantChain.slice(0, -1).entries()) {
       const childIds = this.childrenMap.get(assistant.id) ?? [];
-      const interruptions = childIds.filter((id) => {
-        const message = this.messageMap.get(id);
-        return (
-          message?.role === 'user' &&
-          !message.threadId &&
-          !processedIds.has(id) &&
-          toTime(message.createdAt) >= toTime(assistant.createdAt) &&
-          toTime(message.createdAt) <= toTime(tail.createdAt)
-        );
-      });
+      const interruptions = this.messageCollector.collectGroupInterruptions(
+        assistant,
+        assistantChain[index + 1],
+        tail,
+        processedIds,
+      );
       if (interruptions.length === 0) continue;
 
       const activeId = this.branchResolver.getActiveBranchIdFromMetadata(
@@ -1147,7 +1141,6 @@ export class FlatListBuilder {
       sourceToolMessageId: string;
       sourceToolName: string;
     }[],
-    taskCompletionMessages?: Message[],
     councilMembers?: Message[],
   ): Message {
     const children: AssistantContentBlock[] = [];
@@ -1295,13 +1288,11 @@ export class FlatListBuilder {
 
     const aggregated = this.messageTransformer.aggregateMetadata(children);
 
-    // Finish reasons belong to their own response block; moving one to the first block can
-    // display a terminal notice beside an earlier tool step.
     const groupMetadata: Record<string, any> = {};
     children.forEach((child) => {
       if ((child as any).metadata) {
         Object.entries((child as any).metadata).forEach(([key, value]) => {
-          if (key !== 'finishType') groupMetadata[key] = value;
+          if (!PER_BLOCK_METADATA_KEYS.has(key)) groupMetadata[key] = value;
         });
       }
     });
@@ -1314,11 +1305,15 @@ export class FlatListBuilder {
       }
       Object.assign((children[0] as any).metadata, groupMetadata);
 
-      // Keep each child's finish reason while collecting shared metadata on the first child.
+      // Keep each child's per-block metadata while collecting shared metadata on the first child.
       for (let i = 1; i < children.length; i++) {
-        const finishType = (children[i] as any).metadata?.finishType;
-        if (finishType === undefined) delete (children[i] as any).metadata;
-        else (children[i] as any).metadata = { finishType };
+        const ownMetadata = Object.fromEntries(
+          Object.entries((children[i] as any).metadata ?? {}).filter(
+            ([key, value]) => PER_BLOCK_METADATA_KEYS.has(key) && value !== undefined,
+          ),
+        );
+        if (Object.keys(ownMetadata).length === 0) delete (children[i] as any).metadata;
+        else (children[i] as any).metadata = ownMetadata;
       }
     }
 
@@ -1384,27 +1379,6 @@ export class FlatListBuilder {
         sourceToolMessageId: block.sourceToolMessageId,
         sourceToolName: block.sourceToolName,
       }));
-    }
-
-    // Snapshot post-task-summary turns as content blocks ().
-    // They render after `<SignalCallbacks>` inside the same group, via
-    // a second `<Group>` that pulls live content from the store using
-    // the block id (no need to denormalize text here — keeps streaming
-    // updates working without an extra refresh).
-    if (taskCompletionMessages && taskCompletionMessages.length > 0) {
-      result.taskCompletions = taskCompletionMessages.map((m) => {
-        const block: AssistantContentBlock = {
-          content: m.content ?? '',
-          id: m.id,
-        };
-        if (m.error) block.error = m.error;
-        if (m.fileList && m.fileList.length > 0) block.fileList = m.fileList;
-        if (m.imageList && m.imageList.length > 0) block.imageList = m.imageList;
-        if (m.performance) block.performance = m.performance;
-        if (m.reasoning) block.reasoning = m.reasoning;
-        if (m.usage) block.usage = m.usage;
-        return block;
-      });
     }
 
     return result;

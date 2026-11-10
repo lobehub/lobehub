@@ -1,5 +1,8 @@
 import type { VerifyCheckDefinition } from './acceptanceFlow';
 import type { GoalReleaseGateDossier } from './goalRollout';
+import type { RequiredEvidenceSpec } from './verify/evidence';
+
+export * from './verify/evidence';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
  * shape, Toulmin narrative, and rubric run-policy config. Kept here (not in the
@@ -51,7 +54,10 @@ export type VerifyUserDecision = 'accepted' | 'rejected' | 'overridden';
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export type AcceptanceSubjectType = 'task' | 'topic' | 'document' | 'standalone' | 'goal_gate';
+export type AcceptanceSubjectType =
+  'task' | 'topic' | 'document' | 'standalone' | 'goal_gate' | 'site';
+
+export type CreatableAcceptanceSubjectType = Exclude<AcceptanceSubjectType, 'site'>;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -177,8 +183,30 @@ export interface AcceptanceMetadata {
    * `scm_change_requests` rows, which take precedence when both name a PR.
    */
   pullRequests?: AcceptancePullRequestLink[];
+  /** Latest explicit feedback handoff; kept apart from the standing Site review lifecycle. */
+  repair?: AcceptanceRepairRequest;
+  /** Task delivery's link back to the feedback handoff it addresses. */
+  repairSource?: { acceptanceId: string; commentIds?: string[]; requestId: string };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
+}
+
+export interface AcceptanceRepairRequest {
+  agentId?: string;
+  comment?: string;
+  commentIds: string[];
+  deliveryAcceptanceId?: string;
+  error?: string;
+  executionUserId?: string;
+  /** Frozen feedback, including page anchors and attachment references. */
+  feedback: string;
+  id: string;
+  operationId?: string;
+  requestedAt: string;
+  requestedBy: string;
+  state: 'failed' | 'finished' | 'running' | 'starting';
+  taskId?: string;
+  topicId?: string;
 }
 
 /** A hand-linked pull request on an acceptance. */
@@ -417,14 +445,6 @@ export type VerifyRunScenario = 'coding' | 'writing' | 'research' | 'generic';
  */
 export type VerifySurface = 'web' | 'desktop' | 'cli' | 'mobile' | 'bot';
 
-/**
- * The medium of a captured evidence artifact. `audio` covers a delivered or
- * captured sound (TTS output, a recorded voice reply, an alert tone) — it plays
- * inline on the acceptance page instead of publishing as an unplayable blob.
- */
-export type VerifyEvidenceType =
-  'screenshot' | 'gif' | 'video' | 'audio' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
-
 /** Who / what captured an evidence artifact (provenance). */
 export type VerifyEvidenceCapturedBy =
   'agent' | 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
@@ -650,6 +670,12 @@ export interface VerifyRunMetadata {
     feedback: string;
     predictionIds: string[];
     /**
+     * The checks of the reviewed round the review sent back, by that round's own
+     * plan item id, with the review's reason. They are what an in-round repair is
+     * asked to fix, instead of the whole Task starting another attempt.
+     */
+    rejectedChecks?: { checkItemId: string; feedback: string }[];
+    /**
      * `unjudgeable` is separate from `rejected` on purpose: it means the review
      * could not decide from evidence, not that the delivery fell short. Folding
      * it into `rejected` both sent the builder off to fix nothing and made the
@@ -686,6 +712,12 @@ export interface VerifyRunMetadata {
    * and never absorbs another flow, even while it holds no results yet.
    */
   replayOfRunId?: string;
+  /**
+   * When the stuck-run sweep re-drove this round's judging after its first
+   * attempt died before any verifier started. A round is re-driven at most
+   * once; a second stall is closed as `errored`.
+   */
+  verifierRedrivenAt?: string;
 }
 
 export type VerifyVisualizationValue = boolean | null | number | string;
@@ -792,9 +824,51 @@ export interface VerifyVisualizationManifest {
   views: VerifyVisualizationView[];
 }
 
+/**
+ * Why a builder disputes a check instead of satisfying it.
+ * - `missed_evidence`: the evidence is already there; the previous review missed
+ *   or misread it. The next review reads the builder's note next to the evidence.
+ * - `invalid_criterion`: the check itself is wrong — outside the requirement,
+ *   contradicting it or another check, or impossible for any delivery to meet.
+ *   A panel of review models arbitrates; an upheld dispute waives the check.
+ */
+export type VerifyCheckDisputeKind = 'invalid_criterion' | 'missed_evidence';
+
+/** One panel member's ruling on an `invalid_criterion` dispute. */
+export interface VerifyDisputeVote {
+  model: string;
+  provider: string;
+  reason?: string;
+  /** `errored` when the member could not rule; it then casts no vote. */
+  status: 'errored' | 'judged';
+  /** Whether the member upholds the dispute (waives the check). Unset when errored. */
+  upheld?: boolean;
+}
+
+export interface VerifyDisputeArbitration {
+  decidedAt: string;
+  /** `undecided` means no side reached a majority, so the check stands. */
+  outcome: 'overruled' | 'undecided' | 'upheld';
+  votes: VerifyDisputeVote[];
+}
+
+/** A builder's dispute of one check, filed on the round's check result. */
+export interface VerifyCheckDispute {
+  /** Set while a panel is ruling; it is the claim that keeps a second panel out. */
+  arbitratingSince?: string;
+  /** Only `invalid_criterion` disputes are arbitrated. */
+  arbitration?: VerifyDisputeArbitration;
+  /** Evidence rows on this check the builder points at. */
+  evidenceIds?: string[];
+  filedAt: string;
+  kind: VerifyCheckDisputeKind;
+  reason: string;
+}
+
 /** Known check-result metadata. Remains open for verifier-specific extensions. */
 export interface VerifyCheckResultMetadata {
   [key: string]: unknown;
+  dispute?: VerifyCheckDispute;
   visualization?: VerifyVisualizationManifest;
 }
 
@@ -912,58 +986,6 @@ export interface ToulminVerdict {
 
 // ============================================
 // Evidence — first-class artifacts a verifier produces (screenshots, logs, …)
-// ============================================
-
-/**
- * Declares that a criterion is evidence-driven: it cannot pass on the
- * deliverable text alone — the run must capture and upload an artifact of each
- * listed `type` (via `lh acceptance run result submit`). Stored under the plan item's
- * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
- * structural gate marks a required item `uncertain` when any listed type is
- * missing, independent of the LLM judge.
- */
-export interface RequiredEvidenceSpec {
-  /** What the capturer should produce — guidance only, not validated. */
-  hint?: string;
-  /** Semantic medium the verifier must actually understand, not merely observe exists. */
-  modality?: 'audio' | 'document' | 'image' | 'structured' | 'text' | 'video';
-  /** Where the evidence is expected to come from. */
-  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
-  /** The evidence medium that must be present for this criterion. */
-  type: VerifyEvidenceType;
-}
-
-/**
- * One evidence artifact produced while judging a check. Carries existence +
- * provenance only — no verdict logic. Verifying an evidence is itself a new
- * check (related through `verify_check_results`), so this table stays flat.
- *
- * The payload lives in exactly one of three places: `content` for small inline
- * text, `documentId` for a LobeHub document, or `fileId` for a stored artifact.
- */
-export interface VerifyEvidence {
-  capturedAt?: Date | null;
-  /** Who produced this artifact. */
-  capturedBy?: VerifyEvidenceCapturedBy | null;
-  /** The check result this evidence backs. */
-  checkResultId: string;
-  /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
-  content?: string | null;
-  createdAt: Date;
-  /** Human-readable caption, e.g. "首页首屏完整渲染". */
-  description?: string | null;
-  /** LobeHub document evidence — FK to `documents`. */
-  documentId?: string | null;
-  /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
-  fileId?: string | null;
-  id: string;
-  /** Generic extension bag; concrete capturer-specific shape is not fixed yet. */
-  metadata?: unknown | null;
-  type: VerifyEvidenceType;
-}
-
-// ============================================
-// Report — the LLM-generated delivery-verification narrative for a run
 // ============================================
 
 /**

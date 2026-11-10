@@ -11,6 +11,7 @@ import type { LobeChatDatabase, Transaction } from '../../type';
 import { GROUP_SUPERVISOR_ROLE, resolveGroupMembershipType } from '../../utils/groupMembership';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { GROUP_HAS_INACCESSIBLE_MEMBER } from './constants';
 import {
   type CopyAgentGroupToWorkspaceOptions,
   copyGroupToWorkspace,
@@ -261,75 +262,88 @@ export class AgentGroupRepository {
     // private. Defaults to 'public' to match the column default.
     const groupVisibility = groupParams.visibility ?? folderVisibility ?? 'public';
 
-    // 1. Create supervisor agent (virtual agent)
-    const [supervisorAgent] = await this.db
-      .insert(agents)
-      .values({
-        avatar: supervisorConfig?.avatar,
-        backgroundColor: supervisorConfig?.backgroundColor,
-        chatConfig: supervisorConfig?.chatConfig,
-        description: supervisorConfig?.description,
-        model: supervisorConfig?.model,
-        params: supervisorConfig?.params,
-        // The `plugins` column is still typed `string[]` at the schema layer
-        // (widening deferred to the tri-state rollout's final phase) but
-        // legitimately holds mixed AgentPluginEntry[] at runtime — JSONB has
-        // no schema enforcement.
-        plugins: supervisorConfig?.plugins as unknown as string[] | undefined,
-        provider: supervisorConfig?.provider,
-        systemRole: supervisorConfig?.systemRole,
-        tags: supervisorConfig?.tags,
-        title: supervisorConfig?.title ?? 'Supervisor',
+    // A failed group insert (e.g. a duplicate clientId on retry) must not
+    // leave the synthetic supervisor agent behind.
+    return this.db.transaction(async (trx) => {
+      const memberIds = [...new Set(agentMembers)];
+      if (memberIds.length > 0) {
+        const visibleMembers = await trx
+          .select({ id: agents.id })
+          .from(agents)
+          .where(and(inArray(agents.id, memberIds), this.scope.agentOwnership()));
+
+        if (visibleMembers.length !== memberIds.length) {
+          throw new Error(GROUP_HAS_INACCESSIBLE_MEMBER);
+        }
+      }
+
+      // 1. Create supervisor agent (virtual agent)
+      const [supervisorAgent] = await trx
+        .insert(agents)
+        .values({
+          avatar: supervisorConfig?.avatar,
+          backgroundColor: supervisorConfig?.backgroundColor,
+          chatConfig: supervisorConfig?.chatConfig,
+          description: supervisorConfig?.description,
+          model: supervisorConfig?.model,
+          params: supervisorConfig?.params,
+          // The `plugins` column is still typed `string[]` at the schema layer
+          // (widening deferred to the tri-state rollout's final phase) but
+          // legitimately holds mixed AgentPluginEntry[] at runtime — JSONB has
+          // no schema enforcement.
+          plugins: supervisorConfig?.plugins as unknown as string[] | undefined,
+          provider: supervisorConfig?.provider,
+          systemRole: supervisorConfig?.systemRole,
+          tags: supervisorConfig?.tags,
+          title: supervisorConfig?.title ?? 'Supervisor',
+          userId: this.userId,
+          virtual: true,
+          visibility: groupVisibility,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning();
+
+      // 2. Create the group
+      const [group] = await trx
+        .insert(chatGroups)
+        .values({
+          ...groupParams,
+          userId: this.userId,
+          visibility: groupVisibility,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning();
+
+      // 3. Add supervisor agent to group with role 'supervisor'
+      const supervisorGroupAgent: NewChatGroupAgent = {
+        agentId: supervisorAgent.id,
+        chatGroupId: group.id,
+        order: -1, // Supervisor always first (negative order)
+        role: GROUP_SUPERVISOR_ROLE,
         userId: this.userId,
-        virtual: true,
-        visibility: groupVisibility,
         workspaceId: this.workspaceId ?? null,
-      })
-      .returning();
+      };
 
-    // 2. Create the group
-    const [group] = await this.db
-      .insert(chatGroups)
-      .values({
-        ...groupParams,
+      // 4. Add member agents to group with role 'participant'
+      const memberGroupAgents: NewChatGroupAgent[] = agentMembers.map((agentId, index) => ({
+        agentId,
+        chatGroupId: group.id,
+        order: index,
+        role: 'participant',
         userId: this.userId,
-        visibility: groupVisibility,
         workspaceId: this.workspaceId ?? null,
-      })
-      .returning();
+      }));
 
-    // 3. Add supervisor agent to group with role 'supervisor'
-    const supervisorGroupAgent: NewChatGroupAgent = {
-      agentId: supervisorAgent.id,
-      chatGroupId: group.id,
-      order: -1, // Supervisor always first (negative order)
-      role: GROUP_SUPERVISOR_ROLE,
-      userId: this.userId,
-      workspaceId: this.workspaceId ?? null,
-    };
+      // 5. Insert all group-agent relationships
+      const allGroupAgents = [supervisorGroupAgent, ...memberGroupAgents];
+      const insertedAgents = await trx.insert(chatGroupsAgents).values(allGroupAgents).returning();
 
-    // 4. Add member agents to group with role 'participant'
-    const memberGroupAgents: NewChatGroupAgent[] = agentMembers.map((agentId, index) => ({
-      agentId,
-      chatGroupId: group.id,
-      order: index,
-      role: 'participant',
-      userId: this.userId,
-      workspaceId: this.workspaceId ?? null,
-    }));
-
-    // 5. Insert all group-agent relationships
-    const allGroupAgents = [supervisorGroupAgent, ...memberGroupAgents];
-    const insertedAgents = await this.db
-      .insert(chatGroupsAgents)
-      .values(allGroupAgents)
-      .returning();
-
-    return {
-      agents: insertedAgents,
-      group,
-      supervisorAgentId: supervisorAgent.id,
-    };
+      return {
+        agents: insertedAgents,
+        group,
+        supervisorAgentId: supervisorAgent.id,
+      };
+    });
   }
 
   /**

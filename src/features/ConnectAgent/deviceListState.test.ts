@@ -1,6 +1,7 @@
+import type { DeviceListItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { getDeviceListState } from './deviceListState';
+import { getDeviceListState, isListableDevice } from './deviceListState';
 
 describe('getDeviceListState', () => {
   it('keeps an empty device result in loading state while the request is in flight', () => {
@@ -49,5 +50,19 @@ describe('getDeviceListState when the request fails', () => {
         isFetching: true,
       }),
     ).toBe('loading');
+  });
+});
+
+describe('isListableDevice', () => {
+  const personal = { deviceId: 'dev_p', scope: 'personal' } as DeviceListItem;
+  const shared = { deviceId: 'dev_w', scope: 'workspace' } as DeviceListItem;
+
+  it('keeps personal devices out of a workspace', () => {
+    expect(isListableDevice(personal, true)).toBe(false);
+    expect(isListableDevice(shared, true)).toBe(true);
+  });
+
+  it('lists every device outside a workspace', () => {
+    expect(isListableDevice(personal, false)).toBe(true);
   });
 });

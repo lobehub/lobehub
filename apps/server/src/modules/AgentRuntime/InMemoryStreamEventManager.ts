@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import {
+  compareStreamIds,
   type StreamChunkData,
   type StreamEvent,
   stripFinalStateInEventData,
@@ -23,6 +24,9 @@ const getDefaultReasonDetail = (finalState: any, reason?: string): string => {
 
 type EventCallback = (events: StreamEvent[]) => void;
 
+/** Matches Redis's two-hour inactivity TTL; streams are not trimmed by count. */
+const STREAM_RETENTION_MS = 2 * 3600 * 1000;
+
 /**
  * In-Memory Stream Event Manager
  * In-memory implementation for testing and local development environments
@@ -31,6 +35,16 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   private streams: Map<string, StreamEvent[]> = new Map();
   private subscribers: Map<string, EventCallback[]> = new Map();
   private eventIdCounter = 0;
+  private lastPublishedAt = new Map<string, number>();
+
+  private evictExpiredStreams(): void {
+    const now = Date.now();
+    for (const [operationId, publishedAt] of this.lastPublishedAt) {
+      if (now - publishedAt <= STREAM_RETENTION_MS) continue;
+      this.streams.delete(operationId);
+      this.lastPublishedAt.delete(operationId);
+    }
+  }
 
   private generateEventId(): string {
     this.eventIdCounter++;
@@ -41,6 +55,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     operationId: string,
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
   ): Promise<string> {
+    this.evictExpiredStreams();
     const eventId = this.generateEventId();
 
     const eventData: StreamEvent = {
@@ -64,10 +79,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
 
     stream.push(eventData);
 
-    // Limit stream length to prevent memory overflow
-    if (stream.length > 1000) {
-      stream.shift();
-    }
+    this.lastPublishedAt.set(operationId, Date.now());
 
     log('Published event %s for operation %s:%d', eventData.type, operationId, eventData.stepIndex);
 
@@ -84,6 +96,16 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     }
 
     return eventId;
+  }
+
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    const stream = this.streams.get(operationId);
+    if (!stream || eventIds.length === 0) return;
+    const ids = new Set(eventIds);
+    this.streams.set(
+      operationId,
+      stream.filter((event) => !event.id || !ids.has(event.id)),
+    );
   }
 
   async publishStreamChunk(
@@ -142,6 +164,38 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     return stream.slice(-count).reverse();
   }
 
+  async getStreamHistoryPage(operationId: string, cursor = '0', limit = 200) {
+    this.evictExpiredStreams();
+    const stream = this.streams.get(operationId);
+    const unavailable = { available: false, events: [], hasMore: false, nextCursor: cursor };
+    if (!stream || stream[0]?.type !== 'agent_runtime_init') return unavailable;
+    if (cursor === '0') return this.historyPage(stream, 0, limit, cursor);
+
+    const exact = stream.findIndex((event) => event.id === cursor);
+    if (exact >= 0) return this.historyPage(stream, exact + 1, limit, cursor);
+
+    // Mirror the Redis manager: a cursor removed by `deleteStreamEvents` sits
+    // after the init with a newer event following it; anything else is lost.
+    if (compareStreamIds(stream[0].id!, cursor) >= 0) return unavailable;
+    const next = this.indexAfter(stream, cursor);
+    return next < 0 ? unavailable : this.historyPage(stream, next, limit, cursor);
+  }
+
+  private historyPage(stream: StreamEvent[], start: number, limit: number, cursor: string) {
+    const events = stream.slice(start, start + limit);
+    return {
+      available: true,
+      events,
+      hasMore: stream.length > start + limit,
+      nextCursor: events.at(-1)?.id ?? cursor,
+    };
+  }
+
+  /** Index of the first event newer than `cursor`, or -1. */
+  private indexAfter(stream: StreamEvent[], cursor: string): number {
+    return stream.findIndex((event) => !!event.id && compareStreamIds(event.id, cursor) > 0);
+  }
+
   /**
    * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
    * The in-memory manager is non-blocking: it returns immediately with whatever
@@ -161,12 +215,15 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       return { events: [], lastEventId: stream.at(-1)?.id ?? '0' };
     }
 
-    const idx = stream.findIndex((e) => e.id === lastEventId);
-    const events = idx >= 0 ? stream.slice(idx + 1) : stream.slice();
+    // Like XREAD: everything newer than the cursor, even if the cursor's own
+    // event was removed by `deleteStreamEvents`.
+    const idx = this.indexAfter(stream, lastEventId);
+    const events = idx >= 0 ? stream.slice(idx) : [];
     return { events, lastEventId: events.at(-1)?.id ?? lastEventId };
   }
 
   async cleanupOperation(operationId: string): Promise<void> {
+    this.lastPublishedAt.delete(operationId);
     this.streams.delete(operationId);
     this.subscribers.delete(operationId);
     log('Cleaned up operation %s', operationId);
@@ -244,6 +301,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
    * Clear all data (for testing)
    */
   clear(): void {
+    this.lastPublishedAt.clear();
     this.streams.clear();
     this.subscribers.clear();
     this.eventIdCounter = 0;

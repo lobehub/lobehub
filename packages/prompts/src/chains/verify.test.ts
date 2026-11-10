@@ -33,6 +33,28 @@ describe('chainVerifyReviewPrediction', () => {
    * dropped without a word, so the model rejected checks for "evidence that does
    * not show it" while the artifact existed and was held back from the request.
    */
+  it("frames a builder's rebuttal as a claim to check, not a pass", () => {
+    const { messages } = chainVerifyReviewPrediction({
+      builderRebuttal: 'Screenshot 2 shows the saved state.',
+      title: 'Saves the document',
+      visuals: [{ accessUrl: 'https://example.com/evidence.png' }],
+    });
+    const user = (messages[1].content as { text?: string }[])[0].text!;
+
+    expect(user).toContain('## The builder disputes the previous rejection');
+    expect(user).toContain('Screenshot 2 shows the saved state.');
+    expect(user).toContain('A rebuttal is a claim, not evidence');
+  });
+
+  it('keeps the prompt of a review without a rebuttal unchanged', () => {
+    const { messages } = chainVerifyReviewPrediction({
+      title: 'Saves the document',
+      visuals: [{ accessUrl: 'https://example.com/evidence.png' }],
+    });
+
+    expect(JSON.stringify(messages)).not.toContain('disputes the previous rejection');
+  });
+
   it('declares withheld artifacts and forbids rejecting for their absence', () => {
     const { messages } = chainVerifyReviewPrediction({
       title: 'Multimodal inputs were integrated',

@@ -10,20 +10,22 @@ import {
   Icon,
   stopPropagation,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
+import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
 interface BuiltinSkillItemProps {
   avatar?: string;
+  description?: string;
   identifier: string;
   isSelected?: boolean;
   onSelect?: () => void;
@@ -31,8 +33,9 @@ interface BuiltinSkillItemProps {
 }
 
 const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
-  ({ identifier, title, avatar, isSelected, onSelect }) => {
+  ({ identifier, title, avatar, description, isSelected, onSelect }) => {
     const { t } = useTranslation(['setting', 'plugin', 'common']);
+    const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -65,13 +68,13 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
     const renderStatus = () => {
       if (isInstalled) {
         return (
-          <span className={styles.connected}>
+          <span {...stylex.props(styles.connected)}>
             {t('tools.builtins.installed', { ns: 'setting' })}
           </span>
         );
       }
       return (
-        <span className={styles.disconnected}>
+        <span {...stylex.props(styles.disconnected)}>
           {t('tools.builtins.uninstalled', { ns: 'setting' })}
         </span>
       );
@@ -107,11 +110,16 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
 
     if (onSelect) {
       return (
-        <NavItem
+        <SkillListRow
           active={isSelected}
-          icon={() => <Avatar avatar={avatar} size={18} />}
+          extra={isPage && !isInstalled ? renderStatus() : undefined}
+          icon={() => <Avatar avatar={avatar} size={isPage ? 20 : 18} />}
           title={title}
           titleColor={!isInstalled ? cssVar.colorTextDescription : undefined}
+          summary={t(`tools.builtins.${identifier}.description`, {
+            defaultValue: description ?? '',
+            ns: 'setting',
+          })}
           onClick={onSelect}
         />
       );
@@ -121,7 +129,7 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -138,10 +146,10 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
             style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={onSelect ? undefined : () => createBuiltinSkillDetailModal({ identifier })}
           >
-            <div className={`${styles.icon} ${!isInstalled ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isInstalled && styles.disconnectedIcon)}>
               <Avatar avatar={avatar} size={16} />
             </div>
-            <span className={`${styles.title} ${!isInstalled ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isInstalled && styles.disconnectedTitle)}>
               {title}
             </span>
           </Flexbox>

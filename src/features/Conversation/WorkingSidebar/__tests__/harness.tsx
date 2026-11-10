@@ -28,6 +28,7 @@ const rightPanel = vi.hoisted(() => ({
 
 const agentStore = vi.hoisted(() => ({
   activeAgentId: undefined as string | undefined,
+  heterogeneousType: undefined as string | undefined,
   isHeterogeneous: false,
   rawAgencyConfig: undefined as
     { boundDeviceId?: string; executionTarget?: 'device' | 'local' } | undefined,
@@ -85,6 +86,8 @@ const filesPrefetchProps = vi.hoisted(() => ({
 const reviewState = vi.hoisted(() => ({
   repoType: undefined as string | undefined,
   setRepoType: undefined as ((repoType?: string) => void) | undefined,
+  /** The directory only comes from the desktop home fallback, not a user choice. */
+  isHomeFallback: false,
   showTree: false,
   workingDirectory: undefined as string | undefined,
 }));
@@ -107,7 +110,7 @@ const browserPanes = vi.hoisted(() => ({
 }));
 
 const renderedReview = vi.hoisted(() => ({
-  current: undefined as { composerTarget: ComposerTarget } | undefined,
+  current: undefined as { active: boolean; composerTarget: ComposerTarget } | undefined,
 }));
 
 const localStorageState = vi.hoisted(() => ({
@@ -141,6 +144,7 @@ const globalStore = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
   toggleRightPanel: vi.fn(),
   toggleTerminalPanel: vi.fn(),
+  setWorkingSidebarPullRequestUrl: vi.fn(),
   setWorkingSidebarTab: vi.fn(),
   status: {
     portalWidth: 400 as number | undefined,
@@ -189,7 +193,7 @@ vi.mock('../Files/FilesPrefetch', () => ({
   },
 }));
 vi.mock('../Review', () => ({
-  default: (props: { composerTarget: ComposerTarget }) => {
+  default: (props: { active: boolean; composerTarget: ComposerTarget }) => {
     renderedReview.current = props;
     return <div data-testid="review" />;
   },
@@ -206,6 +210,12 @@ vi.mock('../ParamsSection', () => ({
   },
 }));
 vi.mock('../WorksSection', () => ({ default: () => <div /> }));
+vi.mock('../Search', () => ({
+  TopicSearchPane: ({ topicId }: { topicId: string }) => (
+    <div data-testid="topic-search">{topicId}</div>
+  ),
+}));
+vi.mock('@/hooks/useHotkeys', () => ({ useFindInTopicHotkey: () => undefined }));
 vi.mock('../Browser', () => ({
   default: (props: (typeof browserPanes.current)[number]) => {
     browserPanes.current.push(props);
@@ -252,6 +262,7 @@ vi.mock('@/store/agent/selectors', () => ({
     isWorkspaceAgentById: () => () => false,
   },
   agentSelectors: {
+    currentAgentHeterogeneousProviderType: () => agentStore.heterogeneousType,
     isCurrentAgentHeterogeneous: () => agentStore.isHeterogeneous,
   },
   chatConfigByIdSelectors: {
@@ -280,6 +291,12 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspace.id,
 }));
 
+vi.mock('@/features/Conversation/WorkingSidebar/Memory/MemoryPane', () => ({
+  MemoryPane: (props: { deviceId?: string; workingDirectory: string }) => (
+    <div data-testid="memory-pane">{props.workingDirectory}</div>
+  ),
+}));
+
 vi.mock('@/business/client/features/WorkingSidebarTabs', () => ({
   useBusinessWorkingSidebarTabs: () => businessTabs.current,
 }));
@@ -296,7 +313,10 @@ vi.mock('@/features/ChatInput/ControlBar/useRepoType', async () => {
   };
 });
 vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
-  useEffectiveWorkingDirectory: () => reviewState.workingDirectory,
+  useEffectiveWorkingDirectory: (_agentId?: string, options?: { homeFallback?: boolean }) =>
+    options?.homeFallback === false && reviewState.isHomeFallback
+      ? undefined
+      : reviewState.workingDirectory,
 }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
@@ -449,6 +469,7 @@ beforeEach(() => {
   chatStore.threadMaps = {};
   chatStore.openTopicComments.mockReset();
   agentStore.activeAgentId = undefined;
+  agentStore.heterogeneousType = undefined;
   agentStore.isHeterogeneous = false;
   agentStore.rawAgencyConfig = undefined;
   effectiveConfig.agencyConfig = undefined;
@@ -468,6 +489,7 @@ beforeEach(() => {
   reviewState.setRepoType = undefined;
   reviewState.showTree = false;
   reviewState.workingDirectory = undefined;
+  reviewState.isHomeFallback = false;
   dropdownMenuState.onOpenChangeComplete = undefined;
   dropdownMenuState.items = [];
   globalStore.status.workingSidebarWidth = 360;

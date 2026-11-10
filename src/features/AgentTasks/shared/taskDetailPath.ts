@@ -10,8 +10,8 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
  * accept but never resolve against, so a caller without the title in hand still
  * produces a working link.
  */
-export const taskDetailPath = (taskId: string, agentId?: string, title?: string | null) => {
-  const base = agentId ? `/agent/${agentId}/task/${taskId}` : `/task/${taskId}`;
+export const taskDetailPath = (taskRef: string, agentId?: string, title?: string | null) => {
+  const base = agentId ? `/agent/${agentId}/task/${taskRef}` : `/task/${taskRef}`;
   const slug = taskTitleSlug(title);
 
   return slug ? `${base}/${slug}` : base;
@@ -21,8 +21,8 @@ export const useTaskDetailPath = () => {
   const { aid } = useActiveRouteParams<{ aid?: string }>();
 
   return useCallback(
-    (taskId: string, agentId?: string, title?: string | null) =>
-      taskDetailPath(taskId, agentId ?? aid, title),
+    (taskRef: string, agentId?: string, title?: string | null) =>
+      taskDetailPath(taskRef, agentId ?? aid, title),
     [aid],
   );
 };
@@ -32,8 +32,8 @@ export const useNavigateToTaskDetail = () => {
   const getTaskDetailPath = useTaskDetailPath();
 
   return useCallback(
-    (taskId: string, agentId?: string, title?: string | null) => {
-      navigate(getTaskDetailPath(taskId, agentId, title));
+    (taskRef: string, agentId?: string, title?: string | null) => {
+      navigate(getTaskDetailPath(taskRef, agentId, title));
     },
     [getTaskDetailPath, navigate],
   );

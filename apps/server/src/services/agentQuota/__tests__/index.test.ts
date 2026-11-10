@@ -10,7 +10,7 @@ import {
   AgentQuotaUsageLedgerModel,
   AgentQuotaWindowModel,
 } from '@/database/models/agentQuota';
-import { agents, users } from '@/database/schemas';
+import { agentOperations, agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { QuotaBindingRole } from '@/database/types/agentQuota';
 
@@ -184,6 +184,114 @@ describe('AgentQuotaService.selectForAgent', () => {
       claudeAccount.id,
     );
   });
+
+  it('balances only across accounts the caller can run, skipping a pin it cannot run', async () => {
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([{ id: 'agent-3', slug: 'agent-3', title: 'A3', userId }]);
+    const local = await service.ingestSnapshot({
+      identity: { externalAccountId: 'local-acc' },
+      provider: 'claude-code',
+      readings: [],
+    });
+    const remote = await service.ingestSnapshot({
+      identity: { externalAccountId: 'remote-acc' },
+      provider: 'claude-code',
+      readings: [],
+    });
+    await bindings.upsert({ accountId: local.id, agentId: 'agent-3', role: QuotaBindingRole.pool });
+    await bindings.upsert({
+      accountId: remote.id,
+      agentId: 'agent-3',
+      role: QuotaBindingRole.pool,
+    });
+
+    const onlyRemote = { provider: 'claude-code', runnableExternalAccountIds: ['remote-acc'] };
+    const onlyLocal = { provider: 'claude-code', runnableExternalAccountIds: ['local-acc'] };
+    expect((await service.selectForAgent('agent-3', onlyRemote))?.accountId).toBe(remote.id);
+    expect((await service.selectForAgent('agent-3', onlyLocal))?.accountId).toBe(local.id);
+    expect(
+      await service.selectForAgent('agent-3', {
+        provider: 'claude-code',
+        runnableExternalAccountIds: [],
+      }),
+    ).toBeNull();
+
+    // An agent-wide pin the caller cannot run was picked on another machine:
+    // balance across what it can run instead. Where it can run, it still holds.
+    await bindings.upsert({
+      accountId: remote.id,
+      agentId: 'agent-3',
+      role: QuotaBindingRole.pinned,
+    });
+    expect(await service.selectForAgent('agent-3', onlyLocal)).toMatchObject({
+      accountId: local.id,
+      reason: 'balanced',
+    });
+    expect(await service.selectForAgent('agent-3', onlyRemote)).toMatchObject({
+      accountId: remote.id,
+      pinScope: 'agent',
+      reason: 'pinned',
+    });
+  });
+});
+
+describe('AgentQuotaService.planDeviceRouting', () => {
+  const now = Date.parse('2026-07-02T00:00:00Z');
+  const weekly = (utilization: number) => ({
+    capturedAt: now - 60_000,
+    limitType: 'weekly_all',
+    resetsAt: now + 3 * 24 * HOUR,
+    scopeKey: '',
+    utilization,
+  });
+
+  it('sends a pin as the only candidate, and the pool best-first otherwise', async () => {
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([{ id: 'agent-d', slug: 'agent-d', title: 'D', userId }]);
+    const busy = await service.ingestSnapshot({
+      identity: { email: 'busy@example.com', externalAccountId: 'busy-acc' },
+      provider: 'claude-code',
+      readings: [weekly(80)],
+    });
+    const free = await service.ingestSnapshot({
+      identity: { email: 'free@example.com', externalAccountId: 'free-acc' },
+      provider: 'claude-code',
+      readings: [weekly(10)],
+    });
+    const spent = await service.ingestSnapshot({
+      identity: { externalAccountId: 'spent-acc' },
+      provider: 'claude-code',
+      readings: [weekly(100)],
+    });
+
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toBeNull();
+
+    for (const account of [busy, free, spent])
+      await bindings.upsert({
+        accountId: account.id,
+        agentId: 'agent-d',
+        role: QuotaBindingRole.pool,
+      });
+
+    // An exhausted account is not a candidate; the rest go most headroom first.
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toEqual({
+      candidates: [
+        { externalAccountId: 'free-acc', name: 'free@example.com' },
+        { externalAccountId: 'busy-acc', name: 'busy@example.com' },
+      ],
+      mode: 'balanced',
+    });
+
+    await bindings.upsert({
+      accountId: busy.id,
+      agentId: 'agent-d',
+      role: QuotaBindingRole.pinned,
+    });
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toEqual({
+      candidates: [{ externalAccountId: 'busy-acc', name: 'busy@example.com' }],
+      mode: 'pinned',
+    });
+  });
 });
 
 describe('AgentQuotaService.listLatestReadings', () => {
@@ -244,6 +352,34 @@ describe('AgentQuotaService.listLatestReadings', () => {
     expect(load.sessionUtil).toBe(0);
     expect(load.rateLimitedUntil).toBeNull();
     expect(load.weeklyUtil).toBe(21);
+  });
+
+  it('forgets the 5-hour limit once the plan stops reporting it (Max upgraded to Ultra)', async () => {
+    // The Max-era sample carried a session window; every Ultra sample after
+    // its reset carries none. Its row stays the newest in the session bucket.
+    await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        { ...weeklyReading, capturedAt: now - 8 * HOUR },
+        {
+          capturedAt: now - 8 * HOUR,
+          limitType: 'session',
+          resetsAt: now - 6 * HOUR,
+          scopeKey: '',
+          utilization: 40,
+        },
+      ],
+    });
+    const account = await service.ingestSnapshot({
+      identity: { ...identity, planTier: 'ultra' },
+      provider: 'claude-code',
+      readings: [weeklyReading],
+    });
+
+    const latest = await service.listLatestReadings(account.id);
+
+    expect(latest.map((r) => r.limitType)).toEqual(['weekly_all']);
   });
 });
 
@@ -395,6 +531,35 @@ describe('AgentQuotaService.recordUsage', () => {
         new Date('2026-07-01T02:00:00Z'),
       ),
     ).toBe(0);
+  });
+});
+
+describe('AgentQuotaService.listActiveRuns', () => {
+  it('only counts runs that billed the account within the last six hours', async () => {
+    const now = Date.parse('2026-07-12T12:00:00Z');
+    const account = await new AgentProviderAccountModel(serverDB, userId).create({
+      provider: 'claude-code',
+    });
+    await serverDB.insert(agents).values({ id: 'active-run-agent', userId });
+    await serverDB.insert(agentOperations).values([
+      { agentId: 'active-run-agent', id: 'op-fresh', status: 'running', userId },
+      // Left `running` by a client that never reported back.
+      { agentId: 'active-run-agent', id: 'op-stale', status: 'running', userId },
+    ]);
+    const turn = (operationId: string, at: number) =>
+      ledger.append({
+        accountId: account.id,
+        occurredAt: new Date(at),
+        operationId,
+        provider: 'claude-code',
+      });
+    await turn('op-fresh', now - HOUR);
+    await turn('op-stale', now - 7 * HOUR);
+
+    const runs = await service.listActiveRuns(account.id, now);
+
+    expect(runs.map((run) => run.operationId)).toEqual(['op-fresh']);
+    expect(runs[0].lastTurnAt).toBe(now - HOUR);
   });
 });
 
