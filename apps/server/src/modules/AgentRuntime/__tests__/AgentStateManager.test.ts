@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 
-import { AgentStateManager } from '../AgentStateManager';
+import { AgentStateManager, resetStripOperationToolsetCache } from '../AgentStateManager';
 
 // Mock Redis client. Hoisted so individual tests can assert on the exact
 // payloads handed to `setex` / `lpush`.
@@ -50,6 +50,7 @@ describe('AgentStateManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetStripOperationToolsetCache();
     mockStripFlag(false);
     stateManager = new AgentStateManager();
   });
@@ -557,6 +558,74 @@ describe('AgentStateManager', () => {
 
       expect(loaded?.operationToolSet).toEqual(toolSet);
       expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
+    });
+
+    it('resolves the flag once per cache window for one owner', async () => {
+      mockStripFlag(true);
+      const op = 'op-ff-cache-hit';
+      const state = { operationToolSet: toolSet, origin, status: 'running', stepCount: 1 };
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: state,
+        stepIndex: 1,
+      } as any);
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { ...state, stepCount: 2 },
+        stepIndex: 2,
+      } as any);
+
+      // The per-step write must not pay a flag lookup on every step.
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves the flag per operation owner', async () => {
+      mockStripFlag(true);
+
+      await stateManager.saveAgentState('op-ff-owner-a', {
+        operationToolSet: toolSet,
+        origin: { userId: 'user-a' },
+        status: 'running',
+        stepCount: 1,
+      } as any);
+      await stateManager.saveAgentState('op-ff-owner-b', {
+        operationToolSet: toolSet,
+        origin: { userId: 'user-b' },
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-a');
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-b');
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a failed resolution', async () => {
+      vi.mocked(getServerFeatureFlagsStateFromRuntimeConfig)
+        .mockRejectedValueOnce(new Error('down'))
+        .mockResolvedValue({ enableStripOperationToolset: true } as any);
+      const op = 'op-ff-error-retry';
+      const state = { operationToolSet: toolSet, origin, status: 'running', stepCount: 1 };
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: state,
+        stepIndex: 1,
+      } as any);
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { ...state, stepCount: 2 },
+        stepIndex: 2,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(2);
+      const blobs = pipelineMock.setex.mock.calls.filter(
+        (c) => c[0] === `agent_runtime_state:${op}`,
+      );
+      // First save keeps the blob inline, the retry strips it.
+      expect(JSON.parse(blobs[0][2] as string).operationToolSet).toEqual(toolSet);
+      expect(JSON.parse(blobs.at(-1)![2] as string).operationToolSet).toBeUndefined();
     });
   });
 

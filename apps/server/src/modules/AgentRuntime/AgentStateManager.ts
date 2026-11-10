@@ -113,19 +113,64 @@ const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number
  * load path re-attaches an external tool set unconditionally and leaves an
  * inline one alone, so a blob written under either setting loads the same.
  *
- * Flag resolution is served from the runtime-config provider's in-process
- * cache, so a save does not cost an extra Redis round trip. If it fails, the
- * blob stays inline — the pre-flag behaviour — rather than failing the save.
+ * Resolution is cached here per operation owner for a few seconds on top of the
+ * runtime-config provider's own snapshot cache, so a publish still lands within
+ * seconds without a redeploy and a save pays no per-owner lookup. If resolution
+ * fails, the blob stays inline — the pre-flag behaviour — rather than failing
+ * the save.
  */
+const STRIP_FLAG_CACHE_TTL_MS = 5000;
+const STRIP_FLAG_CACHE_MAX = 1024;
+
+/**
+ * Resolved values, keyed by owner ('' for the global value).
+ *
+ * `getMergedFeatureFlags` always reads the per-user override record when it is
+ * given a user id, and that provider does not cache a missing record
+ * (`cacheNullSnapshots: false`). Resolving with the owner on every save would
+ * therefore put a Redis GET on the per-step write path for every operation
+ * whose owner has no override — the common case, and the one that pays nothing
+ * back because stripping stays inline. This cache bounds the lookup to once per
+ * owner per TTL.
+ */
+const stripFlagCache = new Map<string, { expiresAt: number; value: boolean }>();
+
+/** Clear the strip-flag resolution cache (for testing). */
+export const resetStripOperationToolsetCache = () => {
+  stripFlagCache.clear();
+};
+
 const resolveStripOperationToolset = async (userId?: string): Promise<boolean> => {
   const override = process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET;
   if (override === '0') return false;
   if (override === '1') return true;
 
+  // Owners without a user id all resolve the global value, so they share a key.
+  const cacheKey = userId ?? '';
+  const cached = stripFlagCache.get(cacheKey);
+  if (cached) {
+    if (cached.expiresAt > Date.now()) return cached.value;
+    stripFlagCache.delete(cacheKey);
+  }
+
   try {
     const flags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-    return flags.enableStripOperationToolset === true;
+    const enabled = flags.enableStripOperationToolset === true;
+
+    // Evict the oldest entry instead of growing with the number of owners.
+    if (stripFlagCache.size >= STRIP_FLAG_CACHE_MAX) {
+      const oldestKey = stripFlagCache.keys().next().value;
+      if (oldestKey !== undefined) stripFlagCache.delete(oldestKey);
+    }
+    stripFlagCache.set(cacheKey, {
+      expiresAt: Date.now() + STRIP_FLAG_CACHE_TTL_MS,
+      value: enabled,
+    });
+
+    return enabled;
   } catch (error) {
+    // Deliberately not cached: a transient read failure must not pin the flag
+    // off for a whole TTL.
     log('Failed to resolve agent_runtime_strip_operation_toolset, keeping inline: %O', error);
     return false;
   }
