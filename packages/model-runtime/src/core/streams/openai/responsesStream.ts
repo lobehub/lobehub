@@ -5,6 +5,11 @@ import type { Stream } from 'openai/streaming';
 import { AgentRuntimeErrorType } from '../../../types/error';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIResponseUsage } from '../../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -14,9 +19,7 @@ import type {
 } from '../protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
   createFirstErrorHandleTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
 } from '../protocol';
@@ -370,7 +373,8 @@ export const OpenAIResponsesStream = (
           streamStack,
         }),
       )
-      .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createModelEventTransformer((c) => c, streamStack))
+      .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createSSEEncoder())
   );
 };

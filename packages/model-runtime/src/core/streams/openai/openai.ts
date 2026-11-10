@@ -8,6 +8,11 @@ import { AgentRuntimeErrorType } from '../../../types/error';
 import { isErrorCausedByContentFilter } from '../../../utils/isErrorCausedByContentFilter';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { convertOpenAIUsage } from '../../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -17,9 +22,7 @@ import type {
 } from '../protocol';
 import {
   convertIterableToStream,
-  createCallbacksTransformer,
   createFirstErrorHandleTransformer,
-  createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
@@ -205,14 +208,19 @@ const transformOpenAIStream = (
             // Determine the actual tool index
             const toolIndex = typeof value.index !== 'undefined' ? value.index : mapIndex;
 
-            // Store tool info by index for parallel tool calls (e.g., GPT-5.2)
-            // When a chunk has id and name, it's the start of a new tool call
-            if (streamContext && value.id && value.function?.name) {
+            // Store tool info by index for parallel tool calls (e.g., GPT-5.2).
+            // Any chunk carrying an id starts (or re-identifies) the call at this
+            // index — including opening deltas whose name is still null/'' (NVIDIA
+            // NIM and some OpenAI-compatible proxies send the name in a later
+            // delta). Requiring a name here left those indices unmapped, so their
+            // id-less argument deltas fell back to the FIRST call's id: every
+            // later call in the batch ended with empty arguments.
+            if (streamContext && value.id) {
               if (!streamContext.tools) streamContext.tools = {};
               streamContext.tools[toolIndex] = {
                 id: value.id,
                 index: toolIndex,
-                name: value.function.name,
+                name: value.function?.name || '',
               };
             }
 
@@ -230,11 +238,12 @@ const transformOpenAIStream = (
                 arguments: value.function?.arguments ?? '',
                 name: value.function?.name ?? null,
               },
-              // Priority: explicit id > tools map by index > single tool fallback > generated id
+              // Priority: explicit id > tools map by index > generated id.
+              // Never fall back to another index's id: that merges this delta's
+              // arguments into a different call of the same parallel batch.
               id:
                 value.id ||
                 streamContext?.tools?.[toolIndex]?.id ||
-                streamContext?.tool?.id ||
                 generateToolCallId(mapIndex, value.function?.name),
 
               // mistral's tool calling don't have index and function field, it's data like:
@@ -757,7 +766,8 @@ export const OpenAIStream = (
           streamStack,
         }),
       )
-      .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createModelEventTransformer((c) => c, streamStack))
+      .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+      .pipeThrough(createSSEEncoder())
   );
 };

@@ -8,11 +8,7 @@ import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { ErrorClassifier, refineErrorCode } from '../../errors';
-import {
-  isGPTProResponsesModel,
-  isResponsesAPIModel,
-  supportsGPTResponsesReasoningEffortNone,
-} from '../../providers/openai/modelId';
+import { isResponsesAPIModel } from '../../providers/openai/modelId';
 import type {
   ASROptions,
   ASRPayload,
@@ -84,6 +80,10 @@ import type {
   OpenAIExtraParams,
   ResponseCreateParamsWithPromptCacheKey,
 } from './factoryOptions';
+import {
+  getGenerateObjectReasoningParams,
+  getGenerateObjectResponsesReasoningParams,
+} from './generateObjectReasoning';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 import {
   initializeOpenAIDiagnostics,
@@ -143,35 +143,6 @@ export const CHAT_MODELS_BLOCK_LIST = [
   'whisper',
   'dall-e',
 ];
-
-type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effort' | 'thinking'>;
-const getGenerateObjectReasoningParams = ({
-  reasoning_effort,
-  thinking,
-}: GenerateObjectReasoningParams) => ({
-  // `thinking` is a Lobe runtime abstraction, not a generic OpenAI-compatible API field.
-  // Use it here only to suppress `reasoning_effort`; providers that support thinking
-  // must translate it via `generateObject.handlePayload`.
-  ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
-});
-
-const getGenerateObjectResponsesReasoningParams = ({
-  model,
-  reasoning_effort,
-  thinking,
-}: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPTProResponsesModel(model)) {
-    return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
-  }
-
-  if (thinking?.type === 'disabled') {
-    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
-  }
-
-  return reasoning_effort && reasoning_effort !== 'max'
-    ? { reasoning: { effort: reasoning_effort } }
-    : {};
-};
 
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>({
   provider,
@@ -455,6 +426,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const promptCacheKey = this.resolvePromptCacheKey(model, user);
 
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
+    }
+
+    private async convertGenerateObjectMessages({ messages, model }: GenerateObjectPayload) {
+      return convertOpenAIMessages(messages as any, {
+        forceImageBase64: chatCompletion?.forceImageBase64,
+        forceVideoBase64: chatCompletion?.forceVideoBase64,
+        model,
+        thoughtSignatureScope: await this.getSignatureScope(
+          this.getMappedModelId(model),
+          'thought_signature',
+          'chat_completions',
+        ),
+      });
     }
 
     private handleGenerateObjectPayload(
@@ -929,7 +913,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       options: GenerateObjectOptions | undefined,
       usagePayload: Parameters<typeof convertOpenAIUsage>[1],
     ) {
-      const { messages, schema, model } = payload;
+      const { schema, model } = payload;
 
       // Apply schema transformation if configured
       const processedSchema = generateObjectConfig?.handleSchema
@@ -951,7 +935,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         this.withMappedRequestModel(
           this.handleGenerateObjectPayload(payload, {
             ...getGenerateObjectReasoningParams(payload),
-            messages,
+            messages: await this.convertGenerateObjectMessages(payload),
             model,
             ...this.resolvePromptCacheKeyParams(model, options?.user),
             tool_choice: { function: { name: tool.function.name }, type: 'function' },
@@ -1086,7 +1070,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             this.withMappedRequestModel(
               this.handleGenerateObjectPayload(payload, {
                 ...getGenerateObjectReasoningParams(payload),
-                messages,
+                messages: await this.convertGenerateObjectMessages(payload),
                 model,
                 response_format: { json_schema: processedSchema, type: 'json_schema' },
                 ...this.resolvePromptCacheKeyParams(model, options?.user),
@@ -1415,7 +1399,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         max_tokens,
         ...res
       } = responses?.handlePayload
-        ? (responses?.handlePayload(payload, this._options) as ChatStreamPayload)
+        ? (responses.handlePayload(payload, this._options) as ChatStreamPayload)
         : payload;
       const requestModel =
         this.withMappedRequestModel({ model: res.model }, usageModel).model ?? usageModel;
@@ -1663,17 +1647,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
 
       log('calling chat.completions.create for tool calling');
-      const thoughtSignatureScope = await this.getSignatureScope(
-        requestModel,
-        'thought_signature',
-        'chat_completions',
-      );
-      const msgs = await convertOpenAIMessages(messages as any, {
-        forceImageBase64: chatCompletion?.forceImageBase64,
-        forceVideoBase64: chatCompletion?.forceVideoBase64,
-        model,
-        thoughtSignatureScope,
-      });
+      const msgs = await this.convertGenerateObjectMessages(payload);
 
       const res = await this.client.chat.completions.create(
         this.withMappedRequestModel(

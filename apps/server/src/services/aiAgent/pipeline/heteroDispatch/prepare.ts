@@ -10,7 +10,11 @@ import {
   formatContextSelections,
   formatPageSelections,
 } from '@lobechat/prompts';
-import { applyTopicModelToHeterogeneousProvider, buildHeteroExecArgs } from '@lobechat/types';
+import {
+  applyTopicModelToHeterogeneousProvider,
+  buildHeteroExecArgs,
+  RequestTrigger,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
@@ -47,6 +51,7 @@ export const prepareHeteroRun = async (
     | 'prompt'
     | 'shareGate'
     | 'topicId'
+    | 'userMessageId'
     | 'userMessageMetadata'
     | 'trigger'
   >,
@@ -83,13 +88,18 @@ export const prepareHeteroRun = async (
   let operationJwt: string;
   try {
     operationJwt = await signHeteroOperationJWT({
-      // A `/goal` run also gets `goal:manage` so it can create the goal the agent
-      // supervises; the server still derives the agent and topic from this
-      // operation, never from the CLI. A Task run also gets `acceptance:evidence`
-      // for its own verification round.
+      // A run the user sent also gets `goal:manage` so it can create
+      // the goal the agent supervises; the server still derives the agent and
+      // topic from this operation, never from the CLI. A Task run also gets
+      // `acceptance:evidence` for its own verification round.
       capabilities: heteroOperationCapabilities(prompt, {
         channel: isChannelOperation,
         taskId: operationTaskId,
+        // A scheduled run replays the user's own message off history, so it has
+        // no fresh user row; server-started `chat` deliveries have none either.
+        userTurn:
+          (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
+          ctx.trigger === RequestTrigger.Scheduled,
       }),
       operationId,
       userId: deps.userId,

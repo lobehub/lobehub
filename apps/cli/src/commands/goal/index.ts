@@ -26,6 +26,7 @@ import {
   parseGoalModelConfig,
   registerGoalAssignmentCommands,
 } from './assignment';
+import { registerGoalConfigurationCommands } from './configuration';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import {
   type GoalMetricState,
@@ -1127,69 +1128,10 @@ export function registerGoalCommand(program: Command) {
       log.info(result.message);
     });
 
-  goal
-    .command('set-budget <id>')
-    .description('Update limits; pass "none" to remove a limit')
-    .option('--max-rounds <n>')
-    .option('--max-cost <usd>')
-    .option('--max-experiments <n>', 'Exploration experiment cap (1–200)')
-    .option(
-      '--max-manager-turns <n>',
-      'Main Agent turn cap (1–100); raising it resumes a goal it paused',
-    )
-    .option(
-      '--max-concurrent-tasks <n>',
-      'Tasks allowed to run at once (1–10; "none" restores the default)',
-    )
-    .option('--max-attempts-per-task <n>', 'Attempts per Task before opening a decision gate')
-    .option('--max-steps-per-run <n>', 'Agent step cap per Task run ("none" removes it)')
-    .action(
-      async (
-        id: string,
-        options: {
-          maxAttemptsPerTask?: string;
-          maxConcurrentTasks?: string;
-          maxCost?: string;
-          maxExperiments?: string;
-          maxManagerTurns?: string;
-          maxRounds?: string;
-          maxStepsPerRun?: string;
-        },
-      ) => {
-        const parseLimit = (value: string | undefined, integer = false) =>
-          value === undefined
-            ? undefined
-            : value === 'none'
-              ? null
-              : integer
-                ? Number.parseInt(value, 10)
-                : Number.parseFloat(value);
-        const result = await (
-          await getTrpcClient()
-        ).goal.setBudget.mutate({
-          id,
-          maxAttemptsPerTask:
-            options.maxAttemptsPerTask === undefined
-              ? undefined
-              : Number.parseInt(options.maxAttemptsPerTask, 10),
-          maxConcurrentTasks: parseLimit(options.maxConcurrentTasks, true),
-          maxExperiments:
-            options.maxExperiments === undefined ? undefined : Number(options.maxExperiments),
-          maxManagerTurns:
-            options.maxManagerTurns === undefined
-              ? undefined
-              : Number.parseInt(options.maxManagerTurns, 10),
-          maxRounds: parseLimit(options.maxRounds, true),
-          maxStepsPerRun: parseLimit(options.maxStepsPerRun, true),
-          maxTotalCost: parseLimit(options.maxCost),
-        });
-        log.info(result.message);
-      },
-    );
-
   registerGoalAccessCommands(goal);
   registerGoalArchiveCommands(goal);
   registerGoalAssignmentCommands(goal);
+  registerGoalConfigurationCommands(goal);
 
   goal
     .command('bind-topic <id>')

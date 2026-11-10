@@ -1,6 +1,10 @@
 /**
  * Central SWR key registry
  *
+ * Frozen: do not add keys. New server data the UI paints goes through
+ * `local-replica` (`@/libs/replica`). `keys.frozen.test.ts` fails on any added
+ * key; when a key is migrated or removed, delete its entry there too.
+ *
  * Single source of truth for SWR cache keys, organized by business domain and
  * named with one convention: the first array element is `'<domain>:<resource>'`
  * (lowerCamel resource), followed by parameters.
