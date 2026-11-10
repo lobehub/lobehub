@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
@@ -10,7 +10,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatPercent } from '@/features/DeviceManager/DeviceHealth/format';
-import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
+import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 
 import { accountDisplayName, providerAvatar } from './AccountRow';
 import {
@@ -190,6 +190,19 @@ const styles = stylex.create({
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
   }),
+  // A failed read: what went wrong, and a way to try again.
+  failure: (left: string) => ({
+    position: 'absolute',
+    insetBlockStart: '4px',
+    insetInlineStart: left,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    paddingInlineStart: '8px',
+    whiteSpace: 'nowrap',
+    fontSize: '12px',
+    color: cssVar.colorError,
+  }),
   swatch: { position: 'relative', width: '14px', height: '14px', borderRadius: '4px' },
 });
 
@@ -304,7 +317,11 @@ const AccountWindowsRow = ({
 }: RowProps) => {
   const { t } = useTranslation('setting');
   const useFetchQuotaReadings = useAgentQuotaStore((s) => s.useFetchQuotaReadings);
-  useFetchQuotaReadings(account.id, { refreshInterval: READINGS_REFRESH_MS });
+  const { isValidating, revalidate } = useFetchQuotaReadings(account.id, {
+    refreshInterval: READINGS_REFRESH_MS,
+  });
+  // A read that failed with nothing to show must not look like one still loading.
+  const failed = useAgentQuotaStore(agentQuotaSelectors.readingsFailed(account.id)) && !loaded;
   const name = accountDisplayName(account);
   const midnights = axisMidnights(axis);
 
@@ -314,14 +331,18 @@ const AccountWindowsRow = ({
     return [{ exhausted: window.usedPercent >= 100, key, resetsAt: window.resetsAt }];
   });
   // Before the readings arrive the row says nothing rather than "no data".
-  const idleText = !loaded
-    ? '—'
-    : view.status === 'noData'
-      ? t('subscriptionAccounts.status.noData')
-      : t('subscriptionAccounts.calendar.idle');
+  const idleText = failed
+    ? t('subscriptionAccounts.calendar.failed')
+    : !loaded
+      ? '—'
+      : view.status === 'noData'
+        ? t('subscriptionAccounts.status.noData')
+        : t('subscriptionAccounts.calendar.idle');
   // Out of rotation or never reported: there are no windows to draw, only why.
-  const note =
-    view.status === 'disabled'
+  // A failed read says so instead; the two notes would overlap.
+  const note = failed
+    ? undefined
+    : view.status === 'disabled'
       ? t('subscriptionAccounts.status.disabled')
       : view.status === 'noData' && loaded
         ? t('subscriptionAccounts.status.noData')
@@ -368,7 +389,11 @@ const AccountWindowsRow = ({
         {/* The reset times stay in text, not only in the tooltips: touch has no hover. */}
         <div data-resets {...stylex.props(styles.resets)}>
           {resets.length === 0 ? (
-            <Text fontSize={12} type={'secondary'}>
+            <Text
+              fontSize={12}
+              style={{ color: failed ? cssVar.colorError : undefined }}
+              type={failed ? undefined : 'secondary'}
+            >
               {idleText}
             </Text>
           ) : (
@@ -394,6 +419,23 @@ const AccountWindowsRow = ({
         <DayLines axis={axis} midnights={midnights} />
         <span aria-hidden {...stylex.props(styles.nowLine(x(now, axis)))} />
         {note && <span {...stylex.props(styles.note(x(now, axis)))}>{note}</span>}
+        {failed && (
+          <span data-read-failed {...stylex.props(styles.failure(x(now, axis)))}>
+            {t('subscriptionAccounts.calendar.failedNote')}
+            <Button
+              loading={isValidating}
+              size={'small'}
+              type={'link'}
+              onClick={(e) => {
+                // The row itself opens the account; retrying must not.
+                e.stopPropagation();
+                void revalidate();
+              }}
+            >
+              {t('retry', { ns: 'common' })}
+            </Button>
+          </span>
+        )}
         {drawWindows &&
           windows.map((window) => {
             const text = `${name} · ${formatRange(window.start, window.end, now, t)} · ${windowText(window, now, t)}`;
@@ -443,8 +485,13 @@ const QuotaCalendar = ({ accounts, activeId, extra, onOpen }: QuotaCalendarProps
   const views = accounts.map((account, index) => deriveAccountView(account, readings[index], now));
   const windowsByAccount = views.map((view) => accountWindows(view, axis, now));
   const summary = summarizeQuota(views, now);
-  // Counting before every account has answered would flash "0 available".
-  const allLoaded = readings.every((entry) => entry !== undefined);
+  const failed = useAgentQuotaStore((s) =>
+    accounts.map((a) => !!s.quotaReadingsFailed[a.id] && !s.quotaReadingsMap[a.id]),
+  );
+  // Counting before every account has answered would flash "0 available"; an
+  // account whose read failed has answered, and is counted as unavailable.
+  const allSettled = readings.every((entry, index) => entry !== undefined || failed[index]);
+  const failedCount = failed.filter(Boolean).length;
   // Accounts that can take work at all: in rotation and reporting.
   const countable = views
     .map((view, index) => ({ view, windows: windowsByAccount[index] }))
@@ -463,6 +510,7 @@ const QuotaCalendar = ({ accounts, activeId, extra, onOpen }: QuotaCalendarProps
         t('subscriptionAccounts.calendar.summary.nextReset', {
           time: dayjs(summary.nextResetAt).from(now),
         }),
+    failedCount > 0 && t('subscriptionAccounts.calendar.summary.failed', { count: failedCount }),
   ].filter(Boolean);
 
   const legend = [
@@ -483,7 +531,7 @@ const QuotaCalendar = ({ accounts, activeId, extra, onOpen }: QuotaCalendarProps
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={12}>
           <Text aria-live={'polite'} fontSize={13}>
-            {allLoaded && summaryParts.join(' · ')}
+            {allSettled && summaryParts.join(' · ')}
           </Text>
           {extra}
         </Flexbox>
@@ -538,7 +586,7 @@ const QuotaCalendar = ({ accounts, activeId, extra, onOpen }: QuotaCalendarProps
           </div>
           <div {...stylex.props(styles.track(trackWidth))}>
             <DayLines axis={axis} midnights={midnights} />
-            {allLoaded &&
+            {allSettled &&
               teamBuckets(now, axis).map((bucket) => {
                 const middle = (bucket.start + bucket.end) / 2;
                 const usable = countable.filter(({ windows }) =>

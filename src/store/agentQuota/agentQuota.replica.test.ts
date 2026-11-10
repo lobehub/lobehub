@@ -749,6 +749,32 @@ describe('agent quota replicas', () => {
       await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(2));
     });
 
+    it('marks an account whose read failed, and clears it once a retry answers', async () => {
+      const getLatestReadings = vi
+        .spyOn(agentQuotaService, 'getLatestReadings')
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValue([]);
+
+      const { result } = renderHook(
+        () => useAgentQuotaStore.getState().useFetchQuotaReadings('a1'),
+        { wrapper },
+      );
+      await waitFor(() =>
+        expect(agentQuotaSelectors.readingsFailed('a1')(useAgentQuotaStore.getState())).toBe(true),
+      );
+      // Only the account that failed is marked.
+      expect(agentQuotaSelectors.readingsFailed('a2')(useAgentQuotaStore.getState())).toBe(false);
+
+      await act(async () => {
+        await result.current.revalidate();
+      });
+      await waitFor(() =>
+        expect(agentQuotaSelectors.readingsFailed('a1')(useAgentQuotaStore.getState())).toBe(false),
+      );
+      expect(agentQuotaSelectors.readings('a1')(useAgentQuotaStore.getState())).toEqual([]);
+      expect(getLatestReadings).toHaveBeenCalledTimes(2);
+    });
+
     it('reads once without an interval', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const getLatestReadings = vi

@@ -142,7 +142,14 @@ export class ActionImpl {
     });
     this.#readings = createReplicaSlice(quotaReadingsResource, {
       actionPrefix: 'quotaReadings',
-      effects: confirmOn('readings'),
+      // Track failures per account: an entry that never loads must not read as "still loading".
+      effects: {
+        onApplied: (_data, accountId, context) => {
+          this.#markApplied('readings', context);
+          this.#setReadingsFailed(accountId, false);
+        },
+        onError: (_error, accountId) => this.#setReadingsFailed(accountId, true),
+      },
       fetcher: (accountId) => agentQuotaService.getLatestReadings(accountId),
       get,
       merge: sameValue,
@@ -483,6 +490,17 @@ export class ActionImpl {
   };
 
   // ---- internals ----
+
+  #setReadingsFailed = (accountId: string, failed: boolean) => {
+    const current = this.#get().quotaReadingsFailed;
+    if (!!current[accountId] === failed) return;
+    const { [accountId]: _cleared, ...rest } = current;
+    this.#set(
+      { quotaReadingsFailed: failed ? { ...rest, [accountId]: true } : rest },
+      false,
+      'quotaReadingsFailed',
+    );
+  };
 
   #syncClaudeLocalAccounts = async (): Promise<ClaudeCodeLocalAccount[]> => {
     const accounts = await heterogeneousAgentService.listClaudeCodeAccounts();
