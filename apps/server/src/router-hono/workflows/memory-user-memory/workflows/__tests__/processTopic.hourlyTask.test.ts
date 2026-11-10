@@ -123,6 +123,8 @@ describe('processTopicHandler hourly task behavior', () => {
 
     await expect(processTopicHandler(context as never)).resolves.toMatchObject({ skipped: true });
 
+    // Ends before any persisted step, so nothing is queued on the shared flow-control key.
+    expect(context.run).not.toHaveBeenCalled();
     expect(mocks.extractTopic).not.toHaveBeenCalled();
   });
 
