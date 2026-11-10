@@ -101,8 +101,8 @@ const styles = createStaticStyles(({ css }) => ({
   panel: css`
     overflow: hidden auto;
     height: 100%;
-    padding-block: 20px;
-    padding-inline: 20px;
+    padding-block: 16px;
+    padding-inline: 16px;
   `,
   plan: css`
     padding-block: 4px;
@@ -294,7 +294,7 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
         minWidth={PANEL_WIDTH.min}
         placement={'right'}
       >
-        <Flexbox gap={16}>
+        <Flexbox gap={12}>
           <Flexbox horizontal align={'flex-start'} gap={8}>
             <Text strong style={{ flex: 1, minWidth: 0 }}>
               {title}
@@ -332,9 +332,9 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
             <span className={styles.meta}>{t('acceptance.gate.unitWaitingHint')}</span>
           )}
           {brief && (
-            <Flexbox gap={6}>
+            <Flexbox gap={4}>
               <span className={styles.meta}>{t('acceptance.gate.unitBrief')}</span>
-              <Markdown fontSize={14} variant={'chat'}>
+              <Markdown fontSize={13} variant={'chat'}>
                 {brief.replace(/^\[origin=\w+\]\s*/, '')}
               </Markdown>
             </Flexbox>

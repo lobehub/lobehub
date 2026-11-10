@@ -45,7 +45,7 @@ const ArtifactRow = memo<{ artifact: Artifact }>(({ artifact }) => {
       align={'center'}
       clickable={!!url}
       gap={8}
-      padding={10}
+      padding={8}
       title={url}
       variant={'outlined'}
       onClick={url ? () => window.open(url, '_blank', 'noopener,noreferrer') : undefined}
@@ -79,12 +79,18 @@ const UnitArtifacts = memo<{ unit: GoalReleaseGateUnit }>(({ unit }) => {
   const openWork = useOpenWork();
   const artifacts = unitArtifacts(unit);
   return (
-    <Flexbox gap={8}>
+    <Flexbox gap={4}>
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.gate.unitArtifacts')}
       </Text>
       {unit.works?.length ? (
-        unit.works.map((work) => <WorkSummaryCard item={work} key={work.id} onOpen={openWork} />)
+        // The flat rows of the conversation's working sidebar: the panel is
+        // narrow, and the rows' own inset lines their icons up with the label.
+        <Flexbox style={{ marginInline: -8 }}>
+          {unit.works.map((work) => (
+            <WorkSummaryCard item={work} key={work.id} variant={'inline'} onOpen={openWork} />
+          ))}
+        </Flexbox>
       ) : artifacts.length > 0 ? (
         artifacts.map((artifact, index) => (
           <ArtifactRow artifact={artifact} key={artifact.url ?? `${artifact.title}-${index}`} />

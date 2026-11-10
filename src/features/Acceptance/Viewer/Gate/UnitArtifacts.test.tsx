@@ -10,9 +10,17 @@ vi.mock('react-i18next', () => ({
 const openWork = vi.fn();
 vi.mock('@/features/WorkGallery/useOpenWork', () => ({ useOpenWork: () => openWork }));
 vi.mock('@/features/Work/WorkSummaryCard', () => ({
-  default: ({ item, onOpen }: { item: { title: string }; onOpen: (item: unknown) => void }) => (
+  default: ({
+    item,
+    onOpen,
+    variant,
+  }: {
+    item: { title: string };
+    onOpen: (item: unknown) => void;
+    variant?: string;
+  }) => (
     <button type="button" onClick={() => onOpen(item)}>
-      work-card:{item.title}
+      work-card:{variant}:{item.title}
     </button>
   ),
 }));
@@ -42,7 +50,8 @@ describe('UnitArtifacts', () => {
         })}
       />,
     );
-    fireEvent.click(screen.getByText('work-card:Move inbox reads to replica'));
+    // The compact flat row of the conversation's working sidebar, not the tall card.
+    fireEvent.click(screen.getByText('work-card:inline:Move inbox reads to replica'));
     expect(openWork).toHaveBeenCalledWith(work);
   });
 
