@@ -18,6 +18,13 @@ describe('projectCheckoutDirectory', () => {
     );
   });
 
+  it('turns anything but an id character into a plain one, so no segment escapes', () => {
+    const folder = projectCheckoutDirectory('../proj', '..');
+
+    expect(folder).toBe('projects/___proj/__');
+    expect(isSafeSandboxCwd(folder)).toBe(true);
+  });
+
   it('stays a usable working directory', () => {
     expect(isSafeSandboxCwd(projectCheckoutDirectory('proj_1', ENV_ID))).toBe(true);
   });

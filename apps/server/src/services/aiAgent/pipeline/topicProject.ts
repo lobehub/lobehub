@@ -63,7 +63,8 @@ export const resolveTurnProjectId = async (
  * Left alone when there is no project, when the topic lives in a device
  * directory (it runs there, not in the cloud), or when the conversation already
  * picked where it keeps its files — a pick in the composer wins, the temporary
- * sandbox included.
+ * sandbox included. The plan's default placement is not a pick: the checkout
+ * takes its place.
  */
 export const withProjectSandbox = async (
   deps: TurnProjectDeps,
@@ -76,25 +77,37 @@ export const withProjectSandbox = async (
   },
 ): Promise<ChatTopicMetadata | undefined> => {
   const { agentId, hasDirectory, projectId } = input;
-  // A creation-time marker, never stored: the composer chose a temporary
-  // sandbox on purpose, so the project's checkout is not applied over it.
-  const { sandboxTemporary, ...rest } = input.metadata ?? {};
+  // Creation-time markers, never stored. `sandboxTemporary`: the composer chose
+  // a temporary sandbox on purpose, so nothing is applied over it.
+  // `sandboxSeeded`: the placement is the plan's default nobody chose, so a
+  // project's checkout takes its place.
+  const { sandboxSeeded, sandboxTemporary, ...rest } = input.metadata ?? {};
   const metadata =
-    sandboxTemporary === undefined
+    sandboxSeeded === undefined && sandboxTemporary === undefined
       ? input.metadata
       : Object.keys(rest).length > 0
         ? rest
         : undefined;
   if (sandboxTemporary || !projectId || hasDirectory) return metadata;
   if (
-    metadata?.sandboxEnvironmentId ||
-    metadata?.sandboxInstanceId ||
-    metadata?.sandboxWorkingDirectory
+    !sandboxSeeded &&
+    (metadata?.sandboxEnvironmentId ||
+      metadata?.sandboxInstanceId ||
+      metadata?.sandboxWorkingDirectory)
   )
     return metadata;
 
   const sandbox = await resolveProjectTopicSandbox({ ...deps, agentId, projectId });
   if (Object.keys(sandbox).length === 0) return metadata;
 
-  return { ...metadata, ...sandbox };
+  // The checkout replaces a default placement whole, drive included.
+  const {
+    sandboxDrive: _drive,
+    sandboxEnvironmentId: _environment,
+    sandboxInstanceId: _instance,
+    sandboxWorkingDirectory: _folder,
+    ...others
+  } = metadata ?? {};
+
+  return { ...others, ...sandbox };
 };

@@ -1,11 +1,12 @@
 /** Where every project keeps its repository checkouts on the drive. */
 export const PROJECT_DRIVE_ROOT = 'projects';
 
-const toSegment = (value: string) =>
-  value
-    .trim()
-    .replaceAll(/[^\w.-]+/g, '-')
-    .replaceAll(/^[.-]+|-+$/g, '');
+/**
+ * One path segment from an id. Ids are already path-safe (`prj_…`, UUIDs); any
+ * other character becomes `_`, which also rules out `.`/`..` segments. One
+ * character class, no anchored repetition, so it runs in linear time on any input.
+ */
+const toSegment = (value: string) => value.replaceAll(/[^\w-]/g, '_');
 
 /**
  * A project's checkout of one repository on the drive: one folder per project

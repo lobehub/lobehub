@@ -4,6 +4,7 @@ import {
   consumePendingSandboxSelection,
   getPendingSandboxSelection,
   resolvePendingSandboxSelection,
+  seedPendingSandboxSelection,
   setPendingSandboxSelection,
   setSandboxDefaultSelection,
   subscribePendingSandboxSelection,
@@ -70,6 +71,17 @@ describe('pendingSandboxSelection', () => {
 
   // An explicit temporary-sandbox pick serialized to no fields at all, the same
   // as no pick, so a project conversation was given the project's checkout.
+  // The server must tell a default the composer filled in from a pick: a
+  // project conversation gives the project's checkout the default's place.
+  it('marks a seeded default, and not a pick of the same place', () => {
+    seedPendingSandboxSelection('agent-seeded', { workingDirectory: '.' });
+
+    expect(toSandboxTopicMetadata(getPendingSandboxSelection('agent-seeded'))).toMatchObject({
+      sandboxSeeded: true,
+    });
+    expect(toSandboxTopicMetadata({ workingDirectory: '.' })).not.toHaveProperty('sandboxSeeded');
+  });
+
   it('marks an explicit temporary-sandbox pick, and only that', () => {
     expect(toSandboxTopicMetadata({})).toMatchObject({ sandboxTemporary: true });
     expect(toSandboxTopicMetadata({ workingDirectory: 'app' })).not.toHaveProperty(

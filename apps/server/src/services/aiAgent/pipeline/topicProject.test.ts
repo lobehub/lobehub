@@ -152,6 +152,30 @@ describe('withProjectSandbox', () => {
     expect(mocks.resolveProjectTopicSandbox).not.toHaveBeenCalled();
   });
 
+  // A drive-entitled composer seeds the drive root before anyone picks; taking
+  // that as a pick kept project conversations out of the project's repository.
+  it("puts the project's checkout in place of a default nobody picked", async () => {
+    await expect(
+      withProjectSandbox(deps, {
+        hasDirectory: false,
+        metadata: { sandboxDrive: 'personal', sandboxSeeded: true, sandboxWorkingDirectory: '.' },
+        projectId: 'proj-1',
+      }),
+    ).resolves.toEqual(sandbox);
+  });
+
+  it('keeps the default when the project has no repository, without the marker', async () => {
+    mocks.resolveProjectTopicSandbox.mockResolvedValue({});
+
+    await expect(
+      withProjectSandbox(deps, {
+        hasDirectory: false,
+        metadata: { sandboxSeeded: true, sandboxWorkingDirectory: '.' },
+        projectId: 'proj-1',
+      }),
+    ).resolves.toEqual({ sandboxWorkingDirectory: '.' });
+  });
+
   it('drops the marker outside a project too', async () => {
     await expect(
       withProjectSandbox(deps, {

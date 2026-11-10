@@ -421,6 +421,13 @@ export interface ChatTopicMetadata {
    */
   sandboxInstanceId?: string;
   /**
+   * Creation-time only, never stored: the placement this topic is created with
+   * is the plan's default, filled in by the composer rather than chosen. A
+   * project conversation is given the project's repository checkout in its
+   * place. The server reads it and drops it.
+   */
+  sandboxSeeded?: boolean;
+  /**
    * Creation-time only, never stored: the composer explicitly chose a
    * temporary sandbox before the topic existed. Without it that choice looks
    * the same as no choice at all, and the server would apply a project's
