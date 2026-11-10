@@ -13,6 +13,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService } from '../verify/acceptanceService';
+import { carriedUnitBrief } from './rolloutBatch';
 import type { RolloutGateResult } from './rolloutGate';
 
 const log = debug('lobe-server:goal-release-gate');
@@ -63,6 +64,7 @@ export const buildReleaseGateDossier = (
     if (!node) return [];
     const spend = node.taskId ? spendByTask.get(node.taskId) : undefined;
     const acceptance = graph.acceptances?.[nodeId];
+    const brief = carriedUnitBrief(node);
     return [
       {
         ...(acceptance && {
@@ -86,7 +88,9 @@ export const buildReleaseGateDossier = (
             type: link.work!.type,
             ...(link.work!.url && { url: link.work!.url }),
           })),
-        ...(node.description && { brief: node.description }),
+        // The unit's own note, not the plan-skill instruction every unit
+        // carries: the plan itself is the dossier's first section.
+        ...(brief && { brief }),
         nodeId,
         runs: spend?.runs ?? 0,
         status: node.status,

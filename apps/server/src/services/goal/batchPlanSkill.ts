@@ -28,15 +28,47 @@ const oneLine = (text: string, max: number) => {
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 };
 
+/** Longest a plan skill name runs before it is cut at a word. */
+const MAX_NAME = 48;
+
+/** Lowercase ASCII words of `text` as a slug, cut at a word within `MAX_NAME`. */
+const slugWords = (text: string) => {
+  let slug = '';
+  for (const word of text
+    .normalize('NFKD')
+    .toLowerCase()
+    .split(/[^\da-z]+/)) {
+    if (!word) continue;
+    const next = slug ? `${slug}-${word}` : word;
+    if (next.length > MAX_NAME) break;
+    slug = next;
+  }
+  return slug;
+};
+
+/** A slug carries meaning when it holds a word, not only a version or an id. */
+const isReadable = (slug: string) => /[a-z]{3}/.test(slug);
+
 /**
- * A short skill name for a batch: `goal-plan-` and the first characters of its
- * id. The library keeps names unique, suffixing a clash.
+ * The batch's skill name, read in the user's library and in every unit's brief,
+ * so it says what the plan does: the name the planner gave it, else the ASCII
+ * words of the goal title, and only when neither reads as words the batch id.
+ * The library keeps names unique, suffixing a clash.
  */
-export const planSkillName = (batchNodeId: string) =>
-  `goal-plan-${batchNodeId
+export const planSkillName = (params: {
+  batchNodeId: string;
+  goalTitle?: string;
+  name?: string;
+}) => {
+  const named = slugWords(params.name ?? '');
+  if (isReadable(named)) return named;
+  const fromTitle = slugWords(params.goalTitle ?? '');
+  if (isReadable(fromTitle)) return `${fromTitle}-plan`;
+  return `goal-plan-${params.batchNodeId
     .toLowerCase()
     .replaceAll(/[^\da-z]+/g, '')
     .slice(0, 8)}`;
+};
 
 export const planSkillIdentifier = (skill: GoalRolloutPlanSkill) =>
   buildUserSkillIdentifier(skill.name);
@@ -96,6 +128,8 @@ export class BatchPlanSkillService {
     batchNodeId: string;
     goalId: string;
     goalTitle: string;
+    /** The planner's slug for the plan; see {@link planSkillName}. */
+    name?: string;
     plan: string;
   }): Promise<GoalRolloutPlanSkill> => {
     const skill = await new UserSkillService(this.db, this.userId, this.workspaceId).createSkill({
@@ -104,7 +138,7 @@ export class BatchPlanSkillService {
         `How each unit of "${params.goalTitle}" is done. Revised whenever the batch's release gate sends it back.`,
         MAX_DESCRIPTION,
       ),
-      name: planSkillName(params.batchNodeId),
+      name: planSkillName(params),
       origin: { batchNodeId: params.batchNodeId, goalId: params.goalId, revision: 1 },
       title: oneLine(params.goalTitle, MAX_TITLE),
     });
