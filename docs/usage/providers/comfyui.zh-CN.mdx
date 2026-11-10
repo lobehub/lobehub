@@ -185,6 +185,12 @@ API 密钥：example-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## 常见问题处理
 
+### 连接中断后生成仍在继续
+
+LobeHub 每次仅提交一次生成任务，并跟踪其 ComfyUI 提示词 ID。进度 WebSocket 断开不会使任务失败，也不会重新提交任务：LobeHub 会通过带身份验证的 HTTP 查询同一任务的历史记录，并在完成后获取输出。
+
+提交后最多跟踪五分钟。如果跟踪超时，请先检查 ComfyUI 服务器的队列和历史记录，再决定是否重试 —— 原任务可能仍在运行。托管平台可能设置更短的请求时限；LobeHub 后端请求被终止后，无法继续恢复任务结果。
+
 ### 1. 如何安装 Comfy-Manager
 
 Comfy-Manager 是 ComfyUI 的扩展管理器，让你能够轻松安装和管理各种节点、模型和扩展。

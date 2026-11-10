@@ -58,10 +58,14 @@ export const comfyuiRouter = router({
       );
 
       // Execute image creation
-      return imageService.createImage({
-        model,
-        params,
-      });
+      try {
+        return await imageService.createImage({
+          model,
+          params,
+        });
+      } finally {
+        clientService.dispose();
+      }
     }),
 
   /**
