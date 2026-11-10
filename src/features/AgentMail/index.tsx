@@ -1,8 +1,9 @@
 'use client';
 
 import { Center, Flexbox } from '@lobehub/ui';
-import { useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useLocation, useParams, useSearchParams } from 'react-router';
+import { useSWRConfig } from 'swr';
 import urlJoin from 'url-join';
 
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
@@ -14,7 +15,12 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { StyleSheet } from '@/utils/styles';
 
-import InboxMessageDetail from './InboxMessageDetail';
+import {
+  type ConversationNeighbors,
+  findNeighbors,
+  nextSelectionAfterRemoval,
+} from './conversation';
+import InboxMessageDetail, { type InboxMessageDetailProps } from './InboxMessageDetail';
 import InboxSection from './InboxSection';
 import MailboxCard from './MailboxCard';
 import MailboxEmptyState from './MailboxEmptyState';
@@ -22,11 +28,14 @@ import MailSplitView, { MailNavHeader } from './MailSplitView';
 import { identityStyles } from './styles';
 import { useMailbox, useOpenableChannel } from './useAgentIdentity';
 import {
+  mailCountsKey,
   mailFolderOf,
   type MailListItem,
   type MailView,
   parseMailView,
   useHasRetainedMail,
+  useMailConversation,
+  useMailList,
 } from './useMailList';
 
 const styles = StyleSheet.create({
@@ -80,6 +89,45 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     if (unavailable) navigate(urlJoin('/agent', agentId, 'profile'), { replace: true });
   }, [agentId, navigate, unavailable]);
 
+  // The same SWR entries the list and the switcher read, so stepping and
+  // writes stay in step with them without a request of their own.
+  const accountIds = mailbox.accounts.map((account) => account.id);
+  const list = useMailList({
+    accountId: mailbox.current?.id,
+    agentId,
+    enabled: !!mailbox.data,
+    query,
+    view,
+  });
+  const { mutate: mutateCache } = useSWRConfig();
+  const refresh = () => Promise.all([list.mutate(), mutateCache(mailCountsKey(accountIds))]);
+  const location = useLocation();
+  // Held until the URL open settles, which seeds it with the read it made.
+  const conversation = useMailConversation(mailbox.data ? messageId : undefined, folder);
+  const conversationIds = new Set(
+    (conversation.data ?? []).flatMap((mail) =>
+      mail.inboxMessageId ? [mail.id, mail.inboxMessageId] : [mail.id],
+    ),
+  );
+  if (messageId) conversationIds.add(messageId);
+  const found = findNeighbors(list.items ?? [], conversationIds);
+  // A conversation whose row is briefly out of the list (reseated onto another
+  // of its mails, or mid-write) keeps the neighbours it last had there.
+  const [anchor, setAnchor] = useState<{ ids: string[]; neighbors: ConversationNeighbors }>();
+  if (
+    found.rowId &&
+    (anchor?.neighbors.rowId !== found.rowId ||
+      anchor.neighbors.nextId !== found.nextId ||
+      anchor.neighbors.previousId !== found.previousId)
+  ) {
+    setAnchor({ ids: [...conversationIds], neighbors: found });
+  }
+  const neighbors: ConversationNeighbors = found.rowId
+    ? found
+    : anchor?.ids.some((id) => conversationIds.has(id))
+      ? anchor.neighbors
+      : {};
+
   // Moving between messages replaces the entry, so back leaves the mail page.
   const openMessage = (item: MailListItem) => {
     if (item.kind === 'draft') {
@@ -91,6 +139,57 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     navigate(`${urlJoin(mailPath, item.id)}${search && `?${search}`}`, {
       replace: Boolean(messageId),
     });
+  };
+
+  /** Landing on a neighbour after a removal is automatic, so it is not read until touched. */
+  const landOn = (id: string) => {
+    // Pinned before the move: otherwise the landed-on mail resolves through the
+    // URL open, which marks it read and defeats the deferral.
+    mailbox.select(mailbox.current?.id);
+    navigate(`${urlJoin(mailPath, id)}${search && `?${search}`}`, {
+      replace: true,
+      state: { deferRead: true },
+    });
+  };
+
+  const openById = (id: string) => {
+    mailbox.select(mailbox.current?.id);
+    navigate(`${urlJoin(mailPath, id)}${search && `?${search}`}`, { replace: true });
+  };
+
+  const stepTo = async (direction: 'nextId' | 'previousId') => {
+    let target = neighbors[direction];
+    if (!target && direction === 'nextId' && list.hasMore) {
+      target = findNeighbors(await list.loadNextPage(), conversationIds).nextId;
+    }
+    if (target) openById(target);
+  };
+
+  const closeMessage = () => navigate(`${mailPath}${search && `?${search}`}`, { replace: true });
+
+  const detailProps: Omit<InboxMessageDetailProps, 'id'> = {
+    accountId: mailbox.current?.id,
+    listRowId: neighbors.rowId,
+    accounts: mailbox.accounts,
+    deferRead: Boolean((location.state as { deferRead?: boolean } | null)?.deferRead),
+    disabled,
+    folder,
+    // Paging only helps once the open conversation is a loaded row to step from.
+    hasNext: Boolean(neighbors.nextId) || (Boolean(neighbors.rowId) && list.hasMore),
+    hasPrevious: Boolean(neighbors.previousId),
+    onBack: closeMessage,
+    onEmptied: () => {
+      // A wide screen moves on to the next conversation; a phone returns to the list.
+      const target = mobile ? undefined : nextSelectionAfterRemoval(neighbors);
+      if (target) landOn(target);
+      else closeMessage();
+    },
+    onGoToTrash: () => changeView('trash'),
+    onNext: () => void stepTo('nextId'),
+    onPrevious: () => void stepTo('previousId'),
+    onReseated: landOn,
+    onRestored: openById,
+    refresh,
   };
 
   // The view stays; a search or an open message belongs to the address being left.
@@ -114,6 +213,12 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   if (unavailable) return null;
 
+  // Waits for the URL open to settle, so the pane starts from the read it seeded.
+  // Keyed by view too: Inbox and Trash hold different mails of one conversation.
+  const detail = messageId && mailbox.data && (
+    <InboxMessageDetail {...detailProps} id={messageId} key={`${folder}:${messageId}`} />
+  );
+
   const mailboxCard = (
     <MailboxCard agentId={agentId} disabled={disabled} mailbox={mailbox} onSwitch={switchMailbox} />
   );
@@ -126,13 +231,14 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
       agentId={agentId}
       disabled={disabled}
       query={query}
-      selectedId={mobile ? undefined : (messageId ?? composeId)}
+      selectedId={mobile ? undefined : messageId ? (found.rowId ?? messageId) : composeId}
       view={view}
       onOpen={openMessage}
       onQueryChange={changeQuery}
       onViewChange={changeView}
       onRemoved={(ids) => {
-        if (messageId && ids.includes(messageId)) {
+        // The row may stand for the open conversation under another of its mails' ids.
+        if (messageId && ids.some((id) => conversationIds.has(id))) {
           navigate(`${mailPath}${search && `?${search}`}`, { replace: true });
         }
       }}
@@ -190,14 +296,14 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           {emptyState}
         </>
       ) : (
-        <MailSplitView folder={folder} inbox={inbox} mailbox={mailboxCard} messageId={messageId} />
+        <MailSplitView detail={detail} inbox={inbox} mailbox={mailboxCard} messageId={messageId} />
       )}
       {/* Laid over the list instead of replacing it, so back returns to the same scroll. */}
       {mobile && messageId && (
         <Flexbox className={identityStyles.mobileDetail}>
           <NavHeader />
           <Flexbox flex={1} padding={16} style={styles.body} width={'100%'}>
-            <InboxMessageDetail folder={folder} id={messageId} />
+            {detail}
           </Flexbox>
         </Flexbox>
       )}

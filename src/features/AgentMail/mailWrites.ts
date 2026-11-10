@@ -1,6 +1,23 @@
 import { createWithEqualityFn } from 'zustand/traditional';
 import { shallow } from 'zustand/vanilla/shallow';
 
+/** What the undo toast and the spec's undo window promise. */
+export const UNDO_WINDOW_MS = 8000;
+/** The server's cap on ids per write. */
+export const MAX_IDS_PER_WRITE = 200;
+
+export const chunk = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
+
+/** Unread mail that counts towards an address's badge: only what was received. */
+export const countUnreadInbound = (rows: { direction?: string | null; isUnread: boolean }[]) =>
+  rows.filter((row) => row.isUnread && row.direction === 'inbound').length;
+
 export interface MailPatch {
   isStarred?: boolean;
   isUnread?: boolean;

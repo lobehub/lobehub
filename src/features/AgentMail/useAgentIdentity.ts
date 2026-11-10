@@ -1,6 +1,6 @@
 import type { AgentMailFolder } from '@lobechat/types';
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import useSWRImmutable from 'swr/immutable';
 
 import { agentAccountService } from '@/services/agentAccount';
@@ -8,7 +8,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { IDENTITY_CHANNELS } from './const';
-import { readMailMessage } from './useMailList';
+import { mailConversationKey } from './useMailList';
 
 /** The channel to offer; one this deployment cannot fulfil would only fail on click. */
 export const useOpenableChannel = () => {
@@ -25,24 +25,6 @@ export const useAgentAccounts = (agentId: string) =>
   useSWR(accountsKey(agentId), ([, id]) => agentAccountService.list({ agentId: id }));
 
 /**
- * A message reached through its URL rather than a list row: read it and clear
- * its unread mark before the list and count load, so neither shows it as unread.
- */
-const openMessageFromUrl = async (id: string, folder?: AgentMailFolder) => {
-  const message = await readMailMessage(id, folder);
-  if (!message || message.readAt) return message;
-
-  try {
-    await agentAccountService.markMailRead({ ids: [message.id] });
-  } catch (error) {
-    // The message still opens; a failed read-mark only affects the dot.
-    console.error('[AgentIdentity] mark read failed', error);
-  }
-
-  return message;
-};
-
-/**
  * The mailbox being read, out of the addresses the agent still holds.
  *
  * Derived rather than stored as a fallback, so releasing the selected address
@@ -52,13 +34,21 @@ const openMessageFromUrl = async (id: string, folder?: AgentMailFolder) => {
 export const useMailbox = (agentId: string, messageId?: string, folder?: AgentMailFolder) => {
   const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
   const [selectedId, select] = useState<string>();
-  // Immutable: one open is one read, so a focus refetch must not stamp it again.
+  const { mutate: mutateCache } = useSWRConfig();
+  // A conversation reached through its URL rather than a list row names its
+  // own mailbox. Read once, unread state intact, and handed to the reading
+  // pane, which opens and marks it exactly as it would from the list; its
+  // write shows in the list and the count as soon as they load.
   const openMessage = useSWRImmutable(
     !selectedId && messageId ? ['agent-mail-open-message', messageId, folder] : null,
-    ([, id, view]) => openMessageFromUrl(id, view),
+    async ([, id, view]) => {
+      const conversation = await agentAccountService.getMailConversation({ folder: view, id });
+      await mutateCache(mailConversationKey(id, view), conversation, { revalidate: false });
+      return { accountId: conversation[0]?.accountId };
+    },
   );
   const accounts = (data ?? []).filter((account) => account.status !== 'revoked');
-  const preferredId = selectedId ?? openMessage.data?.accountId ?? undefined;
+  const preferredId = selectedId ?? openMessage.data?.accountId;
 
   return {
     accounts,

@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/types';
 import type { inferRouterOutputs } from '@trpc/server';
 
+import { getBusinessTrpcHeaders } from '@/business/client/trpc-headers';
 import { lambdaClient } from '@/libs/trpc/client';
 import type { LambdaRouter } from '@/server/routers/lambda';
 
@@ -18,6 +19,19 @@ export type AgentMailConversationRow = MailRouterOutputs['list'][number];
 /** One mail of an opened conversation. */
 export type AgentMailRow = MailRouterOutputs['conversation'][number];
 export type AgentMailDraftRow = MailRouterOutputs['drafts']['list'][number];
+/** A mail's HTML body, sanitized by the server, or why there is none to show. */
+export type AgentMailHtml = MailRouterOutputs['html'];
+
+/** Why an attachment download failed, as the attachment route answers it. */
+export type AttachmentFailure = 'expired' | 'too_large' | 'unavailable';
+
+export class AttachmentDownloadError extends Error {
+  constructor(readonly reason: AttachmentFailure) {
+    super(`Attachment download failed: ${reason}`);
+  }
+}
+
+const ATTACHMENT_FAILURES: Record<number, AttachmentFailure> = { 404: 'expired', 413: 'too_large' };
 
 export interface AgentMailScope {
   accountId?: string;
@@ -147,6 +161,21 @@ class AgentAccountService {
 
   getMailConversation = (params: { folder?: AgentMailFolder; id: string }) =>
     lambdaClient.agentAccount.mail.conversation.query(params);
+
+  getMailHtml = (id: string): Promise<AgentMailHtml> =>
+    lambdaClient.agentAccount.mail.html.query({ id });
+
+  /** The bytes come through the attachment route, so the browser never talks to the provider. */
+  downloadMailAttachment = async (id: string, index: number): Promise<Blob> => {
+    const params = new URLSearchParams({ id, index: String(index) });
+    const response = await fetch(`/webapi/agent-mail/attachment?${params}`, {
+      headers: await getBusinessTrpcHeaders(),
+    });
+    if (!response.ok) {
+      throw new AttachmentDownloadError(ATTACHMENT_FAILURES[response.status] ?? 'unavailable');
+    }
+    return response.blob();
+  };
 
   markMailRead = (target: AgentMailTarget) =>
     lambdaClient.agentAccount.mail.markRead.mutate(target);
