@@ -88,6 +88,19 @@ describe('LobeMailApiClient', () => {
     expect(JSON.parse(body)).toEqual({ subject: 'Hi', text: 'Hello', to: ['i@innei.in'] });
   });
 
+  it('sends several recipients as one flat list', async () => {
+    let body = '';
+    const fetchImpl = vi.fn(async (_input: any, init: any) => {
+      body = init?.body;
+      return Response.json({ id: 'msg_1' }, { status: 201 });
+    }) as unknown as typeof fetch;
+
+    const client = new LobeMailApiClient({ apiKey: 'am_x', fetchImpl });
+    await client.sendMessage('inb_1', { subject: 'Hi', to: ['bob@x.io', 'dan@x.io'] });
+
+    expect(JSON.parse(body)).toEqual({ subject: 'Hi', to: ['bob@x.io', 'dan@x.io'] });
+  });
+
   it('creates an inbox and registers a webhook with the bearer key', async () => {
     const calls: Array<{ body?: string; url: string }> = [];
     const fetchImpl = vi.fn(async (input: any, init: any) => {

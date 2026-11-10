@@ -307,7 +307,7 @@ export class LobeMailApiClient {
   ): Promise<EmailMessageDetail> =>
     this.request<EmailMessageDetail>(`/v1/inboxes/${encodeURIComponent(inboxId)}/messages`, {
       // The send route takes a recipient list and rejects a bare address with a 422.
-      body: JSON.stringify({ ...input, to: [input.to] }),
+      body: JSON.stringify({ ...input, to: Array.isArray(input.to) ? input.to : [input.to] }),
       method: 'POST',
     });
 
