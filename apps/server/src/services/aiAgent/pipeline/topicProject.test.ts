@@ -104,7 +104,6 @@ describe('withProjectSandbox', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.findById.mockImplementation(async (id: string) => ({ id, slug: 'atlas' }));
     mocks.resolveProjectTopicSandbox.mockResolvedValue(sandbox);
   });
 
@@ -119,7 +118,7 @@ describe('withProjectSandbox', () => {
       }),
     ).resolves.toEqual({ reasoningConfig: { effort: 'high' }, ...sandbox });
     expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ project: { id: 'proj-1', slug: 'atlas' }, userId: 'user-1' }),
+      expect.objectContaining({ projectId: 'proj-1', userId: 'user-1' }),
     );
   });
 

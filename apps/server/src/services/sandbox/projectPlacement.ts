@@ -1,4 +1,4 @@
-import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
+import { projectCheckoutDirectory, type SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatTopicMetadata } from '@lobechat/types';
 import debug from 'debug';
@@ -17,34 +17,10 @@ export interface ProjectTopicSandboxInput {
   db: LobeChatDatabase;
   /** A repository the composer picked; must be one linked to the project. */
   environmentId?: string;
-  project: { id: string; slug?: string | null };
+  projectId: string;
   userId: string;
   workspaceId?: string;
 }
-
-/** Where every project keeps its checkouts on the drive. */
-export const PROJECT_DRIVE_ROOT = 'projects';
-
-const toSegment = (value: string) =>
-  value
-    .trim()
-    .replaceAll(/[^\w.-]+/g, '-')
-    .replaceAll(/^[.-]+|-+$/g, '');
-
-/**
- * The project's checkout of one repository: one folder per project and
- * repository, shared by every conversation in the project, so work done in one
- * is there for the next — the way a local clone is.
- */
-export const projectCheckoutDirectory = (
-  project: { id: string; slug?: string | null },
-  environmentName: string,
-) => {
-  const projectSegment = toSegment(project.slug ?? '') || toSegment(project.id);
-  const repoSegment = toSegment(environmentName.split('/').pop() ?? '') || 'repository';
-
-  return `${PROJECT_DRIVE_ROOT}/${projectSegment}/${repoSegment}`;
-};
 
 const hasGitSource = (configuration: { sources?: { kind?: string }[] } | null | undefined) =>
   (configuration?.sources ?? []).some((source) => source.kind === 'git');
@@ -70,12 +46,12 @@ const hasGitSource = (configuration: { sources?: { kind?: string }[] } | null | 
 export const resolveProjectTopicSandbox = async ({
   db,
   environmentId,
-  project,
+  projectId,
   userId,
   workspaceId,
 }: ProjectTopicSandboxInput): Promise<ProjectTopicSandbox> => {
   try {
-    const linked = await new ProjectModel(db, userId, workspaceId).listEnvironments(project.id);
+    const linked = await new ProjectModel(db, userId, workspaceId).listEnvironments(projectId);
     const picked = environmentId
       ? linked.find((item) => item.id === environmentId)
       : linked.find((item) => hasGitSource(item.configuration));
@@ -90,10 +66,10 @@ export const resolveProjectTopicSandbox = async ({
     return {
       ...(workspaceId && { sandboxDrive: drive }),
       sandboxEnvironmentId: environment.id,
-      sandboxWorkingDirectory: projectCheckoutDirectory(project, environment.name),
+      sandboxWorkingDirectory: projectCheckoutDirectory(projectId, environment.name),
     };
   } catch (error) {
-    log('Failed to resolve the sandbox for a topic in project %s: %O', project.id, error);
+    log('Failed to resolve the sandbox for a topic in project %s: %O', projectId, error);
     return {};
   }
 };

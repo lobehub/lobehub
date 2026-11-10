@@ -146,8 +146,8 @@ export const projectWorkingDirectoryRouter = router({
       );
       // Everyone who can read a project collaborates in it, so starting a
       // project conversation needs read access, not ownership.
-      const project = await ctx.projectModel.findById(input.projectId);
-      if (!project) throw new Error('Project not found or access denied');
+      if (!(await ctx.projectModel.findById(input.projectId)))
+        throw new Error('Project not found or access denied');
       const [{ snapshot }, sandbox] = await Promise.all([
         resolvePrecreatedTopicSnapshot(ctx.precreatedTopicDeps, input.agentId),
         // A project with a repository works in it from the first message: the
@@ -155,7 +155,7 @@ export const projectWorkingDirectoryRouter = router({
         resolveProjectTopicSandbox({
           db: ctx.serverDB,
           environmentId: input.environmentId,
-          project,
+          projectId: input.projectId,
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         }),
@@ -187,6 +187,34 @@ export const projectWorkingDirectoryRouter = router({
       data: await ctx.projectModel.attachEnvironment(input.projectId, input.environmentId),
       success: true,
     })),
+  /**
+   * Link a GitHub repository to the project: the caller's environment for it,
+   * made when they have none, attached in the same request — the project
+   * composer's "add a repository" needs nothing else to start on the code.
+   */
+  attachRepository: write
+    .input(
+      z.object({
+        projectId: z.string(),
+        repository: z.object({
+          defaultBranch: z.string().max(255).optional(),
+          name: z.string().trim().min(1).max(255),
+          url: z.string().min(1).max(2048),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input: { projectId, repository } }) => {
+      // Checked before the environment is made, so a refusal leaves nothing behind.
+      if (!(await ctx.projectModel.findManageableById(projectId)))
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found or access denied' });
+      const environment = await ctx.environmentModel.ensureForRepository({
+        defaultBranch: repository.defaultBranch,
+        name: repository.name,
+        repositoryUrl: repository.url,
+      });
+      await ctx.projectModel.attachEnvironment(projectId, environment.id);
+      return { data: environment, success: true };
+    }),
   listEnvironments: procedure
     .input(z.object({ projectId: z.string().optional() }))
     .query(async ({ ctx, input }) => ({

@@ -83,8 +83,7 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
   // The topic is written before any run, so a repository the project has must
   // be on it from the start — otherwise the first message runs in an empty sandbox.
   it("starts the conversation in the project's repository", async () => {
-    const project = { id: 'project-1', slug: 'atlas', userId: 'creator' };
-    mocks.findById.mockResolvedValue(project);
+    mocks.findById.mockResolvedValue({ id: 'project-1', userId: 'creator' });
     mocks.resolveProjectTopicSandbox.mockResolvedValue({
       sandboxEnvironmentId: 'env-repo',
       sandboxWorkingDirectory: 'projects/atlas/repo',
@@ -93,7 +92,11 @@ describe('projectWorkingDirectory.createProjectTopic', () => {
     await caller().createProjectTopic({ ...input, environmentId: 'env-repo' });
 
     expect(mocks.resolveProjectTopicSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: 'env-repo', project, workspaceId: 'ws-1' }),
+      expect.objectContaining({
+        environmentId: 'env-repo',
+        projectId: 'project-1',
+        workspaceId: 'ws-1',
+      }),
     );
     expect(mocks.createTopic).toHaveBeenCalledWith(
       expect.objectContaining({

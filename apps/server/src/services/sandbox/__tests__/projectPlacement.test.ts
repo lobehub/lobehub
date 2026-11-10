@@ -18,11 +18,9 @@ vi.mock('@/database/models/environment', () => ({
   }),
 }));
 
-const { projectCheckoutDirectory, resolveProjectTopicSandbox } =
-  await import('../projectPlacement');
+const { resolveProjectTopicSandbox } = await import('../projectPlacement');
 
 const db = {} as LobeChatDatabase;
-const project = { id: 'proj_1', slug: 'lobe-id' };
 const gitConfiguration = {
   kind: 'code',
   sources: [{ kind: 'git', url: 'https://github.com/lobehub-biz/agent-mail' }],
@@ -35,21 +33,7 @@ const repository = {
 };
 
 const resolve = (overrides: Record<string, unknown> = {}) =>
-  resolveProjectTopicSandbox({ db, project, userId: 'user_1', ...overrides });
-
-describe('projectCheckoutDirectory', () => {
-  it('keeps one folder per project and repository', () => {
-    expect(projectCheckoutDirectory(project, 'lobehub-biz/agent-mail')).toBe(
-      'projects/lobe-id/agent-mail',
-    );
-  });
-
-  it('falls back to the project id and strips what a path cannot hold', () => {
-    expect(projectCheckoutDirectory({ id: 'proj_1', slug: null }, 'my repo!')).toBe(
-      'projects/proj_1/my-repo',
-    );
-  });
-});
+  resolveProjectTopicSandbox({ db, projectId: 'proj_1', userId: 'user_1', ...overrides });
 
 describe('resolveProjectTopicSandbox', () => {
   beforeEach(() => {
@@ -60,7 +44,7 @@ describe('resolveProjectTopicSandbox', () => {
   it("works in the project's repository, checked out in the project's folder", async () => {
     await expect(resolve()).resolves.toEqual({
       sandboxEnvironmentId: 'env-repo',
-      sandboxWorkingDirectory: 'projects/lobe-id/agent-mail',
+      sandboxWorkingDirectory: 'projects/proj_1/agent-mail',
     });
   });
 
@@ -96,7 +80,7 @@ describe('resolveProjectTopicSandbox', () => {
 
     await expect(resolve({ environmentId: 'env-other' })).resolves.toEqual({
       sandboxEnvironmentId: 'env-other',
-      sandboxWorkingDirectory: 'projects/lobe-id/lobe-tts',
+      sandboxWorkingDirectory: 'projects/proj_1/lobe-tts',
     });
   });
 

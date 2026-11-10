@@ -305,11 +305,11 @@ export default {
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
   'overview.context.repository.add': 'Add a repository',
+  'overview.context.repository.addAction': 'Add',
   'overview.context.repository.addTitle': 'Add a repository to this project',
-  'overview.context.repository.attachFailed':
-    "The repository was created but couldn't be added to this project",
+  'overview.context.repository.attachFailed': "Couldn't add the repository to this project",
   'overview.context.repository.tooltip':
-    "New conversations work in this repository. It's cloned before the first command runs.",
+    'New conversations work in this repository, cloned before the first command.',
   'overview.context.target.device': 'A connected device',
   'overview.context.target.noneTooltip':
     'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',

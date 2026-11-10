@@ -81,12 +81,7 @@ export const withProjectSandbox = async (
   )
     return metadata;
 
-  const project = await new ProjectModel(deps.db, deps.userId, deps.workspaceId).findById(
-    projectId,
-  );
-  if (!project) return metadata;
-
-  const sandbox = await resolveProjectTopicSandbox({ ...deps, project });
+  const sandbox = await resolveProjectTopicSandbox({ ...deps, projectId });
   if (Object.keys(sandbox).length === 0) return metadata;
 
   return { ...metadata, ...sandbox };

@@ -1,7 +1,7 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { type DropdownItem, DropdownMenu, Icon, toast, Tooltip } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react';
@@ -9,9 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
-import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
+import { openAddRepositoryModal } from './AddRepositoryModal';
 import type { useProjectRepository } from './useProjectRepository';
 
 interface ProjectRepositoryChipProps {
@@ -34,24 +33,9 @@ const ProjectRepositoryChip = ({
   state,
 }: ProjectRepositoryChipProps) => {
   const { t } = useTranslation('project');
-  const attachEnvironment = useProjectDirectoryStore((s) => s.attachEnvironment);
   const { loaded, repositories, repository, setPickedId } = state;
 
-  const addRepository = () =>
-    openCreateEnvironmentModal(
-      undefined,
-      async (created) => {
-        if (!created?.id) return;
-        try {
-          await attachEnvironment(projectId, created.id);
-          setPickedId(created.id);
-        } catch (error) {
-          console.error('Failed to link the repository to the project', error);
-          toast.error(t('overview.context.repository.attachFailed'));
-        }
-      },
-      t('overview.context.repository.addTitle'),
-    );
+  const addRepository = () => openAddRepositoryModal({ onAdded: setPickedId, projectId });
 
   if (!loaded) return null;
 
@@ -73,7 +57,9 @@ const ProjectRepositoryChip = ({
   const label = (
     <>
       <Github size={14} />
-      <span {...stylex.props(workingDirectoryChipStyles.label)}>{repository.name}</span>
+      <span {...stylex.props(workingDirectoryChipStyles.label)}>
+        {repository.name.split('/').pop() || repository.name}
+      </span>
     </>
   );
 
