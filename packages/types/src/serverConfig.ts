@@ -206,6 +206,8 @@ export interface GlobalServerConfig {
   /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
   enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
+  /** Workspace pages collaborate live through the gateway's durable rooms (LobeHub Cloud). */
+  enableWorkspacePageCollab?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
    * Whether the server can relay an LLM call to a browser tab (Agent Gateway

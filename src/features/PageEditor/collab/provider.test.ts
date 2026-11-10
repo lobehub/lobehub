@@ -141,6 +141,36 @@ describe('PageCollabProvider', () => {
     expect(onPendingChange).toHaveBeenLastCalledWith(0);
   });
 
+  it('reports a local edit once synced, but not what the editor writes while syncing or bootstrapping', async () => {
+    const { deliver, mux, ready } = createMux();
+    const doc = new Y.Doc();
+    const onLocalEdit = vi.fn();
+    const onBootstrap = vi.fn(() => doc.getText('t').insert(0, 'from db'));
+    const provider = new PageCollabProvider('doc_1', doc, mux as any, { onBootstrap, onLocalEdit });
+    provider.on('sync', () => doc.getText('t').insert(0, 'root paragraph'));
+
+    provider.connect();
+    ready();
+    deliver(
+      synced({
+        bootstrap: true,
+        bootstrapped: false,
+        update: b64(Y.encodeStateAsUpdate(new Y.Doc())),
+      }),
+    );
+    await Promise.resolve();
+    deliver({ documentId: 'doc_1', seq: 1, type: 'doc_ack' });
+    deliver({
+      documentId: 'doc_1',
+      type: 'doc_update',
+      update: b64(Y.encodeStateAsUpdate(roomWith('remote'))),
+    });
+    expect(onLocalEdit).not.toHaveBeenCalled();
+
+    doc.getText('t').insert(0, 'typed');
+    expect(onLocalEdit).toHaveBeenCalledOnce();
+  });
+
   it('does not echo remote updates back to the room', () => {
     const { deliver, mux, ready, sent } = createMux();
     const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any);
@@ -367,5 +397,94 @@ describe('PageCollabProvider', () => {
 
     expect(onReset).toHaveBeenCalledOnce();
     expect(onReset).toHaveBeenCalledWith('bootstrap_conflict');
+  });
+
+  it('reports a page at its size cap as blocked, staying in the room', () => {
+    const { deliver, mux, ready } = createMux();
+    const onBlocked = vi.fn();
+    const onStatus = vi.fn();
+    const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any, {
+      onBlocked,
+      onStatus,
+    });
+
+    provider.connect();
+    ready();
+    deliver(synced());
+    deliver({
+      code: 'doc_too_large',
+      documentId: 'doc_1',
+      message: 'too large',
+      type: 'doc_error',
+    });
+
+    expect(onBlocked).toHaveBeenCalledWith('too_large');
+    expect(onStatus).not.toHaveBeenCalledWith('error');
+  });
+
+  it('reports a deleted page as blocked instead of a sync failure', () => {
+    const { deliver, mux, ready } = createMux();
+    const onBlocked = vi.fn();
+    const onFailure = vi.fn();
+    const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any, {
+      onBlocked,
+      onFailure,
+    });
+
+    provider.connect();
+    ready();
+    deliver({ code: 'doc_deleted', documentId: 'doc_1', message: 'deleted', type: 'doc_error' });
+
+    expect(onBlocked).toHaveBeenCalledWith('deleted');
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  describe('room capacity', () => {
+    const open = (events: Record<string, unknown>) => {
+      const harness = createMux();
+      new PageCollabProvider('doc_1', new Y.Doc(), harness.mux as any, events).connect();
+      harness.ready();
+      return harness;
+    };
+
+    it('opens a page the room already counts as full read-only, before anyone types', () => {
+      const onBlocked = vi.fn();
+      const { deliver } = open({ onBlocked });
+
+      deliver(synced({ capacity: 'full' }));
+
+      expect(onBlocked).toHaveBeenCalledWith('too_large');
+    });
+
+    it('reports how full the page is on sync and whenever the room says it changed', () => {
+      const onCapacity = vi.fn();
+      const { deliver } = open({ onCapacity });
+
+      deliver(synced({ capacity: 'near_full' }));
+      deliver({ capacity: 'ok', documentId: 'doc_1', type: 'doc_capacity' });
+
+      expect(onCapacity.mock.calls).toEqual([['near_full'], ['ok']]);
+    });
+
+    it('turns the page read-only when the room says it became full', () => {
+      const onBlocked = vi.fn();
+      const { deliver } = open({ onBlocked });
+
+      deliver(synced({ capacity: 'near_full' }));
+      deliver({ capacity: 'full', documentId: 'doc_1', type: 'doc_capacity' });
+
+      expect(onBlocked).toHaveBeenCalledWith('too_large');
+    });
+
+    it('reads a sync from a gateway that does not report capacity as no news', () => {
+      const onBlocked = vi.fn();
+      const onCapacity = vi.fn();
+      const { deliver } = open({ onBlocked, onCapacity });
+
+      deliver(synced());
+
+      expect(onCapacity).not.toHaveBeenCalled();
+      expect(onBlocked).not.toHaveBeenCalled();
+    });
   });
 });
