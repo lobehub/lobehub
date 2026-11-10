@@ -3,11 +3,13 @@ import { type ToolManifest } from '@lobechat/types';
 import { type PluginItem } from '@lobehub/market-sdk';
 import { type TRPCClientError } from '@trpc/client';
 import debug from 'debug';
+import { omit } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
 
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
+import { renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import {
   createReplicaSlice,
   type ReplicaLens,
@@ -482,16 +484,23 @@ export class PluginMCPStoreActionImpl {
       }
 
       let mergedHttpHeaders: Record<string, string> | undefined;
+      let httpUrl: string | undefined;
       let mergedStdioEnv: Record<string, string> | undefined;
       let mergedCloudHeaders: Record<string, string> | undefined;
 
       if (connection?.type === 'http') {
         const baseHeaders = toNonEmptyStringRecord(connection.headers);
+        // Config values the URL asks for (`{{KEY}}`) go into the URL; the rest are headers
+        const rendered = renderMcpUrlTemplate(connection.url ?? '', normalizedConfig);
+        httpUrl = rendered.url;
+        const headerConfig = toNonEmptyStringRecord(
+          normalizedConfig && omit(normalizedConfig, rendered.usedKeys),
+        );
 
-        if (baseHeaders || normalizedConfig) {
+        if (baseHeaders || headerConfig) {
           mergedHttpHeaders = {
             ...baseHeaders,
-            ...normalizedConfig,
+            ...headerConfig,
           };
         }
       }
@@ -586,7 +595,7 @@ export class PluginMCPStoreActionImpl {
                 avatar: plugin.icon,
                 description: plugin.description,
               },
-              url: connection.url!,
+              url: httpUrl!,
             },
             abortController.signal,
           );

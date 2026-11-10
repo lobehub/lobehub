@@ -328,6 +328,41 @@ describe('MCPService', () => {
       expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
     });
 
+    it('fills config placeholders in an HTTP plugin URL instead of sending them as headers', async () => {
+      const { toolsClient } = await import('@/libs/trpc/client');
+
+      mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => ({
+        customParams: {
+          mcp: {
+            headers: { 'X-Client': 'lobehub' },
+            type: 'http',
+            url: 'https://quotes.example.com/mcp?apikey={{API_KEY}}',
+          },
+        },
+        manifest: { meta: { title: 'Quote MCP' }, version: '1.0.0' },
+        settings: { API_KEY: 'rotated key', X_REGION: 'eu' },
+      }));
+      vi.mocked(toolsClient.mcp.callTool.mutate).mockResolvedValue('ok' as never);
+
+      await mcpService.invokeMcpToolCall(
+        {
+          apiName: 'quote',
+          arguments: '{}',
+          id: 'c1',
+          identifier: 'quote-mcp',
+          type: 'standalone',
+        },
+        {},
+      );
+
+      expect(vi.mocked(toolsClient.mcp.callTool.mutate).mock.calls[0][0].params).toEqual({
+        headers: { 'X-Client': 'lobehub', 'X_REGION': 'eu' },
+        name: 'quote-mcp',
+        type: 'http',
+        url: 'https://quotes.example.com/mcp?apikey=rotated%20key',
+      });
+    });
+
     it('should invoke tool call with custom plugin', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');
 
