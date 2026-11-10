@@ -985,6 +985,8 @@ export default {
     'Each agent run carries a fee, even on your own API key. Top up or upgrade your plan, then send again.',
   'input.agentRunFeeUnfunded.descOverflow':
     'Each agent run carries a fee, even on your own API key. Your balance covers it: use your balance, then send again.',
+  'input.agentRunFeeUnfunded.descOverflowOn':
+    'Each agent run carries a fee, even on your own API key. Your balance now pays it once plan limits run out. Send again.',
   'input.agentRunFeeUnfunded.descSubscribe':
     'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
   'input.agentRunFeeUnfunded.descTopUp':
