@@ -84,6 +84,9 @@ export const buildReleaseGateDossier = (
           .map((link) => ({
             ...(link.work!.type === 'document' &&
               link.work!.resourceId && { documentId: link.work!.resourceId }),
+            ...(link.work!.identifier && { identifier: link.work!.identifier }),
+            ...(link.work!.resourceType && { resourceType: link.work!.resourceType }),
+            ...(link.work!.status && { status: link.work!.status }),
             title: link.work!.title ?? link.work!.identifier ?? '',
             type: link.work!.type,
             ...(link.work!.url && { url: link.work!.url }),

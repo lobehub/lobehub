@@ -40,6 +40,7 @@ import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canReviewAcceptance, isReadOnlyAcceptanceDecider } from '../visibility';
 import { latestRound, unitArtifacts } from './dossier';
 import SkillDirectory from './SkillDirectory';
+import UnitArtifacts from './UnitArtifacts';
 import { usePlanFiles } from './usePlanFiles';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -326,26 +327,12 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
                     : t('acceptance.gate.unitAcceptanceOpen')}
                 </a>
               )}
-              {unitArtifacts(selection.unit).map((artifact) =>
-                artifact.url ? (
-                  <a
-                    className={styles.link}
-                    href={artifact.url}
-                    key={artifact.url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {artifact.title}
-                  </a>
-                ) : (
-                  <span className={styles.meta} key={artifact.title}>
-                    {artifact.title}
-                  </span>
-                ),
-              )}
             </Flexbox>
           ) : (
             <span className={styles.meta}>{t('acceptance.gate.unitWaitingHint')}</span>
+          )}
+          {selection.kind === 'result' && (
+            <UnitArtifacts artifacts={unitArtifacts(selection.unit)} />
           )}
           {brief && (
             <Flexbox gap={6}>

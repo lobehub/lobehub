@@ -9,7 +9,10 @@ const plan = {
   skill: { id: 'skill_1', name: 'migrate-reads-to-replica' },
 };
 
-const graphWith = (nodes: { description: string; id: string; title: string }[]) =>
+const graphWith = (
+  nodes: { description: string; id: string; title: string }[],
+  workVersions: unknown[] = [],
+) =>
   ({
     goal: {
       config: {
@@ -24,7 +27,7 @@ const graphWith = (nodes: { description: string; id: string; title: string }[]) 
       title: 'Migrate reads',
     },
     nodes: nodes.map((node) => ({ ...node, status: 'resolved' })),
-    workVersions: [],
+    workVersions,
   }) as unknown as GoalGraphSnapshot;
 
 describe('buildReleaseGateDossier', () => {
@@ -50,5 +53,44 @@ describe('buildReleaseGateDossier', () => {
     expect(dossier?.units.find((unit) => unit.nodeId === 'n2')?.brief).toBe(
       'Migrate `useInbox`; cold start must render cached.',
     );
+  });
+
+  /**
+   * Regression: a unit's pull request reached the review as a bare title link,
+   * with no number or state, so the owner could not tell what to merge.
+   */
+  it("carries each output's reference and state", () => {
+    const dossier = buildReleaseGateDossier(
+      graphWith(
+        [{ description: 'Migrate inbox reads.', id: 'n1', title: 'Home inbox' }],
+        [
+          {
+            nodeId: 'n1',
+            work: {
+              identifier: '#22737',
+              resourceId: 'lobehub/lobehub#22737',
+              resourceType: 'github_pull_request',
+              status: 'open',
+              title: 'Move inbox reads to replica',
+              type: 'external',
+              url: 'https://github.com/lobehub/lobehub/pull/22737',
+              workId: 'work_1',
+            },
+          },
+        ],
+      ),
+      { kind: 'probes', waveSize: 5 },
+    );
+
+    expect(dossier?.units[0].artifacts).toEqual([
+      {
+        identifier: '#22737',
+        resourceType: 'github_pull_request',
+        status: 'open',
+        title: 'Move inbox reads to replica',
+        type: 'external',
+        url: 'https://github.com/lobehub/lobehub/pull/22737',
+      },
+    ]);
   });
 });
