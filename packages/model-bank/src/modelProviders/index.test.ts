@@ -103,7 +103,7 @@ describe('isProviderDeviceOnly', () => {
     ).toBe(true);
   });
 
-  it('relays a keyed provider on a private network unless fetchOnClient is off', () => {
+  it('relays a keyed provider on a private network only when fetchOnClient asks for it', () => {
     for (const baseURL of [
       'http://127.0.0.1:1234/v1',
       'http://localhost:8000/v1',
@@ -111,20 +111,32 @@ describe('isProviderDeviceOnly', () => {
       'http://172.20.1.1/v1',
       'http://192.168.1.2:8000/v1',
       'http://[::1]:8000/v1',
+      'http://[fd12:3456:789a::1]:8000/v1',
+      'http://[fe80::1]:8000/v1',
+      'http://[::ffff:127.0.0.1]:1234/v1',
+      'http://[::ffff:c0a8:102]:8000/v1',
     ]) {
-      expect(isProviderDeviceOnly('my-llm', { keyVaults: { apiKey: 'k', baseURL } })).toBe(true);
+      const keyVaults = { apiKey: 'k', baseURL };
+      expect(isProviderDeviceOnly('my-llm', { fetchOnClient: true, keyVaults })).toBe(true);
+      // An unset flag keeps the server call, so one-shot relay setup and the
+      // server agree on the same execution site.
+      expect(isProviderDeviceOnly('my-llm', { fetchOnClient: false, keyVaults })).toBe(false);
+      expect(isProviderDeviceOnly('my-llm', { keyVaults })).toBe(false);
     }
-    expect(
-      isProviderDeviceOnly('my-llm', {
-        fetchOnClient: false,
-        keyVaults: { apiKey: 'k', baseURL: 'http://127.0.0.1:1234/v1' },
-      }),
-    ).toBe(false);
-    expect(
-      isProviderDeviceOnly('my-llm', {
-        keyVaults: { apiKey: 'k', baseURL: 'http://172.32.0.1/v1' },
-      }),
-    ).toBe(false);
+
+    for (const baseURL of [
+      // Public IPv4 outside RFC 1918, a public IPv6 host and a hostname.
+      'http://172.32.0.1/v1',
+      'http://[2001:db8::1]:8000/v1',
+      'https://api.example.com/v1',
+    ]) {
+      expect(
+        isProviderDeviceOnly('my-llm', {
+          fetchOnClient: true,
+          keyVaults: { apiKey: 'k', baseURL },
+        }),
+      ).toBe(false);
+    }
   });
 
   it('keeps a provider with an API key on the server even with fetchOnClient', () => {

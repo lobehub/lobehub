@@ -292,7 +292,42 @@ export const isProviderFetchOnClient = (
   return config?.fetchOnClient ?? false;
 };
 
-/** Loopback, `localhost` and RFC 1918 hosts: addresses a cloud server cannot reach. */
+/** Loopback and RFC 1918 IPv4 hosts; `0.0.0.0` names this host. */
+const isPrivateIPv4 = (ip: string) => {
+  if (ip === '0.0.0.0') return true;
+
+  const parts = ip.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
+  if (!parts) return false;
+  const [a, b] = [Number(parts[1]), Number(parts[2])];
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+};
+
+/**
+ * Loopback (`::1`), unique-local (`fc00::/7`), link-local (`fe80::/10`) and
+ * IPv4-mapped IPv6 hosts. A URL keeps the brackets around the address.
+ */
+const isPrivateIPv6 = (hostname: string) => {
+  const address = hostname.slice(1, -1);
+  if (address === '::1' || address === '::') return true;
+
+  // `::ffff:192.168.1.2` and its packed form `::ffff:c0a8:102` reach the same IPv4 host.
+  const mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) return isPrivateIPv4(mapped[1]);
+
+  const packed = address.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (packed) {
+    const [hi, lo] = [parseInt(packed[1], 16), parseInt(packed[2], 16)];
+    return isPrivateIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+  }
+
+  const first = parseInt(address.split(':')[0] || '0', 16);
+  return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+};
+
+/**
+ * Loopback, `localhost`, RFC 1918, unique-local and link-local hosts:
+ * addresses a cloud server cannot reach.
+ */
 const isPrivateNetworkUrl = (url: string) => {
   let hostname: string;
   try {
@@ -301,12 +336,9 @@ const isPrivateNetworkUrl = (url: string) => {
     return false;
   }
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
-  if (hostname === '[::1]' || hostname === '0.0.0.0') return true;
+  if (hostname.startsWith('[') && hostname.endsWith(']')) return isPrivateIPv6(hostname);
 
-  const ipv4 = hostname.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
-  if (!ipv4) return false;
-  const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
-  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  return isPrivateIPv4(hostname);
 };
 
 /**
@@ -322,7 +354,9 @@ const isPrivateNetworkUrl = (url: string) => {
  * 1. A provider that disables browser requests always runs on the server.
  * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
  * 3. Only a base URL: an endpoint the server may not reach, so the device.
- * 4. A key and a loopback / private-network base URL: `fetchOnClient`, default the device.
+ * 4. A key and a loopback / private-network base URL: `fetchOnClient`, default
+ *    the server — an unset flag keeps the server call it makes today, so a
+ *    self-hosted endpoint the server reaches is not parked for a device.
  * 5. Otherwise the server.
  */
 export const isProviderDeviceOnly = (
@@ -337,7 +371,7 @@ export const isProviderDeviceOnly = (
   if (!baseURL) return false;
   if (!config?.keyVaults?.apiKey) return true;
 
-  return isPrivateNetworkUrl(baseURL) && (config.fetchOnClient ?? true);
+  return isPrivateNetworkUrl(baseURL) && (config.fetchOnClient ?? false);
 };
 
 /**
