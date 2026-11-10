@@ -694,15 +694,26 @@ export class GoalManagerService {
               : undefined),
         }),
       });
-      await this.db.transaction(async (db) => {
+      const orphaned = await this.db.transaction(async (db) => {
         const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);
-        if (fresh?.config?.managerState?.token === claimed.token) {
-          await saveManagerState(db, goal.id, {
-            ...fresh.config.managerState,
-            operationId: result.operationId,
-          });
-        }
+        // The other half of the owner's settle in `stop`: a dispatch that
+        // outlived the turn timeout can return after the owner closed or
+        // deleted the Goal and settled this turn as never started. Whichever
+        // side takes the lock second stops the run — `stop` when the id is
+        // already recorded here, this dispatch when the settle came first.
+        if (!fresh) return true;
+        const current = fresh.config?.managerState;
+        if (current?.token !== claimed.token) return false;
+        await saveManagerState(db, goal.id, { ...current, operationId: result.operationId });
+        return !!current.consumed && !current.operationId;
       });
+      if (orphaned && result.operationId) {
+        await new AiAgentService(this.db, this.userId, { workspaceId: this.workspaceId })
+          .interruptTask({ operationId: result.operationId, topicId: claimed.topicId })
+          .catch((error) =>
+            console.error('[goal:manager] failed to stop a run its owner already settled', error),
+          );
+      }
     } catch (error) {
       console.error(
         '[goal:manager] dispatch failed; next wakeup adopts any persisted operation',
