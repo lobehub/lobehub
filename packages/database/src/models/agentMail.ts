@@ -111,7 +111,7 @@ export interface SearchAgentMailConversationsResult {
 export const AGENT_MAIL_SEARCH_POOL = 200;
 
 /** The BM25 match text for `query`, or nothing when every word is one the parser drops. */
-const normalizeBm25Terms = (query: string): string | undefined => {
+const bm25MatchTextOf = (query: string): string | undefined => {
   try {
     return normalizeBm25MatchQuery(query, SAFE_BM25_QUERY_OPTIONS);
   } catch {
@@ -657,7 +657,7 @@ export class AgentMailModel {
 
     // pg_search answers candidates inline, from `agent_mails_bm25_idx`. Words
     // the BM25 parser drops (`-`, `and`, `or`, `not`) leave nothing to match.
-    const query = normalizeBm25Terms(text);
+    const query = bm25MatchTextOf(text);
     if (!query) return { ids: [], truncated: false };
     const rows = await this.db
       .select({ id: agentMails.id })
@@ -1044,7 +1044,7 @@ export class AgentMailModel {
    *
    * The inbox item's title and preview go too. Returns the purged mails with
    * the signal each arrived as, whose raw payload is a second copy of the
-   * content the caller must blank as well ({@link SignalModel.purgePayloads}).
+   * content `AgentMailPurgeRepository` blanks in the same transaction.
    */
   purge = async (ids: string[]): Promise<AgentMailPurged[]> => {
     if (ids.length === 0) return [];

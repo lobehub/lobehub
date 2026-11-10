@@ -10,7 +10,6 @@ const model = vi.hoisted(() => ({
   claimForPurge: vi.fn(async (ids: string[]) => ids),
   findById: vi.fn(),
   findLatestInboundInThread: vi.fn(),
-  purge: vi.fn(async (ids: string[]) => ids.map((id) => ({ id, signalId: `sig_${id}` }))),
   releasePurge: vi.fn(async (_ids: string[]) => {}),
 }));
 vi.mock('@/database/models/agentMail', () => ({
@@ -31,10 +30,10 @@ vi.mock('@/database/models/agentMailDraft', () => ({
   }),
 }));
 
-const signals = vi.hoisted(() => ({ purgePayloads: vi.fn(async (ids: string[]) => ids.length) }));
-vi.mock('@/database/models/signal', () => ({
-  SignalModel: vi.fn(function () {
-    return signals;
+const purgeRepo = vi.hoisted(() => ({ purge: vi.fn(async (ids: string[]) => ids) }));
+vi.mock('@/database/repositories/agentMailPurge', () => ({
+  AgentMailPurgeRepository: vi.fn(function () {
+    return purgeRepo;
   }),
 }));
 
@@ -469,9 +468,7 @@ describe('purge', () => {
 
     expect(accounts.deleteProviderMessage).toHaveBeenCalledWith('acc', 'prov_a');
     expect(accounts.deleteProviderMessage).toHaveBeenCalledWith('acc', 'prov_b');
-    expect(model.purge).toHaveBeenCalledWith(['a', 'b']);
-    // The webhook payload of each purged mail's signal is a second copy of it.
-    expect(signals.purgePayloads).toHaveBeenCalledWith(['sig_a', 'sig_b']);
+    expect(purgeRepo.purge).toHaveBeenCalledWith(['a', 'b']);
     expect(result).toEqual({ count: 2, failed: 0 });
   });
 
@@ -497,8 +494,7 @@ describe('purge', () => {
 
     const result = await service().purge([target('a'), target('b')]);
 
-    expect(model.purge).toHaveBeenCalledWith(['a']);
-    expect(signals.purgePayloads).toHaveBeenCalledWith(['sig_a']);
+    expect(purgeRepo.purge).toHaveBeenCalledWith(['a']);
     expect(model.releasePurge).toHaveBeenCalledWith(['b']);
     expect(result).toEqual({ count: 1, failed: 1 });
     accounts.deleteProviderMessage.mockReset();
