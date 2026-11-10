@@ -320,7 +320,7 @@ const InboxSection = ({
               <div className={identityStyles.empty}>
                 {t('identity.mailbox.search.empty', { query })}
               </div>
-              <Button size={'small'} onClick={() => onQueryChange('')}>
+              <Button onClick={() => onQueryChange('')}>
                 {t('identity.mailbox.search.clear')}
               </Button>
             </Flexbox>
