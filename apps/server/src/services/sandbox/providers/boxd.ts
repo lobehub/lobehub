@@ -381,6 +381,8 @@ export class BoxdSandboxProvider implements SandboxProvider {
       }
       if (machine.status === 'stopped') await boxd.machines.start(machine.id);
       await boxd.machines.waitUntilReady(machine.id);
+      // Its lease may be about to run out: push it back before the next minute of calls skips the check.
+      await this.extendLease(machine.id, boxd);
       remember(checkedAt, machine.id, Date.now());
       return machine.id;
     } catch (error) {
@@ -839,6 +841,7 @@ export class BoxdSandboxProvider implements SandboxProvider {
     };
   }
 
+  /** A file up to the read cap is edited here; a bigger one is edited inside the computer. */
   private async editFile(
     id: string,
     boxd: BoxdClient,
@@ -848,6 +851,13 @@ export class BoxdSandboxProvider implements SandboxProvider {
     const replace = String(params.replace ?? '');
 
     const path = this.resolvePath(params.path, params.cwd);
+    const all = params.all === true;
+    const entry = await boxd.machines.fs.stat(id, path);
+    if (entry.isDir) return errorResult(`${path} is a directory`);
+    if (entry.size > READ_FILE_LIMIT_CHARS) {
+      return this.runScript(id, boxd, 'edit', { all, path, replace, search });
+    }
+
     const text = new TextDecoder().decode(await boxd.machines.fs.read(id, path));
     const occurrences = text.split(search).length - 1;
 
@@ -859,7 +869,6 @@ export class BoxdSandboxProvider implements SandboxProvider {
       };
     }
 
-    const all = params.all === true;
     await boxd.machines.fs.write(
       id,
       path,
@@ -922,7 +931,7 @@ export class BoxdSandboxProvider implements SandboxProvider {
   private async runScript(
     id: string,
     boxd: BoxdClient,
-    operation: 'export' | 'glob' | 'grep' | 'output' | 'read' | 'search',
+    operation: 'edit' | 'export' | 'glob' | 'grep' | 'output' | 'read' | 'search',
     params: Record<string, unknown>,
     timeoutMs = timeout(params),
   ): Promise<SandboxCallToolResult> {

@@ -1,5 +1,8 @@
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -304,6 +307,19 @@ describe('BoxdSandboxProvider', () => {
 
     expect(fake.api.machines.create).toHaveBeenCalledTimes(1);
     expect(fake.api.machines.get).toHaveBeenLastCalledWith(fake.machines[0].name);
+  });
+
+  it('pushes back the lease of a computer it adopts before skipping checks for a minute', async () => {
+    await (await createProvider()).callTool('runCommand', { command: 'true' });
+    expect(fake.api.machines.setDeleteAfter).not.toHaveBeenCalled();
+
+    vi.resetModules();
+    const second = await createProvider();
+    await second.callTool('runCommand', { command: 'true' });
+    await second.callTool('runCommand', { command: 'true' });
+
+    expect(fake.api.machines.setDeleteAfter).toHaveBeenCalledTimes(1);
+    expect(fake.api.machines.setDeleteAfter).toHaveBeenCalledWith('vm-1', 900);
   });
 
   it('adopts the computer when a concurrent create wins the name', async () => {
@@ -635,6 +651,36 @@ describe('BoxdSandboxProvider', () => {
     });
   });
 
+  it('edits a file over the read cap inside the computer instead of reading it whole', async () => {
+    const provider = await createProvider();
+    fake.files.set('/home/boxd/workspace/big.log', 'x'.repeat(READ_FILE_LIMIT_CHARS + 1));
+    fake.setExec(async (params) =>
+      params.env?.LOBE_BOXD_OPERATION === 'edit'
+        ? {
+            exitCode: 0,
+            stderr: '',
+            stdout: JSON.stringify({ replacements: 1, success: true }),
+          }
+        : { exitCode: 0, stderr: '', stdout: '' },
+    );
+
+    const result = await provider.callTool('editFile', {
+      path: 'big.log',
+      replace: 'y',
+      search: 'x',
+    });
+
+    expect(result).toEqual({ result: { replacements: 1, success: true }, success: true });
+    expect(fake.api.machines.fs.read).not.toHaveBeenCalled();
+    expect(fake.api.machines.fs.write).not.toHaveBeenCalled();
+    expect(JSON.parse(toolExecs().at(-1)!.env!.LOBE_BOXD_ARGS)).toEqual({
+      all: false,
+      path: '/home/boxd/workspace/big.log',
+      replace: 'y',
+      search: 'x',
+    });
+  });
+
   it('writes, edits and renames files through the file API', async () => {
     const provider = await createProvider();
 
@@ -909,5 +955,77 @@ describe('BoxdSandboxProvider', () => {
       expect(result.truncated).toBe(true);
       for (const match of result.matches) expect(match.content.length).toBeLessThanOrEqual(2000);
     });
+
+    it('edits a large file in place, keeping line endings and bytes that are not UTF-8', () => {
+      const file = path.join(dir, 'big.txt');
+      const body = Buffer.concat([
+        Buffer.from('a-a\r\n'.repeat(200_000)),
+        Buffer.from([0xff, 0xfe]),
+        Buffer.from('\r\nend'),
+      ]);
+      writeFileSync(file, body);
+
+      const first = runToolScript('edit', { path: file, replace: 'b', search: 'a' });
+      const rest = runToolScript('edit', { all: true, path: file, replace: 'c\n', search: 'a' });
+      const missing = runToolScript('edit', { path: file, replace: 'd', search: 'zzz' });
+
+      expect(first).toMatchObject({ replacements: 1, success: true });
+      expect(rest).toMatchObject({ linesAdded: 1, replacements: 399_999, success: true });
+      expect(missing).toMatchObject({ error: 'search text not found', success: false });
+      const edited = readFileSync(file);
+      expect(edited.subarray(0, 10).toString()).toBe('b-c\n\r\nc\n-c');
+      expect(edited.subarray(-7)).toEqual(
+        Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('\r\nend')]),
+      );
+    });
+
+    // The upload is bigger than the memory the script may use, so reading it whole fails.
+    it.skipIf(process.platform !== 'linux')(
+      'streams an export larger than its memory limit, with its length set instead of chunked',
+      async () => {
+        const file = path.join(dir, 'artifact.bin');
+        const data = Buffer.alloc(160 * 1024 * 1024, 7);
+        writeFileSync(file, data);
+        const expected = createHash('sha256').update(data).digest('hex');
+
+        const received: { headers: Record<string, unknown>; method?: string; sha: string }[] = [];
+        const server = createServer((request, response) => {
+          const hash = createHash('sha256');
+          request.on('data', (chunk: Buffer) => hash.update(chunk));
+          request.on('end', () => {
+            received.push({
+              headers: request.headers,
+              method: request.method,
+              sha: hash.digest('hex'),
+            });
+            response.end();
+          });
+        });
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+        const { port } = server.address() as AddressInfo;
+
+        const child = spawn(
+          'sh',
+          ['-c', 'ulimit -v 120000; exec python3 -c "$0"', boxdToolScript],
+          {
+            env: {
+              ...process.env,
+              LOBE_BOXD_ARGS: JSON.stringify({ path: file, url: `http://127.0.0.1:${port}/up` }),
+              LOBE_BOXD_OPERATION: 'export',
+            },
+          },
+        );
+        let stdout = '';
+        child.stdout.on('data', (chunk) => (stdout += chunk));
+        await new Promise((resolve) => child.on('close', resolve));
+        server.close();
+
+        expect(JSON.parse(stdout)).toMatchObject({ size: data.length, status: 200, success: true });
+        expect(received).toHaveLength(1);
+        expect(received[0]).toMatchObject({ method: 'PUT', sha: expected });
+        expect(received[0].headers['content-length']).toBe(String(data.length));
+        expect(received[0].headers['transfer-encoding']).toBeUndefined();
+      },
+    );
   });
 });

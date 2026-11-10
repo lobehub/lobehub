@@ -22,9 +22,18 @@ export const getSandboxConfig = () => {
     server: {
       BOXD_API_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
       BOXD_BASE_URL: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
+      // The lease is pushed back at most once a minute and an export may run 330 s,
+      // so a shorter lease could delete a computer while it is in use.
       BOXD_LEASE_TTL_SEC: z.preprocess(
         emptyStringToUndefined,
-        z.coerce.number().int().nonnegative().optional(),
+        z.coerce
+          .number()
+          .int()
+          .refine(
+            (value) => value === 0 || value >= 600,
+            'BOXD_LEASE_TTL_SEC must be 0 (keep computers) or at least 600 seconds',
+          )
+          .optional(),
       ),
       BOXD_REGION: z.preprocess(emptyStringToUndefined, z.string().optional()),
       BOXD_SNAPSHOT: z.preprocess(emptyStringToUndefined, z.string().optional()),

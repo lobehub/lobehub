@@ -34,7 +34,7 @@ exit "$code"`;
 /**
  * The Python half of the boxd provider: the operations that are cheaper as
  * one process inside the computer than as many file API calls from the
- * server — walking a tree, reading a window of a large file, reading a
+ * server — walking a tree, reading or editing a large file, reading a
  * background command's new output, and uploading an export straight from the
  * computer to storage.
  *
@@ -237,6 +237,26 @@ def read():
     })
 
 
+def edit():
+    """A search and replace on a file too large to bring over whole, written back in place."""
+    path, search, replace = args['path'], args['search'], args.get('replace') or ''
+    with open(path, encoding='utf-8', errors='surrogateescape', newline='') as file:
+        text = file.read()
+    occurrences = text.count(search)
+    if not occurrences:
+        emit({'error': 'search text not found', 'replacements': 0, 'success': False})
+        return
+    replacements = occurrences if args.get('all') else 1
+    with open(path, 'w', encoding='utf-8', errors='surrogateescape', newline='') as file:
+        file.write(text.replace(search, replace, replacements))
+    emit({
+        'linesAdded': replace.count('\n'),
+        'linesDeleted': search.count('\n'),
+        'replacements': replacements,
+        'success': True,
+    })
+
+
 def read_int(path):
     try:
         with open(path) as file:
@@ -321,24 +341,27 @@ def output():
 
 
 def export():
+    """Streams the file to the upload URL; a set Content-Length keeps the PUT a plain one, not chunked."""
     path = args['path']
-    with open(path, 'rb') as file:
-        data = file.read()
+    size = os.path.getsize(path)
     headers = {str(key): str(value) for key, value in (args.get('headers') or {}).items()}
     mime_type = mimetypes.guess_type(path)[0] or 'application/octet-stream'
     if not any(key.lower() == 'content-type' for key in headers):
         headers['Content-Type'] = mime_type
-    request = urllib.request.Request(args['url'], data=data, headers=headers, method='PUT')
-    try:
-        with urllib.request.urlopen(request, timeout=300) as response:
-            status = response.status
-    except urllib.error.HTTPError as error:
-        emit({'error': 'Upload failed with HTTP ' + str(error.code), 'success': False})
-        return
-    emit({'mimeType': mime_type, 'size': len(data), 'status': status, 'success': True})
+    headers = {key: value for key, value in headers.items() if key.lower() != 'content-length'}
+    headers['Content-Length'] = str(size)
+    with open(path, 'rb') as file:
+        request = urllib.request.Request(args['url'], data=file, headers=headers, method='PUT')
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response:
+                status = response.status
+        except urllib.error.HTTPError as error:
+            emit({'error': 'Upload failed with HTTP ' + str(error.code), 'success': False})
+            return
+    emit({'mimeType': mime_type, 'size': size, 'status': status, 'success': True})
 
 
-OPERATIONS = {'export': export, 'glob': glob_files, 'grep': grep, 'output': output, 'read': read, 'search': search}
+OPERATIONS = {'edit': edit, 'export': export, 'glob': glob_files, 'grep': grep, 'output': output, 'read': read, 'search': search}
 
 try:
     OPERATIONS[os.environ['LOBE_BOXD_OPERATION']]()

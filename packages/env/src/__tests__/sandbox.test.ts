@@ -101,4 +101,18 @@ describe('getSandboxConfig', () => {
 
     await expect(import('../sandbox')).rejects.toThrow('Invalid environment variables');
   });
+
+  it('should reject a boxd lease shorter than the renewal and export window', async () => {
+    process.env.BOXD_LEASE_TTL_SEC = '30';
+
+    await expect(import('../sandbox')).rejects.toThrow('Invalid environment variables');
+  });
+
+  it('should accept a boxd lease of 600 seconds', async () => {
+    process.env.BOXD_LEASE_TTL_SEC = '600';
+
+    const { getSandboxConfig } = await import('../sandbox');
+
+    expect(getSandboxConfig().BOXD_LEASE_TTL_SEC).toBe(600);
+  });
 });

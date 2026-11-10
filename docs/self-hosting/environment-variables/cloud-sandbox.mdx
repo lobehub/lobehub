@@ -116,7 +116,7 @@ Supported values:
 ### `BOXD_LEASE_TTL_SEC`
 
 - Type: Optional
-- Description: How long a topic's computer is kept after its last tool call. While the topic is in use, the deletion is pushed back at most once a minute. `0` keeps computers until you delete them.
+- Description: How long a topic's computer is kept after its last tool call. While the topic is in use, the deletion is pushed back at most once a minute. `0` keeps computers until you delete them. Any other value must be at least `600`.
 - Default: `900`
 - Example: `3600`
 
