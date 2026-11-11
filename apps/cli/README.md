@@ -2,6 +2,31 @@
 
 LobeHub command-line interface.
 
+## Release to npm
+
+The `Release CLI` GitHub Actions workflow publishes stable versions to npm's
+`latest` tag from `canary`. To release, bump `apps/cli/package.json` in a PR:
+
+```bash
+cd apps/cli
+npm version patch --no-git-tag-version
+bun run man:generate
+```
+
+Commit the version and generated manual, complete the checks and any product
+acceptance required by the change, then merge the PR into `canary`. CI checks
+the registry, tests the CLI bundle, runs the complete `prepublishOnly` build
+(including the offline report), smoke-checks it, and publishes with provenance.
+The workflow can also be dispatched manually on `canary` to retry a failed run.
+Already published versions are skipped; prereleases and versions older than
+`latest` are rejected. Registry errors stop the run instead of assuming a
+version is unpublished. CI does not change versions or commit back to the repo.
+
+Publishing uses the repository's `NPM_TOKEN` secret, as the SDK release does.
+It must have publish permission for `@lobehub/cli` and support unattended
+publishing under the package's npm authentication policy. PR previews continue
+to publish separately to `pkg.pr.new`.
+
 ## Update a connected device
 
 ```bash
