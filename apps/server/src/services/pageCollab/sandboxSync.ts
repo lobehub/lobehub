@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { ISandboxService, SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   diffLiteXMLBlocks,
@@ -33,25 +35,128 @@ const fromBase64 = (text: string) =>
 const heredoc = (path: string, text: string, tag: string) =>
   `base64 -d > "${path}" <<'${tag}'\n${toBase64(text)}\n${tag}`;
 
+/**
+ * The sandbox runs a command as a single `sh -c` argument, and Linux refuses
+ * any one exec argument of 128 KiB or more (MAX_ARG_STRLEN) with E2BIG. The
+ * page used to ride inside that argument, so past roughly 90 KB of LiteXML
+ * every command failed before the shell started and /mnt/page never appeared.
+ * A page whose files would push the wrapper past this budget is staged in the
+ * sandbox by separate commands instead.
+ */
+export const INLINE_PAGE_LIMIT = 64 * 1024;
+
+/**
+ * Upper bound of one staging command. It stays clear of the 128 KiB argument
+ * limit with room for the `lh` prelude, which is added after this wrapper.
+ */
+export const STAGE_COMMAND_LIMIT = 96 * 1024;
+
+const pageFileNames = ['doc.xml', 'title', '.meta/outline'] as const;
+
+interface PageFiles {
+  outline: string;
+  title: string;
+  xml: string;
+}
+
+const pageFileTexts = (files: PageFiles): Record<(typeof pageFileNames)[number], string> => ({
+  '.meta/outline': files.outline,
+  'doc.xml': files.xml,
+  'title': `${files.title}\n`,
+});
+
+const stagedName = (file: string) => file.replaceAll('/', '_');
+
+/** Names the staged copy, so a page that did not change is sent only once. */
+export const pageStageKey = (files: PageFiles) => {
+  const hash = createHash('sha256');
+  for (const text of Object.values(pageFileTexts(files))) hash.update(text).update('\0');
+  return hash.digest('hex').slice(0, 32);
+};
+
 export const buildOutline = (xml: string) => {
   const blocks = parseLiteXMLBlocks(xml);
   if (typeof blocks === 'string' || blocks.length === 0) return '';
   return `${blocks.map(({ id, tag, text }) => `${id ?? '-'} ${tag} ${text.slice(0, 80)}`.trim()).join('\n')}\n`;
 };
 
+/**
+ * Commands that write the page files into the sandbox, a slice of their base64
+ * at a time so none reaches the exec argument limit. Slices land in a `.part`
+ * directory that only the last command renames, so an interrupted upload never
+ * looks complete. Base64 has no quote, so each slice is safe in single quotes.
+ */
+export const buildStageCommands = (
+  files: PageFiles,
+  pageDir = PAGE_DIR,
+  commandLimit = STAGE_COMMAND_LIMIT,
+) => {
+  const key = pageStageKey(files);
+  const part = `"$__P/.stage/${key}.part"`;
+  const head = `__P=${pageDir}; mkdir -p ${part}`;
+  const budget = commandLimit - head.length - 512;
+
+  const writes: string[] = [];
+  for (const [file, text] of Object.entries(pageFileTexts(files))) {
+    const encoded = toBase64(text);
+    const target = `"$__P/.stage/${key}.part/${stagedName(file)}"`;
+    // Leaves room for the truncate that opens each file, so the first slice joins it.
+    const sliceSize = budget - 2 * target.length - 64;
+    writes.push(`: > ${target}`);
+    for (let start = 0; start < encoded.length; start += sliceSize) {
+      writes.push(`printf '%s' '${encoded.slice(start, start + sliceSize)}' >> ${target}`);
+    }
+  }
+  writes.push(`rm -rf "$__P/.stage/${key}" && mv ${part} "$__P/.stage/${key}"`);
+
+  const commands: string[] = [];
+  let batch: string[] = [];
+  let size = 0;
+  for (const write of writes) {
+    if (batch.length > 0 && size + write.length + 4 > budget) {
+      commands.push([head, ...batch].join(' && '));
+      batch = [];
+      size = 0;
+    }
+    batch.push(write);
+    size += write.length + 4;
+  }
+  commands.push([head, ...batch].join(' && '));
+  return commands;
+};
+
+const stagedPageScript = (key: string, notStagedMarker: string) => {
+  const dir = `$__P/.stage/${key}`;
+  return [
+    `if [ ! -f "${dir}/${stagedName('.meta/outline')}" ]; then printf '\\n%s\\n' "${notStagedMarker}"; exit 0; fi`,
+    ...pageFileNames.map((file) => `base64 -d < "${dir}/${stagedName(file)}" > "$__P/${file}"`),
+    `find "$__P/.stage" -mindepth 1 -maxdepth 1 ! -name '${key}' -exec rm -rf {} +`,
+  ];
+};
+
+/**
+ * Wraps the command so it starts on the current page under `pageDir` and
+ * reports what it changed. With `stageKey`, the page files come from a copy
+ * {@link buildStageCommands} wrote; when that copy is missing the wrapper
+ * prints the not-staged marker and exits before running the command. It exits
+ * 0 because a provider may turn any other status into a failed tool call, and
+ * the marker alone tells the caller to stage.
+ */
 export const wrapPageCommand = (
   command: string,
-  files: { outline: string; title: string; xml: string },
+  files: PageFiles,
   nonce: string,
   pageDir = PAGE_DIR,
+  { stageKey }: { stageKey?: string } = {},
 ) => {
   const tag = `__LOBE_PAGE_${nonce}`;
   const marker = `__LOBE_SYNC_${nonce}`;
+  const texts = pageFileTexts(files);
   return [
     `__P=${pageDir}; mkdir -p "$__P/.orig" "$__P/.meta"`,
-    heredoc('$__P/doc.xml', files.xml, tag),
-    heredoc('$__P/title', `${files.title}\n`, tag),
-    heredoc('$__P/.meta/outline', files.outline, tag),
+    ...(stageKey
+      ? stagedPageScript(stageKey, `${marker}_NOT_STAGED`)
+      : pageFileNames.map((file) => heredoc(`$__P/${file}`, texts[file], tag))),
     'cp "$__P/doc.xml" "$__P/title" "$__P/.orig/"',
     `(\n${command}\n)`,
     '__lobe_rc=$?',
@@ -63,6 +168,61 @@ export const wrapPageCommand = (
     'done',
     'exit $__lobe_rc',
   ].join('\n');
+};
+
+const outputOf = (result: SandboxCallToolResult) => {
+  const raw = (result.result ?? {}) as Record<string, unknown>;
+  return String(raw.stdout ?? raw.output ?? '');
+};
+
+/**
+ * Runs the command on the page. A small page rides inline in the command; a
+ * large one is staged once per version and reused by later commands.
+ */
+const runOnPage = async (
+  service: ISandboxService,
+  toolName: string,
+  params: Record<string, unknown> & { command: string },
+  files: PageFiles,
+  nonce: string,
+  pageDir = PAGE_DIR,
+): Promise<SandboxCallToolResult> => {
+  const inline = wrapPageCommand(params.command, files, nonce, pageDir);
+  if (Buffer.byteLength(inline) - Buffer.byteLength(params.command) <= INLINE_PAGE_LIMIT) {
+    return service.callTool(toolName, { ...params, command: inline });
+  }
+
+  const stageKey = pageStageKey(files);
+  const command = wrapPageCommand(params.command, files, nonce, pageDir, { stageKey });
+  const notStaged = `\n__LOBE_SYNC_${nonce}_NOT_STAGED\n`;
+
+  const first = await service.callTool(toolName, { ...params, command });
+  if (!first.success || !outputOf(first).includes(notStaged)) return first;
+
+  for (const stage of buildStageCommands(files, pageDir)) {
+    const staged = await service.callTool('runCommand', { command: stage });
+    const raw = (staged.result ?? {}) as { exitCode?: unknown; success?: unknown };
+    if (!staged.success) return staged;
+    if ((typeof raw.exitCode === 'number' && raw.exitCode !== 0) || raw.success === false) {
+      return {
+        ...staged,
+        error: { message: `The page could not be written to ${PAGE_DIR} in the sandbox.` },
+        success: false,
+      };
+    }
+  }
+
+  const result = await service.callTool(toolName, { ...params, command });
+  if (result.success && outputOf(result).includes(notStaged)) {
+    return {
+      ...result,
+      error: {
+        message: `The page could not be written to ${PAGE_DIR} in the sandbox; run the command again.`,
+      },
+      success: false,
+    };
+  }
+  return result;
 };
 
 export interface ParsedPageOutput {
@@ -317,15 +477,14 @@ export const withPageSync = (
       }
 
       const nonce = options.nonce?.() ?? crypto.randomUUID().replaceAll('-', '');
-      const result = await service.callTool(toolName, {
-        ...params,
-        command: wrapPageCommand(
-          params.command,
-          { outline: buildOutline(base.stableXml), title: base.title, xml: base.stableXml },
-          nonce,
-          options.pageDir,
-        ),
-      });
+      const result = await runOnPage(
+        service,
+        toolName,
+        { ...params, command: params.command },
+        { outline: buildOutline(base.stableXml), title: base.title, xml: base.stableXml },
+        nonce,
+        options.pageDir,
+      );
       if (!result.success) return result;
 
       const raw = (result.result ?? {}) as Record<string, unknown>;
