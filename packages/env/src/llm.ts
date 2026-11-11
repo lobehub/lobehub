@@ -114,6 +114,9 @@ export const getLLMConfig = () => {
       ENABLED_STEPFUN: z.boolean(),
       STEPFUN_API_KEY: z.string().optional(),
 
+      ENABLED_NAGAAI: z.boolean(),
+      NAGAAI_API_KEY: z.string().optional(),
+
       ENABLED_NEBIUS: z.boolean(),
       NEBIUS_API_KEY: z.string().optional(),
 
@@ -495,6 +498,9 @@ export const getLLMConfig = () => {
       ENABLED_NEWAPI: !!process.env.NEWAPI_API_KEY,
       NEWAPI_API_KEY: process.env.NEWAPI_API_KEY,
       NEWAPI_PROXY_URL: process.env.NEWAPI_PROXY_URL,
+
+      ENABLED_NAGAAI: !!process.env.NAGAAI_API_KEY,
+      NAGAAI_API_KEY: process.env.NAGAAI_API_KEY,
 
       ENABLED_NEBIUS: !!process.env.NEBIUS_API_KEY,
       NEBIUS_API_KEY: process.env.NEBIUS_API_KEY,
