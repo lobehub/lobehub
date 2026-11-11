@@ -1,12 +1,15 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type OpenAI from 'openai';
 
-import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
-import { normalizeAnthropicToolSchema } from '../../utils/anthropicToolSchema';
-import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
-import { parseDataUri } from '../../utils/uriParser';
-import { type InlineImageBudgetOptions, inlineImagesWithinBudget } from './inlineImageBudget';
+import type { OpenAIChatMessage, UserMessageContentPart } from '../../../types';
+import { normalizeAnthropicToolSchema } from '../../../utils/anthropicToolSchema';
+import { resolveImageMimeTypeFromBase64 } from '../../../utils/imageMimeType';
+import { imageUrlToBase64 } from '../../../utils/imageToBase64';
+import { parseDataUri } from '../../../utils/uriParser';
+import {
+  type InlineImageBudgetOptions,
+  inlineImagesWithinBudget,
+} from '../../contextBuilders/inlineImageBudget';
 
 const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
   'image/jpeg',

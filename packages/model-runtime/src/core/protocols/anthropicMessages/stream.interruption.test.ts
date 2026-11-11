@@ -1,7 +1,7 @@
 import type { Stream } from '@anthropic-ai/sdk/streaming';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AnthropicStream } from './anthropic';
+import { AnthropicStream } from './stream';
 
 describe('AnthropicStream interruptions', () => {
   it('should report a stream closed without message_delta / message_stop as interrupted', async () => {

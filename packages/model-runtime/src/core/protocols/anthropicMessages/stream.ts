@@ -2,28 +2,28 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { Stream } from '@anthropic-ai/sdk/streaming';
 import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
 
-import type { ChatStreamCallbacks } from '../../types';
-import { AgentRuntimeErrorType } from '../../types/error';
-import { convertAnthropicUsage } from '../usageConverters';
+import type { ChatStreamCallbacks } from '../../../types';
+import { AgentRuntimeErrorType } from '../../../types/error';
 import {
   createEventCallbacksTransformer,
   createModelEventTransformer,
   createSSEEncoder,
-} from './events';
+} from '../../streams/events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
   StreamToolCallChunkData,
-} from './protocol';
+} from '../../streams/protocol';
 import {
   convertIterableToStream,
   createFirstErrorHandleTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
-} from './protocol';
-import { recordProviderReportedCost } from './providerReportedCost';
+} from '../../streams/protocol';
+import { recordProviderReportedCost } from '../../streams/providerReportedCost';
+import { convertAnthropicUsage } from '../../usageConverters';
 
 export const transformAnthropicStream = (
   chunk: Anthropic.MessageStreamEvent,

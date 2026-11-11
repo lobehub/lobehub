@@ -4,12 +4,12 @@ import type {
   ModelRuntimeDiagnostics,
   ProviderResponseDiagnostics,
   ProviderResponseEventDiagnostics,
-} from '../../types/providerDiagnostics';
+} from '../../../types/providerDiagnostics';
 import {
   appendRawProviderEvent,
   captureRawProviderResponse,
   waitForRawProviderResponse,
-} from '../providerDiagnostics';
+} from '../../providerDiagnostics';
 
 const MAX_RECORDED_PROVIDER_EVENTS = 128;
 const MAX_RECORDED_ERROR_MESSAGE_LENGTH = 500;

@@ -1,4 +1,4 @@
-import type { ChatStreamPayload } from '../../types';
+import type { ChatStreamPayload } from '../../../types';
 
 const smallContextWindowPatterns = [
   /claude-3-opus-20240229/,

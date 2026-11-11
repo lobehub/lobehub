@@ -3,15 +3,15 @@ import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
+import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatible';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { transformResponseAPIToStream } from '../../core/openaiCompatible';
+import { AnthropicStream } from '../../core/protocols/anthropicMessages/stream';
 import { convertOpenAIMessages } from '../../core/protocols/openaiChatCompletions/messages';
 import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
 import { convertOpenAIResponseInputs } from '../../core/protocols/openaiResponses/inputs';
 import { OpenAIResponsesStream } from '../../core/protocols/openaiResponses/stream';
-import { AnthropicStream } from '../../core/streams';
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
