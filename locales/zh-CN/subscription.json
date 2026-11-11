@@ -685,6 +685,8 @@
   "plansModal.modelAccess.title": "解锁全部模型",
   "plansModal.persistentSandbox.desc": "云端沙箱里写下的文件会在会话结束后丢弃。升级后可获得持久化工作目录，跨会话保留、并在各个话题间共享。",
   "plansModal.persistentSandbox.title": "保留沙箱中的文件",
+  "plansModal.preciseSchedule.desc": "定时任务可以设置到具体的每一分钟，不再限于整点和半点。升级到付费套餐后即可自定义时间。",
+  "plansModal.preciseSchedule.title": "让任务在精确时间运行",
   "plansModal.ultraModelAccess.desc": "Ultra 模型能力最强、成本最高，Pro 及以上套餐可用。升级后即可使用。",
   "plansModal.ultraModelAccess.title": "Ultra 模型需要 Pro 及以上套餐",
   "qa.desc": "如果你的问题未被解答，请查看<1>产品文档</1>获取更多常见问题，或联系我们。",

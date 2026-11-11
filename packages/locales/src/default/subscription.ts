@@ -748,6 +748,9 @@ export default {
   'plansModal.persistentSandbox.desc':
     'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
   'plansModal.persistentSandbox.title': 'Keep your sandbox files',
+  'plansModal.preciseSchedule.desc':
+    'Run scheduled tasks at any exact minute, not only on the hour or half hour. Upgrade to a paid plan to pick your own time.',
+  'plansModal.preciseSchedule.title': 'Schedule tasks at an exact time',
   'plansModal.artifactDeploymentLimit.desc':
     'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
   'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',

@@ -685,6 +685,8 @@
   "plansModal.modelAccess.title": "Unlock all models",
   "plansModal.persistentSandbox.desc": "Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.",
   "plansModal.persistentSandbox.title": "Keep your sandbox files",
+  "plansModal.preciseSchedule.desc": "Run scheduled tasks at any exact minute, not only on the hour or half hour. Upgrade to a paid plan to pick your own time.",
+  "plansModal.preciseSchedule.title": "Schedule tasks at an exact time",
   "plansModal.ultraModelAccess.desc": "Ultra models are the most capable and most expensive ones, available on Pro and above. Upgrade to use them.",
   "plansModal.ultraModelAccess.title": "Ultra models need Pro or above",
   "qa.desc": "If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.",
