@@ -9,12 +9,13 @@ import { type ChatItemProps } from '../type';
 
 export interface TitleProps {
   avatar: ChatItemProps['avatar'];
+  quiet?: boolean;
   showTitle?: ChatItemProps['showTitle'];
   time?: ChatItemProps['time'];
   titleAddon?: ChatItemProps['titleAddon'];
 }
 
-const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
+const Title = memo<TitleProps>(({ showTitle, time, avatar, quiet, titleAddon }) => {
   const { t } = useTranslation('chat');
   const title = agentDisplayName(avatar, t('untitledAgent'));
   const { text: timeText, title: timeTitle } = useActivityTime(time);
@@ -22,7 +23,12 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
   return (
     <>
       {showTitle && (
-        <Text fontSize={14} style={{ whiteSpace: 'nowrap' }} weight={500}>
+        <Text
+          fontSize={14}
+          style={{ whiteSpace: 'nowrap' }}
+          type={quiet ? 'secondary' : undefined}
+          weight={500}
+        >
           {title}
         </Text>
       )}

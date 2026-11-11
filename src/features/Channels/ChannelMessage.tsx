@@ -212,6 +212,7 @@ export const ChannelMessage = ({
     >
       {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
+        quietHeader
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}

@@ -79,7 +79,8 @@ export const styles = stylex.create({
     flexShrink: 0,
     fontSize: cssVar.fontSizeSM,
     fontVariantNumeric: 'tabular-nums',
-    color: cssVar.colorTextSecondary,
+    // One step below the author name, which is one step below the message.
+    color: cssVar.colorTextTertiary,
     whiteSpace: 'nowrap',
     opacity: 1,
   },
