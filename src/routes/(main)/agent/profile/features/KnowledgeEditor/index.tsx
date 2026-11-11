@@ -25,7 +25,9 @@ const LibraryCount = memo<{ id: string }>(({ id }) => {
   );
   if (!data) return null;
 
-  const count = data.total ?? data.items.length;
+  // An older server may omit `items`; the count still falls back to zero rather than throwing.
+  const items = data.items ?? [];
+  const count = data.total ?? items.length;
 
   return (
     <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
