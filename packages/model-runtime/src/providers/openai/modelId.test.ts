@@ -182,6 +182,13 @@ describe('supportsGPTResponsesReasoningEffortNone', () => {
     expect(supportsGPTResponsesReasoningEffortNone('openai/gpt-5.6')).toBe(false);
     expect(supportsGPTResponsesReasoningEffortNone('gpt-4o')).toBe(false);
   });
+
+  it('should support none reasoning effort on GPT-6 Sol and Luna, which still accept it', () => {
+    expect(supportsGPTResponsesReasoningEffortNone('gpt-6-sol')).toBe(true);
+    expect(supportsGPTResponsesReasoningEffortNone('gpt-6-luna')).toBe(true);
+    expect(supportsGPTResponsesReasoningEffortNone('codex/gpt-6-luna')).toBe(true);
+    expect(supportsGPTResponsesReasoningEffortNone('openai/gpt-6-sol')).toBe(false);
+  });
 });
 
 describe('isOpenAIReasoningPayloadModel', () => {
