@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsageBreakdown } from './UsageBreakdown';
 
 vi.mock('@/business/client/features/RetainedMemberDrives', () => ({ default: () => null }));
+const workspace = vi.hoisted(() => ({ id: 'ws-a' as string | null }));
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => workspace.id,
+}));
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof LobeUI>();
   return {
@@ -154,6 +158,26 @@ describe('UsageBreakdown', () => {
       // Still says it is measuring: the walk goes on without this tab.
       expect(screen.getByText('drive.usage.measuring')).toBeInTheDocument();
       visibility.mockRestore();
+    });
+
+    it('should stop measuring when the active workspace changes', async () => {
+      workspace.id = 'ws-a';
+      const onRefresh = vi
+        .fn()
+        .mockResolvedValue({ measuring: { drives: ['personal'], scannedBytes: 1 } });
+      const { rerender } = render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
+
+      fireEvent.click(screen.getByTitle('drive.usage.refresh'));
+      await waitFor(() => expect(screen.getByText('drive.usage.measuring')).toBeInTheDocument());
+
+      // Same route, another workspace: requests would now go to it.
+      workspace.id = 'ws-b';
+      rerender(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
+      for (let i = 0; i < 5; i++) await advance();
+
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('drive.usage.measuring')).not.toBeInTheDocument();
+      workspace.id = 'ws-a';
     });
 
     it('should still refresh under StrictMode, which replays effects', async () => {

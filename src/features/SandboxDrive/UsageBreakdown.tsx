@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import RetainedMemberDrives from '@/business/client/features/RetainedMemberDrives';
 import SandboxStorageOverQuotaAction from '@/business/client/features/SandboxStorageOverQuotaAction';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import UserAvatar from '@/components/UserAvatar';
 import { formatSize } from '@/utils/format';
 
@@ -158,8 +159,23 @@ export const UsageBreakdown = memo<{
   const [refreshing, setRefreshing] = useState(false);
   // A drive too large to measure in one call (LOBE-15436): how much the walk
   // has counted so far, shown beside the last finished figure.
-  const [measuring, setMeasuring] = useState<DriveUsageRefreshResult['measuring'] | null>(null);
+  const [measurement, setMeasurement] = useState<{
+    progress: NonNullable<DriveUsageRefreshResult['measuring']>;
+    workspaceId: string | null;
+  } | null>(null);
   const mounted = useRef(true);
+  // The route stays mounted across a workspace switch, and every request goes
+  // to whichever workspace is active then: a loop started in one workspace
+  // must not carry on — or show its progress — in the next.
+  const workspaceId = useActiveWorkspaceId();
+  const activeWorkspace = useRef(workspaceId);
+  useEffect(() => {
+    activeWorkspace.current = workspaceId;
+  }, [workspaceId]);
+  // Progress belongs to the workspace it was measured in.
+  const measuring = measurement?.workspaceId === workspaceId ? measurement.progress : null;
+  const setMeasuring = (progress: DriveUsageRefreshResult['measuring'] | null) =>
+    setMeasurement(progress ? { progress, workspaceId } : null);
   useEffect(() => {
     // Set here too: StrictMode replays effects, running the cleanup once
     // before the component is really gone.
@@ -219,23 +235,25 @@ export const UsageBreakdown = memo<{
   const largestMember = Math.max(1, ...members.map((member) => member.usageBytes ?? 0));
 
   const refresh = async () => {
+    const started = activeWorkspace.current;
+    const current = () => mounted.current && activeWorkspace.current === started;
     setRefreshing(true);
     try {
       // Each call continues the walk where the last one stopped, so keep
       // calling while it is still measuring and someone is looking.
       let pending: DriveUsageRefreshResult['measuring'];
-      for (let call = 0; call < MAX_MEASURE_CALLS && mounted.current; call++) {
+      for (let call = 0; call < MAX_MEASURE_CALLS && current(); call++) {
         if (pending) await wait(MEASURE_CALL_GAP_MS);
-        if (!mounted.current) return;
+        if (!current()) return;
         if (pending && pageHidden()) break;
         const result = await onRefresh(pending?.drives);
-        if (!mounted.current) return;
+        if (!current()) return;
         pending = result?.measuring;
         setMeasuring(pending ?? null);
         if (!pending) break;
       }
     } catch (error) {
-      if (!mounted.current) return;
+      if (!current()) return;
       setMeasuring(null);
       // The execution plane could not walk the drive, so the figure on screen
       // is the last one it measured — say so, rather than let a refresh that
