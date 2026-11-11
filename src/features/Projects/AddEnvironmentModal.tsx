@@ -19,6 +19,7 @@ import { CheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
@@ -186,6 +187,8 @@ const AddEnvironmentContent = ({ onAdded, projectId, publish }: AddEnvironmentCo
               </Text>
             )}
           </>
+        ) : available.error && !available.hasData ? (
+          <AsyncError error={available.error} onRetry={() => available.revalidate()} />
         ) : !available.hasData ? (
           <Text type={'secondary'}>{t('loading', { ns: 'common' })}</Text>
         ) : reusable.length === 0 ? (

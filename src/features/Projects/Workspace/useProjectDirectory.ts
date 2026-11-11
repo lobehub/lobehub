@@ -22,6 +22,21 @@ export const directoriesOnDevice = (directories: ProjectDirectory[], deviceId?: 
     : [];
 
 /**
+ * Where a run goes for a folder just added from a machine's row. The dialog
+ * lets the person change the device, so the folder's own device decides, not
+ * the row it was opened from: this desktop runs it locally when added from the
+ * local row, any other machine as a device.
+ */
+export const addedFolderTarget = (
+  added: { deviceId: string },
+  from: 'device' | 'local',
+  currentDeviceId?: string,
+): { deviceId?: string; target: 'device' | 'local' } =>
+  from === 'local' && added.deviceId === currentDeviceId
+    ? { target: 'local' }
+    : { deviceId: added.deviceId, target: 'device' };
+
+/**
  * The project folder a new conversation on a device starts in: the person's
  * pick while it is still on that device, otherwise the device's first one.
  * Without one the run works wherever the device starts it.

@@ -17,7 +17,7 @@ import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
 import { openAddDirectoryModal } from '../WorkingDirectories/AddDirectoryModal';
-import type { useProjectDirectory } from './useProjectDirectory';
+import { addedFolderTarget, type useProjectDirectory } from './useProjectDirectory';
 import type { useProjectRepository } from './useProjectRepository';
 import type { useProjectWorkLocation } from './useProjectWorkLocation';
 
@@ -143,7 +143,12 @@ const ProjectWorkLocationPicker = ({
     setOpen(false);
     openAddDirectoryModal(projectId, undefined, {
       deviceId: next === 'local' ? currentDeviceId : deviceId,
-      onAdded: (added) => pickDirectory(added.id, next, deviceId),
+      // Follow the folder to the machine it was saved on, which the dialog lets
+      // the person change: this desktop runs it locally, any other as a device.
+      onAdded: (added) => {
+        const place = addedFolderTarget(added, next, currentDeviceId);
+        pickDirectory(added.id, place.target, place.deviceId);
+      },
     });
   };
 

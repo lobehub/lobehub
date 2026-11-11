@@ -21,7 +21,8 @@ interface AddDirectoryOptions {
   /** The machine to add it on, when the caller already knows it. */
   deviceId?: string;
   /** Called with the folder once it is part of the project. */
-  onAdded?: (directory: { id: string }) => void;
+  /** Called with the folder once it is part of the project, and the device it was saved on. */
+  onAdded?: (directory: { deviceId: string; id: string }) => void;
 }
 
 function AddDirectoryContent({
@@ -59,7 +60,8 @@ function AddDirectoryContent({
         name: path.split(/[\\/]/).findLast(Boolean) || path,
       });
       close();
-      onAdded?.(added);
+      // The device picked here, not the one the caller suggested: the person may have changed it.
+      onAdded?.({ deviceId, id: added.id });
     } catch (error) {
       console.error('Failed to add work location', error);
       setError(error);
