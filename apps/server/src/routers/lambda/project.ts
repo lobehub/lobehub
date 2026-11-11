@@ -19,6 +19,7 @@ import {
 } from '@/database/models/project';
 import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
+import { ProjectOverviewRepository } from '@/database/repositories/projectOverview';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -55,6 +56,7 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
         options,
       ),
       projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
+      projectOverviewRepo: new ProjectOverviewRepository(ctx.serverDB, ctx.userId, workspaceId),
       projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
@@ -334,6 +336,15 @@ export const projectRouter = router({
   // Re-enabling them must also move the task's acceptances (and those of its
   // run topics): `acceptances.project_id` is copied from the task when filed,
   // unless the publisher named another project explicitly.
+  /** Folder-card content for every visible project, in one batch. */
+  listOverviews: projectProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.projectOverviewRepo.list(), success: true };
+    } catch (error) {
+      mapProjectError(error, 'listOverviews');
+    }
+  }),
+
   moveTask: projectWriteProcedure
     .input(idInput.extend({ taskId: z.string() }))
     .mutation(async () => {

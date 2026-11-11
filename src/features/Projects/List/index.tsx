@@ -16,20 +16,20 @@ import {
   Flexbox,
   Icon,
   SearchBar,
+  Segmented,
   Text,
-  toast,
   Tooltip,
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ArrowDownUpIcon,
   FolderClosedIcon,
+  ListIcon,
+  type LucideIcon,
   MoreHorizontalIcon,
-  PencilIcon,
   PlusIcon,
   SearchXIcon,
   StarIcon,
-  TrashIcon,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,21 +39,19 @@ import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
-import { useFavoriteMenuItem, useFavoriteToggle } from '@/features/Favorites';
+import { useFavoriteToggle } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectFromGithubModal } from '@/features/Projects/CreateFromGithub';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
-import { createDeleteProjectModal } from '@/features/Projects/DeleteProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
-import { openRenameProjectModal } from '@/features/Projects/RenameProjectModal';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
-import type { ProjectListSortBy } from '@/store/global/initialState';
+import type { ProjectListSortBy, ProjectListViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
@@ -62,10 +60,16 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import { projectFavoriteTarget } from '../projectFavorite';
 import { resolveProjectListState } from '../projectListState';
+import { FolderGrid, FolderGridSkeleton } from './FolderGrid';
 import SortableProjectRows from './SortableProjectRows';
 import { sortProjects } from './sortProjects';
+import { useProjectMenuItems } from './useProjectMenuItems';
 
 const SORT_BYS: ProjectListSortBy[] = ['manual', 'createdAt', 'updatedAt'];
+const VIEW_MODES: { icon: LucideIcon; mode: ProjectListViewMode }[] = [
+  { icon: FolderClosedIcon, mode: 'folder' },
+  { icon: ListIcon, mode: 'list' },
+];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
@@ -211,53 +215,9 @@ ProjectFavoriteStar.displayName = 'ProjectFavoriteStar';
 
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
-  const [deleting, setDeleting] = useState(false);
-  const deleteProject = useProjectStore((s) => s.deleteProject);
-  const canManage = useCanManageProject();
-  const favoriteMenuItem = useFavoriteMenuItem(projectFavoriteTarget(project), {
-    showHotkey: false,
-  });
+  const { deleting, menuItems } = useProjectMenuItems(project);
   const status = resolveProjectStatus(project.status);
   const statusVisual = PROJECT_STATUS_VISUALS[status];
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteProject(project.id);
-    } catch (error) {
-      // On success the row unmounts, so only a failure re-enables it.
-      setDeleting(false);
-      throw error;
-    }
-    toast.success(t('list.deleteSuccess', { name: project.name }));
-  };
-
-  const menuItems: DropdownItem[] = [
-    ...(favoriteMenuItem ? [favoriteMenuItem] : []),
-    ...(canManage
-      ? ([
-          { type: 'divider' },
-          {
-            icon: <Icon icon={PencilIcon} />,
-            key: 'rename',
-            label: t('rename.action'),
-            onClick: () => openRenameProjectModal(project),
-          },
-          {
-            danger: true,
-            icon: <Icon icon={TrashIcon} />,
-            key: 'delete',
-            label: t('list.deleteAction'),
-            onClick: () => {
-              createDeleteProjectModal({
-                onConfirm: handleDelete,
-                project: { id: project.id, name: project.name },
-              });
-            },
-          },
-        ] satisfies DropdownItem[])
-      : []),
-  ];
 
   const row = (
     <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
@@ -314,6 +274,9 @@ const ProjectListPage = memo(() => {
   )(enabled);
   const listState = resolveProjectListState({ error, isHydrated, isValidating, projects });
   const sortBy = useGlobalStore(systemStatusSelectors.projectListSortBy);
+  const viewMode = useGlobalStore(systemStatusSelectors.projectListViewMode);
+  // Cards draw recent topics, tasks and members, which the light list row never needs.
+  useProjectStore((s) => s.useFetchProjectOverviews)(enabled && viewMode === 'folder');
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   // The custom order is shared by the workspace, so only editors may change it.
   const canManage = useCanManageProject();
@@ -337,6 +300,12 @@ const ProjectListPage = memo(() => {
     label: t(`sidebar.sort.${by}`),
     onCheckedChange: () => updateSystemStatus({ projectListSortBy: by }),
     type: 'checkbox' as const,
+  }));
+
+  const viewOptions = VIEW_MODES.map(({ icon, mode }) => ({
+    icon: <Icon icon={icon} />,
+    title: t(`list.view.${mode}`),
+    value: mode,
   }));
 
   const createMenuItems = useMemo<DropdownItem[]>(
@@ -391,6 +360,12 @@ const ProjectListPage = memo(() => {
             onChange={(event) => setKeyword(event.target.value)}
           />
           <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            <Segmented<ProjectListViewMode>
+              aria-label={t('list.view.title')}
+              options={viewOptions}
+              value={viewMode}
+              onChange={(mode) => updateSystemStatus({ projectListViewMode: mode })}
+            />
             <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
               <Button icon={ArrowDownUpIcon} title={t('sidebar.sort.title')}>
                 {t(`sidebar.sort.${sortBy}`)}
@@ -404,7 +379,11 @@ const ProjectListPage = memo(() => {
         {listState === 'error' ? (
           <AsyncError error={error} onRetry={() => revalidate()} />
         ) : listState === 'loading' ? (
-          <SkeletonList rows={8} />
+          viewMode === 'folder' ? (
+            <FolderGridSkeleton />
+          ) : (
+            <SkeletonList rows={8} />
+          )
         ) : filteredProjects.length === 0 ? (
           <Center flex={1} padding={48}>
             <Empty
@@ -412,6 +391,12 @@ const ProjectListPage = memo(() => {
               icon={keyword.trim() ? SearchXIcon : FolderClosedIcon}
             />
           </Center>
+        ) : viewMode === 'folder' ? (
+          <FolderGrid
+            createMenuItems={createMenuItems}
+            draggable={draggable}
+            projects={filteredProjects}
+          />
         ) : (
           <Flexbox gap={4}>
             {draggable ? (

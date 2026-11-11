@@ -8,6 +8,7 @@ import type {
   GlobalState,
   ModelDetailPanelExpandedKey,
   ProjectListSortBy,
+  ProjectListViewMode,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
@@ -510,6 +511,8 @@ const contactListSortBy = (s: GlobalState): ContactListSortBy =>
   s.status.contactListSortBy ?? 'title';
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
+const projectListViewMode = (s: GlobalState): ProjectListViewMode =>
+  s.status.projectListViewMode ?? 'folder';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
@@ -563,6 +566,7 @@ export const systemStatusSelectors = {
   agentDocumentSort,
   contactListSortBy,
   projectListSortBy,
+  projectListViewMode,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
