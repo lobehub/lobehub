@@ -3,14 +3,17 @@
 import { type PropsWithChildren } from 'react';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import { useContactBackUrl } from '@/features/NavRail/useContactBackUrl';
 
 import Agent from './Agent';
 import Nav from './Nav';
 
 const HeaderInfo = (_props: PropsWithChildren) => {
+  const backTo = useContactBackUrl();
+
   return (
     <>
-      <SideBarHeaderLayout left={<Agent />} />
+      <SideBarHeaderLayout backTo={backTo} left={<Agent />} />
       <Nav />
     </>
   );
