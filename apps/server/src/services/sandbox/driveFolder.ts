@@ -96,3 +96,35 @@ export const forgetDriveFolders = (storageKey: string) => {
     if (key.startsWith(`${storageKey}\0`)) existsCache.delete(key);
   }
 };
+
+/**
+ * Create a folder a topic works in, parents included, and remember it.
+ *
+ * For a folder that is a repository's checkout rather than a person's pick:
+ * the environment fills an empty folder again, so bringing it back is a fresh
+ * clone, not an empty folder under a name someone chose to remove.
+ *
+ * `true` once the drive has it; `false` when it could not be made, which a
+ * caller treats like a missing folder.
+ */
+export const ensureDriveFolder = async ({
+  claim,
+  path,
+  topicId,
+  userId,
+  workspaceId,
+}: DriveFolderInput & { topicId?: string }): Promise<boolean> => {
+  try {
+    await new MarketService({
+      userInfo: { sandboxStorage: claim, userId, workspaceId: workspaceId ?? undefined },
+    })
+      .getSandboxStorageClient()
+      .createDirectory({ path, topicId });
+    remember(`${claim.key}\0${path}`);
+
+    return true;
+  } catch (error) {
+    log('Could not create drive folder %s on %s: %O', path, claim.key, error);
+    return false;
+  }
+};

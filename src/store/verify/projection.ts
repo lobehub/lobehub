@@ -1,6 +1,14 @@
-import type { AcceptanceCommentList, CreatableAcceptanceSubjectType } from '@lobechat/types';
+import type {
+  AcceptanceCommentList,
+  CreatableAcceptanceSubjectType,
+  UserSkillVersionDetail,
+} from '@lobechat/types';
 
-import type { VerifyCheckResultItem } from '@/database/schemas/verify';
+import type {
+  VerifyCheckResultItem,
+  VerifyCriterionItem,
+  VerifyRubricItem,
+} from '@/database/schemas/verify';
 import {
   AppIndexedDBStorage,
   arrayEntity,
@@ -9,14 +17,23 @@ import {
   type ReplicaEntityAdapter,
   type ReplicaPagedData,
 } from '@/libs/replica';
+import type { UserSkillDetail } from '@/services/userSkill';
 import type {
   AcceptanceBundle,
   AcceptanceBySubject,
   AcceptanceListFilter,
   AcceptanceListItem,
   AcceptanceListQuery,
+  GoalCriterionWithInstruction,
+  VerifyReportBundle,
+  verifyService,
   VerifyStateResponse,
 } from '@/services/verify';
+
+/** Model / token / latency the verifier's LLM call recorded. */
+export type VerifierTracing = NonNullable<
+  Awaited<ReturnType<typeof verifyService.getVerifierTracing>>
+>;
 
 /**
  * The Acceptance aggregate of one acceptance id (`acceptanceBundleMap[id]`):
@@ -252,6 +269,129 @@ export const acceptanceCommentResource = defineReplica<string, AcceptanceComment
   key: (acceptanceId) => acceptanceId,
   name: 'acceptanceComment',
   persist: { maxEntries: 30 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * A replica value for a read the server may answer with "not found".
+ *
+ * Wrapped on purpose: a replica value can never be `null` (the engine reads it
+ * as "keep the current value"), but a page must tell "the server has no such
+ * record" (`value: null`, settles on its not-found state) apart from "nothing
+ * read yet" (no entry). The `null` answer is never persisted (see
+ * {@link toPersistedLookup}): it is a page state, and a reload must ask again.
+ */
+export interface VerifyLookup<T> {
+  value: T | null;
+}
+
+export const toPersistedLookup = <T>(entry: VerifyLookup<T>): VerifyLookup<T> | null =>
+  entry.value === null ? null : entry;
+
+const TERMINAL_REPORT_STATUSES = new Set(['delivered', 'errored', 'failed', 'passed']);
+
+/**
+ * Persist finished reports only. A run that is still planned / verifying /
+ * repairing is a live status, so a reload must not paint it from an old
+ * snapshot; it maps to `null` and the engine drops any earlier row.
+ */
+export const toPersistedReportBundle = (
+  entry: VerifyLookup<VerifyReportBundle>,
+): VerifyLookup<VerifyReportBundle> | null =>
+  entry.value?.run.status && TERMINAL_REPORT_STATUSES.has(entry.value.run.status) ? entry : null;
+
+/**
+ * The standalone verify report of one run (`verifyReportBundleMap[verifyRunId]`):
+ * the report page and the verify report portal (title, menu, link). Carries
+ * evidence, so the persisted set is LRU-capped.
+ */
+export const verifyReportBundleResource = defineReplica<string, VerifyLookup<VerifyReportBundle>>({
+  key: (verifyRunId) => verifyRunId,
+  name: 'verifyReportBundle',
+  persist: { maxEntries: 30 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** Model / token / latency of one LLM verifier judgment, keyed by tracing id. */
+export const verifierTracingResource = defineReplica<string, VerifyLookup<VerifierTracing>>({
+  key: (tracingId) => tracingId,
+  name: 'verifierTracing',
+  persist: { maxEntries: 100 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** The rubric list is not paged: every template sits in this single entry. */
+export const VERIFY_RUBRIC_LIST_KEY = 'all';
+
+/** The workspace's reusable rubric templates (`verifyRubricListMap.all`). */
+export const verifyRubricListResource = defineReplica<Record<string, never>, VerifyRubricItem[]>({
+  key: () => VERIFY_RUBRIC_LIST_KEY,
+  name: 'verifyRubricList',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** The criteria one rubric groups, in rubric order, keyed by rubric id. */
+export const verifyRubricCriteriaResource = defineReplica<string, VerifyCriterionItem[]>({
+  key: (rubricId) => rubricId,
+  name: 'verifyRubricCriteria',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One entry key per criteria set: the request depends on the ids alone. */
+export const goalCriteriaKey = (criteriaIds: string[]) => criteriaIds.join(',');
+
+/**
+ * The persisted criteria a Goal is accepted against, with their judge
+ * instructions, keyed by the ordered id list (`goalCriteriaMap`). Shared by the
+ * Goal's acceptance-standard section and its result / sign-off pages.
+ */
+export const goalCriteriaResource = defineReplica<string[], GoalCriterionWithInstruction[]>({
+  key: goalCriteriaKey,
+  name: 'verifyGoalCriteria',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * A plan skill from the user's library with every version it kept, keyed by
+ * skill id (`planSkillMap`): the gate's skill directory and the batch plan's
+ * version list. Ships the skill's files, so the persisted set is capped.
+ */
+export const planSkillResource = defineReplica<string, VerifyLookup<UserSkillDetail>>({
+  key: (skillId) => skillId,
+  name: 'planSkill',
+  persist: { maxEntries: 20 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One shipped version of a skill. */
+export interface SkillVersionParams {
+  skillId: string;
+  version: number;
+}
+
+export const skillVersionKey = ({ skillId, version }: SkillVersionParams) =>
+  `${skillId}@${version}`;
+
+/**
+ * One version of a skill as it shipped (`skillVersionMap['<id>@<version>']`).
+ * A version never changes once written, so the persisted copy is exact.
+ */
+export const skillVersionResource = defineReplica<
+  SkillVersionParams,
+  VerifyLookup<UserSkillVersionDetail>
+>({
+  key: skillVersionKey,
+  name: 'skillVersion',
+  persist: { maxEntries: 50 },
   storage: 'indexedDB',
   version: 1,
 });

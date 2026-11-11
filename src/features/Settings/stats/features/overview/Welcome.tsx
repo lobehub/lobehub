@@ -4,9 +4,7 @@ import { Clock3Icon, ClockArrowUp } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { userService } from '@/services/user';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { formatIntergerNumber } from '@/utils/format';
@@ -27,9 +25,8 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
     userProfileSelectors.username(s),
   ]);
 
-  const { data, isLoading } = useClientDataSWR(statsKeys.welcome(), async () =>
-    userService.getUserRegistrationDuration(),
-  );
+  statsActions.useFetchRegistration();
+  const data = useStatsStore(statsSelectors.registration);
 
   return (
     <Flexbox padding={mobile ? 16 : 0}>
@@ -46,12 +43,11 @@ const Welcome = memo<{ mobile?: boolean }>(({ mobile }) => {
           i18nKey="stats.welcome"
           ns={'auth'}
           components={{
-            span:
-              isLoading || !data ? (
-                <Skeleton height={24} style={{ minWidth: 40 }} width={40} />
-              ) : (
-                <span style={{ fontWeight: 'bold' }} />
-              ),
+            span: !data ? (
+              <Skeleton height={24} style={{ minWidth: 40 }} width={40} />
+            ) : (
+              <span style={{ fontWeight: 'bold' }} />
+            ),
           }}
           values={{
             appName: BRANDING_NAME,

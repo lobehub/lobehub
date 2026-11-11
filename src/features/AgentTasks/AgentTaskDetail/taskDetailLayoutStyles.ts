@@ -46,8 +46,35 @@ export const taskDetailLayoutStyles = createStaticStyles(({ css }) => ({
 
     @container task-detail (width >= ${TASK_DETAIL_SIDEBAR_MIN_WIDTH}px) {
       flex-direction: column;
-      gap: 2px;
+      gap: 20px;
       align-items: stretch;
+    }
+  `,
+  // Properties, Labels and Project are titled groups in the sidebar, as in
+  // Linear. The pill row has no room for titles, so there each group dissolves
+  // into the row and its triggers flow as before.
+  propertyGroup: css`
+    display: contents;
+
+    @container task-detail (width >= ${TASK_DETAIL_SIDEBAR_MIN_WIDTH}px) {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+  `,
+  propertyGroupTitle: css`
+    display: none;
+
+    @container task-detail (width >= ${TASK_DETAIL_SIDEBAR_MIN_WIDTH}px) {
+      display: block;
+
+      margin-block-end: 4px;
+      padding-inline: 8px;
+
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 20px;
+      color: ${cssVar.colorTextDescription};
     }
   `,
   propertyItem: css`

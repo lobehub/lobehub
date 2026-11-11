@@ -694,6 +694,39 @@ describe('buildBatchModel roster', () => {
   });
 });
 
+describe('buildBatchModel acceptance', () => {
+  it('marks a done unit whose acceptance was signed off, and only that one', () => {
+    const graph = buildGoalGraphView(
+      {
+        ...batchSnapshot({
+          extraNodes: [
+            node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+            node('m4', 'task', 11, { status: 'resolved', title: 'U4' }),
+            node('m5', 'task', 12, { status: 'active', title: 'U5' }),
+          ],
+          state: { massNodeIds: ['m3', 'm4', 'm5'] },
+        }),
+        acceptances: {
+          m3: { id: 'acc-3', status: 'accepted' },
+          m4: { id: 'acc-4', status: 'passed' },
+          m5: { id: 'acc-5', status: 'accepted' },
+          p1: { id: 'acc-p1', status: 'accepted' },
+        },
+      },
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.waves[0][0]).toMatchObject({ accepted: true, state: 'done', title: 'U3' });
+    expect(model.waves[0][1]).not.toHaveProperty('accepted');
+    // Signed off ahead of its run settling is not a finished square.
+    expect(model.waves[0][2]).not.toHaveProperty('accepted');
+    expect(model.rounds[0].probes.find((probe) => probe.nodeId === 'p1')).toMatchObject({
+      accepted: true,
+    });
+  });
+});
+
 describe('batchPlanTitleKey', () => {
   const round = { forked: false, revision: 2 } as any;
 

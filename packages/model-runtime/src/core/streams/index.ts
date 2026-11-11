@@ -1,4 +1,3 @@
-export * from './anthropic';
 export * from './bedrock';
 export * from './events';
 export * from './google';

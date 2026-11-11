@@ -553,35 +553,6 @@ export const apiKeyKeys = {
   list: def('apiKey:list', () => ['apiKey:list']),
 };
 
-// ---- stats (settings/stats + user header counts) ------------------------
-export const statsKeys = {
-  agentUsageStat: def(
-    'stats:agentUsageStat',
-    (agentId: string, startAt: string, endAt: string, granularity: string) => [
-      'stats:agentUsageStat',
-      agentId,
-      startAt,
-      endAt,
-      granularity,
-    ],
-  ),
-  agents: def('stats:agents', () => ['stats:agents']),
-  countAgents: def('stats:countAgents', () => ['stats:countAgents']),
-  countMessages: def('stats:countMessages', () => ['stats:countMessages']),
-  countTopics: def('stats:countTopics', () => ['stats:countTopics']),
-  heatmaps: def('stats:heatmaps', (type: string) => ['stats:heatmaps', type]),
-  maxTaskDuration: def('stats:maxTaskDuration', () => ['stats:maxTaskDuration']),
-  messages: def('stats:messages', () => ['stats:messages']),
-  rankAgents: def('stats:rankAgents', () => ['stats:rankAgents']),
-  rankModels: def('stats:rankModels', () => ['stats:rankModels']),
-  rankTopics: def('stats:rankTopics', () => ['stats:rankTopics']),
-  sessions: def('stats:sessions', () => ['stats:sessions']),
-  topics: def('stats:topics', () => ['stats:topics']),
-  usageLogs: def('stats:usageLogs', () => ['stats:usageLogs']),
-  usageStat: def('stats:usageStat', () => ['stats:usageStat']),
-  welcome: def('stats:welcome', () => ['stats:welcome']),
-};
-
 // ---- messenger / platform integration -----------------------------------
 export const messengerKeys = {
   myLink: def('messenger:myLink', (platform: string, tokenScopeKey: string | undefined) => [
@@ -606,51 +577,16 @@ export const scmKeys = {
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
-export const expertiseKeys = {
-  domain: def('expertise:domain', (domainId: string) => ['expertise:domain', domainId]),
-  historyCount: def('expertise:historyCount', (agentId: string) => [
-    'expertise:historyCount',
-    agentId,
-  ]),
-  lesson: def('expertise:lesson', (lessonId: string) => ['expertise:lesson', lessonId]),
-  overview: def('expertise:overview', (agentId: string) => ['expertise:overview', agentId]),
-  ruleRevisions: def('expertise:ruleRevisions', (lessonId: string) => [
-    'expertise:ruleRevisions',
-    lessonId,
-  ]),
-  ruleSources: def('expertise:ruleSources', (lessonId: string) => [
-    'expertise:ruleSources',
-    lessonId,
-  ]),
-  rules: def('expertise:rules', () => ['expertise:rules']),
-};
-
 export const verifyKeys = {
   acceptancePurgePreview: def('verify:acceptancePurgePreview', (acceptanceId: string) => [
     'verify:acceptancePurgePreview',
     acceptanceId,
   ]),
-  criteria: def('verify:criteria', () => ['verify:criteria']),
-  instruction: def('verify:instruction', (documentId: string) => [
-    'verify:instruction',
-    documentId,
-  ]),
-  reportBundle: def('verify:reportBundle', (verifyRunId: string) => [
-    'verify:reportBundle',
-    verifyRunId,
-  ]),
-  rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
   /** The acceptance round an old `/verify/:runId` link redirects to. */
   runAcceptanceRound: def('verify:runAcceptanceRound', (verifyRunId: string) => [
     'verify:runAcceptanceRound',
     verifyRunId,
   ]),
-  rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
-    'verify:rubricCriteria',
-    rubricId,
-  ]),
-  rubrics: def('verify:rubrics', () => ['verify:rubrics']),
-  tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
 // ---- inbox / notifications ----------------------------------------------
@@ -937,7 +873,6 @@ export const swrKeys = {
   discover: discoverKeys,
   electron: electronKeys,
   eval: evalKeys,
-  expertise: expertiseKeys,
   favorite: favoriteKeys,
   file: fileKeys,
   fork: forkKeys,
@@ -960,7 +895,6 @@ export const swrKeys = {
   resource: resourceKeys,
   serverConfig: serverConfigKeys,
   share: shareKeys,
-  stats: statsKeys,
   taskLabel: taskLabelKeys,
   thread: threadKeys,
   tool: toolKeys,

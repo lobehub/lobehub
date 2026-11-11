@@ -42,9 +42,11 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { useTaskProjectChoice } from '../features/useTaskProjectChoice';
 import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
@@ -72,6 +74,7 @@ export interface CreateTaskContentProps {
    */
   lockAssignee?: boolean;
   onCreated?: (task: { id: string; agentId?: string; identifier: string; name?: string }) => void;
+  /** The project the task starts in, e.g. the page it was opened from. The user can change it. */
   projectId?: string;
   /**
    * Creates a scheduled task: the form gains a schedule chip and the task is
@@ -128,6 +131,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
       );
     }, [isLabelsInit, labelRegistry]);
+    const { createProjectId, projectChoice, setProjectChoice } = useTaskProjectChoice(projectId);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -227,7 +231,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...pickedLabelIds(labels, pendingDefaultLabelIdsRef.current),
           name: title.trim() || undefined,
           priority: priority || undefined,
-          projectId,
+          projectId: createProjectId,
           // Only send visibility in workspace mode; personal mode ignores it.
           visibility: activeWorkspaceId ? visibility : undefined,
         });
@@ -250,6 +254,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       assigneeUserId,
       canCreateTask,
       close,
+      createProjectId,
       execution,
       createTask,
       editor,
@@ -258,7 +263,6 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       labels,
       onCreated,
       priority,
-      projectId,
       scheduleDraft,
       t,
       title,
@@ -427,6 +431,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 )}
               </Block>
             </TaskLabelPicker>
+
+            <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

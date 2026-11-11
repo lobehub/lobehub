@@ -4,6 +4,7 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import {
   clampCollectionPage,
+  collectionGroupsByProject,
   getMyTaskViewOptions,
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
@@ -93,6 +94,29 @@ describe('AgentTasksPage', () => {
       const newer = taskUpdatedAt('a', '2026-02-01');
       const older = taskUpdatedAt('b', '2026-01-01');
       expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
+    });
+  });
+
+  describe('collectionGroupsByProject', () => {
+    const project = { ...DEFAULT_TASK_LIST_VIEW_OPTIONS, groupBy: 'project' as const };
+
+    it('ignores a stored project grouping on the scheduled tab, which replaces it', () => {
+      expect(collectionGroupsByProject('scheduled', project)).toBe(false);
+    });
+
+    it('still counts a project sub-grouping on the scheduled tab, which keeps it', () => {
+      expect(
+        collectionGroupsByProject('scheduled', {
+          ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+          subGroupBy: 'project',
+        }),
+      ).toBe(true);
+    });
+
+    it('counts it on the tabs that render the stored grouping', () => {
+      expect(collectionGroupsByProject('tasks', project)).toBe(true);
+      expect(collectionGroupsByProject('mine', project)).toBe(true);
+      expect(collectionGroupsByProject('tasks', DEFAULT_TASK_LIST_VIEW_OPTIONS)).toBe(false);
     });
   });
 

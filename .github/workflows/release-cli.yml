@@ -1,0 +1,117 @@
+name: Release CLI
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches:
+      - canary
+    paths:
+      - apps/cli/package.json
+      - .github/workflows/release-cli.yml
+  workflow_dispatch: {}
+
+# Never interrupt a publish or let two runs publish the same version concurrently.
+concurrency:
+  group: release-cli
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish CLI
+    if: github.repository == 'lobehub/lobehub' && github.ref == 'refs/heads/canary'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check release version
+        id: release
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile, readFile } from 'node:fs/promises';
+
+          const { name, version } = JSON.parse(await readFile('apps/cli/package.json', 'utf8'));
+          if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
+            throw new Error(`Only stable versions can be published to latest: ${version}`);
+          }
+          const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (!response.ok) throw new Error(`Registry lookup failed: HTTP ${response.status}`);
+          const metadata = await response.json();
+          if (!metadata.versions || !metadata['dist-tags']?.latest) {
+            throw new Error('Registry response is missing versions or latest');
+          }
+          if (Object.hasOwn(metadata.versions, version)) {
+            console.log(`${name}@${version} is already published; skipping.`);
+            await appendFile(process.env.GITHUB_OUTPUT, 'publish=false\n');
+          } else {
+            const latest = metadata['dist-tags'].latest;
+            if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(latest)) {
+              throw new Error(`Unexpected latest version: ${latest}`);
+            }
+            const currentParts = version.split('.').map(BigInt);
+            const latestParts = latest.split('.').map(BigInt);
+            const firstDifference = currentParts.findIndex((part, i) => part !== latestParts[i]);
+            if (firstDifference < 0 || currentParts[firstDifference] < latestParts[firstDifference]) {
+              throw new Error(`${version} must be newer than latest (${latest})`);
+            }
+            await appendFile(process.env.GITHUB_OUTPUT, 'publish=true\n');
+            console.log(`Publishing ${name}@${version}`);
+          }
+          NODE
+
+      - name: Setup environment
+        if: steps.release.outputs.publish == 'true'
+        uses: ./.github/actions/setup-env
+
+      - name: Configure npm registry
+        if: steps.release.outputs.publish == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        if: steps.release.outputs.publish == 'true'
+        run: pnpm install
+
+      - name: Install CLI workspace dependencies
+        if: steps.release.outputs.publish == 'true'
+        run: pnpm install
+        working-directory: apps/cli
+
+      - name: Test CLI bundle and model-facing docs
+        if: steps.release.outputs.publish == 'true'
+        run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
+        working-directory: apps/cli
+
+      - name: Build publishable CLI bundle
+        if: steps.release.outputs.publish == 'true'
+        run: npm run prepublishOnly
+        working-directory: apps/cli
+
+      - name: Smoke check
+        if: steps.release.outputs.publish == 'true'
+        run: |
+          node dist/index.js --version
+          node dist/index.js --help
+          test -s dist/maintenanceWorker.mjs
+          test -s dist/acceptance-report.html
+          test -s man/man1/lh.1
+        working-directory: apps/cli
+
+      # Publish exactly the bundle checked above, without rebuilding in lifecycle hooks.
+      - name: Pack CLI
+        if: steps.release.outputs.publish == 'true'
+        run: npm pack --ignore-scripts
+        working-directory: apps/cli
+
+      - name: Publish to npm
+        if: steps.release.outputs.publish == 'true'
+        run: npm publish ./lobehub-cli-*.tgz --provenance --access public --tag latest
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -206,6 +206,29 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     expect(existsSync(join(work, 'setup.txt'))).toBe(false);
   });
 
+  // A project checkout removed while its sandbox lived on is made again empty;
+  // the record of the first clone used to keep it empty for good.
+  it('clones again into a checkout folder that was emptied after it was initialized', () => {
+    const command = buildSandboxEnvironmentInitCommand(init());
+    run(command, work);
+    rmSync(work, { force: true, recursive: true });
+    mkdirSync(work);
+
+    const again = run(command, work);
+
+    expect(environmentInitRan(again.stdout)).toBe(true);
+    expect(readFileSync(join(work, 'README.md'), 'utf8')).toBe('hello');
+  });
+
+  it('does not retry a failed clone just because its folder is still empty', () => {
+    const command = buildSandboxEnvironmentInitCommand(
+      init({ bootstrapCommand: undefined, sources: [{ url: `file://${root}/missing` }] }),
+    );
+
+    expect(environmentInitReport(run(command, work).stdout)).toContain('failed');
+    expect(run(command, work).stdout).toBe('');
+  });
+
   it('leaves a folder that already holds files alone, silently', () => {
     writeFileSync(join(work, 'mine.txt'), 'work');
 
