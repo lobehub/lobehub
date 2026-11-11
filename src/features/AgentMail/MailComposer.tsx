@@ -178,7 +178,15 @@ const MailComposer = memo<MailComposerProps>(
 
     const invalid = invalidAddresses(fields);
     const missingRecipient = !replying && fields.to.length === 0;
-    const emptyBody = !fields.text.trim();
+    // Forwarding a mail that has no plain text needs no words of one's own: the
+    // server adds the original. Leaving attachments out takes another route,
+    // which does need a body.
+    const bodyOptional =
+      mode === 'forward' &&
+      !!source &&
+      !source.text.trim() &&
+      composer.excludedAttachments.length === 0;
+    const emptyBody = !bodyOptional && !fields.text.trim();
     const disabledReason = sourceGone
       ? t('identity.compose.error.targetGone')
       : block

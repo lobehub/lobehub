@@ -330,6 +330,17 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
             />
           </div>
         )}
+        {/* The mail being answered left this view (trashed meanwhile); what was written is saved. */}
+        {composing && pickedId && !composeSource && !readOnly && !inTrash && (
+          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+            <Text fontSize={12} type={'secondary'}>
+              {t('identity.compose.sourceLeft')}
+            </Text>
+            <Button size={'small'} type={'text'} onClick={stopComposing}>
+              {t('identity.compose.close')}
+            </Button>
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

@@ -1093,6 +1093,7 @@
   "identity.compose.sent.title": "已发送",
   "identity.compose.sent.view": "查看",
   "identity.compose.showCopies": "抄送 / 密送",
+  "identity.compose.sourceLeft": "正在回复的邮件已不在这个视图里，已写的内容保存在草稿中。",
   "identity.compose.subject": "主题",
   "identity.compose.title.compose": "写信",
   "identity.compose.title.forward": "转发",

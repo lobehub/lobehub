@@ -396,6 +396,8 @@ export default {
   'identity.compose.sent.title': 'Sent',
   'identity.compose.sent.view': 'View',
   'identity.compose.showCopies': 'Cc / Bcc',
+  'identity.compose.sourceLeft':
+    'The mail you were answering left this view. What you wrote is saved in Drafts.',
   'identity.compose.subject': 'Subject',
   'identity.compose.title.compose': 'New mail',
   'identity.compose.title.forward': 'Forward',

@@ -77,7 +77,9 @@ const RecipientInput = memo<RecipientInputProps>(
             onBlur={() => commit(text)}
             onChange={(event) => {
               const next = event.target.value;
-              if (/[\n,;]/.test(next)) commit(next);
+              // Inside an open quote a comma is part of a display name, not a separator.
+              const quoted = (next.match(/"/g)?.length ?? 0) % 2 === 1;
+              if (!quoted && /[\n,;]/.test(next)) commit(next);
               else setText(next);
             }}
             onKeyDown={(event) => {
