@@ -1,5 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,9 +25,11 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, quiet, titleAddon }) 
     <>
       {showTitle && (
         <Text
+          // `type="secondary"` is the description colour, the time's own step; a quiet name sits
+          // one step above it.
+          color={quiet ? cssVar.colorTextSecondary : undefined}
           fontSize={14}
           style={{ whiteSpace: 'nowrap' }}
-          type={quiet ? 'secondary' : undefined}
           weight={500}
         >
           {title}
