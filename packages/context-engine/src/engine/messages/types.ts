@@ -256,6 +256,12 @@ export interface MessagesEngineParams {
    * model context. Undefined / true → trimming enabled (default).
    */
   enableStaleToolResultTrim?: boolean;
+  /**
+   * Prompt-cache TTL requested from the provider (mirrors
+   * `ChatStreamPayload.contextCachingTTL`). Prices the stale-tool-result trim's
+   * warmth check; undefined → the provider's default TTL.
+   */
+  contextCachingTTL?: '5m' | '1h';
   /** Whether to inject the operation expertise snapshot */
   enableExpertise?: boolean;
   /** Force finish flag: when true, injects summary prompt for max-steps completion */

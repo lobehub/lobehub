@@ -6,17 +6,28 @@ import type { ChatStreamPayload } from '../../../types';
 import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { type ComputeChatCostOptions } from '../../usageConverters/utils/computeChatCost';
 import { buildAnthropicMessages, buildAnthropicTools, buildSearchTool } from './messages';
-import { resolveCacheTTL } from './resolveCacheTTL';
+import { buildCacheControl, resolveCacheTTL } from './resolveCacheTTL';
 import { resolveMaxTokens } from './resolveMaxTokens';
 import { resolveClaudeThinkingConfig } from './resolveThinkingConfig';
 
 type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
+
+export interface BuildDefaultAnthropicPayloadOptions {
+  /**
+   * Honour `payload.contextCachingTTL` (`1h` breakpoints). Off by default: the builder is
+   * shared by Anthropic-compatible endpoints (Kimi, MiniMax, Moonshot, Copilot, custom
+   * proxies) that do not document the `ttl` field, so only providers that bill the 1h tier
+   * opt in. Usage pricing follows the `ttl` actually written (see `resolveCacheTTL`).
+   */
+  allowExtendedCacheTTL?: boolean;
+}
 
 /**
  * Build the default Anthropic Messages payload with LobeChat normalization.
  */
 export const buildDefaultAnthropicPayload = async (
   payload: ChatStreamPayload,
+  options: BuildDefaultAnthropicPayloadOptions = {},
 ): Promise<Anthropic.MessageCreateParams> => {
   const {
     messages,
@@ -30,6 +41,7 @@ export const buildDefaultAnthropicPayload = async (
     enabledContextCaching = true,
     enabledSearch,
   } = payload;
+  const contextCachingTTL = options.allowExtendedCacheTTL ? payload.contextCachingTTL : undefined;
 
   const { anthropic: anthropicModels } = await import('model-bank');
 
@@ -51,7 +63,7 @@ export const buildDefaultAnthropicPayload = async (
   const systemPrompts = systemPromptText
     ? ([
         {
-          cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+          cache_control: enabledContextCaching ? buildCacheControl(contextCachingTTL) : undefined,
           text: systemPromptText,
           type: 'text',
         },
@@ -60,11 +72,16 @@ export const buildDefaultAnthropicPayload = async (
 
   const postMessages = stripUnsupportedClaudeAssistantPrefill(
     model,
-    await buildAnthropicMessages(userMessages, { enabledContextCaching }),
+    await buildAnthropicMessages(userMessages, {
+      cacheTTL: contextCachingTTL,
+      enabledContextCaching,
+    }),
   );
 
-  let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
-    AnthropicTools[] | undefined;
+  let postTools = buildAnthropicTools(tools, {
+    cacheTTL: contextCachingTTL,
+    enabledContextCaching,
+  }) as AnthropicTools[] | undefined;
 
   if (enabledSearch) {
     const webSearchTool = buildSearchTool();

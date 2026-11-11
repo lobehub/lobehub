@@ -57,7 +57,8 @@ export interface StaleToolResultTrimConfig {
   crawlKeepChars?: number;
   /**
    * Cache economics of the active provider (TTL + read/write prices), e.g.
-   * from {@link cacheEconomicsForProvider}. Individual `cache*` overrides win.
+   * from {@link cacheEconomicsForProvider}. Individual `cache*` overrides win
+   * (e.g. `cacheTtlMs` to tune DeepSeek's 72h default against observed gaps).
    * @default ANTHROPIC_CACHE_ECONOMICS
    */
   economics?: CacheEconomics;
@@ -136,6 +137,29 @@ export const ANTHROPIC_CACHE_ECONOMICS: CacheEconomics = {
   writePrice: 1.25, // cache write = 1.25× input
 };
 
+/** Anthropic with the opt-in 1-hour TTL: same reads, 2× writes, refreshed per hit. */
+export const ANTHROPIC_1H_CACHE_ECONOMICS: CacheEconomics = {
+  readPrice: 0.1,
+  ttlMs: 3_600_000,
+  writePrice: 2,
+};
+
+/**
+ * DeepSeek's automatic disk cache. Official KV-cache guide: an unused cache is
+ * cleared "usually within a few hours to a few days", so a turn gap inside that
+ * window may still hit. The TTL takes the upper bound of that range (72h): reading
+ * a still-warm prefix as cold would rewrite it for free in the estimate and lose
+ * every later hit, while misreading a cold one as warm only skips a trim. Hits are
+ * billed at ~2-3% of a miss (deepseek-flash 0.003/0.15, deepseek-v4-pro 0.022/0.66
+ * per 1M on the pricing page); there is no write fee — an invalidated prefix costs
+ * one plain input pass.
+ */
+export const DEEPSEEK_CACHE_ECONOMICS: CacheEconomics = {
+  readPrice: 0.033,
+  ttlMs: 72 * 3_600_000,
+  writePrice: 1,
+};
+
 // Cache economics differ per provider; pricing the warmth verdict and the
 // break-even gate with the wrong ones either rewrites still-warm prefixes or
 // skips worthwhile trims.
@@ -143,13 +167,7 @@ const PROVIDER_CACHE_ECONOMICS: Record<string, CacheEconomics> = {
   anthropic: ANTHROPIC_CACHE_ECONOMICS,
   // Anthropic models via Bedrock share the same cache semantics.
   bedrock: ANTHROPIC_CACHE_ECONOMICS,
-  deepseek: {
-    // Automatic disk context cache: long-lived, hit ≈ 0.25× miss, no write
-    // fee — an invalidated prefix just costs a plain input pass.
-    readPrice: 0.25,
-    ttlMs: 3_600_000,
-    writePrice: 1,
-  },
+  deepseek: DEEPSEEK_CACHE_ECONOMICS,
   google: {
     // Gemini implicit caching: short TTL, hit ≈ 0.25×, no explicit write fee.
     readPrice: 0.25,
@@ -164,9 +182,22 @@ const PROVIDER_CACHE_ECONOMICS: Record<string, CacheEconomics> = {
   },
 };
 
+export interface CacheEconomicsOptions {
+  /**
+   * Prompt-cache TTL the request asks for (`ChatStreamPayload.contextCachingTTL`).
+   * Only the Anthropic provider writes `1h` breakpoints; elsewhere it is ignored.
+   */
+  cacheTTL?: '5m' | '1h';
+}
+
 /** Cache economics for a provider id; falls back to Anthropic's (most conservative TTL). */
-export const cacheEconomicsForProvider = (provider?: string): CacheEconomics =>
-  PROVIDER_CACHE_ECONOMICS[provider ?? ''] ?? ANTHROPIC_CACHE_ECONOMICS;
+export const cacheEconomicsForProvider = (
+  provider?: string,
+  options: CacheEconomicsOptions = {},
+): CacheEconomics => {
+  if (provider === 'anthropic' && options.cacheTTL === '1h') return ANTHROPIC_1H_CACHE_ECONOMICS;
+  return PROVIDER_CACHE_ECONOMICS[provider ?? ''] ?? ANTHROPIC_CACHE_ECONOMICS;
+};
 
 const READ_APIS = new Set(['readFile']);
 const WRITE_APIS = new Set(['writeFile', 'editFile']);
@@ -406,8 +437,9 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
     // Cache-warmth gate. Trimming is free only when the prompt cache is cold —
     // i.e. the gap between the previous turn's last activity and this turn's
-    // trigger exceeds the provider's cache TTL (Anthropic: 5 min, refreshed
-    // per hit). When the user follows up within the TTL, the untrimmed prefix
+    // trigger exceeds the provider's cache TTL (Anthropic: 5 min or the opt-in
+    // 1 h, refreshed per hit; DeepSeek's disk cache: up to 72 h, so a turn
+    // boundary there is warm by default). When the user follows up within the TTL, the untrimmed prefix
     // would still hit, so the trim must clear a break-even check against the
     // rewrite it causes:
     //

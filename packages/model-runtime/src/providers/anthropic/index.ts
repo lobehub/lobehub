@@ -13,11 +13,14 @@ const buildAnthropicPayload = (payload: ChatStreamPayload) => {
   const reasoningEffort = supportsClaudeEffortLevel(payload.model, payload.reasoning_effort)
     ? payload.reasoning_effort
     : undefined;
-  return buildDefaultAnthropicPayload({
-    ...payload,
-    effort: payload.effort ?? reasoningEffort,
-    messages: normalizeClaudeThinkingHistoryMessages(payload.messages),
-  });
+  return buildDefaultAnthropicPayload(
+    {
+      ...payload,
+      effort: payload.effort ?? reasoningEffort,
+      messages: normalizeClaudeThinkingHistoryMessages(payload.messages),
+    },
+    { allowExtendedCacheTTL: true },
+  );
 };
 
 export const params = createAnthropicCompatibleParams({
