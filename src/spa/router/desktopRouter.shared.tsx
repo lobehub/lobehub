@@ -42,6 +42,7 @@ import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces'
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
 import { evalRoute } from '@/spa/router/evalRoutes';
+import { homeInboxLoader } from '@/spa/router/homeInboxLoader';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
@@ -647,6 +648,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: deferPlatformElement(options.createHomeElement),
         handle: { meta: workspaceHomeRouteMeta },
         index: true,
+        loader: homeInboxLoader,
       },
       ...sharedMainAreaChildren,
       // Workspace settings — `/:slug/settings/*`. Dedicated layout with its
@@ -755,6 +757,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       }),
     },
     index: true,
+    loader: homeInboxLoader,
   },
   // Catch-all route
   {
