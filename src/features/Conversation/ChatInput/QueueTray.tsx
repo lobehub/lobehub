@@ -1,6 +1,15 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Image,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +32,9 @@ import {
   createQueueSendNowGate,
   getQueuedHintKey,
   putQueuedMessageInEditor,
+  type QueueWithdrawOutcome,
   sendQueuedMessageNow,
+  type SendQueuedMessageNowOutcome,
 } from './utils';
 
 const PREVIEW_SIZE = 28;
@@ -231,6 +242,25 @@ const QueueTray = memo(() => {
     [contextKey, t, withdrawQueuedMessage],
   );
 
+  // "Stop and continue" takes the item back quietly: one the server already
+  // took cannot be sent again, and that is exactly the case the action has to
+  // answer by stopping the turn instead of just saying it is too late.
+  const takeBackForStopAndContinue = useCallback(
+    async (msg: QueuedMessage): Promise<QueueWithdrawOutcome> => {
+      try {
+        const withdrawn = await withdrawQueuedMessage(contextKey, msg.id);
+        return withdrawn ? 'held' : 'taken';
+      } catch (error) {
+        // A failed withdrawal says nothing about where the message is. Callers
+        // must not read it as "already delivered", or they would stop a run
+        // whose message is still waiting.
+        console.error('[QueueTray] withdrawing a queued message failed:', error);
+        return 'unknown';
+      }
+    },
+    [contextKey, withdrawQueuedMessage],
+  );
+
   const handleEdit = useCallback(
     async (msg: QueuedMessage) => {
       if (!(await withdraw(msg))) return;
@@ -244,26 +274,30 @@ const QueueTray = memo(() => {
     [contextKey, dispatchChatUploadFileList, editor, withdraw],
   );
 
-  // "Send now": cancel the currently running agent run for this context, then
-  // immediately fire a fresh sendMessage with this queued item's payload. The
-  // remaining queue (if any) stays in place — the new turn's onComplete drain
-  // will pick them up after it finishes. Reads chatStore inline so we don't
-  // re-subscribe the whole tray to the operations map.
-  const handleSendNow = useCallback(
+  // "Stop and continue": cancel the currently running agent run for this
+  // context, then immediately fire a fresh sendMessage with this queued item's
+  // payload. The remaining queue (if any) stays in place — the new turn's
+  // onComplete drain will pick them up after it finishes. Reads chatStore
+  // inline so we don't re-subscribe the whole tray to the operations map.
+  const handleStopAndContinue = useCallback(
     async (msg: QueuedMessage) => {
+      const result: { outcome?: SendQueuedMessageNowOutcome } = {};
       await sendNowGate
-        .run(() =>
-          sendQueuedMessageNow({
+        .run(async () => {
+          result.outcome = await sendQueuedMessageNow({
             chat: useChatStore.getState(),
             context,
             contextKey,
             msg,
-            withdraw,
-          }),
-        )
-        .catch((error) => console.error('[QueueTray] sendNow failed:', error));
+            stopIfAlreadyDelivered: true,
+            withdraw: takeBackForStopAndContinue,
+          });
+        })
+        .catch((error) => console.error('[QueueTray] stopAndContinue failed:', error));
+      if (result.outcome === 'stopped') toast.info(t('inputQueue.alreadyDeliveredStopped'));
+      if (result.outcome === 'failed') toast.error(t('inputQueue.stopAndContinueFailed'));
     },
-    [context, contextKey, sendNowGate, withdraw],
+    [context, contextKey, sendNowGate, t, takeBackForStopAndContinue],
   );
 
   if (queuedMessages.length === 0) return null;
@@ -333,13 +367,17 @@ const QueueTray = memo(() => {
               title={t('inputQueue.edit')}
               onClick={() => handleEdit(msg)}
             />
-            <ActionIcon
-              aria-label={t('inputQueue.sendNow')}
+            {/* The interrupt is this row's main action, so it carries its own
+                label instead of hiding behind a hover tooltip on an icon. */}
+            <Button
               icon={ArrowUp}
-              size="small"
+              size={'small'}
               title={t('inputQueue.sendNow')}
-              onClick={() => handleSendNow(msg)}
-            />
+              type={'text'}
+              onClick={() => handleStopAndContinue(msg)}
+            >
+              {t('inputQueue.stopAndContinue')}
+            </Button>
             <ActionIcon
               aria-label={t('inputQueue.delete')}
               icon={Trash2}

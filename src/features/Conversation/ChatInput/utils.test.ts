@@ -363,7 +363,7 @@ describe('sendQueuedMessageNow', () => {
     const { chat, order } = chatWith(true);
     const withdraw = vi.fn(async () => {
       order.push('withdraw');
-      return true;
+      return 'held' as const;
     });
 
     await sendQueuedMessageNow({
@@ -390,7 +390,7 @@ describe('sendQueuedMessageNow', () => {
       context,
       contextKey: messageMapKey(context),
       msg: { ...msg, forceRuntime: 'gateway' },
-      withdraw: async () => true,
+      withdraw: async () => 'held' as const,
     });
 
     expect(chat.sendMessage).toHaveBeenCalledWith(
@@ -406,10 +406,67 @@ describe('sendQueuedMessageNow', () => {
       context,
       contextKey: messageMapKey(context),
       msg,
-      withdraw: async () => false,
+      withdraw: async () => 'taken' as const,
     });
 
     expect(chat.cancelOperation).not.toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('still stops the run when the item already left for the agent', async () => {
+    // "Stop and continue" on a follow-up the server already took: it must not
+    // be sent again, but the click still asked to stop this turn.
+    const { chat, order } = chatWith(true);
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      stopIfAlreadyDelivered: true,
+      withdraw: async () => {
+        order.push('withdraw');
+        return 'taken' as const;
+      },
+    });
+
+    expect(outcome).toBe('stopped');
+    expect(order).toEqual(['withdraw', 'cancel']);
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when it cannot tell where the message is', async () => {
+    // A failed withdrawal is not "already delivered": the message may still
+    // be waiting, so neither stopping nor sending is safe.
+    const { chat } = chatWith(true);
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      stopIfAlreadyDelivered: true,
+      withdraw: async () => 'unknown' as const,
+    });
+
+    expect(outcome).toBe('failed');
+    expect(chat.cancelOperation).not.toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('reports a failure when the stop is not confirmed', async () => {
+    const { chat } = chatWith(false);
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      stopIfAlreadyDelivered: true,
+      withdraw: async () => 'taken' as const,
+    });
+
+    expect(outcome).toBe('failed');
     expect(chat.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -425,7 +482,7 @@ describe('sendQueuedMessageNow', () => {
         context,
         contextKey: messageMapKey(context),
         msg,
-        withdraw: async () => true,
+        withdraw: async () => 'held' as const,
       }),
     ).rejects.toThrow();
 
