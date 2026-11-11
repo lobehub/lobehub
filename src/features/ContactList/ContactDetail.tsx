@@ -1,36 +1,47 @@
 'use client';
 
-import { AGENT_CHAT_URL, AGENT_PROFILE_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Button, Center, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button, cx, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import isEqual from 'fast-deep-equal';
 import { MessageCircleIcon, PencilLineIcon, UserRoundXIcon } from 'lucide-react';
-import { memo } from 'react';
+import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import { cardStyles } from '@/features/AgentViewAll/AgentCard';
+import { coverPattern } from '@/features/AgentViewAll/coverColor';
+import { resolveAgentBadge } from '@/features/AgentViewAll/resolveAgentBadge';
+import SidebarItemAvatar from '@/features/AgentViewAll/SidebarItemAvatar';
+import { useAgentCoverColor } from '@/features/AgentViewAll/useAgentCoverColor';
 import NavHeader from '@/features/NavHeader';
-import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useFetchAgentList } from '@/hooks/useFetchAgentList';
-import { usePermission } from '@/hooks/usePermission';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 
-import ContactAvatar from './ContactAvatar';
+import { type ContactCardState, useContactCard } from './useContactCard';
 
-const AVATAR_SIZE = 80;
+const AVATAR_SIZE = 88;
+const COVER_HEIGHT = 144;
 
 const styles = stylex.create({
-  card: {
-    paddingBlock: '48px',
+  body: {
+    paddingBlockEnd: '48px',
     paddingInline: '24px',
-    maxWidth: '480px',
+    maxWidth: '520px',
     width: '100%',
     textAlign: 'center',
+  },
+  // The badge cover from the agents wall, widened into a profile header.
+  cover: {
+    position: 'relative',
+    overflow: 'hidden',
+    flexShrink: 0,
+    borderRadius: '12px',
+    height: `${COVER_HEIGHT}px`,
+    width: '100%',
+  },
+  // The avatar straddles the cover's bottom edge, as on the badge.
+  avatar: {
+    marginBlockStart: `-${AVATAR_SIZE / 2}px`,
   },
   description: {
     fontSize: '14px',
@@ -42,102 +53,141 @@ const styles = stylex.create({
     fontSize: '14px',
     color: cssVar.colorTextQuaternary,
   },
-  role: {
-    overflow: 'hidden',
+  slug: {
     fontSize: '13px',
     color: cssVar.colorTextTertiary,
-    maxWidth: '100%',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+  },
+  state: {
+    paddingBlock: '48px',
+    paddingInline: '24px',
+    maxWidth: '520px',
+    width: '100%',
   },
 });
 
+const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
+  ({ canEdit, chatUrl, item, profileUrl, role, slug, title }) => {
+    const { t } = useTranslation('common');
+    const navigate = useWorkspaceAwareNavigate();
+    const badge = resolveAgentBadge(item);
+    const coverColor = useAgentCoverColor(item, badge.cover, !!badge.coverImage);
+
+    return (
+      <>
+        <div {...stylex.props(styles.cover)}>
+          <div
+            className={cardStyles.cover}
+            data-cover-image={badge.coverImage ? '' : undefined}
+            data-pattern={badge.coverImage ? undefined : coverPattern(item)}
+            style={
+              {
+                '--agent-cover': coverColor,
+                'backgroundImage': badge.coverImage
+                  ? `url(${JSON.stringify(badge.coverImage)})`
+                  : undefined,
+                'height': '100%',
+              } as CSSProperties
+            }
+          />
+        </div>
+        <Flexbox align={'center'} gap={8} {...stylex.props(styles.body)}>
+          <span
+            className={cx(
+              stylex.props(styles.avatar).className,
+              cardStyles.avatarRing,
+              !badge.cover && cardStyles.avatarPlain,
+              item.type === 'group' && cardStyles.avatarRingGroup,
+            )}
+          >
+            <SidebarItemAvatar item={item} shape={'circle'} size={AVATAR_SIZE - 6} />
+          </span>
+          <Text
+            ellipsis
+            as={'h1'}
+            fontSize={22}
+            style={{ margin: 0, maxWidth: '100%' }}
+            weight={600}
+          >
+            {title}
+          </Text>
+          {(role || slug) && (
+            <Flexbox horizontal align={'center'} gap={8} justify={'center'}>
+              {role && (
+                <span className={cardStyles.role} title={role}>
+                  {role}
+                </span>
+              )}
+              {slug && <span {...stylex.props(styles.slug)}>@{slug}</span>}
+            </Flexbox>
+          )}
+          {item.description ? (
+            <span {...stylex.props(styles.description)}>{item.description}</span>
+          ) : (
+            <span {...stylex.props(styles.placeholder)}>{t('contacts.noDescription')}</span>
+          )}
+          <Flexbox horizontal gap={8} justify={'center'} style={{ marginBlockStart: 16 }}>
+            <Button icon={MessageCircleIcon} type={'primary'} onClick={() => navigate(chatUrl)}>
+              {t('contacts.sendMessage')}
+            </Button>
+            {canEdit && (
+              <Button icon={PencilLineIcon} onClick={() => navigate(profileUrl)}>
+                {t('contacts.editProfile')}
+              </Button>
+            )}
+          </Flexbox>
+        </Flexbox>
+      </>
+    );
+  },
+);
+
+ContactCard.displayName = 'ContactCard';
+
 /**
- * A contact's card beside the Contacts list: who the agent or group is, with
- * "Send message" into its chat and, for editors, "Edit profile". Opening a
- * contact only previews it — the chat and the edit surface are one click on.
+ * A contact's card beside the Contacts list: the agents-wall badge widened into
+ * a profile header, with "Send message" into its chat and, for editors, "Edit
+ * profile". Opening a contact only previews it — the chat and the edit surface
+ * are one click on.
  */
 const ContactDetail = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('common');
-  const { t: tChat } = useTranslation('chat');
-  const navigate = useWorkspaceAwareNavigate();
-  const { error, mutate } = useFetchAgentList();
-  const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  const item = useHomeStore(homeAgentListSelectors.getAgentById(id), isEqual);
-  const isGroup = item?.type === 'group';
+  const card = useContactCard(id);
 
-  const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource } = useResourceAccess(
-    isGroup ? 'agentGroup' : 'agent',
-    item ? id : undefined,
-  );
-
-  if (!item) {
-    // Mobile has no Contacts list beside the card to surface a failed load,
-    // so the card owns the retry instead of waiting on a skeleton forever.
-    if (!isInit && error)
+  switch (card.status) {
+    case 'ready': {
+      return <ContactCard {...card} />;
+    }
+    case 'error': {
       return (
-        <Flexbox align={'center'} {...stylex.props(styles.card)}>
-          <AsyncError error={error} variant="inline" onRetry={() => void mutate()} />
+        <Flexbox align={'center'} flex={1} justify={'center'} {...stylex.props(styles.state)}>
+          <AsyncError error={card.error} variant="inline" onRetry={card.retry} />
         </Flexbox>
       );
-
-    if (!isInit)
+    }
+    case 'missing': {
       return (
-        <Flexbox align={'center'} gap={12} {...stylex.props(styles.card)}>
-          <Skeleton.Avatar shape={'square'} size={AVATAR_SIZE} />
-          <Skeleton height={28} width={160} />
-          <Skeleton.Text rows={2} width={['100%', '60%']} />
+        <Flexbox align={'center'} flex={1} justify={'center'} {...stylex.props(styles.state)}>
+          <Empty description={t('contacts.notFound')} icon={UserRoundXIcon} />
         </Flexbox>
       );
-
-    return (
-      <Flexbox align={'center'} {...stylex.props(styles.card)}>
-        <Empty description={t('contacts.notFound')} icon={UserRoundXIcon} />
-      </Flexbox>
-    );
+    }
+    default: {
+      return (
+        <>
+          <Skeleton height={COVER_HEIGHT} radius={12} width={'100%'} />
+          <Flexbox align={'center'} gap={12} {...stylex.props(styles.body)}>
+            <Skeleton.Avatar
+              shape={'circle'}
+              size={AVATAR_SIZE}
+              style={{ marginBlockStart: -AVATAR_SIZE / 2 }}
+            />
+            <Skeleton height={28} width={160} />
+            <Skeleton.Text rows={2} width={['100%', '60%']} />
+          </Flexbox>
+        </>
+      );
+    }
   }
-
-  const title = isGroup
-    ? item.title || tChat('untitledAgent')
-    : agentDisplayName(item, tChat('untitledAgent'));
-  const roleLine = isGroup
-    ? undefined
-    : [agentSecondaryDisplayName(item), item.slug ? `@${item.slug}` : undefined]
-        .filter(Boolean)
-        .join(' · ');
-
-  return (
-    <Flexbox align={'center'} gap={12} {...stylex.props(styles.card)}>
-      <ContactAvatar item={item} name={title} size={AVATAR_SIZE} />
-      <Text ellipsis as={'h1'} fontSize={22} style={{ margin: 0, maxWidth: '100%' }} weight={600}>
-        {title}
-      </Text>
-      {roleLine && <span {...stylex.props(styles.role)}>{roleLine}</span>}
-      {item.description ? (
-        <span {...stylex.props(styles.description)}>{item.description}</span>
-      ) : (
-        <span {...stylex.props(styles.placeholder)}>{t('contacts.noDescription')}</span>
-      )}
-      <Flexbox horizontal gap={8} justify={'center'} style={{ marginBlockStart: 12 }}>
-        <Button
-          icon={MessageCircleIcon}
-          type={'primary'}
-          onClick={() => navigate(isGroup ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id))}
-        >
-          {t('contacts.sendMessage')}
-        </Button>
-        {canEditContent && canEditResource && (
-          <Button
-            icon={PencilLineIcon}
-            onClick={() => navigate(isGroup ? `/group/${id}/profile` : AGENT_PROFILE_URL(id))}
-          >
-            {t('contacts.editProfile')}
-          </Button>
-        )}
-      </Flexbox>
-    </Flexbox>
-  );
 });
 
 ContactDetail.displayName = 'ContactDetail';
@@ -151,9 +201,14 @@ const ContactDetailPage = () => {
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader />
-      <Center flex={1} style={{ overflowY: 'auto' }}>
+      <Flexbox
+        align={'center'}
+        flex={1}
+        paddingInline={16}
+        style={{ overflowY: 'auto', paddingBlockStart: 8 }}
+      >
         {id && <ContactDetail id={id} key={id} />}
-      </Center>
+      </Flexbox>
     </Flexbox>
   );
 };
