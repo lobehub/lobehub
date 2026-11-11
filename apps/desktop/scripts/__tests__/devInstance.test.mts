@@ -254,6 +254,19 @@ describe('login state', () => {
     ).resolves.toBe('saved-cookie-only');
   });
 
+  /** Regression: saving chmod-ed the parent to 0700, failing (EPERM) under a shared /tmp. */
+  it('keeps the permissions of an existing snapshot parent', async () => {
+    const parent = path.join(root, 'shared');
+    await mkdir(parent, { mode: 0o755 });
+    const snapshot = path.join(parent, 'snapshot');
+    const source = path.join(root, 'source');
+    await writeProfile(source, signedIn);
+
+    await expect(saveLoginState(source, { snapshotDirectory: snapshot })).resolves.toBe('saved');
+    expect((await stat(parent)).mode & 0o777).toBe(0o755);
+    expect((await stat(snapshot)).mode & 0o777).toBe(0o700);
+  });
+
   it('describes whether a profile can still sign the next instance in', async () => {
     const profile = path.join(root, 'profile');
     await expect(describeLoginState('snapshot', profile)).resolves.toContain('(absent)');

@@ -402,7 +402,9 @@ export const saveLoginState = async (
 
   const staging = `${snapshotDirectory}.staging.${process.pid}`;
   await rm(staging, { force: true, recursive: true });
-  await ensurePrivateDirectory(path.dirname(snapshotDirectory));
+  // The parent may be a shared directory such as /tmp: create it, never chmod it.
+  // `copyLoginItems` makes the snapshot itself private.
+  await mkdir(path.dirname(snapshotDirectory), { recursive: true });
   await copyLoginItems(source, staging);
   await rm(snapshotDirectory, { force: true, recursive: true });
   await rename(staging, snapshotDirectory);
