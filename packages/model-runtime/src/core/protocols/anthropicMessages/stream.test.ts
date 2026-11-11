@@ -763,11 +763,11 @@ describe('AnthropicStream', () => {
     // ROOT CAUSE:
     //
     // `server_tool_use` (Anthropic's native web search) shared the `tool_use` branch, so a
-    // search Anthropic had already run reached the app as a `web_search` tool call. No app
-    // tool has that name, so the agent rejected it and called the model again.
+    // search Anthropic runs itself reached the app as a `web_search` tool call. No app tool
+    // has that name, so the agent rejected it and called the model again.
     //
     // Before: the search and its query were streamed as `tool_calls`.
-    // After: they pass through as `data`; app tool calls keep their own indexes.
+    // After: only `tool_use` blocks become tool calls, each with its own block's arguments.
     const collectEvents = async (streams: any[], onToolsCalling = vi.fn()) => {
       const protocolStream = AnthropicStream(createReadableStream(streams), {
         callbacks: { onToolsCalling },
@@ -921,6 +921,146 @@ describe('AnthropicStream', () => {
         '{"city": "Hangzhou"}',
       );
       expect(onToolsCalling).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps app tool calls before and after a web search apart', async () => {
+      const events = await collectEvents([
+        createMessageStart('msg_around', 'claude-sonnet-4-5', {
+          input_tokens: 10,
+          output_tokens: 1,
+        }),
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: {
+            type: 'tool_use',
+            id: 'toolu_01',
+            name: 'realtime-weather____fetchCurrentWeather',
+            input: {},
+          },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"city": ' },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '"Paris"}' },
+        },
+        { type: 'content_block_stop', index: 0 },
+        ...webSearchBlocks(1),
+        {
+          type: 'content_block_start',
+          index: 3,
+          content_block: {
+            type: 'tool_use',
+            id: 'toolu_02',
+            name: 'realtime-weather____fetchForecast',
+            input: {},
+          },
+        },
+        {
+          type: 'content_block_delta',
+          index: 3,
+          delta: { type: 'input_json_delta', partial_json: '{"days": 3}' },
+        },
+        { type: 'content_block_stop', index: 3 },
+        {
+          type: 'message_delta',
+          delta: { stop_reason: 'tool_use', stop_sequence: null },
+          usage: { output_tokens: 30 },
+        },
+      ]);
+
+      const toolCalls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
+      const argsOf = (index: number) =>
+        toolCalls
+          .filter((call) => call.index === index)
+          .map((call) => call.function.arguments)
+          .join('');
+
+      expect(
+        toolCalls.filter((call) => call.function.name).map((call) => call.function.name),
+      ).toEqual(['realtime-weather____fetchCurrentWeather', 'realtime-weather____fetchForecast']);
+      expect(argsOf(0)).toBe('{"city": "Paris"}');
+      expect(argsOf(1)).toBe('{"days": 3}');
+    });
+
+    it('keeps an app tool call intact when a relay reuses its block index for a web search', async () => {
+      const events = await collectEvents([
+        createMessageStart('msg_reuse', 'claude-sonnet-4-5', {
+          input_tokens: 10,
+          output_tokens: 1,
+        }),
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: {
+            type: 'server_tool_use',
+            id: 'srvtoolu_02',
+            name: 'web_search',
+            input: {},
+          },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"query": "x"}' },
+        },
+        { type: 'content_block_stop', index: 0 },
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: {
+            type: 'tool_use',
+            id: 'toolu_03',
+            name: 'realtime-weather____fetchCurrentWeather',
+            input: {},
+          },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"city": ' },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '"Oslo"}' },
+        },
+        { type: 'content_block_stop', index: 0 },
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: {
+            type: 'server_tool_use',
+            id: 'srvtoolu_02',
+            name: 'web_search',
+            input: {},
+          },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json: '{"query": "x"}' },
+        },
+        { type: 'content_block_stop', index: 0 },
+        {
+          type: 'message_delta',
+          delta: { stop_reason: 'tool_use', stop_sequence: null },
+          usage: { output_tokens: 30 },
+        },
+      ]);
+
+      const toolCalls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
+
+      expect(
+        toolCalls.filter((call) => call.function.name).map((call) => call.function.name),
+      ).toEqual(['realtime-weather____fetchCurrentWeather']);
+      expect(toolCalls.every((call) => call.index === 0)).toBe(true);
+      expect(toolCalls.map((call) => call.function.arguments).join('')).toBe('{"city": "Oslo"}');
     });
   });
   it('should handle un-normal block type', async () => {

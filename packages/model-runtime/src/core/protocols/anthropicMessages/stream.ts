@@ -103,6 +103,10 @@ export const transformAnthropicStream = (
       return { data: chunk.message, id: chunk.message.id, type: 'data' };
     }
     case 'content_block_start': {
+      // A new block at this index ends the app tool call that used it before: some
+      // Anthropic-format relays reuse block indexes.
+      context.anthropicToolBlocks?.delete(chunk.index);
+
       switch (chunk.content_block.type) {
         case 'redacted_thinking': {
           return {
@@ -116,15 +120,8 @@ export const transformAnthropicStream = (
           return { data: chunk.content_block.text, id: context.id, type: 'data' };
         }
 
-        case 'server_tool_use': {
-          // Server tools (web search, web fetch, code execution) run on Anthropic's side and
-          // their results arrive in this same response. They are not calls for the app to run.
-          context.anthropicServerToolBlocks ??= new Set();
-          context.anthropicServerToolBlocks.add(chunk.index);
-
-          return { data: chunk, id: context.id, type: 'data' };
-        }
-
+        // Only `tool_use` is a call for the app to run. Server tools (`server_tool_use`, such as
+        // web search) are executed by Anthropic, not by the app, and pass through as `data`.
         case 'tool_use': {
           const toolChunk = chunk.content_block;
 
@@ -148,6 +145,8 @@ export const transformAnthropicStream = (
           };
 
           context.tool = { id: toolChunk.id, index: context.toolIndex, name: toolChunk.name };
+          context.anthropicToolBlocks ??= new Map();
+          context.anthropicToolBlocks.set(chunk.index, context.toolIndex);
 
           return { data: [toolCall], id: context.id, type: 'tool_calls' };
         }
@@ -206,16 +205,16 @@ export const transformAnthropicStream = (
         }
 
         case 'input_json_delta': {
-          // The input of a server tool call is not an argument of any app tool call.
-          if (context.anthropicServerToolBlocks?.has(chunk.index)) {
-            return { data: chunk, id: context.id, type: 'data' };
-          }
+          // Arguments belong to the app tool call of this block; any other block's input
+          // (a server tool's) is not an app tool call.
+          const toolIndex = context.anthropicToolBlocks?.get(chunk.index);
+          if (toolIndex === undefined) return { data: chunk, id: context.id, type: 'data' };
 
           const delta = chunk.delta.partial_json;
 
           const toolCall: StreamToolCallChunkData = {
             function: { arguments: delta },
-            index: context.toolIndex || 0,
+            index: toolIndex,
             type: 'function',
           };
 

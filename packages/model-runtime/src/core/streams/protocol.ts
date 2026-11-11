@@ -26,10 +26,11 @@ export type ChatPayloadForTransformStream = {
  */
 export interface StreamContext {
   /**
-   * Content-block indexes of the Anthropic `server_tool_use` blocks seen in this stream.
-   * Anthropic runs these tools itself, so their input deltas are not tool-call arguments.
+   * Anthropic content-block index → app tool-call index, for the `tool_use` blocks of this
+   * stream. Input deltas of any other block, such as a server tool Anthropic runs itself
+   * (`server_tool_use`), are not tool-call arguments.
    */
-  anthropicServerToolBlocks?: Set<number>;
+  anthropicToolBlocks?: Map<number, number>;
   chunkIndex?: number;
   id: string;
   /** Options used to price `usage.cost`, forwarded so hooks can reprice the same usage. */

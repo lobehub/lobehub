@@ -727,7 +727,7 @@ describe('createAnthropicCompatibleRuntime', () => {
     );
   });
 
-  it('should not report a native web search as a tool call when replaying a non-stream response', async () => {
+  it('should replay only the app tool call when a non-stream response also used web search', async () => {
     const messagesCreate = vi.fn().mockResolvedValue({
       content: [
         {
@@ -742,11 +742,17 @@ describe('createAnthropicCompatibleRuntime', () => {
           type: 'web_search_tool_result',
         },
         { text: 'Found it.', type: 'text' },
+        {
+          id: 'toolu_01',
+          input: { city: 'Hangzhou' },
+          name: 'realtime-weather____fetchCurrentWeather',
+          type: 'tool_use',
+        },
       ],
       id: 'msg_non_stream_search',
       model: 'custom-model',
       role: 'assistant',
-      stop_reason: 'end_turn',
+      stop_reason: 'tool_use',
       stop_sequence: null,
       type: 'message',
       usage: { input_tokens: 12, output_tokens: 42 },
@@ -765,7 +771,29 @@ describe('createAnthropicCompatibleRuntime', () => {
     });
     const text = await response.text();
 
-    expect(text).not.toContain('event: tool_calls');
+    const toolCalls = text
+      .split('\n\n')
+      .filter((event) => event.includes('event: tool_calls'))
+      .flatMap((event) =>
+        JSON.parse(
+          event
+            .split('\n')
+            .find((line) => line.startsWith('data: '))!
+            .slice(6),
+        ),
+      );
+
+    expect(toolCalls.filter((call: any) => call.function.name)).toEqual([
+      expect.objectContaining({
+        function: expect.objectContaining({ name: 'realtime-weather____fetchCurrentWeather' }),
+        id: 'toolu_01',
+        index: 0,
+      }),
+    ]);
+    expect(toolCalls.every((call: any) => call.index === 0)).toBe(true);
+    expect(toolCalls.map((call: any) => call.function.arguments).join('')).toBe(
+      '{"city":"Hangzhou"}',
+    );
     expect(text).toContain('event: text\ndata: "Found it."');
   });
   it('should keep the real output tokens when replaying a non-stream response as a stream', async () => {
