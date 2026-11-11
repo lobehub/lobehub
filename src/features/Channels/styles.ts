@@ -170,10 +170,17 @@ export const styles = stylex.create({
     color: cssVar.colorInfo,
     backgroundColor: cssVar.colorInfoBg,
   },
-  /** A mention inside the composer: highlighted text, no tag. */
+  /** A mention inside the composer: highlighted text, no tag; outlined while selected. */
   composerMention: {
+    userSelect: 'none',
     fontWeight: 500,
     color: cssVar.colorInfo,
+    // `.selected` is added by the editor's selection observer, not by React.
+    borderRadius: { 'default': null, ':is(.selected)': cssVar.borderRadius },
+    outlineStyle: { 'default': null, ':is(.selected)': 'solid' },
+    outlineWidth: { 'default': null, ':is(.selected)': '2px' },
+    outlineColor: { 'default': null, ':is(.selected)': cssVar.colorInfo },
+    outlineOffset: { 'default': null, ':is(.selected)': '1px' },
   },
   composer: {
     'position': 'relative',
