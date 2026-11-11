@@ -130,6 +130,13 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
       for (const identifier of REMOTE_DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
     }
   }
+  // Group orchestration can only dispatch members for the verified supervisor
+  // of a group run. When the host checked the roster and this run is not that
+  // supervisor, a pinned or runtime-supplied copy of the tools would still be
+  // advertised and then fail every call, so wall them off in every mode.
+  if (request.isGroupSupervisor === false) {
+    for (const identifier of groupSupervisorToolIds) excludedIdentifiers.add(identifier);
+  }
 
   return {
     allowExplicitActivation: toolMode === 'agent',

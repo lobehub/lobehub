@@ -81,6 +81,24 @@ describe('resolveToolRules', () => {
     }
   });
 
+  it('walls off pinned group orchestration tools unless the run is the verified supervisor', () => {
+    const pinned = { chatConfig: {}, plugins: [...groupSupervisorToolIds] };
+
+    const denied = resolveToolRules(request({ agent: pinned, isGroupSupervisor: false }));
+    for (const id of groupSupervisorToolIds) {
+      expect(denied.excludedIdentifiers.has(id)).toBe(true);
+      expect(denied.defaultToolIds).not.toContain(id);
+    }
+
+    for (const isGroupSupervisor of [true, undefined]) {
+      const kept = resolveToolRules(request({ agent: pinned, isGroupSupervisor }));
+      for (const id of groupSupervisorToolIds) {
+        expect(kept.excludedIdentifiers.has(id)).toBe(false);
+        expect(kept.rules[id]).toBe(true);
+      }
+    }
+  });
+
   it('offers image generation only when pinned on a tool-calling model without native output', () => {
     const pinned = { chatConfig: { enableAgentMode: false }, plugins: ['lobe-image-generation'] };
     expect(resolveToolRules(request({ agent: pinned })).rules['lobe-image-generation']).toBe(true);

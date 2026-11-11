@@ -63,7 +63,12 @@ export interface ToolRuleRequest {
    */
   hasOversizedFiles?: boolean;
   isBotConversation?: boolean;
-  /** Verified against the persisted roster, never a client claim. */
+  /**
+   * Verified against the persisted roster, never a client claim. `true`
+   * enables the group-orchestration tools; `false` walls them off even when
+   * pinned. Leave unset when the host does not verify the roster (the browser
+   * runtime), which keeps the agent's own plugin selection.
+   */
   isGroupSupervisor?: boolean;
   /**
    * Local tools can actually run for a `local` target: the routed device is

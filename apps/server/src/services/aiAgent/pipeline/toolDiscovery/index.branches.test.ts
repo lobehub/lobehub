@@ -501,6 +501,23 @@ describe('discoverTools — group orchestration', () => {
     expect(lastEngineOptions().isGroupSupervisor).toBe(expected);
     expect(result.operationAgentGroup?.currentAgentId).toBe('agent-1');
   });
+
+  it.each([
+    { expected: true, extra: {}, name: 'a resumed supervisor run without the role claim' },
+    {
+      expected: false,
+      extra: { orchestrationRole: 'member' as const },
+      name: 'an explicit member run',
+    },
+    { expected: false, extra: { isSubAgent: true }, name: 'a sub-agent spawned as the supervisor' },
+    { expected: false, extra: { isolationThread: true }, name: 'an isolation-thread guest run' },
+  ])('decides $name from the roster', async ({ expected, extra }) => {
+    chatGroupState.roster = [{ agentId: 'agent-1', role: 'supervisor', title: 'Me' }];
+
+    await run({ appContext: { groupId: 'group-1', ...extra } }).promise;
+
+    expect(lastEngineOptions().isGroupSupervisor).toBe(expected);
+  });
 });
 
 describe('discoverTools — credential snapshot', () => {
