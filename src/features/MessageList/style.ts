@@ -80,13 +80,18 @@ export const styles = stylex.create({
     flexShrink: '1',
     flexBasis: 'auto',
   },
-  /** Beside the name like the conversation header's typing line, in the quiet preview colour. */
+  /**
+   * Beside the name like the conversation header's typing line, in the quiet preview colour. It
+   * keeps its own width and takes the spare room up to the time; a long name ellipsizes instead,
+   * so the dots never run into the time.
+   */
   typing: {
     display: 'flex',
-    flex: '1',
+    flexGrow: '1',
+    flexShrink: '0',
+    flexBasis: 'auto',
     gap: '6px',
     alignItems: 'center',
-    minWidth: 0,
     fontSize: '12px',
     lineHeight: '18px',
     color: cssVar.colorTextTertiary,
