@@ -497,6 +497,7 @@
   "goalAcceptance.removeConfirm.content": "\"{{title}}\" will no longer gate this goal’s final acceptance.",
   "goalAcceptance.removeConfirm.title": "Remove this criterion?",
   "goalAcceptance.title": "Acceptance standard",
+  "goalBatch.cell.accepted": "Accepted",
   "goalBatch.cell.backlog": "Not run",
   "goalBatch.cell.done": "Done",
   "goalBatch.cell.human": "Needs you",

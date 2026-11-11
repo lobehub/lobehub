@@ -497,6 +497,7 @@
   "goalAcceptance.removeConfirm.content": "「{{title}}」将不再作为此目标的最终验收条件。",
   "goalAcceptance.removeConfirm.title": "移除这条标准？",
   "goalAcceptance.title": "验收标准",
+  "goalBatch.cell.accepted": "已验收",
   "goalBatch.cell.backlog": "暂未执行",
   "goalBatch.cell.done": "执行完成",
   "goalBatch.cell.human": "需要介入",
