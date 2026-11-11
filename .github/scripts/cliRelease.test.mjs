@@ -179,8 +179,19 @@ test('persists a reservation in Git, reuses it after a failed run, and skips aft
   const sha = (await git('rev-parse', 'HEAD')).stdout.trim();
   const script = pathToScript();
   const invoke = async (metadata) => {
-    const runner = `import { prepareRelease, reserveRelease } from ${JSON.stringify(script)}; const plan = await prepareRelease({ env: {}, read: async () => (${JSON.stringify(metadata)}) }); if (plan.publish) await reserveRelease();`;
-    await exec(process.execPath, ['--input-type=module', '-e', runner], { cwd: checkout });
+    const runner = `
+      const { prepareRelease, reserveRelease } = await import(process.argv[1]);
+      const metadata = JSON.parse(process.argv[2]);
+      const plan = await prepareRelease({ env: {}, read: async () => metadata });
+      if (plan.publish) await reserveRelease();
+    `;
+    await exec(
+      process.execPath,
+      ['--input-type=module', '-e', runner, script, JSON.stringify(metadata)],
+      {
+        cwd: checkout,
+      },
+    );
   };
   await invoke(registry());
   const publishedPackage = JSON.parse(await readFile(pkgPath, 'utf8'));
