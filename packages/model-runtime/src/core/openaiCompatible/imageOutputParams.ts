@@ -42,10 +42,8 @@ export const applyImageOutputParams = (
 
   if (userInput.output_format === 'gif') {
     if (isImageEdit) throw new Error(GIF_EDIT_UNSUPPORTED_MESSAGE);
-    // All frames are rendered on one sheet that must fit the request pixel budget, so the
-    // API rejects every listed size (1024px edges and up) for a GIF, even at 2 frames:
-    // "No supported sheet fits 2 GIF frames at size '1024x1024'". `auto` picks a frame
-    // size that fits.
+    // Frames share one sheet within the pixel budget, so every listed size (1024px and up) is
+    // rejected for a GIF ("No supported sheet fits 2 GIF frames"); the API picks one that fits.
     delete userInput.size;
     return;
   }
