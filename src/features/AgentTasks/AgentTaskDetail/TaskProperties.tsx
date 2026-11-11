@@ -9,6 +9,8 @@ import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
@@ -73,6 +75,9 @@ const TaskProperties = memo(() => {
   const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
   const projectId = useTaskStore(taskDetailSelectors.activeTaskProjectId);
   const hasParent = !!useTaskStore(taskDetailSelectors.activeTaskParent);
+  // The picker renders nothing while the Projects lab is off, which would leave
+  // the group's title standing over an empty row.
+  const enableProjects = useUserStore(labPreferSelectors.enableProjects);
 
   if (!taskId) return null;
 
@@ -240,32 +245,34 @@ const TaskProperties = memo(() => {
         </TaskLabelPicker>
       </section>
 
-      <section className={styles.propertyGroup}>
-        <div className={styles.propertyGroupTitle}>{t('taskProject.label')}</div>
-        {/* A subtask lives in its parent's project: the server refuses to split them. */}
-        <ProjectSelector
-          fullWidth
-          disabledReason={hasParent ? t('taskProject.inheritedFromParent') : undefined}
-          taskIdentifier={taskId}
-          value={projectId}
-        >
-          <Block
-            clickable
-            horizontal
-            align="center"
-            className={styles.propertyItem}
-            gap={8}
-            variant={'borderless'}
+      {enableProjects && (
+        <section className={styles.propertyGroup}>
+          <div className={styles.propertyGroupTitle}>{t('taskProject.label')}</div>
+          {/* A subtask lives in its parent's project: the server refuses to split them. */}
+          <ProjectSelector
+            fullWidth
+            disabledReason={hasParent ? t('taskProject.inheritedFromParent') : undefined}
+            taskIdentifier={taskId}
+            value={projectId}
           >
-            <TaskProjectValue
-              emptyLabel={t('taskProject.add')}
-              iconSize={16}
-              projectId={projectId}
-              weight={500}
-            />
-          </Block>
-        </ProjectSelector>
-      </section>
+            <Block
+              clickable
+              horizontal
+              align="center"
+              className={styles.propertyItem}
+              gap={8}
+              variant={'borderless'}
+            >
+              <TaskProjectValue
+                emptyLabel={t('taskProject.add')}
+                iconSize={16}
+                projectId={projectId}
+                weight={500}
+              />
+            </Block>
+          </ProjectSelector>
+        </section>
+      )}
     </div>
   );
 });
