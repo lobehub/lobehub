@@ -43,6 +43,19 @@ const oneLine = (text: string | null | undefined) =>
 export const channelPreview = (channel: Pick<ChannelListItem, 'lastMessage'>) =>
   channel.lastMessage ? oneLine(markdownToTxt(channel.lastMessage.content)) : undefined;
 
+/**
+ * A row's preview line: its direct Channel's latest message once it has one, else its latest
+ * topic (assistant reply, else title), else its description.
+ */
+export const conversationPreview = (
+  description: string | null | undefined,
+  topic: RecentItem | undefined,
+  direct?: Pick<ChannelListItem, 'lastMessage'>,
+) =>
+  direct
+    ? (channelPreview(direct) ?? oneLine(description))
+    : oneLine(topic?.lastAssistantMessage || topic?.title || description);
+
 /** When a Channel last had a message, else when it was opened. */
 export const channelActivity = (channel: ChannelListItem): Date =>
   new Date(channel.lastMessage?.createdAt ?? channel.updatedAt ?? channel.createdAt);
@@ -116,7 +129,7 @@ export const buildConversationSections = (
         activeAt: new Date(Math.max(itemTime, channelActivity(direct).getTime())),
         channel: direct,
         item,
-        preview: channelPreview(direct) ?? oneLine(item.description),
+        preview: conversationPreview(item.description, undefined, direct),
         unread: direct.unreadCount ?? 0,
       });
       continue;
@@ -128,10 +141,7 @@ export const buildConversationSections = (
     conversations.push({
       activeAt: new Date(Math.max(itemTime, latestTime)),
       item,
-      preview:
-        (latest?.lastAssistantMessage || latest?.title || item.description || '')
-          .replaceAll(/\s+/g, ' ')
-          .trim() || undefined,
+      preview: conversationPreview(item.description, latest),
     });
   }
 

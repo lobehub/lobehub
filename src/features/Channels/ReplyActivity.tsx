@@ -14,16 +14,9 @@ import {
 } from './jobStatus';
 import { replyEntries, ReplyList } from './MessageReceipts';
 import { activityStyles, styles } from './styles';
+import { TypingDots } from './TypingDots';
 
 const MAX_AVATARS = 3;
-
-export const TypingDots = () => (
-  <span aria-hidden {...stylex.props(activityStyles.dots)}>
-    {[0, 1, 2].map((index) => (
-      <span key={index} {...stylex.props(activityStyles.typingDot, activityStyles.delay(index))} />
-    ))}
-  </span>
-);
 
 /**
  * Who is replying in this conversation, above the composer like a chat app's typing line.

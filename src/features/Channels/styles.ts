@@ -101,7 +101,8 @@ export const styles = stylex.create({
     flexShrink: 0,
     fontSize: cssVar.fontSizeSM,
     fontVariantNumeric: 'tabular-nums',
-    color: cssVar.colorTextSecondary,
+    // One step below the author name, which is one step below the message.
+    color: cssVar.colorTextTertiary,
     whiteSpace: 'nowrap',
     opacity: 1,
   },
@@ -235,9 +236,10 @@ export const styles = stylex.create({
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    // Buttons sit on the last line; glyphs ride high in the line box, so drop the
-    // text 1px to center it on the 28px icons beside it.
-    marginBlockEnd: -1,
+    // Buttons sit on the last line; the glyphs ride about 1.5px high in the line box,
+    // so drop the text that much to center it on the 28px icons beside it. Layout snaps
+    // text to whole pixels, so only a transform can move it the half pixel.
+    transform: 'translateY(1.5px)',
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {

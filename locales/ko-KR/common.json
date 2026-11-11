@@ -351,7 +351,6 @@
   "manageOnlyCreator": "이 작업은 생성자 또는 워크스페이스 소유자만 수행할 수 있습니다",
   "messageList.empty": "아직 대화가 없습니다",
   "messageList.newChat": "새 대화",
-  "messageList.running": "실행 중…",
   "messageList.search": "검색",
   "messengerBanner.dismiss": "닫기",
   "messengerBanner.title": "선호하는 메시징 앱에서 Lobe AI와 대화하세요",
