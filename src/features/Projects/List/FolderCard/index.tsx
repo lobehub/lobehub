@@ -22,6 +22,8 @@ import { folderCardMarker } from './markers.stylex';
 
 const PAPER_EASE = 'cubic-bezier(.2,.8,.2,1)';
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+// Opaque, so the tab laid over the back panel joins it without a darker overlap.
+const FOLDER_COLOR = `color-mix(in srgb, ${cssVar.colorText} 6%, ${cssVar.colorBgContainer})`;
 
 const styles = stylex.create({
   actions: {
@@ -40,7 +42,7 @@ const styles = stylex.create({
     zIndex: 2,
   },
   back: {
-    backgroundColor: cssVar.colorFillTertiary,
+    backgroundColor: FOLDER_COLOR,
     borderColor: cssVar.colorBorderSecondary,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -176,7 +178,7 @@ const styles = stylex.create({
     marginInlineStart: 'auto',
   },
   tab: {
-    backgroundColor: cssVar.colorFillTertiary,
+    backgroundColor: FOLDER_COLOR,
     borderBlockEndWidth: 0,
     borderColor: cssVar.colorBorderSecondary,
     borderStartEndRadius: 12,
