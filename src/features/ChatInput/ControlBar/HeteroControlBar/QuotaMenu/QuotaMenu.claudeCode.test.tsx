@@ -841,6 +841,68 @@ describe('ClaudeCodeQuotaMenu', () => {
     expect(await storage.get(row)).toMatchObject({ data: { status: 'ok' } });
   });
 
+  it('keeps the stored snapshot when the device does not answer the quota RPC', async () => {
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+    const storage = quotaPanelResource.storage!;
+    const sourceKey = createQuotaSourceKey('claude-code', 'agent-1', 'remote-device', undefined);
+    const row = { queryKey: hashQuotaSourceKey(sourceKey), scope: cacheScope.get() };
+    await storage.set(row, {
+      data: claudeSnapshot({ session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 } }),
+      updatedAt: 1,
+    });
+    // Offline device / outdated client: the RPC resolves `null` instead of throwing.
+    mockLambdaClaudeQuota.mockResolvedValue(null);
+
+    render(<ClaudeCodeQuotaMenu deviceId="remote-device" />);
+
+    await waitFor(() => expect(mockLambdaClaudeQuota).toHaveBeenCalled());
+    await waitForQuotaIdle();
+    await waitFor(() => expect(screen.getAllByText('92%').length).toBeGreaterThan(0));
+    expect(screen.queryByText('heteroAgent.quota.unavailable')).toBeNull();
+    expect(await storage.get(row)).toMatchObject({ data: { status: 'ok' } });
+  });
+
+  it('says the device did not respond when there is nothing stored to show', async () => {
+    mockLambdaClaudeQuota.mockResolvedValue(null);
+
+    render(<ClaudeCodeQuotaMenu deviceId="remote-device" />);
+
+    expect(
+      await screen.findByText('heteroAgent.claudeQuota.unavailableDeviceUnreachable'),
+    ).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.quota.unavailable')).toBeNull();
+  });
+
+  it('shows the persisted readings of the account a silent device reported before a reload', async () => {
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+    const staleAt = Date.now() - 10 * 60 * 1000;
+    const storage = quotaPanelResource.storage!;
+    const sourceKey = createQuotaSourceKey('claude-code', 'agent-1', 'remote-device', undefined);
+    await storage.set(
+      { queryKey: hashQuotaSourceKey(sourceKey), scope: cacheScope.get() },
+      {
+        data: claudeSnapshot({
+          identity: { externalAccountId: 'ext-1' },
+          session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+          updatedAt: staleAt,
+        }),
+        updatedAt: 1,
+      },
+    );
+    // Another client ingested a newer reading for the same account meanwhile.
+    mockQuotaService.listAccounts.mockResolvedValue([persistedAccount(staleAt)]);
+    mockQuotaService.getLatestReadings.mockResolvedValue([
+      { ...persistedSessionReading(Date.now()), utilization: 20 },
+    ]);
+    mockLambdaClaudeQuota.mockResolvedValue(null);
+
+    render(<ClaudeCodeQuotaMenu deviceId="remote-device" />);
+    await waitFor(() => expect(mockLambdaClaudeQuota).toHaveBeenCalled());
+
+    await waitFor(() => expect(screen.getAllByText('80%').length).toBeGreaterThan(0));
+    expect(screen.queryByText('heteroAgent.quota.unavailable')).toBeNull();
+  });
+
   it('does not reuse another device account when the newly selected device is unavailable', async () => {
     const capturedAt = Date.now();
     const account = persistedAccount();
