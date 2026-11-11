@@ -1,11 +1,10 @@
 import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
-import { ModelRuntime } from '@lobechat/model-runtime';
+import type { ModelRuntime } from '@lobechat/model-runtime';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
-import { getPlatformModelRuntimeHooks } from '@/business/server/platform-model-runtime';
 import {
   type ConsolidationContextPlan,
   type ConsolidationRoute,
@@ -60,15 +59,7 @@ export const NORMALIZE_BATCH = 80;
 const ROUTE_TOP_CONTEXTS = 30;
 const ROUTE_RECENT_CONTEXTS = 10;
 
-/**
- * Who pays for a run's model calls. `user` (the default) bills the user like any other memory
- * work; `platform` is for the one-off backfill an admin starts, which must not spend the user's
- * credits or keys.
- */
-export type ConsolidationBilling = 'platform' | 'user';
-
 export interface ConsolidationModelOverride {
-  billing?: ConsolidationBilling;
   model?: string;
   provider?: string;
 }
@@ -110,7 +101,6 @@ export class MemoryConsolidationService {
   private readonly userId: string;
   private readonly agentConfig: MemoryAgentConfig;
   private readonly runId: string;
-  private readonly billing: ConsolidationBilling;
   readonly model: UserMemoryConsolidationModel;
   private runtime?: { model: string; runtime: ModelRuntime };
   private embeddingRuntime?: { model: string; runtime: UserMemoryEmbeddingRuntime };
@@ -125,7 +115,6 @@ export class MemoryConsolidationService {
     this.db = db;
     this.userId = userId;
     this.runId = runId;
-    this.billing = override?.billing ?? 'user';
     this.agentConfig = {
       ...agentConsolidation,
       model: override?.model || agentConsolidation.model,
@@ -136,24 +125,6 @@ export class MemoryConsolidationService {
 
   private async getRuntime() {
     if (this.runtime) return this.runtime;
-    if (this.billing === 'platform') {
-      // NOTICE: System credentials only. Resolving through the user's providers would spend their
-      // keys or credits; the platform hooks record what the platform paid instead.
-      const provider = (this.agentConfig.provider || 'openai').toLowerCase();
-      const runtime = await ModelRuntime.initializeWithProvider(
-        provider,
-        provider === BRANDING_PROVIDER
-          ? { userId: this.userId }
-          : {
-              apiKey: this.agentConfig.apiKey,
-              baseURL: this.agentConfig.baseURL,
-              userId: this.userId,
-            },
-        getPlatformModelRuntimeHooks(),
-      );
-      this.runtime = { model: this.agentConfig.model, runtime };
-      return this.runtime;
-    }
     // workspace-audit: intentionally personal-scoped. Memory belongs to the user, so provider
     // access resolves against the user's personal scope, as the persona writer does.
     const aiInfraRepos = new AiInfraRepos(this.db, this.userId, {});
@@ -209,8 +180,6 @@ export class MemoryConsolidationService {
         metadata: {
           consolidationRunId: this.runId,
           consolidationStage: stage,
-          // Platform cost rows are summed per run by their trace id.
-          ...(this.billing === 'platform' ? { traceId: this.runId } : {}),
           trigger: RequestTrigger.Memory,
         },
       },
@@ -329,18 +298,11 @@ export class MemoryConsolidationService {
       if (!this.embeddingRuntime) {
         const { provider, model } =
           getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
-        const runtime =
-          this.billing === 'platform' && ENABLE_BUSINESS_FEATURES
-            ? await ModelRuntime.initializeWithProvider(
-                BRANDING_PROVIDER,
-                { userId: this.userId },
-                getPlatformModelRuntimeHooks(),
-              )
-            : await initModelRuntimeFromDB(
-                this.db,
-                this.userId,
-                ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
-              );
+        const runtime = await initModelRuntimeFromDB(
+          this.db,
+          this.userId,
+          ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+        );
         this.embeddingRuntime = { model, runtime };
       }
       const [vector] = await embedUserMemoryTexts({

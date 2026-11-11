@@ -10,8 +10,6 @@ import { MemoryExtractionWorkflowService } from '@/server/services/memory/userMe
 const schema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('run'),
-    /** `platform` for the one-off backfill an admin starts from DC: system credentials, no charge. */
-    billing: z.enum(['platform', 'user']).optional(),
     model: z.string().optional(),
     provider: z.string().optional(),
     userIds: z.array(z.string().min(1)).min(1).max(100),
@@ -55,7 +53,6 @@ export const memoryUserMemoryConsolidation = async (c: Context) => {
           userId,
           baseUrl,
           {
-            billing: params.billing,
             extraHeaders: upstashWorkflowExtraHeaders,
             model: params.model,
             provider: params.provider,
