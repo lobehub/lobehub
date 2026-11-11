@@ -2,10 +2,12 @@ import type { AIChatModelCard, AIEmbeddingModelCard } from '../types/aiModel';
 
 // https://flex.ai/models
 // Catalogue metadata (context window, pricing, display name) mirrors
-// GET https://api.flex.ai/v1/models as of 2026-10-29.
+// GET https://api.flex.ai/v1/models as of 2026-11-11.
 // Abilities are probed against the live endpoint rather than read from that
 // response, which under-reports image input on three models and over-reports
 // it on one (see the PR description for the per-model results).
+// MiniMax-M3.1-Flash and MiMo-V2.6-Flash-RL joined the catalogue on 2026-11-11;
+// their abilities are taken from the response's `supports` and not yet probed.
 
 const flexaiChatModels: AIChatModelCard[] = [
   {
@@ -389,18 +391,19 @@ const flexaiChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
     },
-    contextWindowTokens: 204_800,
-    displayName: 'MiniMax M2.7',
+    contextWindowTokens: 1_048_576,
+    displayName: 'MiniMax M3.1 Flash',
     family: 'minimax',
-    generation: 'minimax-m2.7',
-    id: 'MiniMax-M2.7',
+    generation: 'minimax-m3.1',
+    id: 'MiniMax-M3.1-Flash',
     organization: 'MiniMax',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.045, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0225, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -411,17 +414,16 @@ const flexaiChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 262_144,
-    displayName: 'Step 3.7 Flash',
-    family: 'step',
-    generation: 'step-3.7',
-    id: 'Step-3.7-Flash',
-    organization: 'StepFun',
+    contextWindowTokens: 1_048_576,
+    displayName: 'MiMo V2.6 Flash RL',
+    family: 'mimo',
+    id: 'MiMo-V2.6-Flash-RL',
+    organization: 'Xiaomi',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0195, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
