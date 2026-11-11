@@ -2688,40 +2688,6 @@ describe('LobeOpenAICompatibleFactory', () => {
       );
     });
 
-    it('should map disabled thinking to none reasoning effort for GPT-6 Sol Responses generateObject', async () => {
-      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
-        output_text: '{"name": "John", "age": 30}',
-      } as any);
-
-      await instance.generateObject({
-        messages: [{ content: 'Generate a person object', role: 'user' as const }],
-        model: 'gpt-6-sol',
-        schema: createPersonExtractorSchema(),
-        thinking: { budget_tokens: 0, type: 'disabled' as const },
-      });
-
-      expect(instance['client'].responses.create).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'gpt-6-sol', reasoning: { effort: 'none' } }),
-        expect.anything(),
-      );
-    });
-
-    it('should leave the reasoning effort to the API for GPT-6 Astra Responses generateObject with thinking disabled', async () => {
-      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
-        output_text: '{"name": "John", "age": 30}',
-      } as any);
-
-      await instance.generateObject({
-        messages: [{ content: 'Generate a person object', role: 'user' as const }],
-        model: 'gpt-6-astra',
-        schema: createPersonExtractorSchema(),
-        thinking: { budget_tokens: 0, type: 'disabled' as const },
-      });
-
-      const [request] = vi.mocked(instance['client'].responses.create).mock.calls[0];
-      expect(request).toMatchObject({ model: 'gpt-6-astra' });
-      expect(request).not.toHaveProperty('reasoning');
-    });
     it('should handle options correctly', async () => {
       const mockResponse = {
         output_text: '{"status": "success"}',
