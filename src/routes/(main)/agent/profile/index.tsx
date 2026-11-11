@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { type FC, memo, Suspense } from 'react';
+import { type FC, lazy, memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -17,17 +17,10 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { StyleSheet } from '@/utils/styles';
 
 import EditLockDriver from './features/EditLockDriver';
-import EngineEditor from './features/EngineEditor';
-import EnvironmentEditor from './features/EnvironmentEditor';
 import Header from './features/Header';
-import InstructionEditor from './features/InstructionEditor';
-import KnowledgeEditor from './features/KnowledgeEditor';
-import ProfileEditor from './features/ProfileEditor';
 import ProfileHydration from './features/ProfileHydration';
 import ProfileProvider from './features/ProfileProvider';
-import SkillsEditor from './features/SkillsEditor';
 import { selectors as profileSelectors, useProfileStore } from './features/store';
-import ToolsEditor from './features/ToolsEditor';
 import { useClickToFocusEditor } from './features/useClickToFocusEditor';
 
 const styles = StyleSheet.create({
@@ -48,6 +41,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 });
+
+// One editor per route: the shell stays small and each page loads only its own editor.
+const EngineEditor = lazy(() => import('./features/EngineEditor'));
+const EnvironmentEditor = lazy(() => import('./features/EnvironmentEditor'));
+const InstructionEditor = lazy(() => import('./features/InstructionEditor'));
+const KnowledgeEditor = lazy(() => import('./features/KnowledgeEditor'));
+const ProfileEditor = lazy(() => import('./features/ProfileEditor'));
+const SkillsEditor = lazy(() => import('./features/SkillsEditor'));
+const ToolsEditor = lazy(() => import('./features/ToolsEditor'));
 
 /** Which page of the profile group the shell renders. They share one editing session. */
 export type AgentProfileViewKey =
@@ -103,7 +105,9 @@ const ProfileArea = memo<{ view: AgentProfileViewKey }>(({ view }) => {
             onClick={handleContentClick}
           >
             <WideScreenContainer>
-              <View />
+              <Suspense fallback={<ProfileSkeleton />}>
+                <View />
+              </Suspense>
             </WideScreenContainer>
           </Flexbox>
         </AsyncBoundary>
