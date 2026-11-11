@@ -39,7 +39,9 @@ const movedFileInput = () => ({
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
 
 const routerMocks = vi.hoisted(() => {
-  const transactionClient = {};
+  // `updateFile` takes the shared per-file advisory lock inside its transaction,
+  // which reaches Postgres through the raw client (`db.execute`).
+  const transactionClient = { execute: vi.fn().mockResolvedValue(undefined) };
 
   return {
     businessFileUploadCheck: vi.fn(),
