@@ -124,6 +124,38 @@ describe('UsageBreakdown', () => {
       expect(screen.getByText('drive.usage.measuring')).toBeInTheDocument();
     });
 
+    it('should say in the open that the figure is the last finished measurement', async () => {
+      const onRefresh = vi
+        .fn()
+        .mockResolvedValue({ measuring: { drives: ['personal'], scannedBytes: 1 } });
+      render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
+
+      fireEvent.click(screen.getByTitle('drive.usage.refresh'));
+
+      // Visible text, not a tooltip: touch screens cannot hover.
+      await waitFor(() =>
+        expect(screen.getByText('drive.usage.measuringHint')).toBeInTheDocument(),
+      );
+    });
+
+    it('should stop calling once the page is hidden', async () => {
+      const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+      const onRefresh = vi
+        .fn()
+        .mockResolvedValue({ measuring: { drives: ['personal'], scannedBytes: 1 } });
+      render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
+
+      fireEvent.click(screen.getByTitle('drive.usage.refresh'));
+      await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
+      visibility.mockReturnValue('hidden');
+      for (let i = 0; i < 5; i++) await advance();
+
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+      // Still says it is measuring: the walk goes on without this tab.
+      expect(screen.getByText('drive.usage.measuring')).toBeInTheDocument();
+      visibility.mockRestore();
+    });
+
     it('should still refresh under StrictMode, which replays effects', async () => {
       const onRefresh = vi.fn().mockResolvedValue({});
       render(

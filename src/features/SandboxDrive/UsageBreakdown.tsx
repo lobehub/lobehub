@@ -38,6 +38,9 @@ const MEASURE_CALL_GAP_MS = 3000;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Nobody is looking: the measurement cron finishes the walk without this tab. */
+const pageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
 /** How many members the ranking shows before it folds the rest away. */
 const MEMBERS_FOLDED = 5;
 
@@ -224,6 +227,7 @@ export const UsageBreakdown = memo<{
       for (let call = 0; call < MAX_MEASURE_CALLS && mounted.current; call++) {
         if (pending) await wait(MEASURE_CALL_GAP_MS);
         if (!mounted.current) return;
+        if (pending && pageHidden()) break;
         const result = await onRefresh(pending?.drives);
         if (!mounted.current) return;
         pending = result?.measuring;
@@ -283,15 +287,11 @@ export const UsageBreakdown = memo<{
             </Text>
           )}
           {measuring && (
-            // The large figure is still the last finished measurement; say a
-            // new one is under way rather than present it as confirmed.
-            <Tooltip title={t('drive.usage.measuringHint')}>
-              <Text fontSize={12} type={'secondary'}>
-                {measuring.scannedBytes === null
-                  ? t('drive.usage.measuringShort')
-                  : t('drive.usage.measuring', { size: formatSize(measuring.scannedBytes) })}
-              </Text>
-            </Tooltip>
+            <Text fontSize={12} type={'secondary'}>
+              {measuring.scannedBytes === null
+                ? t('drive.usage.measuringShort')
+                : t('drive.usage.measuring', { size: formatSize(measuring.scannedBytes) })}
+            </Text>
           )}
           <ActionIcon
             icon={RefreshCwIcon}
@@ -302,6 +302,14 @@ export const UsageBreakdown = memo<{
           />
         </Flexbox>
       </Flexbox>
+
+      {/* The large figure is still the last finished measurement. Said in the
+          open, not in a tooltip: touch screens have no hover. */}
+      {measuring && (
+        <Text fontSize={12} type={'secondary'}>
+          {t('drive.usage.measuringHint')}
+        </Text>
+      )}
 
       <div
         aria-label={t(isWorkspace ? 'drive.usage.poolTitle' : 'drive.usage.title')}
