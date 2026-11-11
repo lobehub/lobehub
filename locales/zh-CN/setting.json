@@ -1066,7 +1066,7 @@
   "identity.compose.error.failed": "发送失败，邮件没有发出。",
   "identity.compose.error.invalidRecipients": "请检查这些地址：{{addresses}}",
   "identity.compose.error.limitHourly": "这个地址发信太频繁，请稍后再试。",
-  "identity.compose.error.looping": "{{reason}}",
+  "identity.compose.error.looping": "发给这个地址的邮件只会被退回或形成循环，所以没有发送。",
   "identity.compose.error.recipientsRequired": "至少添加一位收件人。",
   "identity.compose.error.rejected": "邮件被拒收，请检查收件人：{{reason}}",
   "identity.compose.error.suspended": "这个邮箱已被暂停发信，请联系支持。",

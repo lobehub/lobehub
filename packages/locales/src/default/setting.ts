@@ -365,7 +365,8 @@ export default {
   'identity.compose.error.failed': 'Sending failed. The mail did not go out.',
   'identity.compose.error.invalidRecipients': 'Check these addresses: {{addresses}}',
   'identity.compose.error.limitHourly': 'This address is sending too often. Try again later.',
-  'identity.compose.error.looping': '{{reason}}',
+  'identity.compose.error.looping':
+    'Mail to this address would only bounce back or loop, so it was not sent.',
   'identity.compose.error.recipientsRequired': 'Add at least one recipient.',
   'identity.compose.error.rejected': 'The mail was rejected. Check the recipients: {{reason}}',
   'identity.compose.error.suspended':

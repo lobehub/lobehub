@@ -1,4 +1,5 @@
 import type { AgentMailAddress, AgentMailComposeMode } from '@lobechat/types';
+import { useSyncExternalStore } from 'react';
 import { z } from 'zod';
 
 import type { AgentAccountView, AgentMailRow } from '@/services/agentAccount';
@@ -40,12 +41,26 @@ export const parseAddress = (raw: string): AgentMailAddress => {
 };
 
 /** Splits typed or pasted text into recipients; commas, semicolons and line breaks separate them. */
-export const parseAddressList = (raw: string): AgentMailAddress[] =>
-  raw
-    .split(/[\n,;]+/)
+export const parseAddressList = (raw: string): AgentMailAddress[] => {
+  // A quoted display name may hold a comma: `"Doe, John" <j@x.com>` is one recipient.
+  const parts: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (const char of raw) {
+    if (char === '"') quoted = !quoted;
+    if (!quoted && /[\n,;]/.test(char)) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current);
+  return parts
     .map((part) => part.trim())
     .filter(Boolean)
     .map(parseAddress);
+};
 
 export const formatAddress = ({ address, name }: AgentMailAddress) =>
   name ? `${name} <${address}>` : address;
@@ -113,27 +128,33 @@ export const replyRecipients = (
 
 /** The original below a reply, each line marked as quoted. */
 export const quoteForReply = (source: Pick<AgentMailRow, 'text'>, header: string) =>
-  `\n\n${header}\n${source.text
-    .split('\n')
-    .map((line) => (line ? `> ${line}` : '>'))
-    .join('\n')}`;
+  !source.text.trim()
+    ? ''
+    : `\n\n${header}\n${source.text
+        .split('\n')
+        .map((line) => (line ? `> ${line}` : '>'))
+        .join('\n')}`;
 
 /**
  * The original below a forward. Matches the server's own block, which it only
  * adds when the text does not already carry the original, so it never doubles.
+ * A mail with no plain text (HTML only) gets none here: the server's check
+ * cannot see an empty original, and would add its block a second time.
  */
 export const quoteForForward = (
   source: Pick<AgentMailRow, 'fromAddress' | 'fromName' | 'subject' | 'text'>,
 ) =>
-  [
-    '',
-    '',
-    '---------- Forwarded message ---------',
-    `From: ${source.fromName ? `${source.fromName} <${source.fromAddress}>` : source.fromAddress}`,
-    `Subject: ${source.subject ?? ''}`,
-    '',
-    source.text,
-  ].join('\n');
+  !source.text.trim()
+    ? ''
+    : [
+        '',
+        '',
+        '---------- Forwarded message ---------',
+        `From: ${source.fromName ? `${source.fromName} <${source.fromAddress}>` : source.fromAddress}`,
+        `Subject: ${source.subject ?? ''}`,
+        '',
+        source.text,
+      ].join('\n');
 
 /** What a new composer starts with, before anything is typed. */
 export const initialFieldsFor = (
@@ -199,6 +220,27 @@ interface RememberedBlock {
 
 const BLOCK_KEY = (accountId: string) => `lobe-agent-mail:send-block:${accountId}`;
 
+let blockVersion = 0;
+const blockListeners = new Set<() => void>();
+const blocksChanged = () => {
+  blockVersion += 1;
+  for (const listener of blockListeners) listener();
+};
+
+/**
+ * Re-renders when a refusal is remembered or forgotten, so every entry on the
+ * page (the header's Compose, the answers, the notice) changes together.
+ */
+export const useSendBlockVersion = () =>
+  useSyncExternalStore(
+    (listener) => {
+      blockListeners.add(listener);
+      return () => blockListeners.delete(listener);
+    },
+    () => blockVersion,
+    () => blockVersion,
+  );
+
 /** A receive-only refusal is taken at its word for a day; a plan change may lift it sooner. */
 const RECEIVE_ONLY_MEMORY_MS = 24 * 60 * 60 * 1000;
 
@@ -232,10 +274,16 @@ export const rememberSendRefusal = (
       : code === 'send_limit_daily'
         ? { block: 'limit_reached', until: nextLocalMidnight(now) }
         : undefined;
-  if (block) storage()?.setItem(BLOCK_KEY(accountId), JSON.stringify(block));
+  if (!block) return;
+  storage()?.setItem(BLOCK_KEY(accountId), JSON.stringify(block));
+  blocksChanged();
 };
 
-export const forgetSendRefusal = (accountId: string) => storage()?.removeItem(BLOCK_KEY(accountId));
+export const forgetSendRefusal = (accountId: string) => {
+  if (!storage()?.getItem(BLOCK_KEY(accountId))) return;
+  storage()?.removeItem(BLOCK_KEY(accountId));
+  blocksChanged();
+};
 
 const rememberedBlock = (accountId: string, now: number): SendBlock | undefined => {
   const raw = storage()?.getItem(BLOCK_KEY(accountId));
@@ -246,7 +294,8 @@ const rememberedBlock = (accountId: string, now: number): SendBlock | undefined 
   } catch {
     // unreadable: fall through and drop it
   }
-  forgetSendRefusal(accountId);
+  // Read during render, so it is dropped quietly rather than announced.
+  storage()?.removeItem(BLOCK_KEY(accountId));
   return undefined;
 };
 
@@ -318,10 +367,8 @@ export const sendFailureOf = (error: unknown): SendFailure => {
   return {
     ...known,
     code,
-    reason:
-      code === 'send_rejected' || code === 'recipient_looping'
-        ? (error as Error).message
-        : undefined,
+    // The provider's own words name the refused recipient; nothing else is shown raw.
+    reason: code === 'send_rejected' ? (error as Error).message : undefined,
   };
 };
 
@@ -348,6 +395,14 @@ export const backupKeyOf = (
 export interface DraftBackup {
   excludedAttachments?: number[];
   fields: ComposeFields;
+  /**
+   * Holds something the server does not: edits not saved yet, or a malformed
+   * address the server would refuse. Such a copy wins over the server's draft
+   * on the next open. Whether it is newer is not a clock comparison: the
+   * client's clock and the server's `updatedAt` need not agree, and resuming
+   * an answer touches `updatedAt`.
+   */
+  pending: boolean;
   savedAt: number;
 }
 
@@ -371,3 +426,24 @@ export const writeBackup = (key: string, backup: DraftBackup) => {
 };
 
 export const clearBackup = (key: string) => storage()?.removeItem(key);
+
+// --------------- Discards waiting out their undo ---------------
+
+const pendingDiscards = new Map<string, () => void>();
+
+/** A discarded draft is deleted after the undo window; until then this cancels it. */
+export const holdDiscard = (id: string, cancel: () => void) => pendingDiscards.set(id, cancel);
+
+export const releaseDiscard = (id: string) => pendingDiscards.delete(id);
+
+/**
+ * Keep a draft that is waiting to be deleted, because it was opened again
+ * (answering the same mail again resumes the very draft just discarded).
+ */
+export const cancelPendingDiscard = (id: string) => {
+  const cancel = pendingDiscards.get(id);
+  if (!cancel) return false;
+  pendingDiscards.delete(id);
+  cancel();
+  return true;
+};

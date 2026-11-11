@@ -13,6 +13,7 @@ import {
 
 import {
   backupKeyOf,
+  cancelPendingDiscard,
   clearBackup,
   type ComposeFields,
   DRAFT_SAVE_DELAY_MS,
@@ -125,10 +126,11 @@ export const useComposer = (params: UseComposerParams) => {
   const savingRef = useRef<Promise<void> | undefined>(undefined);
   const closedRef = useRef(false);
 
-  const backup = () =>
+  const backup = (pending = true) =>
     writeBackup(backupKeyRef.current, {
       excludedAttachments: excludedRef.current,
       fields: fieldsRef.current,
+      pending,
       savedAt: Date.now(),
     });
 
@@ -167,9 +169,11 @@ export const useComposer = (params: UseComposerParams) => {
           void refresh().catch(() => undefined);
         }
         if (!dirtyRef.current) {
-          // The local copy is all that holds a malformed address, so it stays,
-          // newer than the save, for the next open to pick up.
-          if (invalidAddresses(snapshot).length > 0) backup();
+          // The local copy is all that holds a malformed address (so it still
+          // wins on the next open), or a forward's choice of attachments, which
+          // drafts do not store.
+          const invalid = invalidAddresses(snapshot).length > 0;
+          if (invalid || excludedRef.current.length > 0) backup(invalid);
           else clearBackup(backupKeyRef.current);
         }
         setSaveState(dirtyRef.current ? 'saving' : 'saved');
@@ -196,7 +200,7 @@ export const useComposer = (params: UseComposerParams) => {
   });
 
   // Open: the saved draft, or this mail's draft for this mode, or a fresh one;
-  // a newer copy in this browser wins over what the server last got.
+  // a copy in this browser holding what the server never got wins.
   useEffect(() => {
     let cancelled = false;
 
@@ -211,6 +215,8 @@ export const useComposer = (params: UseComposerParams) => {
     };
 
     const resume = (draft: AgentMailDraftRow) => {
+      // Opened again within a discard's undo window: keep it.
+      cancelPendingDiscard(draft.id);
       draftIdRef.current = draft.id;
       const key = backupKeyOf(agentId, accountId, { draftId: draft.id });
       // Typed before the draft existed, against the mail it answers.
@@ -222,10 +228,7 @@ export const useComposer = (params: UseComposerParams) => {
       const initial = fresh
         ? initialFieldsFor(mode, source, params.ownAddress, params.replyHeader)
         : fieldsOfDraft(draft, source);
-      const newer =
-        local &&
-        local.savedAt > new Date(draft.updatedAt).getTime() &&
-        !sameFields(local.fields, initial);
+      const newer = local?.pending && !sameFields(local.fields, initial);
       blankRef.current = fresh && !newer;
       adopt(newer ? local.fields : initial, {
         dirty: Boolean(newer),
@@ -319,6 +322,9 @@ export const useComposer = (params: UseComposerParams) => {
     debouncedSave.cancel();
 
     try {
+      // A save already on its way may not have reached the server; the send
+      // reads the stored draft, so it must not overtake that save.
+      if (savingRef.current) await savingRef.current;
       if (dirtyRef.current || !draftIdRef.current) {
         dirtyRef.current = true;
         await save();

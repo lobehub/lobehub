@@ -17,7 +17,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { StyleSheet } from '@/utils/styles';
 
-import { SEND_BLOCK_KEYS, sendBlockOf } from './compose';
+import { SEND_BLOCK_KEYS, sendBlockOf, useSendBlockVersion } from './compose';
 import ComposePane, { NEW_COMPOSE } from './ComposePane';
 import {
   type ConversationNeighbors,
@@ -79,7 +79,13 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
   const mailPath = urlJoin('/agent', agentId, 'mail');
-  const search = searchParams.toString();
+  // A draft open in the URL belongs to the mail it answers, so moving to
+  // another mail, or back to the list, leaves it behind (it saves on unmount).
+  const search = (() => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('compose');
+    return params.toString();
+  })();
   const noAddress = !!mailbox.data && !mailbox.current;
   // Releasing an address keeps the mail it received, so "no address" is not
   // "no mail": only a successful read finding nothing in Inbox, Sent or Trash
@@ -203,8 +209,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const viewSent = (sent: SentMail) =>
     navigate(`${sent.mailId ? urlJoin(mailPath, sent.mailId) : mailPath}?folder=sent`);
 
+  useSendBlockVersion();
   const sendBlock = mailbox.current ? sendBlockOf(mailbox.current) : undefined;
-  const [, setBlockEpoch] = useState(0);
 
   const detailProps: Omit<InboxMessageDetailProps, 'id'> = {
     accountId: mailbox.current?.id,
@@ -317,11 +323,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   // Always on screen under the address, not behind a tooltip a phone cannot hover.
   const sendNotice = !disabled && mailbox.current && sendBlock && (
-    <SendBlockNotice
-      account={mailbox.current}
-      block={sendBlock}
-      onLifted={() => setBlockEpoch((value) => value + 1)}
-    />
+    <SendBlockNotice account={mailbox.current} block={sendBlock} />
   );
 
   const mailboxCard = (

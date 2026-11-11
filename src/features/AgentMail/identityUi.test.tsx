@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { SWRConfig } from 'swr';
+import { useEffect } from 'react';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
@@ -484,6 +485,48 @@ describe('InboxMessageDetail replies', () => {
     expect(service.createMailDraft).not.toHaveBeenCalled();
   });
 
+  it('does not resume a reply draft of another conversation', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    service.getMailDraft.mockResolvedValue(draftRow({ sourceMailId: 'other', text: 'For A' }));
+    fresh(<InboxMessageDetail {...detailProps} composeId={'draft_1'} id={'in'} />);
+
+    await screen.findByTestId('mail-action-reply');
+    await waitFor(() => expect(service.getMailDraft).toHaveBeenCalled());
+    expect(screen.queryByTestId('mail-composer')).toBeNull();
+  });
+
+  it('keeps answering the same mail when a newer one arrives', async () => {
+    const onReady = vi.fn();
+    const Grab = () => {
+      const { mutate } = useSWRConfig();
+      useEffect(() => onReady(mutate), [mutate]);
+      return null;
+    };
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    fresh(
+      <>
+        <Grab />
+        <InboxMessageDetail {...detailProps} id={'in'} />
+      </>,
+    );
+    fireEvent.click(await screen.findByTestId('mail-action-reply'));
+    fireEvent.change(await screen.findByLabelText('identity.compose.body'), {
+      target: { value: 'Typing…' },
+    });
+
+    // The poll brings a newer received mail into the conversation.
+    service.getMailConversation.mockResolvedValue([mailRow('in'), mailRow('in2')]);
+    const revalidate = onReady.mock.calls[0][0] as ReturnType<typeof useSWRConfig>['mutate'];
+    await act(() => revalidate(['agent-mail-conversation', 'in', undefined]));
+    await screen.findByText('body of in2', { exact: false }).catch(() => undefined);
+
+    expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Typing…');
+    expect(service.createMailDraft).toHaveBeenCalledTimes(1);
+    expect(service.createMailDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceMailId: 'in' }),
+    );
+  });
+
   it('offers no answers in the trash', async () => {
     service.getMailConversation.mockResolvedValue([mailRow('in')]);
     fresh(<InboxMessageDetail {...detailProps} folder={'trash'} id={'in'} />);
@@ -852,6 +895,117 @@ describe('MailComposer', () => {
           expect.objectContaining({ text: 'Later' }),
         ),
       );
+    });
+  });
+
+  describe('MailComposer — review fixes', () => {
+    it('waits for a save already on its way before sending the draft', async () => {
+      let finishUpdate!: () => void;
+      service.updateMailDraft.mockImplementation(
+        (id, content) =>
+          new Promise((resolve) => {
+            finishUpdate = () => resolve(composerDraft({ ...content, id }));
+          }),
+      );
+      setupComposer({
+        draft: composerDraft({ subject: 'S', text: 'Old', to: [{ address: 'a@b.com' }] }),
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Old'),
+      );
+
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'New' },
+      });
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+      expect(service.updateMailDraft).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByTestId('mail-send'));
+      await act(() => vi.advanceTimersByTimeAsync(50));
+      // The update has not landed, so the send must not read the old draft yet.
+      expect(service.sendMailDraft).not.toHaveBeenCalled();
+      await act(async () => finishUpdate());
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalledWith('draft_1'));
+    });
+
+    it('remembers removed forward attachments across a save and a reopen', async () => {
+      const forwardSource = composerSource({
+        attachments: [
+          { filename: 'plan.pdf', index: 0 },
+          { filename: 'secret.csv', index: 1 },
+        ],
+      });
+      const first = setupComposer({ inline: true, mode: 'forward', source: forwardSource });
+      await screen.findAllByTestId('compose-attachment');
+      fireEvent.click(screen.getAllByLabelText('identity.compose.removeAttachment')[1]);
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'FYI' },
+      });
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+      await waitFor(() =>
+        expect(screen.getByTestId('mail-save-state')).toHaveTextContent(
+          'identity.compose.save.saved',
+        ),
+      );
+      first.unmount();
+
+      service.createMailDraft.mockResolvedValue(
+        composerDraft({
+          mode: 'forward',
+          sourceMailId: 'mail_1',
+          subject: 'Fwd: Q3 plan',
+          text: 'FYI',
+        }),
+      );
+      setupComposer({ inline: true, mode: 'forward', source: forwardSource });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('FYI'),
+      );
+      expect(screen.getAllByTestId('compose-attachment')[1]).toHaveAttribute(
+        'data-excluded',
+        'true',
+      );
+    });
+
+    it('brings back unsaved edits when answering the same mail again', async () => {
+      // Resuming touches the draft's `updatedAt`, so this must not hinge on timestamps.
+      localStorage.setItem(
+        'lobe-agent-mail:draft:agt_1:acc_a:draft_7',
+        JSON.stringify({
+          fields: { bcc: [], cc: [], subject: '', text: 'Written offline', to: [] },
+          pending: true,
+          savedAt: 1,
+        }),
+      );
+      service.createMailDraft.mockResolvedValue(
+        composerDraft({
+          id: 'draft_7',
+          mode: 'reply',
+          sourceMailId: 'mail_1',
+          text: 'Saved earlier',
+        }),
+      );
+      setupComposer({ inline: true, mode: 'reply', source: composerSource() });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Written offline'),
+      );
+    });
+
+    it('keeps a discarded draft that is opened again within the undo window', async () => {
+      setupComposer({
+        draft: composerDraft({ subject: 'S', text: 'Keep me', to: [{ address: 'a@b.com' }] }),
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Keep me'),
+      );
+      fireEvent.click(screen.getByLabelText('identity.mailbox.action.discard'));
+      await waitFor(() => expect(ui.toastSuccess).toHaveBeenCalled());
+
+      setupComposer({
+        draft: composerDraft({ subject: 'S', text: 'Keep me', to: [{ address: 'a@b.com' }] }),
+      });
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+      expect(service.deleteMailDrafts).not.toHaveBeenCalled();
     });
   });
 

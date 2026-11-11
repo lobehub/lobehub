@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { AgentAccountView, AgentMailDraftRow, AgentMailRow } from '@/services/agentAccount';
 
-import { replySourceOf, SEND_BLOCK_KEYS, sendBlockOf } from './compose';
+import { replySourceOf, SEND_BLOCK_KEYS, sendBlockOf, useSendBlockVersion } from './compose';
 import { useMailDraft } from './ComposePane';
 import {
   buildConversationRows,
@@ -48,7 +48,10 @@ export interface InboxMessageDetailProps extends UseConversationOptions {
 interface Composing {
   draft?: AgentMailDraftRow;
   mode: Exclude<AgentMailComposeMode, 'compose'>;
-  /** The one mail being forwarded, when picked from that mail's menu. */
+  /**
+   * The mail answered or forwarded, fixed when the editor opens: a newer mail
+   * arriving in the conversation must not swap it under the person typing.
+   */
   sourceId?: string;
 }
 
@@ -92,14 +95,21 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     const openedRef = useRef(false);
     const focusRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
+    useSendBlockVersion();
     const [composing, setComposing] = useState<Composing>();
-    // A draft named by the URL (a reload, or opened from Drafts) resumes in place.
+    // A draft named by the URL (a reload, or opened from Drafts) resumes in
+    // place, but only under the conversation it answers.
     const linkedDraft = useMailDraft(composing ? undefined : composeId);
-    if (!composing && linkedDraft.data && !linkedDraft.isValidating && composeId) {
-      const { mode } = linkedDraft.data;
-      if (linkedDraft.data.id === composeId && mode !== 'compose') {
-        setComposing({ draft: linkedDraft.data, mode });
-      }
+    const linked = linkedDraft.data;
+    if (
+      !composing &&
+      linked &&
+      !linkedDraft.isValidating &&
+      linked.id === composeId &&
+      linked.mode !== 'compose' &&
+      mails?.some((mail) => mail.id === linked.sourceMailId)
+    ) {
+      setComposing({ draft: linked, mode: linked.mode });
     }
 
     useEffect(() => {
@@ -176,15 +186,8 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     const byId = new Map(mails.map((mail) => [mail.id, mail]));
 
     const replySource = replySourceOf(mails);
-    // A forward carries one mail: the one picked, the draft's, or the newest.
     const pickedId = composing?.sourceId ?? composing?.draft?.sourceMailId;
-    const forwardSource = (pickedId && mails.find((mail) => mail.id === pickedId)) || newest;
-    const composeSource =
-      composing?.mode === 'forward'
-        ? forwardSource
-        : (composing?.draft?.sourceMailId &&
-            mails.find((mail) => mail.id === composing.draft!.sourceMailId)) ||
-          replySource;
+    const composeSource = pickedId ? mails.find((mail) => mail.id === pickedId) : undefined;
     // Answering sends from the address that holds the mail.
     const accountOf = (mail?: AgentMailRow) =>
       mail ? accounts.find((item) => item.id === mail.accountId) : undefined;
@@ -194,8 +197,11 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
       ? replyBlock && t(SEND_BLOCK_KEYS[replyBlock])
       : t('identity.compose.disabled.noInbound');
     const forwardDisabled = forwardBlock && t(SEND_BLOCK_KEYS[forwardBlock]);
-    const startComposing = (mode: Composing['mode'], sourceId?: string) => {
-      if (composing?.mode === mode && composing.sourceId === sourceId && !composing.draft) {
+    /** Replies answer the newest received mail; a forward carries the one picked, or the newest. */
+    const startComposing = (mode: Composing['mode'], picked?: string) => {
+      const sourceId = picked ?? (mode === 'forward' ? newest.id : replySource?.id);
+      if (!sourceId) return;
+      if (composing?.mode === mode && pickedId === sourceId) {
         composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         return;
       }
@@ -310,7 +316,7 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
               account={composeAccount}
               agentId={agentId}
               draft={composing.draft}
-              key={`${composing.mode}:${composing.draft?.id ?? composeSource.id}`}
+              key={`${composing.mode}:${composing.draft?.id ?? composing.sourceId}`}
               mode={composing.mode}
               refresh={() => Promise.all([mutate(), options.refresh()])}
               source={composeSource}

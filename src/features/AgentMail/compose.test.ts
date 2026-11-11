@@ -53,6 +53,13 @@ describe('addresses', () => {
     ]);
   });
 
+  it('keeps a quoted name with a comma as one recipient', () => {
+    expect(parseAddressList('"Doe, John" <j@x.com>, b@b.com')).toEqual([
+      { address: 'j@x.com', name: 'Doe, John' },
+      { address: 'b@b.com' },
+    ]);
+  });
+
   it('marks what is plainly not an address', () => {
     expect(isValidAddress('a@b.co')).toBe(true);
     expect(isValidAddress('a@b')).toBe(false);
@@ -122,6 +129,13 @@ describe('replies', () => {
     expect(fields.subject).toBe('Re: Q3 plan');
     expect(fields.cc).toEqual([{ address: 'c@d.com' }]);
     expect(fields.text.startsWith('\n\nH\n> line one')).toBe(true);
+  });
+});
+
+describe('originals without plain text', () => {
+  it('adds no quote the server would add again', () => {
+    expect(quoteForForward(mail({ text: '' }))).toBe('');
+    expect(quoteForReply(mail({ text: '  ' }), 'H')).toBe('');
   });
 });
 

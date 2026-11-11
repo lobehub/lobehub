@@ -14,6 +14,7 @@ import {
   toast,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
+import { useLatest } from 'ahooks';
 import dayjs from 'dayjs';
 import { Paperclip, Trash2, Undo2, X } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -28,14 +29,18 @@ import {
 } from '@/services/agentAccount';
 
 import {
+  cancelPendingDiscard,
   forgetSendRefusal,
   formatAddress,
+  holdDiscard,
   invalidAddresses,
   isRememberedBlock,
   isReplyMode,
+  releaseDiscard,
   SEND_BLOCK_KEYS,
   type SendBlock,
   sendBlockOf,
+  useSendBlockVersion,
 } from './compose';
 import { composerStyles as styles } from './composerStyles';
 import InlineError from './InlineError';
@@ -46,15 +51,13 @@ import { type SentMail, useComposer } from './useComposer';
 interface SendBlockNoticeProps {
   account: AgentAccountView;
   block: SendBlock;
-  /** The block was lifted by the person; re-read it. */
-  onLifted?: () => void;
 }
 
 /**
  * Says up front that this address cannot send, instead of letting a person
  * write a mail only to see it refused. Always on screen, never a tooltip.
  */
-export const SendBlockNotice = memo<SendBlockNoticeProps>(({ account, block, onLifted }) => {
+export const SendBlockNotice = memo<SendBlockNoticeProps>(({ account, block }) => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
   const receiveOnly = block === 'receive_only';
@@ -78,14 +81,7 @@ export const SendBlockNotice = memo<SendBlockNoticeProps>(({ account, block, onL
             </Button>
           )}
           {isRememberedBlock(account, block) && (
-            <Button
-              size={'small'}
-              type={'text'}
-              onClick={() => {
-                forgetSendRefusal(account.id);
-                onLifted?.();
-              }}
-            >
+            <Button size={'small'} type={'text'} onClick={() => forgetSendRefusal(account.id)}>
               {t('identity.compose.block.tryAgain')}
             </Button>
           )}
@@ -176,9 +172,8 @@ const MailComposer = memo<MailComposerProps>(
     const [showCopies, setShowCopies] = useState(
       () => (draft?.cc.length ?? 0) > 0 || (draft?.bcc.length ?? 0) > 0,
     );
-    const [blockEpoch, setBlockEpoch] = useState(0);
-    // Re-read on every render so a lifted block or a refusal just remembered shows at once.
-    void blockEpoch;
+    // A refusal remembered or lifted anywhere re-renders this, so the block shows at once.
+    useSendBlockVersion();
     const block = sendBlockOf(account);
 
     const invalid = invalidAddresses(fields);
@@ -213,6 +208,7 @@ const MailComposer = memo<MailComposerProps>(
       });
       // A discarded draft does not go to the trash: it waits out the undo window instead.
       const timer = setTimeout(async () => {
+        releaseDiscard(id);
         await agentAccountService.deleteMailDrafts([id]).catch((error) => {
           console.error('[AgentMail] discard failed', error);
           toast.error({ title: t('identity.mailbox.failed.discard') });
@@ -225,15 +221,19 @@ const MailComposer = memo<MailComposerProps>(
           {
             label: t('identity.mailbox.undo'),
             onClick: () => {
-              clearTimeout(timer);
-              mailWriteActions.end(writeId);
-              undo.close();
+              cancelPendingDiscard(id);
               onReopenDraft?.(id);
             },
           },
         ],
         duration: UNDO_WINDOW_MS,
         title: t('identity.mailbox.toast.discarded'),
+      });
+      // Undo, or the same draft opened again (answering that mail once more), keeps it.
+      holdDiscard(id, () => {
+        clearTimeout(timer);
+        mailWriteActions.end(writeId);
+        undo.close();
       });
     };
 
@@ -269,6 +269,8 @@ const MailComposer = memo<MailComposerProps>(
       await go();
     };
 
+    const sendRef = useLatest(send);
+
     if (composer.loadError) {
       return (
         <InlineError
@@ -298,7 +300,11 @@ const MailComposer = memo<MailComposerProps>(
           const mod = event.metaKey || event.ctrlKey;
           if (mod && event.key === 'Enter') {
             event.preventDefault();
-            void send();
+            // Leaving the field turns an address still being typed into a chip;
+            // send once that edit has rendered.
+            const active = event.currentTarget.ownerDocument.activeElement;
+            if (active instanceof HTMLInputElement) active.blur();
+            setTimeout(() => void sendRef.current(), 0);
           } else if (mod && event.key.toLowerCase() === 's') {
             event.preventDefault();
             void composer.saveNow();
@@ -322,13 +328,7 @@ const MailComposer = memo<MailComposerProps>(
           />
         </Flexbox>
 
-        {block && (
-          <SendBlockNotice
-            account={account}
-            block={block}
-            onLifted={() => setBlockEpoch((value) => value + 1)}
-          />
-        )}
+        {block && <SendBlockNotice account={account} block={block} />}
 
         {!composer.ready ? (
           <Flexbox gap={8}>
