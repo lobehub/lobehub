@@ -232,6 +232,9 @@ importers:
       set-cookie-parser:
         specifier: ^3.1.2
         version: 3.1.2
+      socks-proxy-agent:
+        specifier: ^10.1.0
+        version: 10.1.0(supports-color@9.4.0)
       strip-ansi:
         specifier: 7.2.0
         version: 7.2.0
@@ -7460,6 +7463,10 @@ packages:
   smart-buffer@4.2.0:
     resolution: {integrity: sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==}
     engines: {node: '>= 6.0.0', npm: '>= 3.0.0'}
+
+  socks-proxy-agent@10.1.0:
+    resolution: {integrity: sha512-WlMj/67cEJ6MDI1OcsnjuYKDNDoyPCCYZ249kuuXPiMDw9F8PXkVaQ7YWu3siTydfQ/4BEZcvGzu+aYvz7dDCQ==}
+    engines: {node: '>= 20'}
 
   socks@2.8.10:
     resolution: {integrity: sha512-e0VyvkVTwVYViNovRkZ9aodhxVlyoMn7eJhVUPxZ+eK9P/7CBkxvvsBOHqFPEH416726W8tLXXXjKwqgTErrCQ==}
@@ -15400,6 +15407,14 @@ snapshots:
       is-fullwidth-code-point: 5.1.0
 
   smart-buffer@4.2.0: {}
+
+  socks-proxy-agent@10.1.0(supports-color@9.4.0):
+    dependencies:
+      agent-base: 9.0.0
+      debug: 4.4.3(supports-color@9.4.0)
+      socks: 2.8.10
+    transitivePeerDependencies:
+      - supports-color
 
   socks@2.8.10:
     dependencies:

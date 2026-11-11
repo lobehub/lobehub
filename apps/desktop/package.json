@@ -125,6 +125,7 @@
     "resolve": "^1.22.12",
     "semver": "^7.8.5",
     "set-cookie-parser": "^3.1.2",
+    "socks-proxy-agent": "^10.1.0",
     "strip-ansi": "7.2.0",
     "stylelint": "^17.16.0",
     "superjson": "^2.2.6",

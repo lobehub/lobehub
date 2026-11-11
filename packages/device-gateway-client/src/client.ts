@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import type { Agent } from 'node:http';
 import os from 'node:os';
 
 import type { DeviceMetricSample } from '@lobechat/types';
@@ -64,6 +65,12 @@ const noopLogger: GatewayClientLogger = {
 };
 
 export interface GatewayClientOptions {
+  /**
+   * Agent for the socket's HTTP upgrade request, e.g. a proxy agent. Called on
+   * every connect attempt, so a proxy setting changed in the meantime applies
+   * to the next reconnect. Returning `undefined` connects directly.
+   */
+  agent?: () => Agent | undefined;
   /** Auto-reconnect on disconnection (default: true) */
   autoReconnect?: boolean;
   /**
@@ -146,9 +153,11 @@ export class GatewayClient extends EventEmitter {
   private logger: GatewayClientLogger;
   private autoReconnect: boolean;
   private connectTimeoutMs: number;
+  private getAgent?: () => Agent | undefined;
 
   constructor(options: GatewayClientOptions) {
     super();
+    this.getAgent = options.agent;
     this.token = options.token;
     this.tokenType = options.tokenType;
     this.userAgent = options.userAgent;
@@ -321,8 +330,10 @@ export class GatewayClient extends EventEmitter {
       // a black-holed handshake into a normal error/close pair. The watchdog
       // below is the belt to that suspenders: it also covers the phase `ws`
       // knows nothing about — an opened socket whose `auth_success` never lands.
+      const agent = this.getAgent?.();
       const wsOptions = {
         handshakeTimeout: this.connectTimeoutMs,
+        ...(agent ? { agent } : {}),
         ...(this.userAgent ? { headers: { 'User-Agent': this.userAgent } } : {}),
       };
       const ws = new WebSocket(wsUrl, wsOptions);

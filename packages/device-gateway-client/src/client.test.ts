@@ -1,3 +1,5 @@
+import { Agent } from 'node:http';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayClient } from './client';
@@ -212,6 +214,41 @@ describe('GatewayClient', () => {
         handshakeTimeout: 15_000,
         headers: { 'User-Agent': 'LobeHub Desktop/1.2.3' },
       });
+      c.disconnect();
+    });
+
+    // ROOT CAUSE:
+    // The desktop's proxy setting only replaced undici's global dispatcher, which
+    // `ws` never uses, so behind a firewall that only lets the proxy through the
+    // gateway socket kept dialing direct and reconnected forever (#22378).
+    it('should open each socket through the agent resolved for that attempt', () => {
+      const first = new Agent();
+      const second = new Agent();
+      const agent = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const c = new GatewayClient({
+        agent,
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+      });
+
+      c.connect();
+      expect((c as any).ws.options).toMatchObject({ agent: first });
+      c.reconnect();
+      expect((c as any).ws.options).toMatchObject({ agent: second });
+      c.disconnect();
+    });
+
+    it('should connect directly when the agent resolver returns nothing', () => {
+      const c = new GatewayClient({
+        agent: () => undefined,
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+      });
+
+      c.connect();
+      expect((c as any).ws.options).not.toHaveProperty('agent');
       c.disconnect();
     });
   });
