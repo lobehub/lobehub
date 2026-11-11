@@ -1,15 +1,14 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import TaskKickoffStep from './index';
+import { useTaskKickoffActions } from './useTaskKickoffActions';
 
 const mocks = vi.hoisted(() => ({
   inboxAgentId: 'agt_inbox' as string | undefined,
   interests: ['coding'] as string[],
   navigate: vi.fn(),
-  onCreated: vi.fn(),
+  onRecommendationCreated: vi.fn(),
   queueDraftForMainComposer: vi.fn(),
-  recommendations: { mode: 'hidden' } as Record<string, unknown>,
   trackOnboardingStepCompleted: vi.fn(),
   trackOnboardingStepViewed: vi.fn(),
 }));
@@ -22,38 +21,12 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../components/LobeMessage', () => ({
-  default: ({ sentences }: { sentences: string[] }) => <div>{sentences[0]}</div>,
-}));
-
 vi.mock('@/features/Conversation/composerDraftBus', () => ({
   queueDraftForMainComposer: mocks.queueDraftForMainComposer,
 }));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
-}));
-
-vi.mock('@/features/RecommendTaskTemplates/useDailyBriefRecommendationsUI', () => ({
-  useDailyBriefRecommendationsUI: () => mocks.recommendations,
-}));
-
-vi.mock('@/features/RecommendTaskTemplates/TaskTemplateCard', () => ({
-  TaskTemplateCard: ({
-    onCreated,
-    template,
-  }: {
-    onCreated: (id: number) => void;
-    template: { id: number; title: string };
-  }) => (
-    <button type="button" onClick={() => onCreated(template.id)}>
-      card:{template.title}
-    </button>
-  ),
-}));
-
-vi.mock('@/features/RecommendTaskTemplates/TaskTemplateCardSkeleton', () => ({
-  TaskTemplateCardSkeleton: () => <div>card-skeleton</div>,
 }));
 
 vi.mock('@/services/onboardingMetrics', () => ({
@@ -84,46 +57,27 @@ const STEP = { flow: 'classic', step: 'taskkickoff', stepIndex: 5 };
 beforeEach(() => {
   mocks.inboxAgentId = 'agt_inbox';
   mocks.interests = ['coding'];
-  mocks.recommendations = { mode: 'hidden' };
   mocks.navigate.mockReset();
-  mocks.onCreated.mockReset();
+  mocks.onRecommendationCreated.mockReset();
   mocks.queueDraftForMainComposer.mockReset();
   mocks.trackOnboardingStepCompleted.mockReset();
   mocks.trackOnboardingStepViewed.mockReset();
 });
 
-afterEach(() => {
-  cleanup();
-});
-
-describe('TaskKickoffStep', () => {
+describe('useTaskKickoffActions', () => {
   it('tracks the view once', () => {
-    const { rerender } = render(<TaskKickoffStep />);
-    rerender(<TaskKickoffStep />);
+    const { rerender } = renderHook(() => useTaskKickoffActions());
+    rerender();
 
     expect(mocks.trackOnboardingStepViewed).toHaveBeenCalledTimes(1);
     expect(mocks.trackOnboardingStepViewed).toHaveBeenCalledWith(STEP);
   });
 
-  it('keeps start chat and skip available without suggestions', () => {
-    render(<TaskKickoffStep />);
-
-    expect(screen.getByText('taskKickoff.empty')).toBeTruthy();
-    expect(screen.getByText('taskKickoff.startChat')).toBeTruthy();
-    expect(screen.getByText('taskKickoff.skip')).toBeTruthy();
-  });
-
-  it('shows skeletons while suggestions load', () => {
-    mocks.recommendations = { mode: 'skeleton', skeletonCount: 3 };
-    render(<TaskKickoffStep />);
-
-    expect(screen.getAllByText('card-skeleton')).toHaveLength(3);
-    expect(screen.getByText('taskKickoff.startChat')).toBeTruthy();
-  });
-
   it('queues an interests prompt into the inbox chat', () => {
-    render(<TaskKickoffStep />);
-    fireEvent.click(screen.getByText('taskKickoff.startChat'));
+    const { result } = renderHook(() => useTaskKickoffActions());
+    expect(result.current.canStartChat).toBe(true);
+
+    act(() => result.current.handleStartChat());
 
     expect(mocks.queueDraftForMainComposer).toHaveBeenCalledWith(
       `taskKickoff.prompt.withInterests:${JSON.stringify({ interests: 'interests.area.coding' })}`,
@@ -136,18 +90,47 @@ describe('TaskKickoffStep', () => {
     });
   });
 
-  it('falls back home when the inbox agent is unavailable', () => {
+  it('waits for the inbox agent instead of tracking a chat start', () => {
     mocks.inboxAgentId = undefined;
-    render(<TaskKickoffStep />);
-    fireEvent.click(screen.getByText('taskKickoff.startChat'));
+    const { result } = renderHook(() => useTaskKickoffActions());
+    expect(result.current.canStartChat).toBe(false);
+
+    act(() => result.current.handleStartChat());
 
     expect(mocks.queueDraftForMainComposer).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.trackOnboardingStepCompleted).not.toHaveBeenCalled();
+
+    // Skip stays available, so the step is never a dead end.
+    act(() => result.current.handleSkip());
     expect(mocks.navigate).toHaveBeenCalledWith('/', { replace: true });
+    expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      ...STEP,
+      action: 'skipped',
+      skipped: true,
+    });
+  });
+
+  it('starts the chat once the inbox agent has loaded', () => {
+    mocks.inboxAgentId = undefined;
+    const { rerender, result } = renderHook(() => useTaskKickoffActions());
+
+    mocks.inboxAgentId = 'agt_inbox';
+    rerender();
+    act(() => result.current.handleStartChat());
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_inbox', { replace: true });
+    expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      ...STEP,
+      action: 'chat_started',
+    });
   });
 
   it('tracks skip and goes home', () => {
-    render(<TaskKickoffStep />);
-    fireEvent.click(screen.getByText('taskKickoff.skip'));
+    const { result } = renderHook(() => useTaskKickoffActions());
+
+    act(() => result.current.handleSkip());
 
     expect(mocks.navigate).toHaveBeenCalledWith('/', { replace: true });
     expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledWith({
@@ -158,16 +141,14 @@ describe('TaskKickoffStep', () => {
   });
 
   it('tracks a created template once and keeps the step leavable', () => {
-    mocks.recommendations = {
-      mode: 'cards',
-      onCreated: mocks.onCreated,
-      templates: [{ id: 7, title: 'Daily digest' }],
-    };
-    render(<TaskKickoffStep />);
-    fireEvent.click(screen.getByText('card:Daily digest'));
-    fireEvent.click(screen.getByText('taskKickoff.skip'));
+    const { result } = renderHook(() =>
+      useTaskKickoffActions({ onRecommendationCreated: mocks.onRecommendationCreated }),
+    );
 
-    expect(mocks.onCreated).toHaveBeenCalledWith(7);
+    act(() => result.current.handleCreated(7));
+    act(() => result.current.handleSkip());
+
+    expect(mocks.onRecommendationCreated).toHaveBeenCalledWith(7);
     // Skip still leaves the step, without a second completion event.
     expect(mocks.navigate).toHaveBeenCalledWith('/', { replace: true });
     expect(mocks.trackOnboardingStepCompleted).toHaveBeenCalledTimes(1);

@@ -21,6 +21,7 @@ import { homeType } from '@/features/Home/components/homeType';
 import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
 import { ConnectorAuthRow } from './ConnectorAuthRow';
+import { isNestedControlClick } from './isNestedControlClick';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
 import { styles } from './style';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
@@ -85,6 +86,16 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       [handleAddTask, loading, pendingCreate],
     );
 
+    // On `clickToCreate` the card body is the create action, but its own controls
+    // keep their meaning: tapping the schedule info icon must only show its tooltip.
+    const handleCardCreateClick = useCallback(
+      (event: MouseEvent<HTMLElement>) => {
+        if (isNestedControlClick(event.target, event.currentTarget)) return;
+        handlePrimaryClick(event);
+      },
+      [handlePrimaryClick],
+    );
+
     if (compact)
       return (
         <Flexbox horizontal align={'center'} className={styles.compactRow} gap={4}>
@@ -137,7 +148,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
-        onClick={clickToCreate ? handlePrimaryClick : handleOpenDetail}
+        onClick={clickToCreate ? handleCardCreateClick : handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           <Flexbox
