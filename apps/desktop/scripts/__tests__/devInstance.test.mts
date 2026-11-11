@@ -127,13 +127,35 @@ describe('renderer probes', () => {
   });
 
   it('reports a timeout instead of throwing so callers decide whether it is fatal', async () => {
+    let clock = 0;
     const probe = vi.fn(async () => false);
-    const wait = vi.fn(async () => {});
+    const wait = vi.fn(async (durationMs: number) => {
+      clock += durationMs;
+    });
 
     await expect(
-      waitForDesktopWindow({ cdpPort: 9300, probe, timeoutMs: 3000, wait }),
+      waitForDesktopWindow({ cdpPort: 9300, now: () => clock, probe, timeoutMs: 3000, wait }),
     ).resolves.toBe(false);
-    expect(probe).toHaveBeenCalledTimes(3);
+    expect(probe).toHaveBeenCalledTimes(4);
+    expect(clock).toBe(3000);
+  });
+
+  /** Regression: a fixed attempt count let 2s probes stretch a 60s wait to about 180s. */
+  it('stops at the deadline even when each probe is slow', async () => {
+    let clock = 0;
+    const probe = vi.fn(async () => {
+      clock += 2000;
+      return false;
+    });
+    const wait = vi.fn(async (durationMs: number) => {
+      clock += durationMs;
+    });
+
+    await expect(
+      waitForDesktopWindow({ cdpPort: 9300, now: () => clock, probe, timeoutMs: 3000, wait }),
+    ).resolves.toBe(false);
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(clock).toBeLessThanOrEqual(5000);
   });
 
   it('stops waiting when the process tree exits', async () => {

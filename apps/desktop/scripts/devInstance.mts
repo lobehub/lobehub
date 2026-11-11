@@ -263,6 +263,8 @@ export interface WaitForDesktopWindowOptions {
   /** Throws when the Electron process tree has already exited. */
   assertRunning?: () => void;
   cdpPort: number;
+  /** Clock for the deadline; defaults to `Date.now`. */
+  now?: () => number;
   probe?: (cdpPort: number) => Promise<boolean>;
   signal?: AbortSignal;
   timeoutMs: number;
@@ -276,21 +278,24 @@ export const waitForDesktopWindow = async ({
   probe = probeDesktopWindow,
   signal,
   timeoutMs,
+  now = Date.now,
   wait = (durationMs) =>
     new Promise((resolve) => {
       setTimeout(resolve, durationMs);
     }),
 }: WaitForDesktopWindowOptions) => {
-  const attempts = Math.max(1, Math.ceil(timeoutMs / RENDERER_RETRY_MS));
+  // A deadline, not an attempt count: an unresponsive renderer makes each probe
+  // take seconds, so counting attempts would stretch the wait several times over.
+  const deadline = now() + timeoutMs;
 
-  for (let attempt = 0; attempt < attempts; attempt++) {
+  for (;;) {
     signal?.throwIfAborted();
     assertRunning?.();
     if (await probe(cdpPort)) return true;
-    await wait(RENDERER_RETRY_MS);
+    const remaining = deadline - now();
+    if (remaining <= 0) return false;
+    await wait(Math.min(RENDERER_RETRY_MS, remaining));
   }
-
-  return false;
 };
 
 // ─── Login state ─────────────────────────────────────────────────────
