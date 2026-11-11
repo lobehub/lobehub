@@ -150,6 +150,9 @@ describe('OIDC protocol endpoints', () => {
     '/oidc/me',
     '/oidc/acceptance/callback?error=invalid_target&state=s',
     '/oauth/connector/client-metadata.json',
+    '/oidc/token/revocation',
+    '/oidc/token/introspection',
+    '/oidc/handoff/native',
   ])('serves %s without sending an unauthenticated client to sign-in', async (path) => {
     const { getSession, response } = await callMiddleware(path);
 

@@ -5,6 +5,7 @@ import type { DataSyncConfig, DesktopBootstrapIdentity } from '@lobechat/electro
 import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { notifyDesktopSessionChanged } from '@/modules/appHandoff/sessionEvents';
 import { refreshAppSignIn, withdrawAppSignIn } from '@/modules/cliEmbedding/appSignInFile';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
@@ -143,6 +144,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     }
 
     this.broadcastRemoteServerConfigUpdated();
+    notifyDesktopSessionChanged();
 
     return true;
   }
@@ -301,6 +303,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   private pushRefreshedAccessToken(accessToken: string) {
     this.app.getService(GatewayConnectionService)?.updatePersonalToken(accessToken);
     void refreshAppSignIn(accessToken);
+    notifyDesktopSessionChanged();
   }
 
   /**
@@ -384,6 +387,8 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     this.app.storeManager.delete(this.encryptedTokensKey);
     // Signed out: agent runs must not keep acting as the previous user.
     await withdrawAppSignIn();
+    // …and no local app may obtain a sign-in from this one any more.
+    notifyDesktopSessionChanged();
 
     // Disconnect gateway when tokens are cleared (logout / token refresh failure)
     const gatewaySrv = this.app.getService(GatewayConnectionService);

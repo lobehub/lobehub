@@ -8,7 +8,21 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type { HeteroSessionDirPref } from '@lobechat/types';
 
+/**
+ * A native app executable the user allowed to sign in with this desktop app's
+ * account without asking again. Pinned to the exact file: an update or a
+ * replaced binary changes size or mtime and asks again.
+ */
+export interface AppHandoffTrustedApp {
+  clientId: string;
+  exePath: string;
+  mtimeMs: number;
+  size: number;
+}
+
 export interface ElectronMainStore {
+  /** See {@link AppHandoffTrustedApp}. */
+  appHandoffTrustedApps: AppHandoffTrustedApp[];
   appTrayVisible: boolean;
   completionSound?: Partial<Omit<CompletionSoundSettings, 'systemSoundDisabled'>> & {
     directory?: string;

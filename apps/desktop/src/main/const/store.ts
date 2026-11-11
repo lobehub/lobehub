@@ -26,6 +26,7 @@ export const defaultProxySettings: NetworkProxySettings = {
  * Storage default values
  */
 export const STORE_DEFAULTS: ElectronMainStore = {
+  appHandoffTrustedApps: [],
   appTrayVisible: true,
   dataSyncConfig: { storageMode: 'cloud' },
   encryptedTokens: {},

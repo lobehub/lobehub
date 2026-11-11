@@ -1,3 +1,4 @@
+import { OIDC_NATIVE_HANDOFF } from '@lobechat/business-const';
 import { siteReviewFromResource } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
@@ -399,6 +400,26 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
         grantType: ctx.oidc?.params?.grant_type,
         status: ctx.status,
       }),
+    );
+  });
+
+  /**
+   * Codes for native handoff targets are redeemed at this standard endpoint, so the
+   * handoff's audit trail ends here: `grantId` ties this line to the
+   * `[OIDC] native handoff issued` line that created the grant. (A native client's
+   * own browser sign-in is logged the same way; the issued line tells them apart.)
+   * Replayed and expired codes are already logged by `grant.error` above.
+   */
+  const handoffTargetIds = new Set(OIDC_NATIVE_HANDOFF.to.map((target) => target.clientId));
+  provider.on('grant.success', (ctx) => {
+    const clientId = ctx.oidc?.client?.clientId;
+    if (ctx.oidc?.params?.grant_type !== 'authorization_code' || !clientId) return;
+    if (!handoffTargetIds.has(clientId)) return;
+
+    const code = ctx.oidc.entities?.AuthorizationCode;
+    console.info(
+      '[OIDC] native client code redeemed',
+      JSON.stringify({ clientId, grantId: code?.grantId, sub: code?.accountId }),
     );
   });
 

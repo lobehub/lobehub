@@ -13,10 +13,20 @@ export const OIDC_ROUTES = {
   code_verification: '/oidc/device',
   device_authorization: '/oidc/device/auth',
   end_session: '/oidc/session/end',
+  introspection: '/oidc/token/introspection',
   jwks: '/oidc/jwks',
+  revocation: '/oidc/token/revocation',
   token: '/oidc/token',
   userinfo: '/oidc/me',
 } as const;
 
 /** Where clients fetch discovery: the issuer plus the well-known suffix. */
 export const OIDC_DISCOVERY_PATH = '/oidc/.well-known/openid-configuration';
+
+/**
+ * Where a signed-in first-party app asks the provider to issue a one-time
+ * authorization code for another registered native app (see
+ * `apps/server/src/services/oidc/nativeHandoff.ts`). It is served by its own
+ * route handler, not by oidc-provider.
+ */
+export const OIDC_NATIVE_HANDOFF_PATH = '/oidc/handoff/native';

@@ -4,6 +4,7 @@ import { agentSignal } from './agentSignal';
 import { botWake } from './botWake';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { linear } from './linear';
+import { oidcNativeHandoff } from './oidcNativeHandoff';
 import { pageCollab } from './pageCollab';
 import { skillTools } from './skillTools';
 import { steerQueue } from './steerQueue';
@@ -19,6 +20,7 @@ export const redisService = {
   botWake,
   deviceSystemInfo,
   linear,
+  oidcNativeHandoff,
   pageCollab,
   skillTools,
   steerQueue,

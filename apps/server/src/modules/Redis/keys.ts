@@ -248,6 +248,11 @@ export const RedisKeys = {
    */
   lobechat: {
     /**
+     * Native-app handoff codes one user requested in the current one-minute window.
+     * Full key: lobechat:oidc_native_handoff:v1:{userId}
+     */
+    oidcNativeHandoff: (userId: string): string => `oidc_native_handoff:v1:${userId}`,
+    /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}
      */

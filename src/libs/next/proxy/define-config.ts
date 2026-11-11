@@ -241,8 +241,14 @@ export function defineConfig() {
     // Client ID Metadata Document — fetched by the provider's authorization server.
     '/oauth/connector/client-metadata.json',
     '/oidc/handoff',
+    // Authenticated by the caller's own access token, never by a browser session.
+    '/oidc/handoff/native',
     '/oidc/device/auth',
     '/oidc/token',
+    // RFC 7009 / RFC 7662: native clients revoke (sign out) and introspect with
+    // their client_id and token; a session gate sent them to the sign-in page.
+    '/oidc/token/revocation',
+    '/oidc/token/introspection',
     // OIDC protocol endpoints a client reads before (or without) any browser
     // session: discovery and JWKS are public by spec, and userinfo authenticates
     // with the bearer access token the provider itself checks. Session-gating them

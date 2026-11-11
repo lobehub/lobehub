@@ -1,4 +1,13 @@
 const dialog = {
+  'appHandoff.allow': 'Allow',
+  'appHandoff.deny': "Don't Allow",
+  'appHandoff.detail':
+    'It gets its own sign-in. This app stays signed in, and signing out of either one does not sign out the other. Only allow apps you installed yourself.',
+  'appHandoff.message': '{{name}} wants to sign in with the account you use in this app',
+  'appHandoff.program': 'Program: {{path}}',
+  'appHandoff.remember': 'Always allow this program',
+  'appHandoff.title': 'Allow sign-in',
+  'appHandoff.unknownProgram': 'The program could not be identified.',
   'about.button': 'OK',
   'about.detail': 'An LLM-powered chat app',
   'about.message': '{{appName}} {{appVersion}}',
