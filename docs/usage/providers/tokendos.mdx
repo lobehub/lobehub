@@ -1,0 +1,52 @@
+---
+title: TokenDos Provider Configuration
+description: Learn how to configure and use the TokenDos AI gateway in LobeHub
+tags:
+  - TokenDos
+  - Provider Configuration
+  - Guide
+---
+
+# TokenDos Provider Configuration
+
+TokenDos is a high-performance AI model routing and direct-connect gateway designed for developers, offering native Anthropic Claude and OpenAI compatibility, low-latency streaming, native thinking flow, and 1:1 real-time billing. This guide walks you through configuring TokenDos in LobeHub.
+
+In LobeHub, go to **Settings → AI Providers**, select **TokenDos**, and enable it.
+
+## Prerequisites
+
+Before using the TokenDos API:
+
+1. **Create a TokenDos Account**
+   - Visit [TokenDos](https://www.tokendos.com)
+   - Sign up and log in
+
+2. **Obtain an API Key**
+   - Navigate to [API Key Management](https://www.tokendos.com/token) in the console
+   - Create and copy your API key
+
+## Configuration
+
+### In-App Settings
+
+In LobeHub's provider settings:
+- Enter your `TokenDos API Key`
+- The default endpoint is `https://api.tokendos.com` (leave as default or customize if needed)
+
+### Environment Variables (Self-Hosting)
+
+Add the following to your `.env` file or Docker container environment:
+
+```bash
+# TokenDos API Key
+TOKENDOS_API_KEY=your_tokendos_api_key
+
+# Optional: Custom endpoint (defaults to https://api.tokendos.com)
+TOKENDOS_PROXY_URL=https://api.tokendos.com
+```
+
+## Key Features
+
+1. **Multi-Protocol Intelligent Routing**: Automatically routes Claude models to native Anthropic Messages API with full thinking blocks support, and OpenAI / DeepSeek models to OpenAI `/v1`.
+2. **Dynamic Model Fetching**: Click "Fetch Models" to dynamically sync the complete list of active models.
+3. **Transparent 1:1 Token Billing**: Real-time token usage billing with verifiable routing.
