@@ -92,13 +92,24 @@ export const inboxActivity = (
 /**
  * Turn the sidebar agent/group list into IM-style conversations: each row
  * carries a preview of its latest topic and is ordered by latest activity,
- * pinned rows first.
+ * pinned rows first. Only conversations that exist get a row — a direct Channel
+ * or a topic; the rest stay in Contacts. Pinned rows and the open one stay,
+ * and a search lists every agent so a new conversation can start from it.
  */
 export const buildConversationSections = (
   items: SidebarAgentItem[],
   recents: RecentItem[] | undefined,
   /** The person's direct Channel per agent id. A row that opens one shows that conversation. */
   directChannels?: Map<string, ChannelListItem>,
+  {
+    activeId,
+    includeIdle = false,
+  }: {
+    /** The routed conversation, kept so the open chat always has its row. */
+    activeId?: string;
+    /** Keep agents and groups without any conversation yet. */
+    includeIdle?: boolean;
+  } = {},
 ): ConversationSections => {
   const latestByOwner = topicsByOwner(recents);
 
@@ -123,6 +134,8 @@ export const buildConversationSections = (
     }
 
     const latest = latestByOwner.get(item.id);
+    if (!latest && !includeIdle && !item.pinned && item.id !== activeId) continue;
+
     const latestTime = latest ? toTime(latest.updatedAt) : 0;
 
     conversations.push({

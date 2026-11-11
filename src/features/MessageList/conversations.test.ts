@@ -50,11 +50,39 @@ describe('buildConversationSections', () => {
     );
 
     expect(pinned.map((c) => c.item.id)).toEqual(['p']);
-    expect(recent.map((c) => c.item.id)).toEqual(['a', 'g', 'b']);
+    // Documents are not conversation activity, so `b` has no conversation and no row.
+    expect(recent.map((c) => c.item.id)).toEqual(['a', 'g']);
     expect(recent[0].preview).toBe('newest reply');
     expect(recent[1].preview).toBe('group topic');
-    // Documents are not conversation activity.
-    expect(recent[2].activeAt).toEqual(new Date('2026-10-02'));
+  });
+
+  it('lists only agents and groups that have a conversation', () => {
+    const items = [
+      agent('talked', '2026-10-01'),
+      agent('idle', '2026-10-09'),
+      agent('idle-group', '2026-10-09', { type: 'group' }),
+      agent('open', '2026-10-01'),
+      agent('pinned', '2026-10-01', { pinned: true }),
+    ];
+    const recents = [topic({ agentId: 'talked', updatedAt: '2026-10-02' })];
+
+    const { pinned, recent } = buildConversationSections(items, recents, undefined, {
+      activeId: 'open',
+    });
+
+    expect(pinned.map((c) => c.item.id)).toEqual(['pinned']);
+    expect(recent.map((c) => c.item.id)).toEqual(['talked', 'open']);
+  });
+
+  it('keeps every agent while searching so a new conversation can start', () => {
+    const { recent } = buildConversationSections(
+      [agent('idle', '2026-10-09'), agent('idle-group', '2026-10-08', { type: 'group' })],
+      [],
+      undefined,
+      { includeIdle: true },
+    );
+
+    expect(recent.map((c) => c.item.id)).toEqual(['idle', 'idle-group']);
   });
 
   it('attributes a group topic that also carries the supervisor agentId to the group', () => {
@@ -70,17 +98,17 @@ describe('buildConversationSections', () => {
       ],
     );
 
-    expect(recent.map((c) => c.item.id)).toEqual(['g', 'sup']);
+    // The supervisor has no conversation of its own, so it never shows the group's reply.
+    expect(recent.map((c) => c.item.id)).toEqual(['g']);
     expect(recent[0].preview).toBe('group reply');
-    // The supervisor only keeps its own timestamp and never shows the group's reply.
-    expect(recent[1].activeAt).toEqual(new Date('2026-09-01'));
-    expect(recent[1].preview).toBeUndefined();
   });
 
   it('drops duplicate ids and falls back to the description', () => {
     const { recent } = buildConversationSections(
       [agent('a', '2026-10-01', { description: 'helps' }), agent('a', '2026-10-01')],
       undefined,
+      undefined,
+      { includeIdle: true },
     );
 
     expect(recent).toHaveLength(1);
@@ -104,7 +132,8 @@ describe('buildConversationSections with direct Channels', () => {
       new Map([['a', direct]]),
     );
 
-    expect(recent.map((c) => c.item.id)).toEqual(['a', 'b']);
+    // `b` has neither a direct Channel nor a topic.
+    expect(recent.map((c) => c.item.id)).toEqual(['a']);
     expect(recent[0]).toMatchObject({
       activeAt: new Date('2026-10-09'),
       preview: 'Done, see the PR',
@@ -150,6 +179,8 @@ describe('buildConversationEntries', () => {
       agent('p', '2026-09-01', { pinned: true, title: 'Pinned' }),
     ],
     undefined,
+    undefined,
+    { includeIdle: true },
   );
   const ids = (entries: ReturnType<typeof buildConversationEntries>) =>
     entries.map((e) =>

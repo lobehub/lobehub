@@ -141,6 +141,7 @@ describe('MessageList Body', () => {
     home.items = [
       { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
     ];
+    home.recents = [{ agentId: 'a', routePath: '/agent/a', type: 'topic', updatedAt: new Date() }];
 
     render(createElement(Body));
 
@@ -165,6 +166,42 @@ describe('MessageList Body', () => {
     expect(group).toHaveTextContent('Pinned 2');
     expect(group).not.toHaveTextContent('Agent A');
     expect(group).not.toHaveTextContent('Lobe AI row');
+  });
+
+  it('waits for recents before deciding which agents have a conversation', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
+    ];
+    home.recents = undefined as unknown as unknown[];
+
+    render(createElement(Body));
+
+    expect(screen.getByText('Loading agents')).toBeInTheDocument();
+  });
+
+  // Every agent and group got a row, so the list read like Contacts instead of open conversations.
+  it('lists only agents with a conversation, and every agent while searching', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'a', pinned: false, title: 'Talked', type: 'agent', updatedAt: new Date() },
+      { id: 'b', pinned: false, title: 'Idle', type: 'agent', updatedAt: new Date() },
+      { id: 'c', pinned: false, title: 'Direct', type: 'agent', updatedAt: new Date() },
+    ];
+    home.recents = [{ agentId: 'a', routePath: '/agent/a', type: 'topic', updatedAt: new Date() }];
+    home.channels = [{ agentId: 'c', createdAt: new Date(), id: 'chn_c', projectId: null }];
+
+    const { unmount } = render(createElement(Body));
+
+    expect(screen.getByText('Talked')).toBeInTheDocument();
+    expect(screen.getByText('Direct')).toBeInTheDocument();
+    expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+
+    unmount();
+    home.query = 'idle';
+    render(createElement(Body));
+
+    expect(screen.getByText('Idle')).toBeInTheDocument();
   });
 });
 
@@ -261,6 +298,9 @@ describe('MessageList Body active row', () => {
   it('leaves Agent rows unhighlighted inside a group Channel', () => {
     home.isInit = true;
     home.items = [agent];
+    home.recents = [
+      { agentId: 'agt_nasa', routePath: '/agent/agt_nasa', type: 'topic', updatedAt: new Date() },
+    ];
     home.pathname = '/channels/chn_000000000002';
     home.channels = [{ agentId: null, id: 'chn_000000000002' }];
 

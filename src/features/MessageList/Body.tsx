@@ -156,7 +156,10 @@ const Body = memo(() => {
   const entries = useMemo(
     () =>
       buildConversationEntries(
-        buildConversationSections(items, recents, directChannels),
+        buildConversationSections(items, recents, directChannels, {
+          activeId: activeRouteId,
+          includeIdle: !!query.trim(),
+        }),
         {
           activeAt: inboxActivity(inboxUpdatedAt, inboxTopic, inboxChannel),
           channel: inboxChannel,
@@ -169,6 +172,7 @@ const Body = memo(() => {
       items,
       recents,
       directChannels,
+      activeRouteId,
       inboxUpdatedAt,
       inboxTitle,
       inboxTopic,
@@ -202,9 +206,9 @@ const Body = memo(() => {
       <ConversationItem activeRouteId={activeRouteId} conversation={entry} key={entry.item.id} />
     );
 
-  // Only the agent rows wait on the agent list: Lobe AI and Channels load on
-  // their own, so a slow or failed agent-list request must not hide them.
-  const agentsLoading = !isInit && items.length === 0;
+  // Only the agent rows wait on the agent list and recents (which decide what has a conversation):
+  // Lobe AI and Channels load on their own, so a slow or failed request must not hide them.
+  const agentsLoading = (!isInit && items.length === 0) || recents === undefined;
 
   return (
     <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
