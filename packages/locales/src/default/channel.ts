@@ -19,6 +19,7 @@ export default {
   'sort.order.time.desc': 'Newest first',
   'sort.title': 'Sort channels',
   'title': 'Channels',
+  'unreadMentions': 'Unread mentions: {{count}}',
   'create': 'Create channel',
   'submit': 'Create',
   'create.onlyYou': 'Only you for now. Create it and invite members whenever you like.',

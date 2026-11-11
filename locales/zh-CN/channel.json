@@ -254,5 +254,6 @@
   "unarchiveSuccess": "频道已取消归档",
   "unarchiveThread": "取消归档线程",
   "unarchiveThreadSuccess": "线程已取消归档",
-  "unnamedAgent": "未命名 Agent"
+  "unnamedAgent": "未命名 Agent",
+  "unreadMentions": "{{count}} 条未读提及"
 }

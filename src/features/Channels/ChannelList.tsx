@@ -84,6 +84,36 @@ const styles = stylex.create({
   },
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
+  channel: { position: 'relative' },
+  // An unread Channel gets a pill in the sidebar gutter and a bright, bold title, the way
+  // Discord marks it; an @mention adds a count badge.
+  unreadPill: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockStart: 14,
+    insetInlineStart: -4,
+    width: 4,
+    height: 8,
+    borderStartEndRadius: 4,
+    borderEndEndRadius: 4,
+    backgroundColor: cssVar.colorText,
+  },
+  unreadTitle: { fontWeight: 600 },
+  mentionBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 16,
+    height: 16,
+    paddingInline: 4,
+    borderRadius: 999,
+    fontSize: 10,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: '#fff',
+    backgroundColor: cssVar.colorError,
+    cursor: 'pointer',
+  },
 });
 
 const ChannelThreads = ({
@@ -224,24 +254,47 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const renderChannel = (channel: ChannelListItem) => {
     const path = CHANNEL_URL(channel.id, null, channel.projectId);
     const open = activeChannelId === channel.id;
+    // The open Channel is being read; its count clears once the read receipt lands.
+    const unread = !open && (channel.unreadCount ?? 0) > 0;
+    const mentions = open ? 0 : (channel.mentionCount ?? 0);
     return (
-      <Flexbox key={channel.id}>
+      <Flexbox key={channel.id} {...stylex.props(styles.channel)}>
+        {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
         <NavItem
           active={open && !activeThreadId}
           aria-current={open && !activeThreadId ? 'page' : undefined}
           contextMenuItems={() => menuItems(channel)}
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
-          icon={Hash}
-          // The glyph fills its whole box, so it reads larger than other nav icons at 18px.
-          iconSize={14}
-          title={channel.title}
+          titleColor={unread ? cssVar.colorText : undefined}
           actions={() => (
             <DropdownMenu items={menuItems(channel)}>
               <ActionIcon icon={MoreHorizontal} size="small" title={t('more', { ns: 'common' })} />
             </DropdownMenu>
           )}
+          extra={
+            mentions > 0 ? (
+              <span
+                aria-label={t('unreadMentions', { count: mentions })}
+                {...stylex.props(styles.mentionBadge)}
+                // NavItem stops clicks inside `extra`; the badge still opens the Channel.
+                onClick={() => navigate(path)}
+              >
+                {mentions > 99 ? '99+' : mentions}
+              </span>
+            ) : undefined
+          }
+          title={
+            unread ? (
+              <span {...stylex.props(styles.unreadTitle)}>{channel.title}</span>
+            ) : (
+              channel.title
+            )
+          }
           onClick={() => navigate(path)}
+          icon={Hash}
+          // The glyph fills its whole box, so it reads larger than other nav icons at 18px.
+          iconSize={14}
         />
         {open && (
           <ChannelThreads

@@ -328,6 +328,8 @@ export interface ChannelListItem {
   id: string;
   /** The newest main-channel message, cut for a preview; set by the Channel list. */
   lastMessage?: { content: string; createdAt: Date } | null;
+  /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
+  mentionCount?: number;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   /**

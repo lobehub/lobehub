@@ -254,5 +254,6 @@
   "unarchiveSuccess": "Channel unarchived",
   "unarchiveThread": "Unarchive thread",
   "unarchiveThreadSuccess": "Thread unarchived",
-  "unnamedAgent": "Unnamed Agent"
+  "unnamedAgent": "Unnamed Agent",
+  "unreadMentions": "Unread mentions: {{count}}"
 }
