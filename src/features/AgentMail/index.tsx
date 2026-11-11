@@ -211,13 +211,6 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   if (createdDraftId && composeId !== createdDraftId && composeId !== NEW_COMPOSE) {
     setCreatedDraftId(undefined);
   }
-  // Crossing the narrow breakpoint moves the pane to another subtree, so the
-  // composer remounts anyway: from then on it must read the draft it saved.
-  const [composeLayout, setComposeLayout] = useState(narrow);
-  if (composeLayout !== narrow) {
-    setComposeLayout(narrow);
-    if (createdDraftId) setCreatedDraftId(undefined);
-  }
   const paneComposeId = composeId && composeId === createdDraftId ? NEW_COMPOSE : composeId;
 
   const startCompose = () => {

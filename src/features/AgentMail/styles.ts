@@ -60,6 +60,14 @@ const definitions = stylex.create({
     borderInlineEndStyle: 'solid',
     borderInlineEndColor: cssVar.colorBorderSecondary,
   },
+  /** The list column on a one-column page: the whole width, no divider. */
+  listPaneFull: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minWidth: 0,
+    minHeight: 0,
+  },
   mailboxTrigger: {
     // The dropdown tints an open trigger; on a card that reads as a stray box.
     backgroundColor: 'transparent',
@@ -133,6 +141,7 @@ export const identityStyles = {
   inboxRowSelected:
     stylex.props(definitions.inboxRow, definitions.inboxRowSelected).className ?? '',
   listPane: stylex.props(definitions.listPane).className ?? '',
+  listPaneFull: stylex.props(definitions.listPaneFull).className ?? '',
   mailboxTrigger: stylex.props(definitions.mailboxTrigger).className ?? '',
   mobileDetail: stylex.props(definitions.mobileDetail).className ?? '',
   attachmentRow: stylex.props(definitions.attachmentRow).className ?? '',
