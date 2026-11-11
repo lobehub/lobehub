@@ -5,9 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { openAddCheckModal } from '../Checks/AddCheckModal';
@@ -44,7 +43,7 @@ const AcceptanceFocusWorkspace = () => {
     if (subjectType === 'site') return;
     await verifyService.saveAcceptanceChecklist(subjectType, data.subject.id, checklist);
     await mutate();
-    void globalMutate(isAcceptanceListKey);
+    void useVerifyStore.getState().refreshAcceptanceLists();
     toast.success(t('acceptance.checkCreate.saved'));
   };
 
@@ -115,7 +114,7 @@ const AcceptanceFocusWorkspace = () => {
         try {
           await verifyService.reviewChecks({ id: data.acceptance.id, ...input });
           await mutate();
-          void globalMutate(isAcceptanceListKey);
+          void useVerifyStore.getState().refreshAcceptanceLists();
           return true;
         } catch (cause) {
           console.error('[acceptance:review]', cause);

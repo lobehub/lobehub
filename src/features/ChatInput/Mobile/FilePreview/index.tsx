@@ -1,4 +1,5 @@
-import { createStaticStyles, Flexbox, PreviewGroup, ScrollShadow } from '@lobehub/ui';
+import { Flexbox, PreviewGroup, ScrollShadow } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -8,12 +9,7 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import FileItem from './FileItem';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow-x: scroll;
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({ container: { overflowX: 'scroll', width: '100%' } });
 
 const FilePreview = memo(() => {
   const expand = useChatInputStore((s) => s.expand);
@@ -25,7 +21,7 @@ const FilePreview = memo(() => {
     <ScrollShadow
       hideScrollBar
       horizontal
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       orientation={'horizontal'}
       size={8}
     >

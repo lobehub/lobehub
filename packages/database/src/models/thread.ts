@@ -203,6 +203,52 @@ export class ThreadModel {
     return rows.length > 0;
   };
 
+  /**
+   * Record the operation id of a run that just started. The run is scheduled
+   * before its id is known here, so it may already have settled the thread;
+   * that metadata holds its final usage and error and must not be replaced.
+   */
+  attachRunOperation = async (id: string, metadata: ThreadMetadata) => {
+    return this.db
+      .update(threads)
+      .set({ metadata, updatedAt: new Date() })
+      .where(
+        and(eq(threads.id, id), this.ownership(), eq(threads.status, ThreadStatus.Processing)),
+      );
+  };
+
+  /**
+   * Compare-and-set a `processing` thread into the terminal status of its run.
+   *
+   * `value.metadata.startedAt` must be the value the caller read: every claim
+   * rewrites it, so an earlier run cannot close a follow-up that claimed the
+   * thread after that read. The operation id is written after the run starts,
+   * so it may still be empty; the caller decides whether an empty id is its own.
+   *
+   * @returns whether this caller settled the thread
+   */
+  settleRun = async (
+    id: string,
+    operationId: string,
+    value: { metadata: ThreadMetadata; status: ThreadStatus },
+  ): Promise<boolean> => {
+    const rows = await this.db
+      .update(threads)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(threads.id, id),
+          this.ownership(),
+          eq(threads.status, ThreadStatus.Processing),
+          sql`COALESCE(${threads.metadata} ->> 'operationId', '') IN ('', ${operationId})`,
+          sql`COALESCE(${threads.metadata} ->> 'startedAt', '') = ${value.metadata.startedAt ?? ''}`,
+        ),
+      )
+      .returning({ id: threads.id });
+
+    return rows.length > 0;
+  };
+
   update = async (id: string, value: Partial<ThreadItem>) => {
     return this.db
       .update(threads)

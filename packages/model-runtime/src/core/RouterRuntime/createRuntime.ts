@@ -474,23 +474,21 @@ export const createRouterRuntime = ({
       const requestId = nanoid();
       const { allowedApiTypes, metadata, pricingContext, toolsCount, user } = routeContext;
       const matchedRouter = await this.resolveMatchedRouter(payload.model, pricingContext);
-      const sortedRouterOptions = await this.applySortRouterOptions(
-        matchedRouter,
-        payload.model,
-        this.normalizeRouterOptions(matchedRouter),
-        routeContext,
+      const eligibleRouterOptions = this.normalizeRouterOptions(matchedRouter).filter(
+        (option) =>
+          !allowedApiTypes || allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
       );
-      const routerOptions = allowedApiTypes
-        ? sortedRouterOptions.filter((option) =>
-            allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
-          )
-        : sortedRouterOptions;
-
-      if (routerOptions.length === 0) {
+      if (eligibleRouterOptions.length === 0) {
         throw new TypeError(
           `No provider route supports raw audio input for model ${payload.model}`,
         );
       }
+      const routerOptions = await this.applySortRouterOptions(
+        matchedRouter,
+        payload.model,
+        eligibleRouterOptions,
+        routeContext,
+      );
       const firstChannelId = routerOptions[0]?.id;
       const weighted = routerOptions.some((option) => option.weight !== undefined);
       const routeTasks = params.scheduleRouteRequestSettled

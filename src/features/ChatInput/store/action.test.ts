@@ -17,6 +17,13 @@ vi.mock('@/services/mentionMarketInstall', async (importOriginal) => ({
   installMarketMentions: vi.fn(),
 }));
 
+const createHelloEditor = () => ({
+  cleanDocument: vi.fn(),
+  focus: vi.fn(),
+  getLexicalEditor: () => ({}),
+  getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+});
+
 describe('ChatInput store actions', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -162,12 +169,7 @@ describe('ChatInput store actions', () => {
   });
 
   it('does not record history when the input history feature is disabled', () => {
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       feature: { inputCompletion: true, inputHistory: false, mention: true, slash: true },
@@ -224,12 +226,7 @@ describe('ChatInput store actions', () => {
   // mirror still reads "empty" and used to be silently dropped.
   it('sends via resolveSendBlocked even when the stale disabled mirror says blocked', () => {
     const onSend = vi.fn();
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       onSend,
@@ -244,12 +241,7 @@ describe('ChatInput store actions', () => {
 
   it('blocks the send when resolveSendBlocked reports blocked', () => {
     const onSend = vi.fn();
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       onSend,
@@ -264,12 +256,7 @@ describe('ChatInput store actions', () => {
 
   it('keeps gating on sendButtonProps.disabled when no resolver is provided', () => {
     const onSend = vi.fn();
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       onSend,
@@ -282,12 +269,7 @@ describe('ChatInput store actions', () => {
   });
 
   it('does not record history when no send handler is configured', () => {
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
     });

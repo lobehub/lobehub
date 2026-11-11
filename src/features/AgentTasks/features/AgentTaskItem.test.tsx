@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   activeWorkspaceId: 'workspace-1' as string | undefined,
   fetchTaskDetail: vi.fn(),
   navigate: vi.fn(),
+  projects: undefined as { id: string; name: string }[] | undefined,
+  projectsEnabled: true,
   taskDetailMap: {} as Record<string, unknown>,
 }));
 
@@ -103,6 +105,24 @@ vi.mock('./TaskTriggerTag', () => ({
   ),
 }));
 
+vi.mock('@/store/project', () => ({
+  projectListItemSelector: (id?: string | null) => (s: { projects?: { id: string }[] }) =>
+    id ? s.projects?.find((project) => project.id === id) : undefined,
+  useProjectStore: (selector: (s: unknown) => unknown) => selector({ projects: mocks.projects }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableProjects: () => mocks.projectsEnabled },
+}));
+
+vi.mock('@/features/Projects/ProjectAvatar', () => ({
+  default: () => <i data-testid="project-avatar" />,
+}));
+
 vi.mock('./useTaskItemContextMenu', () => ({
   useTaskItemContextMenu: () => ({ items: [], onContextMenu: vi.fn() }),
 }));
@@ -124,6 +144,8 @@ describe('AgentTaskItem', () => {
     mocks.activeWorkspaceId = 'workspace-1';
     mocks.fetchTaskDetail.mockReset();
     mocks.navigate.mockClear();
+    mocks.projects = [{ id: 'proj_a', name: 'Alpha' }];
+    mocks.projectsEnabled = true;
     mocks.taskDetailMap = {};
   });
 
@@ -153,6 +175,50 @@ describe('AgentTaskItem', () => {
     fireEvent.click(screen.getByText('Hourly trend update'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
+  });
+
+  describe('project badge', () => {
+    const withProject = (projectId?: string | null) => ({
+      ...createTask('agt_owner'),
+      projectId,
+    });
+
+    it.each([['default'], ['compact']] as const)(
+      'shows the project icon and name on a %s row, unless the surface hides it',
+      (variant) => {
+        const { rerender } = render(
+          <AgentTaskItem task={withProject('proj_a')} variant={variant} />,
+        );
+        expect(screen.getByTestId('task-project-chip')).toHaveTextContent('Alpha');
+        expect(screen.getByTestId('project-avatar')).toBeInTheDocument();
+
+        rerender(<AgentTaskItem hideProject task={withProject('proj_a')} variant={variant} />);
+        expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+      },
+    );
+
+    it.each([
+      ['no project', null],
+      ['an undefined project', undefined],
+      ['a project outside the list', 'proj_gone'],
+    ])('renders no badge for %s', (_, projectId) => {
+      render(<AgentTaskItem task={withProject(projectId)} />);
+
+      expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+      expect(screen.queryByText('proj_gone')).not.toBeInTheDocument();
+      expect(screen.getByText('Hourly trend update')).toBeInTheDocument();
+    });
+
+    it('renders no badge until the list loads, or while the Projects lab is off', () => {
+      mocks.projects = undefined;
+      const { rerender } = render(<AgentTaskItem task={withProject('proj_a')} />);
+      expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+
+      mocks.projects = [{ id: 'proj_a', name: 'Alpha' }];
+      mocks.projectsEnabled = false;
+      rerender(<AgentTaskItem task={withProject('proj_a')} variant="compact" />);
+      expect(screen.queryByTestId('task-project-chip')).not.toBeInTheDocument();
+    });
   });
 
   it('shows the assigned agent and member names in tooltips', () => {

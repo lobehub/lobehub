@@ -24,6 +24,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -156,6 +157,7 @@ export const ChannelMessage = ({
                 agentId: agentAuthorId,
                 avatar: message.author.avatar,
                 name: message.author.name || t('unnamedAgent'),
+                title: message.sourceTopicTitle,
                 topicId: sourceTopicId,
               }),
           },
@@ -251,7 +253,15 @@ export const ChannelMessage = ({
                   title: message.author.name,
                 }}
               >
-                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <AgentAvatar
+                    agentId={agentAuthorId}
+                    avatar={message.author.avatar}
+                    name={message.author.name}
+                    shape={'circle'}
+                    size={36}
+                  />
+                </span>
               </AgentProfilePopup>
             ) : (
               avatar

@@ -160,6 +160,8 @@ export async function dispatchAgentRun(
     args?: string[];
     /** Claude Code account the device must spawn on; see the request message. */
     claudeAccountRouting?: ClaudeCodeAccountRouting;
+    /** Entrypoint name the agent asked Claude Code to report; see the request message. */
+    claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
     cwd?: string;

@@ -1,4 +1,11 @@
-import type { FileExtraction, RealComponent, StyleElement, VariableKind } from '../extract';
+import type {
+  FileExtraction,
+  LiteralValue,
+  RealComponent,
+  StyleElement,
+  VariableKind,
+  VariableUse,
+} from '../extract';
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
 import { childCovered, elementsOf, parentCovered, replacedDescendants } from './descendants';
@@ -70,7 +77,17 @@ export interface FilePlan {
   file: string;
   gaps: string[];
   standIns?: Record<string, string[]>;
-  unpaired: Array<{ elementId: string; side: Side }>;
+  unpaired: Array<{ counterpart?: UnpairedCounterpart; elementId: string; side: Side }>;
+}
+
+export interface UnpairedCounterpart {
+  ancestors: string[];
+  inlineStyle?: string;
+  literalProps: Record<string, LiteralValue>;
+  props?: string;
+  real?: true;
+  tag: string;
+  variables: VariableUse[];
 }
 
 export interface PlanConfig {

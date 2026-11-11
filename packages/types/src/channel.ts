@@ -1,4 +1,5 @@
-import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentType } from './agent';
+import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 
@@ -9,17 +10,32 @@ import type { BotWakeKind } from './signal';
  * and operations; the internal transcript stays separate from the public timeline.
  */
 
-export const CHANNEL_RUNTIMES = [
-  'native',
-  'codex',
-  'amp',
-  'grok-build',
-  'claude-code',
-  'pi',
-] as const;
-export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
+/**
+ * Runtimes a Channel can seat, derived rather than listed: LobeHub's own `native` loop plus every
+ * heterogeneous runtime that executes on its user's machine (descriptor-backed CLIs and
+ * protocol-driven local runtimes). A new local runtime joins Channels when it joins the provider
+ * registry; only runtimes known not to work are excluded below, each with its reason.
+ */
+const LOCAL_EXECUTION_RUNTIMES = LocalExecutionHeterogeneousAgentTypeSchema.options;
+
+/**
+ * Remote-task runtimes (`openclaw`, `hermes`) run a task on a remote host instead of on a seated
+ * device, so a Channel's "pick a device + working directory" premise does not hold for them.
+ * They are not part of LOCAL_EXECUTION_RUNTIMES; this list documents the exclusion and is
+ * asserted by tests so a remote runtime cannot slip in by being reclassified.
+ */
+export const CHANNEL_EXCLUDED_RUNTIMES: Readonly<Record<RemoteHeterogeneousAgentType, string>> = {
+  hermes:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+  openclaw:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+};
+
+export const CHANNEL_RUNTIMES = ['native', ...LOCAL_EXECUTION_RUNTIMES] as const;
+export type ChannelRuntime = 'native' | (typeof LOCAL_EXECUTION_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
+  !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
 
 /**
@@ -356,6 +372,7 @@ export interface ChannelPublicMessage {
   sequence: number;
   /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
   sourceTopicId?: string | null;
+  sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
 }

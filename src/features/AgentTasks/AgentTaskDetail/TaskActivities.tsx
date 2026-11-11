@@ -576,7 +576,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ cursor: 'pointer', width: 'fit-content' }}
+        style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
         variant="borderless"
         onClick={() => setIsExpanded((prev) => !prev)}
       >
@@ -587,7 +587,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
       </Block>
       <Collapsible open={isExpanded}>
-        <Flexbox gap={12} paddingBlock={4} paddingInline={12}>
+        <Flexbox gap={12} paddingBlock={4}>
           {commentInput}
           {rows}
           {loadMoreFooter}

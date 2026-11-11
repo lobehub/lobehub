@@ -3,18 +3,18 @@ import type { Stream } from 'openai/streaming';
 
 import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from './events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
 } from './protocol';
-import {
-  convertIterableToStream,
-  createCallbacksTransformer,
-  createSSEProtocolTransformer,
-  generateToolCallId,
-} from './protocol';
+import { convertIterableToStream, generateToolCallId } from './protocol';
 import { setOpenAIChatCompletionUsageMissingDiagnostics } from './usageMissingDiagnostics';
 
 export function transformSparkResponseToStream(data: OpenAI.ChatCompletion) {
@@ -236,6 +236,7 @@ export const SparkAIStream = (
     transformSparkStream(chunk, streamContext, payload);
 
   return readableStream
-    .pipeThrough(createSSEProtocolTransformer(transformWithPayload, streamContext))
-    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack: streamContext }));
+    .pipeThrough(createModelEventTransformer(transformWithPayload, streamContext))
+    .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack: streamContext }))
+    .pipeThrough(createSSEEncoder());
 };

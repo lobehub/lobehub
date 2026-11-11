@@ -50,7 +50,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
       .spyOn(verifyServices, 'instantiateVerifyPlanOnStart')
       .mockReturnValue(instantiation);
     const runVerifySpy = vi
-      .spyOn(verifyServices, 'runVerifyOnCompletion')
+      .spyOn(verifyServices, 'scheduleVerifyOnCompletion')
       .mockResolvedValue(undefined);
 
     // A top-level task op registers the (still-pending) instantiation at start.
@@ -207,7 +207,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
-    vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+    vi.spyOn(verifyServices, 'scheduleVerifyOnCompletion').mockResolvedValue(undefined);
     // The recall gate falls back to the op row when metadata carries no trigger.
     (lifecycle as any).agentOperationModel = { findById: vi.fn(async () => null) };
   };

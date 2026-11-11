@@ -1,8 +1,21 @@
 import type { AgentInboxMessageSummary } from '@lobechat/types';
+import { useState } from 'react';
 import useSWR from 'swr';
+import useSWRImmutable from 'swr/immutable';
 import useSWRInfinite from 'swr/infinite';
 
 import { agentAccountService } from '@/services/agentAccount';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+
+import { IDENTITY_CHANNELS } from './const';
+
+/** The channel to offer; one this deployment cannot fulfil would only fail on click. */
+export const useOpenableChannel = () => {
+  const providers = useServerConfigStore(serverConfigSelectors.agentIdentityProviders);
+
+  return IDENTITY_CHANNELS.find((channel) => providers.includes(channel.provider));
+};
 
 const accountsKey = (agentId: string): [string, string] | null =>
   agentId ? ['agent-accounts', agentId] : null;
@@ -21,25 +34,86 @@ export const INBOX_REFRESH_INTERVAL_MS = 30_000;
 export const useAgentAccounts = (agentId: string) =>
   useSWR(accountsKey(agentId), ([, id]) => agentAccountService.list({ agentId: id }));
 
+/** One stored message, read by id rather than taken from a possibly stale list row. */
+export const useInboxMessage = (id?: string) =>
+  useSWR(id ? ['agent-inbox-message', id] : null, ([, messageId]) =>
+    agentAccountService.getInboxMessage(messageId),
+  );
+
 /**
- * What has arrived at those addresses, newest first.
+ * A message reached through its URL rather than a list row: read it and clear
+ * its unread mark before the list and count load, so neither shows it as unread.
+ */
+const openMessageFromUrl = async (id: string) => {
+  const message = await agentAccountService.getInboxMessage(id);
+  if (message.readAt) return message;
+
+  try {
+    await agentAccountService.markInboxRead([id]);
+  } catch (error) {
+    // The message still opens; a failed read-mark only affects the dot.
+    console.error('[AgentIdentity] mark read failed', error);
+  }
+
+  return message;
+};
+
+/**
+ * The mailbox being read, out of the addresses the agent still holds.
+ *
+ * Derived rather than stored as a fallback, so releasing the selected address
+ * lands on the next one without any bookkeeping. Until the reader picks one, a
+ * message opened from its URL decides, so both panes show the same mailbox.
+ */
+export const useMailbox = (agentId: string, messageId?: string) => {
+  const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
+  const [selectedId, select] = useState<string>();
+  // Immutable: one open is one read, so a focus refetch must not stamp it again.
+  const openMessage = useSWRImmutable(
+    !selectedId && messageId ? ['agent-inbox-open-message', messageId] : null,
+    ([, id]) => openMessageFromUrl(id),
+  );
+  const accounts = (data ?? []).filter((account) => account.status !== 'revoked');
+  const preferredId = selectedId ?? openMessage.data?.accountId;
+
+  return {
+    accounts,
+    current: accounts.find((account) => account.id === preferredId) ?? accounts[0],
+    data: openMessage.isLoading ? undefined : data,
+    error,
+    isLoading: isLoading || openMessage.isLoading,
+    mutate,
+    select,
+  };
+};
+
+export type Mailbox = ReturnType<typeof useMailbox>;
+
+/**
+ * What has arrived at one address, newest first (every address when none is given).
  *
  * Paged by a keyset cursor (the last row of the previous page), so every
  * request asks for one fixed-size page however far back the user scrolls,
  * and rows already on screen stay where they are.
  */
-export const useAgentInbox = (agentId: string) => {
+export const useAgentInbox = (agentId: string, accountId?: string) => {
   const inbox = useSWRInfinite(
     (pageIndex, previous: AgentInboxMessageSummary[] | null) => {
       if (!agentId) return null;
-      if (pageIndex === 0) return ['agent-inbox', agentId, null] as const;
+      if (pageIndex === 0) return ['agent-inbox', agentId, accountId, null] as const;
       const last = previous?.at(-1);
       // The previous page came back short: there is nothing older to ask for.
       if (!last || previous!.length < INBOX_PAGE_SIZE) return null;
-      return ['agent-inbox', agentId, { id: last.id, receivedAt: last.receivedAt }] as const;
+      return [
+        'agent-inbox',
+        agentId,
+        accountId,
+        { id: last.id, receivedAt: last.receivedAt },
+      ] as const;
     },
-    ([, id, before]) =>
+    ([, id, account, before]) =>
       agentAccountService.listInbox({
+        accountId: account,
         agentId: id,
         before: before ?? undefined,
         limit: INBOX_PAGE_SIZE,
@@ -66,9 +140,9 @@ export const useAgentInbox = (agentId: string) => {
  * The server's unread count. The list above stops at its current window, so
  * counting its unread dots would under-report a busy inbox.
  */
-export const useAgentInboxUnreadCount = (agentId: string) =>
+export const useAgentInboxUnreadCount = (agentId: string, accountId?: string) =>
   useSWR(
-    agentId ? ['agent-inbox-unread', agentId] : null,
-    ([, id]) => agentAccountService.getInboxUnreadCount(id),
+    agentId ? ['agent-inbox-unread', agentId, accountId] : null,
+    ([, id, account]) => agentAccountService.getInboxUnreadCount(id, account),
     { refreshInterval: INBOX_REFRESH_INTERVAL_MS },
   );

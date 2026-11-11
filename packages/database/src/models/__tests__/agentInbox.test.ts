@@ -115,6 +115,22 @@ describe('AgentInboxModel workspace isolation by agent visibility', () => {
   });
 });
 
+describe('AgentInboxModel read state per mailbox', () => {
+  it('counts and clears one mailbox without touching the agent\'s other mailbox', async () => {
+    const first = await deliver(publicAgentId, 'first@lobe.id', 'msg_first');
+    const second = await deliver(publicAgentId, 'second@lobe.id', 'msg_second');
+    const owner = new AgentInboxModel(serverDB, ownerId, workspaceId);
+
+    expect(await owner.unreadCount(publicAgentId)).toBe(2);
+    expect(await owner.unreadCount(publicAgentId, first.accountId!)).toBe(1);
+
+    expect(await owner.markAllRead(publicAgentId, first.accountId!)).toBe(1);
+
+    expect(await owner.unreadCount(publicAgentId, first.accountId!)).toBe(0);
+    expect(await owner.unreadCount(publicAgentId, second.accountId!)).toBe(1);
+  });
+});
+
 describe('AgentInboxModel.listSummaries', () => {
   it('pages like list but leaves out what the sender wrote', async () => {
     const message = await deliver(publicAgentId, 'summary@lobe.id', 'msg_summary');

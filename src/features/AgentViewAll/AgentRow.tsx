@@ -1,6 +1,6 @@
 'use client';
 
-import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_USER_AVATAR_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import {
@@ -220,7 +220,10 @@ const AgentRow = memo<AgentRowProps>(
               <Flexbox flex={'none'} style={{ width: AUTHOR_COL_WIDTH }}>
                 {author && (
                   <Tooltip title={author.name}>
-                    <Avatar avatar={author.avatar || DEFAULT_AVATAR} size={AUTHOR_COL_WIDTH} />
+                    <Avatar
+                      avatar={author.avatar || DEFAULT_USER_AVATAR_URL}
+                      size={AUTHOR_COL_WIDTH}
+                    />
                   </Tooltip>
                 )}
               </Flexbox>

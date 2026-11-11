@@ -11,6 +11,8 @@ import { KeyRound, Mail, Phone, Wallet } from 'lucide-react';
  * whose handles the provider mints on its own leaves it off.
  */
 export interface IdentityChannel {
+  /** What follows the chosen prefix in an address on this channel. */
+  addressSuffix: string;
   descKey: 'identity.mail.desc';
   icon: LucideIcon;
   kind: AgentAccountKind;
@@ -21,6 +23,7 @@ export interface IdentityChannel {
 
 export const IDENTITY_CHANNELS: IdentityChannel[] = [
   {
+    addressSuffix: '@lobe.id',
     descKey: 'identity.mail.desc',
     icon: Mail,
     kind: 'mail',

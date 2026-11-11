@@ -17,7 +17,8 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
 /** `label:<groupId>` boards one column per label of that label group, plus "no label". */
-export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status' | `label:${string}`;
+export type TaskKanbanGroupBy =
+  'assignee' | 'member' | 'priority' | 'project' | 'status' | `label:${string}`;
 
 export interface TaskListSliceState {
   /** The viewed list is narrowed by the page's filter, so it is not every task. */

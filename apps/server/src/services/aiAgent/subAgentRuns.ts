@@ -350,6 +350,11 @@ export const execAgentThreadRun = async (
       ? { parentOperationId, toolMessageId: parentMessageId }
       : undefined;
 
+  // Eval inheritance (see `ExecVirtualSubAgentParams.eval`): the child keeps
+  // the attempt's prompt context, runtime and step cap, and its dialogue stays
+  // out of Agent Signal like the parent's.
+  const inheritedEval = 'eval' in params ? params.eval : undefined;
+
   const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
     groupId,
     // Every run spawned here executes in an isolation thread on the SPAWNER's
@@ -359,6 +364,7 @@ export const execAgentThreadRun = async (
     isSubAgent: options.isSubAgent,
     orchestrationRole: options.orchestrationRole,
     subAgentProgress,
+    ...(inheritedEval && { suppressSignal: true }),
     threadId: thread.id,
     topicId,
   };
@@ -375,9 +381,12 @@ export const execAgentThreadRun = async (
       autoStart: true,
       chatConfigOverride: options.chatConfig,
       deviceId: options.deviceId,
+      ...(inheritedEval?.context && { evalContext: inheritedEval.context }),
+      ...(inheritedEval?.runtime && { evalRuntime: inheritedEval.runtime }),
       hooks,
       ...(options.llmExecutor && { llmExecutor: options.llmExecutor }),
       localDeviceId: options.localDeviceId,
+      ...(inheritedEval?.maxSteps && { maxSteps: inheritedEval.maxSteps }),
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,
       parentOperationId: recordedParentOperationId,
@@ -418,8 +427,10 @@ export const execAgentThreadRun = async (
   );
 
   // 5. Store operationId in Thread metadata
-  await deps.threadModel.update(thread.id, {
-    metadata: { ...carryOver, operationId: result.operationId, startedAt },
+  await deps.threadModel.attachRunOperation(thread.id, {
+    ...carryOver,
+    operationId: result.operationId,
+    startedAt,
   });
 
   // 6. If operation failed to start, update thread status

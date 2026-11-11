@@ -813,6 +813,23 @@ describe('systemStatusSelectors', () => {
     });
   });
 
+  describe('teamBoardAttentionCollapsed', () => {
+    // Open by default: a first-time viewer must see what needs attention.
+    it('reads as open when the viewer has never folded the list', () => {
+      const s: GlobalState = merge(initialState, { status: {} });
+
+      expect(systemStatusSelectors.teamBoardAttentionCollapsed(s)).toBe(false);
+    });
+
+    it('keeps the list folded once the viewer put it away', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { teamBoardAttentionCollapsed: true },
+      });
+
+      expect(systemStatusSelectors.teamBoardAttentionCollapsed(s)).toBe(true);
+    });
+  });
+
   describe('homeGoalsCollapsed', () => {
     // The goals card opens by default: a first-time viewer must see the goals,
     // not an unexplained folded header.

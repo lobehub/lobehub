@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  Alert,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Popover,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Alert, Button, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlertTriangle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,61 +11,51 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import type { ChatInputNotice } from './useChatInputNotice';
 
-const styles = createStaticStyles(({ css }) => ({
-  action: css`
-    flex: none;
-    height: 24px;
-    padding-inline: 10px;
-  `,
-  actionWrapper: css`
-    display: inline-flex;
-  `,
-  alert: css`
-    gap: 6px !important;
-    align-items: flex-start !important;
+// The `!important`s of the emotion version are gone: lobe-ui's Alert and Button styles
+// live in a CSS layer, so these unlayered StyleX rules win without them.
+const summaryWarning = `color-mix(in srgb, ${cssVar.colorWarning} 12%, ${cssVar.colorBgContainer})`;
+const summaryWarningActive = `color-mix(in srgb, ${cssVar.colorWarning} 18%, ${cssVar.colorBgContainer})`;
 
-    min-width: 0;
-    padding-inline: 8px 10px !important;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: ${cssVar.fontSizeSM};
-  `,
-  list: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    width: min(360px, calc(100vw - 32px));
-    max-height: min(320px, calc(100vh - 96px));
-  `,
-  notice: css`
-    width: 100%;
-    padding-block: 6px !important;
-  `,
-  summary: css`
-    min-width: 36px;
-    height: 26px;
-    padding-inline: 6px;
-
-    && {
-      color: ${cssVar.colorWarning};
-      background: color-mix(in srgb, ${cssVar.colorWarning} 12%, ${cssVar.colorBgContainer});
-    }
-
-    &&:hover,
-    &&:active,
-    &&[data-popup-open] {
-      color: ${cssVar.colorWarning};
-      background: color-mix(in srgb, ${cssVar.colorWarning} 18%, ${cssVar.colorBgContainer});
-    }
-  `,
-  title: css`
-    min-width: 0;
-
-    font-size: 12px;
-    line-height: 18px !important;
-    overflow-wrap: anywhere;
-    white-space: normal;
-  `,
-}));
+const styles = stylex.create({
+  action: { flex: 'none', height: '24px', paddingInline: '10px' },
+  actionWrapper: { display: 'inline-flex' },
+  alert: {
+    gap: '6px',
+    alignItems: 'flex-start',
+    minWidth: '0',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: cssVar.fontSizeSM,
+  },
+  list: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    width: 'min(360px, calc(100vw - 32px))',
+    maxHeight: 'min(320px, calc(100vh - 96px))',
+  },
+  notice: { width: '100%', paddingBlock: '6px' },
+  summary: {
+    minWidth: '36px',
+    height: '26px',
+    paddingInline: '6px',
+    color: cssVar.colorWarning,
+    backgroundColor: {
+      'default': summaryWarning,
+      ':hover': summaryWarningActive,
+      ':active': summaryWarningActive,
+      ':is([data-popup-open])': summaryWarningActive,
+    },
+    backgroundImage: 'none',
+  },
+  title: {
+    minWidth: '0',
+    fontSize: '12px',
+    lineHeight: '18px',
+    overflowWrap: 'anywhere',
+    whiteSpace: 'normal',
+  },
+});
 
 const popoverStyles = { content: { padding: 8 } } as const;
 
@@ -87,7 +68,7 @@ const NoticeAlert = ({ notice }: NoticeAlertProps) => {
 
   const enableButton = notice.action === 'enableModel' && (
     <Button
-      className={styles.action}
+      className={stylex.props(styles.action).className}
       disabled={notice.actionDisabled}
       loading={notice.actionLoading}
       size={'small'}
@@ -101,7 +82,7 @@ const NoticeAlert = ({ notice }: NoticeAlertProps) => {
   const action =
     enableButton && notice.actionDisabled ? (
       <Tooltip title={notice.actionDisabledReason}>
-        <span className={styles.actionWrapper}>{enableButton}</span>
+        <span {...stylex.props(styles.actionWrapper)}>{enableButton}</span>
       </Tooltip>
     ) : (
       enableButton
@@ -114,8 +95,8 @@ const NoticeAlert = ({ notice }: NoticeAlertProps) => {
       type={notice.type}
       variant={'borderless'}
       classNames={{
-        alert: cx(styles.alert, styles.notice),
-        title: styles.title,
+        alert: stylex.props(styles.alert, styles.notice).className,
+        title: stylex.props(styles.title).className,
       }}
     />
   );
@@ -151,7 +132,7 @@ export const ChatInputNoticeContent = memo(({ notices }: { notices: ChatInputNot
       styles={popoverStyles}
       trigger={isMobile ? 'click' : ['hover', 'click']}
       content={
-        <Flexbox className={styles.list} gap={8}>
+        <Flexbox className={stylex.props(styles.list).className} gap={8}>
           <Text fontSize={12} type={'secondary'} weight={500}>
             {summary}
           </Text>
@@ -163,7 +144,7 @@ export const ChatInputNoticeContent = memo(({ notices }: { notices: ChatInputNot
     >
       <Button
         aria-label={summary}
-        className={styles.summary}
+        className={stylex.props(styles.summary).className}
         icon={<Icon icon={AlertTriangle} size={14} />}
         size={'small'}
         type={'text'}

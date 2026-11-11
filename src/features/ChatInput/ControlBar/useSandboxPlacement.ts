@@ -53,6 +53,15 @@ export const useSandboxPlacement = (agentId: string, scopeTopicId?: string | nul
   const topicMetadata = useChatStore((s) =>
     topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata : undefined,
   );
+  const projectId = useChatStore((s) =>
+    topicId ? (topicSelectors.getTopicById(topicId)(s)?.projectId ?? undefined) : undefined,
+  );
+  // A conversation no loaded list holds — a project conversation opened right
+  // after the project home created it — is read by id, or the chip would show
+  // a temporary sandbox while the topic works in a repository.
+  const isUnlisted = useChatStore((s) => !!topicId && !topicSelectors.getTopicById(topicId)(s));
+  useChatStore((s) => s.useFetchTopicDetail)(isUnlisted ? topicId : undefined);
+  const refreshTopicDetail = useChatStore((s) => s.refreshTopicDetail);
   const topicInstanceId = topicMetadata?.sandboxInstanceId;
   const topicWorkingDirectory = topicMetadata?.sandboxWorkingDirectory;
   const topicDrive = topicMetadata?.sandboxDrive;
@@ -90,9 +99,12 @@ export const useSandboxPlacement = (agentId: string, scopeTopicId?: string | nul
         sandboxInstanceId: next.instanceId,
         sandboxWorkingDirectory: next.instanceId ? undefined : next.workingDirectory,
       });
+      // Written straight to the server when no list holds the topic; read it
+      // back so the pick shows rather than looking ignored until a reload.
+      if (isUnlisted) await refreshTopicDetail(topicId, true);
     },
-    [agentId, topicId, updateTopicMetadata],
+    [agentId, isUnlisted, refreshTopicDetail, topicId, updateTopicMetadata],
   );
 
-  return { selection, setSelection, topicId: topicId ?? undefined };
+  return { projectId, selection, setSelection, topicId: topicId ?? undefined };
 };

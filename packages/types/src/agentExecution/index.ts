@@ -4,6 +4,8 @@ import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { CreateThreadWithMessageParams } from '../aiChat';
 import type { DeviceUnavailableErrorData } from '../device';
 import { workingDirConfigSchema } from '../device';
+import type { EvalToolForwardingConfig } from '../eval/agentEval';
+import type { EvalMemoryReference } from '../eval/evalMemory';
 import type { ComposerUserMessage, TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
@@ -36,6 +38,10 @@ export const initialTopicMetadataSchema = z.object({
   /** The environment to initialize the sandbox from; see `ChatTopicMetadata.sandboxEnvironmentId`. */
   sandboxEnvironmentId: z.string().max(255).optional(),
   sandboxInstanceId: z.string().optional(),
+  /** A default nobody picked; see `ChatTopicMetadata.sandboxSeeded`. */
+  sandboxSeeded: z.boolean().optional(),
+  /** An explicit temporary-sandbox pick; see `ChatTopicMetadata.sandboxTemporary`. */
+  sandboxTemporary: z.boolean().optional(),
   sandboxWorkingDirectory: z.string().max(1024).optional(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
@@ -659,6 +665,25 @@ export interface ExecVirtualSubAgentParams {
    * runs instead of re-routing through the agent-level `boundDeviceId`.
    */
   deviceId?: string;
+  /**
+   * What the child inherits when the parent runs inside an eval attempt: the
+   * attempt's prompt context (session clock), its runtime (tool forwarding,
+   * Memory scope) and its step cap. Without these the child leaves the sandbox:
+   * it reaches real services, the caller's own Memory and the wall clock, and
+   * runs with no step limit.
+   */
+  eval?: {
+    context?: { envPrompt?: string; sessionDate?: string; timezone?: string };
+    maxSteps?: number;
+    runtime?: {
+      /** The parent's tool allowlist; the child may not reach past it either. */
+      allowedTools?: string[];
+      attemptId?: string;
+      caseId?: string;
+      memory?: EvalMemoryReference;
+      toolForwarding?: EvalToolForwardingConfig;
+    };
+  };
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */

@@ -2,34 +2,32 @@
 
 import Empty from '@lobehub/ui/es/Empty/index';
 import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ClipboardX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    flex: 1;
-    min-height: 0;
-    padding-block: 24px;
-    padding-inline: 16px;
-  `,
-  header: css`
-    flex: none;
-
-    min-height: 48px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  page: css`
-    width: 100%;
-    height: 100dvh;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  body: { flex: '1', minHeight: '0', paddingBlock: '24px', paddingInline: '16px' },
+  header: {
+    flex: 'none',
+    minHeight: '48px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  page: {
+    width: '100%',
+    height: '100dvh',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * What an old `/verify/:runId` link shows when it has nowhere to go: the run is
@@ -40,11 +38,11 @@ export const VerifyReportUnavailable = () => {
   const { t } = useTranslation('verify');
 
   return (
-    <Flexbox className={styles.page}>
-      <Flexbox className={styles.header} justify={'center'}>
+    <Flexbox className={stylex.props(styles.page).className}>
+      <Flexbox className={stylex.props(styles.header).className} justify={'center'}>
         <WorkbenchHeader />
       </Flexbox>
-      <Center className={styles.body}>
+      <Center className={stylex.props(styles.body).className}>
         <Empty
           description={t('report.unavailable.description')}
           icon={ClipboardX}
