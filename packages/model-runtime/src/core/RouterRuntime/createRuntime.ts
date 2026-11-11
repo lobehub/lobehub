@@ -1,7 +1,6 @@
 /** @see https://github.com/lobehub/lobe-chat/discussions/6563 */
 import type { ModelPricingContext } from '@lobechat/types';
 import debug from 'debug';
-import { nanoid } from 'nanoid';
 
 import type {
   ASROptions,
@@ -25,13 +24,10 @@ import type {
   VideoPollingRoute,
 } from '../../types';
 import { postProcessModelList } from '../../utils/postProcessModelList';
-import { shouldStopFallbackForError } from '../../utils/routeFallback';
 import { getDurationMs } from '../../utils/timing';
 import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type { ApiType } from './apiTypes';
-import { attachRouteAttemptMetadata, validateRouteAttemptContext } from './attemptContext';
-import { classifyAttemptError } from './attemptErrors';
 import { withAttemptUsage } from './attemptIdentity';
 import { getChatAttemptObservation, observeChatAttempt } from './chatAttempt';
 import { createChatAttemptFallbackCheck, resolveHoldReasoning } from './chatFallbackHooks';
@@ -39,7 +35,7 @@ import type { ChatStreamFallbackAttempt } from './chatStreamFallback';
 import { createChatStreamFallbackResponse } from './chatStreamFallback';
 import { runDecision } from './decisionRuntime';
 import { createRuntimeFromOption } from './optionRuntime';
-import type { RouteAttemptResult, RouteAttemptStart } from './routeAttempt';
+import type { RouteAttemptStart } from './routeAttempt';
 import { createRouteRequestTasks } from './routeRequestTasks';
 import type {
   CreateRouterRuntimeOptions,
@@ -47,6 +43,7 @@ import type {
   RouterInstance,
   Routers,
 } from './routerOptions';
+import { createRouteRun } from './routeRun';
 import {
   normalizeRouterOptions,
   resolveMatchedRouter,
@@ -143,85 +140,31 @@ export const createRouterRuntime = ({
       options: ChatMethodOptions | undefined,
       routeContext: RouteAttemptContext,
     ): Promise<Response> {
-      const requestId = nanoid();
-      const { metadata, toolsCount, user } = routeContext;
       const { matchedRouter, routerOptions } = await selectRouteOptions(
         this.deps,
         payload.model,
         routeContext,
       );
-      const firstChannelId = routerOptions[0]?.id;
-      const weighted = routerOptions.some((option) => option.weight !== undefined);
       const routeTasks = params.scheduleRouteRequestSettled
         ? await createRouteRequestTasks(params.scheduleRouteRequestSettled)
         : undefined;
-
-      const reportReturnedAttempt = (
-        attempt: RouteAttemptStart,
-        result: Partial<RouteAttemptResult> & Pick<RouteAttemptResult, 'durationMs' | 'success'>,
-      ) => {
-        if (!params.onRouteAttempt) return;
-        try {
-          const task = params.onRouteAttempt({ ...attempt, ...result } as RouteAttemptResult);
-          if (routeTasks) routeTasks.track(task);
-          else task.catch((error) => log('onRouteAttempt callback error: %O', error));
-        } catch (error) {
-          log('onRouteAttempt callback error: %O', error);
-        }
-      };
-
-      const shouldContinueAfterRequestError = async (error: unknown, optionIndex: number) => {
-        if (options?.signal?.aborted) return false;
-        if (shouldStopFallbackForError(error)) return false;
-
-        try {
-          return !(await params.shouldStopFallback?.({
-            error,
-            metadata,
-            model: payload.model,
-            optionIndex,
-          }));
-        } catch (fallbackError) {
-          log('shouldStopFallback callback error: %O', fallbackError);
-          return true;
-        }
-      };
+      const run = createRouteRun({
+        deps: this.deps,
+        matchedRouter,
+        model: payload.model,
+        providerId: id,
+        reportRouteRequestManaged: true,
+        routeContext,
+        routerOptions,
+        routeTasks,
+        signal: options?.signal,
+      });
 
       const holdReasoning = await resolveHoldReasoning(params.isImageOutputModel, payload.model);
 
       const startAttempt = async (optionIndex: number): Promise<ChatStreamFallbackAttempt> => {
-        const optionItem = routerOptions[optionIndex];
-        const {
-          channelId,
-          id: resolvedApiType,
-          remark,
-          runtime,
-        } = await createRuntimeFromOption(this.deps, matchedRouter, optionItem);
-        const routeAttemptUserId = validateRouteAttemptContext(this.deps, {
-          apiType: resolvedApiType,
-          channelId,
-          metadata,
-          method: routeContext.method,
-          model: payload.model,
-          routerId: matchedRouter.id,
-          toolsCount,
-          user,
-        });
-        const attempt: RouteAttemptStart = {
-          apiType: resolvedApiType,
-          attemptId: nanoid(),
-          channelId,
-          metadata: metadata ? { ...metadata } : undefined,
-          model: payload.model,
-          optionIndex,
-          providerId: id,
-          remark,
-          requestId,
-          routeRequestManaged: Boolean(routeTasks),
-          routerId: matchedRouter.id,
-          startedAt: Date.now(),
-          userId: routeAttemptUserId,
-        };
+        const prepared = await run.prepareAttempt(optionIndex);
+        const { attempt, runtime } = prepared;
 
         try {
           const response = await observeChatAttempt(
@@ -237,24 +180,8 @@ export const createRouterRuntime = ({
             { deferCallbacks: true, holdReasoning },
           );
           const durationMs = Date.now() - attempt.startedAt;
-          reportReturnedAttempt(attempt, {
-            completionPending: true,
-            durationMs,
-            success: true,
-          });
-          attachRouteAttemptMetadata(this.deps, metadata, {
-            apiType: resolvedApiType,
-            attemptId: attempt.attemptId,
-            channelId,
-            completionPending: true,
-            durationMs,
-            optionIndex,
-            providerId: id,
-            requestId,
-            routerId: matchedRouter.id,
-            success: true,
-            totalOptions: routerOptions.length,
-          });
+          run.reportAttempt(attempt, { completionPending: true, durationMs, success: true });
+          run.attachSuccessMetadata(prepared, { completionPending: true, durationMs });
 
           const observation = getChatAttemptObservation(response);
           if (!observation) throw new Error('Missing chat attempt observation');
@@ -262,52 +189,23 @@ export const createRouterRuntime = ({
           return {
             index: optionIndex,
             observation,
-            onCompleted: async () => {
-              if (!params.onRouteSuccess) return;
-
-              try {
-                /** Report failures here so the request tracker only waits for the handled task. */
-                const task = Promise.resolve(
-                  params.onRouteSuccess({
-                    channelId,
-                    channelWeight: optionItem.weight,
-                    firstChannelId,
-                    method: routeContext.method,
-                    model: payload.model,
-                    routerId: matchedRouter.id,
-                    routeRequestManaged: Boolean(routeTasks),
-                    trackDeferredWork: routeTasks?.track,
-                    userId: routeAttemptUserId,
-                    weighted,
-                  }),
-                ).catch((error) => {
-                  console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
-                });
-                routeTasks?.track(task);
-                await task;
-              } catch (error) {
-                // Affinity storage must not turn a successful upstream response into a fallback.
-                console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
-              }
-            },
+            onCompleted: () =>
+              run.notifyRouteSuccess(prepared, {
+                routeRequestManaged: Boolean(routeTasks),
+                trackDeferredWork: routeTasks?.track,
+              }),
             reader: response.body?.getReader(),
             response,
           };
         } catch (error) {
-          const { nonRetryable, nonRetryableReason } = classifyAttemptError(error);
-          reportReturnedAttempt(attempt, {
-            // Defer cancellation health handling to the terminal outcome, which intentionally ignores it.
+          // Defer cancellation health handling to the terminal outcome, which intentionally ignores it.
+          run.reportFailure(prepared, error, {
             completionPending: options?.signal?.aborted ?? false,
-            durationMs: Date.now() - attempt.startedAt,
-            error,
-            nonRetryable,
-            nonRetryableReason,
-            success: false,
           });
 
           if (
             optionIndex + 1 < routerOptions.length &&
-            (await shouldContinueAfterRequestError(error, optionIndex))
+            (await run.shouldContinueAfterError(error, optionIndex))
           ) {
             return startAttempt(optionIndex + 1);
           }
@@ -328,22 +226,30 @@ export const createRouterRuntime = ({
       }
     }
 
+    /** Try channels in order; an attempt commits as soon as its method returns. */
     private async runWithFallback<T>(
       model: string,
       requestHandler: (runtime: LobeRuntimeAI, attempt: RouteAttemptStart) => Promise<T>,
       routeContext: RouteAttemptContext,
+      signal?: AbortSignal,
     ): Promise<T> {
       const totalStartedAt = Date.now();
-      const requestId = nanoid();
-      const { metadata, toolsCount, user } = routeContext;
+      const { metadata } = routeContext;
       const { matchedRouter, routerOptions } = await selectRouteOptions(
         this.deps,
         model,
         routeContext,
       );
       const totalOptions = routerOptions.length;
-      const firstChannelId = routerOptions[0]?.id;
-      const weighted = routerOptions.some((option) => option.weight !== undefined);
+      const run = createRouteRun({
+        deps: this.deps,
+        matchedRouter,
+        model,
+        providerId: id,
+        routeContext,
+        routerOptions,
+        signal,
+      });
 
       this.trace(
         'runWithFallback start model=%s routerId=%s apiType=%s options=%d traceId=%s',
@@ -363,41 +269,11 @@ export const createRouterRuntime = ({
 
       let lastError: unknown;
 
-      for (const [index, optionItem] of routerOptions.entries()) {
+      for (let index = 0; index < totalOptions; index += 1) {
         const attempt = index + 1;
         const startTime = Date.now();
-        const {
-          channelId,
-          id: resolvedApiType,
-          remark,
-          runtime,
-        } = await createRuntimeFromOption(this.deps, matchedRouter, optionItem);
-        const routeAttemptUserId = validateRouteAttemptContext(this.deps, {
-          apiType: resolvedApiType,
-          channelId,
-          metadata,
-          method: routeContext.method,
-          model,
-          routerId: matchedRouter.id,
-          toolsCount,
-          user,
-        });
-
-        const attemptContext: RouteAttemptStart = {
-          apiType: resolvedApiType,
-          attemptId: nanoid(),
-          channelId,
-          metadata: metadata ? { ...metadata } : undefined,
-          model,
-          optionIndex: index,
-          providerId: id,
-          remark,
-          requestId,
-          routerId: matchedRouter.id,
-          // Exclude lazy runtime construction from provider performance measurements.
-          startedAt: Date.now(),
-          userId: routeAttemptUserId,
-        };
+        const prepared = await run.prepareAttempt(index);
+        const { apiType: resolvedApiType, channelId, remark, runtime } = prepared;
 
         try {
           this.trace(
@@ -410,7 +286,7 @@ export const createRouterRuntime = ({
             resolvedApiType,
             metadata?.traceId,
           );
-          const result = await requestHandler(runtime, attemptContext);
+          const result = await requestHandler(runtime, prepared.attempt);
           this.trace(
             'attempt request success model=%s attempt=%d/%d routerId=%s channelId=%s apiType=%s durationMs=%d totalMs=%d traceId=%s',
             model,
@@ -444,54 +320,13 @@ export const createRouterRuntime = ({
             );
           }
 
-          if (params.onRouteSuccess) {
-            try {
-              await params.onRouteSuccess({
-                channelId,
-                channelWeight: optionItem.weight,
-                firstChannelId,
-                method: routeContext.method,
-                model,
-                routerId: matchedRouter.id,
-                userId: routeAttemptUserId,
-                weighted,
-              });
-            } catch (error) {
-              // Affinity storage must not turn a successful upstream response into a fallback.
-              console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
-            }
-          }
-
-          params
-            .onRouteAttempt?.({
-              ...attemptContext,
-              apiType: resolvedApiType,
-              channelId,
-              durationMs: Date.now() - attemptContext.startedAt,
-              metadata: attemptContext.metadata,
-              model,
-              optionIndex: index,
-              providerId: id,
-              remark,
-              routerId: matchedRouter.id,
-              success: true,
-              userId: routeAttemptUserId,
-            })
-            .catch((e) => {
-              log('onRouteAttempt callback error: %O', e);
-            });
-
-          attachRouteAttemptMetadata(this.deps, metadata, {
-            apiType: resolvedApiType,
-            attemptId: attemptContext.attemptId,
-            channelId,
-            durationMs: Date.now() - attemptContext.startedAt,
-            optionIndex: index,
-            providerId: id,
-            requestId,
-            routerId: matchedRouter.id,
+          await run.notifyRouteSuccess(prepared);
+          run.reportAttempt(prepared.attempt, {
+            durationMs: Date.now() - prepared.attempt.startedAt,
             success: true,
-            totalOptions,
+          });
+          run.attachSuccessMetadata(prepared, {
+            durationMs: Date.now() - prepared.attempt.startedAt,
           });
 
           return result;
@@ -510,64 +345,9 @@ export const createRouterRuntime = ({
             metadata?.traceId,
           );
 
-          const { nonRetryable: shouldStopFallback, nonRetryableReason } =
-            classifyAttemptError(error);
+          run.reportFailure(prepared, error);
 
-          params
-            .onRouteAttempt?.({
-              ...attemptContext,
-              apiType: resolvedApiType,
-              channelId,
-              durationMs: Date.now() - attemptContext.startedAt,
-              error,
-              metadata: attemptContext.metadata,
-              model,
-              nonRetryable: shouldStopFallback,
-              nonRetryableReason,
-              optionIndex: index,
-              providerId: id,
-              remark,
-              routerId: matchedRouter.id,
-              success: false,
-              userId: routeAttemptUserId,
-            })
-            .catch((e) => {
-              log('onRouteAttempt callback error: %O', e);
-            });
-
-          if (shouldStopFallback) {
-            throw error;
-          }
-
-          try {
-            const shouldStopStartedAt = Date.now();
-            const shouldStopFallback = await params.shouldStopFallback?.({
-              error,
-              metadata,
-              model,
-              optionIndex: index,
-            });
-
-            this.trace(
-              'shouldStopFallback done model=%s attempt=%d/%d durationMs=%d shouldStop=%s traceId=%s',
-              model,
-              attempt,
-              totalOptions,
-              getDurationMs(shouldStopStartedAt),
-              shouldStopFallback,
-              metadata?.traceId,
-            );
-
-            if (shouldStopFallback) {
-              throw error;
-            }
-          } catch (fallbackError) {
-            if (fallbackError === error) {
-              throw error;
-            }
-
-            log('shouldStopFallback callback error: %O', fallbackError);
-          }
+          if (!(await run.shouldContinueAfterError(error, index))) throw error;
 
           if (attempt < totalOptions) {
             log(
@@ -669,6 +449,7 @@ export const createRouterRuntime = ({
             toolsCount: payload.tools?.length ?? 0,
             user: options?.user,
           },
+          options?.signal,
         );
       } catch (e) {
         if (params.chatCompletion?.handleError) {
@@ -770,6 +551,7 @@ export const createRouterRuntime = ({
           toolsCount: payload.tools?.length ?? 0,
           user: options?.user,
         },
+        options?.signal,
       );
     }
 
@@ -783,6 +565,7 @@ export const createRouterRuntime = ({
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
+        options?.signal,
       );
     }
 
@@ -796,6 +579,7 @@ export const createRouterRuntime = ({
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
+        options?.signal,
       );
     }
 
@@ -804,6 +588,7 @@ export const createRouterRuntime = ({
         payload.model,
         (runtime, attempt) => runtime.transcribe!(payload, withAttemptUsage(options, attempt)),
         { metadata: options?.metadata, method: 'transcribe', user: options?.user },
+        options?.signal,
       );
     }
 
@@ -820,6 +605,7 @@ export const createRouterRuntime = ({
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
+        options?.signal,
       );
     }
   };
