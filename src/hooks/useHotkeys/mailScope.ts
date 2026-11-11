@@ -25,9 +25,13 @@ const isTyping = (target: EventTarget | null) => {
  * A modal or an open menu handles its own keys. Matched on what is on screen,
  * not on focus: a menu opened by mouse leaves focus on the page behind it.
  */
-/** Layers that take the keyboard while on screen. A toast is a non-modal dialog, so it does not. */
+/**
+ * Layers that take the keyboard while on screen. A toast says it is a
+ * non-modal dialog (`aria-modal="false"`), so it does not; a modal that leaves
+ * `aria-modal` out (the hotkey help) still does.
+ */
 const BLOCKING_OVERLAYS =
-  '[role="dialog"][aria-modal="true"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+  '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"], [role="menu"], [role="listbox"]';
 const OVERLAYS = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
 
 const overlayOpen = (target: EventTarget | null) => {

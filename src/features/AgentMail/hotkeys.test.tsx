@@ -396,8 +396,8 @@ describe('mail hotkeys', () => {
     page();
     await screen.findByText('preview of First');
     const dialog = document.createElement('div');
+    // As the hotkey help renders it: a dialog that leaves `aria-modal` out.
     dialog.setAttribute('role', 'dialog');
-    dialog.setAttribute('aria-modal', 'true');
     dialog.textContent = 'open';
     document.body.append(dialog);
 
