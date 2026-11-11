@@ -25,7 +25,10 @@ const ROUTE_BATCH = 10;
 const payloadSchema = z.object({
   /** `revert` undoes the run `revertRunId` instead of consolidating. */
   action: z.enum(['run', 'revert']).optional(),
-  /** `platform` only comes from the authenticated admin webhook; see `ConsolidationBilling`. */
+  /**
+   * `platform` is set only by admin triggers (the memory webhook, DC with the QStash token); the
+   * workflow endpoint only accepts signed QStash deliveries. See `ConsolidationBilling`.
+   */
   billing: z.enum(['platform', 'user']).optional(),
   model: z.string().optional(),
   provider: z.string().optional(),
