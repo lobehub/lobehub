@@ -37,7 +37,7 @@ export class AgentSignalPrivateAction {
         // can miss receipts and status changes made since, so the first read
         // after a reload or a revisit fetches the full head.
         const isConfirmed = get().agentSignalReceiptsReplica.entries[key]?.source === 'server';
-        const isFullHead = this.fullHeadPending.delete(key) || !isConfirmed;
+        const isFullHead = this.fullHeadPending.has(key) || !isConfirmed;
         const sinceCreatedAt = isFullHead
           ? undefined
           : get().agentSignalReceiptsMap[key]?.[0]?.createdAt;
@@ -47,6 +47,9 @@ export class AgentSignalPrivateAction {
           limit: AGENT_SIGNAL_RECEIPT_LIMIT,
           ...(sinceCreatedAt === undefined ? {} : { sinceCreatedAt }),
         });
+        // Only a full head that answered settles the reopen: a failed one
+        // leaves the intent for the retry.
+        if (isFullHead) this.fullHeadPending.delete(key);
 
         this.emptyRefreshes.set(
           key,

@@ -474,4 +474,43 @@ describe('useAgentSignalReceipts', () => {
       topicId: 'topic-1',
     });
   });
+
+  it('keeps reconciling the full head when the reopen read fails', async () => {
+    vi.useFakeTimers();
+    vi.mocked(agentSignalService.listReceipts).mockResolvedValue({
+      cursor: undefined,
+      receipts: [receipt],
+    });
+
+    const { rerender } = renderHook(
+      ({ topicId }) =>
+        useAgentSignalReceipts({
+          agentId: 'agent-1',
+          displayMessages: [],
+          enabled: true,
+          topicId,
+        }),
+      { initialProps: { topicId: 'topic-1' }, wrapper },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    rerender({ topicId: 'topic-2' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+
+    vi.mocked(agentSignalService.listReceipts).mockClear();
+    vi.mocked(agentSignalService.listReceipts).mockRejectedValueOnce(new Error('offline'));
+    rerender({ topicId: 'topic-1' });
+    // The reopen read fails, then SWR's error retry (2.5–7.5 s) runs.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+
+    const calls = vi.mocked(agentSignalService.listReceipts).mock.calls.map(([input]) => input);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    // The retry is a full head too, so an Undo made elsewhere still reaches this view.
+    expect(calls[1]).toEqual({ agentId: 'agent-1', limit: 20, topicId: 'topic-1' });
+  });
 });
