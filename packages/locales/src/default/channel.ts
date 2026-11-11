@@ -110,6 +110,7 @@ export default {
   'main': 'Channel conversation',
   'startThread': 'Start thread',
   'openThread': 'Open thread',
+  'openThreadPage': 'Open as page',
   'closeThread': 'Close thread',
   'thread': 'Thread',
   'threadDivider': 'Replies in this thread',

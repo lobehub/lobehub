@@ -86,8 +86,9 @@ export const GROUP_CHAT_TOPIC_URL = (groupId: string, topicId: string) =>
   urlJoin('/group', groupId, topicId);
 
 /**
- * A Channel page; a thread opens beside its Channel. A project's Channel opens inside the
- * project so its sidebar stays in place.
+ * A Channel page. A thread link opens the thread as the page (`view=page`); opening one from
+ * a message instead shows it beside the Channel (`?thread=` alone). A project's Channel opens
+ * inside the project so its sidebar stays in place.
  */
 export const CHANNEL_URL = (
   channelId: string,
@@ -95,7 +96,7 @@ export const CHANNEL_URL = (
   projectId?: string | null,
 ) => {
   const path = projectId ? `/project/${projectId}/channels/${channelId}` : `/channels/${channelId}`;
-  return threadId ? `${path}?thread=${encodeURIComponent(threadId)}` : path;
+  return threadId ? `${path}?thread=${encodeURIComponent(threadId)}&view=page` : path;
 };
 
 export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);

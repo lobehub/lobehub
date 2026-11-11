@@ -44,13 +44,13 @@ describe('GitHub links', () => {
 describe('CHANNEL_URL', () => {
   it('builds the channel and thread paths', () => {
     expect(CHANNEL_URL('chn_1')).toBe('/channels/chn_1');
-    expect(CHANNEL_URL('chn_1', 'cht_1')).toBe('/channels/chn_1?thread=cht_1');
+    expect(CHANNEL_URL('chn_1', 'cht_1')).toBe('/channels/chn_1?thread=cht_1&view=page');
   });
 
   it('opens a project Channel inside its project', () => {
     expect(CHANNEL_URL('chn_1', null, 'pro_1')).toBe('/project/pro_1/channels/chn_1');
     expect(CHANNEL_URL('chn_1', 'cht_1', 'pro_1')).toBe(
-      '/project/pro_1/channels/chn_1?thread=cht_1',
+      '/project/pro_1/channels/chn_1?thread=cht_1&view=page',
     );
   });
 });

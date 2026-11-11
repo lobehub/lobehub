@@ -40,6 +40,28 @@ export const styles = stylex.create({
     height: '100%',
     minHeight: 0,
   },
+  // The Channel half of a thread page's `# Channel › thread` title, leading back to the Channel.
+  crumb: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: 8,
+    alignItems: 'center',
+    maxWidth: 200,
+    minWidth: 0,
+    marginBlock: 0,
+    marginInline: 0,
+    paddingBlock: 2,
+    paddingInline: 4,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: 6,
+    font: 'inherit',
+    backgroundColor: {
+      default: 'transparent',
+      [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    },
+    cursor: 'pointer',
+  },
   threadHeader: {
     borderBlockEndWidth: 1,
     borderBlockEndStyle: 'solid',
