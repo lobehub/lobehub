@@ -5,8 +5,13 @@ import { MarketService } from '@/server/services/market';
 import { type ToolExecutionContext } from '../../types';
 import { credsRuntime, ServerCredsService } from '../creds';
 
-const { getMember } = vi.hoisted(() => ({
+const { getMember, resolveSandboxSessionConfig } = vi.hoisted(() => ({
   getMember: vi.fn(),
+  resolveSandboxSessionConfig: vi.fn(),
+}));
+
+vi.mock('@/server/services/sandbox', () => ({
+  resolveSandboxSessionConfig,
 }));
 
 vi.mock('@/database/models/workspaceMember', () => ({
@@ -25,6 +30,11 @@ describe('credsRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getMember.mockResolvedValue({ role: 'member' });
+    resolveSandboxSessionConfig.mockResolvedValue({
+      claim: null,
+      drive: 'personal',
+      mode: 'ephemeral',
+    });
   });
 
   it('signs verified workspace context into the Market trusted-client identity', async () => {
@@ -119,6 +129,89 @@ describe('credsRuntime', () => {
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain('unavailable in shared conversations');
   });
+
+  describe('injectCredsToSandbox', () => {
+    const mockInject = () => {
+      const inject = vi.fn().mockResolvedValue({ credentials: { env: {} }, success: true });
+      vi.mocked(MarketService).mockImplementation(function () {
+        return { market: { creds: { inject } } } as any;
+      });
+      return inject;
+    };
+
+    // Regression: inject only sent keys/sandbox/topicId/userId, so a topic on a
+    // persistent environment or a drive had its credentials written into a
+    // throwaway sandbox, which the next persistent tool call then replaced.
+    it.each([
+      ['persistent', 'inst-1'],
+      ['drive', undefined],
+    ] as const)('routes injection to the topic %s sandbox', async (mode, environment) => {
+      resolveSandboxSessionConfig.mockResolvedValue({
+        claim: { key: 'u-user-1' },
+        drive: 'personal',
+        environment,
+        mode,
+      });
+      const inject = mockInject();
+
+      const runtime = await credsRuntime.factory({
+        serverDB,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const result = await (runtime as any).injectCredsToSandbox({ keys: ['FOO'] });
+
+      expect(result.success).toBe(true);
+      expect(inject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          keys: ['FOO'],
+          sandboxInstanceId: environment,
+          sandboxMode: mode,
+          topicId: 'topic-1',
+        }),
+      );
+    });
+
+    // A device-routed run executes commands on the device, so an injection
+    // would report success while no command could ever read the values.
+    it('refuses when the run is routed to a device', async () => {
+      const inject = mockInject();
+
+      const runtime = await credsRuntime.factory({
+        activeDeviceId: 'device-1',
+        executionPlan: { deviceId: 'device-1', kind: 'device', target: 'device' },
+        serverDB,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const result = await (runtime as any).injectCredsToSandbox({ keys: ['FOO'] });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('SandboxUnreachable');
+      expect(inject).not.toHaveBeenCalled();
+    });
+
+    // In auto mode the Cloud Sandbox tool still reaches the sandbox even with a
+    // device routed, so refusing on "target is not sandbox" would block it.
+    it('allows injection in auto mode with a device routed', async () => {
+      const inject = mockInject();
+
+      const runtime = await credsRuntime.factory({
+        activeDeviceId: 'device-1',
+        executionPlan: { deviceId: 'device-1', kind: 'device', target: 'auto' },
+        serverDB,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const result = await (runtime as any).injectCredsToSandbox({ keys: ['FOO'] });
+
+      expect(result.success).toBe(true);
+      expect(inject).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('ServerCredsService.injectCreds', () => {
@@ -143,7 +236,9 @@ describe('ServerCredsService.injectCreds', () => {
       success: true,
     };
     const inject = vi.fn().mockResolvedValue(injectResult);
-    const service = new ServerCredsService(buildMarketService(inject), 'workspace-1');
+    const service = new ServerCredsService(buildMarketService(inject), {
+      workspaceId: 'workspace-1',
+    });
 
     const result = await service.injectCreds({
       keys: ['dc-cli-token'],

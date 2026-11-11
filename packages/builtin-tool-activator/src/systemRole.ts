@@ -110,7 +110,7 @@ When \`{{creds_sandbox_reachable}}\` is \`true\`:
 - Use \`injectCredsToSandbox\` before running code that needs credentials. Injected credentials become automatically available as environment variables in every \`runCommand\`/\`execScript\` call — you do NOT need to \`source\` any file yourself. See the \`lobe-creds\` system prompt's \`<sandbox_integration>\` section for the full contract.
 
 When \`{{creds_sandbox_reachable}}\` is \`false\` (this run is routed to a device):
-- Do NOT call \`injectCredsToSandbox\` — it would still report success, but it writes into a cloud sandbox nothing in this run actually executes in.
+- Do NOT call \`injectCredsToSandbox\` — it only writes into the cloud sandbox, and nothing in this run executes there.
 - There is currently no tool exposed to read a saved credential's plaintext value for inline use on a device-routed run. Tell the user this credential can't be used in this run rather than inventing a workaround.
 </credential_usage_by_runtime>
 </credentials_management>`;
