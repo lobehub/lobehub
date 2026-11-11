@@ -20,6 +20,7 @@ const CHANNEL_DISPLAY_NAME: Record<string, string> = {
   google: 'Google',
   jina: 'Jina',
   kagi: 'Kagi',
+  keenable: 'Keenable',
   naive: 'Naive',
   search1api: 'Search1API',
   searxng: 'SearXNG',
