@@ -635,7 +635,7 @@ describe('LobeGithubCopilotAI', () => {
           },
         };
       });
-      vi.doMock('../../core/streams', async (importOriginal) => ({
+      vi.doMock('../../core/protocols/anthropicMessages/stream', async (importOriginal) => ({
         ...(await importOriginal<Record<string, unknown>>()),
         AnthropicStream: anthropicStreamMock,
       }));
@@ -672,7 +672,7 @@ describe('LobeGithubCopilotAI', () => {
       );
 
       vi.doUnmock('@anthropic-ai/sdk');
-      vi.doUnmock('../../core/streams');
+      vi.doUnmock('../../core/protocols/anthropicMessages/stream');
       vi.doUnmock('../../utils/getModelPricing');
     });
   });
