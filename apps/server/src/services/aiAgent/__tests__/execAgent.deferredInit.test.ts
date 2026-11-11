@@ -402,6 +402,23 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
       });
     });
 
+    // A web client inside the `agent_llm_relay` rollout declares an executor on
+    // every send; the init never reads it (it rides on the pre-init state).
+    it('defers a send whose client declares an LLM executor', async () => {
+      const llmExecutor = {
+        capabilities: ['llm_execute'],
+        clientId: 'client-1',
+        providers: ['ollama'],
+      };
+
+      await service.execAgent({ ...plainSend, llmExecutor } as any);
+
+      expect(runOperationInit).not.toHaveBeenCalled();
+      const created = mockCreateOperation.mock.calls[0][0];
+      expect(created.pendingInitRequest).toBeDefined();
+      expect(created.llmExecutor).toEqual(llmExecutor);
+    });
+
     it('keeps the init synchronous for a regenerate', async () => {
       rows.set('msg-prev-1', {
         content: 'earlier',
