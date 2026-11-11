@@ -148,10 +148,18 @@ describe('devicePoolForAgent', () => {
     expect(devicePoolForAgent(undefined, false)).toEqual([]);
   });
 
-  it('lets a workspace task pin the caller’s own private devices too', () => {
-    expect(devicePoolForTask(all, true)).toEqual([privateWorkspace, publicWorkspace]);
-    expect(devicePoolForTask(all, false)).toEqual([personal]);
-    expect(devicePoolForTask(undefined, true)).toEqual([]);
+  it('lets the task creator pin their own private devices too', () => {
+    const asCreator = { includeOwnPrivate: true };
+    expect(devicePoolForTask(all, true, asCreator)).toEqual([privateWorkspace, publicWorkspace]);
+    expect(devicePoolForTask(all, false, asCreator)).toEqual([personal]);
+    expect(devicePoolForTask(undefined, true, asCreator)).toEqual([]);
+  });
+
+  // The creator's scheduled runs cannot resolve a collaborator's private row.
+  it('gives a collaborator on someone else’s task only the public workspace pool', () => {
+    const asCollaborator = { includeOwnPrivate: false };
+    expect(devicePoolForTask(all, true, asCollaborator)).toEqual([publicWorkspace]);
+    expect(devicePoolForTask(all, false, asCollaborator)).toEqual([personal]);
   });
 });
 

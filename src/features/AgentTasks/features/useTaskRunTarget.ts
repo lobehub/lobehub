@@ -125,7 +125,12 @@ export interface TaskRunTarget {
  * policy is the exception — the run side drops the requested device for it, so
  * this reports the inherited target instead of the stored pin.
  */
-export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): TaskRunTarget => {
+export const useTaskRunTarget = (
+  agentId: string,
+  pinnedDeviceId: string | undefined,
+  /** The caller is the task's creator, so their own private devices are pinnable. */
+  { canPinPrivateDevices }: { canPinPrivateDevices: boolean },
+): TaskRunTarget => {
   const { t } = useTranslation('chat');
   const {
     data: devices,
@@ -154,9 +159,12 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // under the workspace principal, not under whoever is looking at it, so a pin
   // outside the pool is one automation can never resolve. Same rule the chat
   // picker applies, shared through `devicePoolForAgent` so the two cannot drift.
-  // Private rows in the list are only the caller's own (see `devicePoolForTask`).
+  // The caller's own private rows only when they are the task's creator, whose
+  // identity the scheduled runs use (see `devicePoolForTask`).
   const agentPool = devicePoolForAgent(devices, !!agentWorkspaceId);
-  const pool = devicePoolForTask(devices, !!agentWorkspaceId);
+  const pool = devicePoolForTask(devices, !!agentWorkspaceId, {
+    includeOwnPrivate: canPinPrivateDevices,
+  });
 
   const inheritedTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,

@@ -210,18 +210,25 @@ export const devicePoolForAgent = (
 };
 
 /**
- * The devices a Task may pin: the same pool as {@link devicePoolForAgent}.
+ * The devices a Task may pin.
  *
- * The private workspace rows in a device list are only ever the caller's own
- * (`DeviceModel.findWorkspaceDeviceById` hides other members' private rows), so
- * a member can pin a Task to their own private machine. Its scheduled runs
- * execute as the task's creator, who resolves that machine when they enrolled
- * it.
+ * A Task's scheduled runs execute as its creator, and a private workspace
+ * device resolves only for the member who enrolled it
+ * (`DeviceModel.findWorkspaceDeviceById`). The private rows in a device list
+ * are only ever the caller's own, so they are pinnable exactly when the caller
+ * is the task's creator (`includeOwnPrivate`) — creating it, or editing their
+ * own task. A collaborator editing someone else's task gets the public pool
+ * only: their private machine is one the creator's runs can never reach.
  */
 export const devicePoolForTask = (
   devices: DeviceListItem[] | undefined,
   workspaceAgent: boolean,
-): DeviceListItem[] => devicePoolForAgent(devices, workspaceAgent);
+  { includeOwnPrivate }: { includeOwnPrivate: boolean },
+): DeviceListItem[] => {
+  if (!workspaceAgent || includeOwnPrivate) return devicePoolForAgent(devices, workspaceAgent);
+
+  return groupExecutionTargetDevices(devices).publicWorkspace;
+};
 
 /**
  * This machine's private row in the workspace pool, if it has one — the row

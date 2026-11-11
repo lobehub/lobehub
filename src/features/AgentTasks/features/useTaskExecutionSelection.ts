@@ -36,6 +36,8 @@ export const seedTaskExecutionSelection = (
 
 interface UseTaskExecutionSelectionParams {
   agentId: string;
+  /** The caller is the task's creator (or is creating it); see `devicePoolForTask`. */
+  canPinPrivateDevices: boolean;
   onChange: (execution?: TaskExecutionConfig) => void;
   value?: TaskExecutionConfig;
 }
@@ -51,10 +53,11 @@ interface UseTaskExecutionSelectionParams {
  */
 export const useTaskExecutionSelection = ({
   agentId,
+  canPinPrivateDevices,
   onChange,
   value,
 }: UseTaskExecutionSelectionParams) => {
-  const target = useTaskRunTarget(agentId, value?.boundDeviceId);
+  const target = useTaskRunTarget(agentId, value?.boundDeviceId, { canPinPrivateDevices });
   const { deviceId, devices, inheritedDeviceId, inheritedDirectory } = target;
 
   // "Not following" with nothing picked yet — a cloud agent before any repo, or
