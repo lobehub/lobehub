@@ -9,13 +9,14 @@ import {
   AccordionTrigger,
   ActionIcon,
   cx,
+  type DropdownItem,
   DropdownMenu,
   Flexbox,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Archive, Hash, MoreHorizontal, Plus } from 'lucide-react';
+import { Archive, ArrowDownUp, Hash, MoreHorizontal, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,10 +29,14 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
+import { useGlobalStore } from '@/store/global';
+import type { ChannelListSort } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
 import { matchChannel } from './paths';
+import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
 import { useChannelMenu } from './useChannelMenu';
@@ -42,6 +47,9 @@ import { useThreadMenu } from './useThreadMenu';
 // its 28px slot) and bends into each thread row, the way Discord nests threads. A 2px line
 // centres on that axis; Chromium floors fractional border widths, so 1.5px drew as 1px.
 const SPINE_X = 17;
+
+const SORT_BYS: ChannelListSort['by'][] = ['createdAt', 'updatedAt', 'title'];
+const SORT_ORDERS: ChannelListSort['order'][] = ['desc', 'asc'];
 
 const styles = stylex.create({
   thread: {
@@ -166,7 +174,12 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
   const allChannels = useChannelStore(channelSelectors.list);
-  const channels = useMemo(() => channelsInScope(allChannels, projectId), [allChannels, projectId]);
+  const sort = useGlobalStore(systemStatusSelectors.channelListSort);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const channels = useMemo(() => {
+    const scoped = channelsInScope(allChannels, projectId);
+    return scoped && sortChannels(scoped, sort);
+  }, [allChannels, projectId, sort]);
   useChannelEvents();
 
   const [showArchived, setShowArchived] = useState(false);
@@ -177,6 +190,36 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const query = new URLSearchParams(search);
   const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
   const menuItems = useChannelMenu();
+  const setSort = (channelListSort: ChannelListSort) => updateSystemStatus({ channelListSort });
+  // Name sorts read as A–Z / Z–A; time sorts as newest / oldest first.
+  const orderLabelKey = sort.by === 'title' ? 'alpha' : 'time';
+  const sortMenuItems: DropdownItem[] = [
+    {
+      children: SORT_BYS.map((by) => ({
+        checked: sort.by === by,
+        key: `sort-by-${by}`,
+        label: t(`sort.by.${by}`),
+        onCheckedChange: () => setSort({ ...sort, by }),
+        type: 'checkbox' as const,
+      })),
+      key: 'sort-by',
+      label: t('sort.by'),
+      type: 'group' as const,
+    },
+    { type: 'divider' as const },
+    {
+      children: SORT_ORDERS.map((order) => ({
+        checked: sort.order === order,
+        key: `sort-order-${order}`,
+        label: t(`sort.order.${orderLabelKey}.${order}`),
+        onCheckedChange: () => setSort({ ...sort, order }),
+        type: 'checkbox' as const,
+      })),
+      key: 'sort-order',
+      label: t('sort.order'),
+      type: 'group' as const,
+    },
+  ];
 
   const renderChannel = (channel: ChannelListItem) => {
     const path = CHANNEL_URL(channel.id, null, channel.projectId);
@@ -235,6 +278,15 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
             accordionStyles.actionBorderless,
           )}
         >
+          <DropdownMenu items={sortMenuItems} placement="bottomRight">
+            <ActionIcon
+              aria-label={t('sort.title')}
+              icon={ArrowDownUp}
+              size="small"
+              title={t('sort.title')}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </DropdownMenu>
           <ActionIcon
             aria-label={t('create')}
             icon={Plus}
