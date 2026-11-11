@@ -11,6 +11,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
     addGitWorktree: vi.fn(),
     listGitWorktrees: vi.fn(),
     queryDeviceSystemInfo: vi.fn(),
+    statPath: vi.fn(),
   },
 }));
 
@@ -87,6 +88,29 @@ describe('createChannelWorktree', () => {
     expect(gateway.addGitWorktree).toHaveBeenCalledWith(
       expect.objectContaining({ path: '/code/lobehub/packages/app', worktreePath: worktreeRoot }),
     );
+  });
+
+  it('places the directory through the realpath of a checkout git spells differently', async () => {
+    gateway.addGitWorktree.mockImplementation(async ({ worktreePath }) => ({
+      success: true,
+      worktreePath,
+    }));
+    // Git reports the symlinked root; the configured directory is already its realpath.
+    gateway.listGitWorktrees.mockResolvedValue([{ ...sourceCheckout, path: '/link/lobehub' }]);
+    gateway.statPath.mockResolvedValue({
+      canonicalPath: '/code/lobehub',
+      isDirectory: true,
+    } as never);
+    const worktreeRoot = deriveWorktreePath('/link/lobehub', candidate.branch, {
+      homeDir: '/Users/me',
+    });
+
+    expect(
+      await createChannelWorktree(
+        { ...candidate, sourceDirectory: '/code/lobehub/packages/app' },
+        null,
+      ),
+    ).toEqual({ path: `${worktreeRoot}/packages/app` });
   });
 
   it('keeps waiting when the directory cannot be placed inside its checkout', async () => {

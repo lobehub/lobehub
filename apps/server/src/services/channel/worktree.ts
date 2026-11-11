@@ -60,8 +60,15 @@ export const createChannelWorktree = async (
   if (!listed?.length) return { error: 'The directory is not a git repository' };
 
   // The checkout holding the configured directory, and where that directory sits inside it.
+  // The configured directory is the device's realpath; git may spell its checkout otherwise
+  // (a symlinked root), so a lexical miss is retried against the checkout's realpath.
   const source = listed.find((worktree) => worktree.current);
-  const offset = source && offsetIn(source.path, candidate.sourceDirectory);
+  let offset = source && offsetIn(source.path, candidate.sourceDirectory);
+  if (source && offset === undefined) {
+    const canonical = await deviceGateway.statPath({ ...scope, path: source.path });
+    if (canonical?.canonicalPath)
+      offset = offsetIn(canonical.canonicalPath, candidate.sourceDirectory);
+  }
   if (!source || offset === undefined)
     return { error: 'Could not locate the directory inside its repository' };
 
