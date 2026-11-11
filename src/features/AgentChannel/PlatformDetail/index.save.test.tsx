@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { toast } from '@lobehub/ui';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -82,6 +83,7 @@ const config: CurrentConfig = {
 };
 
 const en = agentEn as Record<string, string>;
+const toastError = vi.spyOn(toast, 'error').mockImplementation(() => undefined as never);
 const openTab = (name: string) =>
   fireEvent.click(screen.getByRole('tab', { name: new RegExp(name) }));
 
@@ -288,6 +290,154 @@ describe('PlatformDetail saving', () => {
     // Duties still has its unsaved edit.
     await waitFor(() => expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(1));
     expect(sensitivity).toHaveValue('0.9');
+  });
+
+  describe('when approving strangers has no owner ID to rely on', () => {
+    const blockOf = (title: string) =>
+      screen.getByText(title).closest('div[class*="header"]')!.parentElement!;
+    const saveBlock = (title: string) =>
+      fireEvent.click(
+        within(blockOf(title)).getByRole('button', { name: en['channel.module.save'] }),
+      );
+    const ownerInput = () => document.querySelector<HTMLInputElement>('#channel-owner-id input')!;
+    const expectOwnerIdAsked = async () => {
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(en['channel.access.identity.requiredToSave']),
+      );
+      await waitFor(() => expect(ownerInput()).toHaveFocus());
+      expect(ownerInput()).toHaveAttribute('aria-invalid', 'true');
+      expect(mocks.updateBotProvider).not.toHaveBeenCalled();
+    };
+
+    it('stops the conversation Save, names the field and focuses it', async () => {
+      render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+
+      fireEvent.click(screen.getByText(en['channel.access.dm.approval']));
+      await waitFor(() => expect(screen.getByText(en['channel.module.unsaved'])).toBeVisible());
+      saveBlock(en['channel.access.section.conversation']);
+
+      await expectOwnerIdAsked();
+    });
+
+    it('stops the owner Save when the ID is cleared under a stored pairing policy', async () => {
+      const paired = {
+        ...config,
+        settings: { ...config.settings, dmPolicy: 'pairing', userId: '42' },
+      };
+      render(<PlatformDetail agentId="agt" currentConfig={paired} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+
+      fireEvent.change(ownerInput(), { target: { value: '  ' } });
+      fireEvent.blur(ownerInput());
+      await waitFor(() => expect(screen.getByText(en['channel.module.unsaved'])).toBeVisible());
+      saveBlock(en['channel.access.section.identity']);
+
+      await expectOwnerIdAsked();
+    });
+
+    it('holds Guest Mode pairing to the same rule the server applies', async () => {
+      const guest = {
+        ...config,
+        settings: { ...config.settings, guestPolicy: 'pairing', userId: '42' },
+      };
+      render(<PlatformDetail agentId="agt" currentConfig={guest} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+
+      fireEvent.change(ownerInput(), { target: { value: '' } });
+      fireEvent.blur(ownerInput());
+      await waitFor(() => expect(screen.getByText(en['channel.module.unsaved'])).toBeVisible());
+      saveBlock(en['channel.access.section.identity']);
+
+      await expectOwnerIdAsked();
+    });
+
+    it('leaves a typed but unsaved ID unmarked, so its own Save still goes through', async () => {
+      const legacy = { ...config, settings: { ...config.settings, dmPolicy: 'pairing' } };
+      render(<PlatformDetail agentId="agt" currentConfig={legacy} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+      fireEvent.change(ownerInput(), { target: { value: '42' } });
+      fireEvent.blur(ownerInput());
+
+      openTab(en['channel.tab.wake']);
+      const limit = screen.getByRole('textbox', {
+        name: new RegExp(en['channel.botWakeMaxSilentWakes']),
+      });
+      fireEvent.change(limit, { target: { value: '5' } });
+      fireEvent.blur(limit);
+      await waitFor(() =>
+        expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(2),
+      );
+      saveBlock(en['channel.wake.section.pace']);
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(en['channel.access.identity.savePendingFirst']),
+      );
+      expect(mocks.updateBotProvider).not.toHaveBeenCalled();
+      // The Access tab opens for the block that still has to be saved.
+      await waitFor(() => expect(ownerInput()).toBeVisible());
+      expect(ownerInput()).not.toHaveAttribute('aria-invalid', 'true');
+
+      saveBlock(en['channel.access.section.identity']);
+      await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
+      expect(mocks.updateBotProvider.mock.calls[0][2].settings.userId).toBe('42');
+    });
+
+    it('asks to save the changed policy, not to fill the ID, when the form no longer needs one', async () => {
+      const legacy = { ...config, settings: { ...config.settings, dmPolicy: 'pairing' } };
+      render(<PlatformDetail agentId="agt" currentConfig={legacy} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+      fireEvent.click(screen.getByText(en['channel.access.dm.everyone']));
+      fireEvent.change(screen.getByPlaceholderText(en['channel.serverId']), {
+        target: { value: '7' },
+      });
+      fireEvent.blur(screen.getByPlaceholderText(en['channel.serverId']));
+      await waitFor(() =>
+        expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(2),
+      );
+      saveBlock(en['channel.access.section.identity']);
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(en['channel.access.identity.savePendingFirst']),
+      );
+      expect(mocks.updateBotProvider).not.toHaveBeenCalled();
+      expect(ownerInput()).not.toHaveAttribute('aria-invalid', 'true');
+
+      saveBlock(en['channel.access.section.conversation']);
+      await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
+      expect(mocks.updateBotProvider.mock.calls[0][2].settings.dmPolicy).toBe('open');
+    });
+
+    it('saves the approval choice together with the owner ID once it is filled', async () => {
+      render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+
+      fireEvent.click(screen.getByText(en['channel.access.dm.approval']));
+      fireEvent.change(ownerInput(), { target: { value: '42' } });
+      fireEvent.blur(ownerInput());
+      await waitFor(() =>
+        expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(2),
+      );
+      saveBlock(en['channel.access.section.conversation']);
+
+      await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
+      const [, , patch] = mocks.updateBotProvider.mock.calls[0];
+      expect(patch.settings.dmPolicy).toBe('pairing');
+      expect(patch.settings.userId).toBe('42');
+      expect(toastError).not.toHaveBeenCalled();
+    });
   });
 });
 

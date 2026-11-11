@@ -31,6 +31,8 @@ import { BOT_RUNTIME_STATUSES, type BotRuntimeStatusSnapshot } from '@/types/bot
 
 import { platformCredentialBodyMap } from '../platform/registry';
 import { getSetupGuide } from '../quickSetup/guides';
+import { OWNER_ID_ANCHOR } from './AccessSection';
+import { ownerIdMissing } from './accessStance';
 import { keepPendingConnectResult, toTestResult } from './actionResults';
 import Body, { type ModuleControls } from './Body';
 import { ChannelHero } from './ChannelHero';
@@ -564,6 +566,34 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [handleValuesChange]);
     useEffect(() => () => saveCoordinator.dispose(), [saveCoordinator]);
 
+    // A save the server would refuse for lack of the owner's ID: say what is missing and take the
+    // person to it, whichever block's Save they pressed. The focus waits for the tab to be open.
+    const [ownerIdRevealing, setOwnerIdRevealing] = useState(false);
+    const revealMissingOwnerId = useCallback(() => {
+      setPickedTab('access');
+      // The form already settles it (an ID typed, or the policy changed) but that is not stored yet.
+      // There is nothing to fill in, and marking a typed ID would block its own block's Save.
+      if (!ownerIdMissing(form.getValues().settings ?? {})) {
+        toast.error(t('channel.access.identity.savePendingFirst'));
+        return;
+      }
+      toast.error(t('channel.access.identity.requiredToSave'));
+      form.setErrors({ 'settings.userId': t('channel.access.identity.required') });
+      setOwnerIdRevealing(true);
+    }, [form, setPickedTab, t]);
+    useEffect(() => {
+      if (!ownerIdRevealing || activeTab !== 'access') return;
+      setOwnerIdRevealing(false);
+      const input = document.querySelector<HTMLInputElement>(`#${OWNER_ID_ANCHOR} input`);
+      input?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      input?.focus({ preventScroll: true });
+    }, [activeTab, ownerIdRevealing]);
+    // The mark goes once the policy no longer asks for an ID, not only when one is typed.
+    const ownerIdNeeded = ownerIdMissing(watchedValues?.settings ?? {});
+    useEffect(() => {
+      if (!ownerIdNeeded) form.setErrors({ 'settings.userId': undefined });
+    }, [form, ownerIdNeeded]);
+
     const handleSave = useCallback(async () => {
       if (writeDisabled) return;
 
@@ -586,6 +616,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
               : tabsWithIssues(form.getValues(), platformDef.schema).find((tab) =>
                   tabs.includes(tab),
                 );
+          if (target === 'access' && ownerIdMissing(form.getValues().settings ?? {})) {
+            revealMissingOwnerId();
+            return;
+          }
           if (target) setPickedTab(target);
           return;
         }
@@ -682,6 +716,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       createBotProvider,
       updateBotProvider,
       connectCurrentBot,
+      revealMissingOwnerId,
       saveCoordinator,
       setPickedTab,
       tabs,
@@ -868,6 +903,23 @@ const PlatformDetail = memo<PlatformDetailProps>(
           setSavingModule(id);
 
           try {
+            // What this Save would store, and for the owner's own block what the form now asks
+            // for too: a policy still unsaved there is what the owner's ID is being cleared under.
+            if (block.kind === 'settings') {
+              const current = form.getValues();
+              const written = mergeSettingsWithDefaults(
+                platformDef.schema,
+                omitUndefinedValues(settingsToSave(block, current, storedRef.current)),
+              );
+              if (
+                ownerIdMissing(written) ||
+                (block.keys.includes('userId') && ownerIdMissing(current.settings ?? {}))
+              ) {
+                revealMissingOwnerId();
+                return;
+              }
+            }
+
             const paths =
               block.kind === 'credentials'
                 ? ['applicationId', ...block.keys.map((key) => `credentials.${key}`)]
@@ -948,6 +1000,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         currentConfig,
         form,
         platformDef.schema,
+        revealMissingOwnerId,
         saveCoordinator,
         saveModules,
         t,

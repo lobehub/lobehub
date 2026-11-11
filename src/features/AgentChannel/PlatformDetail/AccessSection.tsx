@@ -14,11 +14,15 @@ import {
   deriveDmStance,
   type DmStance,
   dropHiddenIncompleteRows,
+  ownerIdMissing,
 } from './accessStance';
 import { ChoiceList, type ChoiceOption } from './ChoiceList';
 import type { ChannelFormValues } from './index';
 import { SchemaField } from './SchemaField';
 import type { AccessSectionKey } from './settingsGroups';
+
+/** Wraps the owner ID field, so a save refused for lack of it can bring it into view. */
+export const OWNER_ID_ANCHOR = 'channel-owner-id';
 
 type GroupPolicy = 'allowlist' | 'disabled' | 'open';
 type DevicePolicy = 'allowlist' | 'owner';
@@ -130,7 +134,7 @@ export const AccessSection = memo<AccessSectionProps>(
     const deviceAllowFrom = byKey.get('deviceAllowFrom');
 
     const ownerMissing = !(typeof settings.userId === 'string' && settings.userId.trim());
-    const approverMissing = settings.dmPolicy === 'pairing' && ownerMissing;
+    const approverMissing = ownerIdMissing(settings);
     // A filled list limits everyone in every surface, so it stays visible (and
     // clearable) whatever the DM stance is.
     const listVisible = stance === 'approval' || stance === 'listed' || hasPeopleList;
@@ -140,6 +144,7 @@ export const AccessSection = memo<AccessSectionProps>(
         <>
           {userId && (
             <SchemaField
+              anchorId={OWNER_ID_ANCHOR}
               disabled={disabled}
               field={userId}
               parentKey="settings"
@@ -154,8 +159,7 @@ export const AccessSection = memo<AccessSectionProps>(
                 </>
               }
               validateOverride={() =>
-                form.getValue('settings.dmPolicy') === 'pairing' &&
-                !String(form.getValue('settings.userId') ?? '').trim()
+                ownerIdMissing((form.getValues().settings ?? {}) as AccessSettings)
                   ? t('channel.access.identity.required')
                   : undefined
               }
