@@ -6,6 +6,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { channelMembers } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository } from '..';
+import { worktreeBranch } from '../worktree';
 import { createChannelFixture, deviceConfig, jobById, jobsOf, lease } from './testUtils';
 
 const db: LobeChatDatabase = await getTestDB();
@@ -44,7 +45,9 @@ describe('channel worktrees', () => {
     const { channel, second, secondJob } = await sharedDirectory();
 
     expect(await execution.worktreeCandidate(channel.id, secondJob.id)).toEqual({
-      branch: `lobe-channel/${second.id.replaceAll('-', '').slice(0, 12)}-main`,
+      branch: expect.stringMatching(
+        new RegExp(`^lobe-channel/${second.id.replaceAll('-', '').slice(0, 12)}-main-[\\da-f]{8}$`),
+      ),
       deviceId: 'device-1',
       deviceUserId: fixture.memberId,
       memberId: second.id,
@@ -125,5 +128,13 @@ describe('channel worktrees', () => {
     const { channel, firstJob } = await sharedDirectory();
 
     expect(await execution.worktreeCandidate(channel.id, firstJob.id)).toBeUndefined();
+  });
+
+  it("names a later environment's worktree apart from the branch an earlier one created", () => {
+    const first = worktreeBranch('member-1', null, 'device-1', '/repo');
+
+    expect(worktreeBranch('member-1', null, 'device-1', '/repo')).toBe(first);
+    expect(worktreeBranch('member-1', null, 'device-1', '/repo-other-checkout')).not.toBe(first);
+    expect(worktreeBranch('member-1', null, 'device-2', '/repo')).not.toBe(first);
   });
 });

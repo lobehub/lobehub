@@ -68,6 +68,36 @@ describe('createChannelWorktree', () => {
     expect(gateway.addGitWorktree).not.toHaveBeenCalled();
   });
 
+  it('keeps a subdirectory configuration in the same subdirectory of the checkout', async () => {
+    gateway.addGitWorktree.mockImplementation(async ({ worktreePath }) => ({
+      success: true,
+      worktreePath,
+    }));
+    const worktreeRoot = deriveWorktreePath('/code/lobehub', candidate.branch, {
+      homeDir: '/Users/me',
+    });
+
+    const result = await createChannelWorktree(
+      { ...candidate, sourceDirectory: '/code/lobehub/packages/app' },
+      null,
+    );
+
+    expect(result).toEqual({ path: `${worktreeRoot}/packages/app` });
+    // The checkout itself is keyed by the repository, not the subdirectory.
+    expect(gateway.addGitWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/code/lobehub/packages/app', worktreePath: worktreeRoot }),
+    );
+  });
+
+  it('keeps waiting when the directory cannot be placed inside its checkout', async () => {
+    gateway.listGitWorktrees.mockResolvedValue([{ ...sourceCheckout, path: '/elsewhere' }]);
+
+    expect(await createChannelWorktree(candidate, null)).toEqual({
+      error: 'Could not locate the directory inside its repository',
+    });
+    expect(gateway.addGitWorktree).not.toHaveBeenCalled();
+  });
+
   it('never asks a directory outside git to add a worktree', async () => {
     gateway.listGitWorktrees.mockResolvedValue([]);
 

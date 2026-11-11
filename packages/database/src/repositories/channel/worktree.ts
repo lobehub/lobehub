@@ -18,9 +18,30 @@ export const WORKTREE_RETRY_MS = 10 * 60 * 1000;
 /** Key of a conversation branch: its Thread, or the main timeline. */
 export const worktreeKey = (threadId: string | null) => threadId ?? 'main';
 
-/** Git branch for the member's worktree; member ids are unique across all channels. */
-export const worktreeBranch = (memberId: string, threadId: string | null) =>
-  `lobe-channel/${memberId.replaceAll('-', '').slice(0, 12)}-${worktreeKey(threadId)}`;
+/** 32-bit FNV-1a as 8 hex chars; only tells environments apart, not a security boundary. */
+const shortHash = (input: string) => {
+  let hash = 0x81_1c_9d_c5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01_00_01_93);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+/**
+ * Git branch for the member's worktree. Member ids are unique across all channels; the
+ * environment hash keeps a later environment (another checkout of the same repository) from
+ * colliding with the branch an earlier one already created, which `git worktree add -b` refuses.
+ */
+export const worktreeBranch = (
+  memberId: string,
+  threadId: string | null,
+  deviceId: string,
+  sourceDirectory: string,
+) =>
+  `lobe-channel/${memberId.replaceAll('-', '').slice(0, 12)}-${worktreeKey(threadId)}-${shortHash(
+    `${deviceId}\0${sourceDirectory}`,
+  )}`;
 
 /** The branch's worktree, while the member still runs in the directory it was cut from. */
 export const assignedWorktree = (
@@ -93,7 +114,7 @@ export const findWorktreeCandidate = async (
   if (!deviceUserId) return;
 
   return {
-    branch: worktreeBranch(member.id, job.threadId),
+    branch: worktreeBranch(member.id, job.threadId, deviceId, workingDirectory),
     deviceId,
     deviceUserId,
     memberId: member.id,
