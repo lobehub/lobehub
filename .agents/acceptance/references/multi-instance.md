@@ -127,7 +127,10 @@ cookies with Chromium's mock keychain (`src/main/pre-app-init.ts`), so the
 system keychain never asks for the login password once per checkout. A login
 copies only between profiles with the same key: from one such instance to
 another (the pool snapshot), not from the default `lobehub-desktop-dev` profile,
-which uses the real keychain. The items below are what a copy needs — only the
+which uses the real keychain. A snapshot saved before this switch no longer
+decrypts (the instance log shows `Failed to decrypt access token` and the window
+stays signed out): sign in once in a pool instance, then `stop` it to re-take the
+snapshot. The items below are what a copy needs — only the
 login-bearing items, NOT the multi-GB caches:
 
 ```bash
