@@ -189,9 +189,16 @@ const ProjectWorkLocationPicker = ({
   const tooltip = compact ? [chipLabel, hint].filter(Boolean).join(' · ') : hint;
 
   // Nothing to pick: a read-only target with no code environment to choose.
+  // A fixed target still leaves the folder on its machine to choose.
+  const machineFolders = directoriesOn(location.machineDeviceId ?? '');
   const interactive =
     !disabled &&
-    (switchable || (showRepositories && onSandbox && (repositories.length > 1 || canManage)));
+    (switchable ||
+      (showRepositories && onSandbox && (repositories.length > 1 || canManage)) ||
+      (showRepositories &&
+        !onSandbox &&
+        !!location.machineDeviceId &&
+        (machineFolders.length > 1 || canManage)));
 
   const repositoryMenu = (
     <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 260 }}>

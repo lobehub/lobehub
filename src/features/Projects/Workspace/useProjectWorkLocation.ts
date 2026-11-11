@@ -57,10 +57,19 @@ export const useProjectWorkLocation = (agentId: string) => {
     currentDeviceId,
     /** Whether the place is shown at all; a member without access sees nothing. */
     displayed: canDisplayExecutionTarget,
-    deviceRows:
-      switchable && deviceRoutingAvailable ? devicePoolForAgent(devices, isWorkspaceAgent) : [],
-    /** This desktop, as a place of its own. */
-    localAvailable: switchable && isDesktop,
+    /**
+     * The machines offered. A fixed target still lists the machine the run is
+     * on: its project folders stay a choice even though the machine is not.
+     */
+    deviceRows: switchable
+      ? deviceRoutingAvailable
+        ? devicePoolForAgent(devices, isWorkspaceAgent)
+        : []
+      : target === 'device' && boundDevice
+        ? [boundDevice]
+        : [],
+    /** This desktop, as a place of its own — or as the fixed place the run already is. */
+    localAvailable: (switchable && isDesktop) || target === 'local',
     /**
      * A device-only heterogeneous provider (Amp, Cursor, OpenCode, Pi, …) has
      * no sandbox toolchain: `resolveExecutionTarget` would coerce a stored

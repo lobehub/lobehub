@@ -99,6 +99,17 @@ describe('useProjectWorkLocation', () => {
     expect(render().sandboxAvailable).toBe(false);
   });
 
+  // A fixed device still has project folders to choose between.
+  it('keeps the fixed device listed so its folders stay a choice', () => {
+    mocks.agency.canSelectExecutionTarget = false;
+    mocks.agency.agencyConfig = { boundDeviceId: 'device_1', executionTarget: 'device' };
+    const location = render();
+
+    expect(location.switchable).toBe(false);
+    expect(location.deviceRows.map((device) => device.deviceId)).toEqual(['device_1']);
+    expect(location.machineDeviceId).toBe('device_1');
+  });
+
   it('offers no other place when the target is fixed', () => {
     mocks.agency.canSelectExecutionTarget = false;
     const location = render();
