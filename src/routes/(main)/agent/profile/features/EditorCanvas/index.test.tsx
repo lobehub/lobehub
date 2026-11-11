@@ -274,6 +274,37 @@ describe('Agent profile EditorCanvas', () => {
     expect(await screen.findByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown);
   });
 
+  it('syncs source mode when persisted Markdown arrives after editor data', async () => {
+    const editorData = { root: { children: ['parsed source'] } };
+    const persistedMarkdown = '<details>\n\n  late source\n\n</details>';
+    agentStoreState.agentMap = {
+      'agent-a': {
+        editorData,
+        systemRole: undefined,
+      },
+    };
+    editorDocuments.markdown = '';
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', editorData));
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+    expect(await screen.findByTestId('prompt-source-editor')).toHaveValue('');
+    editor.setDocument.mockClear();
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData, systemRole: persistedMarkdown },
+      };
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown),
+    );
+    expect(editor.setDocument).not.toHaveBeenCalled();
+  });
+
   it('ignores source change callbacks caused by a programmatic value sync', async () => {
     permissionState.allowed = true;
     const initialEditorData = { root: { children: ['initial'] } };
@@ -494,6 +525,36 @@ describe('Agent profile EditorCanvas', () => {
     expect(handleContentChange).toHaveBeenCalledWith('agent-a', expect.any(Function), editor);
   });
 
+  it('applies an external Markdown restore after local editing', async () => {
+    permissionState.allowed = true;
+    const initialEditorData = { root: { children: ['initial'] } };
+    const initialSystemRole = 'initial prompt';
+    agentStoreState.agentMap = {
+      'agent-a': { editorData: initialEditorData, systemRole: initialSystemRole },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', initialEditorData));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    editorDocuments.json = { root: { children: ['local draft'] } };
+    editorDocuments.markdown = 'local draft';
+    act(() => editorProps.last?.onTextChange(editor));
+    editor.setDocument.mockClear();
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData: null, systemRole: initialSystemRole },
+      };
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+
+    await waitFor(() =>
+      expect(editor.setDocument).toHaveBeenCalledWith('markdown', initialSystemRole),
+    );
+  });
+
   it('shows failed Prompt save feedback with a local Retry action', () => {
     permissionState.allowed = true;
     profileStoreState.promptSaveStatus = 'failed';
@@ -535,6 +596,41 @@ describe('Agent profile EditorCanvas', () => {
     render(<EditorCanvas />);
 
     expect(screen.queryByTestId('prompt-save-status')).not.toBeInTheDocument();
+  });
+
+  it('restores the persisted prompt after another agent supersedes its stream', async () => {
+    permissionState.allowed = true;
+    const initialEditorData = { root: { children: ['full prompt'] } };
+    const fullPrompt = 'full persisted prompt';
+    agentStoreState.agentMap = {
+      'agent-a': { editorData: initialEditorData, systemRole: fullPrompt },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', initialEditorData));
+
+    act(() => {
+      agentStoreState.streamingSystemRole = 'streamed prefix';
+      agentStoreState.streamingSystemRoleAgentId = 'agent-a';
+      agentStoreState.streamingSystemRoleInProgress = true;
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+    await waitFor(() =>
+      expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'streamed prefix'),
+    );
+    editor.setDocument.mockClear();
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData: null, systemRole: fullPrompt },
+      };
+      agentStoreState.streamingSystemRole = 'other agent stream';
+      agentStoreState.streamingSystemRoleAgentId = 'agent-b';
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('markdown', fullPrompt));
   });
 
   it('ignores a stream inherited from the previously active agent', async () => {
