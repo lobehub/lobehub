@@ -23,6 +23,15 @@ if (electronIs.dev()) {
     'userData',
     userDataOverride || path.join(app.getPath('appData'), 'lobehub-desktop-dev'),
   );
+  // A launcher-managed instance (its own profile, `scripts/devInstance.mts`)
+  // encrypts tokens and cookies with Chromium's fixed mock key instead of the
+  // macOS keychain. The keychain grants access per binary, and the dev Electron
+  // is ad-hoc signed and installed once per checkout, so every checkout would
+  // ask for the login password again. The fixed key also keeps a login copied
+  // between such instances readable; one copied from a keychain-encrypted
+  // profile is not, so it signs in once.
+  if (userDataOverride && process.platform === 'darwin')
+    app.commandLine.appendSwitch('use-mock-keychain');
 }
 
 if (globalThis.__SHELL__) Object.freeze(globalThis.__SHELL__);

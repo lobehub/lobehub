@@ -56,7 +56,7 @@ app sessions are dev-build singletons. Validated verdicts:
 | userData dir `lobehub-desktop-dev`       | `pre-app-init.ts:12`                                             | ✅ fixed — now env-overridable via `LOBE_DESKTOP_USER_DATA_DIR`.                                                     |
 | Vite dev server `strictPort:true` 5173   | `apps/desktop/vite.shared.ts`                                    | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree).                        |
 | `electron-server-ipc` unix socket        | `App.ts` → `packages/electron-server-ipc/src/ipcServer.ts:23-31` | ✅ fixed — id now env-overridable via `LOBE_IPC_ID`; distinct sockets, no more hijack (was last-writer-wins).        |
-| safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name**                               | 🔑 requires **app name constant** to decrypt a copied login state.                                                   |
+| safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name**                               | 🔑 macOS: a `LOBE_DESKTOP_USER_DATA_DIR` instance uses the mock keychain (fixed key, no prompt per checkout binary). |
 | Global shortcuts / `lobehub://` protocol | OS-global                                                        | first/last wins; harmless for headless automation.                                                                   |
 | Static file server / iMessage bridge     | `getPort()` dynamic                                              | ✅ auto-allocated, safe.                                                                                             |
 
@@ -77,6 +77,11 @@ Naively "give each instance a different app name" (a tempting first instinct)
 > **Keep `app.setName('lobehub-desktop-dev')` constant for every instance. Vary
 > only the userData dir.** That satisfies the single-instance lock (keyed by
 > userData) AND keeps the keychain key valid so copied tokens/cookies decrypt.
+> On macOS, an instance with its own userData also passes `--use-mock-keychain`:
+> the keychain grants access per binary, and every checkout installs its own
+> ad-hoc-signed Electron, so the real keychain asked for the login password once
+> per checkout. Such instances share the mock key with each other, not with the
+> default profile.
 > The IPC socket is decoupled from the app name via its own `LOBE_IPC_ID` knob
 > (not the app name), so each instance still gets a distinct socket.
 
@@ -117,8 +122,12 @@ All three verified live via the `electron-dev.sh` pool (transcript below).
 
 ## Login-state reuse across userData dirs (validated)
 
-To make a fresh userData dir come up **already logged in**, copy from the golden
-profile (`~/Library/Application Support/lobehub-desktop-dev/`) — only the
+On macOS an instance given `LOBE_DESKTOP_USER_DATA_DIR` encrypts tokens and
+cookies with Chromium's mock keychain (`src/main/pre-app-init.ts`), so the
+system keychain never asks for the login password once per checkout. A login
+copies only between profiles with the same key: from one such instance to
+another (the pool snapshot), not from the default `lobehub-desktop-dev` profile,
+which uses the real keychain. The items below are what a copy needs — only the
 login-bearing items, NOT the multi-GB caches:
 
 ```bash
@@ -133,9 +142,10 @@ done # ~27 MB vs the 1.7 GB full profile (Cache/Code Cache/GPUCache skipped)
 
 - `lobehub-settings.json` → `encryptedTokens` (OIDC access/refresh, safeStorage).
 - `Cookies` + `Local Storage` + `IndexedDB` → better-auth renderer session.
-- Decryption works because app name is unchanged on the same machine (keychain
-  entry `lobehub-desktop-dev Safe Storage` is reused). **Same machine only** —
-  a copy to another machine won't decrypt.
+- Decryption works because both profiles use the same key: the mock keychain
+  for instances with their own userData on macOS, otherwise the keychain entry
+  `lobehub-desktop-dev Safe Storage` (app name unchanged). **Same machine only**
+  for the keychain key — a copy to another machine won't decrypt.
 - **Stale-token caveat:** if the copied access token's `exp` has passed you'll
   see `Authentication failed: "exp" claim timestamp check failed` — this actually
   **confirms decryption succeeded** (the token was decrypted, then found expired).
@@ -223,8 +233,8 @@ project path (the old single-instance script matched every project Electron by
 binary path, so a 2nd `start` tore down the 1st):
 
 ```bash
-electron-dev.sh start 1    # CDP 9223, Vite 5174, userData ud-1 (login copied), IPC id -1
-electron-dev.sh start 2    # CDP 9224, Vite 5175, userData ud-2, IPC id -2
+electron-dev.sh start 1    # CDP 9223, Vite 5174, userData ud-1 (login copied), IPC id -9223
+electron-dev.sh start 2    # CDP 9224, Vite 5175, userData ud-2, IPC id -9224
 electron-dev.sh list       # show running pool instances
 electron-dev.sh stop 1     # sibling-safe: kills ONLY instance 1 (KEEP_DATA=1 to keep ud)
 electron-dev.sh stop --all # stop every instance
@@ -232,10 +242,15 @@ electron-dev.sh stop --all # stop every instance
 ```
 
 - Derives `CDP=9222+id`, `Vite=5173+id`, `userData=$POOL_DIR/ud-<id>`,
-  `IPC id=lobehub-desktop-dev-<id>`, per-id log + pidfile.
-- `start <id>` seeds a fresh userData with the login-item set from the golden
-  profile (override via `LOBE_GOLDEN_PROFILE`); `stop <id>` wipes it unless
-  `KEEP_DATA=1`.
+  `IPC id=lobehub-desktop-dev-<cdp port>` (named by port so launchers with
+  other id schemes cannot pick the same socket), a window label of the checkout
+  plus `#<id>`, per-id log + pidfile. All of it comes from
+  `apps/desktop/scripts/devInstance.mts`.
+- A copied login drops `gatewayDeviceId`, the device-gateway connection id; two
+  instances sharing it replace each other's socket on every reconnect.
+- `start <id>` seeds a fresh userData with the login-item set from the snapshot
+  the last `stop` saved; the first run signs in once inside the app. `stop <id>`
+  wipes the userData unless `KEEP_DATA=1`.
 - `stop <id>` matches by **pidfile session-leader tree + CDP/Vite port holders**,
   never the broad project path → never kills a sibling.
 - Drive each instance with `agent-browser --session s<port> --cdp <port>`.
@@ -244,7 +259,7 @@ electron-dev.sh stop --all # stop every instance
 
 ### Round 1 — concurrency, login reuse, isolation (Model A)
 
-Golden profile `lobehub-desktop-dev` (logged in, user\_2gmT…); 3 userData copies
+Golden profile `lobehub-desktop-dev` (logged in, user_2gmT…); 3 userData copies
 (27 MB each), app name constant. inst1 = `electron-vite dev` (CDP 9223, Vite
 5173\), inst2/inst3 = raw electron (CDP 9224/9225) sharing Vite.
 
