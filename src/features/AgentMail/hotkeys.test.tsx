@@ -335,6 +335,18 @@ describe('mail hotkeys', () => {
     await waitFor(() => expect(probe.location).toBe('/agent/agt_1/mail?folder=sent'));
   });
 
+  it('leaves the open mail for the view a g key names', async () => {
+    surface.width = 600;
+    page('/agent/agt_1/mail/msg_1');
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+
+    press('g');
+    press('d');
+
+    await waitFor(() => expect(probe.location).toBe('/agent/agt_1/mail?folder=drafts'));
+    expect(screen.queryByText('Full body of msg_1')).not.toBeInTheDocument();
+  });
+
   it('opens a reply to the open mail with r, and Esc leaves the mail for its row', async () => {
     page();
     await screen.findByText('preview of First');

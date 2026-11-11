@@ -89,6 +89,7 @@ export const MailHotkeyTarget = <K extends keyof Targets>({
 export interface MailPageHotkeys {
   /** Close the open mail or composer; `false` when neither is open. */
   back: () => boolean;
+  /** Show that view's list, leaving any open mail. */
   changeView: (view: MailView) => void;
   /** `undefined` while the address cannot send; the reason is shown instead. */
   compose?: () => void;

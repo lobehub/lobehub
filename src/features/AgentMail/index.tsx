@@ -490,7 +490,9 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           else return false;
           return true;
         },
-        changeView,
+        // A `g` key goes to that view's list, leaving the open mail, as in Gmail;
+        // on one column the mail would otherwise keep covering the list.
+        changeView: (next) => navigate(next === 'inbox' ? mailPath : `${mailPath}?folder=${next}`),
         compose: !disabled && mailbox.current && !sendBlock ? startCompose : undefined,
         composeBlockedReason: !disabled && sendBlock ? t(SEND_BLOCK_KEYS[sendBlock]) : undefined,
       }}
