@@ -18,7 +18,10 @@ import { useTranslation } from 'react-i18next';
 
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import {
+  isHeterogeneousSandboxExecutionAvailable,
+  resolveExecutionTarget,
+} from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 
@@ -60,7 +63,14 @@ const ProjectRunTargetChip = ({ agentId, compact, disabled }: ProjectRunTargetCh
     workspaceScoped,
   });
   const onSandbox = target === 'sandbox';
-  const switchable = !onSandbox && canSelectExecutionTarget && !disabled;
+  // A device-only heterogeneous provider (Amp, Cursor, OpenCode, Pi, …) has no
+  // sandbox toolchain: `resolveExecutionTarget` coerces a stored `sandbox`
+  // target back to `none`, so offering the switch would only strip the agent's
+  // runnable device target. Mirrors `HeteroDeviceSwitcher`'s `supportsSandbox`.
+  const sandboxAvailable = isHeterogeneousSandboxExecutionAvailable(
+    agencyConfig?.heterogeneousProvider?.type,
+  );
+  const switchable = !onSandbox && sandboxAvailable && canSelectExecutionTarget && !disabled;
 
   const switchToSandbox = async () => {
     if (!(await selectExecutionTarget('sandbox')))
