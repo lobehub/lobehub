@@ -485,6 +485,39 @@ describe('MailComposer', () => {
     });
   });
 
+  describe('MailComposer — Codex on 47f900b87c2', () => {
+    it('shows Cc restored from this browser', async () => {
+      localStorage.setItem(
+        'lobe-agent-mail:draft:agt_1:acc_a:draft_1',
+        JSON.stringify({
+          fields: { bcc: [], cc: [{ address: 'cc@x.com' }], subject: 'S', text: 'T', to: [] },
+          pending: true,
+          savedAt: 1,
+        }),
+      );
+      setupComposer({ draft: composerDraft({ subject: 'S', text: 'T' }) });
+      await waitFor(() => expect(screen.getByLabelText('identity.compose.cc')).toBeInTheDocument());
+      expect(screen.getByText('cc@x.com')).toBeInTheDocument();
+    });
+
+    it('closes on discard at once, before the pending save finishes', async () => {
+      let finishCreate!: () => void;
+      service.createMailDraft.mockImplementation(
+        (input) =>
+          new Promise((resolve) => {
+            finishCreate = () => resolve(composerDraft({ ...input, id: 'draft_d' }));
+          }),
+      );
+      const { onClose } = setupComposer();
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), { target: { value: 'x' } });
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+      fireEvent.click(screen.getByLabelText('identity.mailbox.action.discard'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      await act(async () => finishCreate());
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('MailComposer — Codex on ca8f8261cd0', () => {
     it('finishes a send after the editor is gone without steering the page', async () => {
       let finishSend!: () => void;

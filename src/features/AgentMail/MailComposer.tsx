@@ -170,9 +170,9 @@ const MailComposer = memo<MailComposerProps>(
       source,
     });
     const { fields, sending } = composer;
-    const [showCopies, setShowCopies] = useState(
-      () => (draft?.cc.length ?? 0) > 0 || (draft?.bcc.length ?? 0) > 0,
-    );
+    const [copiesOpened, setShowCopies] = useState(false);
+    // Recipients in Cc or Bcc, saved or restored from this browser, are always shown.
+    const showCopies = copiesOpened || fields.cc.length > 0 || fields.bcc.length > 0;
     const mountedRef = useRef(true);
     useUnmount(() => {
       mountedRef.current = false;
@@ -209,8 +209,11 @@ const MailComposer = memo<MailComposerProps>(
     };
 
     const discard = async () => {
-      const { backupKey, id } = await composer.detach();
+      // Closed at once; the save and the discard finish in the background, and
+      // never steer the page the reader has since moved on in.
+      const detaching = composer.detach();
       onClose();
+      const { backupKey, id } = await detaching;
       if (!id) {
         clearBackup(backupKey);
         return;
