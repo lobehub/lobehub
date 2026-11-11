@@ -315,7 +315,9 @@ export const createAnthropicCompatibleParams = <T extends Record<string, any> = 
     baseURL,
     chatCompletion: {
       getPricingOptions: resolveDefaultAnthropicPricingOptions,
-      handlePayload: buildDefaultAnthropicPayload,
+      // Wrapped: the runtime passes its constructor options as the second argument,
+      // which must not reach the builder's own options.
+      handlePayload: (payload) => buildDefaultAnthropicPayload(payload),
       ...chatCompletion,
     },
     customClient: customClient ?? { createClient: createDefaultAnthropicClient },

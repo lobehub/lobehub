@@ -91,6 +91,13 @@ export interface OpenAIChatMessage {
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
   /**
+   * Advanced: prompt-cache lifetime requested from Anthropic-compatible providers.
+   * `1h` writes cost 2× base input instead of 1.25× for `5m`, so it only pays off when
+   * requests sharing a prefix start more than 5 minutes apart. Undefined → `5m`
+   * (breakpoints are sent without a `ttl`, byte-identical to before this option existed).
+   */
+  contextCachingTTL?: '5m' | '1h';
+  /**
    * @title Provider deployment name
    */
   deploymentName?: string;
