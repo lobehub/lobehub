@@ -32,6 +32,7 @@ import {
   createQueueSendNowGate,
   getQueuedHintKey,
   putQueuedMessageInEditor,
+  type QueueWithdrawOutcome,
   sendQueuedMessageNow,
   type SendQueuedMessageNowOutcome,
 } from './utils';
@@ -245,15 +246,19 @@ const QueueTray = memo(() => {
   // took cannot be sent again, and that is exactly the case the action has to
   // answer by stopping the turn instead of just saying it is too late.
   const takeBackForStopAndContinue = useCallback(
-    async (msg: QueuedMessage) => {
-      const withdrawn = await withdrawQueuedMessage(contextKey, msg.id).catch((error) => {
+    async (msg: QueuedMessage): Promise<QueueWithdrawOutcome> => {
+      try {
+        const withdrawn = await withdrawQueuedMessage(contextKey, msg.id);
+        return withdrawn ? 'held' : 'taken';
+      } catch (error) {
+        // A failed withdrawal says nothing about where the message is. Callers
+        // must not read it as "already delivered", or they would stop a run
+        // whose message is still waiting.
         console.error('[QueueTray] withdrawing a queued message failed:', error);
-        toast.error(t('inputQueue.withdrawFailed'));
-        return false;
-      });
-      return withdrawn === true;
+        return 'unknown';
+      }
     },
-    [contextKey, t, withdrawQueuedMessage],
+    [contextKey, withdrawQueuedMessage],
   );
 
   const handleEdit = useCallback(
@@ -290,6 +295,7 @@ const QueueTray = memo(() => {
         })
         .catch((error) => console.error('[QueueTray] stopAndContinue failed:', error));
       if (result.outcome === 'stopped') toast.info(t('inputQueue.alreadyDeliveredStopped'));
+      if (result.outcome === 'failed') toast.error(t('inputQueue.stopAndContinueFailed'));
     },
     [context, contextKey, sendNowGate, t, takeBackForStopAndContinue],
   );

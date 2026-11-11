@@ -1713,6 +1713,7 @@
   "inputQueue.queuedRunEndMergeHint": "当前运行完成后合并发送",
   "inputQueue.sendNow": "立即发送（中断当前运行）",
   "inputQueue.stopAndContinue": "停止并继续",
+  "inputQueue.stopAndContinueFailed": "停止并继续没成功，请重试",
   "inputQueue.withdrawFailed": "没能撤回这条消息，请重试",
   "intentUnderstanding.title": "正在理解你的意图…",
   "internalLink.agent.open": "打开助理",

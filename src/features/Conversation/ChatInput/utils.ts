@@ -185,16 +185,28 @@ export const toDisplayableSendErrorMessage = (message?: string): string | undefi
 };
 
 /**
+ * What this client got back when it tried to take a queued message out of the
+ * queue.
+ *
+ * - `held`: only this client has it now, so it can be sent.
+ * - `taken`: the server already has it and will deliver it; it must never be
+ *   sent again.
+ * - `unknown`: the withdrawal itself failed, so where the message lives is not
+ *   known. Neither sending nor stopping is safe.
+ */
+export type QueueWithdrawOutcome = 'held' | 'taken' | 'unknown';
+
+/**
  * "Stop and continue" for one queued message: take it out of the queue, stop
  * every run it waits behind, then send it as a steered turn.
  *
  * Withdrawn first: interrupting a run that already took it from the server
- * would leave that copy unanswered. `withdraw` resolving `false` means it is
+ * would leave that copy unanswered. `withdraw` reporting `taken` means it is
  * already on its way, so it must not be sent again — only the stop half is
  * left, which is what `stopIfAlreadyDelivered` handles. Should the interrupt
  * fail, it goes back to the tray, held by this client only.
  */
-export type SendQueuedMessageNowOutcome = 'sent' | 'skipped' | 'stopped';
+export type SendQueuedMessageNowOutcome = 'sent' | 'skipped' | 'stopped' | 'failed';
 
 export const sendQueuedMessageNow = async ({
   chat,
@@ -214,18 +226,28 @@ export const sendQueuedMessageNow = async ({
    * and report `stopped` instead of leaving the user with a notice.
    */
   stopIfAlreadyDelivered?: boolean;
-  withdraw: (msg: QueuedMessage) => Promise<boolean>;
+  withdraw: (msg: QueuedMessage) => Promise<QueueWithdrawOutcome>;
 }): Promise<SendQueuedMessageNowOutcome> => {
   const index = chat.queuedMessages[contextKey]?.findIndex((queued) => queued.id === msg.id) ?? -1;
-  if (!(await withdraw(msg))) {
+  const withdrawn = await withdraw(msg);
+  // Where the message is stays unknown: stopping the run could interrupt work
+  // the user did not ask to stop, and sending could deliver it twice.
+  if (withdrawn === 'unknown') return 'failed';
+
+  if (withdrawn === 'taken') {
     if (!stopIfAlreadyDelivered) return 'skipped';
 
     const blockers = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
-    await Promise.all(blockers.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON))).catch(
-      (error: unknown) => {
-        console.error('[sendQueuedMessageNow] stopping the run failed:', error);
-      },
-    );
+    const confirmed = await Promise.all(
+      blockers.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON)),
+    ).catch((error: unknown): boolean[] | undefined => {
+      console.error('[sendQueuedMessageNow] stopping the run failed:', error);
+      return undefined;
+    });
+    // A handler that failed puts its operation back in the blocking state, so
+    // the run the user asked to stop is still going. Never report it stopped.
+    if (!confirmed || confirmed.some((result) => !result)) return 'failed';
+
     return 'stopped';
   }
   // Back where it was, so the order the user queued in holds.
