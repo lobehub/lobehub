@@ -7,7 +7,6 @@ import type {
   GoalGraphDecision,
   GoalGraphEvent,
   GoalGraphSnapshot,
-  GoalNodeKind,
   GoalPlanContext,
   GoalTickResult,
 } from '@lobechat/types';
@@ -28,12 +27,14 @@ import {
 } from './assignment';
 import { registerGoalConfigurationCommands } from './configuration';
 import { registerGoalGraphEditCommands } from './graphEdit';
+import { registerGoalMarkCommands } from './mark';
 import {
   type GoalMetricState,
   printMetricState,
   readMetricState,
   registerGoalMetricCommands,
 } from './metric';
+import { nodeIcon } from './nodeIcon';
 import { goalReads, hasOperationToken } from './reads';
 import { registerGoalReportCommand } from './report';
 import { missingSeedDependencies, parseTaskFile } from './seedTasks';
@@ -54,14 +55,6 @@ const parseVariant = (raw: string) => {
   return { axis, values };
 };
 
-const nodeIcon: Record<GoalNodeKind, string> = {
-  batch: '▦',
-  decision: '◆',
-  experiment: '⚗',
-  finding: '●',
-  problem: '◇',
-  task: '▣',
-};
 /**
  * Every edge kind reads `source <kind> target`, so a row listing its INCOMING
  * edges by kind states the relationship backwards: an incoming `depends_on`
@@ -70,6 +63,7 @@ const nodeIcon: Record<GoalNodeKind, string> = {
  */
 const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
   answers: 'answered by',
+  confirms: 'confirmed by',
   contains: 'inside',
   contradicts: 'contradicted by',
   decomposes: 'part of',
@@ -78,6 +72,7 @@ const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
   investigates: 'investigated by',
   leads_to: 'follows',
   produces: 'produced by',
+  refutes: 'refuted by',
   supports: 'supported by',
 };
 
@@ -1238,5 +1233,6 @@ export function registerGoalCommand(program: Command) {
     });
 
   registerGoalGraphEditCommands(goal);
+  registerGoalMarkCommands(goal);
   registerGoalMetricCommands(goal);
 }

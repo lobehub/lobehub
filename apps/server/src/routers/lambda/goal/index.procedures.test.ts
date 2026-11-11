@@ -26,6 +26,8 @@ function expected(): Array<
 > {
   return [
     ['addEdge', 'mutation', 13],
+    ['addMark', 'mutation', 13],
+    ['addMarkOperation', 'mutation', 9],
     ['addNode', 'mutation', 13],
     ['advance', 'mutation', 13],
     ['answerClarifications', 'mutation', 13],
@@ -45,8 +47,11 @@ function expected(): Array<
     ['eventsOperation', 'query', 9],
     ['graph', 'query', 12],
     ['graphOperation', 'query', 9],
+    ['judgeMarkOperation', 'mutation', 9],
     ['list', 'query', 12],
     ['listSubscriptions', 'query', 12],
+    ['marks', 'query', 12],
+    ['marksOperation', 'query', 8],
     ['metricState', 'query', 12],
     ['metricStateOperation', 'query', 9],
     ['pause', 'mutation', 13],
@@ -60,6 +65,7 @@ function expected(): Array<
     ['removeMetricCriteria', 'mutation', 13],
     ['restart', 'mutation', 13],
     ['resume', 'mutation', 13],
+    ['retireMark', 'mutation', 13],
     ['retireNodes', 'mutation', 13],
     ['setAcceptanceCriteria', 'mutation', 13],
     ['setAgent', 'mutation', 13],

@@ -1,5 +1,7 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode, TaskStatus } from '@lobechat/types';
 
+import { buildGoalMarksSection, type TaskRunPromptGoalMarks } from './goalMarks';
+
 // ── Formatting helpers for Task tool responses ──
 
 const priorityLabel = (p?: number | null): string => {
@@ -595,6 +597,8 @@ export interface TaskRunPromptInput {
   extraPrompt?: string;
   /** Present only for rounds spawned by the goal outer loop. */
   goalLoop?: TaskRunPromptGoalLoop;
+  /** Present only for runs of a Task that works for a Goal. */
+  goalMarks?: TaskRunPromptGoalMarks;
   /** Parent task context (when current task is a subtask) */
   parentTask?: {
     id?: string;
@@ -700,7 +704,7 @@ const briefIcon = (type: string): string => {
  * 4. Original Task (instruction + description) — the base requirement
  */
 export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): string => {
-  const { task, activities, extraPrompt, goalLoop, workspace, parentTask } = input;
+  const { task, activities, extraPrompt, goalLoop, goalMarks, workspace, parentTask } = input;
   const sections: string[] = [];
 
   // ── 1. High Priority Instruction ──
@@ -1038,6 +1042,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
 
   taskLines.push('</task>');
   sections.push(taskLines.join('\n'));
+  if (goalMarks) sections.push(buildGoalMarksSection(goalMarks));
 
   return sections.join('\n\n');
 };
@@ -1048,5 +1053,6 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
+export type { TaskRunPromptGoalMark, TaskRunPromptGoalMarks } from './goalMarks';
 export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';

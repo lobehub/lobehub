@@ -1,5 +1,10 @@
 import { UserInteractionApiName } from '@lobechat/builtin-tool-user-interaction';
-import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import {
+  buildTaskRunPrompt,
+  type TaskRunPromptGoalLoop,
+  type TaskRunPromptGoalMarks,
+} from '@lobechat/prompts';
 import type {
   TaskItem,
   TaskTopicHandoff,
@@ -10,6 +15,7 @@ import type {
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import { MessageModel } from '@/database/models/message';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
@@ -20,6 +26,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
+import { marksForPrompt } from '@/server/services/goal/marks';
 import {
   countChargedTaskAttempts,
   countUnchargedRuns,
@@ -96,6 +103,29 @@ const isJudgedResult = (result: { status: string; verdict: string | null }) =>
  * acceptance aggregate. Best-effort — any lookup failure degrades to the bare
  * round counters so prompt building never blocks a run.
  */
+/**
+ * The marks every run of a Goal Task is handed, read fresh for this run so a
+ * mark a sibling left a minute ago reaches it. The terminal acceptance Task
+ * judges the Goal rather than doing its work, so it gets none. A failed read
+ * costs the run its marks, never the run.
+ */
+const resolveGoalMarks = async (
+  task: TaskItem,
+  deps: BuildTaskPromptDeps,
+): Promise<TaskRunPromptGoalMarks | undefined> => {
+  if (task.name === GOAL_ACCEPTANCE_TASK_TITLE) return undefined;
+  const { db, userId, workspaceId } = deps;
+  try {
+    const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
+    if (!goal) return undefined;
+    const graph = await new GoalGraphModel(db, userId, workspaceId).getGraph(goal.id);
+    return graph ? marksForPrompt(graph) : undefined;
+  } catch (error) {
+    console.error('[buildTaskPrompt] failed to read goal marks:', error);
+    return undefined;
+  }
+};
+
 const resolveGoalLoopContext = async (
   task: TaskItem,
   deps: BuildTaskPromptDeps,
@@ -440,10 +470,14 @@ export async function buildTaskPrompt(
       });
   }
 
-  const goalLoop = await resolveGoalLoopContext(task, deps);
+  const [goalLoop, goalMarks] = await Promise.all([
+    resolveGoalLoopContext(task, deps),
+    resolveGoalMarks(task, deps),
+  ]);
 
   const prompt = buildTaskRunPrompt({
     ...(goalLoop ? { goalLoop } : {}),
+    ...(goalMarks ? { goalMarks } : {}),
     activities: {
       briefs: briefs.map((b: any) => ({
         createdAt: b.createdAt,

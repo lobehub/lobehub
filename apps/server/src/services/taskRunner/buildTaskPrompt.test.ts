@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -105,6 +106,54 @@ describe('buildTaskPrompt Goal loop context', () => {
     expect(result.prompt).toContain('Restore the table and submit fresh evidence.');
     expect(result.prompt).toContain('Goal loop — round 2 of 2');
     expect(result.prompt).not.toContain('round 2 of 20');
+  });
+});
+
+describe('buildTaskPrompt goal marks', () => {
+  const goalTask = async (name: string) => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Migrate one store slice.', name });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Migrate the stores',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: name });
+    await graphModel.bindTask(goal.id, node!.id, task.id);
+    await graphModel.createNode(goal.id, {
+      description: 'Add the action to __mocks__ as well.',
+      kind: 'pattern',
+      status: 'active',
+      title: 'internal_ action mock missing',
+    });
+    return { task: (await taskModel.findById(task.id))!, taskModel };
+  };
+
+  it('hands a Goal Task run the marks its siblings left', async () => {
+    const { task, taskModel } = await goalTask('Migrate chat slice');
+
+    const { prompt } = await buildTaskPrompt(task, promptDeps(db, taskModel, userId));
+
+    expect(prompt).toContain('<goal_marks>');
+    expect(prompt).toContain('[pattern, unconfirmed] internal_ action mock missing');
+    expect(prompt).toContain('Add the action to __mocks__ as well.');
+  });
+
+  it('gives the terminal acceptance Task none: it judges the Goal, it does not do its work', async () => {
+    const { task, taskModel } = await goalTask(GOAL_ACCEPTANCE_TASK_TITLE);
+
+    const { prompt } = await buildTaskPrompt(task, promptDeps(db, taskModel, userId));
+
+    expect(prompt).not.toContain('<goal_marks>');
+  });
+
+  it('gives a Task outside any Goal none', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Standalone work.' });
+
+    const { prompt } = await buildTaskPrompt(task, promptDeps(db, taskModel, userId));
+
+    expect(prompt).not.toContain('<goal_marks>');
   });
 });
 

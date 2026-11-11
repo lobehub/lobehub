@@ -588,7 +588,31 @@ export interface GoalItem {
  * `experiment`: an experiment is a candidate answer under test, a batch is one
  * reusable transformation applied many times.
  */
-export type GoalNodeKind = 'problem' | 'experiment' | 'task' | 'finding' | 'decision' | 'batch';
+export type GoalNodeKind =
+  | 'problem'
+  | 'experiment'
+  | 'task'
+  | 'finding'
+  | 'decision'
+  | 'batch'
+  | GoalMarkKind
+  /**
+   * A batch's recipe revision. Batches before this kind stored it as a `finding`
+   * titled `GOAL_BATCH_TEMPLATE_TITLE`; those rows are left as they are and
+   * readers accept both.
+   */
+  | 'template';
+
+/**
+ * A mark (trace) one Task leaves for every other Task in the same Goal: what works
+ * (`pattern`), a tool it built (`tool`), what not to touch (`hazard`) and what
+ * not to try again (`dead_end`). Unlike a `finding` — the outcome a Task
+ * delivered, scoped to its experiment — a mark is Goal-wide, written while the
+ * work happens (failures included), and handed to every later run. Runs that
+ * use one record `confirms` / `refutes` edges, and the node's `confidence` is
+ * derived from them.
+ */
+export type GoalMarkKind = 'pattern' | 'tool' | 'hazard' | 'dead_end';
 
 /** Semantic lifecycle of a node; independent from the execution status of its Task. */
 export type GoalNodeStatus =
@@ -612,7 +636,11 @@ export type GoalEdgeKind =
   | 'produces'
   | 'supports'
   | 'contradicts'
-  | 'leads_to';
+  | 'leads_to'
+  /** A run used this mark and it held (`task confirms mark`). */
+  | 'confirms'
+  /** A run used this mark and it was wrong (`task refutes mark`). */
+  | 'refutes';
 
 /** The role an immutable Work version plays for a Goal Graph node. */
 export type GoalNodeWorkVersionRelation = 'input' | 'produced' | 'supports' | 'contradicts';
