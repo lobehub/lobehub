@@ -170,6 +170,11 @@ export const styles = stylex.create({
     color: cssVar.colorInfo,
     backgroundColor: cssVar.colorInfoBg,
   },
+  /** A mention inside the composer: highlighted text, no tag. */
+  composerMention: {
+    fontWeight: 500,
+    color: cssVar.colorInfo,
+  },
   composer: {
     'position': 'relative',
     'flexShrink': 0,

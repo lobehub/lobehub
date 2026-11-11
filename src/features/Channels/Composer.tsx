@@ -76,7 +76,15 @@ type ComposerDelivery =
       onSend: ChannelComposerSend;
     };
 
-const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
+const plugins = [
+  ReactCodePlugin,
+  ReactListPlugin,
+  ReactLinkHighlightPlugin,
+  // Highlighted text like the rest of the line, not the editor's default boxed tag.
+  Editor.withProps(ReactMentionPlugin, {
+    theme: { mention: stylex.props(styles.composerMention).className },
+  }),
+];
 
 /** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
 const inputShell = { borderRadius: 12 };
