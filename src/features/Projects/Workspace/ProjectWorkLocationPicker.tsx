@@ -240,7 +240,8 @@ const ProjectWorkLocationPicker = ({
             <OptionRow
               compact
               active={onThisMachine && folder.id === directory?.id}
-              hint={folder.path}
+              // A path is long: on its own line, so the folder's name stays whole.
+              desc={folder.path}
               icon={<Icon icon={FolderIcon} size={16} />}
               key={folder.id}
               label={folder.name}
