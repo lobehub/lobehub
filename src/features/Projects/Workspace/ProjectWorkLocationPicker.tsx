@@ -12,7 +12,7 @@ import RepositoryAvatar from '@/components/RepositoryAvatar';
 import OptionRow from '@/features/ChatInput/ControlBar/OptionRow';
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
-import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
+import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
@@ -300,7 +300,6 @@ const ProjectWorkLocationPicker = ({
     <OptionRow
       active={onSandbox}
       arrow={showRepositories}
-      desc={tChat('heteroAgent.executionTarget.sandboxDesc')}
       disabled={!switchable && !onSandbox}
       icon={<ExecutionTargetIcon target={'sandbox'} />}
       label={tChat('heteroAgent.executionTarget.sandbox')}
@@ -338,7 +337,6 @@ const ProjectWorkLocationPicker = ({
               <OptionRow
                 active={target === 'local'}
                 arrow={showRepositories}
-                desc={tChat('heteroAgent.executionTarget.localDesc')}
                 icon={<ExecutionTargetIcon target={'local'} />}
                 label={tChat('heteroAgent.executionTarget.local')}
                 onClick={() => void select('local')}
@@ -353,11 +351,15 @@ const ProjectWorkLocationPicker = ({
                   arrow={showRepositories}
                   icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
                   label={device.friendlyName || device.hostname || device.deviceId}
-                  desc={tChat(
-                    device.online
-                      ? 'heteroAgent.executionTarget.online'
-                      : 'heteroAgent.executionTarget.offline',
-                  )}
+                  hint={
+                    <ExecutionTargetDeviceStatus
+                      offlineLabel={tChat('heteroAgent.executionTarget.offline')}
+                      online={device.online}
+                      onlineLabel={tChat('heteroAgent.executionTarget.online')}
+                      unknown={device.onlineUnknown}
+                      unknownLabel={tChat('heteroAgent.executionTarget.presenceChecking')}
+                    />
+                  }
                   onClick={() => void select('device', device.deviceId)}
                 />,
                 'device',
