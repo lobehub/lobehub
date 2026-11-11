@@ -126,6 +126,29 @@ const currentWorktreeEntry = () => ({
 });
 
 describe('WorktreeSwitcher', () => {
+  it('creates a worktree from the commit the dialog showed, not the ref behind it', async () => {
+    addGitWorktreeMock.mockResolvedValue({ success: true, worktreePath: '/repo-wt' });
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={[{ branch: 'feat/current', current: true, path: '/repo' }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('workingDirectory.createWorktreeAction'));
+    await waitFor(() => expect(openCreateWorktreeModalMock).toHaveBeenCalledTimes(1));
+    const { onSubmit } = openCreateWorktreeModalMock.mock.calls[0][0];
+    await onSubmit('wt/new', { detached: false, ref: 'main', sha: 'abc1234def' });
+
+    expect(addGitWorktreeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ baseRef: 'abc1234def', branch: 'wt/new' }),
+    );
+  });
+
   it('keeps the dropdown trigger anchored to a stable DOM wrapper', () => {
     render(
       <WorktreeSwitcher

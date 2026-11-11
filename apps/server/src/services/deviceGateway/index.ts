@@ -315,6 +315,10 @@ export class DeviceGateway {
     return gitRead.listGitWorktrees(this.clientGetter, ...args);
   }
 
+  resolveGitWorktreeBase(...args: DeviceRpcArgs<typeof gitRead.resolveGitWorktreeBase>) {
+    return gitRead.resolveGitWorktreeBase(this.clientGetter, ...args);
+  }
+
   listHeterogeneousAgentModels(...args: DeviceRpcArgs<typeof agents.listHeterogeneousAgentModels>) {
     return agents.listHeterogeneousAgentModels(this.clientGetter, ...args);
   }

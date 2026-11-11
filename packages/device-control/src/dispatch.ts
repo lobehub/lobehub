@@ -28,6 +28,7 @@ import {
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
+  resolveGitWorktreeBase,
   revertGitFile,
   runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
@@ -118,6 +119,7 @@ export const DEVICE_RPC_METHODS = [
   'listGitBranches',
   'listGitRemoteBranches',
   'listGitWorktrees',
+  'resolveGitWorktreeBase',
   'checkoutGitBranch',
   'renameGitBranch',
   'deleteGitBranch',
@@ -422,6 +424,10 @@ export const executeDeviceRpc = async (
       return listGitWorktrees((params as { path: string }).path);
     }
 
+    case 'resolveGitWorktreeBase': {
+      return resolveGitWorktreeBase(params as { baseRef?: string; path: string });
+    }
+
     case 'checkoutGitBranch': {
       return checkoutGitBranch(params as { branch: string; create?: boolean; path: string });
     }
@@ -439,7 +445,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'addGitWorktree': {
-      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
+      return addGitWorktree(
+        params as { baseRef?: string; branch: string; path: string; worktreePath: string },
+      );
     }
 
     case 'pullGitBranch': {
