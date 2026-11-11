@@ -111,6 +111,11 @@ interface AgentGroupMembershipImpactRef {
   groupVisible: boolean;
 }
 
+export interface RemoveAgentOptions {
+  /** The user confirmed a warning that other members' content goes with the agent. */
+  acknowledgeForeignContent?: boolean;
+}
+
 class AgentService {
   /**
    * Check if an agent with the given marketIdentifier already exists
@@ -296,8 +301,19 @@ class AgentService {
   /**
    * Remove an agent and its associated session
    */
-  removeAgent = async (agentId: string) => {
-    return lambdaClient.agent.removeAgent.mutate({ agentId });
+  removeAgent = async (agentId: string, options?: RemoveAgentOptions) => {
+    return lambdaClient.agent.removeAgent.mutate({ agentId, ...options });
+  };
+
+  /**
+   * What deleting the agent takes down besides the caller's own work — other
+   * members' topics (counted) and any other foreign content — for the delete
+   * confirmation.
+   */
+  getAgentDeleteImpact = async (
+    agentId: string,
+  ): Promise<{ foreignTopicCount: number; hasForeignContent: boolean }> => {
+    return lambdaClient.agent.getAgentDeleteImpact.query({ agentId });
   };
 
   /**

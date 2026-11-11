@@ -31,6 +31,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -573,20 +574,16 @@ export const useAgentDropdownMenu = ({
                       label: t('delete', { ns: 'common' }),
                       onClick: ({ domEvent }: any) => {
                         domEvent.stopPropagation();
-                        confirmModal({
-                          cancelText: t('cancel', { ns: 'common' }),
-                          content: t('confirmRemoveSessionItemAlert'),
-                          okButtonProps: { danger: true },
-                          okText: t('delete', { ns: 'common' }),
-                          onOk: async () => {
+                        confirmRemoveAgent({
+                          agentId: id,
+                          onConfirm: async (options) => {
                             try {
-                              await removeAgent(id);
+                              await removeAgent(id, options);
                               toast.success(t('confirmRemoveSessionSuccess'));
                             } catch (error) {
                               toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
                             }
                           },
-                          title: t('delete', { ns: 'common' }),
                         });
                       },
                       sfSymbol: 'trash',

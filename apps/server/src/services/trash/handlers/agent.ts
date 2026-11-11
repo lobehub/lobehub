@@ -59,8 +59,8 @@ export const softDeleteAgent = async (
   // and the list hides them through the agent join); their topics are.
   const sessionIds = await agentModel.findSessionIdsByAgentIds([agentId]);
   // The cascade is scope-wide on purpose (no `restrictToCreator`): the router
-  // already refused a non-owner delete of an agent that carries teammates'
-  // conversations, so whatever is left is the caller's to take.
+  // only lets a non-owner through when nothing foreign rides along, or when
+  // the agent's author acknowledged that teammates' topics go with it.
   const topics = await topicModel.softDeleteByParents(
     { agentIds: [agentId], sessionIds },
     { deletedAt: options.deletedAt },
