@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -340,7 +341,7 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
 
         // f3 waits four minutes behind the two running files
         await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
-        expect(asyncTaskModelMock.update).not.toHaveBeenCalledWith('task_f3', expect.anything());
+        expect(documentServiceMock.parseFile).not.toHaveBeenCalledWith('f3');
         const admittedAt = new Date();
         gates[0].resolve();
         await vi.advanceTimersByTimeAsync(0);
@@ -356,6 +357,63 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
         gates.forEach((gate) => gate.resolve());
         await Promise.all(runs);
       } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps a queued task fresh for status polling beyond the parse timeout', async () => {
+      vi.useFakeTimers();
+      const stuck = deferred();
+      let runs: Promise<unknown>[] = [];
+      try {
+        const taskStates = new Map<
+          string,
+          { createdAt: Date; error: unknown; status: AsyncTaskStatus }
+        >(
+          ['f1', 'f2', 'f3'].map((id) => [
+            'task_' + id,
+            { createdAt: new Date(), error: null, status: AsyncTaskStatus.Processing },
+          ]),
+        );
+        asyncTaskModelMock.update.mockImplementation(async (id: string, value: object) => {
+          const previous = taskStates.get(id) ?? {
+            createdAt: new Date(),
+            error: null,
+            status: AsyncTaskStatus.Processing,
+          };
+          taskStates.set(id, { ...previous, ...value });
+        });
+        fileServiceMock.getFileByteArray.mockResolvedValue(new Uint8Array([1]));
+        chunkServiceMock.chunkContent.mockImplementation(async () => {
+          await stuck.promise;
+          return { chunks: [{ index: 0, text: 'hello', type: 'DocumentChunk' }] };
+        });
+        const caller = fileRouter.createCaller(mockCtx);
+        runs = ['f1', 'f2', 'f3'].map((id) =>
+          caller.parseFileToChunks({ fileId: id, taskId: 'task_' + id }),
+        );
+        // Model the watchdog on every poll while both parse slots stay occupied.
+        for (let minute = 0; minute < 10; minute++) {
+          await vi.advanceTimersByTimeAsync(60_000);
+          const task = taskStates.get('task_f3');
+          expect(task).toBeDefined();
+          if (task && Date.now() - task.createdAt.getTime() > ASYNC_TASK_TIMEOUT) {
+            task.status = AsyncTaskStatus.Error;
+          }
+          expect(task?.status).toBe(AsyncTaskStatus.Processing);
+        }
+        expect(fileServiceMock.getFileByteArray).toHaveBeenCalledTimes(2);
+        stuck.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        await Promise.all(runs);
+        expect(taskStates.get('task_f3')?.status).toBe(AsyncTaskStatus.Success);
+        const updatesAfterCompletion = asyncTaskModelMock.update.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(ASYNC_TASK_TIMEOUT * 2);
+        expect(asyncTaskModelMock.update).toHaveBeenCalledTimes(updatesAfterCompletion);
+      } finally {
+        stuck.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        await Promise.allSettled(runs);
         vi.useRealTimers();
       }
     });
