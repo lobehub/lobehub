@@ -373,7 +373,24 @@ const InboxSection = ({
       return true;
     },
   };
-  useMailHotkeyTarget('list', covered ? undefined : hotkeyTarget);
+  // Covered by the open mail (one column), the list takes no keys of its own;
+  // only the permanent delete the reading pane lacks still reaches the open row.
+  const coveredTarget: MailListHotkeyTarget = {
+    act: (command) => {
+      const open = items.find((item) => item.id === selectedId);
+      if (command !== 'purge' || disabled || searching || view !== 'trash' || !open) return false;
+      actions.purge([open]);
+      return true;
+    },
+    clearSearch: () => false,
+    clearSelection: () => false,
+    focusRow,
+    focusSearch: () => undefined,
+    move: () => undefined,
+    selectAll: () => false,
+    toggleSelect: () => false,
+  };
+  useMailHotkeyTarget('list', covered ? coveredTarget : hotkeyTarget);
 
   /** Arrow keys walk the views (ARIA tabs), Home / End jump to the ends. */
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {

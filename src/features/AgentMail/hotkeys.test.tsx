@@ -409,6 +409,22 @@ describe('mail hotkeys', () => {
     dialog.remove();
   });
 
+  it('still deletes the open Trash mail for good under the narrow overlay', async () => {
+    surface.width = 600;
+    page('/agent/agt_1/mail/msg_1?folder=trash');
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+    await screen.findByText('preview of First');
+
+    // The covered list takes no keys of its own…
+    press('j');
+    press('x');
+    expect(screen.queryByText('identity.mailbox.bulk.selected')).not.toBeInTheDocument();
+
+    // …but the reading pane has no permanent delete, so the open row keeps it.
+    press('Delete', { code: 'Delete', shiftKey: true });
+    expect(ui.confirmModal).toHaveBeenCalledTimes(1);
+  });
+
   it('takes turns between the list and the open mail on a narrow page', async () => {
     surface.width = 600;
     page();
