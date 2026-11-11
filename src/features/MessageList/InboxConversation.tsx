@@ -38,6 +38,8 @@ const InboxConversation = memo<{
   const active = !!activeRouteId && (activeRouteId === routeId || activeRouteId === inboxAgentId);
   const { channelActions, replyState } = useDirectChannelRow(channel, active);
   const avatarState = replyState ?? (running ? 'working' : undefined);
+  // A blocked reply keeps the preview; its avatar already shows it waiting.
+  const typing = !!avatarState && avatarState !== 'waiting';
 
   return (
     <ConversationRow
@@ -47,8 +49,8 @@ const InboxConversation = memo<{
       // An archived direct Channel is the only thing this row can act on.
       contextMenuItems={channel?.status === 'archived' ? channelActions : undefined}
       preview={(channel && channelPreview(channel)) || meta.description || undefined}
-      running={running}
       title={title}
+      typing={typing}
       unread={channel?.unreadCount ?? undefined}
       url={url}
       avatar={

@@ -58,9 +58,6 @@ export const styles = stylex.create({
   rowTextSingleLine: {
     minHeight: 0,
   },
-  running: {
-    color: cssVar.colorSuccess,
-  },
   time: {
     flex: 'none',
     fontSize: '11px',
@@ -76,6 +73,12 @@ export const styles = stylex.create({
     fontSize: '13px',
     fontWeight: 500,
     lineHeight: '18px',
+  },
+  /** Same quiet colour as the preview it replaces, so a reply in progress does not shout. */
+  typing: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
   },
   unread: {
     pointerEvents: 'none',
