@@ -17,6 +17,8 @@ const formatAddress = ({ address, name }: { address: string; name?: string }) =>
 export interface ConversationMessageProps {
   expanded: boolean;
   mail: AgentMailRow;
+  /** Forward this one mail, with its own attachments. */
+  onForward?: () => void;
   onToggle: () => void;
   onToggleStar?: () => void;
   onTrash?: () => void;
@@ -24,7 +26,7 @@ export interface ConversationMessageProps {
 
 /** One mail of a conversation: a summary line, and the mail itself once expanded. */
 const ConversationMessage = memo<ConversationMessageProps>(
-  ({ expanded, mail, onToggle, onToggleStar, onTrash }) => {
+  ({ expanded, mail, onForward, onToggle, onToggleStar, onTrash }) => {
     const { t } = useTranslation('setting');
     const outbound = mail.direction === 'outbound';
     const sender = mail.fromName || mail.fromAddress;
@@ -37,9 +39,14 @@ const ConversationMessage = memo<ConversationMessageProps>(
         ? mail.fromAddress
         : undefined;
 
-    const menuItems = onTrash
-      ? [{ key: 'trash', label: t('identity.inbox.action.trashOne'), onClick: onTrash }]
-      : [];
+    const menuItems = [
+      ...(onForward
+        ? [{ key: 'forward', label: t('identity.compose.action.forwardOne'), onClick: onForward }]
+        : []),
+      ...(onTrash
+        ? [{ key: 'trash', label: t('identity.inbox.action.trashOne'), onClick: onTrash }]
+        : []),
+    ];
 
     return (
       <Flexbox

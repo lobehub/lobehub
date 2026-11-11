@@ -1,12 +1,14 @@
 'use client';
 
-import type { AgentMailFolder } from '@lobechat/types';
+import type { AgentMailComposeMode, AgentMailFolder } from '@lobechat/types';
 import { Button, Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AgentAccountView, AgentMailRow } from '@/services/agentAccount';
+import type { AgentAccountView, AgentMailDraftRow, AgentMailRow } from '@/services/agentAccount';
 
+import { replySourceOf, SEND_BLOCK_KEYS, sendBlockOf, useSendBlockVersion } from './compose';
+import { useMailDraft } from './ComposePane';
 import {
   buildConversationRows,
   idsToMarkReadOnOpen,
@@ -15,12 +17,17 @@ import {
 } from './conversation';
 import ConversationMessage from './ConversationMessage';
 import InlineError from './InlineError';
+import MailComposer from './MailComposer';
 import MailDetailToolbar from './MailDetailToolbar';
+import type { SentMail } from './useComposer';
 import { useConversation, type UseConversationOptions } from './useConversation';
 
 export interface InboxMessageDetailProps extends UseConversationOptions {
   /** The addresses still held; the mail's own may have been released since. */
-  accounts: Pick<AgentAccountView, 'id' | 'status'>[];
+  accounts: AgentAccountView[];
+  agentId: string;
+  /** A reply or forward draft of this conversation to resume, from the URL. */
+  composeId?: string;
   /** Landed here because the last conversation left, so reading waits for the reader. */
   deferRead?: boolean;
   /** Read-only viewer: mail stays readable, nothing can be changed. */
@@ -31,8 +38,21 @@ export interface InboxMessageDetailProps extends UseConversationOptions {
   hasPrevious: boolean;
   id: string;
   onBack: () => void;
+  /** The open draft changed (created, or closed with `undefined`), for the URL. */
+  onComposeChange: (draftId?: string) => void;
   onNext: () => void;
   onPrevious: () => void;
+  onViewSent: (sent: SentMail) => void;
+}
+
+interface Composing {
+  draft?: AgentMailDraftRow;
+  mode: Exclude<AgentMailComposeMode, 'compose'>;
+  /**
+   * The mail answered or forwarded, fixed when the editor opens: a newer mail
+   * arriving in the conversation must not swap it under the person typing.
+   */
+  sourceId?: string;
 }
 
 /**
@@ -42,6 +62,8 @@ export interface InboxMessageDetailProps extends UseConversationOptions {
 const InboxMessageDetail = memo<InboxMessageDetailProps>(
   ({
     accounts,
+    agentId,
+    composeId,
     deferRead,
     disabled,
     folder,
@@ -49,8 +71,10 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     hasPrevious,
     id,
     onBack,
+    onComposeChange,
     onNext,
     onPrevious,
+    onViewSent,
     ...options
   }) => {
     const { t } = useTranslation('setting');
@@ -70,6 +94,27 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     const [readArmed, setReadArmed] = useState(!deferRead);
     const openedRef = useRef(false);
     const focusRef = useRef<HTMLDivElement>(null);
+    const composerRef = useRef<HTMLDivElement>(null);
+    useSendBlockVersion();
+    const [composing, setComposing] = useState<Composing>();
+    // A draft named by the URL (a reload, or opened from Drafts) resumes in
+    // place, but only under the conversation it answers.
+    const linkedDraft = useMailDraft(composing ? undefined : composeId);
+    const linked = linkedDraft.data;
+    if (
+      !composing &&
+      linked &&
+      !linkedDraft.isValidating &&
+      linked.id === composeId &&
+      linked.mode !== 'compose' &&
+      mails?.some((mail) => mail.id === linked.sourceMailId)
+    ) {
+      setComposing({ draft: linked, mode: linked.mode });
+    }
+
+    useEffect(() => {
+      if (composing) composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, [composing]);
 
     // Seed once per opened conversation: a poll must not undo what the reader toggled.
     useEffect(() => {
@@ -140,6 +185,34 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     const rows = buildConversationRows(mails, open, unfolded);
     const byId = new Map(mails.map((mail) => [mail.id, mail]));
 
+    const replySource = replySourceOf(mails);
+    const pickedId = composing?.sourceId ?? composing?.draft?.sourceMailId;
+    const composeSource = pickedId ? mails.find((mail) => mail.id === pickedId) : undefined;
+    // Answering sends from the address that holds the mail.
+    const accountOf = (mail?: AgentMailRow) =>
+      mail ? accounts.find((item) => item.id === mail.accountId) : undefined;
+    const replyBlock = sendBlockOf(accountOf(replySource ?? newest));
+    const forwardBlock = sendBlockOf(accountOf(newest));
+    const replyDisabled = replySource
+      ? replyBlock && t(SEND_BLOCK_KEYS[replyBlock])
+      : t('identity.compose.disabled.noInbound');
+    const forwardDisabled = forwardBlock && t(SEND_BLOCK_KEYS[forwardBlock]);
+    /** Replies answer the newest received mail; a forward carries the one picked, or the newest. */
+    const startComposing = (mode: Composing['mode'], picked?: string) => {
+      const sourceId = picked ?? (mode === 'forward' ? newest.id : replySource?.id);
+      if (!sourceId) return;
+      if (composing?.mode === mode && pickedId === sourceId) {
+        composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+      setComposing({ mode, sourceId });
+    };
+    const stopComposing = () => {
+      setComposing(undefined);
+      onComposeChange(undefined);
+    };
+    const composeAccount = accountOf(composeSource);
+
     const toggle = (mail: AgentMailRow) => {
       const opening = !open.has(mail.id);
       setExpanded((current) => {
@@ -154,12 +227,17 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     return (
       <Flexbox gap={12} padding={4}>
         <MailDetailToolbar
+          forwardDisabledReason={forwardDisabled || undefined}
           hasNext={hasNext}
           hasPrevious={hasPrevious}
+          replyDisabledReason={replyDisabled || undefined}
           starred={starred.length > 0}
           unread={anyUnread}
+          onForward={readOnly || inTrash ? undefined : () => startComposing('forward')}
           onNext={onNext}
           onPrevious={onPrevious}
+          onReply={readOnly || inTrash ? undefined : () => startComposing('reply')}
+          onReplyAll={readOnly || inTrash ? undefined : () => startComposing('replyAll')}
           onRestore={readOnly || !inTrash ? undefined : () => void restore(mails)}
           onToggleRead={readOnly ? undefined : () => void setUnread(mails, !anyUnread)}
           onTrash={readOnly || inTrash ? undefined : () => void trash(mails)}
@@ -218,6 +296,11 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
                   mail={mail}
                   onToggle={() => toggle(mail)}
                   onTrash={readOnly || inTrash ? undefined : () => void trash([mail])}
+                  onForward={
+                    readOnly || inTrash || forwardDisabled
+                      ? undefined
+                      : () => startComposing('forward', mail.id)
+                  }
                   onToggleStar={
                     readOnly || inTrash ? undefined : () => void setStarred([mail], !mail.starredAt)
                   }
@@ -226,6 +309,38 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
             );
           })}
         </Flexbox>
+        {composing && composeSource && composeAccount && !readOnly && !inTrash && (
+          <div ref={composerRef}>
+            <MailComposer
+              inline
+              account={composeAccount}
+              agentId={agentId}
+              draft={composing.draft}
+              key={`${composing.mode}:${composing.draft?.id ?? composing.sourceId}`}
+              mode={composing.mode}
+              refresh={() => Promise.all([mutate(), options.refresh()])}
+              source={composeSource}
+              onClose={stopComposing}
+              onDraftCreated={(draftId) => onComposeChange(draftId)}
+              onViewSent={onViewSent}
+              onReopenDraft={(draftId) => {
+                setComposing(undefined);
+                onComposeChange(draftId);
+              }}
+            />
+          </div>
+        )}
+        {/* The mail being answered left this view (trashed meanwhile); what was written is saved. */}
+        {composing && pickedId && !composeSource && !readOnly && !inTrash && (
+          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+            <Text fontSize={12} type={'secondary'}>
+              {t('identity.compose.sourceLeft')}
+            </Text>
+            <Button size={'small'} type={'text'} onClick={stopComposing}>
+              {t('identity.compose.close')}
+            </Button>
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },
