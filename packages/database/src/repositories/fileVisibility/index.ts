@@ -1,8 +1,7 @@
-import { sql } from 'drizzle-orm';
-
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
 import type { LobeChatDatabase } from '../../type';
+import { lockFileForWrite } from '../../utils/fileWriteLock';
 
 /**
  * Publish / unpublish a file.
@@ -28,14 +27,12 @@ export class FileVisibilityRepository {
     return this.db.transaction(async (trx) => {
       const db = trx as LobeChatDatabase;
 
-      // `DocumentService.parseFile` takes this same per-file advisory lock before
-      // it re-reads the file's visibility and inserts the parsed document. Taking
-      // it here serializes the two: a publish that starts mid-parse waits for the
-      // insert and then flips the new row below, instead of committing between
-      // the parse's visibility read and its write and leaving the text behind.
-      await db.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
-      );
+      // `DocumentService.parseFile` and `updateFile` take this same per-file lock,
+      // so all three write paths are serialised per file: a publish that starts
+      // mid-parse waits for the insert and then flips the new row below, instead
+      // of committing between the parse's visibility read and its write and
+      // leaving the text behind.
+      await lockFileForWrite(db, fileId);
 
       const updated = await new FileModel(db, this.userId, this.workspaceId).setVisibility(
         fileId,

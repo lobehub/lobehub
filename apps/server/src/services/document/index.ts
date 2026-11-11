@@ -19,7 +19,7 @@ import {
 import { isChunkingUnsupported } from '@lobechat/utils/isChunkingUnsupported';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 import pMap from 'p-map';
 
@@ -27,6 +27,7 @@ import { MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import { lockFileForWrite } from '@/database/utils/fileWriteLock';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -1070,11 +1071,12 @@ export class DocumentService {
         // itself stays outside the transaction: it downloads and reads the whole
         // file, and holding a connection that long would turn every large upload
         // into pool pressure.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
-        );
-
         const transactionDb = tx as unknown as LobeChatDatabase;
+
+        // Same per-file lock `FileVisibilityRepository.setVisibility` and
+        // `updateFile` take, so the parse cannot interleave with either.
+        await lockFileForWrite(transactionDb, fileId);
+
         const transactionDocumentModel = new DocumentModel(
           transactionDb,
           this.userId,
