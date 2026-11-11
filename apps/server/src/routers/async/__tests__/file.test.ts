@@ -321,6 +321,45 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
       }
     });
 
+    it('restarts the task clock when a queued file finally starts parsing', async () => {
+      vi.useFakeTimers();
+      try {
+        const gates: ReturnType<typeof deferred>[] = [];
+        fileServiceMock.getFileByteArray.mockResolvedValue(new Uint8Array([1]));
+        chunkServiceMock.chunkContent.mockImplementation(async () => {
+          const gate = deferred();
+          gates.push(gate);
+          await gate.promise;
+          return { chunks: [{ index: 0, text: 'hello', type: 'DocumentChunk' }] };
+        });
+
+        const caller = fileRouter.createCaller(mockCtx);
+        const runs = ['f1', 'f2', 'f3'].map((id) =>
+          caller.parseFileToChunks({ fileId: id, taskId: `task_${id}` }),
+        );
+
+        // f3 waits four minutes behind the two running files
+        await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+        expect(asyncTaskModelMock.update).not.toHaveBeenCalledWith('task_f3', expect.anything());
+        const admittedAt = new Date();
+        gates[0].resolve();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(asyncTaskModelMock.update).toHaveBeenCalledWith('task_f3', {
+          createdAt: admittedAt,
+          error: null,
+          status: AsyncTaskStatus.Processing,
+        });
+
+        gates.forEach((gate) => gate.resolve());
+        await vi.advanceTimersByTimeAsync(0);
+        gates.forEach((gate) => gate.resolve());
+        await Promise.all(runs);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not keep a parse slot while the embedding task of a finished file runs', async () => {
       const embedding = deferred();
       chunkServiceMock.asyncEmbeddingFileChunks.mockImplementation(() => embedding.promise);

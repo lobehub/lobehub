@@ -384,8 +384,14 @@ export const fileRouter = router({
           });
 
           const chunkingPromise = async () => {
-            // update the task status to processing
-            await asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
+            // The task was created before it queued for a slot, and the stale-task watchdog
+            // expires tasks by `createdAt`. Restart that clock now that parsing really begins,
+            // and clear an expiry the watchdog may have written while the file was waiting.
+            await asyncTaskModel.update(input.taskId, {
+              createdAt: new Date(),
+              error: null,
+              status: AsyncTaskStatus.Processing,
+            });
 
             // parse file to document record first (for detailed content viewing)
             try {
