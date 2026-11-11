@@ -1,7 +1,7 @@
 'use client';
 
 import { HotkeyGroupEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
-import { Grid, Icon, Tabs } from '@lobehub/ui';
+import { cssVar, Grid, Icon, Tabs } from '@lobehub/ui';
 import { Mail, MessageSquare, Settings2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
@@ -40,7 +40,7 @@ const HotkeyHelperPanel = memo(() => {
         body: { paddingBlock: 24 },
         mask: {
           backdropFilter: 'blur(8px)',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: cssVar.colorBgMask,
         },
       }}
       title={

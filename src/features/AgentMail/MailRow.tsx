@@ -128,7 +128,15 @@ const MailRow = ({
             styles.checkbox,
             (selecting || selected || alwaysShowControls) && styles.checkboxAlways,
           )}
+          // The checkbox inside is the control; this wrapper only adds Shift for a range.
+          role={'presentation'}
           onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleSelect(event.shiftKey);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== ' ' && event.key !== 'Enter') return;
             event.preventDefault();
             event.stopPropagation();
             onToggleSelect(event.shiftKey);
@@ -192,6 +200,7 @@ const MailRow = ({
       {!readOnly && (
         <div
           {...stylex.props(styles.actions, alwaysShowControls && styles.actionsAlways)}
+          role={'group'}
           onClick={stop}
         >
           {buttons}
