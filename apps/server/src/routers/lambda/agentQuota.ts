@@ -48,6 +48,20 @@ const requireDeviceRowId = async (
   return id;
 };
 
+/**
+ * Refuse an account id the caller cannot see. Readings, windows, spend and
+ * runs carry no visibility of their own — they inherit the account's — so
+ * every procedure taking an id checks it here, or a private account would
+ * stay readable (and bindable) by anyone who learned its id while it was public.
+ */
+const requireVisibleAccount = async (
+  ctx: { accountModel: AgentProviderAccountModel },
+  accountId: string,
+): Promise<void> => {
+  if (!(await ctx.accountModel.findById(accountId)))
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+};
+
 const readingSchema = z.object({
   capturedAt: z.number(),
   windowMinutes: z.number().int().positive().optional(),
@@ -287,7 +301,10 @@ export const agentQuotaRouter = router({
         weight: z.number().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.bindingModel.upsert(input)),
+    .mutation(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.bindingModel.upsert(input);
+    }),
 
   listBindings: quotaProcedure
     .input(z.object({ agentId: z.string() }))
@@ -296,7 +313,10 @@ export const agentQuotaRouter = router({
   /** UI "switch account": pin one account for an agent, demoting any prior pin. */
   switchAccount: quotaProcedure
     .input(z.object({ accountId: z.string(), agentId: z.string() }))
-    .mutation(async ({ ctx, input }) => ctx.bindingModel.pin(input.agentId, input.accountId)),
+    .mutation(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.bindingModel.pin(input.agentId, input.accountId);
+    }),
 
   unbindAccount: quotaProcedure
     .input(z.object({ id: z.string() }))
@@ -322,6 +342,7 @@ export const agentQuotaRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const deviceRowId = await requireDeviceRowId(ctx, input.deviceId);
+      if (input.accountId) await requireVisibleAccount(ctx, input.accountId);
       try {
         await ctx.quotaService.setDeviceAccount(input.agentId, deviceRowId, input.accountId);
       } catch (error) {
@@ -356,7 +377,10 @@ export const agentQuotaRouter = router({
   // ── quota read (QuotaMenu read model) ────────────────────────────────────
   getWindows: quotaProcedure
     .input(z.object({ accountId: z.string(), limit: z.number().optional() }))
-    .query(async ({ ctx, input }) => ctx.windowModel.listByAccount(input.accountId, input.limit)),
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.windowModel.listByAccount(input.accountId, input.limit);
+    }),
 
   /**
    * Display read model: the newest reading per limit bucket. Prefer this over
@@ -365,7 +389,10 @@ export const agentQuotaRouter = router({
    */
   getLatestReadings: quotaProcedure
     .input(z.object({ accountId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.quotaService.listLatestReadings(input.accountId)),
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listLatestReadings(input.accountId);
+    }),
 
   /**
    * Full reading time series (oldest first) for the usage calendar's daily
@@ -373,12 +400,13 @@ export const agentQuotaRouter = router({
    */
   listSnapshots: quotaProcedure
     .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
-    .query(async ({ ctx, input }) =>
-      ctx.quotaService.listSnapshotSeries(
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listSnapshotSeries(
         input.accountId,
         new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
-      ),
-    ),
+      );
+    }),
 
   /**
    * Per-turn token + cost spend (oldest first) for the usage calendar. Kept
@@ -387,17 +415,21 @@ export const agentQuotaRouter = router({
    */
   listUsageTurns: quotaProcedure
     .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
-    .query(async ({ ctx, input }) =>
-      ctx.quotaService.listUsageTurns(
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listUsageTurns(
         input.accountId,
         new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
-      ),
-    ),
+      );
+    }),
 
   /** Agent runs in flight on an account — who is spending it right now. */
   listActiveRuns: quotaProcedure
     .input(z.object({ accountId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.quotaService.listActiveRuns(input.accountId)),
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listActiveRuns(input.accountId);
+    }),
 
   // ── load balancing ───────────────────────────────────────────────────────
   resolveAccountLoads: quotaProcedure
