@@ -156,7 +156,9 @@ export const UsageBreakdown = memo<{
   onRefresh: (drives?: SandboxDrive[]) => Promise<DriveUsageRefreshResult | void>;
 }>(({ data, inPopover, onRefresh }) => {
   const { t } = useTranslation('setting');
-  const [refreshing, setRefreshing] = useState(false);
+  // Which refresh is running, and in which workspace: the spinner belongs to
+  // that workspace, and only that refresh may clear it.
+  const [busy, setBusy] = useState<{ token: object; workspaceId: string | null } | null>(null);
   // A drive too large to measure in one call (LOBE-15436): how much the walk
   // has counted so far, shown beside the last finished figure.
   const [measurement, setMeasurement] = useState<{
@@ -172,6 +174,7 @@ export const UsageBreakdown = memo<{
   useEffect(() => {
     activeWorkspace.current = workspaceId;
   }, [workspaceId]);
+  const refreshing = busy?.workspaceId === workspaceId;
   // Progress belongs to the workspace it was measured in.
   const measuring = measurement?.workspaceId === workspaceId ? measurement.progress : null;
   const setMeasuring = (progress: DriveUsageRefreshResult['measuring'] | null) =>
@@ -237,7 +240,8 @@ export const UsageBreakdown = memo<{
   const refresh = async () => {
     const started = activeWorkspace.current;
     const current = () => mounted.current && activeWorkspace.current === started;
-    setRefreshing(true);
+    const token = {};
+    setBusy({ token, workspaceId: started });
     try {
       // Each call continues the walk where the last one stopped, so keep
       // calling while it is still measuring and someone is looking.
@@ -264,7 +268,7 @@ export const UsageBreakdown = memo<{
           : t('workingDirectory.drive.actionFailed', { ns: 'device' }),
       );
     } finally {
-      if (mounted.current) setRefreshing(false);
+      if (mounted.current) setBusy((now) => (now?.token === token ? null : now));
     }
   };
 

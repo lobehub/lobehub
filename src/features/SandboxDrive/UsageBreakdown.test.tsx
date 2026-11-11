@@ -17,9 +17,15 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     ...actual,
     // Real base-ui ActionIcon only surfaces its title via a hover Tooltip, so
     // a plain button stands in to make the refresh clickable by its label.
-    ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-      <button title={title} type="button" onClick={onClick} />
-    ),
+    ActionIcon: ({
+      loading,
+      onClick,
+      title,
+    }: {
+      loading?: boolean;
+      onClick?: () => void;
+      title?: string;
+    }) => <button data-loading={!!loading} title={title} type="button" onClick={onClick} />,
     toast: { ...actual.toast, error: vi.fn() },
     Tooltip: ({ children }: { children: unknown }) => children,
   };
@@ -177,6 +183,37 @@ describe('UsageBreakdown', () => {
 
       expect(onRefresh).toHaveBeenCalledTimes(1);
       expect(screen.queryByText('drive.usage.measuring')).not.toBeInTheDocument();
+      workspace.id = 'ws-a';
+    });
+
+    it("should keep one workspace's refresh spinner out of another", async () => {
+      workspace.id = 'ws-a';
+      let finishA: (value: unknown) => void = () => {};
+      let finishB: (value: unknown) => void = () => {};
+      const onRefresh = vi
+        .fn()
+        .mockImplementationOnce(() => new Promise((resolve) => (finishA = resolve)))
+        .mockImplementationOnce(() => new Promise((resolve) => (finishB = resolve)));
+      const view = () => <UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />;
+      const { rerender } = render(view());
+      const button = () => screen.getByTitle('drive.usage.refresh');
+
+      fireEvent.click(button());
+      await waitFor(() => expect(button().dataset.loading).toBe('true'));
+
+      // A's request is still in flight; B is not refreshing.
+      workspace.id = 'ws-b';
+      rerender(view());
+      expect(button().dataset.loading).toBe('false');
+
+      // B starts its own; A finishing must not clear it.
+      fireEvent.click(button());
+      await waitFor(() => expect(button().dataset.loading).toBe('true'));
+      finishA({});
+      await advance();
+      expect(button().dataset.loading).toBe('true');
+      finishB({});
+      await waitFor(() => expect(button().dataset.loading).toBe('false'));
       workspace.id = 'ws-a';
     });
 
