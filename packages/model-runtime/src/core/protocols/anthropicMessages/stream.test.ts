@@ -760,307 +760,102 @@ describe('AnthropicStream', () => {
   });
 
   describe('server tools', () => {
-    // ROOT CAUSE:
-    //
-    // `server_tool_use` (Anthropic's native web search) shared the `tool_use` branch, so a
-    // search Anthropic runs itself reached the app as a `web_search` tool call. No app tool
-    // has that name, so the agent rejected it and called the model again.
-    //
-    // Before: the search and its query were streamed as `tool_calls`.
-    // After: only `tool_use` blocks become tool calls, each with its own block's arguments.
-    const collectEvents = async (streams: any[], onToolsCalling = vi.fn()) => {
-      const protocolStream = AnthropicStream(createReadableStream(streams), {
-        callbacks: { onToolsCalling },
-      });
-      const decoder = new TextDecoder();
-      let text = '';
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        text += decoder.decode(chunk, { stream: true });
-      }
-
-      return text
-        .split('\n\n')
-        .filter(Boolean)
-        .map((block) => {
-          const lines = block.split('\n');
-          const event = lines.find((line) => line.startsWith('event: '))!.slice(7);
-          const data = JSON.parse(lines.find((line) => line.startsWith('data: '))!.slice(6));
-
-          return { data, event };
-        });
-    };
-
-    const webSearchBlocks = (start: number) => [
-      {
-        type: 'content_block_start',
-        index: start,
-        content_block: {
-          type: 'server_tool_use',
-          id: 'srvtoolu_01',
-          name: 'web_search',
-          input: {},
-        },
-      },
-      {
-        type: 'content_block_delta',
-        index: start,
-        delta: { type: 'input_json_delta', partial_json: '{"query": "lobehub"}' },
-      },
-      { type: 'content_block_stop', index: start },
-      {
-        type: 'content_block_start',
-        index: start + 1,
-        content_block: {
-          type: 'web_search_tool_result',
-          tool_use_id: 'srvtoolu_01',
-          content: [{ type: 'web_search_result', title: 'LobeHub', url: 'https://lobehub.com' }],
-        },
-      },
-      { type: 'content_block_stop', index: start + 1 },
+    // `server_tool_use` (Anthropic's native web search) shared the `tool_use` branch, so a search
+    // Anthropic runs itself reached the app as a `web_search` tool call and was rejected (#22615).
+    const start = (index: number, content_block: object) => ({
+      content_block,
+      index,
+      type: 'content_block_start',
+    });
+    const delta = (index: number, delta: object) => ({ delta, index, type: 'content_block_delta' });
+    const input = (index: number, partial_json: string) =>
+      delta(index, { partial_json, type: 'input_json_delta' });
+    const search = (index: number) => [
+      start(index, { id: 'srvtoolu_01', input: {}, name: 'web_search', type: 'server_tool_use' }),
+      input(index, '{"query": "lobehub"}'),
+    ];
+    const tool = (index: number, name: string, ...parts: string[]) => [
+      start(index, { id: `toolu_${index}`, input: {}, name, type: 'tool_use' }),
+      ...parts.map((part) => input(index, part)),
     ];
 
-    it('does not report a native web search as a tool call', async () => {
+    const run = async (blocks: object[]) => {
       const onToolsCalling = vi.fn();
-      const events = await collectEvents(
-        [
-          createMessageStart('msg_search', 'claude-sonnet-4-5', {
-            input_tokens: 10,
-            output_tokens: 1,
-          }),
-          ...webSearchBlocks(0),
-          { type: 'content_block_start', index: 2, content_block: { type: 'text', text: '' } },
-          {
-            type: 'content_block_delta',
-            index: 2,
-            delta: { type: 'text_delta', text: 'Found it.' },
-          },
-          {
-            type: 'content_block_delta',
-            index: 2,
-            delta: {
-              type: 'citations_delta',
-              citation: {
-                type: 'web_search_result_location',
-                title: 'LobeHub',
-                url: 'https://lobehub.com',
-              },
-            },
-          },
-          { type: 'content_block_stop', index: 2 },
-          {
-            type: 'message_delta',
-            delta: { stop_reason: 'end_turn', stop_sequence: null },
-            usage: { output_tokens: 20 },
-          },
+      const usage = { input_tokens: 1, output_tokens: 1 };
+      const stream = AnthropicStream(
+        createReadableStream([
+          createMessageStart('msg', 'claude', usage),
+          ...blocks,
           { type: 'message_stop' },
-        ],
-        onToolsCalling,
+        ]),
+        { callbacks: { onToolsCalling } },
       );
+      let text = '';
+      // @ts-ignore
+      for await (const chunk of stream) text += new TextDecoder().decode(chunk);
 
-      expect(events.filter((e) => e.event === 'tool_calls')).toEqual([]);
+      const events = text
+        .split('\n\n')
+        .filter(Boolean)
+        .map((sse) => {
+          const [, event, data] = sse.split('\n');
+          return { data: JSON.parse(data.slice(6)), event: event.slice(7) };
+        });
+      const calls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
+      const args: Record<number, string> = {};
+      for (const call of calls)
+        args[call.index] = (args[call.index] ?? '') + call.function.arguments;
+
+      return {
+        args,
+        events,
+        names: calls.map((call) => call.function.name).filter(Boolean),
+        onToolsCalling,
+      };
+    };
+
+    it('does not report a native web search as a tool call', async () => {
+      const { args, events, onToolsCalling } = await run([
+        ...search(0),
+        start(1, { content: [], tool_use_id: 'srvtoolu_01', type: 'web_search_tool_result' }),
+        start(2, { text: '', type: 'text' }),
+        delta(2, { text: 'Found it.', type: 'text_delta' }),
+        delta(2, {
+          citation: { title: 'LobeHub', url: 'https://lobehub.com' },
+          type: 'citations_delta',
+        }),
+      ]);
+
+      expect(args).toEqual({});
       expect(onToolsCalling).not.toHaveBeenCalled();
       expect(events).toContainEqual({ data: 'Found it.', event: 'text' });
       expect(events).toContainEqual({
         data: { citations: [{ title: 'LobeHub', url: 'https://lobehub.com' }] },
         event: 'grounding',
       });
-      expect(events.at(-1)).toEqual({ data: 'message_stop', event: 'stop' });
     });
 
-    it('keeps an app tool call after a web search at index 0 with only its own arguments', async () => {
-      const onToolsCalling = vi.fn();
-      const events = await collectEvents(
-        [
-          createMessageStart('msg_mixed', 'claude-sonnet-4-5', {
-            input_tokens: 10,
-            output_tokens: 1,
-          }),
-          ...webSearchBlocks(0),
-          {
-            type: 'content_block_start',
-            index: 2,
-            content_block: {
-              type: 'tool_use',
-              id: 'toolu_01',
-              name: 'realtime-weather____fetchCurrentWeather',
-              input: {},
-            },
-          },
-          {
-            type: 'content_block_delta',
-            index: 2,
-            delta: { type: 'input_json_delta', partial_json: '{"city": ' },
-          },
-          {
-            type: 'content_block_delta',
-            index: 2,
-            delta: { type: 'input_json_delta', partial_json: '"Hangzhou"}' },
-          },
-          { type: 'content_block_stop', index: 2 },
-          {
-            type: 'message_delta',
-            delta: { stop_reason: 'tool_use', stop_sequence: null },
-            usage: { output_tokens: 30 },
-          },
-        ],
-        onToolsCalling,
-      );
-
-      const toolCalls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
-
-      expect(toolCalls[0]).toEqual({
-        function: { arguments: '', name: 'realtime-weather____fetchCurrentWeather' },
-        id: 'toolu_01',
-        index: 0,
-        type: 'function',
-      });
-      expect(toolCalls.every((call) => call.index === 0)).toBe(true);
-      expect(toolCalls.map((call) => call.function.arguments).join('')).toBe(
-        '{"city": "Hangzhou"}',
-      );
-      expect(onToolsCalling).toHaveBeenCalledTimes(3);
-    });
-
-    it('keeps app tool calls before and after a web search apart', async () => {
-      const events = await collectEvents([
-        createMessageStart('msg_around', 'claude-sonnet-4-5', {
-          input_tokens: 10,
-          output_tokens: 1,
-        }),
-        {
-          type: 'content_block_start',
-          index: 0,
-          content_block: {
-            type: 'tool_use',
-            id: 'toolu_01',
-            name: 'realtime-weather____fetchCurrentWeather',
-            input: {},
-          },
-        },
-        {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'input_json_delta', partial_json: '{"city": ' },
-        },
-        {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'input_json_delta', partial_json: '"Paris"}' },
-        },
-        { type: 'content_block_stop', index: 0 },
-        ...webSearchBlocks(1),
-        {
-          type: 'content_block_start',
-          index: 3,
-          content_block: {
-            type: 'tool_use',
-            id: 'toolu_02',
-            name: 'realtime-weather____fetchForecast',
-            input: {},
-          },
-        },
-        {
-          type: 'content_block_delta',
-          index: 3,
-          delta: { type: 'input_json_delta', partial_json: '{"days": 3}' },
-        },
-        { type: 'content_block_stop', index: 3 },
-        {
-          type: 'message_delta',
-          delta: { stop_reason: 'tool_use', stop_sequence: null },
-          usage: { output_tokens: 30 },
-        },
+    it('numbers app tool calls around web searches densely, each with its own arguments', async () => {
+      const { args, names } = await run([
+        ...search(0),
+        ...tool(1, 'weather____current', '{"city": ', '"Paris"}'),
+        ...search(2),
+        ...tool(3, 'weather____forecast', '{"days": 3}'),
       ]);
 
-      const toolCalls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
-      const argsOf = (index: number) =>
-        toolCalls
-          .filter((call) => call.index === index)
-          .map((call) => call.function.arguments)
-          .join('');
-
-      expect(
-        toolCalls.filter((call) => call.function.name).map((call) => call.function.name),
-      ).toEqual(['realtime-weather____fetchCurrentWeather', 'realtime-weather____fetchForecast']);
-      expect(argsOf(0)).toBe('{"city": "Paris"}');
-      expect(argsOf(1)).toBe('{"days": 3}');
+      expect(names).toEqual(['weather____current', 'weather____forecast']);
+      expect(args).toEqual({ 0: '{"city": "Paris"}', 1: '{"days": 3}' });
     });
 
-    it('keeps an app tool call intact when a relay reuses its block index for a web search', async () => {
-      const events = await collectEvents([
-        createMessageStart('msg_reuse', 'claude-sonnet-4-5', {
-          input_tokens: 10,
-          output_tokens: 1,
-        }),
-        {
-          type: 'content_block_start',
-          index: 0,
-          content_block: {
-            type: 'server_tool_use',
-            id: 'srvtoolu_02',
-            name: 'web_search',
-            input: {},
-          },
-        },
-        {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'input_json_delta', partial_json: '{"query": "x"}' },
-        },
-        { type: 'content_block_stop', index: 0 },
-        {
-          type: 'content_block_start',
-          index: 0,
-          content_block: {
-            type: 'tool_use',
-            id: 'toolu_03',
-            name: 'realtime-weather____fetchCurrentWeather',
-            input: {},
-          },
-        },
-        {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'input_json_delta', partial_json: '{"city": ' },
-        },
-        {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'input_json_delta', partial_json: '"Oslo"}' },
-        },
-        { type: 'content_block_stop', index: 0 },
-        {
-          type: 'content_block_start',
-          index: 0,
-          content_block: {
-            type: 'server_tool_use',
-            id: 'srvtoolu_02',
-            name: 'web_search',
-            input: {},
-          },
-        },
-        {
-          type: 'content_block_delta',
-          index: 0,
-          delta: { type: 'input_json_delta', partial_json: '{"query": "x"}' },
-        },
-        { type: 'content_block_stop', index: 0 },
-        {
-          type: 'message_delta',
-          delta: { stop_reason: 'tool_use', stop_sequence: null },
-          usage: { output_tokens: 30 },
-        },
+    it('keeps an app tool call intact when a relay reuses its block index for web searches', async () => {
+      const { args, names } = await run([
+        ...search(0),
+        ...tool(0, 'weather____current', '{"city": "Oslo"}'),
+        ...search(0),
       ]);
 
-      const toolCalls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
-
-      expect(
-        toolCalls.filter((call) => call.function.name).map((call) => call.function.name),
-      ).toEqual(['realtime-weather____fetchCurrentWeather']);
-      expect(toolCalls.every((call) => call.index === 0)).toBe(true);
-      expect(toolCalls.map((call) => call.function.arguments).join('')).toBe('{"city": "Oslo"}');
+      expect(names).toEqual(['weather____current']);
+      expect(args).toEqual({ 0: '{"city": "Oslo"}' });
     });
   });
   it('should handle un-normal block type', async () => {

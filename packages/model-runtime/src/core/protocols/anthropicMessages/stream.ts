@@ -103,8 +103,7 @@ export const transformAnthropicStream = (
       return { data: chunk.message, id: chunk.message.id, type: 'data' };
     }
     case 'content_block_start': {
-      // A new block at this index ends the app tool call that used it before: some
-      // Anthropic-format relays reuse block indexes.
+      // A new block ends the app tool call that used its index (some relays reuse indexes).
       context.anthropicToolBlocks?.delete(chunk.index);
 
       switch (chunk.content_block.type) {
@@ -120,8 +119,7 @@ export const transformAnthropicStream = (
           return { data: chunk.content_block.text, id: context.id, type: 'data' };
         }
 
-        // Only `tool_use` is a call for the app to run. Server tools (`server_tool_use`, such as
-        // web search) are executed by Anthropic, not by the app, and pass through as `data`.
+        // Only `tool_use` is an app tool call; server tools (`server_tool_use`) run on Anthropic.
         case 'tool_use': {
           const toolChunk = chunk.content_block;
 
@@ -205,8 +203,7 @@ export const transformAnthropicStream = (
         }
 
         case 'input_json_delta': {
-          // Arguments belong to the app tool call of this block; any other block's input
-          // (a server tool's) is not an app tool call.
+          // Only an app tool call's block takes arguments; a server tool's input is not one.
           const toolIndex = context.anthropicToolBlocks?.get(chunk.index);
           if (toolIndex === undefined) return { data: chunk, id: context.id, type: 'data' };
 

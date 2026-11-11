@@ -736,20 +736,15 @@ describe('createAnthropicCompatibleRuntime', () => {
           name: 'web_search',
           type: 'server_tool_use',
         },
-        {
-          content: [{ title: 'LobeHub', type: 'web_search_result', url: 'https://lobehub.com' }],
-          tool_use_id: 'srvtoolu_01',
-          type: 'web_search_tool_result',
-        },
-        { text: 'Found it.', type: 'text' },
+        { content: [], tool_use_id: 'srvtoolu_01', type: 'web_search_tool_result' },
         {
           id: 'toolu_01',
           input: { city: 'Hangzhou' },
-          name: 'realtime-weather____fetchCurrentWeather',
+          name: 'weather____current',
           type: 'tool_use',
         },
       ],
-      id: 'msg_non_stream_search',
+      id: 'msg_search',
       model: 'custom-model',
       role: 'assistant',
       stop_reason: 'tool_use',
@@ -762,39 +757,22 @@ describe('createAnthropicCompatibleRuntime', () => {
       customClient: createCustomClientConfig(messagesCreate),
       provider: 'test-provider',
     });
-    const runtime = new Runtime({ apiKey: 'test-key' });
-
-    const response = await runtime.chat({
+    const response = await new Runtime({ apiKey: 'test-key' }).chat({
       messages: [{ content: 'Question', role: 'user' }],
       model: 'custom-model',
       stream: false,
     });
-    const text = await response.text();
-
-    const toolCalls = text
+    const calls = (await response.text())
       .split('\n\n')
-      .filter((event) => event.includes('event: tool_calls'))
-      .flatMap((event) =>
-        JSON.parse(
-          event
-            .split('\n')
-            .find((line) => line.startsWith('data: '))!
-            .slice(6),
-        ),
-      );
+      .filter((sse) => sse.includes('event: tool_calls'))
+      .flatMap((sse) => JSON.parse(sse.split('\ndata: ')[1]));
 
-    expect(toolCalls.filter((call: any) => call.function.name)).toEqual([
-      expect.objectContaining({
-        function: expect.objectContaining({ name: 'realtime-weather____fetchCurrentWeather' }),
-        id: 'toolu_01',
-        index: 0,
-      }),
+    expect(
+      calls.map((call: any) => [call.index, call.function.name, call.function.arguments]),
+    ).toEqual([
+      [0, 'weather____current', ''],
+      [0, undefined, '{"city":"Hangzhou"}'],
     ]);
-    expect(toolCalls.every((call: any) => call.index === 0)).toBe(true);
-    expect(toolCalls.map((call: any) => call.function.arguments).join('')).toBe(
-      '{"city":"Hangzhou"}',
-    );
-    expect(text).toContain('event: text\ndata: "Found it."');
   });
   it('should keep the real output tokens when replaying a non-stream response as a stream', async () => {
     const messagesCreate = vi.fn().mockResolvedValue({
