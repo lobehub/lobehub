@@ -39,7 +39,7 @@ export const useClaudeCodeMemory = ({
       ? localFileKeys.claudeCodeMemory(deviceId, workingDirectory, configDir, projectDirName)
       : null;
 
-  return useClientDataSWR(
+  const response = useClientDataSWR(
     key,
     async () => {
       const result = await claudeCodeMemoryService.listMemory({
@@ -55,4 +55,15 @@ export const useClaudeCodeMemory = ({
     // portal, so a refocus re-reads the directory instead of waiting minutes.
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );
+
+  // Old remote clients reject the RPC; old local desktops have no IPC handler.
+  // Keep transport/permission failures on the ordinary retry path.
+  const requiresUpgrade =
+    response.error instanceof Error &&
+    (response.error.message.includes('Unknown device RPC method: listClaudeCodeMemory') ||
+      response.error.message.includes(
+        "No handler registered for 'workspace.listClaudeCodeMemory'",
+      ));
+
+  return { ...response, requiresUpgrade };
 };

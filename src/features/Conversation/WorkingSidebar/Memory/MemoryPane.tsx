@@ -1,6 +1,6 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
 import type { DeviceClaudeCodeMemoryFile } from '@lobechat/types';
-import { ActionIcon, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { BrainIcon, FileTextIcon, RefreshCwIcon } from 'lucide-react';
@@ -8,6 +8,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import AsyncError from '@/components/AsyncError';
 import { SkillSection } from '@/features/SkillsList';
 import { useChatStore } from '@/store/chat';
 
@@ -105,7 +106,7 @@ interface MemoryPaneProps {
 export const MemoryPane = memo<MemoryPaneProps>(({ agentId, deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
-  const { data, error, isLoading, isValidating, mutate } = useClaudeCodeMemory({
+  const { data, error, isLoading, isValidating, mutate, requiresUpgrade } = useClaudeCodeMemory({
     agentId,
     deviceId,
     workingDirectory,
@@ -121,6 +122,26 @@ export const MemoryPane = memo<MemoryPaneProps>(({ agentId, deviceId, workingDir
     [deviceId, memoryDir, openLocalFile],
   );
   const refresh = useCallback(() => void mutate(), [mutate]);
+
+  if (requiresUpgrade && data === undefined) {
+    return (
+      <Flexbox data-testid={'workspace-memory'} padding={12}>
+        <AsyncError
+          title={t('workingPanel.claudeMemory.upgrade.title')}
+          action={
+            <Button loading={isValidating} onClick={refresh}>
+              {t('workingPanel.claudeMemory.upgrade.reload')}
+            </Button>
+          }
+          description={t(
+            deviceId
+              ? 'workingPanel.claudeMemory.upgrade.deviceDescription'
+              : 'workingPanel.claudeMemory.upgrade.desktopDescription',
+          )}
+        />
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox
