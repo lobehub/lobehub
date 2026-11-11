@@ -213,9 +213,12 @@ const AddEnvironmentContent = ({ onAdded, projectId, publish }: AddEnvironmentCo
                     <Text ellipsis weight={500}>
                       {environment.name}
                     </Text>
-                    <Text ellipsis fontSize={12} type={'secondary'}>
-                      {repositorySlug(environment) ?? t('settings.noRepository')}
-                    </Text>
+                    {/* A name that already is the slug needs no second copy of it. */}
+                    {repositorySlug(environment) !== environment.name && (
+                      <Text ellipsis fontSize={12} type={'secondary'}>
+                        {repositorySlug(environment) ?? t('settings.noRepository')}
+                      </Text>
+                    )}
                   </Flexbox>
                   {selected && (
                     <span {...stylex.props(styles.check)}>

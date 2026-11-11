@@ -164,12 +164,17 @@ const ProjectWorkLocationPicker = ({
         {repositories.map((environment) => (
           <OptionRow
             compact
-            active={onSandbox && environment.id === repository?.id}
-            hint={repositorySlug(environment)}
             icon={<RepositoryAvatar size={16} url={environmentRepositoryUrl(environment)} />}
             key={environment.id}
             label={environment.name}
             onClick={() => pickRepository(environment.id)}
+            active={onSandbox && environment.id === repository?.id}
+            // A name that already is the slug needs no second copy of it.
+            hint={
+              repositorySlug(environment) === environment.name
+                ? undefined
+                : repositorySlug(environment)
+            }
           />
         ))}
       </div>
@@ -212,7 +217,9 @@ const ProjectWorkLocationPicker = ({
             arrow={false}
             closeDelay={150}
             content={repositoryMenu}
-            placement={'rightTop'}
+            // The chip sits at the composer's right edge, so the second level
+            // opens inward rather than off the side of the window.
+            placement={'leftTop'}
             styles={SUBMENU_STYLES}
             trigger={['hover', 'click']}
           >
