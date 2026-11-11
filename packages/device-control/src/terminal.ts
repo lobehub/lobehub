@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 
 import { detectWindowsShell } from '@lobechat/local-file-shell/shell';
+import type { DeviceClient } from '@lobechat/types';
 
 import type {
   CloseTerminalParams,
@@ -94,6 +95,8 @@ interface TerminalSession {
 }
 
 export interface TerminalManagerOptions {
+  /** Which client this host is; returned on create so callers can pin the session to it. */
+  client: DeviceClient;
   /**
    * Resolves the `node-pty` module. Injected rather than imported: it is a
    * native module each host ships its own way (the CLI as an external runtime
@@ -176,7 +179,7 @@ export class TerminalSessionManager {
       session.pty = undefined;
     });
 
-    return { cwd, id, pid: pty.pid, shell };
+    return { client: this.options.client, cwd, id, pid: pty.pid, shell };
   }
 
   write(params: WriteTerminalParams): void {

@@ -49,7 +49,7 @@ describe('TerminalSessionManager', () => {
   beforeEach(() => {
     ptys.length = 0;
     spawnOptions = undefined;
-    manager = new TerminalSessionManager({ loadPty });
+    manager = new TerminalSessionManager({ client: 'cli', loadPty });
   });
 
   afterEach(() => {
@@ -66,7 +66,11 @@ describe('TerminalSessionManager', () => {
     // only exists when the shell has a controlling terminal.
     const { info } = await openSession();
 
-    expect(info).toMatchObject({ shell: expect.any(String), pid: expect.any(Number) });
+    expect(info).toMatchObject({
+      client: 'cli',
+      pid: expect.any(Number),
+      shell: expect.any(String),
+    });
     expect(spawnOptions).toMatchObject({
       cols: 80,
       env: expect.objectContaining({ TERM: 'xterm-256color' }),
@@ -169,7 +173,7 @@ describe('TerminalSessionManager', () => {
 
   it('answers a read for a session it no longer holds as an ended shell', async () => {
     const warn = vi.fn();
-    const reaped = new TerminalSessionManager({ loadPty, logger: { warn } });
+    const reaped = new TerminalSessionManager({ client: 'cli', loadPty, logger: { warn } });
     try {
       const info = await reaped.create({ cols: 80, rows: 24 });
       reaped.close({ id: info.id });

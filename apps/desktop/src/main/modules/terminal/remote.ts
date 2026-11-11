@@ -18,6 +18,7 @@ let remoteTerminals: TerminalSessionManager | undefined;
  */
 export const getRemoteTerminalDeps = () => {
   remoteTerminals ??= new TerminalSessionManager({
+    client: 'desktop',
     loadPty: () => import('@lydell/node-pty'),
     logger: { warn: (message) => logger.warn(message) },
   });

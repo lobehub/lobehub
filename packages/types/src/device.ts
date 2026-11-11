@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
 import type { ManagedDevicePhase } from './managedDevice';
+import type { DeviceClient } from './tool/builtin';
 
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
@@ -1091,6 +1092,12 @@ export type DeviceAppUpdateInstallResult =
 
 /** Result of the `createTerminalSession` device RPC. */
 export interface DeviceCreateTerminalSessionResult {
+  /**
+   * The client hosting the session. Its later calls must reach the same
+   * client: the desktop app and `lh connect` keep separate sessions, and a
+   * device can hold both connections. Absent from hosts that predate it.
+   */
+  client?: DeviceClient;
   /** Directory the shell actually started in (a missing `cwd` falls back home). */
   cwd: string;
   id: string;

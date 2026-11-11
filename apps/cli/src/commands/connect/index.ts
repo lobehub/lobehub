@@ -575,6 +575,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // session is actually created, so a daemon that never opens a terminal never
   // touches it.
   const terminals = new TerminalSessionManager({
+    client: 'cli',
     // Lazy: the CLI bundle is embedded in contexts that have no `node_modules`
     // at all (the desktop app runs it from `Resources/bin`), so a static import
     // would fail every one of them at startup.
