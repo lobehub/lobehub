@@ -19,6 +19,7 @@ import { CheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -27,7 +28,6 @@ import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projec
 import { parseGithubRepository } from './CreateFromGithub/githubRepository';
 import RepositoryList from './CreateFromGithub/RepositoryList';
 import { environmentRepositoryUrl, reusableEnvironments } from './environmentSource';
-import RepositoryAvatar from './RepositoryAvatar';
 
 const styles = stylex.create({
   list: {

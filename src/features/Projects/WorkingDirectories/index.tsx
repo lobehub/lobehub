@@ -3,6 +3,7 @@ import { FolderIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   useProjectDirectories,
@@ -11,7 +12,6 @@ import {
 } from '@/store/projectWorkingDirectory';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
-import RepositoryAvatar from '../RepositoryAvatar';
 import { openEnvironmentModal } from './EnvironmentModal';
 
 interface ProjectWorkingDirectoriesProps {

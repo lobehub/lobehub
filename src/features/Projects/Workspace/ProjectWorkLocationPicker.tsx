@@ -8,6 +8,7 @@ import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import OptionRow from '@/features/ChatInput/ControlBar/OptionRow';
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
@@ -15,7 +16,6 @@ import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
-import RepositoryAvatar from '../RepositoryAvatar';
 import type { useProjectRepository } from './useProjectRepository';
 import { useProjectWorkLocation } from './useProjectWorkLocation';
 

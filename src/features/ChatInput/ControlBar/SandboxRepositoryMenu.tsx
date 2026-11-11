@@ -1,13 +1,14 @@
 'use client';
 
 import type { EnvironmentConfiguration } from '@lobechat/types';
-import { Github } from '@lobehub/icons';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PlusIcon, SettingsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 
 import OptionRow from './OptionRow';
 import { repositorySlug } from './sandboxEnvironmentOptions';
@@ -71,7 +72,7 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
               active={environment.id === selectedId}
               desc={environment.description || undefined}
               hint={repositorySlug(environment)}
-              icon={<Github size={16} />}
+              icon={<RepositoryAvatar size={16} url={repositorySlug(environment)} />}
               key={environment.id}
               label={environment.name}
               onClick={() => {
