@@ -291,6 +291,36 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
       ]);
     });
 
+    it('keeps the slot of a file that timed out until its parsing really ends', async () => {
+      vi.useFakeTimers();
+      try {
+        const stuck = deferred();
+        fileServiceMock.getFileByteArray.mockResolvedValue(new Uint8Array([1]));
+        chunkServiceMock.chunkContent.mockImplementation(async () => {
+          await stuck.promise;
+          return { chunks: [{ index: 0, text: 'hello', type: 'DocumentChunk' }] };
+        });
+
+        const caller = fileRouter.createCaller(mockCtx);
+        const runs = ['f1', 'f2', 'f3'].map((id) =>
+          caller.parseFileToChunks({ fileId: id, taskId: `task_${id}` }),
+        );
+
+        // both running files give up waiting, but their parsing is still going on
+        await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+        await expect(runs[0]).resolves.toMatchObject({ success: false });
+        await expect(runs[1]).resolves.toMatchObject({ success: false });
+        expect(fileServiceMock.getFileByteArray).toHaveBeenCalledTimes(2);
+
+        stuck.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fileServiceMock.getFileByteArray).toHaveBeenCalledTimes(3);
+        await expect(runs[2]).resolves.toEqual({ success: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not keep a parse slot while the embedding task of a finished file runs', async () => {
       const embedding = deferred();
       chunkServiceMock.asyncEmbeddingFileChunks.mockImplementation(() => embedding.promise);
