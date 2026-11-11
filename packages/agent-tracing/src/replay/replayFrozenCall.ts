@@ -1,13 +1,8 @@
 import { match } from '@lobechat/eval-rubric';
 
 import { createJudgeContext } from './judge';
-import {
-  buildReplayRequest,
-  extractCompletionText,
-  extractToolCalls,
-  type FrozenCall,
-  type ModelTarget,
-} from './payload';
+import { buildReplayRequest, type FrozenCall, type ModelTarget } from './payload';
+import { readReplayCompletion } from './response';
 
 const JUDGE_THRESHOLD = 0.6;
 
@@ -69,19 +64,12 @@ export const replayFrozenCall = async ({
       };
     }
 
-    const body = (await res.json()) as {
-      usage?: { completion_tokens?: number; prompt_tokens?: number };
-    };
+    const completion = await readReplayCompletion(res);
 
     return {
-      content: extractCompletionText(body),
+      ...completion,
       durationMs: Date.now() - startedAt,
       model: target.label,
-      toolCalls: extractToolCalls(body),
-      usage: {
-        completionTokens: body?.usage?.completion_tokens,
-        promptTokens: body?.usage?.prompt_tokens,
-      },
     };
   } catch (error) {
     return {
