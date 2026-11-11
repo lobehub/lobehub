@@ -486,7 +486,12 @@ describe('UploadService', () => {
         success: true,
       });
 
-      await expect(uploadService.uploadToServerS3(largeFile, {})).rejects.toThrow('signing failed');
+      vi.useFakeTimers();
+      const upload = uploadService.uploadToServerS3(largeFile, {});
+      const assertion = expect(upload).rejects.toThrow('signing failed');
+      await vi.runAllTimersAsync();
+      await assertion;
+      vi.useRealTimers();
 
       expect(lambdaClient.upload.abortS3MultipartUpload.mutate).toHaveBeenCalledWith({
         pathname: expect.any(String),

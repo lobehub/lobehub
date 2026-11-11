@@ -16,6 +16,68 @@ const MAX_MULTIPART_PARTS = 10_000;
 const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
 const MULTIPART_UPLOAD_THRESHOLD = 64 * 1024 * 1024;
 
+const MAX_PART_RETRIES = 3;
+const PART_RETRY_BASE_DELAY_MS = 1000;
+/** A PUT fails when the browser reports no upload progress for this long. */
+const PUT_STALL_TIMEOUT_MS = 120_000;
+/**
+ * `xhr.timeout` covers the whole request, so it scales with the body: a fixed
+ * value would permanently fail a slow connection that is still making progress.
+ */
+const PUT_MIN_TIMEOUT_MS = 120_000;
+const PUT_MIN_BYTES_PER_SECOND = 32 * 1024;
+const SIGN_PART_TIMEOUT_MS = 60_000;
+const COMPLETE_MULTIPART_TIMEOUT_MS = 5 * 60_000;
+const CLEANUP_TIMEOUT_MS = 30_000;
+
+const FAILED_UPLOAD_STATE: FileUploadState = { progress: 0, restTime: 0, speed: 0 };
+
+const getAbortReason = (signal: AbortSignal) =>
+  signal.reason ?? new Error('Upload cancelled by user');
+
+/**
+ * Settle with `task`, or reject once `timeoutMs` passes or `signal` aborts. A
+ * hung API call must not hold the upload in `uploading`.
+ */
+const withDeadline = <T>(task: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(getAbortReason(signal!));
+    const timer = setTimeout(() => reject(UPLOAD_NETWORK_ERROR), timeoutMs);
+    const settle = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    task.then(resolve, reject).finally(settle);
+  });
+
+const waitForRetry = (delayMs: number, signal?: AbortSignal): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(getAbortReason(signal!));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+
+/** The API answered that this part is not allowed, which a new attempt cannot change. */
+const isRejectedByApi = (error: unknown): boolean => {
+  const httpStatus = (error as { data?: { httpStatus?: unknown } } | undefined)?.data?.httpStatus;
+  return (
+    typeof httpStatus === 'number' &&
+    httpStatus >= 400 &&
+    httpStatus < 500 &&
+    httpStatus !== 408 &&
+    httpStatus !== 429
+  );
+};
+
 /**
  * Generate file storage path metadata for S3-compatible storage
  * @param originalFilename - Original filename
@@ -61,7 +123,10 @@ interface UploadFileToS3Options {
 class UploadService {
   releaseUpload = async (pathname: string) => {
     try {
-      await lambdaClient.upload.abortS3Upload.mutate({ pathname });
+      await withDeadline(
+        lambdaClient.upload.abortS3Upload.mutate({ pathname }),
+        CLEANUP_TIMEOUT_MS,
+      );
     } catch (error) {
       console.error('Failed to clean S3 upload:', error);
     }
@@ -191,9 +256,7 @@ class UploadService {
       }
     } catch (error) {
       await this.releaseUpload(uploadPathname);
-      if (abortController?.signal.aborted) {
-        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
-      }
+      onProgress?.(abortController?.signal.aborted ? 'cancelled' : 'error', FAILED_UPLOAD_STATE);
       throw error;
     }
 
@@ -238,9 +301,7 @@ class UploadService {
         file.type,
       );
     } catch (error) {
-      if (abortController?.signal.aborted) {
-        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
-      }
+      onProgress?.(abortController?.signal.aborted ? 'cancelled' : 'error', FAILED_UPLOAD_STATE);
       throw error;
     }
 
@@ -275,28 +336,73 @@ class UploadService {
     const xhr = new XMLHttpRequest();
     const abort = () => xhr.abort();
     signal?.addEventListener('abort', abort, { once: true });
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
 
     try {
       return await new Promise<string | undefined>((resolve, reject) => {
+        const armStallTimer = () => {
+          clearTimeout(stallTimer);
+          stallTimer = setTimeout(() => {
+            reject(UPLOAD_NETWORK_ERROR);
+            xhr.abort();
+          }, PUT_STALL_TIMEOUT_MS);
+        };
+
         xhr.upload.addEventListener('progress', (event) => {
+          armStallTimer();
           if (event.lengthComputable) onProgress(event.loaded);
         });
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(xhr.getResponseHeader?.('ETag') || undefined);
-          } else reject(xhr.statusText);
+          } else reject(xhr.statusText || `HTTP ${xhr.status}`);
         });
         xhr.addEventListener('error', () => {
           if (xhr.status === 0) reject(UPLOAD_NETWORK_ERROR);
-          else reject(xhr.statusText);
+          else reject(xhr.statusText || `HTTP ${xhr.status}`);
         });
+        xhr.addEventListener('timeout', () => reject(UPLOAD_NETWORK_ERROR));
         xhr.addEventListener('abort', () => reject(new Error('Upload cancelled by user')));
         xhr.open('PUT', url);
+        xhr.timeout = Math.max(PUT_MIN_TIMEOUT_MS, (blob.size / PUT_MIN_BYTES_PER_SECOND) * 1000);
         if (contentType) xhr.setRequestHeader('Content-Type', contentType);
         xhr.send(blob);
+        armStallTimer();
       });
     } finally {
+      clearTimeout(stallTimer);
       signal?.removeEventListener('abort', abort);
+    }
+  };
+
+  /**
+   * Every attempt signs a new URL: a pre-signed URL may have expired by the time
+   * the previous attempt failed. Cancelling never retries.
+   */
+  private uploadPartWithRetry = async (
+    blob: Blob,
+    part: { partNumber: number; pathname: string; uploadId: string },
+    signal: AbortSignal | undefined,
+    onProgress: (loaded: number) => void,
+  ): Promise<string | undefined> => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const url = await withDeadline(
+          lambdaClient.upload.createS3MultipartUploadPartUrl.mutate(part),
+          SIGN_PART_TIMEOUT_MS,
+          signal,
+        );
+
+        return await this.putBlob(url, blob, signal, onProgress);
+      } catch (error) {
+        if (signal?.aborted || attempt >= MAX_PART_RETRIES || isRejectedByApi(error)) throw error;
+
+        console.warn(
+          `Retrying part ${part.partNumber} of upload ${part.uploadId} (attempt ${attempt + 2}):`,
+          error,
+        );
+        await waitForRetry(PART_RETRY_BASE_DELAY_MS * 2 ** attempt, signal);
+      }
     }
   };
 
@@ -323,28 +429,34 @@ class UploadService {
 
         const offset = (partNumber - 1) * partSize;
         const end = Math.min(offset + partSize, file.size);
-        const url = await lambdaClient.upload.createS3MultipartUploadPartUrl.mutate({
-          partNumber,
-          pathname,
-          uploadId,
-        });
-
-        const etag = await this.putBlob(url, file.slice(offset, end), signal, (loaded) => {
-          onProgress(offset + loaded);
-        });
+        const etag = await this.uploadPartWithRetry(
+          file.slice(offset, end),
+          { partNumber, pathname, uploadId },
+          signal,
+          (loaded) => {
+            onProgress(offset + loaded);
+          },
+        );
         if (etag) parts.push({ etag, partNumber });
         onProgress(end);
       }
 
-      await lambdaClient.upload.completeS3MultipartUpload.mutate({
-        partCount,
-        parts: parts.length === partCount ? parts : undefined,
-        pathname,
-        uploadId,
-      });
+      await withDeadline(
+        lambdaClient.upload.completeS3MultipartUpload.mutate({
+          partCount,
+          parts: parts.length === partCount ? parts : undefined,
+          pathname,
+          uploadId,
+        }),
+        COMPLETE_MULTIPART_TIMEOUT_MS,
+        signal,
+      );
     } catch (error) {
       try {
-        await lambdaClient.upload.abortS3MultipartUpload.mutate({ pathname, uploadId });
+        await withDeadline(
+          lambdaClient.upload.abortS3MultipartUpload.mutate({ pathname, uploadId }),
+          CLEANUP_TIMEOUT_MS,
+        );
       } catch (abortError) {
         console.error('Failed to abort S3 multipart upload:', abortError);
       }
