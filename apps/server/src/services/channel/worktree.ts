@@ -75,10 +75,21 @@ export const createChannelWorktree = async (
   const worktreePath = deriveWorktreePath(source.path, candidate.branch, {
     homeDir: systemInfo.homePath,
   });
+  // An untracked or ignored subdirectory is not in a fresh checkout; running there would fail
+  // and the assignment would keep sending later replies to it, so keep waiting instead.
+  const relocate = async (checkout: string): Promise<ChannelWorktreeResult> => {
+    const path = inCheckout(checkout, offset);
+    if (!offset) return { path };
+    const stat = await deviceGateway.statPath({ ...scope, path });
+    return stat?.isDirectory
+      ? { path }
+      : { error: 'The directory is not part of the repository checkout' };
+  };
+
   const existing = listed.find(
     (worktree) => worktree.path === worktreePath && worktree.branch === candidate.branch,
   );
-  if (existing) return { path: inCheckout(existing.path, offset) };
+  if (existing) return relocate(existing.path);
 
   const added = await deviceGateway.addGitWorktree({
     ...scope,
@@ -86,6 +97,6 @@ export const createChannelWorktree = async (
     path: candidate.sourceDirectory,
     worktreePath,
   });
-  if (added.success) return { path: inCheckout(added.worktreePath ?? worktreePath, offset) };
+  if (added.success) return relocate(added.worktreePath ?? worktreePath);
   return { error: added.error || 'Could not create a worktree' };
 };

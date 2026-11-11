@@ -74,6 +74,7 @@ describe('createChannelWorktree', () => {
       success: true,
       worktreePath,
     }));
+    gateway.statPath.mockResolvedValue({ isDirectory: true } as never);
     const worktreeRoot = deriveWorktreePath('/code/lobehub', candidate.branch, {
       homeDir: '/Users/me',
     });
@@ -97,10 +98,9 @@ describe('createChannelWorktree', () => {
     }));
     // Git reports the symlinked root; the configured directory is already its realpath.
     gateway.listGitWorktrees.mockResolvedValue([{ ...sourceCheckout, path: '/link/lobehub' }]);
-    gateway.statPath.mockResolvedValue({
-      canonicalPath: '/code/lobehub',
-      isDirectory: true,
-    } as never);
+    gateway.statPath
+      .mockResolvedValueOnce({ canonicalPath: '/code/lobehub', isDirectory: true } as never)
+      .mockResolvedValue({ isDirectory: true } as never);
     const worktreeRoot = deriveWorktreePath('/link/lobehub', candidate.branch, {
       homeDir: '/Users/me',
     });
@@ -111,6 +111,22 @@ describe('createChannelWorktree', () => {
         null,
       ),
     ).toEqual({ path: `${worktreeRoot}/packages/app` });
+  });
+
+  it('keeps waiting when the subdirectory is not part of the new checkout', async () => {
+    gateway.addGitWorktree.mockImplementation(async ({ worktreePath }) => ({
+      success: true,
+      worktreePath,
+    }));
+    // An untracked or ignored directory exists in the source but not in a fresh checkout.
+    gateway.statPath.mockResolvedValue(undefined);
+
+    expect(
+      await createChannelWorktree(
+        { ...candidate, sourceDirectory: '/code/lobehub/packages/new-app' },
+        null,
+      ),
+    ).toEqual({ error: 'The directory is not part of the repository checkout' });
   });
 
   it('keeps waiting when the directory cannot be placed inside its checkout', async () => {
