@@ -101,20 +101,24 @@ const MailSplitView = ({
   const { t } = useTranslation('setting');
 
   if (narrow) {
+    const covered = Boolean(messageId || composing);
     return (
       <Flexbox flex={1} style={{ minHeight: 0, position: 'relative' }} width={'100%'}>
-        <MailNavHeader action={action} />
-        <Flexbox
-          flex={1}
-          gap={16}
-          paddingBlock={'0 12px'}
-          paddingInline={12}
-          style={{ minHeight: 0 }}
-        >
-          <div className={identityStyles.accounts}>{mailbox}</div>
-          {inbox}
+        {/* Covered, the list is out of the tab order and the accessibility tree. */}
+        <Flexbox flex={1} inert={covered} style={{ minHeight: 0 }}>
+          <MailNavHeader action={action} />
+          <Flexbox
+            flex={1}
+            gap={16}
+            paddingBlock={'0 12px'}
+            paddingInline={12}
+            style={{ minHeight: 0 }}
+          >
+            <div className={identityStyles.accounts}>{mailbox}</div>
+            {inbox}
+          </Flexbox>
         </Flexbox>
-        {(messageId || composing) && (
+        {covered && (
           <NarrowDetail focusBack={Boolean(messageId)} key={messageId ?? 'compose'} onBack={onBack}>
             {detail}
           </NarrowDetail>

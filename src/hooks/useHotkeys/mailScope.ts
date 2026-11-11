@@ -8,7 +8,6 @@ import { useHotkeyById } from './useHotkeyById';
 
 /** How long the first key of a sequence (`g`, `*`) waits for the second. */
 const SEQUENCE_TIMEOUT_MS = 1000;
-const SEQUENCE_PREFIXES = new Set(['*', 'g']);
 const MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'OS', 'Shift']);
 
 /** Keys that answer the `g` / `*` before them; a bare-key hotkey must not also act on them. */
@@ -56,8 +55,10 @@ const trackSequence = (event: KeyboardEvent) => {
     return;
   }
   const bare = !event.metaKey && !event.ctrlKey && !event.altKey;
-  pendingPrefix =
-    bare && SEQUENCE_PREFIXES.has(event.key) ? { at: now, key: event.key } : undefined;
+  // Matched the way the sequences themselves are: `g` by key position (any
+  // layout), `*` by the character it types.
+  const prefix = event.code === 'KeyG' ? 'g' : event.key === '*' ? '*' : undefined;
+  pendingPrefix = bare && prefix ? { at: now, key: prefix } : undefined;
 };
 
 /**
@@ -80,8 +81,6 @@ export const useRegisterMailHotkeys = () => {
 };
 
 export interface MailHotkeyOptions {
-  /** Also fires from a text field: only the composer's own keys (send, save, close). */
-  inFields?: boolean;
   /** Second key of a `g` / `*` sequence. */
   sequence?: boolean;
   /** Match the produced character rather than the key position, as `*` needs. */
@@ -92,13 +91,13 @@ export interface MailHotkeyOptions {
  * One mail hotkey. The handler returns `false` when it had nothing to act on,
  * so the key keeps its default (Enter on a button, Esc for a popover).
  *
- * Skipped while typing (unless `inFields`), while an input method is composing,
+ * Skipped while typing, while an input method is composing,
  * while a modal or menu is open, and when something nearer already handled it.
  */
 export const useMailHotkey = (
   id: HotkeyId,
   handler: (event: KeyboardEvent) => boolean | void,
-  { inFields, sequence, useKey }: MailHotkeyOptions = {},
+  { sequence, useKey }: MailHotkeyOptions = {},
 ) =>
   useHotkeyById(
     id,
@@ -109,8 +108,8 @@ export const useMailHotkey = (
       if (handler(event) !== false) event.preventDefault();
     },
     {
-      enableOnContentEditable: Boolean(inFields),
-      enableOnFormTags: Boolean(inFields),
+      enableOnContentEditable: false,
+      enableOnFormTags: false,
       preventDefault: false,
       scopes: [HotkeyScopeEnum.Mail],
       useKey,

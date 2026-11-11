@@ -248,6 +248,7 @@ const MailComposer = memo<MailComposerProps>(
       const undo = toast.success({
         actions: [{ label: t('identity.mailbox.undo'), onClick: offered.run }],
         duration: UNDO_WINDOW_MS,
+        onClose: offered.withdraw,
         title: t('identity.mailbox.toast.discarded'),
       });
       // Undo, or the same draft opened again (answering that mail once more), keeps it.

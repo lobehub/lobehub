@@ -41,8 +41,10 @@ const HotkeySetting = memo(() => {
   const mapHotkeyItem = (item: HotkeyItem) => {
     const hotkeyConflicts = Object.entries(hotkey)
       .map(([key, value]) => {
-        // Mail keys only live on the mail page, so they cannot collide with these.
-        if (key === item.id || MAIL_HOTKEY_IDS.has(key as HotkeyItem['id'])) return false;
+        // A bare mail key only lives on the mail page; one with a modifier can
+        // still meet a global binding there.
+        if (key === item.id) return false;
+        if (MAIL_HOTKEY_IDS.has(key as HotkeyItem['id']) && !value?.includes('+')) return false;
         return value;
       })
       .filter(Boolean) as string[];

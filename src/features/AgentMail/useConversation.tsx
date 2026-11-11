@@ -265,6 +265,7 @@ export const useConversation = (
     const undoToast = toast.success({
       actions: [{ label: t('identity.mailbox.undo'), onClick: undo.run }],
       duration: UNDO_WINDOW_MS,
+      onClose: undo.withdraw,
       title: t('identity.mailbox.toast.trashed'),
     });
   };

@@ -319,12 +319,14 @@ const InboxSection = ({
     const previous = lastSelectedRef.current;
     lastSelectedRef.current = selectedId;
     if (selectedId === previous) return;
+    // Paging to a neighbour keeps the old row; that is the pane's own step, not a loss.
+    if (selectedId && previous && items.some((item) => item.id === previous)) return;
     const target = selectedId ?? previous;
     if (!target) return;
     // Runs after the commit that unmounted the pane, so the loss is already visible.
     const active = document.activeElement;
     if (!active || active === document.body) focusRow(target);
-  }, [selectedId]);
+  }, [items, selectedId]);
 
   const hotkeyTarget: MailListHotkeyTarget = {
     act,

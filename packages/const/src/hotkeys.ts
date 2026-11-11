@@ -134,7 +134,7 @@ const MAIL_HOTKEYS: HotkeyRegistration = [
   mail(HotkeyEnum.MailSend, combineKeys([KeyEnum.Mod, KeyEnum.Enter]), true),
   mail(HotkeyEnum.MailSaveDraft, combineKeys([KeyEnum.Mod, 's']), true),
   mail(HotkeyEnum.MailCloseCompose, KeyEnum.Esc, true),
-  // `#` is Shift+3; matched by key position, so it holds on any layout.
+  // `#` as Shift+3 (US / CN layouts); where `#` sits elsewhere, Delete does the same.
   mail(HotkeyEnum.MailTrash, combineKeys([KeyEnum.Shift, '3'])),
   mail(HotkeyEnum.MailTrashDelete, KeyEnum.Delete),
   mail(HotkeyEnum.MailPurge, combineKeys([KeyEnum.Shift, KeyEnum.Delete])),

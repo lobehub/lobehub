@@ -256,6 +256,8 @@ export const useMailActions = ({
     const undoToast = toast.success({
       actions: [{ label: t('identity.mailbox.undo'), onClick: undo.run }],
       duration: UNDO_WINDOW_MS,
+      // Dismissed by hand, the trash stands: `z` must not quietly undo it.
+      onClose: undo.withdraw,
       title: t('identity.mailbox.toast.trashed'),
     });
 
@@ -361,6 +363,7 @@ export const useMailActions = ({
     const undoToast = toast.success({
       actions: [{ label: t('identity.mailbox.undo'), onClick: undo.run }],
       duration: UNDO_WINDOW_MS,
+      onClose: undo.withdraw,
       title: t('identity.mailbox.toast.discarded'),
     });
   };
