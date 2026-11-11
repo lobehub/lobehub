@@ -485,6 +485,57 @@ describe('MailComposer', () => {
     });
   });
 
+  describe('MailComposer — Codex on ca8f8261cd0', () => {
+    it('finishes a send after the editor is gone without steering the page', async () => {
+      let finishSend!: () => void;
+      service.sendMailDraft.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishSend = () => resolve({ mailId: 'sent_9', providerMessageId: 'p9' });
+          }),
+      );
+      const { onClose, unmount } = setupComposer({
+        draft: composerDraft({ subject: 'S', text: 'Body', to: [{ address: 'a@b.com' }] }),
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Body'),
+      );
+      fireEvent.click(screen.getByTestId('mail-send'));
+      await waitFor(() => expect(service.sendMailDraft).toHaveBeenCalled());
+      unmount();
+      await act(async () => finishSend());
+
+      expect(onClose).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(ui.toastSuccess).toHaveBeenCalledWith(
+          expect.objectContaining({ title: 'identity.compose.sent.title' }),
+        ),
+      );
+    });
+
+    it('keeps the local copy when deleting a discarded draft fails', async () => {
+      service.deleteMailDrafts.mockRejectedValue(new TypeError('Failed to fetch'));
+      const forwardSource = composerSource({
+        attachments: [
+          { filename: 'plan.pdf', index: 0 },
+          { filename: 'secret.csv', index: 1 },
+        ],
+      });
+      setupComposer({ inline: true, mode: 'forward', source: forwardSource });
+      await screen.findAllByTestId('compose-attachment');
+      fireEvent.click(screen.getAllByLabelText('identity.compose.removeAttachment')[1]);
+      fireEvent.click(screen.getByLabelText('identity.mailbox.action.discard'));
+      await waitFor(() => expect(ui.toastSuccess).toHaveBeenCalled());
+      await act(() => vi.advanceTimersByTimeAsync(9000));
+
+      expect(service.deleteMailDrafts).toHaveBeenCalled();
+      expect(
+        JSON.parse(localStorage.getItem('lobe-agent-mail:draft:agt_1:acc_a:draft_1')!)
+          .excludedAttachments,
+      ).toEqual([1]);
+    });
+  });
+
   describe('MailComposer — Codex on f28b53e4cf4', () => {
     it('discards a new mail whose first save is still on its way', async () => {
       let finishCreate!: () => void;

@@ -14,10 +14,10 @@ import {
   toast,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { useLatest } from 'ahooks';
+import { useLatest, useUnmount } from 'ahooks';
 import dayjs from 'dayjs';
 import { Paperclip, Trash2, Undo2, X } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -173,6 +173,10 @@ const MailComposer = memo<MailComposerProps>(
     const [showCopies, setShowCopies] = useState(
       () => (draft?.cc.length ?? 0) > 0 || (draft?.bcc.length ?? 0) > 0,
     );
+    const mountedRef = useRef(true);
+    useUnmount(() => {
+      mountedRef.current = false;
+    });
     // A refusal remembered or lifted anywhere re-renders this, so the block shows at once.
     useSendBlockVersion();
     const block = sendBlockOf(account);
@@ -221,11 +225,15 @@ const MailComposer = memo<MailComposerProps>(
       // A discarded draft does not go to the trash: it waits out the undo window instead.
       const timer = setTimeout(async () => {
         releaseDiscard(id);
-        clearBackup(backupKey);
-        await agentAccountService.deleteMailDrafts([id]).catch((error) => {
-          console.error('[AgentMail] discard failed', error);
-          toast.error({ title: t('identity.mailbox.failed.discard') });
-        });
+        // The local copy goes only with the draft: a draft that survives a failed
+        // delete still needs a forward's removed attachments.
+        await agentAccountService
+          .deleteMailDrafts([id])
+          .then(() => clearBackup(backupKey))
+          .catch((error) => {
+            console.error('[AgentMail] discard failed', error);
+            toast.error({ title: t('identity.mailbox.failed.discard') });
+          });
         await refresh().catch(() => undefined);
         mailWriteActions.end(writeId);
       }, UNDO_WINDOW_MS);
@@ -261,8 +269,12 @@ const MailComposer = memo<MailComposerProps>(
       const go = async () => {
         const sent = await composer.send();
         if (!sent) return;
-        onSent?.(sent);
-        onClose();
+        // Left for another mail while sending: the send and its toast finish,
+        // but this editor no longer steers the page.
+        if (mountedRef.current) {
+          onSent?.(sent);
+          onClose();
+        }
         toast.success({
           actions: onViewSent
             ? [{ label: t('identity.compose.sent.view'), onClick: () => onViewSent(sent) }]
