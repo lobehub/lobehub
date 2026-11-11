@@ -393,7 +393,10 @@ const Overview = memo<OverviewProps>(
                 trailing={
                   <span
                     className={sectionStyles.pill}
-                    style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
+                    style={{
+                      background: `color-mix(in srgb, ${ci.color} 12%, transparent)`,
+                      color: ci.color,
+                    }}
                   >
                     <Icon icon={ci.icon} size={12} />
                     {shouldShowCiLabel(ciStatus)
