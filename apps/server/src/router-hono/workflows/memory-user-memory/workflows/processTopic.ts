@@ -10,10 +10,13 @@ import { WorkflowAbort, WorkflowNonRetryableError } from '@upstash/workflow';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { UserModel } from '@/database/models/user';
+import { shouldConsolidateAfterExtraction } from '@/database/models/userMemory/consolidation';
 import { getServerDB } from '@/database/server';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
   MemoryExtractionExecutor,
+  MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 import { runStep } from '@/server/workflows/step';
@@ -27,6 +30,12 @@ const CEPA_LAYERS: LayersEnum[] = [LayersEnum.Context, LayersEnum.Preference, La
 
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic';
+/**
+ * Consolidation waits this long after an extraction, so the rest of the user's topics in the same
+ * batch land in one run. Runs per user are serialized, and one that finds nothing pending ends
+ * after its first read.
+ */
+const CONSOLIDATION_DELAY_SECONDS = 600;
 
 /**
  * Whether this delivery belongs to a banned user and reports to no tracked task.
@@ -161,6 +170,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
         const cepaLayers = payload.layers.length
           ? payload.layers.filter((layer) => CEPA_LAYERS.includes(layer))
           : CEPA_LAYERS;
+        let contextsExtracted = 0;
         if (cepaLayers.length > 0) {
           const layers = cepaLayers;
 
@@ -171,7 +181,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             return guard.response;
           }
 
-          await runStep(context, stepName, async () =>
+          const extracted = await runStep(context, stepName, async () =>
             (await isBanned())
               ? undefined
               : executor.extractTopic({
@@ -189,6 +199,7 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
                   workspaceId: payload.workspaceId,
                 }),
           );
+          contextsExtracted = extracted?.layers?.[LayersEnum.Context] ?? 0;
         }
         {
           {
@@ -273,6 +284,28 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
                   }),
             );
           }
+        }
+
+        // Only legacy contexts are consolidated, so a topic that wrote none has nothing to file.
+        if (contextsExtracted > 0) {
+          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:consolidate`;
+          const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+          if (!guard.result) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return guard.response;
+          }
+
+          await runStep(context, stepName, async () => {
+            if (!(await shouldConsolidateAfterExtraction(await getServerDB(), userId)))
+              return { scheduled: false };
+            const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+            const { workflowRunId } = await MemoryExtractionWorkflowService.triggerConsolidation(
+              userId,
+              payload.baseUrl,
+              { delay: CONSOLIDATION_DELAY_SECONDS, extraHeaders: upstashWorkflowExtraHeaders },
+            );
+            return { scheduled: true, workflowRunId };
+          });
         }
 
         if (payload.asyncTaskId && payload.userInitiated) {

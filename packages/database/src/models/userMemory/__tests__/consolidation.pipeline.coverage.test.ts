@@ -12,7 +12,11 @@ import {
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { listConsolidatedUserIds, UserMemoryConsolidationModel } from '../consolidation';
+import {
+  AUTO_CONSOLIDATION_MAX_PENDING,
+  shouldConsolidateAfterExtraction,
+  UserMemoryConsolidationModel,
+} from '../consolidation';
 
 const userId = 'consolidation-pipeline-user';
 const otherUserId = 'consolidation-pipeline-other';
@@ -89,21 +93,26 @@ beforeEach(async () => {
 });
 
 describe('pipeline reads', () => {
-  it('lists every consolidated user once and skips dossiers without an owner', async () => {
-    const mine = await createLegacy('scheduler backend', '2026-05-01');
-    const theirs = await createLegacy('scheduler panel', '2026-05-02', { owner: otherUserId });
+  it('consolidates after extraction once consolidated, or while the backlog is small', async () => {
+    // A small backlog is taken in one run.
+    await createLegacy('scheduler backend', '2026-05-01');
+    expect(await shouldConsolidateAfterExtraction(serverDB, userId)).toBe(true);
+
+    // A large one waits for the backfill.
+    for (let i = 0; i <= AUTO_CONSOLIDATION_MAX_PENDING; i += 1)
+      await createLegacy(`note ${i}`, '2026-05-02', { owner: otherUserId });
+    expect(await shouldConsolidateAfterExtraction(serverDB, otherUserId)).toBe(false);
+
+    // Once consolidated, every later extraction is followed up whatever is left.
+    const [first] = await new UserMemoryConsolidationModel(
+      serverDB,
+      otherUserId,
+    ).listPendingLegacyContexts(1);
     await new UserMemoryConsolidationModel(serverDB, otherUserId).applyContextPlan(
       'run_theirs',
-      planFor([theirs.context.id]),
+      planFor([first.id]),
     );
-    await model.applyContextPlan('run_mine', planFor([mine.context.id]));
-
-    // A regrouped dossier can lose its owner: it must not show up as a consolidated user.
-    await serverDB.insert(userMemoriesDossiers).values({ title: 'orphan', userId: null });
-
-    const ids = await listConsolidatedUserIds(serverDB);
-    expect(ids).toEqual(expect.arrayContaining([userId, otherUserId]));
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(await shouldConsolidateAfterExtraction(serverDB, otherUserId)).toBe(true);
   });
 
   it('reads legacy rows by id, reporting a missing source id as null', async () => {

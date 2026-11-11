@@ -7,7 +7,6 @@ import {
   userMemoriesContexts,
   userMemoriesDossiers,
   userMemoriesOperations,
-  users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
@@ -106,16 +105,30 @@ export const deriveContextStatus = (lastEvidenceAt: Date, now = new Date()) => {
 const runTag = (runId: string) => ({ consolidationRunId: runId });
 
 /**
- * Users that have been consolidated at least once, so the nightly run can keep them current.
- * Reads the dossiers table (new and small), not the large contexts table.
+ * A user with at most this many unconsolidated legacy contexts starts consolidating from their
+ * extractions. Larger backlogs wait for the platform-paid backfill an admin starts, so the user is
+ * never billed for their whole history at once.
  */
-export const listConsolidatedUserIds = async (db: LobeChatDatabase): Promise<string[]> => {
-  const rows = await db
-    .selectDistinct({ userId: userMemoriesDossiers.userId })
+export const AUTO_CONSOLIDATION_MAX_PENDING = 50;
+
+/**
+ * Whether a user's fresh memories are consolidated right after extraction: they were consolidated
+ * before, or their backlog is small enough to take in one run.
+ */
+export const shouldConsolidateAfterExtraction = async (
+  db: LobeChatDatabase,
+  userId: string,
+): Promise<boolean> => {
+  const [dossier] = await db
+    .select({ id: userMemoriesDossiers.id })
     .from(userMemoriesDossiers)
-    .innerJoin(users, eq(users.id, userMemoriesDossiers.userId))
-    .where(sql`COALESCE(${users.banned}, false) = false`);
-  return rows.map((r) => r.userId).filter((id): id is string => !!id);
+    .where(eq(userMemoriesDossiers.userId, userId))
+    .limit(1);
+  if (dossier) return true;
+  const pending = await new UserMemoryConsolidationModel(db, userId).listPendingLegacyContexts(
+    AUTO_CONSOLIDATION_MAX_PENDING + 1,
+  );
+  return pending.length <= AUTO_CONSOLIDATION_MAX_PENDING;
 };
 
 export class UserMemoryConsolidationModel {

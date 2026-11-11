@@ -25,6 +25,8 @@ const ROUTE_BATCH = 10;
 const payloadSchema = z.object({
   /** `revert` undoes the run `revertRunId` instead of consolidating. */
   action: z.enum(['run', 'revert']).optional(),
+  /** `platform` only comes from the authenticated admin webhook; see `ConsolidationBilling`. */
+  billing: z.enum(['platform', 'user']).optional(),
   model: z.string().optional(),
   provider: z.string().optional(),
   revertRunId: z.string().optional(),
@@ -70,6 +72,7 @@ export const consolidationHandler = async (context: WorkflowContext) => {
 
   const service = () =>
     new MemoryConsolidationService(db, payload.userId, runId, {
+      billing: payload.billing,
       model: payload.model,
       provider: payload.provider,
     });

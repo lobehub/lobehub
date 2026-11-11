@@ -289,7 +289,14 @@ export class MemoryExtractionWorkflowService {
   static triggerConsolidation(
     userId: string,
     baseUrl: string,
-    options?: { extraHeaders?: Record<string, string>; model?: string; provider?: string },
+    options?: {
+      billing?: 'platform' | 'user';
+      /** Seconds to wait first, so a burst of extractions lands in one run. */
+      delay?: number;
+      extraHeaders?: Record<string, string>;
+      model?: string;
+      provider?: string;
+    },
   ) {
     if (!baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
@@ -297,7 +304,13 @@ export class MemoryExtractionWorkflowService {
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.consolidation, baseUrl);
     return this.getClient().trigger({
-      body: { model: options?.model, provider: options?.provider, userId },
+      body: {
+        billing: options?.billing,
+        model: options?.model,
+        provider: options?.provider,
+        userId,
+      },
+      delay: options?.delay,
       flowControl: {
         key: `memory-user-memory.pipelines.consolidation.${userId}`,
         parallelism: 1,

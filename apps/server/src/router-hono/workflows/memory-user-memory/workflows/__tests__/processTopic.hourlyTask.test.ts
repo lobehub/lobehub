@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   createExecutor: vi.fn(),
   extractTopic: vi.fn(),
   isHourlyMemoryExtractionCancellationRequested: vi.fn(),
+  shouldConsolidateAfterExtraction: vi.fn(),
+  triggerConsolidation: vi.fn(),
 }));
 
 vi.mock('@lobechat/observability-otel/modules/upstash-workflow', () => ({
@@ -36,6 +38,7 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
   MemoryExtractionExecutor: {
     create: mocks.createExecutor,
   },
+  MemoryExtractionWorkflowService: { triggerConsolidation: mocks.triggerConsolidation },
   normalizeMemoryExtractionPayload: (payload: Record<string, unknown>) => ({
     ...payload,
     forceAll: payload.forceAll ?? false,
@@ -58,6 +61,14 @@ vi.mock('@/database/models/asyncTask', () => ({
       isUserMemoryExtractionCancellationRequested: vi.fn(async () => false),
     };
   }),
+}));
+
+vi.mock('@/database/models/userMemory/consolidation', () => ({
+  shouldConsolidateAfterExtraction: mocks.shouldConsolidateAfterExtraction,
+}));
+
+vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
+  parseMemoryExtractionConfig: () => ({ upstashWorkflowExtraHeaders: {} }),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -91,6 +102,51 @@ describe('processTopicHandler hourly task behavior', () => {
     mocks.extractTopic.mockResolvedValue(undefined);
     mocks.isBanned.mockResolvedValue(false);
     mocks.isHourlyMemoryExtractionCancellationRequested.mockResolvedValue(false);
+    mocks.shouldConsolidateAfterExtraction.mockResolvedValue(true);
+    mocks.triggerConsolidation.mockResolvedValue({ workflowRunId: 'consolidation-run' });
+  });
+
+  const topicPayload = {
+    baseUrl: 'https://app.example.com',
+    sources: [MemorySourceType.ChatTopic],
+    topicIds: ['t1'],
+    userIds: ['u1'],
+  };
+
+  it('schedules a delayed consolidation after a topic writes a context', async () => {
+    mocks.extractTopic.mockResolvedValueOnce({
+      extracted: true,
+      layers: { [LayersEnum.Context]: 1 },
+      memoryIds: ['m1'],
+    });
+
+    await processTopicHandler(createContext(topicPayload) as never);
+
+    expect(mocks.triggerConsolidation).toHaveBeenCalledWith('u1', 'https://app.example.com', {
+      delay: 600,
+      extraHeaders: {},
+    });
+  });
+
+  it('does not consolidate when the topic wrote no context or the backlog awaits the backfill', async () => {
+    mocks.extractTopic.mockResolvedValueOnce({
+      extracted: true,
+      layers: { [LayersEnum.Preference]: 2 },
+      memoryIds: ['m1', 'm2'],
+    });
+    await processTopicHandler(createContext(topicPayload) as never);
+    expect(mocks.shouldConsolidateAfterExtraction).not.toHaveBeenCalled();
+
+    mocks.extractTopic.mockResolvedValueOnce({
+      extracted: true,
+      layers: { [LayersEnum.Context]: 1 },
+      memoryIds: ['m1'],
+    });
+    mocks.shouldConsolidateAfterExtraction.mockResolvedValueOnce(false);
+    await processTopicHandler(createContext(topicPayload) as never);
+    expect(mocks.shouldConsolidateAfterExtraction).toHaveBeenCalledTimes(1);
+
+    expect(mocks.triggerConsolidation).not.toHaveBeenCalled();
   });
 
   it('checks hourly cancellation before CEPA and identity extraction', async () => {
