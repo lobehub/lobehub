@@ -81,10 +81,47 @@ describe('Windows', () => {
 });
 
 describe.runIf(process.platform === 'linux')('Linux', () => {
+  // Ownership is injected: CI images differ in who owns /usr and /usr/bin.
+  const fakeFs = (owners: Record<string, { mode: number; uid: number }>) => ({
+    realpath: (async (value: string) => value) as any,
+    stat: (async (value: string) => {
+      const entry = owners[value];
+      if (!entry) throw new Error(`ENOENT ${value}`);
+      return entry;
+    }) as any,
+  });
+  const rootOwned = {
+    '/': { mode: 0o40755, uid: 0 },
+    '/opt': { mode: 0o40755, uid: 0 },
+    '/opt/Native': { mode: 0o40755, uid: 0 },
+    '/opt/Native/native': { mode: 0o100755, uid: 0 },
+  };
+
   it('accepts an executable in a root-owned, non-writable install directory', async () => {
     await expect(
-      verifyExecutable('/usr/bin/env', { linux: { exeDirs: ['/usr/bin'] } }),
+      verifyExecutable(
+        '/opt/Native/native',
+        { linux: { exeDirs: ['/opt/Native'] } },
+        fakeFs(rootOwned),
+      ),
     ).resolves.toBe(true);
+  });
+
+  it('rejects the install when any directory above it is group- or world-writable', async () => {
+    await expect(
+      verifyExecutable(
+        '/opt/Native/native',
+        { linux: { exeDirs: ['/opt/Native'] } },
+        fakeFs({ ...rootOwned, '/opt': { mode: 0o40777, uid: 0 } }),
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      verifyExecutable(
+        '/opt/Native/native',
+        { linux: { exeDirs: ['/opt/Native'] } },
+        fakeFs({ ...rootOwned, '/opt/Native/native': { mode: 0o100755, uid: 1000 } }),
+      ),
+    ).resolves.toBe(false);
   });
 
   it('rejects a user-writable copy even when its directory is listed', async () => {

@@ -12,6 +12,7 @@ export interface AppHandoffVerification {
 
 export interface VerifyDeps {
   platform?: NodeJS.Platform;
+  realpath?: typeof realpath;
   run?: RunCommand;
   stat?: typeof stat;
 }
@@ -59,10 +60,15 @@ const verifyWindows = async (exePath: string, signerSubject: string, run: RunCom
  * A user-writable copy (AppImage in ~/Downloads, a dev build) does not pass and
  * falls back to the confirmation dialog.
  */
-const verifyLinux = async (exePath: string, exeDirs: string[], statFn: typeof stat) => {
+const verifyLinux = async (
+  exePath: string,
+  exeDirs: string[],
+  statFn: typeof stat,
+  realpathFn: typeof realpath,
+) => {
   let resolved: string;
   try {
-    resolved = await realpath(exePath);
+    resolved = await realpathFn(exePath);
   } catch {
     return false;
   }
@@ -104,7 +110,12 @@ export const verifyExecutable = async (
     return verifyWindows(exePath, verification.win.signerSubject, run);
   }
   if (platform === 'linux' && verification.linux) {
-    return verifyLinux(exePath, verification.linux.exeDirs, deps.stat ?? stat);
+    return verifyLinux(
+      exePath,
+      verification.linux.exeDirs,
+      deps.stat ?? stat,
+      deps.realpath ?? realpath,
+    );
   }
   return false;
 };
