@@ -85,13 +85,14 @@ const styles = stylex.create({
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
   channel: { position: 'relative' },
-  // An unread Channel gets a pill in the sidebar gutter and a bright, bold title, the way
-  // Discord marks it; an @mention adds a count badge.
+  // An unread Channel gets a pill on the row's leading edge and a bright, bold title, the way
+  // Discord marks it; an @mention adds a count badge. The accordion panel clips anything
+  // outside the row, so the pill sits in the row's own inline padding.
   unreadPill: {
     pointerEvents: 'none',
     position: 'absolute',
     insetBlockStart: 14,
-    insetInlineStart: -4,
+    insetInlineStart: 0,
     width: 4,
     height: 8,
     borderStartEndRadius: 4,
