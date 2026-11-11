@@ -8,7 +8,7 @@ export interface StaticRouteMeta {
   titleKey?: string;
 }
 
-export type RouteAvatarKind = 'workspace';
+export type RouteAvatarKind = 'agent' | 'workspace';
 
 export interface DynamicRouteMeta {
   /**
@@ -18,7 +18,8 @@ export interface DynamicRouteMeta {
   avatar?: string | null;
   /**
    * The entity whose avatar this is, when its fallback differs from the
-   * initials one. A workspace draws the bauhaus mark seeded from its title.
+   * initials one. A workspace draws the bauhaus mark seeded from its title; an
+   * agent draws the character generated from `avatarSeed` (its id).
    */
   avatarKind?: RouteAvatarKind;
   /**

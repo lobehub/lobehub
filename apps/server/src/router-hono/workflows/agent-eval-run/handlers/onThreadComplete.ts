@@ -37,6 +37,7 @@ export const onThreadComplete = async (c: Context) => {
       cost,
       duration,
       errorMessage,
+      executionId,
       llmCalls,
       steps,
       toolCalls,
@@ -62,7 +63,7 @@ export const onThreadComplete = async (c: Context) => {
 
     // Check if run was aborted — skip processing to avoid overwriting abort state
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    const run = await runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
     if (run?.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s threadId=%s', runId, testCaseId, threadId);
       return c.json({ cancelled: true });
@@ -71,6 +72,7 @@ export const onThreadComplete = async (c: Context) => {
     const service = new AgentEvalRunService(db, userId, wsId);
 
     const { allThreadsDone, allRunDone } = await service.recordThreadCompletion({
+      executionId,
       runId,
       status,
       telemetry: {

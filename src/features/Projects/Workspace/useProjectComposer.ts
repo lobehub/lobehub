@@ -109,6 +109,8 @@ export const useProjectComposer = (
   mode: ProjectComposerMode,
   /** The project agent the message goes to; the main agent unless the user picked another. */
   agentId: string,
+  /** The project repository the conversation works in; the server picks the first when unset. */
+  environmentId?: string,
 ) => {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
@@ -155,7 +157,7 @@ export const useProjectComposer = (
       // Sending here rather than after the page loads keeps the attachments,
       // which cannot travel through the URL.
       const [topic] = await Promise.all([
-        createProjectTopic({ agentId, projectId: project.id, title }),
+        createProjectTopic({ agentId, environmentId, projectId: project.id, title }),
         ensureAgentConfigLoaded(agentId),
       ]);
       // Open the conversation right away: the send shows its message there

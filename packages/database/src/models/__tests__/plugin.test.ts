@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewInstalledPlugin } from '../../schemas';
-import { userInstalledPlugins, users } from '../../schemas';
+import { userInstalledPlugins, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { PluginModel } from '../plugin';
 
@@ -24,6 +24,53 @@ afterEach(async () => {
 });
 
 describe('PluginModel', () => {
+  it('excludes quarantined evaluation installations from normal discovery and execution lookup', async () => {
+    await pluginModel.create({
+      identifier: 'eval-only',
+      type: 'customPlugin',
+      source: 'agent-eval',
+    });
+    await pluginModel.create({ identifier: 'ordinary', type: 'customPlugin' });
+    expect((await pluginModel.query()).map((p) => p.identifier)).toEqual(['ordinary']);
+    expect(await pluginModel.findById('eval-only')).toBeUndefined();
+    expect(await pluginModel.findById('ordinary')).toBeDefined();
+  });
+
+  it('installing a real plugin coexists with a legacy eval installation in another workspace and preserves its connection', async () => {
+    await serverDB.insert(workspaces).values({
+      id: 'legacy-eval-workspace',
+      name: 'Eval',
+      slug: 'legacy-eval',
+      primaryOwnerId: userId,
+    });
+    const evaluationModel = new PluginModel(serverDB, userId, 'legacy-eval-workspace');
+    await evaluationModel.create({
+      identifier: 'notion',
+      type: 'customPlugin',
+      source: 'agent-eval',
+      customParams: { mcp: { type: 'http', url: 'https://mock.invalid/mcp' } },
+      settings: { token: 'old-private-token' },
+      manifest: { identifier: 'notion' } as any,
+    });
+    await pluginModel.create({
+      identifier: 'notion',
+      type: 'plugin',
+      manifest: { identifier: 'notion', meta: { title: 'Notion' } } as any,
+    });
+    const saved = await pluginModel.findById('notion');
+    expect(saved?.source).toBeNull();
+    expect(saved?.customParams).toBeNull();
+    expect(saved?.settings).toBeNull();
+    expect((await pluginModel.query()).map((p) => p.identifier)).toEqual(['notion']);
+    const stored = await serverDB.select().from(userInstalledPlugins);
+    expect(stored).toHaveLength(2);
+    const evaluation = stored.find((p) => p.source === 'agent-eval');
+    expect(evaluation?.identifier).toMatch(/^agent-eval:/);
+    expect(evaluation?.manifest?.identifier).toBe('notion');
+    expect(evaluation?.customParams?.mcp?.url).toBe('https://mock.invalid/mcp');
+    expect(evaluation?.settings).toEqual({ token: 'old-private-token' });
+  });
+
   describe('create', () => {
     it('should create a new installed plugin', async () => {
       const params = {

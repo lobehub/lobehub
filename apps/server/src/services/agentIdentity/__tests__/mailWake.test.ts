@@ -515,6 +515,7 @@ describe('mail digest flush', () => {
     const [own, , instruction, fenced] = prompt.split('\n\n');
     expect(instruction).toContain('direct Channel');
     expect(runs[0].params.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(runs[0].params.exclusivePluginIds).toEqual(['lobe-agent-account']);
     expect(runs[0].params.hooks).toEqual([
       expect.objectContaining({ id: `agent-inbox-report:${accountId}`, type: 'onComplete' }),
     ]);

@@ -28,6 +28,11 @@ const useTopicTitle = (
     return topic?.title || undefined;
   });
 
+// Known from the route alone, so a background tab whose agent is not loaded still
+// swaps a cached legacy default image for the generated character.
+const agentAvatarIdentity = (agentId: string | undefined) =>
+  agentId ? ({ avatarKind: 'agent', avatarSeed: agentId } as const) : undefined;
+
 const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);
   const meta = useAgentStore((state) => {
@@ -44,7 +49,8 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 
   usePublishDynamicRouteMeta(
     {
-      avatar: meta.avatar,
+      avatar: hasMeta ? (meta.avatar ?? null) : undefined,
+      ...agentAvatarIdentity(params.aid),
       backgroundColor: meta.backgroundColor,
       title: [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
     },
@@ -78,7 +84,8 @@ const createAgentSectionDynamicMeta = (titleKey: string) => {
 
     usePublishDynamicRouteMeta(
       {
-        avatar: meta.avatar,
+        avatar: hasMeta ? (meta.avatar ?? null) : undefined,
+        ...agentAvatarIdentity(params.aid),
         backgroundColor: meta.backgroundColor,
         title: [translate(titleKey), agentTitle].filter(Boolean).join(' · ') || undefined,
       },

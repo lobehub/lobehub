@@ -10,6 +10,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { useSession } from '@/libs/better-auth/auth-client';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 
 import { type MessengerPlatform } from '../constants';
 import { getMessengerErrorMessage } from '../i18n';
@@ -31,9 +32,8 @@ const MessengerVerifyPage = memo(() => {
   const isSignedIn = !!session?.user;
 
   // Used in the success state to deep-link the user back to the bot.
-  const platformsSWR = useSWR(messengerKeys.availablePlatforms(), () =>
-    messengerService.availablePlatforms(),
-  );
+  messengerActions.useFetchPlatforms();
+  const platforms = useMessengerStore(messengerSelectors.platforms);
 
   const tokenSWR = useSWR(randomId && isSignedIn ? messengerKeys.peek(randomId) : null, async () =>
     messengerService.peekLinkToken(randomId),
@@ -148,7 +148,7 @@ const MessengerVerifyPage = memo(() => {
     );
   }
 
-  const platformMeta = platformsSWR.data?.find(
+  const platformMeta = platforms?.find(
     (p) =>
       p.id ===
       (existingLinkSWR.data?.platform ??

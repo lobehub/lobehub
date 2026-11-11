@@ -46,9 +46,11 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { useTaskProjectChoice } from '../features/useTaskProjectChoice';
 import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
@@ -88,6 +90,7 @@ interface CreateTaskInlineEntryProps {
   onCreated?: (task: { id: string; agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
+  /** The project the task starts in, e.g. the page it is composed on. The user can change it. */
   projectId?: string;
   /**
    * `hero` adapts the entry for the empty-tasks landing: hides collapse,
@@ -128,6 +131,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // Label ids read from a draft before the registry loaded; resolved (and
   // stale ones dropped) once it has.
   const pendingDraftLabelIdsRef = useRef<string[] | undefined>(undefined);
+  // A subtask has no picker: the server files it under its parent's project.
+  const { createProjectId, projectChoice, setProjectChoice } = useTaskProjectChoice(
+    projectId,
+    !parentTaskId,
+  );
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
   const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -266,6 +274,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // foreign id here and fail the create.
     setLabels([]);
     pendingDraftLabelIdsRef.current = undefined;
+    setProjectChoice(projectId ?? null);
     setVisibility(defaultVisibility);
     setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
@@ -291,6 +300,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         setMemberChoice(draft.assigneeUserId);
       }
       if (draft.visibility) setVisibility(draft.visibility);
+      // `null` restores an explicit "no project"; a missing key keeps the scope's default.
+      if (draft.projectId === null || typeof draft.projectId === 'string')
+        setProjectChoice(draft.projectId);
       const labelIds = Array.isArray(draft.labelIds)
         ? draft.labelIds.filter((id): id is string => typeof id === 'string')
         : [];
@@ -314,6 +326,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editor,
     isMembersLoading,
     lockAssignee,
+    projectId,
+    setProjectChoice,
   ]);
 
   useEffect(() => {
@@ -349,6 +363,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           labels.length > 0 ? labels.map((label) => label.id) : pendingDraftLabelIdsRef.current,
         markdown,
         priority,
+        projectId: projectChoice,
         visibility,
       },
       draftHasTextRef.current,
@@ -364,6 +379,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     lockAssignee,
     memberChoice,
     priority,
+    projectChoice,
     visibility,
   ]);
 
@@ -394,6 +410,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     setLabels([]);
     // A restore still waiting for the registry belongs to the draft just sent.
     pendingDraftLabelIdsRef.current = undefined;
+    setProjectChoice(projectId ?? null);
     setAssigneeAgentId(agentId);
     setMemberChoice(undefined);
     setInstruction('');
@@ -403,7 +420,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     setIntentAnswers({});
     editor?.cleanDocument?.();
     if (draftStorageKey) clearTaskCreateDraft(draftStorageKey);
-  }, [agentId, defaultVisibility, draftStorageKey, editor]);
+  }, [agentId, defaultVisibility, draftStorageKey, editor, projectId, setProjectChoice]);
 
   /** What the composer currently holds, or null when there is nothing to create. */
   const readDraft = useCallback(() => {
@@ -466,7 +483,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           name: draft.name,
           parentTaskId,
           priority: priority || undefined,
-          projectId,
+          projectId: createProjectId,
           // Only send visibility in workspace mode; personal mode lets the server
           // fall through to the schema default ('public', inert in personal mode).
           visibility: activeWorkspaceId ? visibility : undefined,
@@ -533,6 +550,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       draftStorageKey,
       assigneeAgentId,
       assigneeUserId,
+      createProjectId,
       createTask,
       execution,
       labels,
@@ -540,7 +558,6 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       onCreated,
       parentTaskId,
       priority,
-      projectId,
       resetComposer,
       visibility,
     ],
@@ -687,15 +704,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       initialRequirement: seed.requirement,
       initialTitle: intentTitle.trim() || seed.title,
       onCreated: resetComposer,
-      projectId,
+      projectId: createProjectId,
     });
     setAnalysis(null);
   }, [
     analysis,
     assigneeAgentId,
+    createProjectId,
     intentAnswers,
     intentTitle,
-    projectId,
     readDraft,
     resetComposer,
     t,
@@ -831,6 +848,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 )}
               </Block>
             </TaskLabelPicker>
+
+            {!parentTaskId && (
+              <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
+            )}
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

@@ -30,6 +30,7 @@ import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { createTaskModal } from '../CreateTaskModal';
+import { useTaskProjectList } from '../features/useTaskProjectList';
 import Breadcrumb from '../shared/Breadcrumb';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
@@ -46,6 +47,7 @@ import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import {
   dropMissingLabelGroupings,
+  dropProjectGrouping,
   getCompletedWithin,
   getVisibleTaskStatuses,
   normalizeTaskListViewOptions,
@@ -186,6 +188,20 @@ export const getScheduledTaskViewOptions = (
 });
 
 /**
+ * Whether a collection's project groups need the project list to be told apart.
+ * Judged on what the collection renders: the scheduled tab replaces the stored
+ * grouping, so a stored `project` must not hold it behind the project request.
+ */
+export const collectionGroupsByProject = (
+  collection: TaskCollection,
+  viewOptions: TaskListViewOptions,
+): boolean => {
+  const { groupBy, subGroupBy } =
+    collection === 'scheduled' ? getScheduledTaskViewOptions(viewOptions) : viewOptions;
+  return groupBy === 'project' || subGroupBy === 'project';
+};
+
+/**
  * "My tasks" additionally sends `completedTasks` as a server filter
  * (`getVisibleTaskStatuses` / `getCompletedWithin`) rather than applying it to
  * the fetched page.
@@ -264,16 +280,29 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           .join(',')
       : undefined,
   );
-  const viewOptions = useMemo(
-    () =>
-      dropMissingLabelGroupings(
-        normalizeTaskListViewOptions(rawViewOptions),
-        labelGroupIdsKey === undefined
-          ? undefined
-          : new Set(labelGroupIdsKey.split(',').filter(Boolean)),
-      ),
-    [rawViewOptions, labelGroupIdsKey],
-  );
+  // The one read of the project list for this page; rows map ids through its cache.
+  const {
+    enabled: projectsEnabled,
+    error: projectsError,
+    projects,
+    retry: retryProjects,
+  } = useTaskProjectList();
+  const canGroupByProject = projectsEnabled && !projectId;
+  const viewOptions = useMemo(() => {
+    const options = dropMissingLabelGroupings(
+      normalizeTaskListViewOptions(rawViewOptions),
+      labelGroupIdsKey === undefined
+        ? undefined
+        : new Set(labelGroupIdsKey.split(',').filter(Boolean)),
+    );
+    return canGroupByProject ? options : dropProjectGrouping(options);
+  }, [canGroupByProject, rawViewOptions, labelGroupIdsKey]);
+  // Project groups cannot be told apart until the list that names them loads, so
+  // a list view holds its skeleton, or surfaces the failure, instead of
+  // flashing every task under "No project".
+  const needsProjectList = !projects && collectionGroupsByProject(collection, viewOptions);
+  const projectListError = needsProjectList ? projectsError : undefined;
+  const isProjectListPending = needsProjectList && !projectsError;
   // Group headers of the ordinary list offer the board's column create entry.
   const groupCreateScope = useMemo(
     () => (canCreateTask ? { agentId, projectId } : undefined),
@@ -546,6 +575,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             )}
             {!isScheduledCollection && headerVisibility.showViewOptions && (
               <TasksGroupConfig
+                canGroupByProject={canGroupByProject}
                 options={viewOptions}
                 pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
                 setOptions={setViewOptions}
@@ -595,9 +625,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
         >
           <TaskList
             data={isCollectionListInit || undefined}
-            error={collectionSWR.error}
+            error={collectionSWR.error ?? projectListError}
             filter={filter}
-            isLoading={collectionSWR.isLoading || (!isCollectionListInit && !collectionSWR.error)}
+            hideProject={!!projectId}
             items={collectionTasks}
             options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
             routeScope={routeScope}
@@ -619,6 +649,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                   )
                 : t('taskList.scheduled.empty'))
             }
+            isLoading={
+              collectionSWR.isLoading ||
+              isProjectListPending ||
+              (!isCollectionListInit && !collectionSWR.error)
+            }
             selectionScope={[
               collection,
               isMineCollection ? myTaskScope : '',
@@ -626,7 +661,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               agentId ?? '',
               projectId ?? '',
             ].join(':')}
-            onRetry={() => collectionSWR.mutate()}
+            onRetry={() => (projectListError ? retryProjects() : collectionSWR.mutate())}
           />
           {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
             <Flexbox horizontal justify={'center'} paddingBlock={8}>
@@ -673,13 +708,14 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             data={isTaskListInit || undefined}
             emptyAction={filterEmptyAction}
             emptyDescription={filterEmptyDescription}
-            error={error}
+            error={error ?? projectListError}
             filter={filter}
-            isLoading={isLoading || (!isTaskListInit && !error)}
+            hideProject={!!projectId}
+            isLoading={isLoading || isProjectListPending || (!isTaskListInit && !error)}
             options={viewOptions}
             queryKey={queryKey}
             routeScope={routeScope}
-            onRetry={() => mutate()}
+            onRetry={() => (projectListError ? retryProjects() : mutate())}
             onShowHiddenCompleted={handleShowHiddenCompleted}
           />
         </WideScreenContainer>

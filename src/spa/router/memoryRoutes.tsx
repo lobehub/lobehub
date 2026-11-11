@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router';
 
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import { activityListLoader } from '@/spa/router/activityListLoader';
+import { memoryRulesLoader } from '@/spa/router/expertiseLoaders';
 import { identitiesListLoader } from '@/spa/router/identitiesListLoader';
 import { preferenceListLoader } from '@/spa/router/preferenceListLoader';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -71,6 +72,7 @@ export const memoryChildren: RouteObject[] = [
       // Same icon the memory sidebar uses, so a desktop tab and the nav item agree.
       meta: routeMeta({ icon: Scale, titleKey: 'navigation.memoryRules' }),
     },
+    loader: memoryRulesLoader,
     path: 'rules',
   },
   {

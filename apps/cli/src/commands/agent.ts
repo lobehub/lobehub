@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { AgentGraphSchema } from '@lobechat/types/agent/graph';
-import { type Command, InvalidArgumentError } from 'commander';
+import { type Command, InvalidArgumentError, Option } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
@@ -42,6 +42,10 @@ const readJsonObjectFile = async (
 
   return parsed as Record<string, unknown>;
 };
+
+/** Values `agent.createAgent` accepts for `visibility`; omit it to keep the server default. */
+const AGENT_VISIBILITIES = ['private', 'public'] as const;
+type AgentVisibility = (typeof AGENT_VISIBILITIES)[number];
 
 const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
   readJsonObjectFile(agencyConfigFile, 'agencyConfig');
@@ -154,6 +158,8 @@ export function registerAgentCommand(program: Command) {
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
+        // Visibility only means something inside a workspace.
+        if (r.workspaceId && r.visibility) meta.push(`Visibility: ${r.visibility}`);
         if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
 
         if (r.systemRole) {
@@ -175,14 +181,23 @@ export function registerAgentCommand(program: Command) {
     .option('-p, --provider <provider>', 'Provider ID')
     .option('-s, --system-role <role>', 'System role prompt')
     .option('--group <groupId>', 'Group ID')
+    .addOption(
+      new Option(
+        '--visibility <visibility>',
+        'Who can see the agent in a workspace: `private` (only you) or `public` (workspace members). Omit to use the server default',
+      ).choices(AGENT_VISIBILITIES),
+    )
+    .option('--json [fields]', 'Output the created agent as JSON, optionally selecting fields')
     .action(
       async (options: {
         description?: string;
         group?: string;
+        json?: string | boolean;
         model?: string;
         provider?: string;
         systemRole?: string;
         title?: string;
+        visibility?: AgentVisibility;
       }) => {
         const client = await getTrpcClient();
         const buildUrl = await resolveAppUrlBuilder(client);
@@ -196,13 +211,46 @@ export function registerAgentCommand(program: Command) {
 
         const input: Record<string, any> = { config };
         if (options.group) input.groupId = options.group;
+        // Passed through as-is. When omitted the key is left out entirely so the
+        // server keeps deciding (its default, or the folder's visibility).
+        if (options.visibility) input.visibility = options.visibility;
 
         const result = await client.agent.createAgent.mutate(input as any);
         const r = result as any;
         const agentId = r.agentId || r.id;
         const url = buildUrl(`/agent/${encodeURIComponent(agentId)}`);
+
+        if (options.json !== undefined) {
+          // `createAgent` only returns the id, so read the stored row back: the
+          // visibility reported here is what the server persisted (default or
+          // folder-inherited included), never an echo of the flag. The agent
+          // already exists at this point, so a failed read-back must still print
+          // its id (with `visibility: null`) — exiting non-zero would invite the
+          // caller to retry and create a duplicate.
+          let created: any = null;
+          try {
+            created = await client.agent.getAgentConfigById.query({ agentId });
+          } catch (error) {
+            log.warn(`Created ${agentId}, but could not read it back: ${(error as Error).message}`);
+          }
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(
+            {
+              id: agentId,
+              ...(r.sessionId ? { sessionId: r.sessionId } : {}),
+              title: created?.title ?? options.title ?? null,
+              url,
+              visibility: created?.visibility ?? null,
+              workspaceId: created?.workspaceId ?? null,
+            },
+            fields,
+          );
+          return;
+        }
+
         console.log(`${pc.green('✓')} Created agent ${pc.bold(agentId)}`);
         if (r.sessionId) console.log(`  Session: ${r.sessionId}`);
+        if (options.visibility) console.log(`  Visibility: ${options.visibility}`);
         console.log(`${pc.bold('agent')}: ${url}`);
       },
     );

@@ -84,6 +84,8 @@ describe('AgentConversation avatar', () => {
     render(createElement(AgentConversation, { active: false, conversation: conversation() }));
 
     expect(screen.getByTestId('agent-avatar')).toHaveTextContent('agt_cook:generated');
+    expect(screen.getByTestId('menu')).toHaveTextContent('delete');
+    expect(screen.getByTestId('menu')).not.toHaveTextContent('channel-');
   });
 
   it('keeps an agent’s own image or emoji', () => {
@@ -113,13 +115,6 @@ describe('AgentConversation avatar', () => {
     );
 
     expect(screen.getByTestId('menu')).toHaveTextContent('channel-unarchive');
-  });
-
-  it('keeps the Agent menu alone when the row opens no Channel', () => {
-    render(createElement(AgentConversation, { active: false, conversation: conversation() }));
-
-    expect(screen.getByTestId('menu')).toHaveTextContent('delete');
-    expect(screen.getByTestId('menu')).not.toHaveTextContent('channel-');
   });
 });
 

@@ -3,6 +3,20 @@ export default {
   'settings.reuseEnvironmentDescription':
     'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
   'settings.startDirectoryConversation': 'New topic here',
+  'settings.editDirectory': 'Edit folder',
+  'settings.editDirectoryBusy':
+    'A topic is running in this folder. Wait for it to finish and try again.',
+  'settings.editDirectoryOtherEnvironment':
+    'This folder already belongs to another environment. Choose a different folder or device.',
+  'settings.editDirectoryDescription':
+    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+  'settings.editDirectoryFailed': 'Could not update the folder',
+  'settings.removeDirectory': 'Remove folder',
+  'settings.removeDirectoryConfirmDescription':
+    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+  'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
+  'settings.removeDirectoryFailed':
+    'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
   'settings.configureDirectory': 'Add a working directory',
   'settings.reuseEnvironment': 'Add an existing environment to this project',
   'settings.addDirectoryFailed': 'Could not add working directory',
@@ -14,8 +28,8 @@ export default {
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
   'settings.workLocations': 'Working directories',
-  'settings.directoryDescription':
-    'Choose a folder and start a topic. The Agent will work with files in that folder on the connected device.',
+  'settings.directoryListDescription':
+    'Device folders this project works in. Agents read and change files in them on that device.',
   'settings.environmentDescription':
     'Keep repository sources together in an environment, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
@@ -290,6 +304,22 @@ export default {
   'rename.title': 'Rename project',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
+  'overview.context.repository.add': 'Add a repository',
+  'overview.context.repository.addAction': 'Add',
+  'overview.context.repository.addTitle': 'Add a repository to this project',
+  'overview.context.repository.attachFailed': "Couldn't add the repository to this project",
+  'overview.context.repository.publishHint':
+    'This agent is shared with the workspace and only uses published environments, so the repository is added as one that workspace members can see.',
+  'overview.context.repository.tooltip':
+    'New conversations work in this repository, cloned before the first command.',
+  'overview.context.settings': 'Repositories and environments',
+  'overview.context.target.device': 'A connected device',
+  'overview.context.target.noneTooltip':
+    'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',
+  'overview.context.target.sandboxTooltip':
+    'Runs in the cloud sandbox, so none of your devices need to be online.',
+  'overview.context.target.switchFailed': "Couldn't change where this agent runs",
+  'overview.context.target.useSandbox': 'Use the cloud sandbox',
   'overview.sendHint': '⌘ ↵ to send',
   'overview.startConversation': 'Start moving',
   'overview.tasksEmpty': 'No tasks belong to this project yet.',

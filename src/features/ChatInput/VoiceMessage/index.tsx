@@ -1,16 +1,21 @@
 'use client';
 
 import { type VoiceMessageRecording } from '@lobechat/types';
-import { createStaticStyles, Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
 import { useAgentId } from '../hooks/useAgentId';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
+import { voiceSendButtonMarker } from '../markers.stylex';
 import { useChatInputStore, useStoreApi } from '../store';
 import { formatVoiceDuration } from './mediaRecorder';
+import { styles } from './style';
 import { useIntentionalHover } from './useIntentionalHover';
 import {
   getVoiceMessageActionState,
@@ -46,397 +51,6 @@ const VoiceMessageIcon = ({
 
 VoiceMessageIcon.displayName = 'VoiceMessageIcon';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bar: css`
-    width: 4px;
-    min-height: 4px;
-    border-radius: 9999px;
-
-    background: ${cssVar.colorPrimary};
-
-    transition: height 80ms linear;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  cancelButton: css`
-    cursor: default;
-
-    position: relative;
-
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: 0;
-    border-radius: 9999px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-
-    transition:
-      color 120ms ease,
-      background 120ms ease,
-      transform 120ms ease;
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFill};
-    }
-
-    &:active {
-      transform: scale(0.96);
-    }
-
-    @media (width <= 600px) {
-      &::after {
-        content: '';
-        position: absolute;
-        inset: -6px;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  container: css`
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    width: min(300px, calc(100vw - 112px));
-    min-width: min(220px, calc(100vw - 112px));
-    height: 32px;
-    padding-inline: 2px;
-
-    animation: voice-message-enter 160ms ease-out;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-
-    @keyframes voice-message-enter {
-      from {
-        transform: translateX(8px);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-  `,
-  error: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 50%;
-    inset-inline: 12px 44px;
-    transform: translateY(-50%);
-
-    overflow: hidden;
-
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.3;
-    color: ${cssVar.colorError};
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  pill: css`
-    position: relative;
-
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-    height: 100%;
-    border-radius: 9999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progress: css`
-    position: absolute;
-    z-index: 3;
-    inset-block-end: 0;
-    inset-inline: 6px;
-
-    overflow: hidden;
-
-    height: 2px;
-    border-radius: 1px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressValue: css`
-    height: 100%;
-    border-radius: inherit;
-
-    opacity: 0.72;
-    background: ${cssVar.colorBgContainer};
-
-    transition: width 120ms linear;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  sendArrow: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 50%;
-    inset-inline-end: 2px;
-    transform: translateY(-50%);
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-
-    opacity: 1;
-
-    transition:
-      opacity 100ms ease,
-      transform 160ms ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  sendButton: css`
-    cursor: default;
-
-    position: absolute;
-    z-index: 2;
-    inset: 0;
-
-    overflow: hidden;
-
-    width: 100%;
-    padding: 0;
-    border: 0;
-    border-radius: inherit;
-
-    color: ${cssVar.colorBgContainer};
-
-    background: transparent;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      z-index: 0;
-      inset: 0;
-
-      border-radius: inherit;
-
-      background: ${cssVar.colorPrimary};
-      clip-path: circle(14px at calc(100% - 16px) 50%);
-
-      transition: clip-path 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    &[data-error='true']::before {
-      background: ${cssVar.colorError};
-    }
-
-    &[data-expanded='true'] {
-      cursor: wait;
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorBgContainer};
-    }
-
-    &[data-expanded='true']::before {
-      background: ${cssVar.colorFill};
-    }
-
-    &[data-hover-expanded='true']::before,
-    &:focus-visible::before,
-    &[data-expanded='true']::before {
-      clip-path: circle(150% at calc(100% - 16px) 50%);
-    }
-
-    &[data-hover-expanded='true'] > span:first-child,
-    &:focus-visible > span:first-child,
-    &[data-expanded='true'] > span:first-child {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    &[data-expanded='true'] > span:first-child {
-      gap: 8px;
-      padding-inline: 14px;
-      font-size: ${cssVar.fontSizeSM};
-      font-weight: normal;
-    }
-
-    &[data-hover-expanded='true'] > span:last-child,
-    &:focus-visible > span:last-child,
-    &[data-expanded='true'] > span:last-child {
-      transform: translateY(-50%) translateX(6px);
-      opacity: 0;
-    }
-
-    &[data-expanded='true'] > span:first-child > span:last-child {
-      display: none;
-    }
-
-    &[data-expanded='true'] > span:first-child > span:nth-child(2) {
-      display: none;
-    }
-
-    &[data-expanded='true'] > span:first-child > span:first-child > i {
-      animation: voice-message-busy-dot 900ms ease-in-out infinite;
-    }
-
-    &[data-expanded='true'] > span:first-child > span:first-child > i:nth-child(2) {
-      animation-delay: 120ms;
-    }
-
-    &[data-expanded='true'] > span:first-child > span:first-child > i:nth-child(3) {
-      animation-delay: 240ms;
-    }
-
-    &[data-expanded='true'] > span:first-child > span:first-child > i:last-child {
-      display: none;
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -3px;
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-    }
-
-    &:disabled::before {
-      opacity: 0.45;
-    }
-
-    &[data-expanded='true']:disabled {
-      cursor: wait;
-    }
-
-    &[data-expanded='true']:disabled::before {
-      opacity: 1;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::before {
-        transition: none;
-      }
-
-      &[data-expanded='true'] > span:first-child > span:first-child > i {
-        animation: none;
-      }
-    }
-
-    @keyframes voice-message-busy-dot {
-      0%,
-      60%,
-      100% {
-        transform: scale(0.72);
-        opacity: 0.38;
-      }
-
-      30% {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-  `,
-  sendDots: css`
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-
-    > i {
-      width: 3px;
-      height: 3px;
-      border-radius: 9999px;
-      background: currentcolor;
-    }
-  `,
-  sendLabel: css`
-    position: absolute;
-    z-index: 2;
-    inset: 0;
-    transform: translateY(4px);
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 0;
-    padding-inline: 10px;
-
-    font-size: ${cssVar.fontSize};
-    font-weight: ${cssVar.fontWeightStrong};
-    white-space: nowrap;
-
-    opacity: 0;
-
-    transition:
-      opacity 100ms ease,
-      transform 160ms ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  sendText: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  waveform: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    justify-content: center;
-  `,
-  visuallyHidden: css`
-    position: absolute;
-
-    overflow: hidden;
-
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-
-    white-space: nowrap;
-
-    clip: rect(0, 0, 0, 0);
-    clip-path: inset(50%);
-  `,
-}));
-
 export interface VoiceMessageControlProps {
   actionLabel: string;
   actionText?: string;
@@ -455,10 +69,19 @@ export interface VoiceMessageControlProps {
   waveform: number[];
 }
 
-const SendDots = () => (
-  <span aria-hidden className={styles.sendDots}>
+const SendDots = ({ busy, hidden }: { busy?: boolean; hidden?: boolean }) => (
+  <span aria-hidden {...stylex.props(styles.sendDots, hidden && styles.hidden)}>
     {Array.from({ length: 4 }, (_, index) => (
-      <i key={index} />
+      <i
+        key={index}
+        {...stylex.props(
+          styles.sendDot,
+          busy && styles.sendDotBusy,
+          busy && index === 1 && styles.sendDotBusySecond,
+          busy && index === 2 && styles.sendDotBusyThird,
+          busy && index === 3 && styles.hidden,
+        )}
+      />
     ))}
   </span>
 );
@@ -485,19 +108,21 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
     const { handlePointerEnter, handlePointerLeave, isHoverExpanded } =
       useIntentionalHover(sendButtonRef);
 
+    const sendOpen = Boolean(expanded || isHoverExpanded);
+
     return (
       <div
         aria-label={groupLabel}
-        className={styles.container}
+        {...stylex.props(styles.container)}
         data-testid="voice-message-recorder"
         role="group"
       >
-        <span aria-live="polite" className={styles.visuallyHidden}>
+        <span aria-live="polite" {...stylex.props(styles.visuallyHidden)}>
           {statusAnnouncement}
         </span>
         <button
           aria-label={cancelLabel}
-          className={styles.cancelButton}
+          {...stylex.props(styles.cancelButton)}
           data-testid="voice-message-cancel"
           type="button"
           onClick={onCancel}
@@ -505,20 +130,21 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
           <Icon icon={X} size={17} />
         </button>
 
-        <div className={styles.pill} data-testid="voice-message-pill">
-          <span className={styles.visuallyHidden}>{durationLabel}</span>
+        <div {...stylex.props(styles.pill)} data-testid="voice-message-pill">
+          <span {...stylex.props(styles.visuallyHidden)}>{durationLabel}</span>
 
           {errorText ? (
-            <span className={styles.error} title={errorText}>
+            <span {...stylex.props(styles.error)} title={errorText}>
               {errorText}
             </span>
           ) : (
-            <div aria-hidden className={styles.waveform}>
+            <div aria-hidden {...stylex.props(styles.waveform)}>
               {waveform.map((level, index) => (
                 <span
-                  className={styles.bar}
                   key={index}
-                  style={{ height: `${Math.max(4, Math.round(level * 18))}px` }}
+                  {...sx(styles.bar, {
+                    height: `${Math.max(4, Math.round(level * 18))}px`,
+                  })}
                 />
               ))}
             </div>
@@ -527,7 +153,6 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
           <Tooltip title={tooltip}>
             <button
               aria-label={actionLabel}
-              className={styles.sendButton}
               data-error={isRetry}
               data-expanded={expanded}
               data-hover-expanded={isHoverExpanded}
@@ -535,24 +160,39 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
               disabled={sendDisabled}
               ref={sendButtonRef}
               type="button"
+              {...stylex.props(
+                voiceSendButtonMarker,
+                styles.sendButton,
+                isRetry && styles.sendButtonError,
+                isHoverExpanded && styles.sendButtonHoverExpanded,
+                expanded && styles.sendButtonExpanded,
+              )}
               onClick={onAction}
               onPointerEnter={(event) => handlePointerEnter(event.pointerType)}
               onPointerLeave={(event) => handlePointerLeave(event.pointerType)}
             >
-              <span className={styles.sendLabel}>
-                <SendDots />
-                <span className={styles.sendText}>{actionText}</span>
-                <SendDots />
+              <span
+                {...stylex.props(
+                  styles.sendLabel,
+                  sendOpen && styles.sendLabelOpen,
+                  expanded && styles.sendLabelExpanded,
+                )}
+              >
+                <SendDots busy={expanded} />
+                <span {...stylex.props(styles.sendText, expanded && styles.hidden)}>
+                  {actionText}
+                </span>
+                <SendDots hidden={expanded} />
               </span>
-              <span className={styles.sendArrow}>
+              <span {...stylex.props(styles.sendArrow, sendOpen && styles.sendArrowHidden)}>
                 <Icon icon={isRetry ? RotateCcw : ArrowUp} size={18} />
               </span>
             </button>
           </Tooltip>
 
           {progress !== undefined && (
-            <div aria-hidden className={styles.progress}>
-              <div className={styles.progressValue} style={{ width: `${progress}%` }} />
+            <div aria-hidden {...stylex.props(styles.progress)}>
+              <div {...sx(styles.progressValue, { width: `${progress}%` })} />
             </div>
           )}
         </div>

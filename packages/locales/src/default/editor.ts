@@ -31,6 +31,11 @@ export default {
   'link.open': 'Open link',
   'link.placeholder': 'Enter link URL',
   'link.unlink': 'Unlink',
+  'list.number.continue': 'Continue previous numbering',
+  'list.number.continueHeading': 'Continue heading numbering',
+  'list.number.restart': 'Start new list',
+  'list.number.set': 'Set number',
+  'list.number.value': 'Change number',
   'markdown.cancel': 'Cancel',
   'markdown.confirm': 'Convert',
   'markdown.parseMessage':

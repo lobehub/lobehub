@@ -2,7 +2,7 @@
 import type OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createOpenAICompatibleRuntime } from '../openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../openaiCompatible';
 import { createRouterRuntime } from './createRuntime';
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({

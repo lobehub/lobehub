@@ -84,7 +84,7 @@ const EditingIndicator = memo(() => {
       </Flexbox>
     );
   }
-  if (collabStatus || !isWorkspacePage) return null;
+  if (!isWorkspacePage || (collabStatus && !isLockedByOther)) return null;
 
   const locked = isLockedByOther || isLockedBySelf || saveBlockedByLock;
 

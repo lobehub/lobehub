@@ -8,7 +8,7 @@ import { CriterionList, CriterionRow, shouldGroupChecks } from '@/features/Accep
 
 const styles = createStaticStyles(({ css }) => ({
   groupHeader: css`
-    padding-block: 9px;
+    padding-block: 8px;
     padding-inline: 12px;
   `,
 }));

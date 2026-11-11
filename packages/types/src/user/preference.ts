@@ -179,6 +179,10 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
+   * edit workspace pages together in a live collaboration room
+   */
+  enablePageCollab: z.boolean().optional(),
+  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),

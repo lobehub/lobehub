@@ -81,6 +81,19 @@ const expectLogsToBeRedacted = (logOutput: string) => {
   }
 };
 
+const testToolInput = (mockParams: MCPClientParams) => ({
+  clientParams: mockParams,
+  toolName: 'testTool',
+  argsStr: '{}',
+});
+
+const stdioTestParams = () => ({
+  name: 'test-mcp',
+  type: 'stdio' as const,
+  command: 'test-command',
+  args: ['--test'],
+});
+
 describe('MCPService stdio authorization', () => {
   const stdioParams = {
     args: ['serve'],
@@ -126,6 +139,16 @@ describe('MCPService stdio authorization', () => {
 
     await expect(new MCPService().listRawTools(stdioParams)).resolves.toEqual([]);
     expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
+  });
+
+  it('isolates cached MCP sessions for the same URL with different credentials', async () => {
+    const service = new MCPService();
+    const base = { name: 'same-endpoint', type: 'http' as const, url: 'https://mcp.example.com' };
+    await service.listRawTools({ ...base, auth: { type: 'bearer', token: 'first-token' } });
+    await service.listRawTools({ ...base, auth: { type: 'bearer', token: 'second-token' } });
+    await service.listRawTools({ ...base, auth: { type: 'bearer', token: 'first-token' } });
+    expect(MCPClient).toHaveBeenCalledTimes(2);
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledTimes(2);
   });
 
   it('keeps HTTP MCP available on the web', async () => {
@@ -385,12 +408,7 @@ describe('MCPService', () => {
   });
 
   describe('callTool', () => {
-    const mockParams = {
-      name: 'test-mcp',
-      type: 'stdio' as const,
-      command: 'test-command',
-      args: ['--test'],
-    };
+    const mockParams = stdioTestParams();
 
     it('should return MCPToolCallResult when content array is empty', async () => {
       mockClient.callTool.mockResolvedValue({
@@ -398,11 +416,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe('');
       expect(result.success).toBe(true);
@@ -415,11 +429,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe('');
       expect(result.success).toBe(true);
@@ -432,11 +442,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe(JSON.stringify(jsonData));
       expect(result.success).toBe(true);
@@ -449,11 +455,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe(textData);
       expect(result.success).toBe(true);
@@ -467,11 +469,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe('');
       expect(result.success).toBe(true);
@@ -490,11 +488,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe('First message\n\nSecond message\n\n{"json": "data"}');
       expect(result.success).toBe(true);
@@ -512,11 +506,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe('First message\n\nSecond message');
       expect(result.success).toBe(true);
@@ -531,11 +521,7 @@ describe('MCPService', () => {
 
       mockClient.callTool.mockResolvedValue(errorResult);
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.error?.message).toBe('Error occurred');
       expect(result.content).toBe('Error occurred');
@@ -725,11 +711,7 @@ describe('MCPService', () => {
         isError: false,
       });
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.content).toBe('ok');
       expect(result.success).toBe(true);
@@ -757,11 +739,7 @@ describe('MCPService', () => {
       const mcpError = new ProtocolError(ProtocolErrorCode.InvalidParams, 'tool blew up');
       mockClient.callTool.mockRejectedValue(mcpError);
 
-      const result = await mcpService.callTool({
-        clientParams: mockParams,
-        toolName: 'testTool',
-        argsStr: '{}',
-      });
+      const result = await mcpService.callTool(testToolInput(mockParams));
 
       expect(result.success).toBe(false);
       expect(result.error).toBe(mcpError);
@@ -775,11 +753,7 @@ describe('MCPService', () => {
       async (code) => {
         const error = new SdkError(code, 'transport failed');
         mockClient.callTool.mockRejectedValue(error);
-        const result = await mcpService.callTool({
-          clientParams: mockParams,
-          toolName: 'testTool',
-          argsStr: '{}',
-        });
+        const result = await mcpService.callTool(testToolInput(mockParams));
         expect(result).toMatchObject({ success: false, error, state: { isError: true } });
         expect(mockClient.callTool).toHaveBeenCalledTimes(1);
       },
@@ -853,12 +827,7 @@ describe('MCPService', () => {
   });
 
   describe('listTools', () => {
-    const mockParams = {
-      name: 'test-mcp',
-      type: 'stdio' as const,
-      command: 'test-command',
-      args: ['--test'],
-    };
+    const mockParams = stdioTestParams();
 
     it('should successfully list tools and transform to LobeChatPluginApi format', async () => {
       const mockTools = [
@@ -990,12 +959,7 @@ describe('MCPService', () => {
   });
 
   describe('listResources', () => {
-    const mockParams = {
-      name: 'test-mcp',
-      type: 'stdio' as const,
-      command: 'test-command',
-      args: ['--test'],
-    };
+    const mockParams = stdioTestParams();
 
     it('should retry with a fresh session when NoValidSessionId error occurs', async () => {
       const resources = [{ name: 'res1', uri: 'file:///res1' }];
@@ -1018,12 +982,7 @@ describe('MCPService', () => {
   });
 
   describe('listPrompts', () => {
-    const mockParams = {
-      name: 'test-mcp',
-      type: 'stdio' as const,
-      command: 'test-command',
-      args: ['--test'],
-    };
+    const mockParams = stdioTestParams();
 
     it('should retry with a fresh session when NoValidSessionId error occurs', async () => {
       const prompts = [{ name: 'prompt1' }];

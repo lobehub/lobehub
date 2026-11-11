@@ -18,6 +18,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   distinct topics one nightly review may cover. Its keys live in the `agent-signal` namespace
   next to the Agent Signal runtime stores. Each count returns `undefined` without Redis; the
   Agent Signal caller decides whether that fails open or closed.
+- `taskRunDelivery`: one settle per operation for a Task run's `onComplete` redeliveries — a
+  ten minute lease while settling, a three day marker once settled. `unavailable` without Redis;
+  the webhook then settles anyway.
 - `agentIdentity`: replay claims on agent-account provider webhooks, one per provider event
   id, in the `agent-identity` namespace. `releaseWebhookEvent` gives a claim back when the
   delivery failed after it was claimed. Without Redis the claim falls back to a process-local one.

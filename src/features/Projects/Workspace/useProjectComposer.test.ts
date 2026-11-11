@@ -202,6 +202,22 @@ describe('useProjectComposer', () => {
     );
   });
 
+  // The topic exists before the send, so the repository has to go with it.
+  it('starts the conversation in the repository picked in the context bar', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    const { result } = renderHook(() =>
+      useProjectComposer(project, 'chat', 'coordinator', 'env-repo'),
+    );
+
+    await act(async () => {
+      await result.current.send(composer('Fix the flaky test'));
+    });
+
+    expect(mocks.createProjectTopic).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'env-repo', projectId: 'prj_1' }),
+    );
+  });
+
   it('assigns a task to the picked project agent', async () => {
     mocks.createTask.mockResolvedValue({ id: 'task_1', identifier: 'T-1', name: 'Ship it' });
     const { result } = renderHook(() => useProjectComposer(project, 'task', 'reviewer'));

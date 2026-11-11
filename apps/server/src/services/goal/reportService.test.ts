@@ -30,6 +30,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './index';
 import { GoalReportStore } from './reportStore';
@@ -323,6 +324,59 @@ describe('GoalService wrap-up branch', () => {
     const result = await service.tick(graph.goal.id);
     expect(result.taskId).toBeDefined();
     expect(reportTaskRuns()).toHaveLength(0);
+  });
+
+  it('assigns the wrap-up Task to the Goal creator', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    const [{ taskId }] = reportTaskRuns().map(([params]: any) => params);
+    const task = await taskModel.findById(taskId);
+    expect(task?.assigneeUserId).toBe(userId);
+  });
+
+  /**
+   * Regression: the result is claimed before the Task is created and never
+   * retried, so a creator who stops being assignable between resolving the owner
+   * and `createTask`'s own check must not cost the Goal its report.
+   */
+  it('still writes the report, unassigned, when the creator stops being assignable mid-dispatch', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    // Assignable when the owner is resolved, gone by the time `createTask` checks.
+    let ownerChecks = 0;
+    vi.spyOn(TaskService.prototype, 'assertAssigneeUserAssignable').mockImplementation(
+      async (assigneeUserId) => {
+        if (assigneeUserId && ++ownerChecks > 1) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Assignee user not found' });
+        }
+      },
+    );
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    const [{ taskId }] = reportTaskRuns().map(([params]: any) => params);
+    const task = await taskModel.findById(taskId);
+    expect(task?.assigneeUserId).toBeNull();
+    expect((await service.graph(goalId)).report?.dispatch.error).toBeUndefined();
+  });
+
+  it('does not retry away a wrap-up failure the owner did not cause', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    const createTask = vi
+      .spyOn(TaskService.prototype, 'createTask')
+      .mockRejectedValue(new Error('database unavailable'));
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect((await service.graph(goalId)).report?.dispatch.error).toBe('database unavailable');
   });
 
   /**

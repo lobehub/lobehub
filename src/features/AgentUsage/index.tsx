@@ -13,7 +13,13 @@ import { useAgentStore } from '@/store/agent';
 import { type AgentUsageGranularity } from '@/types/usage/usageRecord';
 import { StyleSheet } from '@/utils/styles';
 
-import { RANGE_DAYS, type TimeRange, useAgentUsageStats } from './hooks';
+import {
+  DEFAULT_GRANULARITY,
+  DEFAULT_RANGE,
+  RANGE_DAYS,
+  type TimeRange,
+  useAgentUsageStats,
+} from './hooks';
 import ModelBreakdown from './ModelBreakdown';
 import StatCards from './StatCards';
 import UsageTrendChart from './UsageTrendChart';
@@ -41,15 +47,15 @@ const AgentUsage = memo(() => {
   const { t } = useTranslation('spend');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
-  const [range, setRange] = useState<TimeRange>('30d');
-  const [granularity, setGranularity] = useState<AgentUsageGranularity>('day');
+  const [range, setRange] = useState<TimeRange>(DEFAULT_RANGE);
+  const [granularity, setGranularity] = useState<AgentUsageGranularity>(DEFAULT_GRANULARITY);
 
   const handleGranularityChange = (nextGranularity: AgentUsageGranularity) => {
     setGranularity(nextGranularity);
     if (nextGranularity === 'week' && range === '7d') setRange('30d');
   };
 
-  const { data, isLoading, error, mutate } = useAgentUsageStats(
+  const { data, isLoading, error, revalidate } = useAgentUsageStats(
     activeAgentId ?? '',
     range,
     granularity,
@@ -124,7 +130,7 @@ const AgentUsage = memo(() => {
                 </Flexbox>
               </Flexbox>
               {showError ? (
-                <AsyncError error={error} variant={'metric'} onRetry={() => mutate()} />
+                <AsyncError error={error} variant={'metric'} onRetry={() => revalidate()} />
               ) : (
                 <StatCards
                   isLoading={isLoading}

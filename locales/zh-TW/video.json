@@ -40,8 +40,6 @@
   "generation.editing.hint": "描述要更改的內容；其他部分保持不變",
   "generation.editing.modelLocked": "編輯保留原影片的模型",
   "generation.editing.title": "編輯 V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 免費額度已用完。影片現在將使用你的餘額。",
-  "generation.freeQuota.remaining": "🎁 今日剩餘 {{remaining}} 部免費影片",
   "generation.status.editing": "生成編輯中...",
   "generation.status.failed": "產生失敗",
   "generation.status.generating": "產生中...",

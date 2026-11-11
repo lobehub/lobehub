@@ -159,6 +159,12 @@ export const RedisKeys = {
      * Full key: agentRun:run_slots:v1:{userId}
      */
     runSlots: (userId: string): string => `run_slots:v1:${userId}`,
+    /**
+     * Whether one operation's `onComplete` delivery is settling or has settled
+     * its Task run, so a redelivery is not applied a second time.
+     * Full key: agentRun:task_run_delivery:v1:{operationId}
+     */
+    taskRunDelivery: (operationId: string): string => `task_run_delivery:v1:${operationId}`,
   },
   /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.

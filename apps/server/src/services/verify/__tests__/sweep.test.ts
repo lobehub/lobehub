@@ -9,19 +9,29 @@ const {
   settleFailedRepair,
   claimVerifying,
   findStuckVerifying,
+  listByAcceptance,
+  messageFindById,
   operationFindById,
   recompute,
+  recordVerifierRedrive,
+  redriveClaimedVerification,
   resultListByRun,
   upsertByCheckItem,
   finalizeVerifyRun,
+  findVerifyMessageByOperationId,
 } = vi.hoisted(() => ({
   releaseUndeliveredRound: vi.fn(),
   settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
+  findVerifyMessageByOperationId: vi.fn(),
+  listByAcceptance: vi.fn(),
+  messageFindById: vi.fn(),
   operationFindById: vi.fn(),
   recompute: vi.fn(),
+  recordVerifierRedrive: vi.fn(),
+  redriveClaimedVerification: vi.fn(),
   resultListByRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
@@ -29,7 +39,7 @@ const {
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: Object.assign(
     vi.fn(function () {
-      return {};
+      return { listByAcceptance, recordVerifierRedrive };
     }),
     { findStuckVerifying },
   ),
@@ -49,6 +59,12 @@ vi.mock('../statusService', () => ({
     return { claimVerifying, recompute };
   }),
 }));
+vi.mock('@/database/models/message', () => ({
+  MessageModel: vi.fn(function () {
+    return { findById: messageFindById, findVerifyMessageByOperationId };
+  }),
+}));
+vi.mock('../lifecycle', () => ({ redriveClaimedVerification }));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
 vi.mock('../undeliveredRound', () => ({ releaseUndeliveredRound }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
@@ -82,8 +98,13 @@ describe('sweepStuckVerifyRuns', () => {
       claimVerifying,
       finalizeVerifyRun,
       findStuckVerifying,
+      findVerifyMessageByOperationId,
+      listByAcceptance,
+      messageFindById,
       operationFindById,
       recompute,
+      recordVerifierRedrive,
+      redriveClaimedVerification,
       resultListByRun,
       upsertByCheckItem,
     ].forEach((m) => m.mockReset());
@@ -299,6 +320,79 @@ describe('sweepStuckVerifyRuns', () => {
     expect(outcome.skipped).toBe(1);
     expect(outcome.settled).toEqual(['run-newer']);
   });
+  describe('a round whose judging never started a verifier', () => {
+    // The production shape: the completion gate claimed `verifying`, then died
+    // before any verifier spawned, so every check is pending with no verifier.
+    const neverJudged = (overrides?: Partial<Record<string, unknown>>) =>
+      stuckRun({
+        acceptanceId: 'acc-1',
+        roundIndex: 3,
+        updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+        ...overrides,
+      });
+
+    beforeEach(() => {
+      resultListByRun.mockResolvedValue([
+        { checkItemId: 'c1', status: 'pending', verifierOperationId: null, verdict: null },
+        { checkItemId: 'c2', status: 'pending', verifierOperationId: null, verdict: null },
+      ]);
+      operationFindById.mockResolvedValue({ id: 'op-1', status: 'done' });
+      listByAcceptance.mockResolvedValue([{ roundIndex: 2 }, { roundIndex: 3 }]);
+      findVerifyMessageByOperationId.mockResolvedValue({ id: 'card-7', parentId: 'msg-final' });
+      messageFindById.mockResolvedValue({ content: 'final delivery', id: 'msg-final' });
+    });
+
+    it('judges the latest round again with the final reply instead of closing it', async () => {
+      singlePage([neverJudged()]);
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.redriven).toEqual(['run-1']);
+      expect(outcome.abandoned).toEqual([]);
+      expect(recordVerifierRedrive).toHaveBeenCalledWith('run-1', NOW);
+      expect(redriveClaimedVerification).toHaveBeenCalledWith(
+        db,
+        'u1',
+        { deliverable: 'final delivery', operationId: 'op-1' },
+        undefined,
+      );
+      // The redriven judge owns the ending; nothing is stamped errored.
+      expect(upsertByCheckItem).not.toHaveBeenCalled();
+      expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    });
+
+    it('closes it as errored once it was already re-driven', async () => {
+      singlePage([neverJudged({ metadata: { verifierRedrivenAt: '2026-08-09T23:00:00Z' } })]);
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.abandoned).toEqual(['run-1']);
+      expect(redriveClaimedVerification).not.toHaveBeenCalled();
+    });
+
+    it('closes a superseded round without driving the task', async () => {
+      // r2 and r3 both stranded: r2 must not pause the task r3 is about to judge.
+      singlePage([neverJudged({ roundIndex: 2 })]);
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.abandoned).toEqual(['run-1']);
+      expect(redriveClaimedVerification).not.toHaveBeenCalled();
+      expect(recompute).toHaveBeenCalledWith('op-1');
+      expect(finalizeVerifyRun).not.toHaveBeenCalled();
+    });
+
+    it('closes it when the builder run did not finish successfully', async () => {
+      singlePage([neverJudged()]);
+      operationFindById.mockResolvedValue({ id: 'op-1', status: 'error' });
+
+      const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+      expect(outcome.abandoned).toEqual(['run-1']);
+      expect(redriveClaimedVerification).not.toHaveBeenCalled();
+    });
+  });
+
   it('recovers a planned repair whose operation died before judging began', async () => {
     singlePage([stuckRun({ status: 'planned' })]);
     settleFailedRepair.mockResolvedValue(true);

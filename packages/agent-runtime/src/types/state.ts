@@ -18,6 +18,7 @@ import type {
   AgentSignalOperationMarker,
   ChatToolPayload,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
@@ -157,7 +158,17 @@ export interface AgentRunPrincipal {
  */
 export interface AgentRunPlan {
   /** Evaluation execution controls (tool forwarding) for eval runs. */
-  eval?: { caseId?: string; toolForwarding?: EvalToolForwardingConfig };
+  eval?: {
+    connectorSnapshots?: EvalConnectorSnapshots;
+    /** The only tool identifiers the attempt may see or call; see EvalRuntimeContext. */
+    allowedTools?: string[];
+    /** The eval attempt (case run or pass@k thread) this operation serves; inherited by sub-agents. */
+    attemptId?: string;
+    caseId?: string;
+    /** Isolated Memory scope of the eval trial (server-created). */
+    memory?: { fixtureHash: string; runId: string; threadId?: string; topicId: string };
+    toolForwarding?: EvalToolForwardingConfig;
+  };
   /** Where (and whether) the run executes, resolved once at the entry point. */
   execution?: ExecutionPlan;
   /** Operation-level skill set for the skill resolver. */

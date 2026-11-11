@@ -12,6 +12,15 @@ describe('runCommand', () => {
   let processManager: ShellProcessManager;
   let tmpDir: string;
 
+  const requiredSandboxOptions = (): Parameters<typeof runCommand>[1] => ({
+    processManager,
+    sandboxPolicy: {
+      allowNetwork: false,
+      onUnavailable: 'deny',
+      writableRoots: [tmpDir],
+    },
+  });
+
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lobehub-shell-runner-'));
     processManager = new ShellProcessManager(tmpDir);
@@ -212,14 +221,7 @@ describe('runCommand', () => {
       const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
         { command: 'echo unreachable', cwd: missingCwd },
-        {
-          processManager,
-          sandboxPolicy: {
-            allowNetwork: false,
-            onUnavailable: 'deny',
-            writableRoots: [tmpDir],
-          },
-        },
+        requiredSandboxOptions(),
       );
 
       expect(result.success).toBe(false);
@@ -358,14 +360,7 @@ describe('runCommand', () => {
             command: 'printf "output:%s" "${LOB_TEST_SANDBOX_SECRET-unset}"',
             env: { LOB_TEST_SANDBOX_SECRET: 'must-not-leak' },
           },
-          {
-            processManager,
-            sandboxPolicy: {
-              allowNetwork: false,
-              onUnavailable: 'deny',
-              writableRoots: [tmpDir],
-            },
-          },
+          requiredSandboxOptions(),
         );
 
         expect(result).toMatchObject({ exit_code: 0, success: true });
@@ -439,14 +434,7 @@ describe('runCommand', () => {
       async () => {
         const result = await runCommand(
           { command: 'sleep 0.05 && echo sandbox-background', run_in_background: true },
-          {
-            processManager,
-            sandboxPolicy: {
-              allowNetwork: false,
-              onUnavailable: 'deny',
-              writableRoots: [tmpDir],
-            },
-          },
+          requiredSandboxOptions(),
         );
 
         const output = await processManager.getOutput({ shell_id: result.shell_id! });
@@ -460,14 +448,7 @@ describe('runCommand', () => {
       async () => {
         const result = await runCommand(
           { command: 'sleep 60', run_in_background: true },
-          {
-            processManager,
-            sandboxPolicy: {
-              allowNetwork: false,
-              onUnavailable: 'deny',
-              writableRoots: [tmpDir],
-            },
-          },
+          requiredSandboxOptions(),
         );
 
         expect(processManager.kill(result.shell_id!).success).toBe(true);

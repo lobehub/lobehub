@@ -142,6 +142,24 @@ afterEach(() => {
 });
 
 describe('environment stop between tool steps', () => {
+  it('intercepts a native tool before the real executor or client dispatch', async () => {
+    const fixture = setup([
+      {
+        id: 'eval-contract',
+        type: 'beforeToolCall',
+        handler: async (event) => {
+          (event as any).mock({ content: 'Frozen fixture response', success: true });
+        },
+      },
+    ]);
+    await fixture.step([
+      { ...call(), identifier: 'lobe-web-browsing', apiName: 'search', executor: 'server' },
+    ]);
+    expect(fixture.execute).not.toHaveBeenCalled();
+    expect(dispatchClient).not.toHaveBeenCalled();
+    expect(JSON.stringify(fixture.rows)).toContain('Frozen fixture response');
+  });
+
   it('does not launch another server tool after the persisted interrupt, before local polling catches up', async () => {
     const controller = new AbortController();
     const fixture = setup([], controller.signal);
