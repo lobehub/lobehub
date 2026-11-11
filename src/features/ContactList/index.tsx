@@ -6,15 +6,17 @@ import {
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
+  accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  cx,
   DropdownMenu,
   Flexbox,
   Text,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { UserRoundPlusIcon } from 'lucide-react';
+import { ArrowDownUpIcon, UserRoundPlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,15 +32,15 @@ import { NAV_PANEL_CONTACTS_KEY } from '@/features/NavPanel/railRouteKey';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { CONTACT_URL } from './const';
 import ContactAvatar from './ContactAvatar';
+import { CONTACT_SORT_BYS, sortContacts } from './sortContacts';
 import { styles } from './style';
-
-const byTitle = (fallback: string) => (a: SidebarAgentItem, b: SidebarAgentItem) =>
-  agentDisplayName(a, fallback).localeCompare(agentDisplayName(b, fallback), 'zh-Hans-CN');
 
 const useActiveRouteId = () => {
   const { pathname } = useActiveLocation();
@@ -76,15 +78,33 @@ const Body = memo(() => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const activeRouteId = useActiveRouteId();
+  const sortBy = useGlobalStore(systemStatusSelectors.contactListSortBy);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const { agents, groups } = useMemo(() => {
     const unique = [...new Map(items.map((item) => [item.id, item])).values()];
-    const sort = byTitle(tChat('untitledAgent'));
+    const fallback = tChat('untitledAgent');
     return {
-      agents: unique.filter((item) => item.type !== 'group').sort(sort),
-      groups: unique.filter((item) => item.type === 'group').sort(sort),
+      agents: sortContacts(
+        unique.filter((item) => item.type !== 'group'),
+        sortBy,
+        fallback,
+      ),
+      groups: sortContacts(
+        unique.filter((item) => item.type === 'group'),
+        sortBy,
+        fallback,
+      ),
     };
-  }, [items, tChat]);
+  }, [items, sortBy, tChat]);
+
+  const sortMenuItems = CONTACT_SORT_BYS.map((by) => ({
+    checked: sortBy === by,
+    key: by,
+    label: t(`contacts.sort.${by}`),
+    onCheckedChange: () => updateSystemStatus({ contactListSortBy: by }),
+    type: 'checkbox' as const,
+  }));
 
   if (!isInit && items.length === 0)
     return error ? (
@@ -121,6 +141,24 @@ const Body = memo(() => {
                   </Text>
                 </Flexbox>
               </AccordionTrigger>
+              {/* One order for both sections; the hover action sits where the home sidebar keeps its section actions. */}
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={cx(
+                  'accordion-action',
+                  accordionStyles.action,
+                  accordionStyles.actionBorderless,
+                )}
+              >
+                <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
+                  <ActionIcon
+                    icon={ArrowDownUpIcon}
+                    size={'small'}
+                    title={t('contacts.sort.tooltip')}
+                  />
+                </DropdownMenu>
+              </Flexbox>
             </AccordionHeader>
             <AccordionPanel>
               <Flexbox gap={1} paddingBlock={1} paddingInline={2}>
@@ -169,7 +207,7 @@ const Header = memo(() => {
 Header.displayName = 'ContactListHeader';
 
 /**
- * Contacts tab list column: every agent and group, alphabetically. A row opens
+ * Contacts tab list column: every agent and group, by name or most recently updated. A row opens
  * the contact card (`/agents/:id`) and keeps the list in place; the card is
  * where the user starts a chat or goes on to edit the profile.
  */

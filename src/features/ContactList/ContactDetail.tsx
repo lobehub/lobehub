@@ -17,6 +17,7 @@ import { useAgentCoverColor } from '@/features/AgentViewAll/useAgentCoverColor';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
+import { ContactInfo } from './ContactInfo';
 import { type ContactCardState, useContactCard } from './useContactCard';
 
 const AVATAR_SIZE = 88;
@@ -135,6 +136,8 @@ const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
               </Button>
             )}
           </Flexbox>
+          {/* Groups own no addresses; only agents carry contact info. */}
+          {item.type !== 'group' && <ContactInfo agentId={item.id} />}
         </Flexbox>
       </>
     );
