@@ -51,8 +51,9 @@ interface DeviceTerminalInfo {
 /**
  * One interactive shell on a remote device, driven over the device RPC surface.
  *
- * The PTY itself lives in the device's `lh connect` process; this object owns
- * only the polling cursor and the sink that routes keystrokes back. Because the
+ * The PTY itself lives on the device, in its `lh connect` process or desktop
+ * app; this object owns only the polling cursor and the sink that routes
+ * keystrokes back. Because the
  * shell is a real PTY, `sudo` sees a controlling terminal and prompts for its
  * password exactly as it would locally — the password never leaves the device
  * and nothing about it is stored anywhere.

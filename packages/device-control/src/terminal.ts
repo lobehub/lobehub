@@ -2,36 +2,50 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 
+import { detectWindowsShell } from '@lobechat/local-file-shell/shell';
+
 import type {
   CloseTerminalParams,
   CloseTerminalResult,
   CreateTerminalSessionParams,
   CreateTerminalSessionResult,
+  DeviceControlDeps,
   ReadTerminalParams,
   ReadTerminalResult,
   ResizeTerminalParams,
   WriteTerminalParams,
-} from '@lobechat/device-control';
-import { detectWindowsShell } from '@lobechat/local-file-shell/shell';
-import type { IPty } from '@lydell/node-pty';
+} from './types';
 
-/**
- * `@lydell/node-pty` is a native module: it ships a prebuilt binary per
- * platform and cannot be bundled, so it stays a real runtime dependency and is
- * marked external in `tsdown.config.ts`. It is also imported lazily, because
- * the CLI bundle is embedded in contexts that have no `node_modules` at all
- * (the desktop app runs it from `Resources/bin`) — a static import would make
- * every one of those fail at startup, while a host that never opens a terminal
- * never resolves this at all.
- */
-const importPty = () => import('@lydell/node-pty');
-let ptyModule: ReturnType<typeof importPty> | undefined;
-const loadPty = () => (ptyModule ??= importPty());
+/** The slice of a `node-pty` PTY this manager drives. */
+export interface TerminalPty {
+  kill: () => void;
+  onData: (listener: (data: string) => void) => unknown;
+  onExit: (listener: (event: { exitCode: number }) => void) => unknown;
+  pid: number;
+  resize: (cols: number, rows: number) => void;
+  write: (data: string | Buffer) => void;
+}
+
+/** The slice of the `node-pty` module this manager needs. */
+export interface TerminalPtyModule {
+  spawn: (
+    file: string,
+    args: string[],
+    options: {
+      cols: number;
+      cwd: string;
+      env: Record<string, string>;
+      name: string;
+      rows: number;
+    },
+  ) => TerminalPty;
+}
 
 /**
  * PTY sessions for the remote terminal, driven by the `createTerminalSession` /
  * `writeTerminal` / `readTerminal` / `resizeTerminal` / `closeTerminal` device
- * RPCs.
+ * RPCs. Hosted by both the CLI daemon (`lh connect`) and the desktop app's
+ * gateway connection, so either kind of device can serve a remote shell.
  *
  * Unlike the desktop app's local terminal — which pushes `onData` at the
  * renderer over IPC — the device RPC surface is strictly request/response, so
@@ -75,11 +89,18 @@ interface TerminalSession {
   id: string;
   lastActiveAt: number;
   pid: number;
-  pty?: IPty;
+  pty?: TerminalPty;
   shell: string;
 }
 
 export interface TerminalManagerOptions {
+  /**
+   * Resolves the `node-pty` module. Injected rather than imported: it is a
+   * native module each host ships its own way (the CLI as an external runtime
+   * dependency, the desktop app unpacked from its asar), and a host that never
+   * opens a terminal should never load it.
+   */
+  loadPty: () => Promise<TerminalPtyModule>;
   logger?: { warn: (message: string) => void };
 }
 
@@ -102,7 +123,9 @@ export class TerminalSessionManager {
   private sessions = new Map<string, TerminalSession>();
   private sweepTimer: NodeJS.Timeout;
 
-  constructor(private options: TerminalManagerOptions = {}) {
+  private ptyModule?: Promise<TerminalPtyModule>;
+
+  constructor(private options: TerminalManagerOptions) {
     this.sweepTimer = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS);
     this.sweepTimer.unref();
   }
@@ -116,7 +139,7 @@ export class TerminalSessionManager {
     const cols = params.cols > 0 ? params.cols : 80;
     const rows = params.rows > 0 ? params.rows : 24;
 
-    const { spawn } = await loadPty();
+    const { spawn } = await (this.ptyModule ??= this.options.loadPty());
     const pty = spawn(shell, [], {
       cols,
       cwd,
@@ -277,3 +300,17 @@ export class TerminalSessionManager {
     }
   }
 }
+
+type TerminalDeps = Pick<
+  DeviceControlDeps,
+  'closeTerminal' | 'createTerminalSession' | 'readTerminal' | 'resizeTerminal' | 'writeTerminal'
+>;
+
+/** The device-control terminal handlers, backed by one {@link TerminalSessionManager}. */
+export const createTerminalDeps = (terminals: TerminalSessionManager): TerminalDeps => ({
+  closeTerminal: async (params) => terminals.close(params),
+  createTerminalSession: (params) => terminals.create(params),
+  readTerminal: async (params) => terminals.read(params),
+  resizeTerminal: async (params) => terminals.resize(params),
+  writeTerminal: async (params) => terminals.write(params),
+});
