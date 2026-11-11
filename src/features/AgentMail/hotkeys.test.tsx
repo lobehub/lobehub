@@ -407,6 +407,35 @@ describe('mail hotkeys', () => {
     expect(service.deleteMailDrafts).not.toHaveBeenCalled();
   });
 
+  it('discards the open draft from its focused row with #', async () => {
+    const draft = {
+      accountId: 'acc_a',
+      bcc: [],
+      cc: [],
+      id: 'draft_9',
+      mode: 'compose',
+      sourceMailId: null,
+      subject: 'Half written',
+      text: 'body',
+      to: [],
+      updatedAt: new Date(),
+    };
+    service.listMailDrafts.mockResolvedValue([draft]);
+    service.getMailDraft.mockResolvedValue(draft);
+    page('/agent/agt_1/mail?folder=drafts&compose=draft_9');
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+
+    act(() => rowNamed('Half written').focus());
+    press('#', { code: 'Digit3', shiftKey: true });
+
+    // The row leaves (the delete waits out the undo window) and its editor closes with it.
+    await waitFor(() => expect(screen.queryByTestId('mail-composer')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Half written/ })).not.toBeInTheDocument();
+    expect(toastApi.success).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'identity.mailbox.toast.discarded' }),
+    );
+  });
+
   it('says why sending is off instead of ignoring r or c', async () => {
     service.list.mockResolvedValue([
       account('acc_a', 'a@lobe.id', { capabilities: { receive: true, send: false } }),

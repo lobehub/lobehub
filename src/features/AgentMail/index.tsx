@@ -394,6 +394,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
         if (messageId && ids.some((id) => conversationIds.has(id))) {
           navigate(`${mailPath}${search && `?${search}`}`, { replace: true });
         }
+        // A discarded draft that is open closes with its row.
+        else if (!messageId && composeId && ids.includes(composeId)) closeCompose();
       }}
     />
   );

@@ -250,8 +250,10 @@ const InboxSection = ({
     if (selectedItems.length > 0) return { fromSelection: true, rows: selectedItems };
     const focused = focusedRowId();
     // The open conversation's own row: the reading pane acts on it, so a wide
-    // screen moves on to the next one as it does from the toolbar.
-    if (focused && (focused !== selectedId || command === 'purge')) {
+    // screen moves on to the next one as it does from the toolbar. An open
+    // draft has no such pane (its composer takes no row keys), so it stays here.
+    const focusedDraft = items.find((item) => item.id === focused)?.kind === 'draft';
+    if (focused && (focused !== selectedId || command === 'purge' || focusedDraft)) {
       return { fromSelection: false, rows: items.filter((item) => item.id === focused) };
     }
     // The reading pane has no permanent delete; the open row stands in for it.
