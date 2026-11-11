@@ -1711,6 +1711,7 @@
   "inputQueue.queuedRunEndHint": "Sends when the current run finishes",
   "inputQueue.queuedRunEndMergeHint": "Merged and sent when the current run finishes",
   "inputQueue.sendNow": "Send now (interrupts current run)",
+  "inputQueue.sendNowFailed": "Couldn’t interrupt the current run. Try again.",
   "inputQueue.withdrawFailed": "Couldn’t take the message back. Try again.",
   "intentUnderstanding.title": "Understanding your intent...",
   "internalLink.agent.open": "Open agent",
