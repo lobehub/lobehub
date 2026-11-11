@@ -272,13 +272,29 @@ interface ExecutionTargetDeviceStatusProps {
   unknownLabel: string;
 }
 
+interface ExecutionTargetStatusDotProps {
+  /** Read out and shown on hover when the dot stands alone, without a status text beside it. */
+  label?: string;
+  online: boolean;
+}
+
+/** A device's presence as a dot: green while online, grey otherwise. */
+export const ExecutionTargetStatusDot = memo<ExecutionTargetStatusDotProps>(({ label, online }) => (
+  <span
+    aria-hidden={!label}
+    aria-label={label}
+    className={online ? styles.dotOnline : styles.dotOffline}
+    role={label ? 'img' : undefined}
+    title={label}
+  />
+));
+
+ExecutionTargetStatusDot.displayName = 'ExecutionTargetPicker.ExecutionTargetStatusDot';
+
 export const ExecutionTargetDeviceStatus = memo<ExecutionTargetDeviceStatusProps>(
   ({ offlineLabel, online, onlineLabel, unknown, unknownLabel }) => (
     <span className={styles.status}>
-      <span
-        aria-hidden
-        className={unknown ? styles.dotOffline : online ? styles.dotOnline : styles.dotOffline}
-      />
+      <ExecutionTargetStatusDot online={!unknown && online} />
       <span>{unknown ? unknownLabel : online ? onlineLabel : offlineLabel}</span>
     </span>
   ),

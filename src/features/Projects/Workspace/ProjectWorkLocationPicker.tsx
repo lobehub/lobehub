@@ -12,7 +12,7 @@ import RepositoryAvatar from '@/components/RepositoryAvatar';
 import OptionRow from '@/features/ChatInput/ControlBar/OptionRow';
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
-import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
+import { ExecutionTargetIcon, ExecutionTargetStatusDot } from '@/features/ExecutionTargetPicker';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
@@ -353,11 +353,16 @@ const ProjectWorkLocationPicker = ({
                   arrow={showRepositories}
                   icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
                   label={device.friendlyName || device.hostname || device.deviceId}
-                  desc={tChat(
-                    device.online
-                      ? 'heteroAgent.executionTarget.online'
-                      : 'heteroAgent.executionTarget.offline',
-                  )}
+                  badge={
+                    <ExecutionTargetStatusDot
+                      online={device.online}
+                      label={tChat(
+                        device.online
+                          ? 'heteroAgent.executionTarget.online'
+                          : 'heteroAgent.executionTarget.offline',
+                      )}
+                    />
+                  }
                   onClick={() => void select('device', device.deviceId)}
                 />,
                 'device',
