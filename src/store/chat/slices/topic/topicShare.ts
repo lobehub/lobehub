@@ -71,6 +71,9 @@ export class ChatTopicShareActionImpl {
     topicId: string,
     visibility: TopicShareVisibility,
   ): Promise<string | undefined> => {
+    // The record belongs to the identity that started the change; never adopt
+    // (and persist) it into another account's or workspace's scope.
+    const scope = this.#share.resource.scope.get();
     const current = this.#get().topicShareMap[topicId]?.share;
 
     let record = current
@@ -81,11 +84,14 @@ export class ChatTopicShareActionImpl {
     if (record && record.visibility !== visibility)
       record = await topicService.updateShareVisibility(topicId, visibility);
 
+    const isSameScope = this.#share.resource.scope.get() === scope;
+
     if (record) {
       const share = toShareInfo(record);
-      this.#share.update(topicId, () => ({ share }));
+      if (isSameScope) this.#share.update(topicId, () => ({ share }));
       return share.id;
     }
+    if (!isSameScope) return current?.id;
 
     await this.#share.fetch(topicId, { fresh: true });
     return this.#get().topicShareMap[topicId]?.share?.id ?? current?.id;

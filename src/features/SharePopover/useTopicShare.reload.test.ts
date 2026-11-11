@@ -157,4 +157,42 @@ describe('useTopicShare across a reload', { timeout: 60_000 }, () => {
 
     expect(first.getShareInfo).toHaveBeenCalledTimes(1);
   });
+
+  it('does not adopt a share change into the identity switched to while it was in flight', async () => {
+    const first = await reload();
+    first.getShareInfo.mockResolvedValue(null as never);
+    let answer!: (value: ReturnType<typeof record>) => void;
+    first.enableSharing.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve as never;
+        }) as never,
+    );
+    const { rerender, result } = first.render();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let change!: Promise<unknown>;
+    act(() => {
+      change = result.current.setVisibility('link');
+    });
+
+    // The user switches workspace while the request is in flight; the new
+    // identity's own read has not answered yet.
+    first.getShareInfo.mockImplementation(pending);
+    scope.current = `share-user-${randomUUID()}:ws-2`;
+    rerender();
+    await act(async () => {
+      answer(record('link'));
+      await change;
+    });
+    await settle();
+
+    const second = await reload();
+    second.getShareInfo.mockImplementation(pending);
+    const reloaded = second.render();
+    await settle();
+
+    // Nothing was persisted for the new identity: it waits for its own server answer.
+    expect(reloaded.result.current.isLoading).toBe(true);
+  });
 });
