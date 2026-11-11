@@ -153,9 +153,15 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
           const raw = typeof spec === 'string' ? spec : firstString(record?.type);
           if (!raw) return [];
 
+          const provenance = record?.provenance;
+          if (provenance !== undefined && provenance !== 'execution')
+            log.warn(
+              `plan item "${id}": requiredEvidence provenance "${String(provenance)}" is not "execution" — ignoring it`,
+            );
           return [
             {
               hint: firstString(record?.hint),
+              ...(provenance === 'execution' ? { provenance: 'execution' as const } : {}),
               type: assertPlanEnum(raw, EVIDENCE_TYPES, 'requiredEvidence', id),
             },
           ];
