@@ -37,13 +37,19 @@ export const useAgentSignalReceipts = (input: {
     () => (shouldFetch ? { agentId: input.agentId!, topicId: input.topicId! } : null),
     [shouldFetch, input.agentId, input.topicId],
   );
-  const pollingKey = params
-    ? `${params.agentId}:${params.topicId}:${input.pollingSignal ?? ''}`
-    : undefined;
+  const scopeKey = params ? `${params.agentId}:${params.topicId}` : undefined;
+  const pollingKey = scopeKey ? `${scopeKey}:${input.pollingSignal ?? ''}` : undefined;
+  const scopeKeyRef = useRef<string | undefined>(undefined);
   const pollingKeyRef = useRef<string | undefined>(undefined);
   const pollingRef = useRef<{ params: AgentSignalReceiptsParams | null; startedAt?: number }>({
     params: null,
   });
+
+  // Opening a topic (again) reconciles its whole head; polls stay incremental.
+  if (scopeKeyRef.current !== scopeKey) {
+    scopeKeyRef.current = scopeKey;
+    if (params) agentSignalActions.requestFullReceiptHead(params);
+  }
 
   if (pollingKeyRef.current !== pollingKey) {
     pollingKeyRef.current = pollingKey;

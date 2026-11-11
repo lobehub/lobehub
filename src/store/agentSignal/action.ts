@@ -50,6 +50,11 @@ export class AgentSignalActionImpl {
   getEmptyRefreshes = (params: AgentSignalReceiptsParams): number =>
     this.#private.emptyRefreshes.get(agentSignalReceiptsKey(params)) ?? 0;
 
+  /** Make the topic's next read a full head, when the topic is opened (again). */
+  requestFullReceiptHead = (params: AgentSignalReceiptsParams): void => {
+    this.#private.fullHeadPending.add(agentSignalReceiptsKey(params));
+  };
+
   /** Restart the polling backoff, when new work starts in the topic. */
   resetReceiptPolling = (params: AgentSignalReceiptsParams): void => {
     this.#private.emptyRefreshes.delete(agentSignalReceiptsKey(params));

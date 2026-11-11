@@ -432,4 +432,46 @@ describe('useAgentSignalReceipts', () => {
     });
     expect(agentSignalService.listReceipts).toHaveBeenCalledTimes(callsAtTimeout + 1);
   });
+
+  it('reads the full head again when a topic is reopened', async () => {
+    vi.useFakeTimers();
+    vi.mocked(agentSignalService.listReceipts).mockResolvedValue({
+      cursor: undefined,
+      receipts: [receipt],
+    });
+
+    const { rerender } = renderHook(
+      ({ topicId }) =>
+        useAgentSignalReceipts({
+          agentId: 'agent-1',
+          displayMessages: [],
+          enabled: true,
+          topicId,
+        }),
+      { initialProps: { topicId: 'topic-1' }, wrapper },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    rerender({ topicId: 'topic-2' });
+    // Past the dedupe window, so reopening topic-1 requests at once.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+
+    vi.mocked(agentSignalService.listReceipts).mockClear();
+    rerender({ topicId: 'topic-1' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    // An Undo made elsewhere changes an older receipt, which a `sinceCreatedAt`
+    // read would never return.
+    expect(vi.mocked(agentSignalService.listReceipts).mock.calls[0]?.[0]).toEqual({
+      agentId: 'agent-1',
+      limit: 20,
+      topicId: 'topic-1',
+    });
+  });
 });

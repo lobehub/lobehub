@@ -20,6 +20,12 @@ export class AgentSignalPrivateAction {
    * bookkeeping only, never data, so it is not scoped to an identity.
    */
   readonly emptyRefreshes = new Map<string, number>();
+  /**
+   * Entries whose next read must be a full head: a topic opened again. An
+   * incremental read only returns receipts newer than the head, so it never
+   * carries a change to an older one (an Undo from another tab or device).
+   */
+  readonly fullHeadPending = new Set<string>();
 
   constructor(set: Setter, get: () => AgentSignalState) {
     this.receipts = createReplicaSlice(agentSignalReceiptsResource, {
@@ -27,12 +33,14 @@ export class AgentSignalPrivateAction {
       fetcher: async (params) => {
         const key = agentSignalReceiptsKey(params);
         // Only a list the server answered this session may be extended
-        // incrementally: a persisted one can miss receipts and status changes
-        // made since, so the first read after a reload fetches the full head.
+        // incrementally, and only while its topic stays open: a persisted one
+        // can miss receipts and status changes made since, so the first read
+        // after a reload or a revisit fetches the full head.
         const isConfirmed = get().agentSignalReceiptsReplica.entries[key]?.source === 'server';
-        const sinceCreatedAt = isConfirmed
-          ? get().agentSignalReceiptsMap[key]?.[0]?.createdAt
-          : undefined;
+        const isFullHead = this.fullHeadPending.delete(key) || !isConfirmed;
+        const sinceCreatedAt = isFullHead
+          ? undefined
+          : get().agentSignalReceiptsMap[key]?.[0]?.createdAt;
 
         const result = await agentSignalService.listReceipts({
           ...params,
