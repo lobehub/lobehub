@@ -20,6 +20,7 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
+import { hasReplyActivity } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
@@ -278,7 +279,9 @@ const Timeline = ({
                 replyTarget={reply.target}
                 activity={
                   // A direct conversation shows its Agent's state beside the name in the header.
-                  direct && !threadId ? null : <ReplyActivity detail={detail} threadId={threadId} />
+                  (direct && !threadId) || !hasReplyActivity(detail, threadId) ? null : (
+                    <ReplyActivity detail={detail} threadId={threadId} />
+                  )
                 }
                 placeholder={
                   threadId

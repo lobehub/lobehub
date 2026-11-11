@@ -69,6 +69,12 @@ export const conversationReplies = (detail: ChannelDetail, threadId: string | nu
   };
 };
 
+/** Whether the conversation has a reply or routing in progress to show above the composer. */
+export const hasReplyActivity = (detail: ChannelDetail, threadId: string | null) => {
+  const { jobs, receiving } = conversationReplies(detail, threadId);
+  return jobs.length > 0 || receiving;
+};
+
 /**
  * What a direct conversation's header says about its one Agent: "typing" while it works, or the
  * reply it is `waiting` on when blocked or stopping. Null when nothing is pending.

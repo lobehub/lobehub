@@ -171,10 +171,21 @@ export const styles = stylex.create({
     backgroundColor: cssVar.colorInfoBg,
   },
   composer: {
-    flexShrink: 0,
-    paddingBlockEnd: 12,
+    'position': 'relative',
+    'flexShrink': 0,
+    'paddingBlockEnd': 12,
+    // The feed fades out into the composer instead of being cut at its top edge.
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      insetBlockEnd: '100%',
+      insetInline: 0,
+      height: 24,
+      backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer}, transparent)`,
+    },
   },
-  /** Typing activity above the input; keeps its height when empty. */
+  /** Typing activity above the input; rendered only while someone is replying. */
   composerStatus: {
     display: 'flex',
     alignItems: 'center',
