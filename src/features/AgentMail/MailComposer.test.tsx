@@ -485,6 +485,23 @@ describe('MailComposer', () => {
     });
   });
 
+  describe('MailComposer — Codex on 3135dab5f01', () => {
+    it('keeps an address still being typed when Esc closes the editor', async () => {
+      const { onClose, unmount } = setupComposer();
+      const input = screen.getByLabelText('identity.compose.to');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'late@x.com' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(onClose).toHaveBeenCalled();
+      unmount();
+      await waitFor(() =>
+        expect(service.createMailDraft).toHaveBeenCalledWith(
+          expect.objectContaining({ to: [{ address: 'late@x.com' }] }),
+        ),
+      );
+    });
+  });
+
   describe('MailComposer — Codex on 47f900b87c2', () => {
     it('shows Cc restored from this browser', async () => {
       localStorage.setItem(

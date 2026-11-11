@@ -338,6 +338,9 @@ const MailComposer = memo<MailComposerProps>(
             void composer.saveNow();
           } else if (event.key === 'Escape' && !sending) {
             event.preventDefault();
+            // An address still being typed becomes a chip first, so the close saves it.
+            const active = event.currentTarget.ownerDocument.activeElement;
+            if (active instanceof HTMLInputElement) active.blur();
             close();
           }
         }}
