@@ -374,13 +374,19 @@ export const useComposer = (params: UseComposerParams) => {
   };
 
   /** Stop composing and drop the draft; the caller offers the undo. */
+  /**
+   * Stop composing for a discard. Whatever was typed is saved first, and a
+   * first save already on its way is waited for, so the draft exists to be
+   * deleted and undoing brings it back whole. The local copy stays (it may
+   * hold a forward's removed attachments) until the deletion commits; the
+   * caller clears it with the returned key.
+   */
   const detach = async () => {
     closedRef.current = true;
     debouncedSave.cancel();
-    // Whatever was typed is saved first, so undoing the discard brings it back whole.
+    if (savingRef.current) await savingRef.current;
     if (dirtyRef.current) await save().catch(() => undefined);
-    clearBackup(backupKeyRef.current);
-    return draftIdRef.current;
+    return { backupKey: backupKeyRef.current, id: draftIdRef.current };
   };
 
   return {

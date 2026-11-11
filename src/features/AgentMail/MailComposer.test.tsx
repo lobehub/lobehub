@@ -485,6 +485,47 @@ describe('MailComposer', () => {
     });
   });
 
+  describe('MailComposer — Codex on f28b53e4cf4', () => {
+    it('discards a new mail whose first save is still on its way', async () => {
+      let finishCreate!: () => void;
+      service.createMailDraft.mockImplementation(
+        (input) =>
+          new Promise((resolve) => {
+            finishCreate = () => resolve(composerDraft({ ...input, id: 'draft_new' }));
+          }),
+      );
+      setupComposer();
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'Oops' },
+      });
+      await act(() => vi.advanceTimersByTimeAsync(DRAFT_SAVE_DELAY_MS + 10));
+      fireEvent.click(screen.getByLabelText('identity.mailbox.action.discard'));
+      await act(async () => finishCreate());
+
+      await act(() => vi.advanceTimersByTimeAsync(9000));
+      expect(service.deleteMailDrafts).toHaveBeenCalledWith(['draft_new']);
+    });
+
+    it("keeps a forward's removed attachments through the discard undo window", async () => {
+      const forwardSource = composerSource({
+        attachments: [
+          { filename: 'plan.pdf', index: 0 },
+          { filename: 'secret.csv', index: 1 },
+        ],
+      });
+      setupComposer({ inline: true, mode: 'forward', source: forwardSource });
+      await screen.findAllByTestId('compose-attachment');
+      fireEvent.click(screen.getAllByLabelText('identity.compose.removeAttachment')[1]);
+      fireEvent.click(screen.getByLabelText('identity.mailbox.action.discard'));
+      await waitFor(() => expect(ui.toastSuccess).toHaveBeenCalled());
+
+      const key = 'lobe-agent-mail:draft:agt_1:acc_a:draft_1';
+      expect(JSON.parse(localStorage.getItem(key)!).excludedAttachments).toEqual([1]);
+      await act(() => vi.advanceTimersByTimeAsync(9000));
+      expect(localStorage.getItem(key)).toBeNull();
+    });
+  });
+
   describe('MailComposer — after the verification round', () => {
     it("forwards a mail with no plain text without asking for words of one's own", async () => {
       setupComposer({ inline: true, mode: 'forward', source: composerSource({ text: '' }) });

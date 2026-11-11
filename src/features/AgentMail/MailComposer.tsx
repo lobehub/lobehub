@@ -30,6 +30,7 @@ import {
 
 import {
   cancelPendingDiscard,
+  clearBackup,
   forgetSendRefusal,
   formatAddress,
   holdDiscard,
@@ -204,9 +205,12 @@ const MailComposer = memo<MailComposerProps>(
     };
 
     const discard = async () => {
-      const id = await composer.detach();
+      const { backupKey, id } = await composer.detach();
       onClose();
-      if (!id) return;
+      if (!id) {
+        clearBackup(backupKey);
+        return;
+      }
       const writeId = mailWriteActions.begin({
         accountId: account.id,
         draftDelta: -1,
@@ -217,6 +221,7 @@ const MailComposer = memo<MailComposerProps>(
       // A discarded draft does not go to the trash: it waits out the undo window instead.
       const timer = setTimeout(async () => {
         releaseDiscard(id);
+        clearBackup(backupKey);
         await agentAccountService.deleteMailDrafts([id]).catch((error) => {
           console.error('[AgentMail] discard failed', error);
           toast.error({ title: t('identity.mailbox.failed.discard') });
