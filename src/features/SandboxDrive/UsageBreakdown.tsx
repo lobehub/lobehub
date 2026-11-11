@@ -1,11 +1,12 @@
 'use client';
 
+import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ActionIcon, Button, Flexbox, Icon, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { LockIcon, RefreshCwIcon, UserRoundIcon, UsersIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RetainedMemberDrives from '@/business/client/features/RetainedMemberDrives';
@@ -13,12 +14,29 @@ import SandboxStorageOverQuotaAction from '@/business/client/features/SandboxSto
 import UserAvatar from '@/components/UserAvatar';
 import { formatSize } from '@/utils/format';
 
-import type { useDriveUsage } from './useDriveData';
+import type { DriveUsageRefreshResult, useDriveUsage } from './useDriveData';
 
 /** The market's code for a usage refresh whose walk did not finish. */
 const USAGE_MEASURE_FAILED = 'STORAGE_USAGE_MEASURE_FAILED';
 
 type DriveUsageData = NonNullable<ReturnType<typeof useDriveUsage>['data']>;
+
+/**
+ * How many refresh calls one click keeps going for while a large drive is
+ * still being measured. Each call walks for up to about half a minute on the
+ * server, so this follows a walk for several minutes; past it, the measurement
+ * cron finishes the walk and the next visit shows the result.
+ */
+const MAX_MEASURE_CALLS = 12;
+
+/**
+ * Pause between those calls. A call normally spends its time walking on the
+ * server; when another caller holds the walk it answers at once, and without
+ * a pause the loop would spend all its calls in a second.
+ */
+const MEASURE_CALL_GAP_MS = 3000;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** How many members the ranking shows before it folds the rest away. */
 const MEMBERS_FOLDED = 5;
@@ -130,10 +148,21 @@ export const UsageBreakdown = memo<{
   data: DriveUsageData;
   /** In a popover: a smaller figure and bounded width. Embedded: the page's width. */
   inPopover?: boolean;
-  onRefresh: () => Promise<void>;
+  /** `drives`: only these, to continue walks still under way; all when omitted. */
+  onRefresh: (drives?: SandboxDrive[]) => Promise<DriveUsageRefreshResult | void>;
 }>(({ data, inPopover, onRefresh }) => {
   const { t } = useTranslation('setting');
   const [refreshing, setRefreshing] = useState(false);
+  // A drive too large to measure in one call (LOBE-15436): how much the walk
+  // has counted so far, shown beside the last finished figure.
+  const [measuring, setMeasuring] = useState<DriveUsageRefreshResult['measuring'] | null>(null);
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   const [showAllMembers, setShowAllMembers] = useState(false);
 
   const drives = data.drives ?? [];
@@ -187,8 +216,21 @@ export const UsageBreakdown = memo<{
   const refresh = async () => {
     setRefreshing(true);
     try {
-      await onRefresh();
+      // Each call continues the walk where the last one stopped, so keep
+      // calling while it is still measuring and someone is looking.
+      let pending: DriveUsageRefreshResult['measuring'];
+      for (let call = 0; call < MAX_MEASURE_CALLS && mounted.current; call++) {
+        if (pending) await wait(MEASURE_CALL_GAP_MS);
+        if (!mounted.current) return;
+        const result = await onRefresh(pending?.drives);
+        if (!mounted.current) return;
+        pending = result?.measuring;
+        setMeasuring(pending ?? null);
+        if (!pending) break;
+      }
     } catch (error) {
+      if (!mounted.current) return;
+      setMeasuring(null);
       // The execution plane could not walk the drive, so the figure on screen
       // is the last one it measured — say so, rather than let a refresh that
       // changed nothing pass for one that confirmed it (LOBE-15436).
@@ -198,7 +240,7 @@ export const UsageBreakdown = memo<{
           : t('workingDirectory.drive.actionFailed', { ns: 'device' }),
       );
     } finally {
-      setRefreshing(false);
+      if (mounted.current) setRefreshing(false);
     }
   };
 
@@ -224,16 +266,31 @@ export const UsageBreakdown = memo<{
           </Flexbox>
         </Flexbox>
         <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
-          <Text fontSize={12} type={refused ? 'danger' : over ? 'warning' : 'secondary'}>
-            {total === null
-              ? t('drive.usage.unmeasuredShort')
-              : over
-                ? t('drive.usage.overBy', { size: formatSize(total - quotaBytes) })
-                : t('drive.usage.remaining', {
-                    percent: formatPercent(percent(total, quotaBytes)),
-                    size: formatSize(quotaBytes - total),
-                  })}
-          </Text>
+          {/* Over the quota stays said while a new measurement runs: those are
+              the drives most likely to be large, and writes may be refused. */}
+          {(over || !measuring) && (
+            <Text fontSize={12} type={refused ? 'danger' : over ? 'warning' : 'secondary'}>
+              {total === null
+                ? t('drive.usage.unmeasuredShort')
+                : over
+                  ? t('drive.usage.overBy', { size: formatSize(total - quotaBytes) })
+                  : t('drive.usage.remaining', {
+                      percent: formatPercent(percent(total, quotaBytes)),
+                      size: formatSize(quotaBytes - total),
+                    })}
+            </Text>
+          )}
+          {measuring && (
+            // The large figure is still the last finished measurement; say a
+            // new one is under way rather than present it as confirmed.
+            <Tooltip title={t('drive.usage.measuringHint')}>
+              <Text fontSize={12} type={'secondary'}>
+                {measuring.scannedBytes === null
+                  ? t('drive.usage.measuringShort')
+                  : t('drive.usage.measuring', { size: formatSize(measuring.scannedBytes) })}
+              </Text>
+            </Tooltip>
+          )}
           <ActionIcon
             icon={RefreshCwIcon}
             loading={refreshing}

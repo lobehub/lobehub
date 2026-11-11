@@ -48,7 +48,51 @@ describe('useDriveUsage refresh', () => {
     const { result } = renderHook(() => useDriveUsage());
 
     await act(async () => {
-      await expect(result.current.refresh()).resolves.toBeUndefined();
+      await expect(result.current.refresh()).resolves.toEqual({});
     });
+  });
+
+  // LOBE-15436: a drive too large to walk in one call answers "still measuring".
+  it('should report a drive still being measured with what has been counted', async () => {
+    vi.mocked(sandboxStorageService.refreshStorageUsage)
+      .mockResolvedValueOnce({
+        usageMeasurement: { scannedBytes: 300, startedAt: null, status: 'measuring' },
+      } as any)
+      .mockResolvedValueOnce({} as any);
+    const { result } = renderHook(() => useDriveUsage());
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    await act(async () => {
+      await expect(result.current.refresh()).resolves.toEqual({
+        measuring: { drives: ['public'], scannedBytes: 300 },
+      });
+    });
+  });
+
+  it('should still say measuring when the walk has not reported a count yet', async () => {
+    vi.mocked(sandboxStorageService.refreshStorageUsage).mockResolvedValue({
+      usageMeasurement: { scannedBytes: null, startedAt: null, status: 'measuring' },
+    } as any);
+    const { result } = renderHook(() => useDriveUsage());
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    await act(async () => {
+      await expect(result.current.refresh()).resolves.toEqual({
+        measuring: { drives: ['public', 'personal'], scannedBytes: null },
+      });
+    });
+  });
+
+  it('should measure only the drives it is given', async () => {
+    vi.mocked(sandboxStorageService.refreshStorageUsage).mockResolvedValue({} as any);
+    const { result } = renderHook(() => useDriveUsage());
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    await act(async () => {
+      await result.current.refresh(['personal']);
+    });
+
+    expect(sandboxStorageService.refreshStorageUsage).toHaveBeenCalledTimes(1);
+    expect(sandboxStorageService.refreshStorageUsage).toHaveBeenCalledWith({ drive: 'personal' });
   });
 });
