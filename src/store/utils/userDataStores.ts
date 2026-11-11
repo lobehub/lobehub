@@ -10,6 +10,7 @@ import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/tr
 import { useDiscoverStore } from '@/store/discover';
 import { useDocumentStore } from '@/store/document';
 import { useEvalStore } from '@/store/eval';
+import { expertiseActions } from '@/store/expertise';
 import { useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
 import { useImageStore } from '@/store/image';
@@ -58,6 +59,7 @@ const resetableStores: ResetableStoreApi[] = [
 const resetableActions: ResetableStore[] = [
   channelActions,
   agentDocumentActions,
+  expertiseActions,
   pageActions,
   projectFileActions,
   resourcePermissionActions,

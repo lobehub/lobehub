@@ -17,6 +17,7 @@ import {
 } from '@/routes/(main)/agent/features/routeMeta';
 import { agentDocumentListLoader } from '@/spa/router/agentDocumentListLoader';
 import { channelDataLoader } from '@/spa/router/channelDataLoader';
+import { selfLearningLoader } from '@/spa/router/expertiseLoaders';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
 import { dynamicElement, dynamicLayout, redirectElement } from '@/utils/router';
@@ -137,6 +138,7 @@ export const agentPageChildren: RouteObject[] = [
       'Desktop > Chat > Self Learning',
     ),
     handle: { meta: agentSelfLearningRouteMeta },
+    loader: selfLearningLoader,
     path: 'self-evolving',
   },
   {
@@ -189,6 +191,7 @@ export const agentPageChildren: RouteObject[] = [
         path: 'rules/:lessonId',
       },
     ],
+    loader: selfLearningLoader,
     path: 'self-evolving/:domainId',
   },
   // Legacy `/self-learning` deep-links keep their remaining path when redirected.
