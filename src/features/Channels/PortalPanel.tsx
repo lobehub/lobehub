@@ -9,22 +9,22 @@ import RightPanel from '@/features/RightPanel';
 
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT } from './ThreadPanel';
-import { useAcceptancePanel } from './useAcceptancePanel';
+import { usePortalPanel } from './usePortalPanel';
 
 /** Entity details a Channel can show beside its feed; anything else follows its own route. */
 export const CHANNEL_ENTITY_PORTAL_SCOPE = [
   'acceptance',
 ] as const satisfies readonly InternalLinkReference['type'][];
 
-/** The acceptance report behind a link in the feed, beside the Channel like a thread. */
-export function AcceptancePanel({
+/** A report or web page opened from a link in the feed, beside the Channel like a thread. */
+export function PortalPanel({
   availableWidth = 1000,
   channelId,
 }: {
   availableWidth?: number;
   channelId: string;
 }): ReactNode {
-  const { close, open } = useAcceptancePanel(channelId);
+  const { close, open } = usePortalPanel(channelId);
   const [preferredWidth, setPreferredWidth] = useState(720);
   const narrow = availableWidth < THREAD_FLOAT_BREAKPOINT;
   const maxWidth = narrow ? availableWidth : availableWidth - 360;

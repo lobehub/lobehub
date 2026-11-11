@@ -688,6 +688,36 @@ describe('Link Render — open an external link in the side browser', () => {
     );
   });
 
+  it("opens the page in the host's side browser when the host has one", () => {
+    mockConst.isDesktop = true;
+    const openInHostBrowser = vi.fn();
+
+    const { container } = render(
+      <EntityLinkHostProvider portal={['acceptance']} onOpenSideBrowser={openInHostBrowser}>
+        <Render
+          id="msg-1"
+          tagName="lobeLink"
+          type="element"
+          node={{
+            properties: {
+              linkDomain: 'localhost',
+              linkHref: 'http://localhost:3022/observability/context',
+              linkKind: 'generic',
+              linkLabel: 'http://localhost:3022/observability/context',
+            },
+          }}
+        >
+          {null}
+        </Render>
+      </EntityLinkHostProvider>,
+    );
+    fireEvent.click(container.querySelector('[data-side-browser]')!);
+
+    expect(openInHostBrowser).toHaveBeenCalledWith('http://localhost:3022/observability/context');
+    // The working sidebar is not on this page; a request left for it would pop it open later.
+    expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
+  });
+
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
     mockConst.isDesktop = true;
 
