@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { deriveWorktreePath } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -24,9 +25,12 @@ const candidate = {
   threadId: null,
 };
 
+const sourceCheckout = { branch: 'main', current: true, path: '/code/lobehub' };
+
 beforeEach(() => {
   vi.resetAllMocks();
   gateway.queryDeviceSystemInfo.mockResolvedValue({ homePath: '/Users/me' } as never);
+  gateway.listGitWorktrees.mockResolvedValue([sourceCheckout]);
 });
 
 describe('createChannelWorktree', () => {
@@ -52,29 +56,36 @@ describe('createChannelWorktree', () => {
   });
 
   it('reuses the checkout an earlier attempt already created', async () => {
-    gateway.addGitWorktree.mockResolvedValue({ error: 'already exists', success: false });
-    gateway.listGitWorktrees.mockImplementation(async () => [
-      {
-        branch: candidate.branch,
-        current: false,
-        path: (gateway.addGitWorktree.mock.calls[0][0] as { worktreePath: string }).worktreePath,
-      },
+    const worktreePath = deriveWorktreePath(candidate.sourceDirectory, candidate.branch, {
+      homeDir: '/Users/me',
+    });
+    gateway.listGitWorktrees.mockResolvedValue([
+      sourceCheckout,
+      { branch: candidate.branch, current: false, path: worktreePath },
     ]);
 
-    const result = await createChannelWorktree(candidate, null);
-
-    expect(result.path).toContain('/Users/me/.lobehub/worktrees/');
+    expect(await createChannelWorktree(candidate, null)).toEqual({ path: worktreePath });
+    expect(gateway.addGitWorktree).not.toHaveBeenCalled();
   });
 
-  it('reports why when the directory cannot host a worktree', async () => {
-    gateway.addGitWorktree.mockResolvedValue({
-      error: 'fatal: not a git repository',
-      success: false,
-    });
+  it('never asks a directory outside git to add a worktree', async () => {
     gateway.listGitWorktrees.mockResolvedValue([]);
 
     expect(await createChannelWorktree(candidate, null)).toEqual({
-      error: 'fatal: not a git repository',
+      error: 'The directory is not a git repository',
+    });
+    // The device creates the target's parent folder before git refuses.
+    expect(gateway.addGitWorktree).not.toHaveBeenCalled();
+  });
+
+  it('reports why when git refuses the worktree', async () => {
+    gateway.addGitWorktree.mockResolvedValue({
+      error: "fatal: a branch named 'x' already exists",
+      success: false,
+    });
+
+    expect(await createChannelWorktree(candidate, null)).toEqual({
+      error: "fatal: a branch named 'x' already exists",
     });
   });
 
