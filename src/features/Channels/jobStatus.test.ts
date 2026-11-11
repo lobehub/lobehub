@@ -102,6 +102,19 @@ describe('Channel task tone', () => {
     ]);
   });
 
+  it('does not show a follow-up deferred behind the primary responder as replying', () => {
+    const deferred = job({ blockedCode: 'awaiting_primary', id: 'deferred' });
+    expect(replyActivityJobs([job({ id: 'primary', status: 'running' }), deferred])).toEqual([
+      expect.objectContaining({ id: 'primary' }),
+    ]);
+    expect(channelJobTone(deferred)).toBe('quiet');
+    expect(channelJobStatus(deferred)).toBe('blocked.awaiting_primary');
+    // Once it starts, it is a reply in progress like any other.
+    expect(replyActivityJobs([{ ...deferred, blockedCode: null, status: 'running' }])).toHaveLength(
+      1,
+    );
+  });
+
   it('leaves no reply activity when all three Agents have replied', () => {
     expect(
       replyActivityJobs(['codex', 'pi', 'native'].map((id) => job({ id, status: 'completed' }))),

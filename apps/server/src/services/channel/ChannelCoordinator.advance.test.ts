@@ -11,6 +11,7 @@ const { executions, execAgent, notifyChannel } = vi.hoisted(() => ({
     claim: vi.fn(),
     finishDispatch: vi.fn(),
     input: vi.fn(),
+    primaryReply: vi.fn(),
     recentContext: vi.fn(),
   },
   execAgent: vi.fn(),
@@ -76,6 +77,7 @@ describe('Channel concurrent startup', () => {
     vi.resetAllMocks();
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
+    executions.primaryReply.mockResolvedValue(null);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     executions.claim.mockImplementation(async (_channelId, id: string) => ({
@@ -187,5 +189,22 @@ describe('Channel concurrent startup', () => {
     await coordinator().advance('channel');
     expect(execAgent).toHaveBeenCalledTimes(2);
     expect(executions.accepted).not.toHaveBeenCalledWith('channel', 'job-0');
+  });
+
+  it('hands a deferred follow-up the primary responder’s reply', async () => {
+    executions.primaryReply.mockResolvedValue({
+      author: { id: 'agt-coder', name: 'Coder', type: 'agent' },
+      content: 'Fixed in the tokenizer.',
+      id: 'reply',
+      replyToId: 'message',
+      sequence: 2,
+      threadId: null,
+    });
+    await coordinator(1).advance('channel');
+
+    expect(executions.primaryReply).toHaveBeenCalledWith('channel', 'job-0');
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain('<channel_reply from="Coder" type="agent"');
+    expect(prompt).toContain('Fixed in the tokenizer.');
   });
 });
