@@ -6,6 +6,7 @@ const expertiseReset = vi.hoisted(() => vi.fn());
 const pageReset = vi.hoisted(() => vi.fn());
 const resourcePermissionReset = vi.hoisted(() => vi.fn());
 const sandboxReset = vi.hoisted(() => vi.fn());
+const statsReset = vi.hoisted(() => vi.fn());
 const workReset = vi.hoisted(() => vi.fn());
 const fakeStore = vi.hoisted(() => () => ({
   getState: () => {
@@ -38,6 +39,7 @@ vi.mock('@/store/resourcePermission', () => ({
   resourcePermissionActions: { reset: resourcePermissionReset },
 }));
 vi.mock('@/store/sandbox', () => ({ sandboxActions: { reset: sandboxReset } }));
+vi.mock('@/store/stats', () => ({ statsActions: { reset: statsReset } }));
 vi.mock('@/store/session', () => ({ useSessionStore: fakeStore() }));
 vi.mock('@/store/task', () => ({ useTaskStore: fakeStore() }));
 vi.mock('@/store/tool', () => ({ useToolStore: fakeStore() }));
@@ -54,6 +56,7 @@ describe('stores.reset', () => {
     pageReset.mockClear();
     resourcePermissionReset.mockClear();
     sandboxReset.mockClear();
+    statsReset.mockClear();
     workReset.mockClear();
   });
 
@@ -73,6 +76,8 @@ describe('stores.reset', () => {
     // outlive the data context, even when the next one reuses the scope string.
     expect(resourcePermissionReset).toHaveBeenCalledTimes(1);
     expect(sandboxReset).toHaveBeenCalledTimes(1);
+    // Another identity must not paint the previous one's usage numbers.
+    expect(statsReset).toHaveBeenCalledTimes(1);
     expect(workReset).toHaveBeenCalledTimes(1);
     for (const reset of storeResets) expect(reset).toHaveBeenCalledTimes(1);
     expect(order[0]).toBe('mux');

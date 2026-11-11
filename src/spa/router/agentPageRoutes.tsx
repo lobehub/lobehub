@@ -16,6 +16,7 @@ import {
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
 import { agentDocumentListLoader } from '@/spa/router/agentDocumentListLoader';
+import { agentUsageLoader } from '@/spa/router/agentUsageLoader';
 import { channelDataLoader } from '@/spa/router/channelDataLoader';
 import { selfLearningLoader } from '@/spa/router/expertiseLoaders';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
@@ -120,6 +121,7 @@ export const agentPageChildren: RouteObject[] = [
       'Desktop > Chat > Statistics',
     ),
     handle: { meta: agentStatisticsRouteMeta },
+    loader: agentUsageLoader,
     path: 'statistics',
   },
   {

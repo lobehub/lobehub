@@ -22,6 +22,7 @@ import { projectFileActions } from '@/store/projectFile';
 import { resourcePermissionActions } from '@/store/resourcePermission';
 import { sandboxActions } from '@/store/sandbox';
 import { useSessionStore } from '@/store/session';
+import { statsActions } from '@/store/stats';
 import { useTaskStore } from '@/store/task';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
@@ -64,6 +65,7 @@ const resetableActions: ResetableStore[] = [
   projectFileActions,
   resourcePermissionActions,
   sandboxActions,
+  statsActions,
   workActions,
 ];
 
