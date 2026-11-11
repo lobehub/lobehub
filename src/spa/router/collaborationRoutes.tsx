@@ -17,6 +17,15 @@ export const collaborationRoutes: RouteObject[] = [
         handle: { meta: agentsRouteMeta },
         index: true,
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/agents/[id]'),
+          'Desktop > Agents > Contact',
+          { preloadId: 'agents' },
+        ),
+        handle: { meta: agentsRouteMeta },
+        path: ':id',
+      },
     ],
     errorElement: <ErrorBoundary resetPath=".." />,
     path: 'agents',
