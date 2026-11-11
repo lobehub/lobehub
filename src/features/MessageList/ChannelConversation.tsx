@@ -8,6 +8,8 @@ import { HashIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { useChannelMenu } from '@/features/Channels/useChannelMenu';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
+import { projectListItemSelector, useProjectStore } from '@/store/project';
 
 import ConversationRow from './ConversationRow';
 import { channelPreview } from './conversations';
@@ -22,6 +24,8 @@ interface ChannelConversationProps {
 /** A group Channel as one more conversation, ordered with the Agents by its latest message. */
 const ChannelConversation = memo<ChannelConversationProps>(({ active, activeAt, channel }) => {
   const menuItems = useChannelMenu();
+  // A Channel grouped under a project wears that project's logo; a standalone one keeps "#".
+  const project = useProjectStore(projectListItemSelector(channel.projectId));
 
   return (
     <ConversationRow
@@ -34,12 +38,16 @@ const ChannelConversation = memo<ChannelConversationProps>(({ active, activeAt, 
       unread={channel.unreadCount}
       url={CHANNEL_URL(channel.id)}
       avatar={
-        <Avatar
-          avatar={<Icon color={cssVar.colorTextSecondary} icon={HashIcon} size={16} />}
-          background={cssVar.colorFillSecondary}
-          shape={'square'}
-          size={AVATAR_SIZE}
-        />
+        project ? (
+          <ProjectAvatar avatar={project.avatar} name={project.name} size={AVATAR_SIZE} />
+        ) : (
+          <Avatar
+            avatar={<Icon color={cssVar.colorTextSecondary} icon={HashIcon} size={16} />}
+            background={cssVar.colorFillSecondary}
+            shape={'square'}
+            size={AVATAR_SIZE}
+          />
+        )
       }
     />
   );
