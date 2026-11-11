@@ -17,11 +17,16 @@
  *   most expensive list price). A value above it cannot be a per-run cost.
  * - A cumulative value continues the previous CC op's reported value: the
  *   difference is non-negative and itself within the cap.
- * - A previous op this guard already de-cumulated proves the session reports
- *   cumulatively, so its successors are treated the same even below the cap.
  *
- * New clients report per-run cost, which almost never satisfies both conditions
- * (it rarely exceeds the cap), so their values pass through untouched.
+ * Only the first condition is evidence on its own: a value above the cap cannot be
+ * a per-run cost. A previous op the guard de-cumulated does not carry that
+ * judgement over, because a topic can switch clients mid-session — a legacy client
+ * may have reported a small session total, and the upgraded client that follows
+ * reports an honest per-run value whose delta against that total looks like a
+ * continuation. Treating it as one would book a fraction of the real spend.
+ *
+ * New clients report per-run cost, which rarely exceeds the cap, so their values
+ * pass through untouched.
  */
 
 export const CLAUDE_CODE_PROVIDER = 'claude-code';
@@ -36,8 +41,6 @@ export interface PreviousClaudeCodeCost {
   /** Raw value that op's client reported: `cost.reportedSessionTotal` when the
    * guard rewrote it, otherwise its `total_cost`. */
   reportedCost: number;
-  /** Whether the guard already treated that op as session-cumulative. */
-  reportedCumulative: boolean;
 }
 
 export interface ClaudeCodeCostInput {
@@ -84,7 +87,8 @@ export const resolveClaudeCodeRunCost = ({
   const delta = reportedCost - previous.reportedCost;
   // A session reset (or an unrelated session) reports less than the previous op.
   if (delta < 0 || delta > cap) return untouched;
-  if (reportedCost <= cap && !previous.reportedCumulative) return untouched;
+  // Below the cap the value can honestly be a per-run cost, so it is left alone.
+  if (reportedCost <= cap) return untouched;
 
   return { reportedSessionTotal: reportedCost, total: roundUsd(delta) };
 };

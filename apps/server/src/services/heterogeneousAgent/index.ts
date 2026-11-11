@@ -819,10 +819,7 @@ export class HeterogeneousAgentService {
         topicId,
       });
       if (!previous) return undefined;
-      return {
-        reportedCost: previous.reportedSessionTotal ?? previous.totalCost,
-        reportedCumulative: previous.reportedSessionTotal !== null,
-      };
+      return { reportedCost: previous.reportedSessionTotal ?? previous.totalCost };
     } catch (err) {
       log('heteroFinish: previous claude-code cost lookup failed (non-fatal): %O', err);
       return undefined;
