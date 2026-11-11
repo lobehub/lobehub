@@ -205,6 +205,49 @@ describe('knowledge content read boundaries', () => {
     ).toBe(true);
   });
 
+  it.each([false, true])(
+    'does not return ordinary owner content to a different explicit caller (policy enabled: %s)',
+    async (policyEnabled) => {
+      if (policyEnabled) enablePolicy();
+      const result = await new KnowledgeBaseSearchService(
+        db,
+        owner,
+        undefined,
+        undefined,
+        viewer,
+      ).getFileContents(['docs_content_personal']);
+      expect(result[0].content).toBe('');
+      expect(result[0].error).toBe('Document not found');
+    },
+  );
+
+  it.each([false, true])(
+    'reads ordinary content in the explicit caller scope (policy enabled: %s)',
+    async (policyEnabled) => {
+      if (policyEnabled) enablePolicy();
+      const result = await new KnowledgeBaseSearchService(
+        db,
+        owner,
+        undefined,
+        undefined,
+        viewer,
+      ).getFileContents(['docs_content_viewer']);
+      expect(result[0].content).toBe('viewer text');
+    },
+  );
+
+  it.each([false, true])(
+    'preserves ordinary owner reads without an explicit caller (policy enabled: %s)',
+    async (policyEnabled) => {
+      if (policyEnabled) enablePolicy();
+      const result = await new KnowledgeBaseSearchService(db, owner).getFileContents([
+        'docs_content_personal',
+        'docs_content_viewer',
+      ]);
+      expect(result.map((row) => row.content)).toEqual(['personal text', '']);
+    },
+  );
+
   it('permits a current viewer to read only exact granted items and their parsed pages', async () => {
     enablePolicy();
     const result = await contents(viewer, [

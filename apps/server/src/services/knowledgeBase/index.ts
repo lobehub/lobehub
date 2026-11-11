@@ -266,6 +266,14 @@ export class KnowledgeBaseSearchService {
         )
       ).flat();
     }
+    if (this.askerId && this.askerId !== this.userId)
+      return new KnowledgeBaseSearchService(
+        this.serverDB,
+        this.askerId,
+        this.workspaceId,
+        this.callerAgentVisibility,
+        this.askerId,
+      ).readScopedContents(ids);
     return this.readScopedContents(ids);
   }
 
