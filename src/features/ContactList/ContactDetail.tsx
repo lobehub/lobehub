@@ -11,6 +11,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import AsyncError from '@/components/AsyncError';
 import NavHeader from '@/features/NavHeader';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -60,7 +61,7 @@ const ContactDetail = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
-  useFetchAgentList();
+  const { error, mutate } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const item = useHomeStore(homeAgentListSelectors.getAgentById(id), isEqual);
   const isGroup = item?.type === 'group';
@@ -72,6 +73,15 @@ const ContactDetail = memo<{ id: string }>(({ id }) => {
   );
 
   if (!item) {
+    // Mobile has no Contacts list beside the card to surface a failed load,
+    // so the card owns the retry instead of waiting on a skeleton forever.
+    if (!isInit && error)
+      return (
+        <Flexbox align={'center'} {...stylex.props(styles.card)}>
+          <AsyncError error={error} variant="inline" onRetry={() => void mutate()} />
+        </Flexbox>
+      );
+
     if (!isInit)
       return (
         <Flexbox align={'center'} gap={12} {...stylex.props(styles.card)}>

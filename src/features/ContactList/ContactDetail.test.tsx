@@ -10,13 +10,18 @@ import { ContactDetail } from './ContactDetail';
 const navigate = vi.hoisted(() => vi.fn());
 const agentList = vi.hoisted(() => ({ init: true, items: [] as { id: string }[] }));
 const access = vi.hoisted(() => ({ canEdit: true }));
+const fetch = vi.hoisted(() => ({ error: undefined as unknown, mutate: vi.fn() }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigate,
 }));
 vi.mock('@/features/NavHeader', () => ({ default: () => null }));
-vi.mock('@/hooks/useFetchAgentList', () => ({ useFetchAgentList: () => ({}) }));
+vi.mock('@/hooks/useFetchAgentList', () => ({ useFetchAgentList: () => fetch }));
+vi.mock('@/components/AsyncError', () => ({
+  default: ({ onRetry }: { onRetry?: () => void }) =>
+    createElement('button', { onClick: onRetry, type: 'button' }, 'Retry contacts'),
+}));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: access.canEdit }),
@@ -34,6 +39,8 @@ vi.mock('./ContactAvatar', () => ({ default: () => null }));
 
 beforeEach(() => {
   navigate.mockReset();
+  fetch.error = undefined;
+  fetch.mutate.mockReset();
   access.canEdit = true;
   agentList.init = true;
   agentList.items = [
@@ -86,5 +93,16 @@ describe('ContactDetail', () => {
     render(createElement(ContactDetail, { id: 'agt_missing' }));
 
     expect(screen.getByText('contacts.notFound')).toBeInTheDocument();
+  });
+
+  it('shows a retryable error instead of an endless skeleton when the first load fails', () => {
+    agentList.init = false;
+    agentList.items = [];
+    fetch.error = new Error('429');
+
+    render(createElement(ContactDetail, { id: 'agt_1' }));
+
+    fireEvent.click(screen.getByText('Retry contacts'));
+    expect(fetch.mutate).toHaveBeenCalled();
   });
 });
