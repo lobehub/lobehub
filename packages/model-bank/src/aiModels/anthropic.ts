@@ -39,7 +39,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/fable-5-2/overview
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['contextCachingTTL', 'disableContextCaching', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',
