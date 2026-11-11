@@ -165,7 +165,9 @@ export const useComposer = (params: UseComposerParams) => {
           clearBackup(backupKeyRef.current);
           backupKeyRef.current = nextKey;
           if (dirtyRef.current) backup();
-          paramsRef.current.onDraftCreated?.(draft.id);
+          // A composer already closed keeps saving but no longer steers the page:
+          // the person has moved on, perhaps to another mail.
+          if (!closedRef.current) paramsRef.current.onDraftCreated?.(draft.id);
           void refresh().catch(() => undefined);
         }
         if (!dirtyRef.current) {
@@ -246,7 +248,13 @@ export const useComposer = (params: UseComposerParams) => {
             mode,
             sourceMailId: source.id,
           });
-          if (cancelled) return;
+          if (cancelled || closedRef.current) {
+            // Closed while it opened: an answer nobody wrote in is not left behind.
+            if (isBlankDraft(draft)) {
+              void agentAccountService.deleteMailDrafts([draft.id]).catch(() => undefined);
+            }
+            return;
+          }
           resume(draft);
           paramsRef.current.onDraftCreated?.(draft.id);
           void paramsRef.current.refresh().catch(() => undefined);

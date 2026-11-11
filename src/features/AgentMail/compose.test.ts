@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   backupKeyOf,
   forwardSubject,
+  hasSeparator,
   initialFieldsFor,
   invalidAddresses,
   isValidAddress,
@@ -58,6 +59,13 @@ describe('addresses', () => {
       { address: 'j@x.com', name: 'Doe, John' },
       { address: 'b@b.com' },
     ]);
+  });
+
+  it('sees separators only outside quoted names', () => {
+    expect(hasSeparator('"Doe, John"')).toBe(false);
+    expect(hasSeparator('"Doe, John" <j@x.com>')).toBe(false);
+    expect(hasSeparator('"Doe, John" <j@x.com>,')).toBe(true);
+    expect(hasSeparator('a@b.com;')).toBe(true);
   });
 
   it('marks what is plainly not an address', () => {

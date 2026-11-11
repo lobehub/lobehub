@@ -41,6 +41,16 @@ export const parseAddress = (raw: string): AgentMailAddress => {
 };
 
 /** Splits typed or pasted text into recipients; commas, semicolons and line breaks separate them. */
+/** Whether `raw` has a comma, semicolon or line break that is not inside a quoted name. */
+export const hasSeparator = (raw: string) => {
+  let quoted = false;
+  for (const char of raw) {
+    if (char === '"') quoted = !quoted;
+    else if (!quoted && /[\n,;]/.test(char)) return true;
+  }
+  return false;
+};
+
 export const parseAddressList = (raw: string): AgentMailAddress[] => {
   // A quoted display name may hold a comma: `"Doe, John" <j@x.com>` is one recipient.
   const parts: string[] = [];

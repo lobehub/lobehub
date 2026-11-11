@@ -7,7 +7,13 @@ import { X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatAddress, isValidAddress, mergeAddresses, parseAddressList } from './compose';
+import {
+  formatAddress,
+  hasSeparator,
+  isValidAddress,
+  mergeAddresses,
+  parseAddressList,
+} from './compose';
 import { composerStyles as styles } from './composerStyles';
 
 export interface RecipientInputProps {
@@ -77,9 +83,8 @@ const RecipientInput = memo<RecipientInputProps>(
             onBlur={() => commit(text)}
             onChange={(event) => {
               const next = event.target.value;
-              // Inside an open quote a comma is part of a display name, not a separator.
-              const quoted = (next.match(/"/g)?.length ?? 0) % 2 === 1;
-              if (!quoted && /[\n,;]/.test(next)) commit(next);
+              // A comma inside a quoted display name is part of the name.
+              if (hasSeparator(next)) commit(next);
               else setText(next);
             }}
             onKeyDown={(event) => {
@@ -92,7 +97,7 @@ const RecipientInput = memo<RecipientInputProps>(
             }}
             onPaste={(event) => {
               const pasted = event.clipboardData.getData('text');
-              if (!/[\n,;]/.test(pasted)) return;
+              if (!hasSeparator(pasted)) return;
               event.preventDefault();
               commit(`${text}${pasted}`);
             }}

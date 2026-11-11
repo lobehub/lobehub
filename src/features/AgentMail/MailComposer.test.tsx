@@ -445,6 +445,46 @@ describe('MailComposer', () => {
     });
   });
 
+  describe('MailComposer — Codex on 94a2f6b1f07', () => {
+    it('does not steer the page once closed, while its first save finishes', async () => {
+      let finishCreate!: () => void;
+      service.createMailDraft.mockImplementation(
+        (input) =>
+          new Promise((resolve) => {
+            finishCreate = () => resolve(composerDraft({ ...input, id: 'draft_late' }));
+          }),
+      );
+      const onDraftCreated = vi.fn();
+      const { onClose } = setupComposer({ onDraftCreated });
+      fireEvent.change(screen.getByLabelText('identity.compose.body'), {
+        target: { value: 'Bye' },
+      });
+      fireEvent.click(screen.getByLabelText('identity.compose.close'));
+      expect(onClose).toHaveBeenCalled();
+
+      await act(async () => finishCreate());
+      expect(service.createMailDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Bye' }),
+      );
+      expect(onDraftCreated).not.toHaveBeenCalled();
+    });
+
+    it('keeps a quoted name whole when typed one character at a time', () => {
+      setupComposer();
+      const input = screen.getByLabelText('identity.compose.to');
+      let typed = '';
+      for (const char of '"Doe, John" <j@x.com>') {
+        typed += char;
+        fireEvent.change(input, { target: { value: typed } });
+      }
+      expect(screen.queryByTestId('recipient-chip')).toBeNull();
+      fireEvent.change(input, { target: { value: `${typed},` } });
+      expect(screen.getAllByTestId('recipient-chip').map((chip) => chip.textContent)).toEqual([
+        'Doe, John <j@x.com>',
+      ]);
+    });
+  });
+
   describe('MailComposer — after the verification round', () => {
     it("forwards a mail with no plain text without asking for words of one's own", async () => {
       setupComposer({ inline: true, mode: 'forward', source: composerSource({ text: '' }) });
