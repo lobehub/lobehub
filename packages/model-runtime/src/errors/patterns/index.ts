@@ -1,40 +1,10 @@
-import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
-/**
- * One entry in the pattern registry.
- *
- * Patterns are matched against the upstream error message via either substring
- * inclusion or regex test. Substring matching is the default and preferred form
- * because it's cheap, debuggable, and resilient to whitespace.
- *
- * A pattern can be scoped to a specific `provider` or upstream `errorType` when
- * the same substring could otherwise produce false positives across providers.
- */
-export interface ErrorPattern {
-  /** Code produced when this pattern matches. */
-  code: ILobeAgentRuntimeErrorType;
+import { CONTENT_MODERATION_PATTERNS } from './contentModeration';
+import type { ErrorPattern } from './types';
+import { sub } from './utils';
 
-  /** Optional upstream errorType scope. When set, only matches errors carrying that errorType. */
-  errorType?: string;
-
-  /** Match rule. */
-  match:
-    | { kind: 'substring'; value: string; caseInsensitive?: boolean }
-    | { kind: 'regex'; value: RegExp };
-
-  /** Short note on origin / why the pattern is here. */
-  note?: string;
-
-  /** Optional provider scope (single key or list). When set, only matches errors from that provider. */
-  provider?: string | string[];
-}
-
-const sub = (value: string, opts?: { caseInsensitive?: boolean }): ErrorPattern['match'] => ({
-  kind: 'substring',
-  value,
-  caseInsensitive: opts?.caseInsensitive,
-});
+export type { ErrorPattern } from './types';
 
 /**
  * Source of truth for upstream-message-driven error classification.
@@ -1148,66 +1118,7 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   // ─────────────────────────────────────────────────────────────────────────
   // ContentModeration
   // ─────────────────────────────────────────────────────────────────────────
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('violation of provider Terms Of Service'),
-  },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('Content violates usage guidelines'),
-  },
-  { code: AgentRuntimeErrorType.ContentModeration, match: sub('Attention Required! | Cloudflare') },
-  { code: AgentRuntimeErrorType.ContentModeration, match: sub('Sorry, you have been blocked') },
-  { code: AgentRuntimeErrorType.ContentModeration, match: sub('抱歉，您所输入的内容含有违规信息') },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('Content Exists Risk'),
-    note: 'DeepSeek',
-  },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('Input data may contain inappropriate content'),
-  },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('Your request contains prohibited content'),
-    note: 'Anthropic',
-  },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('DataInspectionFailed: Input text data may contain inappropriate content'),
-    note: 'Aliyun',
-  },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('This content was flagged for possible cybersecurity risk'),
-    note: 'OpenAI Trusted Access',
-  },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('output new_sensitive (1027)'),
-    note: 'MiniMax',
-  },
-  { code: AgentRuntimeErrorType.ContentModeration, match: sub('sensitive_words_detected') },
-  { code: AgentRuntimeErrorType.ContentModeration, match: sub('sensitive words detected') },
-  { code: AgentRuntimeErrorType.ContentModeration, match: sub('请勿发送探测请求') },
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('Output data may contain inappropriate content'),
-    note: 'sensenova output-side',
-  },
-
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('data_inspection_failed'),
-    note: 'Alibaba/Qwen content-safety rejection, delivered as a JSON error code.',
-  },
-
-  // Harvested from the 2026-09 production residue.
-  {
-    code: AgentRuntimeErrorType.ContentModeration,
-    match: sub('rejected by content moderation'),
-  },
+  ...CONTENT_MODERATION_PATTERNS,
 
   // ─────────────────────────────────────────────────────────────────────────
   // RequestBodyTooLarge — serialized request exceeded an upstream body limit
