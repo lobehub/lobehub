@@ -65,7 +65,13 @@ export class ProjectRepository {
       // The environment belongs to another aggregate too, and a repository the
       // environment cannot accept must not leave a half-made project behind, so
       // it is created in the same transaction.
+      //
+      // A workspace-public main agent applies published environments only, so
+      // its repository is published too; reusing the creator's private one
+      // would link a repository the project's conversations never check out.
       if (repository) {
+        const publish =
+          !!this.workspaceId && (mainAgent as { visibility?: string }).visibility === 'public';
         const environment = await new EnvironmentModel(
           db,
           this.userId,
@@ -74,6 +80,7 @@ export class ProjectRepository {
           defaultBranch: repository.defaultBranch,
           name: repository.name,
           repositoryUrl: repository.url,
+          ...(publish && { visibility: 'public' as const }),
         });
         await db.insert(projectEnvironments).values({
           addedByUserId: this.userId,
