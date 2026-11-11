@@ -5,7 +5,10 @@ import { createElement } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { agentSignalService } from '@/services/agentSignal';
+import { useAgentSignalStore } from '@/store/agentSignal';
+import { initialState } from '@/store/agentSignal/initialState';
 
 import { useAgentSignalReceipts } from './useAgentSignalReceipts';
 
@@ -25,6 +28,12 @@ const { receipt } = vi.hoisted(() => ({
     userId: 'user-1',
   },
 }));
+
+// Poll timing only: persistence is covered by `src/store/agentSignal/replica.test.ts`.
+vi.mock('@/libs/swr', async () => {
+  const swr = await import('swr');
+  return { mutate: swr.mutate, useClientDataSWR: swr.default };
+});
 
 vi.mock('@/services/agentSignal', () => ({
   agentSignalService: {
@@ -50,6 +59,12 @@ describe('useAgentSignalReceipts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    useAgentSignalStore.setState({ ...initialState });
+    const scope = crypto.randomUUID();
+    vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+    vi.spyOn(cacheScope, 'use').mockReturnValue(scope);
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(false);
+    vi.spyOn(cacheScope, 'canHydrate').mockReturnValue(false);
   });
 
   const renderReceiptsHook = (input: Parameters<typeof useAgentSignalReceipts>[0]) =>
@@ -292,8 +307,9 @@ describe('useAgentSignalReceipts', () => {
       topicId: 'topic-1',
     });
 
+    // Let the first request settle (it also writes the replica) before timing polls.
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(agentSignalService.listReceipts).toHaveBeenCalledTimes(1);
 
@@ -325,8 +341,9 @@ describe('useAgentSignalReceipts', () => {
       topicId: 'topic-1',
     });
 
+    // Let the first request settle (it also writes the replica) before timing polls.
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(agentSignalService.listReceipts).toHaveBeenCalledTimes(1);
 
@@ -361,8 +378,9 @@ describe('useAgentSignalReceipts', () => {
       topicId: 'topic-1',
     });
 
+    // Let the first request settle (it also writes the replica) before timing polls.
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(0);
     });
 
     await act(async () => {
@@ -396,8 +414,9 @@ describe('useAgentSignalReceipts', () => {
       { initialProps: { pollingSignal: 'assistant-1' }, wrapper },
     );
 
+    // Let the first request settle (it also writes the replica) before timing polls.
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(0);
     });
 
     await act(async () => {
