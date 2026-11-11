@@ -192,6 +192,11 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   // A new mail is keyed `new` until its first save names it. Swapping in that
   // id must not remount the composer the person is typing in.
   const [createdDraftId, setCreatedDraftId] = useState<string>();
+  // Only while that composer is on screen: once the URL names something else
+  // (another view, the list, another draft), opening the draft again reads it.
+  if (createdDraftId && composeId !== createdDraftId && composeId !== NEW_COMPOSE) {
+    setCreatedDraftId(undefined);
+  }
   const paneComposeId = composeId && composeId === createdDraftId ? NEW_COMPOSE : composeId;
 
   const startCompose = () => {

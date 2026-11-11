@@ -911,6 +911,33 @@ describe('AgentMail composer', () => {
     );
   });
 
+  it('reads a just-created draft again after leaving its editor', async () => {
+    const saved = draft({ id: 'draft_new', subject: 'Plan', text: 'First words' });
+    service.createMailDraft.mockResolvedValue(saved);
+    service.getMailDraft.mockResolvedValue(saved);
+    service.listMailDrafts.mockResolvedValue([saved]);
+    composePage('/agent/agt_1/mail?compose=new');
+
+    fireEvent.change(await screen.findByLabelText('identity.compose.body'), {
+      target: { value: 'First words' },
+    });
+    await waitFor(
+      () => expect(screen.getByTestId('location')).toHaveTextContent('compose=draft_new'),
+      { timeout: 4000 },
+    );
+    expect(service.getMailDraft).not.toHaveBeenCalled();
+
+    // Leave for Drafts, then open the same draft from there: it is read, not a blank editor.
+    fireEvent.click(screen.getByRole('tab', { name: /identity.mailbox.folder.drafts/ }));
+    await waitFor(() => expect(screen.queryByTestId('mail-composer')).toBeNull());
+    fireEvent.click(await screen.findByRole('button', { name: 'lin@partner.example — Plan' }));
+
+    await waitFor(() => expect(service.getMailDraft).toHaveBeenCalledWith('draft_new'));
+    await waitFor(() =>
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('First words'),
+    );
+  });
+
   it('says up front that an address only receives, and keeps reading working', async () => {
     service.list.mockResolvedValue([
       { ...account('acc_a', 'a@lobe.id'), capabilities: { receive: true, send: false } },
