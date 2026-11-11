@@ -8,7 +8,11 @@ interface RenderHomeOptions {
   hiddenWidgets?: string[];
   /** Module factory for the rail inbox. */
   homeInbox?: () => { default: ComponentType<any> };
+  /** Whether the session check has answered; `false` models a cold boot still restoring it. */
+  isLoaded?: boolean;
   isLogin?: boolean;
+  /** Last-known resolved cache scope persisted by a previous session. */
+  persistedScope?: string;
   portalViewType?: PortalViewType;
   promo?: ReactNode;
   search?: string;
@@ -45,7 +49,9 @@ function translate() {
 const renderHome = async ({
   hiddenWidgets = [],
   homeInbox = () => stub('home-inbox'),
+  isLoaded = true,
   isLogin = true,
+  persistedScope,
   portalViewType,
   promo,
   search = '',
@@ -54,6 +60,7 @@ const renderHome = async ({
 }: RenderHomeOptions = {}) => {
   vi.resetModules();
   window.history.replaceState(null, '', `/${search}`);
+  if (persistedScope) localStorage.setItem('lobehub:active-scope', persistedScope);
 
   vi.doMock('react-i18next', () => ({ useTranslation: translate }));
   vi.doMock('../HomeHeader', () => homeHeaderStub);
@@ -84,7 +91,7 @@ const renderHome = async ({
   }
   vi.doMock('@/store/global', () => ({ useGlobalStore: selectFromGlobalStore }));
   function selectFromUserStore(selector: (state: unknown) => unknown) {
-    return selector({ isSignedIn: isLogin });
+    return selector({ isLoaded, isSignedIn: isLoaded ? isLogin : undefined });
   }
   vi.doMock('@/store/user', () => ({ useUserStore: selectFromUserStore }));
 
@@ -95,6 +102,7 @@ const renderHome = async ({
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   window.history.replaceState(null, '', '/');
   vi.doUnmock('react-i18next');
   vi.doUnmock('../HomeHeader');
@@ -252,6 +260,21 @@ describe('Home rail layout', () => {
 
     act(() => reportEmpty?.(false));
     expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+  }, 20000);
+
+  it('keeps the two-column layout while the session check restores the last signed-in user', async () => {
+    await renderHome({ isLoaded: false, persistedScope: 'user_abc:w1', showHomeRail: true });
+
+    expect(screen.getByTestId('home-rail')).toContainElement(screen.getByTestId('home-inbox'));
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'false');
+    expect(screen.getByTestId('home-portrait')).toBeInTheDocument();
+  }, 20000);
+
+  it('stays single-column for a first-ever visit whose session has not answered yet', async () => {
+    await renderHome({ isLoaded: false, showHomeRail: true });
+
+    expect(screen.queryByTestId('home-rail')).not.toBeInTheDocument();
+    expect(screen.getByTestId('home-main')).toHaveAttribute('data-rail-collapsed', 'true');
   }, 20000);
 });
 

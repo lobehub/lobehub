@@ -13,14 +13,13 @@ import { EntityLinkHostProvider } from '@/features/EntityLink/host';
  * every refresh, painting it empty before the cards arrived.
  */
 import HomeInbox from '@/features/HomeInbox';
+import { useIsSignedInOrRestoring } from '@/libs/swr/useCacheScope';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { HOME_ENTITY_PORTAL_SCOPE, isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
@@ -334,7 +333,9 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const Home = memo(() => {
-  const isLogin = useUserStore(authSelectors.isLogin);
+  // The page paints from the last user's cache before the session answers;
+  // judging layout by `isSignedIn` alone drew one column, then two.
+  const isLogin = useIsSignedInOrRestoring();
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);

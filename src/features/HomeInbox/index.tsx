@@ -16,7 +16,7 @@ import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 // Direct module import, not the feature barrel: home must not pull the whole
 // acceptance workspace into its chunk for one hook.
-import { useCacheScope } from '@/libs/swr/useCacheScope';
+import { useCacheScope, useIsSignedInOrRestoring } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -29,7 +29,7 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import GoalsRailCard from './GoalsRailCard';
 import { filterHiddenWidgetSections } from './hiddenWidgets';
 import { buildHomeGoalEntries } from './homeGoals';
-import { resolveInboxBlockState } from './inboxBlockState';
+import { resolveInboxBlockState, resolveSignedOutRailState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
@@ -47,6 +47,14 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline-start: 8px;
   `,
 }));
+
+/** Two loading cards: holds the rail's place without asserting any section. */
+const RailSkeleton = () => (
+  <Flexbox gap={12}>
+    <BriefCardSkeleton />
+    <BriefCardSkeleton />
+  </Flexbox>
+);
 
 /**
  * Mounted only while the rail has settled with nothing to show, so the page
@@ -139,6 +147,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const { t } = useTranslation('home');
   const { t: tCommon } = useTranslation('common');
   const isLogin = useUserStore(authSelectors.isLogin);
+  const restoringSession = useIsSignedInOrRestoring() && !isLogin;
   const myId = useUserStore(userProfileSelectors.userId);
 
   // Briefs are per-user AND per-workspace rows: a list left over from the
@@ -221,7 +230,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     [topics.running, myId],
   );
 
-  if (!isLogin) return null;
+  if (!isLogin)
+    return resolveSignedOutRailState({ isRail, restoringSession }) === 'skeleton' ? (
+      <RailSkeleton />
+    ) : null;
 
   // The cached feed is on screen while the server confirms it: say so on the
   // section heading instead of hiding the rows behind a skeleton.
@@ -495,13 +507,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
         (!showRailSections || Boolean(newsSWR.data) || Boolean(newsSWR.error));
 
-      if (!railFeedsSettled)
-        return (
-          <Flexbox gap={12}>
-            <BriefCardSkeleton />
-            <BriefCardSkeleton />
-          </Flexbox>
-        );
+      if (!railFeedsSettled) return <RailSkeleton />;
 
       return onRailEmptyChange ? <RailEmptyReporter onChange={onRailEmptyChange} /> : null;
     }
