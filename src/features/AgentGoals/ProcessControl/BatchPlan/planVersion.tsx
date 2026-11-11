@@ -1,12 +1,19 @@
 'use client';
 
-import { createContext, memo, type PropsWithChildren, use, useMemo, useState } from 'react';
-
-import { useClientDataSWR } from '@/libs/swr';
-import { userSkillService } from '@/services/userSkill';
+import {
+  createContext,
+  memo,
+  type PropsWithChildren,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
 import type { BatchModel, BatchRound } from '../Graph/batchModel';
+import { usePlanSkill } from './skillVersions';
 
 /**
  * The plan version a reader picked in the panel's header, shared with its body.
@@ -44,11 +51,17 @@ export interface PlanVersion {
  */
 export const usePlanVersions = (graph: GoalGraphView, model: BatchModel) => {
   const planSkill = model.planSkill;
-  // Keyed by the round count, so a revision the panel is open on loads its version.
-  const { data: skill, isLoading } = useClientDataSWR(
-    planSkill ? ['goal-plan-skill', planSkill.id, model.rounds.length] : null,
-    () => userSkillService.get(planSkill!.id),
-  );
+  const planSkillId = planSkill?.id;
+  const { data: skill, isLoading, mutate } = usePlanSkill(planSkillId);
+  // A new round can rewrite the plan: re-read the skill once the round count
+  // moves, so a revision the panel is open on loads its version.
+  const roundCount = model.rounds.length;
+  const lastRoundCount = useRef(roundCount);
+  useEffect(() => {
+    if (lastRoundCount.current === roundCount) return;
+    lastRoundCount.current = roundCount;
+    if (planSkillId) void mutate();
+  }, [mutate, planSkillId, roundCount]);
   const kept = [...(skill?.versions ?? [])].sort((a, b) => a.version - b.version);
   const versions: PlanVersion[] = kept.length
     ? kept.map((version) => ({ revision: version.version }))
