@@ -386,6 +386,26 @@ describe('agent quota replicas', () => {
       expect(updateAccount).toHaveBeenCalledWith('a1', { enabled: false });
       expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())?.[0]?.enabled).toBe(false);
     });
+
+    it('shares a private account with the workspace in the replica and on the server', async () => {
+      vi.spyOn(agentQuotaService, 'listAccounts')
+        .mockResolvedValueOnce([account('a1', { visibility: 'private' })])
+        .mockRejectedValue(new Error('offline'));
+      const updateAccount = vi
+        .spyOn(agentQuotaService, 'updateAccount')
+        .mockResolvedValue(undefined as never);
+      renderHook(() => useAgentQuotaStore.getState().useFetchQuotaAccounts(), { wrapper });
+      await waitFor(() =>
+        expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())).toBeDefined(),
+      );
+
+      await act(() => useAgentQuotaStore.getState().setQuotaAccountVisibility('a1', 'public'));
+
+      expect(updateAccount).toHaveBeenCalledWith('a1', { visibility: 'public' });
+      expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())?.[0]?.visibility).toBe(
+        'public',
+      );
+    });
   });
 
   describe('user-data reset', () => {
