@@ -176,6 +176,46 @@ export class TaskLabelModel {
     return row;
   };
 
+  /**
+   * Find the labels with these names, creating the missing ones; returns every
+   * label named, new or not. An existing label is kept as it is, whatever color
+   * or group was asked for, and the first of several with one name decides. A
+   * label a concurrent caller just created is found rather than failing, which
+   * is what sets this apart from {@link create}.
+   */
+  findOrCreateMany = async (
+    params: Pick<CreateTaskLabelParams, 'color' | 'isGroup' | 'name' | 'parentId'>[],
+  ): Promise<TaskLabelItem[]> => {
+    // One row per name: callers pass a label per use, which can outgrow the
+    // bind parameters a statement may hold.
+    const unique = new Map<string, (typeof params)[number]>();
+    for (const item of params) {
+      const key = item.name.trim().toLowerCase();
+      if (!unique.has(key)) unique.set(key, item);
+    }
+    const items = [...unique.values()];
+    if (items.length === 0) return [];
+    for (const item of items) {
+      await this.assertValidParent(item.parentId, item.isGroup ?? false);
+    }
+
+    await this.db
+      .insert(taskLabels)
+      .values(
+        items.map((item) =>
+          this.payload({
+            color: item.color ?? null,
+            isGroup: item.isGroup ?? false,
+            name: item.name.trim(),
+            parentId: item.parentId ?? null,
+          }),
+        ),
+      )
+      .onConflictDoNothing();
+
+    return this.findByNames(items.map((item) => item.name));
+  };
+
   update = async (id: string, value: UpdateTaskLabelParams): Promise<TaskLabelItem | undefined> => {
     const current = await this.findById(id);
     if (!current) throw new TaskLabelError('LABEL_NOT_FOUND', `Label not found: ${id}`);
@@ -382,6 +422,22 @@ export class TaskLabelModel {
     }
 
     return labels;
+  };
+
+  /**
+   * Hold these labels for the rest of the transaction, as an assignment does, for a
+   * writer that must lock a task before it knows which of them it attaches. Assigning
+   * takes labels before the task, so taking them first keeps that order.
+   */
+  lockForShare = async (labelIds: string[]): Promise<void> => {
+    const ids = labelIds.filter(isUuid);
+    if (ids.length === 0) return;
+    await this.db
+      .select({ id: taskLabels.id })
+      .from(taskLabels)
+      .where(and(inArray(taskLabels.id, ids), this.ownership()))
+      .orderBy(asc(taskLabels.id))
+      .for('share');
   };
 
   /** Validate a label set for assignment without writing anything. */
