@@ -189,16 +189,15 @@ export const isGPTProResponsesModel = (model: string): boolean => {
 };
 
 /**
- * GPT-6+ models whose model page still lists `reasoning.effort: 'none'`.
+ * GPT-6+ models verified to accept `reasoning.effort: 'none'` on the Responses API.
  *
  * @see https://developers.openai.com/api/docs/models/gpt-6.1-terra
  */
 const GPT6_REASONING_EFFORT_NONE_MODELS = new Set(['gpt-6.1-terra']);
 
 /**
- * `reasoning.effort: 'none'` is a GPT-5.x affordance. GPT-5 Pro never supported it,
- * and GPT-6+ models removed it — their lowest effort is `low` — except the ones in
- * `GPT6_REASONING_EFFORT_NONE_MODELS`.
+ * `reasoning.effort: 'none'` is a GPT-5.x affordance that GPT-5 Pro never supported. GPT-6+
+ * models are treated as not accepting it unless listed in `GPT6_REASONING_EFFORT_NONE_MODELS`.
  *
  * @see https://developers.openai.com/docs/guides/latest-model
  */
