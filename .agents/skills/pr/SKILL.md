@@ -168,7 +168,7 @@ Filter to your touched files — this repo's standalone type-check emits pre-exi
 
 - **Each PR links only its own layer's LobeHub tasks.** Server PR: `LobeHub task: [T-<server>](url)`. Client PR: the `<pkg>` / `<desktop>` / `<cli>` tasks. Don't let one PR's body claim another layer's task.
 - Both PRs are `Part of T-<parent>`.
-- On PR creation, set each linked subtask to `paused` with `lh task edit <id> --status paused` and add a completion comment with `lh task comment <id> -m`; complete it with `lh task complete <id>` only after merge.
+- On PR creation, add a completion comment to each linked subtask with `lh task comment <id> -m`, finish the rest of the stack bookkeeping, and only then set the subtasks to `paused` with `lh task edit <id> --status paused`: pausing a task interrupts its running operations, including the agent doing this bookkeeping. Complete each with `lh task complete <id>` only after merge.
 
 ## Gotchas
 
