@@ -4368,6 +4368,7 @@ export default {
   'userFeedbackCard.title': 'User feedback',
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
+  'sandboxDrive.openStorage': 'Sandbox Storage',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
   'sandboxDrive.pickerTitle': 'Work location',

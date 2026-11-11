@@ -2128,6 +2128,7 @@
   "sandboxDrive.fallbackChip.instanceUnavailable": "环境目录不可用",
   "sandboxDrive.fallbackChip.rootNotAllowed": "请选择文件夹",
   "sandboxDrive.manageEnvironments": "设置",
+  "sandboxDrive.openStorage": "沙箱存储",
   "sandboxDrive.pickerInfoTooltip": "临时工作目录随沙箱清理；云盘文件夹跨会话保留；代码仓库在第一条命令前克隆好。",
   "sandboxDrive.pickerTitle": "工作位置",
   "sandboxDrive.root": "根目录",
