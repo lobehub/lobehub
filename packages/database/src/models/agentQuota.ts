@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -69,33 +69,17 @@ export class AgentProviderAccountModel {
   }
 
   /**
-   * The rows this member may see and use. In a workspace a `private` account is
-   * visible to its creator and to every member whose device holds a login for
-   * it — the same real account signed in by two members is one row both of
-   * them use. Personal scope ignores visibility.
+   * The rows this member may see and use: public workspace accounts and their
+   * own private ones. A login does not widen this — the server cannot verify
+   * that a reporting device really holds the provider login, so a reported
+   * login is no proof of access. Sharing a private account is its creator's
+   * call (`setVisibility`). Personal scope ignores visibility.
    */
-  private mine = () => {
-    const scope = this.scope();
-    if (!this.workspaceId) return scope;
-
-    // Uncorrelated on purpose: the relational query API aliases the outer table,
-    // so a subquery pointing back at it would not resolve.
-    const holdsLogin = inArray(
-      agentProviderAccounts.id,
-      this.db
-        .select({ id: agentProviderAccountLogins.accountId })
-        .from(agentProviderAccountLogins)
-        .where(eq(agentProviderAccountLogins.userId, this.userId)),
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentProviderAccounts,
     );
-    return and(
-      scope,
-      or(
-        eq(agentProviderAccounts.visibility, 'public'),
-        eq(agentProviderAccounts.userId, this.userId),
-        holdsLogin,
-      ),
-    )!;
-  };
 
   /** Every row of the scope regardless of visibility: one real account is one row per workspace. */
   private scope = () =>
@@ -140,19 +124,16 @@ export class AgentProviderAccountModel {
    *
    * Dedupe looks past visibility: a teammate's private row for the same
    * identity is still that account, and inserting a second one would collide
-   * with the workspace identity index. Finding such a row grants nothing on its
-   * own — knowing an external id is not holding the login. The caller may pass
-   * `claimLogin` to record the login on a device it reports from; the row is
-   * updated and returned only if that (or anything else) makes it visible to
-   * this member, and `undefined` comes back otherwise. A new workspace row
-   * starts `private` — a login reported from a member's machine is theirs
-   * until they publish it.
+   * with the workspace identity index. Finding such a row grants nothing —
+   * knowing an external id is not holding the login — so it is neither updated
+   * nor returned, and `undefined` comes back. A new workspace row starts
+   * `private`: a login reported from a member's machine is theirs until they
+   * publish it.
    */
   upsertByIdentity = async (
     provider: string,
     identity: AccountIdentityInput,
     defaults: Partial<NewAgentProviderAccount> = {},
-    options: { claimLogin?: (accountId: string) => Promise<unknown> } = {},
   ): Promise<SafeAccount | undefined> => {
     if (identity.externalAccountId) {
       const existing = await this.db.query.agentProviderAccounts.findFirst({
@@ -164,8 +145,6 @@ export class AgentProviderAccountModel {
         ),
       });
       if (existing) {
-        if (!(await this.findById(existing.id)) && options.claimLogin)
-          await options.claimLogin(existing.id);
         const [row] = await this.db
           .update(agentProviderAccounts)
           .set({ ...identity, lastValidatedAt: new Date(), updatedAt: new Date() })

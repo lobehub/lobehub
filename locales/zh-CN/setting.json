@@ -1988,7 +1988,7 @@
   "subscriptionAccounts.usageTitle": "用量记录",
   "subscriptionAccounts.visibility.private": "私有",
   "subscriptionAccounts.visibility.privateAction": "设为私有",
-  "subscriptionAccounts.visibility.privateConfirm.desc": "之后只有你和在自己设备上登录了这个账号的成员能看到它，其他成员的 Agent 不再使用它的额度。",
+  "subscriptionAccounts.visibility.privateConfirm.desc": "之后只有你能看到它，其他成员的 Agent 不再使用它的额度。",
   "subscriptionAccounts.visibility.privateConfirm.title": "将这个账号设为私有？",
   "subscriptionAccounts.visibility.publicAction": "共享给团队",
   "subscriptionAccounts.visibility.publicConfirm.desc": "所有成员都能看到它，他们的 Agent 也可以使用它的额度。之后可以在同一菜单里改回私有。",

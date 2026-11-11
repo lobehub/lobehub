@@ -161,22 +161,16 @@ export class AgentQuotaService {
     provider: string;
     readings: QuotaLimitReading[];
   }): Promise<SafeAccount | undefined> => {
-    // A sample read on a device proves the account is signed in there. That
-    // login is also what reveals a teammate's private row of the same account,
-    // so it is claimed during the lookup; the writes below are visibility-scoped.
-    const claimLogin = params.deviceId
-      ? (accountId: string) => this.logins.record(accountId, params.deviceId!)
-      : undefined;
     const account = await this.accounts.upsertByIdentity(
       params.provider,
       params.identity as AccountIdentityInput,
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
-      { claimLogin },
     );
-    // A private account this member cannot see: no login to prove otherwise, so
-    // the reading is dropped rather than written into someone else's account.
+    // Another member's private account: the reading is dropped rather than
+    // written into an account this member cannot see.
     if (!account) return undefined;
-    await claimLogin?.(account.id);
+    // A sample read on a device proves the account is signed in there.
+    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     // The wallet is not a limit reading, so it can't ride the snapshots table —
     // keep the latest sample on the account row or the persisted view loses the
     // Extra Usage section between live samples.

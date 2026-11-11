@@ -202,7 +202,7 @@ describe('Agent quota workspace scope', () => {
     expect(await personal.setVisibility(own!.id, 'public')).toBe(false);
   });
 
-  it('shows a private account to a teammate once their device holds a login for it', async () => {
+  it('keeps a private account from a teammate who reports its identity, even with a login', async () => {
     const identity = { externalAccountId: 'ext-shared-login', email: 'pair@b.com' };
     await serverDB.insert(devices).values({
       deviceId: 'teammate-mac',
@@ -220,14 +220,13 @@ describe('Agent quota workspace scope', () => {
     const teammate = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
     const account = (await mine.upsertByIdentity('claude-code', identity))!;
 
-    // Knowing the external id is not holding the login: a report without one
-    // neither inserts a colliding row nor reads or overwrites the private one.
+    // Knowing the external id is not holding the login: the report neither
+    // inserts a colliding row nor reads or overwrites the private one.
     const blind = await teammate.upsertByIdentity('claude-code', {
       ...identity,
       email: 'overwritten@b.com',
     });
     expect(blind).toBeUndefined();
-    expect(await teammate.findById(account.id)).toBeNull();
     expect((await mine.findById(account.id))?.email).toBe('pair@b.com');
     expect(
       await serverDB
@@ -236,21 +235,18 @@ describe('Agent quota workspace scope', () => {
         .where(eq(agentProviderAccounts.externalAccountId, identity.externalAccountId)),
     ).toHaveLength(1);
 
-    // Reporting it from their own device records the login, which reveals the
-    // same row instead of colliding with the workspace identity index.
-    const logins = new AgentProviderAccountLoginModel(serverDB, teammateId, workspaceId);
-    const fromTeammate = await teammate.upsertByIdentity(
-      'claude-code',
-      identity,
-      {},
-      {
-        claimLogin: (accountId) => logins.record(accountId, device.id),
-      },
+    // A login reported from the teammate's own device is unverifiable, so it
+    // grants nothing either: only the creator publishing it shares it.
+    await new AgentProviderAccountLoginModel(serverDB, teammateId, workspaceId).record(
+      account.id,
+      device.id,
     );
-    expect(fromTeammate?.id).toBe(account.id);
-    expect((await teammate.list()).map((a) => a.id)).toEqual([account.id]);
-    // Using it is not owning it: only the creator decides who else sees it.
+    expect(await teammate.upsertByIdentity('claude-code', identity)).toBeUndefined();
+    expect(await teammate.list()).toEqual([]);
     expect(await teammate.setVisibility(account.id, 'public')).toBe(false);
+
+    await mine.setVisibility(account.id, 'public');
+    expect((await teammate.list()).map((a) => a.id)).toEqual([account.id]);
   });
 
   it('lets the same external identity exist once per scope', async () => {

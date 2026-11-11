@@ -1988,7 +1988,7 @@
   "subscriptionAccounts.usageTitle": "Usage history",
   "subscriptionAccounts.visibility.private": "Private",
   "subscriptionAccounts.visibility.privateAction": "Make private",
-  "subscriptionAccounts.visibility.privateConfirm.desc": "Only you and members signed in to it on their own devices will see it. Other members' agents stop drawing on its quota.",
+  "subscriptionAccounts.visibility.privateConfirm.desc": "Only you will see it. Other members' agents stop drawing on its quota.",
   "subscriptionAccounts.visibility.privateConfirm.title": "Make this account private?",
   "subscriptionAccounts.visibility.publicAction": "Share with workspace",
   "subscriptionAccounts.visibility.publicConfirm.desc": "Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.",

@@ -4980,7 +4980,7 @@ When I am ___, I need ___
   'subscriptionAccounts.visibility.private': 'Private',
   'subscriptionAccounts.visibility.privateAction': 'Make private',
   'subscriptionAccounts.visibility.privateConfirm.desc':
-    "Only you and members signed in to it on their own devices will see it. Other members' agents stop drawing on its quota.",
+    "Only you will see it. Other members' agents stop drawing on its quota.",
   'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
   'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
   'subscriptionAccounts.visibility.publicConfirm.desc':
