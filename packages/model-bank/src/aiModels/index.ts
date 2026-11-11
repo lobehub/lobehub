@@ -145,7 +145,6 @@ const staticModelMap: ModelsMap = {
   glmcodingplan,
   groq,
   higress,
-  hubris,
   huggingface,
   hunyuan,
   infiniai,
@@ -204,6 +203,8 @@ const staticModelMap: ModelsMap = {
   zenmux,
   zeroone,
   zhipu,
+  // Last on purpose: a gateway's entries must not win a lookup by model name over the vendor's.
+  hubris,
 };
 
 export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList(staticModelMap);
