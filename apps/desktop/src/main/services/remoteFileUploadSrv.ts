@@ -58,11 +58,12 @@ export type UploadFailureKind = 'auth' | 'network' | 'storage_quota' | 'unknown'
 
 export interface UploadFailure {
   kind: UploadFailureKind;
-  /** The CLI's own error line, e.g. `storage_block:upgrade_required`. */
+  /** The CLI's own error line, e.g. `storage_block:upgrade_required; 0 B of 1 GB remaining…`. */
   reason: string;
 }
 
-const MAX_REASON_LENGTH = 300;
+/** Roomy enough for the CLI's storage-block line with its quota and recovery links. */
+const MAX_REASON_LENGTH = 800;
 
 const NETWORK_ERROR_PATTERN =
   /fetch failed|network|socket hang up|timed? ?out|econnreset|econnrefused|etimedout|enotfound|eai_again|epipe|und_err|upload failed: 5\d\d/i;
@@ -114,7 +115,7 @@ export const describeUploadFailure = (error: unknown): UploadFailure => {
   ].join(' ');
 
   const storageBlock = classifiable.match(/storage_block:[\w-]+/);
-  if (storageBlock) return { kind: 'storage_quota', reason: storageBlock[0] };
+  if (storageBlock) return { kind: 'storage_quota', reason };
   if (AUTH_ERROR_PATTERN.test(classifiable)) return { kind: 'auth', reason };
   if (NETWORK_ERROR_PATTERN.test(classifiable)) return { kind: 'network', reason };
 
