@@ -348,7 +348,7 @@ describe('knowledgeBaseRouter', () => {
   });
 
   describe('transferKnowledgeBase', () => {
-    it('checks target storage before transferring a library', async () => {
+    it('checks storage and clears source permissions when transferring to personal scope', async () => {
       await caller.transferKnowledgeBase({
         id: 'kb-1',
         targetWorkspaceId: null,
@@ -366,6 +366,8 @@ describe('knowledgeBaseRouter', () => {
         'test-user',
         undefined,
       );
+      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+      expect(mockPermissionSetAccessLevel).not.toHaveBeenCalled();
     });
 
     it('returns a stable error code when the library no longer exists', async () => {
@@ -401,16 +403,6 @@ describe('knowledgeBaseRouter', () => {
         'edit',
         'test-user',
       );
-    });
-
-    it('only clears the source row when moving to personal scope', async () => {
-      await caller.transferKnowledgeBase({
-        id: 'kb-1',
-        targetWorkspaceId: null,
-      });
-
-      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
-      expect(mockPermissionSetAccessLevel).not.toHaveBeenCalled();
     });
   });
 

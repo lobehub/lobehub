@@ -35,7 +35,7 @@ const userId = 'project-model-user';
 const otherUserId = 'project-model-other-user';
 let projectIdentifierSequence = 0;
 
-const createProject = (repo: ProjectModel, input: Omit<CreateProjectInput, 'identifier'>) =>
+const createProject = (repo: ProjectRepository, input: Omit<CreateProjectInput, 'identifier'>) =>
   repo.create({
     ...input,
     identifier: `P${String(++projectIdentifierSequence).padStart(5, '0')}`,
@@ -367,13 +367,15 @@ describe('ProjectModel', () => {
     const hidden = await createProject(otherRepo, { name: 'Hidden', visibility: 'private' });
 
     expect(await model.findByIds([])).toEqual([]);
-    expect(await model.findByIds([first.id, second.id, hidden.id])).toEqual(
+    const readableProjects = await model.findByIds([first.id, second.id, hidden.id]);
+
+    expect(readableProjects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: first.id }),
         expect.objectContaining({ id: second.id }),
       ]),
     );
-    expect(await model.findByIds([first.id, second.id, hidden.id])).toHaveLength(2);
+    expect(readableProjects).toHaveLength(2);
   });
 
   it('filters and paginates projects', async () => {

@@ -62,6 +62,19 @@ export interface ICredsService {
   }>;
 }
 
+export interface CredsExecutionRuntimeContext {
+  /**
+   * Whether this run's commands can reach the cloud sandbox the credentials
+   * are injected into (the `creds_sandbox_reachable` prompt variable). `false`
+   * when the run is routed to a device outside `auto` mode: injection would
+   * still succeed, but nothing this run executes could read the values.
+   * Undefined is treated as reachable.
+   */
+  sandboxReachable?: boolean;
+  topicId?: string;
+  userId?: string;
+}
+
 /**
  * Creds Execution Runtime (Server-side)
  *
@@ -75,9 +88,9 @@ export interface ICredsService {
  */
 export class CredsExecutionRuntime {
   private credsService: ICredsService;
-  private context: { topicId?: string; userId?: string };
+  private context: CredsExecutionRuntimeContext;
 
-  constructor(credsService: ICredsService, context: { topicId?: string; userId?: string } = {}) {
+  constructor(credsService: ICredsService, context: CredsExecutionRuntimeContext = {}) {
     this.credsService = credsService;
     this.context = context;
   }
@@ -192,6 +205,18 @@ export class CredsExecutionRuntime {
   async injectCredsToSandbox(
     args: InjectCredsToSandboxParams,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (this.context.sandboxReachable === false) {
+      return {
+        content:
+          'Cannot inject credentials: this run executes commands on a device, not in the cloud sandbox, so injected credentials would not be visible to any command. Credential injection only works when commands run in the cloud sandbox.',
+        error: {
+          message: 'The cloud sandbox is not reachable in this run',
+          type: 'SandboxUnreachable',
+        },
+        success: false,
+      };
+    }
+
     try {
       const topicId = this.context.topicId;
       if (!topicId) {

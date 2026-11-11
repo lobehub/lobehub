@@ -1090,6 +1090,7 @@ export class ProjectModel {
         id: environments.id,
         name: environments.name,
         configuration: environments.configuration,
+        visibility: environments.visibility,
       })
       .from(environments)
       .innerJoin(

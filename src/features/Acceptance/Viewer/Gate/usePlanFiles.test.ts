@@ -12,13 +12,10 @@ const skill = vi.hoisted(() => ({
   versions: {} as Record<number, { files?: unknown[] }>,
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: (key: unknown) => ({ data: key ? skill.current : undefined }),
-}));
 vi.mock('@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions', () => ({
+  usePlanSkill: (skillId: string | undefined) => ({ data: skillId ? skill.current : undefined }),
   useSkillVersion: (_skillId: string, version: number) => ({ data: skill.versions[version] }),
 }));
-vi.mock('@/services/userSkill', () => ({ userSkillService: { get: vi.fn() } }));
 
 const file = (path: string) => ({ content: '', path });
 

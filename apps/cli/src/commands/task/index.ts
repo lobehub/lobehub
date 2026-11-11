@@ -668,6 +668,7 @@ export function registerTaskCommand(program: Command) {
     .option('--agent <id>', 'Assign to agent')
     .option('--user <idOrEmail>', 'Assign to a workspace member (user id, email or username)')
     .option('--priority <n>', 'Priority (0-4)')
+    .option('--project <id>', 'Move to a project ("null" to remove it from its project)')
     .option(
       '--label <name>',
       "Add a label (repeatable or comma-separated; replaces the task's other label of the same group)",
@@ -702,6 +703,7 @@ export function registerTaskCommand(program: Command) {
           model?: string;
           name?: string;
           priority?: string;
+          project?: string;
           provider?: string;
           removeLabel?: string[];
           status?: string;
@@ -724,6 +726,8 @@ export function registerTaskCommand(program: Command) {
         if (options.agent) input.assigneeAgentId = options.agent;
         if (assigneeUserId) input.assigneeUserId = assigneeUserId;
         if (options.priority) input.priority = Number.parseInt(options.priority, 10);
+        if (options.project !== undefined)
+          input.projectId = options.project === 'null' ? null : options.project;
         if (options.heartbeatInterval)
           input.heartbeatInterval = Number.parseInt(options.heartbeatInterval, 10);
         if (options.heartbeatTimeout !== undefined) {

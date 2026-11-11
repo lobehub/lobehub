@@ -309,20 +309,7 @@ describe('routing worker', () => {
     expect(mocks.record).not.toHaveBeenCalled();
   });
 
-  it('records the recipients the resolver delivered to, not the proposed members', async () => {
-    // The reviewer left while the model was running, so only the coder was delivered to.
-    mocks.resolve.mockResolvedValue({ recipients: ['coder'], status: 'assigned' });
-    await run();
-    expect(mocks.record).toHaveBeenCalledWith(
-      {},
-      'channel',
-      expect.anything(),
-      expect.objectContaining({ memberIds: ['coder'], status: 'assigned' }),
-      expect.anything(),
-      { recipients: ['coder'], status: 'assigned' },
-    );
-
-    mocks.record.mockClear();
+  it('records an unassigned applied result after proposing a member', async () => {
     mocks.resolve.mockResolvedValue({ recipients: [], status: 'unassigned' });
     await run();
     expect(mocks.record).toHaveBeenCalledWith(

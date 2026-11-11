@@ -12,6 +12,26 @@ import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
 import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
 
+const MAX_LOGGED_ERROR_LENGTH = 500;
+
+/**
+ * One-line summary of a document save failure. A Drizzle "Failed query" error
+ * embeds every bound parameter (the whole page and its editor JSON) in its
+ * message, so log the innermost driver cause, truncated.
+ */
+const describeSaveError = (error: unknown): string => {
+  let current = error;
+  while (current instanceof Error && current.cause !== undefined) current = current.cause;
+
+  const code = (current as { code?: unknown } | null)?.code;
+  const message = current instanceof Error ? current.message : String(current);
+  const summary = typeof code === 'string' ? `${code} ${message}` : message;
+
+  return summary.length > MAX_LOGGED_ERROR_LENGTH
+    ? `${summary.slice(0, MAX_LOGGED_ERROR_LENGTH)}…`
+    : summary;
+};
+
 export interface WebBrowsingDocumentService {
   /** Returns the agent document binding when one was created, so its id can be handed to the model. */
   associateDocument: (documentId: string) => Promise<{ id?: string } | void>;
@@ -130,7 +150,9 @@ export class WebBrowsingExecutionRuntime {
             const binding = await this.documentService!.associateDocument(doc.id);
             if (binding?.id) savedDocumentIds.set(pageData.url, binding.id);
           } catch (error) {
-            console.error('[WebBrowsing] Failed to save crawl result to agent document:', error);
+            console.error(
+              `[WebBrowsing] Failed to save crawl result to agent document (${pageData.url}): ${describeSaveError(error)}`,
+            );
           }
         }),
       );

@@ -54,8 +54,8 @@ describe('withConversationGoalPrompt', () => {
   });
 
   it('binds a goal the user names instead of creating a duplicate', () => {
-    // `goal:manage` reaches a device or gateway run only through `/goal`, so
-    // these instructions are the only way such a run can bind an existing goal.
+    // `goal:manage` reaches a device or gateway run only from a user-sent or
+    // `/goal` turn, and these instructions tell it to bind an existing one.
     expect(conversationGoalPrompt).toContain('lh goal bind-topic <goalId> --json');
     expect(conversationGoalPrompt).toContain('do not create a new goal');
     expect(conversationGoalPrompt).toContain('only allow creating or binding this goal');

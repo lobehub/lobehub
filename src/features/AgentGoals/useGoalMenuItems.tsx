@@ -107,7 +107,15 @@ export const useGoalMenuItems = ({
         okButtonProps: { danger: next === 'canceled' },
         okText: t(`goalDetail.closeConfirm.${next}.ok`),
         onOk: async () => {
-          await closeGoal(goalId, next);
+          try {
+            await closeGoal(goalId, next);
+          } catch (error) {
+            // The server refuses while it cannot confirm a run has stopped. Say
+            // so instead of leaving the dialog sitting there; it has already
+            // paused the goal, so the list is refreshed either way.
+            console.error('[goal:close] failed to close goal', error);
+            toast.error(t('goalDetail.closeConfirm.failed'));
+          }
           onStatusChanged?.();
         },
         title: t(`goalDetail.closeConfirm.${next}.title`),

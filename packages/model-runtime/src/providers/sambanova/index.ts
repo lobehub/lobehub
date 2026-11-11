@@ -1,6 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 
 export const LobeSambaNovaAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.sambanova.ai/v1',

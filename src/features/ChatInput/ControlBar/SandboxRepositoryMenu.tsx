@@ -11,20 +11,9 @@ import { useTranslation } from 'react-i18next';
 
 import OptionRow from './OptionRow';
 import { repositorySlug } from './sandboxEnvironmentOptions';
+import SubmenuHeader from './SubmenuHeader';
 
 const styles = stylex.create({
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBlock: '4px',
-    paddingInline: '8px',
-  },
-  headerTitle: {
-    fontSize: '12px',
-    fontWeight: 500,
-    color: cssVar.colorTextSecondary,
-  },
   hint: {
     paddingInline: '8px',
     fontSize: '12px',
@@ -33,19 +22,6 @@ const styles = stylex.create({
   list: {
     maxHeight: '280px',
     overflowY: 'auto',
-  },
-  manageButton: {
-    cursor: 'pointer',
-    display: 'flex',
-    gap: '4px',
-    alignItems: 'center',
-    padding: '0',
-    borderStyle: 'none',
-    fontSize: '11px',
-    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
-    backgroundColor: 'transparent',
-    backgroundImage: 'none',
-    transition: 'color 0.2s',
   },
 });
 
@@ -78,13 +54,14 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
     const { t } = useTranslation('chat');
     return (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
-        <div {...stylex.props(styles.header)}>
-          <span {...stylex.props(styles.headerTitle)}>{t('sandboxEnvironment.title')}</span>
-          <button {...stylex.props(styles.manageButton)} type={'button'} onClick={onManage}>
-            <Icon icon={SettingsIcon} size={11} />
-            <span>{t('sandboxDrive.manageEnvironments')}</span>
-          </button>
-        </div>
+        <SubmenuHeader
+          title={t('sandboxEnvironment.title')}
+          action={{
+            icon: SettingsIcon,
+            label: t('sandboxDrive.manageEnvironments'),
+            onClick: onManage,
+          }}
+        />
         <Text className={stylex.props(styles.hint).className}>{t('sandboxEnvironment.hint')}</Text>
 
         <div {...stylex.props(styles.list)}>

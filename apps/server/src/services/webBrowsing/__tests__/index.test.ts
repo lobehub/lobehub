@@ -324,4 +324,38 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
     expect(mocks.documentModel.create).not.toHaveBeenCalled();
     expect(mocks.documentService.updateDocument).not.toHaveBeenCalled();
   });
+
+  it('strips NUL characters, which PostgreSQL text and jsonb columns reject', async () => {
+    mocks.documentModel.findBySource.mockResolvedValueOnce(undefined);
+    mocks.documentModel.create.mockResolvedValueOnce({ id: 'doc-nul' });
+
+    await service.upsertCrawledDocument({
+      content: 'before\u0000after\u0000',
+      title: 'Page with NUL',
+      url: 'https://example.com/nul',
+    });
+
+    expect(mocks.documentModel.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'beforeafter',
+        editorData: { root: { fakeNodeFor: 'beforeafter' } },
+      }),
+    );
+  });
+
+  it('compares the NUL-stripped body so an unchanged re-crawl short-circuits', async () => {
+    mocks.documentModel.findBySource.mockResolvedValueOnce({
+      content: 'beforeafter',
+      id: 'doc-nul',
+    } as any);
+
+    const result = await service.upsertCrawledDocument({
+      content: 'before\u0000after',
+      title: 'Page with NUL',
+      url: 'https://example.com/nul',
+    });
+
+    expect(result).toEqual({ id: 'doc-nul', status: 'unchanged' });
+    expect(mocks.documentService.updateDocument).not.toHaveBeenCalled();
+  });
 });

@@ -7,6 +7,14 @@ import { messagesReducer as conversationMessagesReducer } from '@/features/Conve
 import { type MessageDispatch } from './reducer';
 import { messagesReducer } from './reducer';
 
+const defaultToolPayload = (): ChatToolPayload => ({
+  id: 'tc_1',
+  type: 'default',
+  identifier: 'tool1',
+  apiName: 'testFunction',
+  arguments: '{"arg1": "value1"}',
+});
+
 describe('messagesReducer', () => {
   let initialState: UIChatMessage[];
 
@@ -424,13 +432,7 @@ describe('messagesReducer', () => {
   describe('addMessageTool', () => {
     it('should add a tool to the specified assistant message if it dont have tools', () => {
       const messageId = '1';
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -452,13 +454,7 @@ describe('messagesReducer', () => {
 
     it('should add a tool to the specified assistant message', () => {
       const messageId = 'message2';
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -478,13 +474,7 @@ describe('messagesReducer', () => {
     });
 
     it('should not modify the state if the message is not found', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -497,13 +487,7 @@ describe('messagesReducer', () => {
     });
 
     it('should not add a tool if the message is not an assistant message', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',

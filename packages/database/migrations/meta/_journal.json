@@ -1484,6 +1484,13 @@
       "when": 1794233764532,
       "tag": "0211_add_documents_created_by_agent_id",
       "breakpoints": true
+    },
+    {
+      "idx": 212,
+      "version": "7",
+      "when": 1794296581452,
+      "tag": "0212_workspace_member_config",
+      "breakpoints": true
     }
   ],
   "version": "6"

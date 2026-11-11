@@ -37,6 +37,7 @@ import type { MemoryExtractionExecutorContext } from './context';
 import type { MemoryExtractionTaskErrorItem } from './errors';
 import {
   buildAsyncTaskErrorFrom,
+  describeError,
   makeTaskErrorItem,
   MemoryExtractionAggregateError,
   serializeError,
@@ -450,7 +451,7 @@ export async function extractTopic(ctx: MemoryExtractionExecutorContext, job: To
         }
         span.setStatus({
           code: SpanStatusCode.ERROR,
-          message: error instanceof Error ? error.message : 'Extraction failed',
+          message: describeError(error),
         });
         span.recordException(error as Error);
         console.error(

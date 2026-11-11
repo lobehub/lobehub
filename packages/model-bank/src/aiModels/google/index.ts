@@ -164,6 +164,53 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    // Same unified 1M window as Argon: 64K output by default, up to 1M with long decode.
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-carbon
+    contextWindowTokens: 1_048_576,
+    description:
+      "Gemini 4 Carbon is Google's strongest model, with state-of-the-art cybersecurity and long-horizon capabilities for sustained agentic coding, multimodal knowledge work, and scientific reasoning.",
+    displayName: 'Gemini 4 Carbon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-carbon',
+    isOfficial: true,
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-11-30; they double afterward ($4 input, $0.20 cached input,
+     * $20 output). Explicit caching is not supported, so there is no cache-write price.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-10',
+    // Sampling parameters are ignored by the API.
+    // https://ai.google.dev/gemini-api/docs/latest-model
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
     // Unified 1M window shared by input, thinking and output; a response defaults to 64K output
     // and can go up to 1M with long decode.
     // https://ai.google.dev/gemini-api/docs/models/gemini-4-argon

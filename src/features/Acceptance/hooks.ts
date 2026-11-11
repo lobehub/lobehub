@@ -1,34 +1,25 @@
 import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import useSWRInfinite from 'swr/infinite';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import type { ReplicaSyncResult } from '@/libs/replica';
 import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
 import type {
   AcceptanceBySubject,
   AcceptanceListFilter,
-  AcceptanceListPage,
+  AcceptanceListItem,
   AcceptanceListQuery,
+  VerifyReportBundle,
 } from '@/services/verify';
 import { verifyService } from '@/services/verify';
+import { useDocumentStore } from '@/store/document';
 import { useVerifyStore, verifySelectors } from '@/store/verify';
+import type { AcceptanceListParams, AcceptancePageParams } from '@/store/verify/projection';
 
-const ACCEPTANCE_PAGE_SIZE = 30;
 const VERIFY_REPORT_SWR_CONFIG = {
   revalidateIfStale: false,
   revalidateOnFocus: false,
   revalidateOnReconnect: false,
-} as const;
-
-// The acceptance bundle is a LIVE decision surface — rounds run and reviews land
-// while the reviewer is away — so unlike the immutable report snapshots it
-// revalidates on focus/reconnect. Coming back to the tab shows the current state
-// without a manual refresh (focus is throttled by SWR's default 5s).
-const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
-  revalidateOnFocus: true,
-  revalidateOnReconnect: true,
 } as const;
 
 /**
@@ -71,13 +62,45 @@ export const useVerifyResults = (operationId: string | null) => {
   return { data: run?.results, mutate };
 };
 
-/** Full standalone report bundle (run + report + results + evidence) by verifyRunId. */
-export const useVerifyReportBundle = (verifyRunId: string | null) =>
-  useClientDataSWR(
-    verifyRunId ? verifyKeys.reportBundle(verifyRunId) : null,
-    () => verifyService.getReportBundle(verifyRunId!),
-    VERIFY_REPORT_SWR_CONFIG,
-  );
+/**
+ * What a replica-backed read hands the views that used to read an SWR response:
+ * `data` is the store entry (`undefined` until hydrated or fetched), `mutate`
+ * re-runs the network sync.
+ */
+export interface VerifyReplicaRead<T> {
+  data: T | undefined;
+  error: unknown;
+  /** Nothing to show yet, and no failure either. */
+  isLoading: boolean;
+  isValidating: boolean;
+  mutate: () => Promise<unknown>;
+}
+
+const toReplicaRead = <T>(
+  data: T | undefined,
+  sync: ReplicaSyncResult,
+  enabled: boolean,
+): VerifyReplicaRead<T> => ({
+  data,
+  error: sync.error,
+  isLoading: enabled && data === undefined && sync.error == null,
+  isValidating: sync.isValidating,
+  mutate: sync.revalidate,
+});
+
+/**
+ * Full standalone report bundle (run + report + results + evidence) by
+ * verifyRunId. `data` is `null` once the server answered there is no such run;
+ * a finished report paints from IndexedDB on reload, then refreshes.
+ */
+export const useVerifyReportBundle = (
+  verifyRunId: string | null,
+): VerifyReplicaRead<VerifyReportBundle | null> => {
+  const useFetchVerifyReportBundle = useVerifyStore((s) => s.useFetchVerifyReportBundle);
+  const data = useVerifyStore(verifySelectors.verifyReportBundle(verifyRunId));
+  const sync = useFetchVerifyReportBundle(verifyRunId);
+  return toReplicaRead(data, sync, !!verifyRunId);
+};
 
 export { useAcceptanceBundle } from './Viewer/useAcceptanceBundle';
 
@@ -143,46 +166,53 @@ export const useAcceptanceBySubject = (
   };
 };
 
+const EMPTY_ITEMS: AcceptanceListItem[] = [];
+
 /**
- * The caller's recent acceptance aggregates (with subject headers) — the list
- * panel. `limit` widens the recency window for surfaces that must reach further
- * back than the panel does (the merge target picker).
+ * The caller's recent acceptance aggregates (with subject headers), read from
+ * the verify store's replica of `acceptanceListMap`. `limit` widens the recency
+ * window for surfaces that must reach further back than the panel does (the
+ * merge target picker); `fresh` skips the shared dedupe window on mount.
  *
- * A widened window is its own SWR key. Mutations invalidate the whole
- * `verify:acceptances` key family so every filter / limit / search variant
- * revalidates together.
+ * Every write revalidates all list entries together
+ * (`useVerifyStore.getState().refreshAcceptanceLists()`).
  */
 export const useAcceptanceList = (
   enabled: boolean,
   options?: AcceptanceListQuery & {
+    fresh?: boolean;
     limit?: number;
     q?: string;
-    revalidateOnMount?: boolean;
   },
-) =>
-  useClientDataSWR(
-    enabled
-      ? verifyKeys.acceptances(options?.limit, options?.q, {
-          filter: options?.filter,
-          projectId: options?.projectId,
-          scope: options?.scope,
-          source: options?.source,
-        })
-      : null,
-    () =>
-      verifyService.listAcceptances({
+) => {
+  const params: AcceptanceListParams | null = enabled
+    ? {
         filter: options?.filter,
         limit: options?.limit,
         projectId: options?.projectId,
         q: options?.q,
         scope: options?.scope,
         source: options?.source,
-      }),
-    {
-      ...VERIFY_REPORT_SWR_CONFIG,
-      ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),
-    },
-  );
+      }
+    : null;
+  const useFetchAcceptanceList = useVerifyStore((s) => s.useFetchAcceptanceList);
+  const sync = useFetchAcceptanceList(params, { fresh: options?.fresh });
+  const entry = useVerifyStore(verifySelectors.acceptanceList(params));
+  const confirmed = useVerifyStore(verifySelectors.isAcceptanceListConfirmed(params));
+
+  // A restored empty list is only the last session's answer: until the server
+  // confirms it, "no acceptances" is still loading (not onboarding or an empty state).
+  const data = entry && (entry.length > 0 || confirmed) ? entry : undefined;
+  // A failed background refresh keeps the last list on screen.
+  const error = data ? undefined : sync.error;
+
+  return {
+    data,
+    error,
+    isLoading: enabled && !data && !error,
+    mutate: sync.revalidate,
+  };
+};
 
 /** Rounds, evidence files and bytes a delete would purge. Pass null to skip. */
 export const useAcceptancePurgePreview = (acceptanceId: string | null) =>
@@ -194,129 +224,96 @@ export const useAcceptancePurgePreview = (acceptanceId: string | null) =>
 
 /**
  * The panel's scroll feed: keyset pages, newest first, with the in-progress /
- * completed split applied server-side (see `acceptance.listPage`).
+ * completed split applied server-side (see `acceptance.listPage`), read from
+ * the verify store's paged replica (`acceptancePageMap`). The head page
+ * survives a reload, so the panel paints its last rows before the network.
  *
  * A `null` filter disables the feed entirely — that is how the panel hands off
- * to the flat search read. Changing the filter starts a fresh key series, so the
- * loaded depth collapses back to one page rather than cascading a refetch of as
- * many pages as the previous view had open.
+ * to the flat search read. Switching to a feed collapses it back to its head
+ * page rather than refetching as many pages as an earlier visit had open.
  */
 export const useAcceptanceListInfinite = (
   filter: AcceptanceListFilter | null,
   query: Omit<AcceptanceListQuery, 'filter'> = {},
 ) => {
-  const workspaceId = useActiveWorkspaceId();
   const { projectId, scope, source } = query;
-
-  const getKey = useCallback(
-    (_index: number, previous: AcceptanceListPage | null) => {
-      if (previous && previous.nextCursor === null) return null;
-      if (!filter) return null;
-      return verifyKeys.acceptancePage(
-        workspaceId ?? undefined,
-        { filter, projectId, scope, source },
-        previous?.nextCursor ?? undefined,
-      );
-    },
-    [filter, projectId, scope, source, workspaceId],
+  const params = useMemo<AcceptancePageParams | null>(
+    () => (filter ? { filter, projectId, scope, source } : null),
+    [filter, projectId, scope, source],
   );
-
-  const { data, error, isLoading, mutate, setSize, size } = useSWRInfinite(
-    getKey,
-    // Read the narrowing from the closure, not the key: the key spells the
-    // unfiled project as a sentinel string, the server wants `null`.
-    (key: readonly string[]) =>
-      verifyService.listAcceptancePage({
-        cursor: key.at(-1) || undefined,
-        filter: filter ?? undefined,
-        limit: ACCEPTANCE_PAGE_SIZE,
-        projectId,
-        scope,
-        source,
-      }),
-    { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
-  );
+  const useFetchAcceptancePage = useVerifyStore((s) => s.useFetchAcceptancePage);
+  const sync = useFetchAcceptancePage(params);
+  const entry = useVerifyStore(verifySelectors.acceptancePage(params));
+  const confirmed = useVerifyStore(verifySelectors.isAcceptancePageConfirmed(params));
 
   useEffect(() => {
-    setSize(1);
-  }, [filter, projectId, scope, source, workspaceId, setSize]);
+    if (params) useVerifyStore.getState().collapseAcceptancePage(params);
+  }, [params]);
 
   const loadMore = useCallback(() => {
-    void setSize((s) => s + 1);
-  }, [setSize]);
+    if (params) void useVerifyStore.getState().loadMoreAcceptancePage(params);
+  }, [params]);
 
-  // SWR leaves a failed/pending page's slot `undefined`, so guard the holes.
-  const items = data?.flatMap((page) => page?.items ?? []) ?? [];
-  const lastLoadedPage = data?.findLast(Boolean);
-  const reachedEnd = lastLoadedPage ? lastLoadedPage.nextCursor === null : false;
-  const hasLoadedPages = data !== undefined;
-
-  const isLoadingInitial = !error && isLoading && !hasLoadedPages;
-  const isLoadingMore =
-    !error && hasLoadedPages && size > 0 && typeof data[size - 1] === 'undefined';
+  // A restored empty head is not a settled "no acceptances" until the server says so.
+  const settled = !!entry && (entry.items.length > 0 || confirmed);
+  const items = settled ? entry.items : EMPTY_ITEMS;
+  // A failed background refresh keeps the rows on screen; only a feed with
+  // nothing to show reads as failed.
+  const error = settled ? undefined : sync.error;
+  const loadMoreError = settled ? entry.loadMoreError : undefined;
 
   return {
     error,
-    // Pause the sentinel while an error is showing so it cannot hot-loop the
-    // failed page; the panel offers a manual retry instead.
-    hasMore: !reachedEnd && !error,
-    isLoadingInitial,
-    isLoadingMore,
+    // Pause the sentinel while a page error is showing so it cannot hot-loop
+    // the failed page; the panel offers a manual retry instead.
+    hasMore: settled && entry.hasMore && !loadMoreError,
+    isLoadingInitial: !!params && !settled && !error,
+    isLoadingMore: settled && !!entry.isLoadingMore,
     items,
     loadMore,
-    mutate,
+    loadMoreError,
+    mutate: sync.revalidate,
   };
 };
 
-/**
- * Acceptance status for a known subject set — one read for a whole list.
- *
- * Not `useAcceptanceList`: that feed is capped at the newest rows across every
- * subject type, so any subject pushed past the cap would read as having no
- * acceptance at all. Revalidates on focus like the bundle, because a delivery
- * that lands while the tab sits open has to show up without a reload.
- */
-export const useAcceptanceStatuses = (
-  subjectType: CreatableAcceptanceSubjectType,
-  subjectIds: string[],
-  enabled = true,
-) =>
-  useClientDataSWR(
-    enabled && subjectIds.length > 0
-      ? verifyKeys.acceptanceStatuses(subjectType, subjectIds)
-      : null,
-    () => verifyService.listAcceptanceStatuses(subjectType, subjectIds),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
-  );
-
 /** Model / token / latency for an LLM verifier judgment. Pass null to skip. */
-export const useVerifierTracing = (tracingId: string | null | undefined) =>
-  useClientDataSWR(tracingId ? verifyKeys.tracing(tracingId) : null, () =>
-    verifyService.getVerifierTracing(tracingId!),
-  );
+export const useVerifierTracing = (tracingId: string | null | undefined) => {
+  const useFetchVerifierTracing = useVerifyStore((s) => s.useFetchVerifierTracing);
+  const data = useVerifyStore(verifySelectors.verifierTracing(tracingId));
+  const sync = useFetchVerifierTracing(tracingId);
+  return toReplicaRead(data, sync, !!tracingId);
+};
 
-/** The criterion's original judging rule, stored in its instruction document. */
-export const useVerifyInstruction = (documentId: string | null | undefined) =>
-  useClientDataSWR(documentId ? verifyKeys.instruction(documentId) : null, () =>
-    documentService.getDocumentById(documentId!),
-  );
-
-/** A rubric and its run-policy config (e.g. maxRepairRounds). Pass null to skip. */
-export const useRubric = (rubricId: string | null | undefined) =>
-  useClientDataSWR(rubricId ? verifyKeys.rubric(rubricId) : null, () =>
-    verifyService.getRubric(rubricId!),
-  );
+/**
+ * The criterion's original judging rule, stored in its instruction document.
+ * Shares the document detail replica, so it paints from the same persisted row
+ * as every other view of that document.
+ */
+export const useVerifyInstruction = (documentId: string | null | undefined) => {
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  return useFetchDocumentDetail(documentId || undefined);
+};
 
 /** The workspace's reusable rubric templates (delivery-standard groups). */
-export const useRubrics = (enabled = true) =>
-  useClientDataSWR(enabled ? verifyKeys.rubrics() : null, () => verifyService.listRubrics());
-
-/** The workspace's reusable atomic criteria. */
-export const useCriteria = () =>
-  useClientDataSWR(verifyKeys.criteria(), () => verifyService.listCriteria());
+export const useRubrics = (enabled = true) => {
+  const useFetchVerifyRubrics = useVerifyStore((s) => s.useFetchVerifyRubrics);
+  const data = useVerifyStore(verifySelectors.verifyRubrics);
+  const sync = useFetchVerifyRubrics(enabled);
+  return toReplicaRead(data, sync, enabled);
+};
 
 /** The criteria a rubric groups, in rubric order. Pass null to skip. */
-export const useRubricCriteria = (rubricId: string | null | undefined) =>
-  useClientDataSWR(rubricId ? verifyKeys.rubricCriteria(rubricId) : null, () =>
-    verifyService.getRubricCriteria(rubricId!),
-  );
+export const useRubricCriteria = (rubricId: string | null | undefined) => {
+  const useFetchVerifyRubricCriteria = useVerifyStore((s) => s.useFetchVerifyRubricCriteria);
+  const data = useVerifyStore(verifySelectors.verifyRubricCriteria(rubricId));
+  const sync = useFetchVerifyRubricCriteria(rubricId);
+  return toReplicaRead(data, sync, !!rubricId);
+};
+
+/** The persisted criteria a Goal is accepted against, in its order. Empty ids skip. */
+export const useGoalCriteria = (criteriaIds: string[]) => {
+  const useFetchGoalCriteria = useVerifyStore((s) => s.useFetchGoalCriteria);
+  const data = useVerifyStore(verifySelectors.goalCriteria(criteriaIds));
+  const sync = useFetchGoalCriteria(criteriaIds);
+  return toReplicaRead(data, sync, criteriaIds.length > 0);
+};

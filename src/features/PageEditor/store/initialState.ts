@@ -37,8 +37,12 @@ export interface PublicState {
 
 export interface PageCollabState {
   access: 'edit' | 'view';
+  blocked?: 'deleted' | 'too_large';
   /** The room's body reached the editor; until then the page shows the stored copy. */
   bodyReady?: boolean;
+  capacity?: 'full' | 'near_full' | 'ok';
+  /** This member edited the page in the room; from then on the room holds the page's edit lock. */
+  edited?: boolean;
   pending: number;
   /** Joins the room again after it failed to sync. */
   retry?: () => void;
