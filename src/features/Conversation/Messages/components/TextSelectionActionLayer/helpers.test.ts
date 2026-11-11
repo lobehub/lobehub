@@ -6,6 +6,7 @@ import {
   getSelectionPreview,
   getSelectionToolbarPosition,
   isSameTextSelectionContext,
+  isTextSelectionAdded,
 } from './helpers';
 
 describe('TextSelectionActionLayer helpers', () => {
@@ -43,18 +44,91 @@ describe('TextSelectionActionLayer helpers', () => {
     );
   });
 
+  it('reports the added state while the same text is pending in the composer', () => {
+    const pending = createTextSelectionContext({
+      id: 'selection-1',
+      selectedText: 'selected text',
+      title: 'Message selection',
+    });
+
+    // A repeated selection of the added text must surface the added state rather than
+    // offering an add that is silently deduped.
+    expect(isTextSelectionAdded([pending], '  selected text ')).toBe(true);
+    expect(isTextSelectionAdded([pending], 'other text')).toBe(false);
+    // Removing the chip (or sending the message) clears it.
+    expect(isTextSelectionAdded([], 'selected text')).toBe(false);
+    // A file or page reference with the same content is a different context.
+    expect(isTextSelectionAdded([{ ...pending, filePath: 'src/a.ts' }], 'selected text')).toBe(
+      false,
+    );
+  });
+
   it('clips long previews without changing the selected content', () => {
     const selectedText = 'a'.repeat(90);
 
     expect(getSelectionPreview(selectedText)).toBe(`${'a'.repeat(80)}...`);
   });
 
-  it('keeps toolbar position inside viewport margins', () => {
-    const rect = DOMRect.fromRect({ height: 18, width: 30, x: -20, y: 4 });
+  it('anchors the toolbar above the first selected line', () => {
+    const rect = DOMRect.fromRect({ height: 18, width: 100, x: 200, y: 300 });
 
-    expect(getSelectionToolbarPosition(rect, 320)).toEqual({
-      left: 12,
-      top: 12,
+    expect(
+      getSelectionToolbarPosition(rect, {
+        selectionBottom: 360,
+        viewportHeight: 800,
+        viewportWidth: 1280,
+      }),
+    ).toEqual({
+      left: 250,
+      placement: 'top',
+      top: 288,
+    });
+  });
+
+  it('keeps the toolbar inside horizontal viewport margins', () => {
+    const rect = DOMRect.fromRect({ height: 18, width: 30, x: -20, y: 300 });
+
+    expect(
+      getSelectionToolbarPosition(rect, {
+        selectionBottom: 318,
+        viewportHeight: 800,
+        viewportWidth: 320,
+      }).left,
+    ).toBe(12);
+  });
+
+  it('flips below the whole selection when there is no room above', () => {
+    // A selection near the viewport top used to clamp to top=12 while the toolbar is
+    // translated -100%, which pushed it entirely off-screen.
+    const rect = DOMRect.fromRect({ height: 18, width: 30, x: 100, y: 4 });
+
+    expect(
+      getSelectionToolbarPosition(rect, {
+        selectionBottom: 70,
+        viewportHeight: 800,
+        viewportWidth: 320,
+      }),
+    ).toEqual({
+      left: 115,
+      placement: 'bottom',
+      top: 82,
+    });
+  });
+
+  it('keeps a flipped toolbar on screen when the selection overflows the viewport', () => {
+    // First line scrolled above the viewport and the selection ends below it.
+    const rect = DOMRect.fromRect({ height: 18, width: 30, x: 100, y: -200 });
+
+    expect(
+      getSelectionToolbarPosition(rect, {
+        selectionBottom: 1200,
+        viewportHeight: 800,
+        viewportWidth: 320,
+      }),
+    ).toEqual({
+      left: 115,
+      placement: 'bottom',
+      top: 752,
     });
   });
 
