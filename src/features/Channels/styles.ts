@@ -155,6 +155,9 @@ export const styles = stylex.create({
     marginInline: 2,
     verticalAlign: 'baseline',
   },
+  eventMemberAgent: {
+    cursor: 'pointer',
+  },
   eventMemberName: {
     // Let the name supply the inline flex baseline instead of the avatar.
     alignSelf: 'baseline',
