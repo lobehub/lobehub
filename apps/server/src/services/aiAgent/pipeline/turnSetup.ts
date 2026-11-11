@@ -369,6 +369,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Skills the user selected for this turn; see `ExecAgentParams.selectedSkillIds`. */
   selectedSkillIds?: string[];
+  /** Tools the user @-mentioned for this turn; see `ExecAgentParams.selectedToolIds`. */
+  selectedToolIds?: string[];
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
   /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
@@ -476,6 +478,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     selectedSkillIds,
+    selectedToolIds,
     shareGate,
     steer,
     throwIfExecutionAborted,
@@ -888,6 +891,7 @@ export const setupTurn = async (
     composerMetadata: userMessage?.metadata,
     externalOrigin,
     selectedSkillIds,
+    selectedToolIds,
     steer,
     trigger,
   });

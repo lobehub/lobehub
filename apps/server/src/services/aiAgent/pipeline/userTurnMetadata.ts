@@ -11,6 +11,8 @@ export interface UserTurnMetadataInput {
   composerMetadata?: ComposerUserMessageMetadata;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   selectedSkillIds?: string[];
+  /** @-mentioned tools for this message. Turn-scoped; see `selectedToolIds` below. */
+  selectedToolIds?: string[];
   steer?: boolean;
   trigger?: string;
 }
@@ -27,6 +29,7 @@ export const buildUserTurnMetadata = ({
   composerMetadata,
   externalOrigin,
   selectedSkillIds,
+  selectedToolIds,
   steer,
   trigger,
 }: UserTurnMetadataInput) => ({
@@ -56,4 +59,7 @@ export const buildUserTurnMetadata = ({
   // Later turns read the selection back from history, so the skills stay
   // injected for the rest of the topic (see `collectSelectedSkillIds`).
   ...(selectedSkillIds?.length ? { selectedSkillIds: [...new Set(selectedSkillIds)] } : undefined),
+  // This turn only. A resume reads the ids back off this row; the next user
+  // turn does not (see `collectCurrentTurnSelectedToolIds`).
+  ...(selectedToolIds?.length ? { selectedToolIds: [...new Set(selectedToolIds)] } : undefined),
 });
