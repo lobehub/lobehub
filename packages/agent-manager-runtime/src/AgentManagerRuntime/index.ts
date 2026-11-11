@@ -33,7 +33,8 @@ import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 
-import { describeHeterogeneousAgent, renderHeteroRuntimeLines } from '../heteroAgentDescriptor';
+import { buildAgentDetailContent } from '../agentDetail';
+import { describeHeterogeneousAgent } from '../heteroAgentDescriptor';
 import type {
   AgentManagerRuntimeServices,
   AgentSearchItem,
@@ -352,22 +353,8 @@ export class AgentManagerRuntime {
         },
       };
 
-      const parts: string[] = [];
-      if (detail.meta.title) parts.push(`**${detail.meta.title}**`);
-      if (detail.meta.description) parts.push(detail.meta.description);
-      if (detail.config.model)
-        parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-      if (detail.config.plugins?.length) {
-        parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
-      }
-      parts.push(...renderHeteroRuntimeLines(runtime));
-      if (detail.config.systemRole) {
-        parts.push(`System Prompt: ${detail.config.systemRole}`);
-      }
-
       return {
-        content:
-          parts.length > 0 ? parts.join('\n') : `Agent "${agentId}" found (no details available).`,
+        content: buildAgentDetailContent(detail),
         state: {
           agentId,
           config: detail.config,

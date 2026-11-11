@@ -13,6 +13,7 @@ const {
   mockQueryAgents,
   mockExistsById,
   mockGetAgentConfigById,
+  mockServiceGetAgentConfigById,
   mockServiceUpdateConfig,
   mockUpdateAgent,
   mockUpdateConfig,
@@ -37,6 +38,7 @@ const {
   mockGetAssistantList: vi.fn(),
   mockGetAssistantDetail: vi.fn(),
   mockQueryAgents: vi.fn(),
+  mockServiceGetAgentConfigById: vi.fn(),
   mockServiceUpdateConfig: vi.fn(),
   mockUpdateAgent: vi.fn(),
   mockUpdateConfig: vi.fn(),
@@ -44,7 +46,10 @@ const {
 
 vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn(function () {
-    return { updateAgentConfig: mockServiceUpdateConfig };
+    return {
+      getAgentConfigById: mockServiceGetAgentConfigById,
+      updateAgentConfig: mockServiceUpdateConfig,
+    };
   }),
 }));
 
@@ -118,6 +123,8 @@ describe('agentManagementRuntime', () => {
     vi.clearAllMocks();
     mockExistsById.mockResolvedValue(true);
     mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
+    // The merged (defaults-applied) read delegates to the raw row by default.
+    mockServiceGetAgentConfigById.mockImplementation((...args) => mockGetAgentConfigById(...args));
     mockResolveConnectors.mockResolvedValue([]);
     mockQueryPlugins.mockResolvedValue([]);
     mockGetMcpManifest.mockRejectedValue(new Error('not in marketplace'));
@@ -700,6 +707,101 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression guard (T-13805): the tool description promises system prompt,
+  // model, provider and plugins — plus the external runtime and where it runs
+  // for heterogeneous agents — but this runtime dropped every empty field and
+  // never read agencyConfig, so a Codex / DeepSeek Harness agent came back as a
+  // bare "**Title**" line.
+  describe('getAgentDetail configuration', () => {
+    it('returns the effective config of a native agent', async () => {
+      mockServiceGetAgentConfigById.mockResolvedValue({
+        id: 'agt-native',
+        model: 'gpt-4o',
+        plugins: ['web-browsing', { identifier: 'calculator', mode: 'auto' }],
+        provider: 'openai',
+        systemRole: 'You are a careful writer.',
+        title: 'Writer',
+      });
+
+      const result = await createRuntime().getAgentDetail({ agentId: 'agt-native' });
+
+      expect(mockServiceGetAgentConfigById).toHaveBeenCalledWith('agt-native');
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('**Writer**');
+      expect(result.content).toContain('Model: gpt-4o');
+      expect(result.content).toContain('Provider: openai');
+      expect(result.content).toContain('Plugins: web-browsing, calculator (auto)');
+      expect(result.content).toContain('System Prompt: You are a careful writer.');
+      expect(result.content).not.toContain('Runtime:');
+      expect(result.state).toMatchObject({
+        agentId: 'agt-native',
+        config: {
+          model: 'gpt-4o',
+          plugins: ['web-browsing', 'calculator (auto)'],
+          provider: 'openai',
+          systemRole: 'You are a careful writer.',
+        },
+        meta: { title: 'Writer' },
+      });
+      expect((result.state as any).config.runtime).toBeUndefined();
+    });
+
+    it('describes a heterogeneous agent runtime and where it runs', async () => {
+      mockServiceGetAgentConfigById.mockResolvedValue({
+        agencyConfig: {
+          executionTarget: 'sandbox',
+          heterogeneousProvider: { type: 'deepseek-harness' },
+        },
+        id: 'agt-harness',
+        plugins: [],
+        systemRole: '',
+        title: 'DeepSeek Harness',
+      });
+
+      const result = await createRuntime().getAgentDetail({ agentId: 'agt-harness' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).not.toBe('**DeepSeek Harness**');
+      expect(result.content).toContain('Model: (not set)');
+      expect(result.content).toContain('Provider: (not set)');
+      expect(result.content).toContain('Plugins: (none)');
+      expect(result.content).toContain('System Prompt: (empty)');
+      expect(result.content).toContain('Runtime: DeepSeek Harness');
+      expect(result.content).toContain('Runs on: a server-spawned cloud sandbox');
+      expect((result.state as any).config.runtime).toMatchObject({
+        capabilities: expect.arrayContaining(['filesystem-write', 'shell-commands']),
+        executionTarget: 'sandbox',
+        kind: 'runtime',
+        type: 'deepseek-harness',
+      });
+    });
+
+    it('reports the bound device of a device-pinned hetero agent', async () => {
+      mockServiceGetAgentConfigById.mockResolvedValue({
+        agencyConfig: {
+          boundDeviceId: 'device-42',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'codex' },
+        },
+        id: 'agt-codex',
+        model: 'gpt-5',
+        provider: 'openai',
+        title: 'Codex',
+      });
+
+      const result = await createRuntime().getAgentDetail({ agentId: 'agt-codex' });
+
+      expect(result.content).toContain('Runtime: Codex');
+      expect(result.content).toContain('(deviceId: device-42)');
+      expect((result.state as any).config.runtime).toMatchObject({
+        boundDeviceId: 'device-42',
+        executionTarget: 'device',
+        kind: 'cli',
+        type: 'codex',
+      });
     });
   });
 

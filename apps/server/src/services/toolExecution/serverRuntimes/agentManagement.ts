@@ -1,8 +1,10 @@
 import {
   AgentManagementIdentifier,
+  buildAgentDetailContent,
   type CallAgentParams,
   type CreateAgentParams,
   type DeleteAgentParams,
+  describeHeterogeneousAgent,
   type DuplicateAgentParams,
   type GetAgentDetailParams,
   type InstallPluginParams,
@@ -242,7 +244,10 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
       getAgentDetail: async (params: GetAgentDetailParams): Promise<ToolExecutionResult> => {
         try {
-          const agent = await agentModel.getAgentConfigById(params.agentId);
+          // Read the merged config (defaults → user defaults → agent row), the
+          // same view the client AgentManagerRuntime and an actual run use, so
+          // an agent that inherits its model still reports the model it runs.
+          const agent = await agentService.getAgentConfigById(params.agentId);
 
           if (!agent) {
             // searchAgent can surface marketplace agents (short-code ids) that
@@ -254,6 +259,15 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
             return { content: `Agent "${params.agentId}" not found.`, success: false };
           }
+
+          // The merged config carries DB-row fields (description, tags) that
+          // are not on LobeAgentConfig.
+          const raw = agent as Record<string, any>;
+
+          // Heterogeneous agents (Claude Code / Codex / DeepSeek Harness …)
+          // bring their own toolset and ignore the chat model/plugins; describe
+          // the runtime and where it executes instead.
+          const runtime = describeHeterogeneousAgent(agent.agencyConfig);
 
           // Normalize to identifier strings (annotated with mode when not
           // pinned) — `agent.plugins` is the raw AgentPluginEntry[] (string |
@@ -273,29 +287,20 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
               openingQuestions: agent.openingQuestions,
               plugins: pluginSummaries,
               provider: agent.provider,
+              ...(runtime && { runtime }),
               systemRole: agent.systemRole,
             },
             meta: {
               avatar: agent.avatar,
               backgroundColor: agent.backgroundColor,
-              description: agent.description,
-              tags: agent.tags,
+              description: raw.description as string | undefined,
+              tags: raw.tags as string[] | undefined,
               title: agent.title,
             },
           };
 
-          const parts: string[] = [];
-          if (detail.meta.title) parts.push(`**${detail.meta.title}**`);
-          if (detail.meta.description) parts.push(detail.meta.description);
-          if (detail.config.model)
-            parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-          if (detail.config.plugins?.length) {
-            parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
-          }
-          if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
-
           return {
-            content: parts.length > 0 ? parts.join('\n') : `Agent "${params.agentId}" found.`,
+            content: buildAgentDetailContent(detail),
             state: { agentId: params.agentId, ...detail, success: true },
             success: true,
           };
@@ -541,8 +546,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
  * Best-effort marketplace detail lookup for ids that have no local agents row.
  * Mirrors the client `AgentManagerRuntime.getMarketAgentDetail`; market config
  * almost never carries `agencyConfig`, so the hetero runtime descriptor is
- * intentionally not mirrored here (apps/server does not depend on
- * `@lobechat/agent-manager-runtime`).
+ * intentionally not mirrored here.
  */
 const getMarketAgentDetail = async (
   discoverService: DiscoverService,
