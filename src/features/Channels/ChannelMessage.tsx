@@ -24,6 +24,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -36,7 +37,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
-import { channelTimeFormatters } from './messagePresentation';
+import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
@@ -112,13 +113,16 @@ export const ChannelMessage = ({
     !isRoot &&
     message.routingStatus !== 'unassigned' &&
     !detail.jobs.some((job) => job.messageId === message.id && job.status === 'failed');
+  // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
       dateTime={date.toISOString()}
       title={timeFormats.full.format(date)}
       {...stylex.props(styles.messageTime)}
     >
-      {timeFormats.time.format(date)}
+      {compact
+        ? timeFormats.time.format(date)
+        : channelMessageTime(date, { locale: i18n.language, yesterday: t('date.yesterday') })}
     </time>
   );
   const isOwnMessage = useUserStore((s) =>
@@ -156,6 +160,7 @@ export const ChannelMessage = ({
                 agentId: agentAuthorId,
                 avatar: message.author.avatar,
                 name: message.author.name || t('unnamedAgent'),
+                title: message.sourceTopicTitle,
                 topicId: sourceTopicId,
               }),
           },
@@ -207,6 +212,7 @@ export const ChannelMessage = ({
     >
       {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
+        quietHeader
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
@@ -251,7 +257,15 @@ export const ChannelMessage = ({
                   title: message.author.name,
                 }}
               >
-                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <AgentAvatar
+                    agentId={agentAuthorId}
+                    avatar={message.author.avatar}
+                    name={message.author.name}
+                    shape={'circle'}
+                    size={36}
+                  />
+                </span>
               </AgentProfilePopup>
             ) : (
               avatar

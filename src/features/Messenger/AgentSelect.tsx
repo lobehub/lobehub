@@ -4,11 +4,9 @@ import { agentDisplayName } from '@lobechat/types';
 import { Flexbox, Select, type SelectProps, Text } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import AgentAvatar from '@/components/AgentAvatar';
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 
 interface AgentSelectProps extends Omit<SelectProps<string>, 'options' | 'value' | 'onChange'> {
   /**
@@ -27,16 +25,18 @@ const AgentSelect = memo<AgentSelectProps>(
   ({ value, onChange, workspaceId, defaultToInbox, ...rest }) => {
     const { t: tCommon } = useTranslation('common');
     // Cascading fetch: agents are scoped to the selected `workspaceId` (or
-    // personal when null). The scope is part of the SWR key so switching scope
-    // refetches the right list.
-    const agentsSWR = useSWR(messengerKeys.agentsForBinding(workspaceId), () =>
-      messengerService.listAgentsForBinding(workspaceId),
-    );
+    // personal when null), one replica entry per scope, so switching scope
+    // reads the right list and a reload paints it from the local copy.
+    const scopeId = workspaceId ?? null;
+    const agentsSync = messengerActions.useFetchBindingAgents(scopeId);
+    const agents = useMessengerStore(messengerSelectors.bindingAgents(scopeId));
+    const isSettled = useMessengerStore(messengerSelectors.isBindingAgentsSettled(scopeId));
+    const isConfirmed = useMessengerStore(messengerSelectors.isBindingAgentsConfirmed(scopeId));
 
     const defaultAgentTitle = tCommon('defaultSession');
     const options = useMemo(
       () =>
-        (agentsSWR.data ?? []).map((agent) => {
+        (agents ?? []).map((agent) => {
           const title = agentDisplayName(agent, defaultAgentTitle);
           return {
             label: (
@@ -56,13 +56,15 @@ const AgentSelect = memo<AgentSelectProps>(
             value: agent.id,
           };
         }),
-      [agentsSWR.data, defaultAgentTitle],
+      [agents, defaultAgentTitle],
     );
 
     // Inbox (LobeAI) agent of the current scope, pinned to the top server-side.
+    // Defaulting writes the pick to the server, so it waits for the server's
+    // list rather than a restored copy that may be stale.
     const inboxAgentId = useMemo(
-      () => (agentsSWR.data ?? []).find((agent) => agent.isInbox)?.id,
-      [agentsSWR.data],
+      () => (isConfirmed ? agents?.find((agent) => agent.isInbox)?.id : undefined),
+      [agents, isConfirmed],
     );
 
     // When asked to default to the scope's inbox and nothing is selected, select
@@ -78,7 +80,7 @@ const AgentSelect = memo<AgentSelectProps>(
 
     return (
       <Select
-        loading={agentsSWR.isLoading}
+        loading={!isSettled && !agentsSync.error}
         options={options}
         value={value ?? null}
         onChange={(next) => onChange?.((next as string | null) ?? undefined)}

@@ -20,7 +20,9 @@ import useSWR from 'swr';
 
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
+import { SANDBOX_STORAGE_PATH } from '@/features/ResourceHome/paths';
 import { openSandboxDirectoryModal } from '@/features/WorkingDirectory';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { environmentService } from '@/services/environment';
@@ -31,7 +33,12 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import OptionRow from './OptionRow';
 import SandboxDriveMenu from './SandboxDriveMenu';
-import { environmentChipState, pickableEnvironments } from './sandboxEnvironmentOptions';
+import {
+  environmentChipState,
+  pickableEnvironments,
+  repositorySelection,
+  repositorySlug,
+} from './sandboxEnvironmentOptions';
 import SandboxRepositoryMenu, { type SandboxRepositoryOption } from './SandboxRepositoryMenu';
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
@@ -81,6 +88,8 @@ interface SandboxDrivePickerProps {
   /** Whether this plan includes a drive. Without one the menu offers the way to a plan. */
   entitled: boolean;
   onChange: (selection: SandboxSelection) => Promise<void>;
+  /** The project the conversation belongs to; its repositories have a checkout there. */
+  projectId?: string;
   topicId?: string;
   /** Where this conversation works today. */
   value: SandboxSelection;
@@ -108,7 +117,7 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * replaces it.
  */
 const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
-  ({ entitled, onChange, topicId, value }) => {
+  ({ entitled, onChange, projectId, topicId, value }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
@@ -185,11 +194,16 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       }
     };
 
-    // A repository is only cloned into an empty folder, so it never inherits the
-    // folder the conversation was on: it starts in a temporary sandbox.
     const pickRepository = async (environment: SandboxRepositoryOption) => {
       try {
-        await onChange({ environmentId: environment.id });
+        await onChange(
+          repositorySelection(environment, {
+            projectId,
+            published:
+              environments.find((item) => item.id === environment.id)?.visibility === 'public',
+            workspace: !!workspaceId,
+          }),
+        );
         void revalidatePlacement();
       } catch {
         // The topic kept its place; said rather than left looking changed.
@@ -240,7 +254,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     const chipIcon = fallback ? (
       <Icon icon={TriangleAlertIcon} size={14} />
     ) : onRepository ? (
-      <Github size={14} />
+      <RepositoryAvatar size={14} url={repository && repositorySlug(repository)} />
     ) : persistent ? (
       <Icon icon={currentIcon} size={14} />
     ) : (
@@ -301,6 +315,10 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
                   selectedPath={showFolder ? value.workingDirectory : undefined}
                   onBrowse={openBrowser}
                   onPick={(folder) => void select(folder)}
+                  onOpenStorage={() => {
+                    setOpen(false);
+                    navigate(SANDBOX_STORAGE_PATH);
+                  }}
                 />
               }
             >
@@ -363,8 +381,21 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
               arrow
               compact
               active={onRepository}
-              icon={<Github size={16} />}
-              label={t('sandboxEnvironment.title')}
+              hint={onRepository && repository ? repositorySlug(repository) : undefined}
+              icon={
+                onRepository && repository ? (
+                  <RepositoryAvatar size={16} url={repositorySlug(repository)} />
+                ) : (
+                  <Github size={16} />
+                )
+              }
+              label={
+                // The repository the conversation works in, by name; the
+                // generic title only while none is picked.
+                onRepository && repositoryState.kind === 'picked'
+                  ? repositoryState.name
+                  : t('sandboxEnvironment.title')
+              }
               onClick={() => {}}
             />
           </div>

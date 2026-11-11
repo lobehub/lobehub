@@ -17,6 +17,13 @@ vi.mock('@saintno/comfyui-sdk', () => ({
 vi.mock('@/server/services/comfyui/core/comfyUIAuthService');
 vi.mock('@/server/services/comfyui/core/comfyUIConnectionService');
 
+const workflowCallWrapper = () => ({
+  onFailed: vi.fn().mockReturnThis(),
+  onFinished: vi.fn().mockReturnThis(),
+  onProgress: vi.fn().mockReturnThis(),
+  run: vi.fn(),
+});
+
 describe('ComfyUIClientService', () => {
   let service: ComfyUIClientService;
   let mockClient: any;
@@ -246,12 +253,7 @@ describe('ComfyUIClientService', () => {
       };
 
       // Create CallWrapper mock instance
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
+      const mockCallWrapper = workflowCallWrapper();
 
       // Setup CallWrapper mock
       vi.mocked(CallWrapper).mockImplementation(function () {
@@ -278,12 +280,7 @@ describe('ComfyUIClientService', () => {
       const mockWorkflow = { id: 'test' };
       const mockError = new Error('Workflow failed');
 
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
+      const mockCallWrapper = workflowCallWrapper();
 
       vi.mocked(CallWrapper).mockImplementation(function () {
         return mockCallWrapper as any;
@@ -306,12 +303,7 @@ describe('ComfyUIClientService', () => {
       const mockProgress = { step: 1, total: 10 };
       const progressCallback = vi.fn();
 
-      const mockCallWrapper = {
-        onFailed: vi.fn().mockReturnThis(),
-        onFinished: vi.fn().mockReturnThis(),
-        onProgress: vi.fn().mockReturnThis(),
-        run: vi.fn(),
-      };
+      const mockCallWrapper = workflowCallWrapper();
 
       vi.mocked(CallWrapper).mockImplementation(function () {
         return mockCallWrapper as any;

@@ -10,11 +10,13 @@ import {
   taskTopics,
 } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import {
   activitiesOwnership,
   commentsOwnership,
   depsOwnership,
   docsOwnership,
+  seqOwnership,
   type TaskModelContext,
   taskOwnership,
   taskOwnershipSql,
@@ -57,6 +59,34 @@ export const findAllDescendants = async (
   }
 
   return all;
+};
+
+/**
+ * Whether a direct subtask sits outside `projectId` (`null` = no project). Scoped
+ * like the identifier sequence rather than by `taskOwnership`: another member's
+ * private subtask is hidden from the caller but still has to share its parent's
+ * project. A trashed subtask no longer counts, like a trashed dependency.
+ */
+export const hasSubtaskOutsideProject = async (
+  ctx: TaskModelContext,
+  taskId: string,
+  projectId: string | null,
+): Promise<boolean> => {
+  const [row] = await ctx.db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.parentTaskId, taskId),
+        seqOwnership(ctx),
+        notTrashed(tasks.isDeleted),
+        projectId === null
+          ? isNotNull(tasks.projectId)
+          : sql`${tasks.projectId} IS DISTINCT FROM ${projectId}`,
+      ),
+    )
+    .limit(1);
+  return !!row;
 };
 
 // Recursive query to get full task tree

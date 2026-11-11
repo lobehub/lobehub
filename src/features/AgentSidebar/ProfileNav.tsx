@@ -1,13 +1,15 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
   ChevronLeftIcon,
-  FileUserIcon,
+  DnaIcon,
+  MailIcon,
   RadioTowerIcon,
   Share2Icon,
+  UserRoundIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -15,6 +17,7 @@ import urlJoin from 'url-join';
 import {
   type AgentProfileTab,
   buildAgentProfileTabPath,
+  groupAgentProfileTabOptions,
 } from '@/features/AgentProfileTabs/tabOptions';
 import { useAgentProfileTabOptions } from '@/features/AgentProfileTabs/useAgentProfileTabOptions';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -26,10 +29,12 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
-  channel: RadioTowerIcon,
-  profile: FileUserIcon,
-  share: Share2Icon,
-  statistics: ChartColumnBigIcon,
+  'channel': RadioTowerIcon,
+  'mail': MailIcon,
+  'profile': UserRoundIcon,
+  'self-evolving': DnaIcon,
+  'share': Share2Icon,
+  'statistics': ChartColumnBigIcon,
 };
 
 interface ProfileNavProps {
@@ -46,15 +51,30 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
   return (
     <SideBarLayout
       body={
-        <Flexbox gap={1} paddingInline={4}>
-          {options.map(({ label, value }) => (
-            <NavItem
-              active={value === active}
-              icon={TAB_ICONS[value]}
-              key={value}
-              title={label}
-              onClick={() => navigate(buildAgentProfileTabPath(agentId, value))}
-            />
+        <Flexbox gap={12} paddingInline={4}>
+          {groupAgentProfileTabOptions(options).map((group) => (
+            <Flexbox gap={1} key={group.key}>
+              {group.key === 'identity' && (
+                <Text
+                  ellipsis
+                  fontSize={12}
+                  style={{ paddingBlock: 4, paddingInline: 8 }}
+                  type={'secondary'}
+                  weight={500}
+                >
+                  {t('tab.group.identity')}
+                </Text>
+              )}
+              {group.options.map(({ label, value }) => (
+                <NavItem
+                  active={value === active}
+                  icon={TAB_ICONS[value]}
+                  key={value}
+                  title={label}
+                  onClick={() => navigate(buildAgentProfileTabPath(agentId, value))}
+                />
+              ))}
+            </Flexbox>
           ))}
         </Flexbox>
       }
@@ -63,11 +83,14 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
           <SideBarHeaderLayout
             showBack={false}
             left={
-              <NavItem
+              <Button
                 icon={ChevronLeftIcon}
-                title={t('tab.backToChat')}
+                size={'small'}
+                type={'text'}
                 onClick={() => navigate(urlJoin('/agent', agentId))}
-              />
+              >
+                {t('tab.backToChat')}
+              </Button>
             }
           />
           <Flexbox paddingBlock={'0 8px'} paddingInline={6}>

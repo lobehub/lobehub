@@ -97,16 +97,16 @@ class AgentAccountService {
     lambdaClient.agentAccount.inbox.list.query(params);
 
   /** Unread across the whole inbox, not just the page a list happened to load. */
-  getInboxUnreadCount = async (agentId: string): Promise<number> =>
-    (await lambdaClient.agentAccount.inbox.unreadCount.query({ agentId })).unreadCount;
+  getInboxUnreadCount = async (agentId: string, accountId?: string): Promise<number> =>
+    (await lambdaClient.agentAccount.inbox.unreadCount.query({ accountId, agentId })).unreadCount;
 
   getInboxMessage = async (id: string): Promise<AgentInboxMessage> =>
     toInboxMessage(await lambdaClient.agentAccount.inbox.get.query({ id }));
 
   markInboxRead = (ids: string[]) => lambdaClient.agentAccount.inbox.markRead.mutate({ ids });
 
-  markAllInboxRead = (agentId: string) =>
-    lambdaClient.agentAccount.inbox.markAllRead.mutate({ agentId });
+  markAllInboxRead = (agentId: string, accountId?: string) =>
+    lambdaClient.agentAccount.inbox.markAllRead.mutate({ accountId, agentId });
 }
 
 export const agentAccountService = new AgentAccountService();

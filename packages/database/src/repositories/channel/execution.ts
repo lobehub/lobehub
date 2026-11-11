@@ -259,6 +259,39 @@ export class ChannelExecutionRepository {
   };
 
   /**
+   * The reply a deferred follow-up waited for: the primary responder's answer to the same
+   * request, published after the request cutoff. Read by id within the job's branch only; the
+   * cutoff still bounds the history tools. Null for every other job.
+   */
+  primaryReply = async (
+    channelId: string,
+    jobId: string,
+  ): Promise<ChannelContextMessage | null> => {
+    const [job] = await this.db
+      .select({ manifest: channelJobs.manifest })
+      .from(channelJobs)
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          eq(channelJobs.id, jobId),
+          isNotNull(channelJobs.manifest),
+        ),
+      );
+    if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
+    const messageId = job.manifest.primaryReplyMessageId;
+    if (!messageId) return null;
+
+    const [reply] = await readManifestMessages(
+      this.db,
+      channelId,
+      // Sequences are int4; the reply is past the request cutoff, so lift it for this one id.
+      { ...job.manifest, cutoffSequence: 2_147_483_647 },
+      { messageId },
+    );
+    return reply ?? null;
+  };
+
+  /**
    * Public messages before the request that this run's topic has not seen, oldest first and
    * at most {@link RECENT_CONTEXT_LIMIT}: everything after the last request the topic accepted,
    * except the reply it published. A new topic has seen nothing, so it gets the latest

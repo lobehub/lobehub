@@ -1,4 +1,5 @@
-import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentType } from './agent';
+import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 
@@ -9,17 +10,32 @@ import type { BotWakeKind } from './signal';
  * and operations; the internal transcript stays separate from the public timeline.
  */
 
-export const CHANNEL_RUNTIMES = [
-  'native',
-  'codex',
-  'amp',
-  'grok-build',
-  'claude-code',
-  'pi',
-] as const;
-export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
+/**
+ * Runtimes a Channel can seat, derived rather than listed: LobeHub's own `native` loop plus every
+ * heterogeneous runtime that executes on its user's machine (descriptor-backed CLIs and
+ * protocol-driven local runtimes). A new local runtime joins Channels when it joins the provider
+ * registry; only runtimes known not to work are excluded below, each with its reason.
+ */
+const LOCAL_EXECUTION_RUNTIMES = LocalExecutionHeterogeneousAgentTypeSchema.options;
+
+/**
+ * Remote-task runtimes (`openclaw`, `hermes`) run a task on a remote host instead of on a seated
+ * device, so a Channel's "pick a device + working directory" premise does not hold for them.
+ * They are not part of LOCAL_EXECUTION_RUNTIMES; this list documents the exclusion and is
+ * asserted by tests so a remote runtime cannot slip in by being reclassified.
+ */
+export const CHANNEL_EXCLUDED_RUNTIMES: Readonly<Record<RemoteHeterogeneousAgentType, string>> = {
+  hermes:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+  openclaw:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+};
+
+export const CHANNEL_RUNTIMES = ['native', ...LOCAL_EXECUTION_RUNTIMES] as const;
+export type ChannelRuntime = 'native' | (typeof LOCAL_EXECUTION_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
+  !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
 
 /**
@@ -197,6 +213,12 @@ export type ChannelJobStatus =
  * The details are what the woken Agent is told about the wake.
  */
 export interface ChannelJobWake {
+  /**
+   * The member whose reply to the same message this wake waits for: the message's one primary
+   * responder. The job starts only after that member's job settles, with its reply in the prompt,
+   * so it can stay silent when the reply already covers the request.
+   */
+  afterMemberId?: string;
   /** The message falls within the member's duties (`helpful`: it can settle an open question). */
   duty?: { helpful?: boolean; matched?: string };
   /** The member spoke here lately and this message followed. */
@@ -213,6 +235,8 @@ export interface ChannelJobWake {
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** A deferred `followup` waiting for the message's primary responder to settle. */
+  | 'awaiting_primary'
   | 'device_approval_pending'
   | 'device_offline'
   | 'device_required'
@@ -276,6 +300,11 @@ export interface ChannelHistoryMessageDetail {
 export interface ChannelInputManifest {
   /** Immutable at claim time; later public messages belong to the next run. */
   cutoffSequence: number;
+  /**
+   * A deferred `followup` (see `ChannelJobWake.afterMemberId`): the reply the primary responder
+   * published to the same request, delivered with the request even though it is past the cutoff.
+   */
+  primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
   requestMessageId: string;
@@ -356,6 +385,7 @@ export interface ChannelPublicMessage {
   sequence: number;
   /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
   sourceTopicId?: string | null;
+  sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
 }

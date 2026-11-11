@@ -10,6 +10,15 @@ import type { AgentState } from '../types';
  */
 export const TOOL_CALL_REPEAT_LIMIT = 20;
 
+/**
+ * Tool calls one LLM turn may request before the turn is stopped without
+ * running any of them. A model that has lost the thread can fill its whole
+ * output budget with tool calls (MiMo V2.6 Flash emitted 4,383 in one turn,
+ * 131k tokens, mostly varied arguments); every one of those would otherwise
+ * be dispatched to a real service. Legitimate fan-out stays far below this.
+ */
+export const TOOL_CALL_BURST_LIMIT = 50;
+
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(canonicalize);
 
@@ -49,7 +58,11 @@ export const updateToolCallRepeatGuard = (
 
   for (const toolCalling of toolsCalling) {
     const signature = getToolCallSignature(toolCalling);
-    counts[signature] = (previousCounts[signature] ?? 0) + 1;
+    // Copies of one call inside a single turn count like consecutive turns:
+    // a model that asks for the same call hundreds of times in one response is
+    // as stuck as one that asks once per turn, and counting per turn let the
+    // whole batch through to the tools.
+    counts[signature] = (counts[signature] ?? previousCounts[signature] ?? 0) + 1;
   }
 
   return { counts };
@@ -57,3 +70,6 @@ export const updateToolCallRepeatGuard = (
 
 export const hasRepeatedToolCall = (guard: AgentState['toolCallRepeatGuard']) =>
   Object.values(guard?.counts ?? {}).some((count) => count >= TOOL_CALL_REPEAT_LIMIT);
+
+export const hasToolCallBurst = (toolsCalling: ChatToolPayload[]) =>
+  toolsCalling.length > TOOL_CALL_BURST_LIMIT;

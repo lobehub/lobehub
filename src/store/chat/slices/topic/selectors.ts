@@ -279,6 +279,21 @@ const getTopicWorkingDirectory =
 const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined =>
   extractTopicWorkingDirectory(currentActiveTopic(s));
 
+/**
+ * Extract the device a topic's local files live on.
+ * `runningOperation.deviceId` wins over the pinned `boundDeviceId`, matching
+ * the server-side `getTopicDeviceId` used for topic listing.
+ */
+const extractTopicDeviceId = (topic: ChatTopic | undefined): string | undefined =>
+  topic?.metadata?.runningOperation?.deviceId ?? topic?.metadata?.boundDeviceId ?? undefined;
+
+/**
+ * Get the device the current topic's local files belong to.
+ * Undefined for a topic that ran on this machine, or never bound one.
+ */
+const currentTopicDeviceId = (s: ChatStoreState): string | undefined =>
+  extractTopicDeviceId(currentActiveTopic(s));
+
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
 
 /**
@@ -540,6 +555,7 @@ export const topicSelectors = {
   currentActiveTopicSummary,
   currentTopicCount,
   currentTopicData,
+  currentTopicDeviceId,
   currentTopicLength,
   currentTopicMetadata,
   currentTopicWorkingDirectory,

@@ -51,6 +51,9 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
+  'features.pageCollab.desc':
+    "Edit workspace pages together in real time and see who else is on the page. When off, pages still save normally and show teammates' changes after a refresh.",
+  'features.pageCollab.title': 'Live Page Collaboration',
   'features.projects.desc':
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',

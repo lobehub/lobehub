@@ -2,6 +2,7 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  ContactListSortBy,
   DocsPageSectionKey,
   DocsPageSectionView,
   GlobalState,
@@ -460,6 +461,8 @@ const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? false;
 const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
 const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
 const homeGoalsCollapsed = (s: GlobalState): boolean => s.status.homeGoalsCollapsed ?? false;
+const teamBoardAttentionCollapsed = (s: GlobalState): boolean =>
+  s.status.teamBoardAttentionCollapsed ?? false;
 const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
 const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
@@ -503,6 +506,8 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   foldersFirst: true,
   order: 'asc',
 };
+const contactListSortBy = (s: GlobalState): ContactListSortBy =>
+  s.status.contactListSortBy ?? 'title';
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
@@ -556,6 +561,7 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
+  contactListSortBy,
   projectListSortBy,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
@@ -604,6 +610,7 @@ export const systemStatusSelectors = {
   taskListFilter,
   taskListFilters,
   taskListViewOptions,
+  teamBoardAttentionCollapsed,
   sidebarExpandedKeys,
   agentSidebarSections,
   projectOnboardingDismissed,

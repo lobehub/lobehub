@@ -15,18 +15,21 @@ import { useChatStore } from '@/store/chat';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { AcceptancePanel, CHANNEL_ENTITY_PORTAL_SCOPE } from './AcceptancePanel';
+import { AgentProfilePanel } from './AgentProfilePanel';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
+import { openTopic } from './openTopic';
 import { DirectReplyStatus } from './ReplyActivity';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
+import { ThreadPageActions, ThreadPageTitle } from './ThreadPageTitle';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
 import { useAcceptancePanelOpen } from './useAcceptancePanel';
 import { useThreadPanel } from './useThreadPanel';
 
-/** One Channel: the main conversation, with a thread beside it. */
+/** One Channel: the main conversation, with a thread beside it, or one thread as the page. */
 function EnabledChannelPage() {
   const { t } = useTranslation('channel');
   const { channelId } = useParams<{ channelId: string }>();
@@ -49,17 +52,21 @@ function EnabledChannelPage() {
   // explicitly opening another panel closes the report.
   const threadId = acceptanceOpen ? null : panel.threadId;
   const threadDraft = acceptanceOpen ? null : panel.draft;
+  const pageThreadId = panel.pageThreadId;
+  // A direct conversation's side panel is its Agent's profile; a workspace group's is the roster.
+  const hasMemberPanel =
+    !!directAgent || (!!detail?.channel.workspaceId && !detail.channel.agentId);
   const membersOpen =
-    !!detail?.channel.workspaceId &&
+    hasMemberPanel &&
     membersChannelId === channelId &&
     !threadId &&
     !threadDraft &&
     !acceptanceOpen;
-  // A thread or the member list replaces the topic.
-  const openTopic =
-    topic?.channelId === channelId && !threadId && !threadDraft && !membersOpen && !acceptanceOpen
-      ? topic
-      : null;
+  const visibleTopic = openTopic(topic, channelId, {
+    acceptance: acceptanceOpen,
+    members: membersOpen,
+    thread: !!(threadId || threadDraft || pageThreadId),
+  });
   if (!channelId) return null;
 
   return (
@@ -68,81 +75,112 @@ function EnabledChannelPage() {
         // A rule separates the header from the feed scrolling under it.
         {...stylex.props(styles.threadHeader)}
         left={
-          <Flexbox horizontal align="center" gap={8}>
-            {/* A direct conversation is titled by its Agent's name alone, like an IM chat. */}
-            {!directAgent && <Hash color={cssVar.colorTextDescription} size={16} />}
-            <Text ellipsis weight={500}>
-              {detail?.channel.title || t('title')}
-            </Text>
-            {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
-            {directAgent && <DirectReplyStatus detail={detail!} />}
-          </Flexbox>
+          pageThreadId && detail ? (
+            <ThreadPageTitle detail={detail} threadId={pageThreadId} onBack={panel.close} />
+          ) : (
+            <Flexbox horizontal align="center" gap={8}>
+              {/* A direct conversation is titled by its Agent's name alone, like an IM chat. */}
+              {!directAgent && <Hash color={cssVar.colorTextDescription} size={16} />}
+              <Text ellipsis weight={500}>
+                {detail?.channel.title || t('title')}
+              </Text>
+              {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
+              {directAgent && <DirectReplyStatus detail={detail!} />}
+            </Flexbox>
+          )
         }
         right={
           detail && (
-            <MemberStatus
-              detail={detail}
-              memberPanel={
-                detail.channel.workspaceId
-                  ? {
-                      id: memberPanelId,
-                      open: membersOpen,
-                      onToggle: () => {
-                        if (!membersOpen) {
-                          panel.close();
-                          setTopic(null);
-                          clearPortalStack();
-                        }
-                        setMembersChannelId(membersOpen ? null : channelId);
-                      },
-                    }
-                  : undefined
-              }
-            />
+            <Flexbox horizontal align="center" gap={8}>
+              {pageThreadId && <ThreadPageActions detail={detail} threadId={pageThreadId} />}
+              <MemberStatus
+                detail={detail}
+                memberPanel={
+                  hasMemberPanel
+                    ? {
+                        id: memberPanelId,
+                        open: membersOpen,
+                        onToggle: () => {
+                          if (!membersOpen) {
+                            // The roster sits beside a thread page; it only replaces a side panel.
+                            if (!pageThreadId) panel.close();
+                            setTopic(null);
+                            clearPortalStack();
+                          }
+                          setMembersChannelId(membersOpen ? null : channelId);
+                        },
+                      }
+                    : undefined
+                }
+              />
+            </Flexbox>
           )
         }
       />
       <EntityLinkHostProvider portal={CHANNEL_ENTITY_PORTAL_SCOPE}>
         <Flexbox horizontal ref={conversationRef} {...stylex.props(styles.conversations)}>
-          <ChannelConversation
-            channelId={channelId}
-            key={channelId}
-            inert={
-              (!!(threadId || threadDraft || acceptanceOpen) &&
-                (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
-              (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-              (!!openTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
-            }
-            onOpenThread={(nextThreadId, toggle) => {
-              setTopic(null);
-              // A send that finishes behind an open report (toggle: false) must not close it.
-              if (toggle !== false) clearPortalStack();
-              // Under a report the thread only looks closed, so bring it back, don't toggle it off.
-              panel.openThread(nextThreadId, acceptanceOpen ? false : toggle);
-            }}
-            onOpenTopic={(next) => {
-              panel.close();
-              setMembersChannelId(null);
-              clearPortalStack();
-              setTopic({ ...next, channelId });
-            }}
-            onStartThread={(draft) => {
-              setTopic(null);
-              clearPortalStack();
-              panel.openDraft(draft);
-            }}
-          />
-          {detail && membersOpen && (
-            <MemberPanel
-              availableWidth={conversationWidth}
-              detail={detail}
-              id={memberPanelId}
-              onClose={() => setMembersChannelId(null)}
+          {pageThreadId ? (
+            <ChannelConversation
+              channelId={channelId}
+              key={`${channelId}:${pageThreadId}`}
+              threadId={pageThreadId}
+              inert={
+                (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
+                (acceptanceOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+              }
+            />
+          ) : (
+            <ChannelConversation
+              channelId={channelId}
+              key={channelId}
+              inert={
+                (!!(threadId || threadDraft || acceptanceOpen) &&
+                  (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
+                (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
+                (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+              }
+              onOpenThread={(nextThreadId, toggle) => {
+                setTopic(null);
+                // A send that finishes behind an open report (toggle: false) must not close it.
+                if (toggle !== false) clearPortalStack();
+                // Under a report the thread only looks closed, so bring it back, don't toggle it off.
+                panel.openThread(nextThreadId, acceptanceOpen ? false : toggle);
+              }}
+              onOpenTopic={(next) => {
+                panel.close();
+                setMembersChannelId(null);
+                clearPortalStack();
+                setTopic({ ...next, channelId });
+              }}
+              onStartThread={(draft) => {
+                setTopic(null);
+                clearPortalStack();
+                panel.openDraft(draft);
+              }}
             />
           )}
+          {detail &&
+            membersOpen &&
+            (directAgent?.agentId ? (
+              <AgentProfilePanel
+                agentId={directAgent.agentId}
+                availableWidth={conversationWidth}
+                id={memberPanelId}
+                key={directAgent.agentId}
+                member={directAgent}
+                onClose={() => setMembersChannelId(null)}
+              />
+            ) : (
+              <MemberPanel
+                availableWidth={conversationWidth}
+                detail={detail}
+                id={memberPanelId}
+                onClose={() => setMembersChannelId(null)}
+              />
+            ))}
           <ReplyTopicPanel
             availableWidth={conversationWidth}
-            topic={openTopic}
+            topic={visibleTopic}
             onClose={() => setTopic(null)}
           />
           {detail && (
@@ -153,6 +191,7 @@ function EnabledChannelPage() {
               key={`thread:${channelId}`}
               threadId={threadId}
               onClose={panel.close}
+              onOpenPage={panel.openPage}
               onSendDraft={panel.send}
             />
           )}

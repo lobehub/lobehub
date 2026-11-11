@@ -34,23 +34,54 @@ export const CHANNEL_WAKE_MODEL_CALLS_PER_HOUR = 300;
 /** Why routing woke a member it was unsure about: it may stay silent. */
 const UNCERTAIN_WAKE: ChannelJobWake = { kind: 'followup', reason: 'routing-uncertain' };
 
+/** Why routing woke a member it was sure about after another one: it answers only if it adds. */
+const DEFERRED_WAKE: ChannelJobWake = { kind: 'followup', reason: 'routing-deferred' };
+
 /**
- * Thresholds the decision model's answers. Only calibrated boolean probabilities count, never
- * choice concentration/confidence.
- *
- * - At least 0.7: chosen, and owes an answer.
- * - Between 0.3 and 0.7: woken as a `followup`, free to stay silent, unless its silent-wake
- *   budget is spent (`quiet`). Uncertainty is not a provider failure.
- * - At most 0.3: left out. Every answer confidently negative: `skipped`.
- * - Any answer missing or invalid: `unassigned`, whatever the others said.
+ * One primary responder per message. `memberIds[0]` leads with the wake it was given (none: it
+ * owes an answer). Every other member becomes a `followup` deferred behind it (`afterMemberId`),
+ * keeping the reason it was woken for: its job starts only once the primary's settles, with the
+ * primary's reply in its prompt. The audit details name who led and who followed.
  */
-export const selectChannelResponders = (
+export const assignWithPrimary = (
+  reason: string,
+  memberIds: string[],
+  wakes: Readonly<Record<string, ChannelJobWake>> = {},
+): Extract<ChannelRoutingDecision, { status: 'assigned' }> => {
+  const [primary, ...deferred] = memberIds;
+  const all: Record<string, ChannelJobWake> = {
+    ...(wakes[primary] && { [primary]: wakes[primary] }),
+    ...Object.fromEntries(
+      deferred.map((memberId) => [
+        memberId,
+        {
+          ...(wakes[memberId] ?? DEFERRED_WAKE),
+          afterMemberId: primary,
+          kind: 'followup' as const,
+        },
+      ]),
+    ),
+  };
+  return {
+    memberIds,
+    reason,
+    status: 'assigned',
+    ...(Object.keys(all).length > 0 && { wakes: all }),
+    ...(deferred.length > 0 && {
+      details: { deferredMemberIds: deferred, primaryMemberId: primary },
+    }),
+  };
+};
+
+/**
+ * Each candidate's calibrated probability, or undefined when any answer is missing, refused or
+ * out of range: one unusable answer makes the whole decision unusable.
+ */
+const readProbabilities = (
   candidates: Pick<RoutingInput['candidates'][number], 'memberId'>[],
   response: DecisionResponse,
-  quiet: ReadonlySet<string> = new Set(),
-): ChannelRoutingDecision => {
-  const selected: string[] = [];
-  const uncertain: string[] = [];
+): Map<string, number> | undefined => {
+  const probabilities = new Map<string, number>();
   for (const { memberId } of candidates) {
     const answer = response.answers[memberId];
     if (
@@ -60,26 +91,95 @@ export const selectChannelResponders = (
       answer.probability < 0 ||
       answer.probability > 1
     )
-      return {
-        reason: 'The decision model did not return valid probabilities for every candidate',
-        status: 'unassigned',
-      };
-    if (answer.probability >= 0.7) selected.push(memberId);
-    else if (answer.probability > 0.3 && !quiet.has(memberId)) uncertain.push(memberId);
+      return;
+    probabilities.set(memberId, answer.probability);
   }
-  if (!selected.length && !uncertain.length)
-    return { reason: 'No Agent response is needed', status: 'skipped' };
+  return probabilities;
+};
 
-  return {
-    memberIds: [...selected, ...uncertain],
-    reason: uncertain.length
-      ? 'Selected by the Channel decision model; uncertain members may stay silent'
-      : 'Selected by the Channel decision model',
-    status: 'assigned',
-    ...(uncertain.length && {
-      wakes: Object.fromEntries(uncertain.map((memberId) => [memberId, UNCERTAIN_WAKE])),
-    }),
+/** Most likely first; ties keep candidate order. */
+const byProbability = (ids: string[], probabilities: ReadonlyMap<string, number>) =>
+  ids.toSorted((a, b) => probabilities.get(b)! - probabilities.get(a)!);
+
+const isConfident = (probability: number) => probability >= 0.7;
+const isUncertain = (probability: number) => probability > 0.3 && probability < 0.7;
+
+/**
+ * Thresholds the decision model's answers. Only calibrated boolean probabilities count, never
+ * choice concentration/confidence.
+ *
+ * - At least 0.7: chosen. The most likely one is the message's primary responder and owes an
+ *   answer; the other chosen ones, and any member between 0.3 and 0.7 that is not `quiet`,
+ *   follow it as deferred `followup`s (see {@link assignWithPrimary}).
+ * - Nobody at 0.7: only the most likely member between 0.3 and 0.7 that is not `quiet` is woken,
+ *   as a `followup` free to stay silent. Uncertainty is not a provider failure.
+ * - At most 0.3: left out. Every answer confidently negative: `skipped`.
+ * - Any answer missing or invalid: `unassigned`, whatever the others said.
+ */
+export const selectChannelResponders = (
+  candidates: Pick<RoutingInput['candidates'][number], 'memberId'>[],
+  response: DecisionResponse,
+  quiet: ReadonlySet<string> = new Set(),
+): ChannelRoutingDecision => {
+  const probabilities = readProbabilities(candidates, response);
+  if (!probabilities)
+    return {
+      reason: 'The decision model did not return valid probabilities for every candidate',
+      status: 'unassigned',
+    };
+  const ranked = byProbability(
+    candidates.map(({ memberId }) => memberId),
+    probabilities,
+  );
+  const selected = ranked.filter((memberId) => isConfident(probabilities.get(memberId)!));
+  const uncertain = ranked.filter(
+    (memberId) => isUncertain(probabilities.get(memberId)!) && !quiet.has(memberId),
+  );
+  if (selected.length) {
+    const memberIds = [...selected, ...uncertain];
+    return assignWithPrimary(
+      memberIds.length > 1
+        ? 'Selected by the Channel decision model; the others follow its reply'
+        : 'Selected by the Channel decision model',
+      memberIds,
+      Object.fromEntries(uncertain.map((memberId) => [memberId, UNCERTAIN_WAKE])),
+    );
+  }
+  if (uncertain.length)
+    return {
+      memberIds: [uncertain[0]],
+      reason: 'The Channel decision model was unsure; the likeliest member may stay silent',
+      status: 'assigned',
+      wakes: { [uncertain[0]]: UNCERTAIN_WAKE },
+    };
+
+  return { reason: 'No Agent response is needed', status: 'skipped' };
+};
+
+/**
+ * Which member's own wake leads when several claim a message and no model ranks them: the one
+ * the person was just talking to, then one whose duties cover it. Ties keep candidate order.
+ */
+const OWN_RULE_PRIORITY = ['followup-window', 'in-duty'];
+const ownRuleRank = ({ initiation }: MemberWakeJudgement) => {
+  const rank = OWN_RULE_PRIORITY.indexOf(initiation?.reason ?? '');
+  return rank === -1 ? OWN_RULE_PRIORITY.length : rank;
+};
+const byOwnRules = (judgements: MemberWakeJudgement[]) =>
+  judgements.toSorted((a, b) => ownRuleRank(a) - ownRuleRank(b));
+
+/** Members called by name, in the order the message names them; ties keep candidate order. */
+const byNamedOrder = (
+  named: MemberWakeJudgement[],
+  input: Pick<RoutingInput, 'candidates' | 'message'>,
+) => {
+  const text = input.message.toLowerCase();
+  const position = ({ memberId }: MemberWakeJudgement) => {
+    const name = input.candidates.find((candidate) => candidate.memberId === memberId)?.name;
+    const index = name ? text.indexOf(name.trim().toLowerCase()) : -1;
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
   };
+  return named.toSorted((a, b) => position(a) - position(b));
 };
 
 /** Compact per-member record of what the members' own rules said, for the routing audit row. */
@@ -177,16 +277,15 @@ export class ChannelRoutingService {
           Object.fromEntries(
             members.map(({ initiation, memberId }) => [memberId, toChannelJobWake(initiation!)]),
           );
+        const ids = (members: MemberWakeJudgement[]) => members.map(({ memberId }) => memberId);
         const claimed = judgements.filter(({ initiation }) => initiation);
-        // Called by name: those members, and nobody needs to arbitrate.
-        const named = claimed.filter(({ initiation }) => initiation!.reason === 'named-in-text');
+        // Called by name: those members, and nobody needs to arbitrate. The first one named leads.
+        const named = byNamedOrder(
+          claimed.filter(({ initiation }) => initiation!.reason === 'named-in-text'),
+          input,
+        );
         if (named.length)
-          return {
-            memberIds: named.map(({ memberId }) => memberId),
-            reason: 'Named in the message',
-            status: 'assigned' as const,
-            wakes: wakes(named),
-          };
+          return assignWithPrimary('Named in the message', ids(named), wakes(named));
         if (claimed.length === 1)
           return {
             memberIds: [claimed[0].memberId],
@@ -207,12 +306,11 @@ export class ChannelRoutingService {
         const config = await resolveChannelRoutingConfig(this.db, input.userId);
         if (!config) {
           return claimed.length
-            ? {
-                memberIds: claimed.map(({ memberId }) => memberId),
-                reason: 'Woken by their own rules',
-                status: 'assigned' as const,
-                wakes: wakes(claimed),
-              }
+            ? assignWithPrimary(
+                'Woken by their own rules',
+                ids(byOwnRules(claimed)),
+                wakes(claimed),
+              )
             : { reason: 'Channel decision model is disabled', status: 'unassigned' as const };
         }
         // A background worker has no initiating device tab. Never bypass the relay policy.
@@ -256,27 +354,32 @@ export class ChannelRoutingService {
         );
         const selected = selectChannelResponders(candidates, response, quiet);
         // Arbitrating claims keeps any claimer that is not a confident no, woken for the reason its
-        // own rules gave: none of them owes an answer. An unusable answer is no verdict on the
-        // claims, so they all stand.
-        const kept =
-          selected.status === 'assigned'
-            ? claimed.filter(({ memberId }) => selected.memberIds.includes(memberId))
-            : selected.status === 'unassigned'
-              ? claimed
-              : [];
-        const decision: ChannelRoutingDecision = !claimed.length
-          ? selected
-          : kept.length
-            ? {
-                memberIds: kept.map(({ memberId }) => memberId),
-                reason: 'Woken by their own rules; arbitrated by the Channel decision model',
-                status: 'assigned',
-                wakes: wakes(kept),
-              }
+        // own rules gave; the most likely one leads and the rest follow its reply. An unusable
+        // answer is no verdict on the claims, so they all stand, led by their own rules' order.
+        const probabilities = readProbabilities(candidates, response);
+        const kept = probabilities
+          ? byProbability(
+              ids(byOwnRules(claimed)).filter((memberId) => {
+                const probability = probabilities.get(memberId)!;
+                return (
+                  isConfident(probability) || (isUncertain(probability) && !quiet.has(memberId))
+                );
+              }),
+              probabilities,
+            )
+          : ids(byOwnRules(claimed));
+        const decision: ChannelRoutingDecision =
+          claimed.length && kept.length
+            ? assignWithPrimary(
+                'Woken by their own rules; arbitrated by the Channel decision model',
+                kept,
+                wakes(claimed),
+              )
             : selected;
         return {
           ...decision,
           details: {
+            ...decision.details,
             ...details,
             latencyMs: Date.now() - start,
             model: config.model,
@@ -297,18 +400,21 @@ export class ChannelRoutingService {
         messageId: input.messageId,
         error: error instanceof Error ? error.name : 'DecisionError',
       });
-      const claimed = judgements.filter(({ initiation }) => initiation);
+      const claimed = byOwnRules(judgements.filter(({ initiation }) => initiation));
       // The members' own rules already decided: a failed arbitration must not drop them.
-      if (claimed.length)
-        return {
-          details: { ...details, latencyMs: Date.now() - start },
-          memberIds: claimed.map(({ memberId }) => memberId),
-          reason: 'Woken by their own rules; the Channel decision model failed or timed out',
-          status: 'assigned',
-          wakes: Object.fromEntries(
+      if (claimed.length) {
+        const decision = assignWithPrimary(
+          'Woken by their own rules; the Channel decision model failed or timed out',
+          claimed.map(({ memberId }) => memberId),
+          Object.fromEntries(
             claimed.map(({ initiation, memberId }) => [memberId, toChannelJobWake(initiation!)]),
           ),
+        );
+        return {
+          ...decision,
+          details: { ...decision.details, ...details, latencyMs: Date.now() - start },
         };
+      }
       return {
         details: { ...details, latencyMs: Date.now() - start },
         reason: 'The Channel decision model failed or timed out',

@@ -294,21 +294,6 @@ describe('ApiKey', () => {
     await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
   });
 
-  it('deletes a key from the detail drawer after modal confirmation', async () => {
-    renderPage();
-    await screen.findByText('My Key');
-
-    const dialog = await openDetail('My Key');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'apikey.list.actions.delete' }));
-
-    expect(hoisted.confirmModal).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'apikey.list.actions.deleteConfirm.title' }),
-    );
-
-    await waitFor(() => expect(hoisted.trpc.deleteApiKey).toHaveBeenCalledWith({ id: 'key-1' }));
-    await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
-  });
-
   it('shows the permission toast on forbidden errors without refreshing', async () => {
     hoisted.trpc.updateApiKey.mockRejectedValue({ data: { code: 'FORBIDDEN' } });
     renderPage();
@@ -587,7 +572,7 @@ describe('ApiKey', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('deletes from the drawer and closes it', async () => {
+  it('deletes from the drawer, refreshes the list and closes it', async () => {
     renderPage();
     await screen.findByText('My Key');
 
@@ -599,6 +584,7 @@ describe('ApiKey', () => {
     );
 
     await waitFor(() => expect(hoisted.trpc.deleteApiKey).toHaveBeenCalledWith({ id: 'key-1' }));
+    await waitFor(() => expect(hoisted.trpc.getApiKeys).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

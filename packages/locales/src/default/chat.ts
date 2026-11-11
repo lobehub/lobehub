@@ -76,6 +76,7 @@ export default {
 
   'response.contentSafetyNotice':
     'This reply was limited for content safety reasons. If this happens often, you may temporarily lose access to this model.',
+  'goalBatch.cell.accepted': 'Accepted',
   'goalBatch.cell.backlog': 'Not run',
   'goalBatch.cell.done': 'Done',
   'goalBatch.cell.human': 'Needs you',
@@ -196,6 +197,7 @@ export default {
   'goalBatch.round.reviseEdge': 'Sent back · revise',
   'goalBatch.round.title': 'Round {{revision}}',
   'goalBatch.status.done': 'All done',
+  'goalBatch.status.held': 'Waiting for your release',
   'goalBatch.status.human': '{{count}} need you',
   'goalBatch.status.pending': 'Not started',
   'goalBatch.status.running': 'In progress',
@@ -981,6 +983,15 @@ export default {
   'input.addUser': 'Add a user message',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
+  'input.agentRunFeeUnfunded.desc':
+    'Each agent run carries a fee, even on your own API key. Top up or upgrade your plan, then send again.',
+  'input.agentRunFeeUnfunded.descOverflow':
+    'Each agent run carries a fee, even on your own API key. Your balance covers it: use your balance, then send again.',
+  'input.agentRunFeeUnfunded.descSubscribe':
+    'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
+  'input.agentRunFeeUnfunded.descTopUp':
+    'Each agent run carries a fee, even on your own API key. Top up, then send again.',
+  'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':
@@ -1040,6 +1051,7 @@ export default {
   'inputQueue.queuedRunEndHint': 'Sends when the current run finishes',
   'inputQueue.queuedRunEndMergeHint': 'Merged and sent when the current run finishes',
   'inputQueue.sendNow': 'Send now (interrupts current run)',
+  'inputQueue.sendNowFailed': 'Couldn’t interrupt the current run. Try again.',
   'inputQueue.alreadyDelivered': 'Already sent to the agent',
   'inputQueue.withdrawFailed': 'Couldn’t take the message back. Try again.',
   'intentUnderstanding.title': 'Understanding your intent...',
@@ -1968,7 +1980,9 @@ export default {
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
   'tab.backToChat': 'Back to chat',
+  'tab.group.identity': 'Identity',
   'tab.integration': 'IM Bots',
+  'tab.mail': 'Mail',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',
   'tab.search': 'Search',
@@ -2001,6 +2015,8 @@ export default {
   'taskSchedule.advancedSettings': 'Advanced settings',
   'taskSchedule.clear': 'Clear',
   'taskSchedule.continuous': 'Continuous',
+  'taskSchedule.customMinute': 'Custom',
+  'taskSchedule.customMinute.badge': 'Pro',
   'taskSchedule.enable': 'Enable automation',
   'taskSchedule.every': 'Every',
   'taskSchedule.frequency': 'Frequency',
@@ -2023,9 +2039,11 @@ export default {
   'taskSchedule.summary.daily': 'Daily at {{time}}',
   'taskSchedule.summary.disabled': 'Automation is off',
   'taskSchedule.summary.everyNHours': 'Every {{count}} hours',
+  'taskSchedule.summary.everyNHoursAtMinute': 'Every {{count}} hours at :{{minute}}',
   'taskSchedule.summary.everyNHoursHalfPast': 'Every {{count}} hours at half past',
   'taskSchedule.summary.heartbeat': 'Runs every {{interval}}',
   'taskSchedule.summary.hourly': 'Every hour',
+  'taskSchedule.summary.hourlyAtMinute': 'Every hour at :{{minute}}',
   'taskSchedule.summary.hourlyHalfPast': 'Every hour at half past',
   'taskSchedule.summary.weekly': 'Every {{days}} at {{time}}',
   'taskSchedule.tag.add': 'Set schedule',
@@ -2535,6 +2553,7 @@ export default {
     'Runs still in progress will be stopped and no new tasks will start. You can reopen the goal from this menu.',
   'goalDetail.closeConfirm.canceled.ok': 'Cancel goal',
   'goalDetail.closeConfirm.canceled.title': 'Cancel this goal?',
+  'goalDetail.closeConfirm.failed': 'Couldn’t close this goal. Try again in a moment.',
   'goalDetail.deleteConfirm.content':
     'This goal and its task plan will be permanently deleted. Conversation history is retained.',
   'goalDetail.deleteConfirm.ok': 'Delete goal',
@@ -3270,6 +3289,7 @@ export default {
   'taskList.groupBy.member': 'Assignee',
   'taskList.groupBy.none': 'No grouping',
   'taskList.groupBy.priority': 'Priority',
+  'taskList.groupBy.project': 'Project',
   'taskList.groupBy.schedule': 'Schedule',
   'taskList.groupBy.status': 'Status',
   'taskList.orderBy.assignee': 'Agent',
@@ -3784,12 +3804,6 @@ export default {
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
   'workingPanel.overview.emptyTitle': 'Ready to work',
-  'workingPanel.overview.profile.view': 'View profile',
-  'workingPanel.profile.description': 'About',
-  'workingPanel.profile.model': 'Model',
-  'workingPanel.profile.noDescription': 'No description yet',
-  'workingPanel.profile.tabs.detail': 'Details',
-  'workingPanel.profile.tabs.workspace': 'Workspace',
   'workingPanel.overview.deviceError': 'Could not load the device status',
   'workingPanel.overview.environmentError': 'Could not load the repository status',
   'workingPanel.overview.execution.device': 'Connected device',
@@ -4355,6 +4369,7 @@ export default {
   'userFeedbackCard.title': 'User feedback',
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
+  'sandboxDrive.openStorage': 'Sandbox Storage',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
   'sandboxDrive.pickerTitle': 'Work location',
@@ -4396,6 +4411,17 @@ export default {
   'taskLabel.noLabel': 'No label',
   'taskLabel.noLabels': 'No labels',
   'taskLabel.searchPlaceholder': 'Search or create labels…',
+  'taskProject.add': 'Add to project',
+  'taskProject.empty': 'No projects yet',
+  'taskProject.inheritedFromParent': "A subtask stays in its parent's project",
+  'taskProject.label': 'Project',
+  'taskProject.loadFailed': 'Failed to load projects',
+  'taskProject.moveRefused':
+    "Can't move this task while its parent, subtasks or dependencies stay in the current project. Move or detach them first.",
+  'taskProject.noMatch': 'No matching project',
+  'taskProject.none': 'No project',
+  'taskProject.searchPlaceholder': 'Search projects…',
+  'taskProject.unavailable': 'Unavailable project',
   'taskList.filter.field.label': 'Label',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
 };

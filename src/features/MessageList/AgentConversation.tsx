@@ -34,6 +34,8 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const { onClick, url } = useAgentConversationLink(id, agentUrl);
   const { channelActions, replyState } = useDirectChannelRow(conversation.channel, active);
   const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
+  // A blocked reply keeps the preview; its avatar already shows it waiting.
+  const typing = !!avatarState && avatarState !== 'waiting';
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
 
@@ -75,8 +77,8 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       activeAt={activeAt}
       contextMenuItems={menuItems}
       preview={preview}
-      running={chatRunning}
       title={title}
+      typing={typing}
       unread={conversation.unread ?? item.unreadCount}
       url={url}
       avatar={

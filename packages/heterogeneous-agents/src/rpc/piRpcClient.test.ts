@@ -97,16 +97,18 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
 });
 
+const piOptions = () => ({
+  args: [],
+  commandPath: 'pi',
+  cwd: '/workspace',
+  env: { ...process.env },
+  onEvent: vi.fn(),
+  onStderr: vi.fn(),
+});
+
 describe('PiRpcClient', () => {
   it('does not probe or spawn when cancelled before startup', async () => {
-    const client = new PiRpcClient({
-      args: [],
-      commandPath: 'pi',
-      cwd: '/workspace',
-      env: { ...process.env },
-      onEvent: vi.fn(),
-      onStderr: vi.fn(),
-    });
+    const client = new PiRpcClient(piOptions());
     await client.close();
     await expect(client.start()).rejects.toThrow('closed by host');
     expect(execFileMock).not.toHaveBeenCalled();
@@ -119,14 +121,7 @@ describe('PiRpcClient', () => {
       options.signal.addEventListener('abort', () => callback(new Error('aborted'), '', ''));
       return probe;
     });
-    const client = new PiRpcClient({
-      args: [],
-      commandPath: 'pi',
-      cwd: '/workspace',
-      env: { ...process.env },
-      onEvent: vi.fn(),
-      onStderr: vi.fn(),
-    });
+    const client = new PiRpcClient(piOptions());
     const start = client.start().catch((error) => error);
     await vi.waitFor(() => expect(execFileMock).toHaveBeenCalled());
     const confirmed = vi.fn();
@@ -178,14 +173,7 @@ describe('PiRpcClient', () => {
       execFileMock.mockImplementation((_command, _args, _options, callback) =>
         callback(null, version, ''),
       );
-      const client = new PiRpcClient({
-        args: [],
-        commandPath: 'pi',
-        cwd: '/workspace',
-        env: { ...process.env },
-        onEvent: vi.fn(),
-        onStderr: vi.fn(),
-      });
+      const client = new PiRpcClient(piOptions());
       await expect(client.start()).rejects.toThrow(/0\.80\.5.*upgrade/i);
       expect(spawnMock).not.toHaveBeenCalled();
     },

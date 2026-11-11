@@ -69,6 +69,11 @@ export const createProjectMainAgent = async (
 ) => {
   const agent = await new AgentModel(db, scope.userId, scope.workspaceId).create({
     ...createProjectCoordinatorAgentConfig({ avatar: input.avatar, name: input.name }),
+    // A project's work outlives a conversation and needs no machine of the
+    // member's to be online: the cloud sandbox keeps the project's checkout on
+    // its drive. Left unset, a web client would resolve the agent to no
+    // execution target at all, and the project would start with nowhere to run.
+    agencyConfig: { executionTarget: 'sandbox' },
     visibility: input.visibility,
   });
 

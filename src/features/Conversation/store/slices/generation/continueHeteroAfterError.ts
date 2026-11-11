@@ -123,6 +123,7 @@ export const continueHeteroAfterError = async (
 
     await runHeterogeneousFromExistingMessage(chatStore, {
       context,
+      continuesRun: true,
       heterogeneousProvider,
       parentMessageId: continueParentId,
       parentOperationId: operationId,

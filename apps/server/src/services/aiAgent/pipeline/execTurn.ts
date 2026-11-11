@@ -639,6 +639,9 @@ export const execAgentTurn = async (
     disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
     disableTools: params.disableTools,
     ephemeralUserMessage,
+    evalAllowedTools: evalRuntime?.allowedTools,
+    evalConnectorSnapshots: evalRuntime?.connectorSnapshots,
+    evalMemory: evalRuntime?.memory,
     exclusivePluginIds,
     existingMessageIds,
     files,
@@ -681,7 +684,6 @@ export const execAgentTurn = async (
         discordContext ||
         evalContext ||
         evalRuntime ||
-        params.llmExecutor ||
         params.reservedOperationId ||
         params.topicStartOwnerOperationId ||
         parentOperationId ||

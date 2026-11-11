@@ -39,6 +39,39 @@ export const serializeError = (
   }
 };
 
+/**
+ * A readable one-line message for anything an extraction step throws.
+ *
+ * Model runtimes throw plain payloads such as `{ errorType, error, provider }` rather than
+ * `Error`s, which used to surface as `[object Object]` or a generic "Extraction failed".
+ */
+export const describeError = (error: unknown, limit = 500): string => {
+  const clip = (text: string) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
+  if (error instanceof Error) return clip(error.message || error.name);
+  if (typeof error === 'string') return clip(error);
+  if (!error || typeof error !== 'object') return String(error ?? 'Unknown extraction error');
+
+  const record = error as Record<string, unknown>;
+  const inner = record.error;
+  const innerMessage =
+    getStringErrorProperty(inner, 'message') ??
+    getStringErrorProperty((inner as { error?: unknown } | undefined)?.error, 'message');
+  const message = getStringErrorProperty(record, 'message') ?? innerMessage;
+  const prefix = [
+    getStringErrorProperty(record, 'provider'),
+    getStringErrorProperty(record, 'errorType'),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  if (prefix || message) return clip([prefix, message].filter(Boolean).join(': '));
+
+  try {
+    return clip(JSON.stringify(error));
+  } catch {
+    return 'Unknown extraction error';
+  }
+};
+
 type MemoryExtractionErrorStage = 'extract' | 'persist' | 'retrieval';
 
 export interface MemoryExtractionTaskErrorItem extends AsyncTaskStructuredErrorItem {
@@ -131,8 +164,5 @@ export const buildAsyncTaskErrorFrom = (
     };
   }
 
-  return new AsyncTaskError(
-    AsyncTaskErrorType.ServerError,
-    error instanceof Error ? error.message : 'Extraction failed',
-  );
+  return new AsyncTaskError(AsyncTaskErrorType.ServerError, describeError(error));
 };
