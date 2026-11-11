@@ -41,6 +41,7 @@ CRAWLER_IMPLS="naive,search1api"
 | `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                                                 | `EXA_API_KEY`                                                               |
 | `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。                                    | `FIRECRAWL_API_KEY`                                                         |
 | `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                                           | `JINA_READER_API_KEY`                                                       |
+| `keenable`    | [Keenable](https://keenable.ai/) 提供的网页抓取 API，以 Markdown 返回正文，无需 API Key 即可使用。 | `KEENABLE_API_KEY`（可选）                                                  |
 | `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                                                        |                                                                             |
 | `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。                           | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
 | `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。                                         | `TAVILY_API_KEY`                                                            |
@@ -192,6 +193,16 @@ FIRECRAWL_URL=https://api.firecrawl.dev/v2
 ```
 
 > ⚙️ 一般无需修改，除非你使用的是自托管版本或代理服务。
+
+---
+
+## `KEENABLE_API_KEY`
+
+[Keenable](https://keenable.ai/) 网页抓取 API（`CRAWLER_IMPLS=keenable`）的可选密钥。未设置时使用 Keenable 的免密钥公共端点（按 IP 限流）；设置密钥后使用带密钥的服务。`KEENABLE_API_URL` 可覆盖默认地址（`https://api.keenable.ai`）。
+
+```env
+KEENABLE_API_KEY=xxxxxx
+```
 
 ---
 
