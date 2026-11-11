@@ -17,7 +17,7 @@ import { createNanoId } from '../../utils/idGenerator';
 import { notTrashed } from '../../utils/softDelete';
 import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
-import { findThread } from './delivery';
+import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
 import { resolveTopic } from './topic';
 import { audit } from './transaction';
@@ -149,6 +149,47 @@ const directoryBlock = async (
 };
 
 /**
+ * Blocks that wait on a device or a person, not on work that will finish by itself. A primary
+ * responder stuck on one of these no longer holds back the follow-ups deferred behind it: they
+ * run without its reply rather than wait indefinitely.
+ */
+const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
+  'device_approval_pending',
+  'device_offline',
+  'device_required',
+  'unavailable',
+  'workspace_changed',
+]);
+
+/** The job of the member a deferred follow-up waits for, on the same message. */
+const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string) => {
+  const [primary] = await tx
+    .select({
+      blockedCode: channelJobs.blockedCode,
+      publishedMessageId: channelJobs.publishedMessageId,
+      status: channelJobs.status,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, job.channelId),
+        eq(channelJobs.messageId, job.messageId),
+        eq(channelJobs.memberId, memberId),
+      ),
+    );
+  return primary;
+};
+
+/**
+ * Whether the primary responder may still answer: running, or queued behind work that will
+ * finish. Completed, silent, failed and cancelled jobs have settled; a missing job (the primary
+ * was not delivered) never holds anyone back.
+ */
+const awaitsPrimary = (primary: { blockedCode: ChannelJobBlockCode | null; status: string }) =>
+  primary.status === 'running' ||
+  (primary.status === 'queued' && !(primary.blockedCode && STUCK_BLOCKS.has(primary.blockedCode)));
+
+/**
  * Starts the job if it is at the head of its member's queue and nothing holds the member,
  * its environment or its directory. The caller holds the channel lock. Returns null when
  * the job cannot start now; a lasting reason is recorded on the job as `blockedCode`.
@@ -181,6 +222,15 @@ export const claimJob = async (
   const thread = await findThread(tx, channel.id, job.threadId);
   if (thread?.status === 'archived') {
     await cancel(tx, job, 'thread_archived');
+    return null;
+  }
+
+  // A deferred follow-up waits for the message's primary responder, then sees its reply.
+  const primary = job.wake?.afterMemberId
+    ? await primaryJob(tx, job, job.wake.afterMemberId)
+    : undefined;
+  if (primary && awaitsPrimary(primary)) {
+    await block(tx, job, 'awaiting_primary', AWAITING_PRIMARY_REASON);
     return null;
   }
 
@@ -314,7 +364,13 @@ export const claimJob = async (
         request.sequence,
         executionConfig,
       );
-      const manifest = buildManifest({ job, member, request, thread });
+      const manifest = buildManifest({
+        job,
+        member,
+        primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
+        request,
+        thread,
+      });
       // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
       // derives the Agent and topic from the operation ID.
       const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;

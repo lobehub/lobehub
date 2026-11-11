@@ -172,9 +172,10 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context] = await Promise.all([
+      const [input, context, primaryReply] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
+        this.executions.primaryReply(job.channelId, job.id),
       ]);
       const attachments = await resolveChannelAttachments(
         this.db,
@@ -200,6 +201,7 @@ export class ChannelCoordinator {
         prompt: buildChannelPrompt(job.manifest, input, {
           context: context.messages,
           omitted: context.omitted,
+          primaryReply,
           wake: job.wake,
         }),
         reservedOperationId: job.operationId,

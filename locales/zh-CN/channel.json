@@ -24,6 +24,7 @@
   "autoTitle.empty": "我的频道",
   "autoTitle.more": "{{names}} 等 {{total}} 位成员",
   "autoTitle.separator": "、",
+  "blocked.awaiting_primary": "等待其他 Agent 先回复",
   "blocked.device_approval_pending": "等待设备授权",
   "blocked.device_offline": "等待设备上线",
   "blocked.device_required": "请为这个 Agent 选择运行设备",

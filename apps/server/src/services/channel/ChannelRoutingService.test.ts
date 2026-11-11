@@ -139,18 +139,24 @@ describe('Channel responder decisions', () => {
   });
 
   it.each([0.3001, 0.5, 0.6999])(
-    'wakes only the uncertain members as follow-ups that may stay silent (%s)',
+    'wakes an uncertain member as a follow-up that may stay silent (%s)',
     (probability) => {
-      const uncertain = { reviewer: { kind: 'followup', reason: 'routing-uncertain' } };
       expect(selectChannelResponders(input.candidates, response(0.05, probability))).toEqual(
-        expect.objectContaining({ memberIds: ['reviewer'], status: 'assigned', wakes: uncertain }),
+        expect.objectContaining({
+          memberIds: ['reviewer'],
+          status: 'assigned',
+          wakes: { reviewer: { kind: 'followup', reason: 'routing-uncertain' } },
+        }),
       );
-      // A confident pick still owes an answer; only the uncertain one may stay silent.
+      // A confident pick leads and owes an answer; the uncertain one follows its reply.
       expect(selectChannelResponders(input.candidates, response(0.95, probability))).toEqual(
         expect.objectContaining({
+          details: { deferredMemberIds: ['reviewer'], primaryMemberId: 'coder' },
           memberIds: ['coder', 'reviewer'],
           status: 'assigned',
-          wakes: uncertain,
+          wakes: {
+            reviewer: { afterMemberId: 'coder', kind: 'followup', reason: 'routing-uncertain' },
+          },
         }),
       );
     },
@@ -165,22 +171,53 @@ describe('Channel responder decisions', () => {
     ).toMatchObject({ status: 'skipped' });
   });
 
-  it('invites all candidates for the reported open-ended LobeHub question', () => {
+  it('wakes only the likeliest member when nobody reaches the threshold', () => {
     const candidates = ['pi', 'codex', 'jinyan'].map((memberId) => ({
       description: '',
       memberId,
       name: memberId,
     }));
+    // The reported open-ended question used to wake all three at once.
     expect(
       selectChannelResponders(candidates, {
         model: 'jev-1.14.0',
         answers: {
-          pi: { probability: 0.51, type: 'boolean' },
-          codex: { probability: 0.41, type: 'boolean' },
+          pi: { probability: 0.41, type: 'boolean' },
+          codex: { probability: 0.51, type: 'boolean' },
           jinyan: { probability: 0.35, type: 'boolean' },
         },
       }),
-    ).toMatchObject({ status: 'assigned', memberIds: ['pi', 'codex', 'jinyan'] });
+    ).toEqual({
+      memberIds: ['codex'],
+      reason: 'The Channel decision model was unsure; the likeliest member may stay silent',
+      status: 'assigned',
+      wakes: { codex: { kind: 'followup', reason: 'routing-uncertain' } },
+    });
+    // A quiet member is passed over for the next likeliest.
+    expect(
+      selectChannelResponders(
+        candidates,
+        {
+          model: 'jev-1.14.0',
+          answers: {
+            pi: { probability: 0.41, type: 'boolean' },
+            codex: { probability: 0.51, type: 'boolean' },
+            jinyan: { probability: 0.35, type: 'boolean' },
+          },
+        },
+        new Set(['codex']),
+      ),
+    ).toMatchObject({ memberIds: ['pi'] });
+  });
+
+  it('lets the likeliest of several confident members lead and defers the rest', () => {
+    expect(selectChannelResponders(input.candidates, response(0.8, 0.95))).toEqual({
+      details: { deferredMemberIds: ['coder'], primaryMemberId: 'reviewer' },
+      memberIds: ['reviewer', 'coder'],
+      reason: 'Selected by the Channel decision model; the others follow its reply',
+      status: 'assigned',
+      wakes: { coder: { afterMemberId: 'reviewer', kind: 'followup', reason: 'routing-deferred' } },
+    });
   });
 
   it.each([-1, 1.1, Number.NaN, Number.POSITIVE_INFINITY])(
@@ -266,7 +303,7 @@ describe('routing worker', () => {
     );
   });
 
-  it('persists uncertain recipients as follow-ups with the decision audit', async () => {
+  it('persists only the likeliest uncertain recipient as a follow-up with the decision audit', async () => {
     mocks.decide.mockResolvedValue(response(0.51, 0.41));
     await run();
     expect(mocks.decide).toHaveBeenCalledTimes(1);
@@ -275,15 +312,33 @@ describe('routing worker', () => {
       'message',
       2,
       expect.objectContaining({
-        memberIds: ['coder', 'reviewer'],
+        memberIds: ['coder'],
         status: 'assigned',
-        reason: 'Selected by the Channel decision model; uncertain members may stay silent',
-        wakes: {
-          coder: { kind: 'followup', reason: 'routing-uncertain' },
-          reviewer: { kind: 'followup', reason: 'routing-uncertain' },
-        },
+        wakes: { coder: { kind: 'followup', reason: 'routing-uncertain' } },
         details: expect.objectContaining({
           probabilities: JSON.stringify(response(0.51, 0.41).answers),
+        }),
+      }),
+    );
+  });
+
+  it('defers every other confident member behind the primary and audits who led', async () => {
+    mocks.decide.mockResolvedValue(response(0.75, 0.9));
+    await run();
+    expect(mocks.resolve).toHaveBeenCalledWith(
+      'channel',
+      'message',
+      2,
+      expect.objectContaining({
+        memberIds: ['reviewer', 'coder'],
+        status: 'assigned',
+        wakes: {
+          coder: { afterMemberId: 'reviewer', kind: 'followup', reason: 'routing-deferred' },
+        },
+        details: expect.objectContaining({
+          deferredMemberIds: ['coder'],
+          model: 'jev-1.14.0',
+          primaryMemberId: 'reviewer',
         }),
       }),
     );
@@ -539,7 +594,7 @@ describe('members’ own wake rules', () => {
     expect(Object.keys(request.questions)).toEqual(['coder']);
   });
 
-  it('keeps every claim when the arbitration answer is unusable', async () => {
+  it('keeps every claim when the arbitration answer is unusable, one leading', async () => {
     withCandidates(answeredMia, answeredMia);
     mocks.classify.mockResolvedValue({ addressedToBot: 0.9, kind: 'question', reason: 'p=0.9' });
     mocks.decide.mockResolvedValue({
@@ -548,12 +603,52 @@ describe('members’ own wake rules', () => {
     });
     await run();
 
-    expect(mocks.resolve).toHaveBeenCalledWith(
-      'channel',
-      'message',
-      2,
-      expect.objectContaining({ memberIds: ['coder', 'reviewer'], status: 'assigned' }),
-    );
+    const [, , , decision] = mocks.resolve.mock.calls[0];
+    expect(decision).toMatchObject({ memberIds: ['coder', 'reviewer'], status: 'assigned' });
+    expect(decision.wakes.coder.afterMemberId).toBeUndefined();
+    expect(decision.wakes.reviewer).toMatchObject({
+      afterMemberId: 'coder',
+      kind: 'followup',
+      reason: 'followup-window',
+    });
+  });
+
+  it('lets the likeliest claimer lead an arbitrated message; the others follow it', async () => {
+    withCandidates(answeredMia, answeredMia);
+    mocks.classify.mockResolvedValue({ addressedToBot: 0.9, kind: 'question', reason: 'p=0.9' });
+    mocks.decide.mockResolvedValue(response(0.55, 0.9));
+    await run();
+
+    const [, , , decision] = mocks.resolve.mock.calls[0];
+    expect(decision).toMatchObject({
+      details: expect.objectContaining({
+        deferredMemberIds: ['coder'],
+        primaryMemberId: 'reviewer',
+      }),
+      memberIds: ['reviewer', 'coder'],
+      status: 'assigned',
+    });
+    // Each keeps the reason its own rules gave; only the follower waits.
+    expect(decision.wakes.reviewer).toMatchObject({ kind: 'followup', reason: 'followup-window' });
+    expect(decision.wakes.reviewer.afterMemberId).toBeUndefined();
+    expect(decision.wakes.coder).toMatchObject({
+      afterMemberId: 'reviewer',
+      kind: 'followup',
+      reason: 'followup-window',
+    });
+  });
+
+  it('lets the first member named lead when several are called by name', async () => {
+    withCandidates({}, {}, 'Reviewer and Coder, can you take a look?');
+    await run();
+
+    expect(mocks.decide).not.toHaveBeenCalled();
+    const [, , , decision] = mocks.resolve.mock.calls[0];
+    expect(decision).toMatchObject({ memberIds: ['reviewer', 'coder'], status: 'assigned' });
+    expect(decision.wakes).toEqual({
+      coder: { afterMemberId: 'reviewer', kind: 'followup', named: true, reason: 'named-in-text' },
+      reviewer: { kind: 'followup', named: true, reason: 'named-in-text' },
+    });
   });
 
   it('lets a bot-threads member be chosen in a Thread it follows, not in the main channel', async () => {
@@ -592,7 +687,13 @@ describe('members’ own wake rules', () => {
       'channel',
       'message',
       2,
-      expect.objectContaining({ memberIds: ['coder', 'reviewer'], status: 'assigned' }),
+      expect.objectContaining({
+        memberIds: ['coder', 'reviewer'],
+        status: 'assigned',
+        wakes: expect.objectContaining({
+          reviewer: expect.objectContaining({ afterMemberId: 'coder' }),
+        }),
+      }),
     );
   });
 });
