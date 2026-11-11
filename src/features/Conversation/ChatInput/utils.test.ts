@@ -413,6 +413,28 @@ describe('sendQueuedMessageNow', () => {
     expect(chat.sendMessage).not.toHaveBeenCalled();
   });
 
+  it('still stops the run when the item already left for the agent', async () => {
+    // "Stop and continue" on a follow-up the server already took: it must not
+    // be sent again, but the click still asked to stop this turn.
+    const { chat, order } = chatWith(true);
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      stopIfAlreadyDelivered: true,
+      withdraw: async () => {
+        order.push('withdraw');
+        return false;
+      },
+    });
+
+    expect(outcome).toBe('stopped');
+    expect(order).toEqual(['withdraw', 'cancel']);
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['unconfirmed', false],
     ['failed', new Error('device unreachable')],

@@ -185,29 +185,49 @@ export const toDisplayableSendErrorMessage = (message?: string): string | undefi
 };
 
 /**
- * "Send now" for one queued message: take it out of the queue, stop every run
- * it waits behind, then send it as a steered turn.
+ * "Stop and continue" for one queued message: take it out of the queue, stop
+ * every run it waits behind, then send it as a steered turn.
  *
  * Withdrawn first: interrupting a run that already took it from the server
  * would leave that copy unanswered. `withdraw` resolving `false` means it is
- * already on its way, so nothing is stopped or sent. Should the interrupt
+ * already on its way, so it must not be sent again — only the stop half is
+ * left, which is what `stopIfAlreadyDelivered` handles. Should the interrupt
  * fail, it goes back to the tray, held by this client only.
  */
+export type SendQueuedMessageNowOutcome = 'sent' | 'skipped' | 'stopped';
+
 export const sendQueuedMessageNow = async ({
   chat,
   context,
   contextKey,
   msg,
+  stopIfAlreadyDelivered = false,
   withdraw,
 }: {
   chat: ChatStore;
   context: ConversationContext;
   contextKey: string;
   msg: QueuedMessage;
+  /**
+   * The follow-up is already the server's: sending it again would run it
+   * twice, but the click still asked to stop this turn. Cancel the blockers
+   * and report `stopped` instead of leaving the user with a notice.
+   */
+  stopIfAlreadyDelivered?: boolean;
   withdraw: (msg: QueuedMessage) => Promise<boolean>;
-}): Promise<void> => {
+}): Promise<SendQueuedMessageNowOutcome> => {
   const index = chat.queuedMessages[contextKey]?.findIndex((queued) => queued.id === msg.id) ?? -1;
-  if (!(await withdraw(msg))) return;
+  if (!(await withdraw(msg))) {
+    if (!stopIfAlreadyDelivered) return 'skipped';
+
+    const blockers = operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
+    await Promise.all(blockers.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON))).catch(
+      (error: unknown) => {
+        console.error('[sendQueuedMessageNow] stopping the run failed:', error);
+      },
+    );
+    return 'stopped';
+  }
   // Back where it was, so the order the user queued in holds.
   const putBack = () =>
     chat.restoreQueuedMessage(
@@ -252,6 +272,8 @@ export const sendQueuedMessageNow = async ({
     message: msg.content,
     metadata: { ...msg.metadata, steer: true },
   });
+
+  return 'sent';
 };
 
 /**
