@@ -46,6 +46,46 @@ describe('active conversation projection', () => {
     });
   });
 
+  it('scopes the home route to the inbox agent', () => {
+    const coordinate = resolveActiveConversationCoordinate({ params: {}, url: '/' });
+
+    projectActiveConversationCoordinate(coordinate, { inboxAgentId: 'inbox' });
+
+    expect(useAgentStore.getState().activeAgentId).toBe('inbox');
+    expect(useChatStore.getState()).toMatchObject({
+      activeAgentId: undefined,
+      activeThreadId: undefined,
+      activeTopicId: undefined,
+    });
+  });
+
+  it('switches from the home tab back to the agent tab with that agent active', () => {
+    projectActiveConversationCoordinate(
+      resolveActiveConversationCoordinate({ params: {}, url: '/' }),
+      { inboxAgentId: 'inbox' },
+    );
+
+    projectActiveConversationCoordinate(
+      resolveActiveConversationCoordinate({
+        params: { aid: 'agent-cc' },
+        resolvedAgentId: 'agent-cc',
+        url: '/agent/agent-cc',
+      }),
+      { inboxAgentId: 'inbox' },
+    );
+
+    expect(useAgentStore.getState().activeAgentId).toBe('agent-cc');
+    expect(useChatStore.getState().activeAgentId).toBe('agent-cc');
+  });
+
+  it('clears the active agent on a route-less page that is not home', () => {
+    const coordinate = resolveActiveConversationCoordinate({ params: {}, url: '/settings' });
+
+    projectActiveConversationCoordinate(coordinate, { inboxAgentId: 'inbox' });
+
+    expect(useAgentStore.getState().activeAgentId).toBeUndefined();
+  });
+
   it('projects a group route without clearing it as a non-conversation page', () => {
     const group: AgentGroupDetail = {
       agents: [],

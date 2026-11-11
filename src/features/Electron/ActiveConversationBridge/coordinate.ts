@@ -5,6 +5,11 @@ export interface ActiveConversationCoordinate {
   groupId?: string;
   hash: string;
   isConversation: boolean;
+  /**
+   * The tab shows the home page (`/` or the workspace root). The home page has
+   * no agent in its URL but still scopes the shell to the inbox agent.
+   */
+  isHome: boolean;
   pathname: string;
   projectBasePath?: string;
   projectId?: string;
@@ -18,12 +23,15 @@ interface ResolveActiveConversationCoordinateOptions {
   params: { aid?: string; gid?: string; projectId?: string; topicId?: string };
   resolvedAgentId?: string;
   url: string;
+  /** Active workspace slug; its root path is that workspace's home page. */
+  workspaceSlug?: string | null;
 }
 
 export const resolveActiveConversationCoordinate = ({
   params,
   resolvedAgentId,
   url,
+  workspaceSlug,
 }: ResolveActiveConversationCoordinateOptions): ActiveConversationCoordinate => {
   const location = new URL(url, 'https://desktop.local');
   const segments = location.pathname.split('/').filter(Boolean);
@@ -60,6 +68,9 @@ export const resolveActiveConversationCoordinate = ({
     segments[projectSegmentIndex + 2] === 'topic' &&
     (projectSuffixLength === 0 || (projectSuffixLength === 1 && params.topicId !== undefined));
   const isConversation = agentConversation || groupConversation || projectConversation;
+  const isHome =
+    segments.length === 0 ||
+    (!!workspaceSlug && segments.length === 1 && segments[0] === workspaceSlug);
   const agentBasePath =
     agentSegmentIndex >= 0 ? `/${segments.slice(0, agentSegmentIndex + 2).join('/')}` : undefined;
   const groupBasePath =
@@ -75,6 +86,7 @@ export const resolveActiveConversationCoordinate = ({
     groupId: groupSegmentIndex >= 0 ? params.gid : undefined,
     hash: location.hash,
     isConversation,
+    isHome,
     pathname: location.pathname,
     projectBasePath,
     projectId: projectConversation ? params.projectId : undefined,

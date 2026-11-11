@@ -22,8 +22,14 @@ const resolveProjectTopicAgentId = (
   return containerKey?.startsWith('agent_') ? containerKey.slice('agent_'.length) : undefined;
 };
 
+interface ProjectActiveConversationOptions {
+  /** Agent the home page scopes the shell to; undefined until builtin agents load. */
+  inboxAgentId?: string;
+}
+
 export const projectActiveConversationCoordinate = (
   coordinate: ActiveConversationCoordinate,
+  { inboxAgentId }: ProjectActiveConversationOptions = {},
 ): void => {
   const currentAgentId = useChatStore.getState().activeAgentId;
 
@@ -122,11 +128,20 @@ export const projectActiveConversationCoordinate = (
   }
 
   if (!coordinate.routeAgentId) {
-    if (useAgentStore.getState().activeAgentId !== undefined) {
+    // The home page scopes the agent store to the inbox agent. On desktop this
+    // bridge owns that write instead of the home layout: keep-alive tabs run the
+    // home layout's effects whenever its <Activity> shows or hides, and that
+    // commit is deferred behind the tab switch, so a home-owned write landed
+    // after this projection and left another tab's sidebar on the inbox agent
+    // (or on no agent).
+    const homeAgentId = coordinate.isHome ? inboxAgentId : undefined;
+    if (useAgentStore.getState().activeAgentId !== homeAgentId) {
       useAgentStore.setState(
-        { activeAgentId: undefined },
+        { activeAgentId: homeAgentId },
         false,
-        'ActiveConversationBridge/leaveAgent',
+        homeAgentId
+          ? 'ActiveConversationBridge/syncHomeAgent'
+          : 'ActiveConversationBridge/leaveAgent',
       );
     }
     if (

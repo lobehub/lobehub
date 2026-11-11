@@ -23,6 +23,19 @@ describe('active conversation coordinate', () => {
     );
   });
 
+  it('treats the root and the active workspace root as the home page', () => {
+    const resolve = (url: string, workspaceSlug?: string | null) =>
+      resolveActiveConversationCoordinate({ params: {}, url, workspaceSlug }).isHome;
+
+    expect(resolve('/')).toBe(true);
+    expect(resolve('/?tab=recent')).toBe(true);
+    expect(resolve('/team', 'team')).toBe(true);
+    expect(resolve('/team/', 'team')).toBe(true);
+    expect(resolve('/team', null)).toBe(false);
+    expect(resolve('/team/settings', 'team')).toBe(false);
+    expect(resolve('/settings')).toBe(false);
+  });
+
   it('does not interpret an agent subpage as a conversation route', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: { aid: 'agent-a' },
