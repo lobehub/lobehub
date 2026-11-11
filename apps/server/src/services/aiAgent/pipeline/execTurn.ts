@@ -684,7 +684,6 @@ export const execAgentTurn = async (
         discordContext ||
         evalContext ||
         evalRuntime ||
-        params.llmExecutor ||
         params.reservedOperationId ||
         params.topicStartOwnerOperationId ||
         parentOperationId ||

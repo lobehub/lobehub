@@ -12,7 +12,10 @@ export const isDeferredInitEnabled = async (userId: string): Promise<boolean> =>
 export interface DeferInitInput {
   /** Runs started without auto-start are stepped by their caller, not the queue. */
   autoStart: boolean;
-  /** Set for every caller that is not the plain composer (bots, group members, sub-agents, ...). */
+  /**
+   * Set for every caller that is not the plain composer (bots, group members, sub-agents, ...).
+   * A client's LLM executor declaration is not one: the init never reads it.
+   */
   hasOrchestration: boolean;
   queueRuntimeEnabled: boolean;
   request: AgentRunInitRequest;
