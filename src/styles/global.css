@@ -66,7 +66,7 @@ body {
 
 /* antd resets re-apply antialiased on each component root, so body alone is not enough */
 html[data-font-antialiasing='off'] * {
-  -webkit-font-smoothing: auto;
+  -webkit-font-smoothing: subpixel-antialiased;
   -moz-osx-font-smoothing: auto;
 }
 
