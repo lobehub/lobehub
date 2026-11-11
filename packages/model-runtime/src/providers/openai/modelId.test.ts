@@ -177,6 +177,7 @@ describe('supportsGPTResponsesReasoningEffortNone', () => {
   });
   it('should support none reasoning effort on GPT-6.1 Terra, whose model page lists it', () => {
     expect(supportsGPTResponsesReasoningEffortNone('gpt-6.1-terra')).toBe(true);
+    expect(supportsGPTResponsesReasoningEffortNone('codex/gpt-6.1-terra')).toBe(true);
     expect(supportsGPTResponsesReasoningEffortNone('openai/gpt-6.1-terra')).toBe(false);
   });
 

@@ -2663,6 +2663,23 @@ describe('LobeOpenAICompatibleFactory', () => {
       );
     });
 
+    it('should map disabled thinking to none reasoning effort for GPT-6.1 Terra Responses generateObject', async () => {
+      vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
+        output_text: '{"name": "John", "age": 30}',
+      } as any);
+
+      await instance.generateObject({
+        messages: [{ content: 'Generate a person object', role: 'user' as const }],
+        model: 'gpt-6.1-terra',
+        schema: createPersonExtractorSchema(),
+        thinking: { budget_tokens: 0, type: 'disabled' as const },
+      });
+
+      expect(instance['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'gpt-6.1-terra', reasoning: { effort: 'none' } }),
+        expect.anything(),
+      );
+    });
     it('should normalize GPT-5 Pro-family Responses generateObject reasoning effort to high', async () => {
       const mockResponse = {
         output_text: '{"name": "John", "age": 30}',
