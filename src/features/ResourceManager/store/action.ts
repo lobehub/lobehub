@@ -583,12 +583,19 @@ export class ResourceManagerStoreActionImpl {
   ): void => {
     // Skip the write path when the mode didn't actually change — clicking the
     // already-active tab shouldn't invalidate the list.
-    if (this.#get().listVisibility === listVisibility) return;
+    // Still record and persist it: the in-memory value may be an unhydrated
+    // default that differs from the stored preference.
+    if (this.#get().listVisibility === listVisibility) {
+      if (workspaceId) this.#set({ listVisibilityWorkspaceId: workspaceId });
+      writePersistedResourceMode(workspaceId, listVisibility);
+      return;
+    }
 
     // Reset selection when the visible pool changes so a leftover "select all"
     // does not accidentally target rows that are no longer on screen.
     this.#set({
       listVisibility,
+      listVisibilityWorkspaceId: workspaceId,
       selectAllState: 'none',
       selectedFileIds: [],
       selectionTotal: undefined,
@@ -619,9 +626,13 @@ export class ResourceManagerStoreActionImpl {
     const persisted = readPersistedResourceMode(workspaceId);
     const next =
       persisted ?? (workspaceId ? DEFAULT_WORKSPACE_LIST_VISIBILITY : initialState.listVisibility);
-    if (this.#get().listVisibility === next) return;
+    if (this.#get().listVisibility === next) {
+      this.#set({ listVisibilityWorkspaceId: workspaceId });
+      return;
+    }
     this.#set({
       listVisibility: next,
+      listVisibilityWorkspaceId: workspaceId,
       selectAllState: 'none',
       selectedFileIds: [],
       selectionTotal: undefined,
