@@ -2128,6 +2128,7 @@
   "sandboxDrive.fallbackChip.instanceUnavailable": "Environment unavailable",
   "sandboxDrive.fallbackChip.rootNotAllowed": "Pick a folder",
   "sandboxDrive.manageEnvironments": "Settings",
+  "sandboxDrive.openStorage": "Sandbox Storage",
   "sandboxDrive.pickerInfoTooltip": "A temporary directory is cleaned up with the sandbox. A folder on your cloud drive is kept across conversations. A repository is cloned before the first command.",
   "sandboxDrive.pickerTitle": "Work location",
   "sandboxDrive.root": "Root",

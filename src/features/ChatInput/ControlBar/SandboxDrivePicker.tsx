@@ -21,6 +21,7 @@ import useSWR from 'swr';
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
+import { SANDBOX_STORAGE_PATH } from '@/features/ResourceHome/paths';
 import { openSandboxDirectoryModal } from '@/features/WorkingDirectory';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { environmentService } from '@/services/environment';
@@ -312,6 +313,10 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
                   selectedPath={showFolder ? value.workingDirectory : undefined}
                   onBrowse={openBrowser}
                   onPick={(folder) => void select(folder)}
+                  onOpenStorage={() => {
+                    setOpen(false);
+                    navigate(SANDBOX_STORAGE_PATH);
+                  }}
                 />
               }
             >
