@@ -16,6 +16,7 @@ table acceptance_comments {
   attachments jsonb
   source jsonb
   metadata jsonb
+  review_mark_id text
   client_id text [not null]
   resolved_at "timestamp with time zone"
   resolved_by_user_id text
@@ -31,6 +32,7 @@ table acceptance_comments {
     author_user_id [name: 'acceptance_comments_author_user_id_idx']
     author_agent_id [name: 'acceptance_comments_author_agent_id_idx']
     workspace_id [name: 'acceptance_comments_workspace_id_idx']
+    review_mark_id [name: 'acceptance_comments_review_mark_id_idx']
   }
 }
 
@@ -78,6 +80,64 @@ table acceptance_flows {
 
   indexes {
     acceptance_id [name: 'acceptance_flows_acceptance_idx']
+  }
+}
+
+table acceptance_review_marks {
+  id text [pk, not null]
+  review_id text [not null]
+  seq integer [not null]
+  kind text [not null]
+  page_url text [not null]
+  route text [not null]
+  rect_document jsonb [not null]
+  rect_viewport jsonb [not null]
+  scroll jsonb [not null]
+  viewport jsonb [not null]
+  regions jsonb
+  region_refs jsonb
+  targets jsonb
+  sketch jsonb
+  context jsonb
+  screenshot_file_id text
+  content text [not null]
+  client_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (review_id, client_id) [name: 'acceptance_review_marks_review_id_client_id_unique', unique]
+    (review_id, seq) [name: 'acceptance_review_marks_review_id_seq_unique', unique]
+  }
+}
+
+table acceptance_reviews {
+  id text [pk, not null]
+  acceptance_id uuid [not null]
+  author_user_id text
+  workspace_id text
+  project_id text
+  status text [not null, default: 'draft']
+  page_url text [not null]
+  route text [not null]
+  page_title text
+  title text
+  summary text
+  agent_id text
+  last_mark_seq integer [not null, default: 0]
+  task_id text
+  delivery_acceptance_id uuid
+  submitted_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (acceptance_id, route, created_at) [name: 'acceptance_reviews_acceptance_route_created_idx']
+    task_id [name: 'acceptance_reviews_task_id_idx']
+    delivery_acceptance_id [name: 'acceptance_reviews_delivery_acceptance_id_idx']
+    author_user_id [name: 'acceptance_reviews_author_user_id_idx']
+    workspace_id [name: 'acceptance_reviews_workspace_id_idx']
+    (acceptance_id, author_user_id) [name: 'acceptance_reviews_one_draft_per_author_unique', unique]
   }
 }
 
