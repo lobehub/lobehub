@@ -3,17 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { getGenerateObjectResponsesReasoningParams } from './generateObject';
 
 describe('getGenerateObjectResponsesReasoningParams', () => {
-  const thinkingOff = { budget_tokens: 0, type: 'disabled' as const };
+  // GPT-6.1 Terra accepts the none effort; GPT-6.1 Sol rejects it, so the API default stays.
+  it.each([
+    ['gpt-6.1-terra', { reasoning: { effort: 'none' } }],
+    ['gpt-6.1-sol', {}],
+  ])('maps disabled thinking for %s', (model, expected) => {
+    const thinking = { budget_tokens: 0, type: 'disabled' as const };
 
-  it('sends the none effort for GPT-6.1 Terra when thinking is disabled', () => {
-    expect(
-      getGenerateObjectResponsesReasoningParams({ model: 'gpt-6.1-terra', thinking: thinkingOff }),
-    ).toEqual({ reasoning: { effort: 'none' } });
-  });
-
-  it('leaves the effort to the API for GPT-6.1 Sol, which rejects none', () => {
-    expect(
-      getGenerateObjectResponsesReasoningParams({ model: 'gpt-6.1-sol', thinking: thinkingOff }),
-    ).toEqual({});
+    expect(getGenerateObjectResponsesReasoningParams({ model, thinking })).toEqual(expected);
   });
 });
