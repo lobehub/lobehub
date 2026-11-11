@@ -9,10 +9,11 @@
  * reaches all of them. Only `node:` built-ins are imported and the TypeScript is
  * erasable, so `node scripts/devInstanceCli.mts` runs it without a build step.
  */
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { chmod, cp, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 // ─── Instance identity ───────────────────────────────────────────────
 
@@ -69,12 +70,12 @@ export const getDesktopDevEnvironment = (instance: DesktopDevInstance): Record<s
     : undefined),
 });
 
-const git = (checkout: string, args: string[]) => {
+const execFileAsync = promisify(execFile);
+
+const git = async (checkout: string, args: string[]) => {
   try {
-    return execFileSync('git', ['-C', checkout, ...args], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    const { stdout } = await execFileAsync('git', ['-C', checkout, ...args], { encoding: 'utf8' });
+    return stdout.trim();
   } catch {
     return '';
   }
@@ -85,21 +86,25 @@ const git = (checkout: string, args: string[]) => {
  * own directory name is the same in every superproject worktree, so the
  * superproject's working tree names it instead.
  */
-const readCheckout = (directory: string) => {
-  const superproject = git(directory, ['rev-parse', '--show-superproject-working-tree']);
-  const root = superproject || git(directory, ['rev-parse', '--show-toplevel']) || directory;
-  return { branch: git(root, ['branch', '--show-current']), root };
+export const readCheckout = async (directory: string) => {
+  const superproject = await git(directory, ['rev-parse', '--show-superproject-working-tree']);
+  const root =
+    superproject || (await git(directory, ['rev-parse', '--show-toplevel'])) || directory;
+  return { branch: await git(root, ['branch', '--show-current']), root };
 };
 
 /**
  * Names a checkout for the window label: the directory, plus the branch when the
  * directory name does not already spell it (worktree directories usually do).
  */
-export const getCheckoutLabel = (directory: string, { branch, root } = readCheckout(directory)) => {
+export const getCheckoutLabel = ({ branch, root }: { branch: string; root: string }) => {
   const name = path.basename(path.resolve(root));
   if (!branch || branch.replaceAll('/', '-') === name) return name;
   return `${name} · ${branch}`;
 };
+
+export const readCheckoutLabel = async (directory: string) =>
+  getCheckoutLabel(await readCheckout(directory));
 
 /** The profile holds session cookies and tokens, so only the owner may read it. */
 export const ensurePrivateDirectory = async (directory: string) => {

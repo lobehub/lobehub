@@ -69,11 +69,11 @@ describe('instance environment', () => {
   });
 
   it('labels a checkout by directory and adds the branch only when the name hides it', () => {
-    expect(
-      getCheckoutLabel('/x', { branch: 'feat/desktop-label', root: '/w/feat-desktop-label' }),
-    ).toBe('feat-desktop-label');
-    expect(getCheckoutLabel('/x', { branch: 'main', root: '/w/lobehub' })).toBe('lobehub · main');
-    expect(getCheckoutLabel('/x', { branch: '', root: '/w/lobehub' })).toBe('lobehub');
+    expect(getCheckoutLabel({ branch: 'feat/desktop-label', root: '/w/feat-desktop-label' })).toBe(
+      'feat-desktop-label',
+    );
+    expect(getCheckoutLabel({ branch: 'main', root: '/w/lobehub' })).toBe('lobehub · main');
+    expect(getCheckoutLabel({ branch: '', root: '/w/lobehub' })).toBe('lobehub');
   });
 
   it('resolves Electron appData per platform', () => {

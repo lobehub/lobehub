@@ -17,9 +17,9 @@ import { parseArgs } from 'node:util';
 import {
   createDesktopDevInstance,
   describeLoginState,
-  getCheckoutLabel,
   getDesktopDevEnvironment,
   probeDesktopSignedIn,
+  readCheckoutLabel,
   saveLoginState,
   seedLoginState,
   waitForDesktopWindow,
@@ -75,7 +75,7 @@ switch (command) {
   }
 
   case 'checkout-label': {
-    console.log(getCheckoutLabel(argument ?? process.cwd()));
+    console.log(await readCheckoutLabel(argument ?? process.cwd()));
     break;
   }
 

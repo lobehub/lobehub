@@ -39,7 +39,8 @@ export const buildDevInstanceBadgeScript = (
   Object.assign(badge.style, {
     background: 'rgba(250, 140, 22, 0.92)',
     borderRadius: '0 0 ${platform === 'darwin' ? '0 6px' : '6px 6px'}',
-    color: '#fff',
+    // Dark text: white on this orange measured about 2.5:1, below the 4.5:1 text minimum.
+    color: 'rgba(0, 0, 0, 0.88)',
     font: '600 11px/18px -apple-system, BlinkMacSystemFont, sans-serif',
     maxWidth: '40vw',
     overflow: 'hidden',

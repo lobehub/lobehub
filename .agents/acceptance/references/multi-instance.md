@@ -130,18 +130,10 @@ another (the pool snapshot), not from the default `lobehub-desktop-dev` profile,
 which uses the real keychain. A snapshot saved before this switch no longer
 decrypts (the instance log shows `Failed to decrypt access token` and the window
 stays signed out): sign in once in a pool instance, then `stop` it to re-take the
-snapshot. The items below are what a copy needs — only the
-login-bearing items, NOT the multi-GB caches:
-
-```bash
-SRC="$HOME/Library/Application Support/lobehub-desktop-dev"
-DST="/tmp/lobe-ud-<id>"
-for f in lobehub-settings.json "Local State" Preferences \
-  Cookies Cookies-journal "Local Storage" IndexedDB \
-  "Session Storage" "Network Persistent State" lobehub-storage; do
-  [ -e "$SRC/$f" ] && cp -R "$SRC/$f" "$DST/"
-done # ~27 MB vs the 1.7 GB full profile (Cache/Code Cache/GPUCache skipped)
-```
+snapshot. Copy a login with `apps/desktop/scripts/devInstanceCli.mts`: `save-login`
+snapshots a signed-in profile and `seed-login` copies it into a new one (both run by
+`electron-dev.sh`). They copy only the login-bearing items below, NOT the multi-GB
+caches, and drop the install-scoped `gatewayDeviceId`:
 
 - `lobehub-settings.json` → `encryptedTokens` (OIDC access/refresh, safeStorage).
 - `Cookies` + `Local Storage` + `IndexedDB` → better-auth renderer session.
