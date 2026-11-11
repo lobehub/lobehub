@@ -48,6 +48,30 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
   });
 });
 
+/**
+ * Parsing and splitting a file is synchronous CPU work on this process' event loop, and every
+ * running task keeps a whole file (up to MAX_FILE_PARSE_SIZE) in memory. A folder upload fires
+ * one task per file at once, so they queue here instead of all running together and starving
+ * every other request served by this process.
+ */
+const PARSE_CONCURRENCY = 2;
+let activeParses = 0;
+const waitingParses: (() => void)[] = [];
+
+const withParseSlot = async <T>(fn: () => Promise<T>): Promise<T> => {
+  if (activeParses < PARSE_CONCURRENCY) activeParses++;
+  // a finishing task hands its slot straight to the next waiter
+  else await new Promise<void>((resolve) => waitingParses.push(resolve));
+
+  try {
+    return await fn();
+  } finally {
+    const next = waitingParses.shift();
+    if (next) next();
+    else activeParses--;
+  }
+};
+
 const resolveWorkspaceIdFromFile = async (
   serverDB: LobeChatDatabase,
   userId: string,
@@ -282,146 +306,159 @@ export const fileRouter = router({
         };
       }
 
-      let content: Uint8Array | undefined;
-      try {
-        content = await fileService.getFileByteArray(file.url);
-      } catch (e) {
-        console.error(e);
-        const errorCode = (e as any).Code;
-        // Storage returned NoSuchKey. Do NOT delete the file row — transient S3
-        // outages, IAM misconfig, or already-orphaned DB rows must not cascade
-        // into destroying chunks/embeddings/documents. Mark the task as Error
-        // so users see a clear message and can re-upload or retry.
-        if (errorCode === 'NoSuchKey') {
+      const parse = async () => {
+        let content: Uint8Array | undefined;
+        try {
+          content = await fileService.getFileByteArray(file.url);
+        } catch (e) {
+          console.error(e);
+          const errorCode = (e as any).Code;
+          // Storage returned NoSuchKey. Do NOT delete the file row — transient S3
+          // outages, IAM misconfig, or already-orphaned DB rows must not cascade
+          // into destroying chunks/embeddings/documents. Mark the task as Error
+          // so users see a clear message and can re-upload or retry.
+          if (errorCode === 'NoSuchKey') {
+            await asyncTaskModel.update(input.taskId, {
+              error: new AsyncTaskError(
+                AsyncTaskErrorType.TaskTriggerError,
+                'File content unavailable in storage. Verify storage access or re-upload.',
+              ),
+              status: AsyncTaskStatus.Error,
+            });
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'File content unavailable in storage.',
+            });
+          }
+          // Other fetch errors (network, IAM, etc.) — mark the task as Error so
+          // the user surface stays consistent, then propagate.
           await asyncTaskModel.update(input.taskId, {
             error: new AsyncTaskError(
               AsyncTaskErrorType.TaskTriggerError,
-              'File content unavailable in storage. Verify storage access or re-upload.',
+              `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
             ),
             status: AsyncTaskStatus.Error,
           });
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'File content unavailable in storage.',
-          });
+          throw e;
         }
-        // Other fetch errors (network, IAM, etc.) — mark the task as Error so
-        // the user surface stays consistent, then propagate.
-        await asyncTaskModel.update(input.taskId, {
-          error: new AsyncTaskError(
-            AsyncTaskErrorType.TaskTriggerError,
-            `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
-          ),
-          status: AsyncTaskStatus.Error,
-        });
-        throw e;
-      }
 
-      if (!content) return;
+        if (!content) return;
 
-      const asyncTask = await asyncTaskModel.findById(input.taskId);
+        const asyncTask = await asyncTaskModel.findById(input.taskId);
 
-      if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
+        if (!asyncTask)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
 
-      try {
-        const startAt = Date.now();
+        try {
+          const startAt = Date.now();
 
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(
-              new AsyncTaskError(
-                AsyncTaskErrorType.Timeout,
-                'chunking task is timeout, please try again',
-              ),
-            );
-          }, ASYNC_TASK_TIMEOUT);
-        });
-
-        const chunkingPromise = async () => {
-          // update the task status to processing
-          await asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
-
-          // parse file to document record first (for detailed content viewing)
-          try {
-            await documentService.parseFile(input.fileId);
-          } catch (e) {
-            // document parsing failure should not block chunking
-            console.warn(
-              '[parseFileToChunks] document parsing failed, continuing with chunking:',
-              e,
-            );
-          }
-
-          // partition file to chunks
-          const chunkResult = await chunkService.chunkContent({
-            content,
-            fileType: file.fileType,
-            filename: file.name,
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+              reject(
+                new AsyncTaskError(
+                  AsyncTaskErrorType.Timeout,
+                  'chunking task is timeout, please try again',
+                ),
+              );
+            }, ASYNC_TASK_TIMEOUT);
           });
 
-          // after finish partition, we need to filter out some elements
-          const chunks = chunkResult.chunks.map(({ text, ...item }): NewChunkItem => ({
-            ...item,
-            text: text ? sanitizeUTF8(text) : '',
-            userId: ctx.userId,
-            workspaceId,
-          }));
+          const chunkingPromise = async () => {
+            // update the task status to processing
+            await asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
 
-          const duration = Date.now() - startAt;
+            // parse file to document record first (for detailed content viewing)
+            try {
+              await documentService.parseFile(input.fileId);
+            } catch (e) {
+              // document parsing failure should not block chunking
+              console.warn(
+                '[parseFileToChunks] document parsing failed, continuing with chunking:',
+                e,
+              );
+            }
 
-          // if no chunk found, throw error
-          if (chunks.length === 0) {
-            throw {
-              message:
-                'No chunk found in this file. it may due to current chunking method can not parse file accurately',
-              name: AsyncTaskErrorType.NoChunkError,
-            };
-          }
+            // partition file to chunks
+            const chunkResult = await chunkService.chunkContent({
+              content,
+              fileType: file.fileType,
+              filename: file.name,
+            });
 
-          await chunkModel.bulkCreate(chunks, input.fileId);
-
-          if (chunkResult.unstructuredChunks) {
-            const unstructuredChunks = chunkResult.unstructuredChunks.map((item): NewChunkItem => ({
+            // after finish partition, we need to filter out some elements
+            const chunks = chunkResult.chunks.map(({ text, ...item }): NewChunkItem => ({
               ...item,
-              fileId: input.fileId,
+              text: text ? sanitizeUTF8(text) : '',
               userId: ctx.userId,
               workspaceId,
             }));
-            await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
-          }
 
-          // update the task status to success
+            const duration = Date.now() - startAt;
+
+            // if no chunk found, throw error
+            if (chunks.length === 0) {
+              throw {
+                message:
+                  'No chunk found in this file. it may due to current chunking method can not parse file accurately',
+                name: AsyncTaskErrorType.NoChunkError,
+              };
+            }
+
+            await chunkModel.bulkCreate(chunks, input.fileId);
+
+            if (chunkResult.unstructuredChunks) {
+              const unstructuredChunks = chunkResult.unstructuredChunks.map(
+                (item): NewChunkItem => ({
+                  ...item,
+                  fileId: input.fileId,
+                  userId: ctx.userId,
+                  workspaceId,
+                }),
+              );
+              await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
+            }
+
+            // update the task status to success
+            await asyncTaskModel.update(input.taskId, {
+              duration,
+              status: AsyncTaskStatus.Success,
+            });
+
+            return { success: true };
+          };
+          // Race between the chunking process and the timeout
+          return await Promise.race([chunkingPromise(), timeoutPromise]);
+        } catch (e) {
+          const error = e as any;
+
+          const asyncTaskError = error.body
+            ? ({
+                body: safeParseJSON(error.body) ?? error.body,
+                name: error.name,
+              } as IAsyncTaskError)
+            : new AsyncTaskError((error as Error).name, error.message);
+
+          console.error('[Chunking Error]', asyncTaskError);
           await asyncTaskModel.update(input.taskId, {
-            duration,
-            status: AsyncTaskStatus.Success,
+            error: asyncTaskError,
+            status: AsyncTaskStatus.Error,
           });
 
-          // if enable auto embedding, trigger the embedding task
-          if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
-            await chunkService.asyncEmbeddingFileChunks(input.fileId);
-          }
+          return {
+            message: `File ${file.name}(${input.taskId}) failed to chunking: ${(e as Error).message}`,
+            success: false,
+          };
+        }
+      };
 
-          return { success: true };
-        };
-        // Race between the chunking process and the timeout
-        return await Promise.race([chunkingPromise(), timeoutPromise]);
-      } catch (e) {
-        const error = e as any;
+      const result = await withParseSlot(parse);
 
-        const asyncTaskError = error.body
-          ? ({ body: safeParseJSON(error.body) ?? error.body, name: error.name } as IAsyncTaskError)
-          : new AsyncTaskError((error as Error).name, error.message);
-
-        console.error('[Chunking Error]', asyncTaskError);
-        await asyncTaskModel.update(input.taskId, {
-          error: asyncTaskError,
-          status: AsyncTaskStatus.Error,
-        });
-
-        return {
-          message: `File ${file.name}(${input.taskId}) failed to chunking: ${(e as Error).message}`,
-          success: false,
-        };
+      // The embedding task is network-bound and can run long: start it once the parse slot is
+      // free, so it never holds back the files still waiting to be parsed.
+      if (result?.success && fileEnv.CHUNKS_AUTO_EMBEDDING) {
+        await chunkService.asyncEmbeddingFileChunks(input.fileId);
       }
+
+      return result;
     }),
 });

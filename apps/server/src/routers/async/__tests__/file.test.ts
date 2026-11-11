@@ -208,4 +208,105 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
       expect.objectContaining({ status: AsyncTaskStatus.Error }),
     );
   });
+
+  describe('parse concurrency', () => {
+    // lets every already-unblocked promise chain run to its next real wait
+    const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+
+    beforeEach(() => {
+      fileModelMock.findById.mockImplementation(async (id: string) => ({
+        fileType: 'text/plain',
+        id,
+        name: `${id}.txt`,
+        size: 10,
+        url: `https://example.com/${id}.txt`,
+      }));
+      asyncTaskModelMock.findById.mockResolvedValue({ id: 'task' });
+      chunkServiceMock.chunkContent.mockResolvedValue({
+        chunks: [{ index: 0, text: 'hello', type: 'DocumentChunk' }],
+      });
+    });
+
+    it('holds a batch of files back so only two are downloaded and parsed at a time', async () => {
+      const gates = new Map<string, ReturnType<typeof deferred>>();
+      let inFlight = 0;
+      let peak = 0;
+      fileServiceMock.getFileByteArray.mockImplementation(async (url: string) => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        const gate = deferred();
+        gates.set(url, gate);
+        await gate.promise;
+        inFlight--;
+        return new Uint8Array([1]);
+      });
+
+      const caller = fileRouter.createCaller(mockCtx);
+      const ids = ['f1', 'f2', 'f3', 'f4', 'f5'];
+      const runs = ids.map((id) => caller.parseFileToChunks({ fileId: id, taskId: `task_${id}` }));
+
+      await flush();
+      expect(gates.size).toBe(2);
+
+      // release files one by one; every finished file lets exactly one waiting file start
+      for (let done = 0; done < ids.length; done++) {
+        const [url, gate] = [...gates.entries()][0];
+        gates.delete(url);
+        gate.resolve();
+        await flush();
+        expect(gates.size).toBe(Math.min(2, ids.length - done - 1));
+      }
+
+      const results = await Promise.all(runs);
+      expect(results).toEqual(ids.map(() => ({ success: true })));
+      expect(peak).toBe(2);
+    });
+
+    it('frees the slot of a file that fails, so later files still run', async () => {
+      fileServiceMock.getFileByteArray
+        .mockRejectedValueOnce({ Code: 'NoSuchKey' })
+        .mockRejectedValueOnce({ Code: 'AccessDenied', message: 'forbidden' })
+        .mockResolvedValue(new Uint8Array([1]));
+
+      const caller = fileRouter.createCaller(mockCtx);
+      const results = await Promise.allSettled(
+        ['f1', 'f2', 'f3', 'f4'].map((id) =>
+          caller.parseFileToChunks({ fileId: id, taskId: `task_${id}` }),
+        ),
+      );
+
+      expect(results.map((r) => r.status)).toEqual([
+        'rejected',
+        'rejected',
+        'fulfilled',
+        'fulfilled',
+      ]);
+    });
+
+    it('does not keep a parse slot while the embedding task of a finished file runs', async () => {
+      const embedding = deferred();
+      chunkServiceMock.asyncEmbeddingFileChunks.mockImplementation(() => embedding.promise);
+      fileServiceMock.getFileByteArray.mockResolvedValue(new Uint8Array([1]));
+
+      const caller = fileRouter.createCaller(mockCtx);
+      const runs = ['f1', 'f2', 'f3', 'f4'].map((id) =>
+        caller.parseFileToChunks({ fileId: id, taskId: `task_${id}` }),
+      );
+
+      await flush();
+      // all four are chunked although every one of them is still waiting on its embedding call
+      expect(chunkModelMock.bulkCreate).toHaveBeenCalledTimes(4);
+
+      embedding.resolve();
+      await Promise.all(runs);
+    });
+  });
 });
