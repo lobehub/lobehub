@@ -300,9 +300,9 @@ export default {
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
   'environment.add.action': 'Add',
-  'environment.add.existing': 'Existing environment',
+  'environment.add.existing': 'Add an existing one',
   'environment.add.failed': "Couldn't add the environment to this project",
-  'environment.add.github': 'From GitHub',
+  'environment.add.github': 'New from GitHub',
   'environment.add.noExisting': 'All of your environments are already in this project.',
   'environment.add.noPublished':
     'No published environments to add. A shared project only uses published environments.',
