@@ -1,5 +1,11 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
+import {
+  isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
+import { isAgentOperationSettled } from '@lobechat/types';
 import debug from 'debug';
 
 import { redisService } from '@/server/services/redis';
@@ -10,6 +16,7 @@ import {
   type DeferredToolResultControlInput,
   loadDurableToolResultHooks,
 } from '../hooks/deferredToolResultControl';
+import { HETERO_OPERATION_SILENCE_MS } from '../operationLease';
 import { steerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
@@ -99,6 +106,89 @@ export async function isOperationInterrupted(
   return deps.coordinator.isInterrupted(operationId);
 }
 
+const isHeterogeneousProvider = (provider: string | null | undefined): boolean =>
+  !!provider &&
+  (isLocalHeterogeneousType(provider) ||
+    isRemoteHeterogeneousType(provider) ||
+    isLocalRuntimeHeterogeneousType(provider));
+
+/**
+ * Settle a parent parked in `waiting_for_async_tool` whose runtime is gone,
+ * together with its dead async children, so a stop request on its task can be
+ * confirmed instead of refused with 409.
+ *
+ * The parent's own row cannot prove it is stranded: its lease stops
+ * refreshing the moment it parks, so a parent parked behind a long sub-agent
+ * call reads exactly like a dead one. The children are the proof — the pair
+ * is only settled when every direct child is terminal, or a `running` child
+ * with no coordinator state whose own lease has expired (a stateless
+ * heterogeneous child gets the reaper's silence window instead of the plain
+ * dead-operation lease, because it only refreshes its lease when ingest
+ * batches arrive). A child that is still alive — coordinator state, a fresh
+ * lease, or any other non-terminal status — keeps the whole interrupt
+ * unconfirmed, as does a retirement that loses its compare-and-set race, so
+ * a live run is never killed by a stale read.
+ *
+ * Only the parent and its direct children are settled: a `running` child
+ * with live descendants of its own is not a leaf, so it keeps the interrupt
+ * unconfirmed rather than stranding a grandchild the same way.
+ *
+ * @returns true only when the parent row was claimed; false keeps the
+ * interrupt unconfirmed, exactly as before.
+ */
+async function settleStaleAsyncParent(
+  deps: OperationControlDeps,
+  operationId: string,
+): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - DEAD_OPERATION_LEASE_MS);
+  const tree = await deps.agentOperationModel.listOperationTree(operationId).catch(() => undefined);
+  if (!tree) return false;
+
+  for (const row of tree) {
+    if (row.id === operationId) continue;
+    if (isAgentOperationSettled(row.status)) continue;
+    if (row.status !== 'running') return false;
+
+    // A `running` child that still has live descendants of its own is not a
+    // leaf: settling it would strand them the same way the parent was
+    // stranded. Only a child whose descendants have all settled can be
+    // retired with its parent.
+    const childTree = await deps.agentOperationModel
+      .listOperationTree(row.id)
+      .catch(() => undefined);
+    if (!childTree) return false;
+    if (
+      childTree.some(
+        (descendant) => descendant.id !== row.id && !isAgentOperationSettled(descendant.status),
+      )
+    ) {
+      return false;
+    }
+
+    // A `running` child with live coordinator state is executing somewhere.
+    const childState = await deps.coordinator.loadAgentState(row.id).catch(() => null);
+    if (childState) return false;
+
+    // A stateless heterogeneous child only refreshes its lease when ingest
+    // batches arrive, so it gets the same silence window the reaper grants
+    // it before it counts as dead.
+    const childStaleBefore = new Date(
+      Date.now() -
+        (isHeterogeneousProvider(row.provider)
+          ? HETERO_OPERATION_SILENCE_MS
+          : DEAD_OPERATION_LEASE_MS),
+    );
+    if (row.updatedAt && new Date(row.updatedAt).getTime() >= childStaleBefore.getTime()) {
+      return false;
+    }
+    if (!(await deps.agentOperationModel.settleStaleRunning(row.id, childStaleBefore))) {
+      return false;
+    }
+  }
+
+  return deps.agentOperationModel.settleStaleWaitingForAsyncTool(operationId, staleBefore);
+}
+
 /**
  * Interrupt a running agent operation by setting its state to 'interrupted'.
  * The agent will stop at the next step boundary (cannot abort an in-flight LLM call).
@@ -135,6 +225,20 @@ export async function interruptOperation(
         operationId,
         new Date(Date.now() - DEAD_OPERATION_LEASE_MS),
       );
+    }
+
+    // A parent parked in `waiting_for_async_tool` with no runtime state and
+    // an expired lease is the same shape of dead operation — a child that
+    // died (or never reported back) leaves the parent parked forever, and
+    // every stop request on its task is refused as unconfirmed. The parent
+    // is only settled once its async children are proven dead too; see
+    // `settleStaleAsyncParent`.
+    if (
+      operation.status === 'waiting_for_async_tool' &&
+      operation.updatedAt &&
+      new Date(operation.updatedAt).getTime() < Date.now() - DEAD_OPERATION_LEASE_MS
+    ) {
+      return settleStaleAsyncParent(deps, operationId);
     }
     return false;
   }
