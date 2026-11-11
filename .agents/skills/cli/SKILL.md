@@ -145,15 +145,22 @@ Every command runs against one scope, resolved in this order:
    (no `workspace:read`, such as a workspace-bound API key) skips resolution and
    sends the value as an id with a warning, so it must pass the id.
    `lh connect --workspace` takes an id only.
-2. the `LOBEHUB_WORKSPACE_ID` env var (an id only)
-3. the scope persisted by `lh workspace use <id|slug>`
-4. personal content (no workspace)
+2. the global `lh -w, --workspace <id|slug> <command>` flag, for this process
+   only; it goes before the subcommand and is never saved. `personal` selects
+   personal content. Commands that ignore the scope, including `connect` and
+   `status`, reject it.
+3. the `LOBEHUB_WORKSPACE_ID` env var (an id, slug or `personal`). A value that
+   matches none of your workspaces fails the command. `login`, `logout`, `man`,
+   `completion`, `update`, `connect`, `status` and `doctor` do not resolve it, and neither do
+   dispatched runs (`LOBEHUB_JWT`), whose id comes from the server.
+4. the scope persisted by `lh workspace use <id|slug>`
+5. personal content (no workspace)
 
 The persisted scope is bound to the account and server it was chosen under. If
 either changes — a different `lh login`, a `--server` switch — it is ignored and
 reported as stale rather than attaching a workspace header the new identity has
 no membership in. `lh logout` clears it. `lh whoami` and `lh workspace current`
-both print which of the four sources is in effect.
+both print which of the five sources is in effect.
 
 API-key auth carries no local account identity, so there is nothing to bind a
 saved scope to — those callers pass `LOBEHUB_WORKSPACE_ID` instead.

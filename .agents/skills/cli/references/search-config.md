@@ -129,7 +129,7 @@ deployment these procedures answer empty or `NOT_IMPLEMENTED`.
 | `lh workspace use <id\|slug>` | Persist the scope for subsequent commands              |
 | `lh workspace use --personal` | Drop back to personal content                          |
 
-Resolution order is `--workspace` → `LOBEHUB_WORKSPACE_ID` → the persisted scope
+Resolution order is a command's `--workspace` → the global `lh -w <id|slug>` → `LOBEHUB_WORKSPACE_ID` → the persisted scope
 → personal. Setting the persisted scope while `LOBEHUB_WORKSPACE_ID` is exported
 prints a warning, because the env var still wins.
 

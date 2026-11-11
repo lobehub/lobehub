@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 
+import { applyWorkspaceOverride } from './api/workspaceRef';
 import { registerAcceptanceCommands } from './commands/acceptance';
 import { registerVerifyCommand } from './commands/acceptance/deprecatedVerify';
 import { registerAgentCommand } from './commands/agent';
@@ -59,7 +60,24 @@ export function createProgram() {
   program
     .name(CLI_PRIMARY_BIN)
     .description(`${CLI_DISPLAY_NAME} - manage and connect to ${CLI_PRODUCT_NAME} services`)
-    .version(cliVersion);
+    .version(cliVersion)
+    // Without this the root `-w` also claims it after the subcommand, taking it
+    // from `search -w` (web), `task review -w` (weight) and every local `--workspace`.
+    .enablePositionalOptions()
+    .option(
+      '-w, --workspace <id|slug>',
+      "Workspace for this command only (overrides LOBEHUB_WORKSPACE_ID and 'workspace use')",
+    )
+    .hook('preAction', async (root, action) => {
+      let top = action;
+      while (top.parent && top.parent !== root) top = top.parent;
+      await applyWorkspaceOverride(
+        root.opts<{ workspace?: string }>().workspace,
+        top.name(),
+        // `notification --workspace` with no value means "use the ambient scope".
+        typeof action.opts<{ workspace?: unknown }>().workspace === 'string',
+      );
+    });
 
   const internalToolWorker = program
     .command('tool-worker')

@@ -1,4 +1,4 @@
-import { PERSONAL_SCOPE_ENV_VALUE } from '../../api/workspace';
+import { PERSONAL_SCOPE_ENV_VALUE, resolveWorkspaceScope } from '../../api/workspace';
 import { resolveIdentityFingerprint } from '../../auth/identity';
 import { loadActiveWorkspace, resolveServerUrl, saveActiveWorkspace } from '../../settings';
 import { redactUrlCredentials } from '../redact';
@@ -39,6 +39,17 @@ const workspaceScope: DoctorCheck = {
       serverUrl: redactUrlCredentials(serverUrl),
       storedWorkspaceId: stored?.workspaceId,
     };
+
+    // The global flag travels through the env var, but the user never set it.
+    const scope = resolveWorkspaceScope();
+    if (scope.source === 'flag')
+      return {
+        detail: scope.workspaceId
+          ? `Workspace ${scope.workspaceId}, from --workspace.`
+          : 'Personal scope, from --workspace.',
+        evidence,
+        status: 'ok',
+      };
 
     if (fromEnv === PERSONAL_SCOPE_ENV_VALUE)
       return {
