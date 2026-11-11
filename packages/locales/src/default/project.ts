@@ -311,6 +311,12 @@ export default {
   'environment.privateInSharedTooltip':
     "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
   'overview.context.location.devices': 'Devices',
+  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directoryUnavailable':
+    "Couldn't reach this folder. Check that the device is online and the folder still exists.",
+  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectoryTooltip':
+    "This device has no project folder yet, so the conversation starts in the device's default directory.",
   'overview.context.location.environments': 'Code environments',
   'overview.context.location.noEnvironments': 'No code environments yet.',
   'overview.context.location.title': 'Work location',

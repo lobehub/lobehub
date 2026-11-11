@@ -4,7 +4,7 @@ import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, FolderIcon, PlusIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,8 +16,10 @@ import { ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
+import { openAddDirectoryModal } from '../WorkingDirectories/AddDirectoryModal';
+import type { useProjectDirectory } from './useProjectDirectory';
 import type { useProjectRepository } from './useProjectRepository';
-import { useProjectWorkLocation } from './useProjectWorkLocation';
+import type { useProjectWorkLocation } from './useProjectWorkLocation';
 
 /**
  * A submenu's list can arrive after it opens; sized to itself, its positioner
@@ -64,16 +66,19 @@ const styles = stylex.create({
 });
 
 interface ProjectWorkLocationPickerProps {
-  agentId: string;
   /** Whether this member may give the project another environment. */
   canManage: boolean;
   /** Icon only, the place in the tooltip — for a narrow composer. */
   compact?: boolean;
+  /** The project folder a run on a device starts in. */
+  directoryState: ReturnType<typeof useProjectDirectory>;
   disabled?: boolean;
+  /** Where the agent runs and where it can be moved to. */
+  location: ReturnType<typeof useProjectWorkLocation>;
   projectId: string;
   /** Environments added here are published: the agent is workspace-public and applies nothing else. */
   publish?: boolean;
-  /** A task starts no conversation, so it has no code environment to pick. */
+  /** A task starts no conversation, so it has no code environment or folder to pick. */
   showRepositories?: boolean;
   state: ReturnType<typeof useProjectRepository>;
 }
@@ -85,10 +90,11 @@ interface ProjectWorkLocationPickerProps {
  * picker writes it; the code environment is this conversation's.
  */
 const ProjectWorkLocationPicker = ({
-  agentId,
   canManage,
   compact,
+  directoryState,
   disabled,
+  location,
   projectId,
   publish,
   showRepositories = true,
@@ -102,11 +108,12 @@ const ProjectWorkLocationPicker = ({
     deviceRows,
     displayed,
     localAvailable,
+    currentDeviceId,
     sandboxAvailable,
     select: moveTo,
     switchable,
     target,
-  } = useProjectWorkLocation(agentId);
+  } = location;
   const onSandbox = target === 'sandbox';
 
   const { repositories, repository, setPickedId } = state;
@@ -121,6 +128,23 @@ const ProjectWorkLocationPicker = ({
     setPickedId(environmentId);
     if (!onSandbox) void select('sandbox');
     else setOpen(false);
+  };
+
+  const { directory, directoriesOn, setPickedId: setDirectoryId } = directoryState;
+  const directoryShown = showRepositories && !onSandbox && !!directory;
+
+  /** A folder belongs to one machine; picking it moves the run there too. */
+  const pickDirectory = (directoryId: string, next: 'device' | 'local', deviceId?: string) => {
+    setDirectoryId(directoryId);
+    void select(next, deviceId);
+  };
+
+  const addDirectory = (next: 'device' | 'local', deviceId?: string) => {
+    setOpen(false);
+    openAddDirectoryModal(projectId, undefined, {
+      deviceId: next === 'local' ? currentDeviceId : deviceId,
+      onAdded: (added) => pickDirectory(added.id, next, deviceId),
+    });
   };
 
   const addEnvironment = () => {
@@ -142,6 +166,9 @@ const ProjectWorkLocationPicker = ({
   } else if (target === 'device') {
     chipIcon = <ExecutionTargetIcon devicePlatform={boundDevice?.platform} target={'device'} />;
   }
+  // On a machine, the folder is what the conversation works in.
+  const machineLabel = chipLabel;
+  if (directoryShown) chipLabel = directory.name;
 
   const hint = onSandbox
     ? repositoryShown
@@ -149,7 +176,11 @@ const ProjectWorkLocationPicker = ({
       : t('overview.context.target.sandboxTooltip')
     : target === 'none'
       ? t('overview.context.target.noneTooltip')
-      : undefined;
+      : directoryShown
+        ? `${directory.path} · ${machineLabel}`
+        : showRepositories && (target === 'device' || target === 'local')
+          ? t('overview.context.location.noDirectoryTooltip')
+          : undefined;
   const tooltip = compact ? [chipLabel, hint].filter(Boolean).join(' · ') : hint;
 
   // Nothing to pick: a read-only target with no code environment to choose.
@@ -194,6 +225,64 @@ const ProjectWorkLocationPicker = ({
     </Flexbox>
   );
 
+  /** One machine's folders: the second level of its row. */
+  const directoryMenu = (next: 'device' | 'local', deviceId?: string) => {
+    const folders = directoriesOn((next === 'local' ? currentDeviceId : deviceId) ?? '');
+    const onThisMachine =
+      next === 'local'
+        ? target === 'local'
+        : target === 'device' && deviceId === boundDevice?.deviceId;
+    return (
+      <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 260 }}>
+        <div {...stylex.props(styles.header)}>{t('overview.context.location.directories')}</div>
+        <div {...stylex.props(styles.list)}>
+          {folders.map((folder) => (
+            <OptionRow
+              compact
+              active={onThisMachine && folder.id === directory?.id}
+              hint={folder.path}
+              icon={<Icon icon={FolderIcon} size={16} />}
+              key={folder.id}
+              label={folder.name}
+              onClick={() => pickDirectory(folder.id, next, deviceId)}
+            />
+          ))}
+        </div>
+        {folders.length === 0 && (
+          <Text className={stylex.props(styles.hint).className}>
+            {t('overview.context.location.noDirectories')}
+          </Text>
+        )}
+        {canManage && (
+          <OptionRow
+            compact
+            icon={<Icon icon={PlusIcon} size={16} />}
+            label={t('settings.addDirectory')}
+            onClick={() => addDirectory(next, deviceId)}
+          />
+        )}
+      </Flexbox>
+    );
+  };
+
+  /** A machine row opens its folders one level down, as the sandbox opens its repositories. */
+  const machineRow = (row: ReactNode, next: 'device' | 'local', deviceId?: string) =>
+    showRepositories ? (
+      <Popover
+        arrow={false}
+        closeDelay={150}
+        content={directoryMenu(next, deviceId)}
+        key={deviceId ?? next}
+        placement={'leftTop'}
+        styles={SUBMENU_STYLES}
+        trigger={['hover', 'click']}
+      >
+        <div data-testid={`project-location-machine-${deviceId ?? next}`}>{row}</div>
+      </Popover>
+    ) : (
+      row
+    );
+
   const sandboxRow = (
     <OptionRow
       active={onSandbox}
@@ -231,30 +320,37 @@ const ProjectWorkLocationPicker = ({
       {(localAvailable || deviceRows.length > 0) && (
         <>
           <div {...stylex.props(styles.header)}>{t('overview.context.location.devices')}</div>
-          {localAvailable && (
-            <OptionRow
-              active={target === 'local'}
-              desc={tChat('heteroAgent.executionTarget.localDesc')}
-              icon={<ExecutionTargetIcon target={'local'} />}
-              label={tChat('heteroAgent.executionTarget.local')}
-              onClick={() => void select('local')}
-            />
-          )}
-          <div {...stylex.props(styles.list)}>
-            {deviceRows.map((device) => (
+          {localAvailable &&
+            machineRow(
               <OptionRow
-                active={target === 'device' && device.deviceId === boundDevice?.deviceId}
-                icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
-                key={device.deviceId}
-                label={device.friendlyName || device.hostname || device.deviceId}
-                desc={tChat(
-                  device.online
-                    ? 'heteroAgent.executionTarget.online'
-                    : 'heteroAgent.executionTarget.offline',
-                )}
-                onClick={() => void select('device', device.deviceId)}
-              />
-            ))}
+                active={target === 'local'}
+                arrow={showRepositories}
+                desc={tChat('heteroAgent.executionTarget.localDesc')}
+                icon={<ExecutionTargetIcon target={'local'} />}
+                label={tChat('heteroAgent.executionTarget.local')}
+                onClick={() => void select('local')}
+              />,
+              'local',
+            )}
+          <div {...stylex.props(styles.list)}>
+            {deviceRows.map((device) =>
+              machineRow(
+                <OptionRow
+                  active={target === 'device' && device.deviceId === boundDevice?.deviceId}
+                  arrow={showRepositories}
+                  icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
+                  label={device.friendlyName || device.hostname || device.deviceId}
+                  desc={tChat(
+                    device.online
+                      ? 'heteroAgent.executionTarget.online'
+                      : 'heteroAgent.executionTarget.offline',
+                  )}
+                  onClick={() => void select('device', device.deviceId)}
+                />,
+                'device',
+                device.deviceId,
+              ),
+            )}
           </div>
         </>
       )}

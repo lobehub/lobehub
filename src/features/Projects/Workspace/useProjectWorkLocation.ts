@@ -13,6 +13,7 @@ import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useDeviceList } from '@/store/device';
+import { useElectronStore } from '@/store/electron';
 
 /**
  * Where the picked agent's new conversation runs, resolved the way the run
@@ -36,6 +37,10 @@ export const useProjectWorkLocation = (agentId: string) => {
     workspaceScoped,
   });
   const boundDevice = devices?.find((device) => device.deviceId === agencyConfig?.boundDeviceId);
+  // This desktop's own gateway id, which a `local` run works on.
+  const currentDeviceId = useElectronStore((s) =>
+    isDesktop ? s.gatewayDeviceInfo?.deviceId : undefined,
+  );
   const switchable = canDisplayExecutionTarget && canSelectExecutionTarget;
 
   /** Resolves `false` when the move was refused or failed; picking the current place is a no-op. */
@@ -48,6 +53,8 @@ export const useProjectWorkLocation = (agentId: string) => {
 
   return {
     boundDevice,
+    /** This desktop's gateway id, on desktop only. */
+    currentDeviceId,
     /** Whether the place is shown at all; a member without access sees nothing. */
     displayed: canDisplayExecutionTarget,
     deviceRows:
@@ -64,5 +71,12 @@ export const useProjectWorkLocation = (agentId: string) => {
     /** A fixed workspace target, or a member who may not change it, keeps the place as it is. */
     switchable,
     target,
+    /** The machine a device or local run works on; none for the sandbox. */
+    machineDeviceId:
+      target === 'device'
+        ? agencyConfig?.boundDeviceId
+        : target === 'local'
+          ? (currentDeviceId ?? agencyConfig?.boundDeviceId)
+          : undefined,
   };
 };

@@ -30,11 +30,14 @@ import { projectComposerAgents } from './projectComposerAgents';
 import ProjectWorkLocationPicker from './ProjectWorkLocationPicker';
 import {
   AttachmentsNotReadyError,
+  DirectoryUnavailableError,
   getProjectComposerContextKey,
   type ProjectComposerMode,
   useProjectComposer,
 } from './useProjectComposer';
+import { useProjectDirectory } from './useProjectDirectory';
 import { useProjectRepository } from './useProjectRepository';
+import { useProjectWorkLocation } from './useProjectWorkLocation';
 
 const leftActions: ActionKeys[] = [];
 const rightActions: ActionKeys[] = [];
@@ -147,9 +150,16 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   );
   const repositoryState = useProjectRepository(project.id, sharedAgent);
   const canManageProject = useCanManageProject();
-  // A task is not started in a conversation, so it has no repository to pick.
-  const environmentId = mode === 'chat' ? repositoryState.repository?.id : undefined;
-  const { send, sending } = useProjectComposer(project, mode, agentId, environmentId);
+  const location = useProjectWorkLocation(agentId);
+  const directoryState = useProjectDirectory(project.id, location.machineDeviceId);
+  // A task is not started in a conversation, so it has no repository or folder to pick.
+  const place =
+    mode !== 'chat'
+      ? {}
+      : location.target === 'sandbox'
+        ? { environmentId: repositoryState.repository?.id }
+        : { directoryId: directoryState.directory?.id };
+  const { send, sending } = useProjectComposer(project, mode, agentId, place);
 
   useInitAgentConfig(agentId);
   const isAgentConfigLoading = useAgentStore((s) =>
@@ -171,6 +181,10 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     } catch (error) {
       if (error instanceof AttachmentsNotReadyError) {
         toast.error(tHome('dashboard.task.attachmentsNotReady'));
+        return;
+      }
+      if (error instanceof DirectoryUnavailableError) {
+        toast.error(t('overview.context.location.directoryUnavailable'));
         return;
       }
       console.error('Failed to send from the project home', error);
@@ -219,10 +233,11 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             gap={2}
           >
             <ProjectWorkLocationPicker
-              agentId={agentId}
               canManage={canManageProject}
               compact={compact}
+              directoryState={directoryState}
               disabled={sending}
+              location={location}
               projectId={project.id}
               publish={sharedAgent}
               showRepositories={mode === 'chat'}

@@ -54,6 +54,8 @@ describe('useProjectWorkLocation', () => {
     expect(location.target).toBe('sandbox');
     expect(location.deviceRows.map((device) => device.deviceId)).toEqual(['device_1', 'device_2']);
 
+    expect(location.machineDeviceId).toBeUndefined();
+
     await expect(location.select('device', 'device_1')).resolves.toBe(true);
     expect(mocks.selectExecutionTarget).toHaveBeenCalledWith('device', 'device_1', undefined);
   });
@@ -63,6 +65,8 @@ describe('useProjectWorkLocation', () => {
     const location = render();
 
     expect(location.boundDevice?.friendlyName).toBe('Studio Mac');
+    // The machine whose project folders the conversation can start in.
+    expect(location.machineDeviceId).toBe('device_1');
 
     await location.select('sandbox');
     expect(mocks.selectExecutionTarget).toHaveBeenCalledWith('sandbox', undefined, undefined);
