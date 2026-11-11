@@ -1,5 +1,12 @@
 import { $isListItemNode, $isListNode, type ListItemNode, ListNode } from '@lexical/list';
-import { $getState, $setState, createState, type LexicalEditor, type LexicalNode } from 'lexical';
+import {
+  $getNodeByKey,
+  $getState,
+  $setState,
+  createState,
+  type LexicalEditor,
+  type LexicalNode,
+} from 'lexical';
 
 import { $getListItemHeading } from './headingState';
 
@@ -37,8 +44,12 @@ export const registerListNumberOverrides = (editor: LexicalEditor) =>
   editor.registerNodeTransform(ListNode, (list) => {
     if (list.getListType() !== 'number') return;
 
+    // The state before this update: a node missing from it was made just now.
+    const before = editor.getEditorState();
+    const existed = (node: LexicalNode) => before.read(() => $getNodeByKey(node.getKey()) !== null);
+
     let value = list.getStart();
-    let previousOverride: number | undefined;
+    let previous: ListItemNode | undefined;
 
     for (const child of list.getChildren()) {
       if (!$isListItemNode(child)) continue;
@@ -49,15 +60,24 @@ export const registerListNumberOverrides = (editor: LexicalEditor) =>
 
       let override = $getState(child, listNumberState);
       // Enter copies an item together with its state; the copy continues the
-      // numbering instead of restarting it a second time.
-      if (override !== undefined && override === previousOverride) {
+      // numbering instead of restarting it a second time. Only a new item
+      // right after an older one with the same restart is such a copy: two
+      // older items were each restarted on purpose, and two new ones arrived
+      // together (a paste, a loaded document) already holding what they mean.
+      if (
+        override !== undefined &&
+        previous &&
+        override === $getState(previous, listNumberState) &&
+        !existed(child) &&
+        existed(previous)
+      ) {
         $setState(child, listNumberState, undefined);
         override = undefined;
       }
       if (override !== undefined) value = override;
       if (child.getValue() !== value) child.setValue(value);
 
-      previousOverride = override;
+      previous = child;
       value += 1;
     }
   });

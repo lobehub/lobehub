@@ -4,11 +4,16 @@ import { $getRoot, $getSelection, $isRangeSelection, type LexicalEditor } from '
 import { describe, expect, it } from 'vitest';
 
 import { $continueListNumbering, $getListNumbering, $setListItemNumber } from './listNumbering';
-import { RichListPlugin } from './RichListPlugin';
+import { RichListDocumentPlugin } from './RichListDocumentPlugin';
 
 const setup = (markdown: string) => {
   const kernel = new Kernel();
-  kernel.registerPlugins([CommonPlugin, MarkdownPlugin, ListPlugin, RichListPlugin as never]);
+  kernel.registerPlugins([
+    CommonPlugin,
+    MarkdownPlugin,
+    ListPlugin,
+    RichListDocumentPlugin as never,
+  ]);
   const editor = kernel.initNodeEditor()!;
   kernel.setDocument('markdown', markdown);
   return editor;
@@ -76,6 +81,15 @@ describe('list numbering', () => {
     );
 
     expect(numbers(editor)).toEqual(['1. a', '7. b', '8. c']);
+  });
+
+  it('keeps a restart on each of two items in a row', () => {
+    const editor = setup('1. a\n2. b\n3. c\n');
+
+    act(editor, (items) => $setListItemNumber(items.b, 1));
+    act(editor, (items) => $setListItemNumber(items.c, 1));
+
+    expect(numbers(editor)).toEqual(['1. a', '1. b', '1. c']);
   });
 
   it('continues the numbering of the previous list across other blocks', () => {

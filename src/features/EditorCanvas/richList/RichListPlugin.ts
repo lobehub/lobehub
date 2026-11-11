@@ -11,10 +11,15 @@ import {
 import { $createHeadingNode, $isHeadingNode, type HeadingNode } from '@lexical/rich-text';
 import { mergeRegister } from '@lexical/utils';
 import {
+  $getListItemHeading,
+  $setListItemHeading,
+  registerRichListDocument,
+  type RichListMarkdownService,
+} from '@lobechat/editor-runtime';
+import {
   type getKernelFromEditor,
   IMarkdownShortCutService,
   INSERT_HEADING_COMMAND,
-  MARKDOWN_READER_LEVEL_HIGH,
   useLexicalComposerContext,
 } from '@lobehub/editor';
 import {
@@ -32,9 +37,6 @@ import {
 } from 'lexical';
 import { type FC, useLayoutEffect } from 'react';
 
-import { $getListItemHeading, $setListItemHeading } from './headingState';
-import { registerListNumberOverrides } from './listNumbering';
-
 type IEditorKernel = NonNullable<ReturnType<typeof getKernelFromEditor>>;
 
 // The marker the caret has just completed: `- `, `* `, `+ `, `1. `, `[ ] `,
@@ -51,24 +53,9 @@ type RunTransformers = (
   trigger?: 'enter',
 ) => boolean;
 
-type MarkdownWriter = (
-  ctx: {
-    addProcessor: (processor: (before: string, content: string, after: string) => string) => void;
-  },
-  node: LexicalNode,
-) => void | boolean;
-
-interface MarkdownServiceInternals {
-  // Neither is part of the exported interface: `runTransformers` is the typing
-  // entry point and `markdownWriters` the writer table it serialises with.
-  markdownWriters: Record<string, MarkdownWriter>;
+interface MarkdownServiceInternals extends RichListMarkdownService {
+  // Not part of the exported interface: the entry point typing runs through.
   runTransformers: RunTransformers;
-}
-
-interface ReadNode {
-  [key: string]: unknown;
-  children?: ReadNode[];
-  type: string;
 }
 
 /**
@@ -98,63 +85,6 @@ const patchListShortcut = (service: MarkdownServiceInternals) => {
   return () => {
     if (service.runTransformers === patched) service.runTransformers = runTransformers;
   };
-};
-
-/** `- ### Title`: the item's heading level follows its list marker. */
-const patchListItemWriter = (service: MarkdownServiceInternals) => {
-  const type = ListItemNode.getType();
-  const write = service.markdownWriters[type];
-  if (!write) return () => {};
-
-  const patched: MarkdownWriter = (ctx, node) => {
-    const tag = $isListItemNode(node) ? $getListItemHeading(node) : undefined;
-    if (tag) {
-      const hashes = `${'#'.repeat(Number(tag.slice(1)))} `;
-      ctx.addProcessor((before, content, after) => `${before}${hashes}${content}${after}`);
-    }
-    return write(ctx, node);
-  };
-  service.markdownWriters[type] = patched;
-
-  return () => {
-    if (service.markdownWriters[type] === patched) service.markdownWriters[type] = write;
-  };
-};
-
-const readListItem = (
-  children: ReadNode[],
-  index: number,
-  { checked, heading }: { checked?: unknown; heading?: unknown } = {},
-): ReadNode => ({
-  checked: typeof checked === 'boolean' ? checked : undefined,
-  children,
-  direction: 'ltr',
-  format: '',
-  indent: 0,
-  type: 'listitem',
-  value: index + 1,
-  version: 1,
-  ...(heading ? { $: { listHeading: heading } } : {}),
-});
-
-/**
- * Reads `- ### Title` back into a heading list item. Items without a heading
- * fall through to ListPlugin's reader.
- */
-const listItemReader = (node: { checked?: unknown }, children: ReadNode[], index: number) => {
-  if (!children.some((child) => child.type === 'heading')) return false;
-
-  return children.map((child) => {
-    if (child.type === 'heading')
-      return readListItem(child.children ?? [], index, {
-        checked: node.checked,
-        heading: child.tag,
-      });
-    if (child.type === 'paragraph')
-      return readListItem(child.children ?? [], index, { checked: node.checked });
-    if (child.type === 'list') return readListItem([child], index);
-    return child;
-  });
 };
 
 const LIST_COMMANDS: [typeof INSERT_UNORDERED_LIST_COMMAND, ListType][] = [
@@ -251,8 +181,9 @@ const registerHeadingAttribute = (editor: LexicalEditor) =>
   });
 
 /**
- * List items that keep a heading level (`- ### Title`) and ordered lists that
- * renumber from any item.
+ * The page editor's side of rich lists: typing, commands and rendering. What
+ * the document itself needs (Markdown, numbering) is shared with the server's
+ * headless editor through `registerRichListDocument`.
  */
 export class RichListPlugin {
   static pluginName = 'LobeRichListPlugin';
@@ -265,19 +196,14 @@ export class RichListPlugin {
   }
 
   onInit(editor: LexicalEditor): void {
-    const service = this.kernel.requireService(IMarkdownShortCutService);
-    const internals = service as unknown as MarkdownServiceInternals | null;
-    service?.registerMarkdownReader(
-      'listItem',
-      listItemReader as never,
-      MARKDOWN_READER_LEVEL_HIGH,
-    );
+    const internals = this.kernel.requireService(
+      IMarkdownShortCutService,
+    ) as unknown as MarkdownServiceInternals | null;
 
     this.cleanup = mergeRegister(
       internals ? patchListShortcut(internals) : () => {},
-      internals ? patchListItemWriter(internals) : () => {},
+      registerRichListDocument(editor, internals),
       registerHeadingAttribute(editor),
-      registerListNumberOverrides(editor),
       ...LIST_COMMANDS.map(([command, listType]) =>
         editor.registerCommand(command, () => $headingsToList(listType), COMMAND_PRIORITY_NORMAL),
       ),

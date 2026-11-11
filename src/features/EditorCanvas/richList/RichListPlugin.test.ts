@@ -1,5 +1,6 @@
 import { $isListItemNode, $isListNode, INSERT_ORDERED_LIST_COMMAND } from '@lexical/list';
 import { $isHeadingNode } from '@lexical/rich-text';
+import { $getListItemHeading } from '@lobechat/editor-runtime';
 import {
   CommonPlugin,
   INSERT_HEADING_COMMAND,
@@ -18,7 +19,6 @@ import {
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 
-import { $getListItemHeading } from './headingState';
 import { RichListPlugin } from './RichListPlugin';
 
 // Commit pending updates, then let follow-up updates queued from update

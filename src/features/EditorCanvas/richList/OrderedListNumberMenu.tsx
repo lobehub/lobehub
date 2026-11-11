@@ -1,23 +1,25 @@
 'use client';
 
 import { $isListItemNode, type ListItemNode } from '@lexical/list';
-import type { IEditor } from '@lobehub/editor';
-import { Button, Flexbox, InputNumber, Popover, Text, Tooltip } from '@lobehub/ui';
-import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
-import * as stylex from '@stylexjs/stylex';
-import { $getNearestNodeFromDOMNode, $getNodeByKey } from 'lexical';
-import { type CSSProperties, memo, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useTranslation } from 'react-i18next';
-
-import { sx } from '@/styles/sx';
-
 import {
   $continueListNumbering,
   $getListNumbering,
   $setListItemNumber,
   type ListNumbering,
-} from './listNumbering';
+} from '@lobechat/editor-runtime';
+import type { IEditor } from '@lobehub/editor';
+import { Button, Flexbox, InputNumber, Popover, Text, Tooltip } from '@lobehub/ui';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { $getNearestNodeFromDOMNode, $getNodeByKey } from 'lexical';
+import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
+
+import { findOrderedItemNear } from './markerHitTest';
+import { onListNumberMenuRequest } from './numberMenuRequest';
 
 const styles = stylex.create({
   item: { justifyContent: 'flex-start', paddingInline: 8 },
@@ -105,13 +107,10 @@ const findMarkerItem = (root: HTMLElement, x: number, y: number) => {
   // Markers hang outside the item, up to a few characters left of the root.
   if (y < bounds.top || y > bounds.bottom || x < bounds.left - 64 || x > bounds.right) return;
 
-  for (const li of root.querySelectorAll<HTMLLIElement>('ol.editor_listOrdered > li')) {
-    // An item holding only a nested list has no number of its own.
-    const first = li.firstElementChild;
-    if (first?.tagName === 'OL' || first?.tagName === 'UL') continue;
-    const marker = getMarker(li);
-    if (contains(marker.rect, x, y)) return { li, marker };
-  }
+  const li = findOrderedItemNear(root, x, y);
+  if (!li) return;
+  const marker = getMarker(li);
+  if (contains(marker.rect, x, y)) return { li, marker };
 };
 
 /**
@@ -186,13 +185,29 @@ const NumberMenuContent = memo<NumberMenuContentProps>(
 NumberMenuContent.displayName = 'NumberMenuContent';
 
 /**
- * Hovering an ordered list's number highlights it; clicking it opens a menu to
- * continue earlier numbering, set the number, or start a new list there.
+ * A menu on an ordered list's number to continue earlier numbering, set the
+ * number, or start a new list there. With the pointer: hovering the number
+ * highlights it and clicking opens the menu. Without it: `requestListNumberMenu`
+ * (the slash menu's "Set number") opens the menu on the caret's item.
  */
 const OrderedListNumberMenu = memo<{ editor: IEditor }>(({ editor }) => {
   const { t } = useTranslation('editor');
   const [marker, setMarker] = useState<Marker>();
   const [open, setOpen] = useState(false);
+  // A menu opened from the keyboard gives the caret back when it closes.
+  const openedFromKeyboard = useRef(false);
+
+  useEffect(
+    () =>
+      onListNumberMenuRequest(editor, (key) => {
+        const li = editor.getLexicalEditor?.()?.getElementByKey(key);
+        if (!(li instanceof HTMLLIElement)) return;
+        openedFromKeyboard.current = true;
+        setMarker({ key, ...getMarker(li) });
+        setOpen(true);
+      }),
+    [editor],
+  );
 
   useEffect(() => {
     if (open) return;
@@ -233,6 +248,10 @@ const OrderedListNumberMenu = memo<{ editor: IEditor }>(({ editor }) => {
   const close = () => {
     setOpen(false);
     setMarker(undefined);
+    if (openedFromKeyboard.current) {
+      openedFromKeyboard.current = false;
+      lexical.focus();
+    }
   };
 
   const update = (fn: (item: ListItemNode) => void) => {
