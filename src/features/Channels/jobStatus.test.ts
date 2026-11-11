@@ -6,6 +6,7 @@ import {
   channelJobTone,
   directAvatarState,
   directReplyStatus,
+  hasReplyActivity,
   memberCurrentJob,
   memberJobStatus,
   replyActivityJobs,
@@ -247,5 +248,38 @@ describe('replyAvatarState', () => {
   it('ignores settled replies and stays idle without any', () => {
     expect(replyAvatarState([job({ status: 'failed', writerHeld: false })])).toBeUndefined();
     expect(replyAvatarState([])).toBeUndefined();
+  });
+});
+
+describe('hasReplyActivity', () => {
+  const detail = (patch: { jobs?: unknown[]; messages?: unknown[] }) =>
+    ({ jobs: [], messages: [], ...patch }) as never;
+
+  it('is false when nothing is pending, so the composer keeps no empty status strip', () => {
+    expect(hasReplyActivity(detail({}), null)).toBe(false);
+    expect(
+      hasReplyActivity(
+        detail({ jobs: [{ publicationRevoked: false, status: 'completed', threadId: null }] }),
+        null,
+      ),
+    ).toBe(false);
+  });
+
+  it('is true while a reply runs or a sent message awaits routing', () => {
+    expect(
+      hasReplyActivity(
+        detail({ jobs: [{ publicationRevoked: false, status: 'running', threadId: null }] }),
+        null,
+      ),
+    ).toBe(true);
+    expect(hasReplyActivity(detail({ messages: [{ routingStatus: 'pending' }] }), null)).toBe(true);
+  });
+
+  it('only counts replies in the given thread', () => {
+    const running = detail({
+      jobs: [{ publicationRevoked: false, status: 'running', threadId: 'thread-a' }],
+    });
+    expect(hasReplyActivity(running, 'thread-a')).toBe(true);
+    expect(hasReplyActivity(running, null)).toBe(false);
   });
 });

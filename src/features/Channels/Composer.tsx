@@ -9,6 +9,7 @@ import {
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
 import { Reply, X } from 'lucide-react';
@@ -249,9 +250,9 @@ export function Composer({
               <Flexbox gap={4}>
                 {replyTarget && (
                   <Flexbox horizontal align="center" gap={8} padding={8}>
-                    <Reply size={14} />
+                    <Reply color={cssVar.colorTextTertiary} size={14} />
                     <Flexbox flex={1} style={{ minWidth: 0 }}>
-                      <Text ellipsis fontSize={12}>
+                      <Text ellipsis fontSize={12} type="secondary">
                         {t('reply.to', { name: replyTarget.author.name || t('deletedMember') })}
                         {' · '}
                         {replyTarget.content || t('reply.attachment')}
