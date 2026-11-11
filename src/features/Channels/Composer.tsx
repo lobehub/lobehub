@@ -120,7 +120,7 @@ export function Composer({
   /** The card the mention picker docks to, full width above the input like an IM. */
   const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
-  const attachments = useAttachments();
+  const attachments = useAttachments(draftKey);
   const { allowed } = usePermission('create_content');
   const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   const canUpload = allowed && enableUpload;

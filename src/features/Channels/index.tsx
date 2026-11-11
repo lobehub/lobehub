@@ -20,6 +20,7 @@ import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
+import { openTopic } from './openTopic';
 import { DirectReplyStatus } from './ReplyActivity';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
@@ -61,11 +62,11 @@ function EnabledChannelPage() {
     !threadId &&
     !threadDraft &&
     !acceptanceOpen;
-  // A thread or the member list replaces the topic.
-  const openTopic =
-    topic?.channelId === channelId && !threadId && !threadDraft && !membersOpen && !acceptanceOpen
-      ? topic
-      : null;
+  const visibleTopic = openTopic(topic, channelId, {
+    acceptance: acceptanceOpen,
+    members: membersOpen,
+    thread: !!(threadId || threadDraft || pageThreadId),
+  });
   if (!channelId) return null;
 
   return (
@@ -136,7 +137,7 @@ function EnabledChannelPage() {
                 (!!(threadId || threadDraft || acceptanceOpen) &&
                   (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
                 (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-                (!!openTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+                (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
               }
               onOpenThread={(nextThreadId, toggle) => {
                 setTopic(null);
@@ -179,7 +180,7 @@ function EnabledChannelPage() {
             ))}
           <ReplyTopicPanel
             availableWidth={conversationWidth}
-            topic={openTopic}
+            topic={visibleTopic}
             onClose={() => setTopic(null)}
           />
           {detail && (
