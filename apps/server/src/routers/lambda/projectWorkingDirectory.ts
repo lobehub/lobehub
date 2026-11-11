@@ -19,6 +19,7 @@ import {
   resolvePrecreatedTopicSnapshot,
 } from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveProjectTopicSandbox } from '@/server/services/sandbox/projectPlacement';
 
 import {
   assertCanUseConversationTargets,
@@ -133,6 +134,8 @@ export const projectWorkingDirectoryRouter = router({
       z.object({
         projectId: z.string(),
         agentId: z.string(),
+        /** The project repository the conversation works in; the first one when left out. */
+        environmentId: z.string().optional(),
         title: z.string().trim().min(1).max(255),
       }),
     )
@@ -145,14 +148,24 @@ export const projectWorkingDirectoryRouter = router({
       // project conversation needs read access, not ownership.
       if (!(await ctx.projectModel.findById(input.projectId)))
         throw new Error('Project not found or access denied');
-      const { snapshot } = await resolvePrecreatedTopicSnapshot(
-        ctx.precreatedTopicDeps,
-        input.agentId,
-      );
+      const [{ snapshot }, sandbox] = await Promise.all([
+        resolvePrecreatedTopicSnapshot(ctx.precreatedTopicDeps, input.agentId),
+        // A project with a repository works in it from the first message: the
+        // topic is written before any run, so no later pick would reach it.
+        resolveProjectTopicSandbox({
+          agentId: input.agentId,
+          db: ctx.serverDB,
+          environmentId: input.environmentId,
+          projectId: input.projectId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        }),
+      ]);
       return {
         data: await ctx.topicModel.create({
           ...snapshot,
           agentId: input.agentId,
+          metadata: { ...snapshot.metadata, ...sandbox },
           projectId: input.projectId,
           title: input.title,
         }),
@@ -175,6 +188,37 @@ export const projectWorkingDirectoryRouter = router({
       data: await ctx.projectModel.attachEnvironment(input.projectId, input.environmentId),
       success: true,
     })),
+  /**
+   * Link a GitHub repository to the project: the caller's environment for it,
+   * made when they have none, attached in the same request — the project
+   * composer's "add a repository" needs nothing else to start on the code.
+   */
+  attachRepository: write
+    .input(
+      z.object({
+        projectId: z.string(),
+        repository: z.object({
+          defaultBranch: z.string().max(255).optional(),
+          name: z.string().trim().min(1).max(255),
+          url: z.string().min(1).max(2048),
+        }),
+        /** `public` for a workspace-public agent, which applies published environments only. */
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { projectId, repository, visibility } }) => {
+      // Checked before the environment is made, so a refusal leaves nothing behind.
+      if (!(await ctx.projectModel.findManageableById(projectId)))
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found or access denied' });
+      const environment = await ctx.environmentModel.ensureForRepository({
+        defaultBranch: repository.defaultBranch,
+        name: repository.name,
+        repositoryUrl: repository.url,
+        visibility,
+      });
+      await ctx.projectModel.attachEnvironment(projectId, environment.id);
+      return { data: environment, success: true };
+    }),
   listEnvironments: procedure
     .input(z.object({ projectId: z.string().optional() }))
     .query(async ({ ctx, input }) => ({

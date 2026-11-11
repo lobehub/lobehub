@@ -38,6 +38,10 @@ export const initialTopicMetadataSchema = z.object({
   /** The environment to initialize the sandbox from; see `ChatTopicMetadata.sandboxEnvironmentId`. */
   sandboxEnvironmentId: z.string().max(255).optional(),
   sandboxInstanceId: z.string().optional(),
+  /** A default nobody picked; see `ChatTopicMetadata.sandboxSeeded`. */
+  sandboxSeeded: z.boolean().optional(),
+  /** An explicit temporary-sandbox pick; see `ChatTopicMetadata.sandboxTemporary`. */
+  sandboxTemporary: z.boolean().optional(),
   sandboxWorkingDirectory: z.string().max(1024).optional(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),

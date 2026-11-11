@@ -93,6 +93,10 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   ) => Promise<ServiceData<'associateTopic'>>;
   /** Link an environment to a project. */
   attachEnvironment: (...args: ServiceParams<'attachEnvironment'>) => Promise<void>;
+  /** Link a GitHub repository to a project, making its environment when needed. */
+  attachRepository: (
+    ...args: ServiceParams<'attachRepository'>
+  ) => Promise<ServiceData<'attachRepository'>>;
   /** Register a working directory, absorbing the conversations it covers. */
   bind: (...args: ServiceParams<'bind'>) => Promise<ServiceData<'bind'>>;
   /** Open a project conversation outside any directory binding. */
@@ -276,6 +280,14 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         // The scope-wide list gained the environment instanced by the attach.
         environments.revalidate(ALL_PROJECTS_KEY),
       ]);
+    },
+    attachRepository: async (input) => {
+      const result = await projectWorkingDirectoryService.attachRepository(input);
+      await Promise.all([
+        environments.revalidate(input.projectId),
+        environments.revalidate(ALL_PROJECTS_KEY),
+      ]);
+      return result.data;
     },
     bind: async (input) => {
       const result = await projectWorkingDirectoryService.bind(input);
