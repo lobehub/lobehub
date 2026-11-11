@@ -107,6 +107,8 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     // The draft just closed: the URL still names it until the navigation lands,
     // and resuming it from there would reopen the editor the person closed.
     const [dismissedDraftId, setDismissedDraftId] = useState<string>();
+    // Only until the close lands: a later reopen (undo of a discard) names it on purpose.
+    if (dismissedDraftId && composeId !== dismissedDraftId) setDismissedDraftId(undefined);
     if (
       !composing &&
       linked &&

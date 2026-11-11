@@ -367,6 +367,34 @@ describe('mail hotkeys', () => {
     await waitFor(() => expect(rowNamed('First')).toHaveFocus());
   });
 
+  it('brings a discarded reply back with z', async () => {
+    service.getMailDraft.mockResolvedValue({
+      accountId: 'acc_a',
+      bcc: [],
+      cc: [],
+      id: 'draft_1',
+      mode: 'reply',
+      sourceMailId: 'msg_1',
+      subject: null,
+      text: 'kept',
+      to: [],
+      updatedAt: new Date(),
+    });
+    page('/agent/agt_1/mail/msg_1');
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+    press('r');
+    await waitFor(() => expect(probe.location).toContain('compose=draft_1'));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'identity.mailbox.action.discard' }));
+    await waitFor(() => expect(screen.queryByTestId('mail-composer')).not.toBeInTheDocument());
+
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    press('z');
+    // The editor the undo names opens again, though it was just closed.
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+    expect(service.deleteMailDrafts).not.toHaveBeenCalled();
+  });
+
   it('says why sending is off instead of ignoring r or c', async () => {
     service.list.mockResolvedValue([
       account('acc_a', 'a@lobe.id', { capabilities: { receive: true, send: false } }),
