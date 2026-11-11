@@ -300,7 +300,6 @@ const ProjectWorkLocationPicker = ({
     <OptionRow
       active={onSandbox}
       arrow={showRepositories}
-      desc={tChat('heteroAgent.executionTarget.sandboxDesc')}
       disabled={!switchable && !onSandbox}
       icon={<ExecutionTargetIcon target={'sandbox'} />}
       label={tChat('heteroAgent.executionTarget.sandbox')}
@@ -338,7 +337,6 @@ const ProjectWorkLocationPicker = ({
               <OptionRow
                 active={target === 'local'}
                 arrow={showRepositories}
-                desc={tChat('heteroAgent.executionTarget.localDesc')}
                 icon={<ExecutionTargetIcon target={'local'} />}
                 label={tChat('heteroAgent.executionTarget.local')}
                 onClick={() => void select('local')}
