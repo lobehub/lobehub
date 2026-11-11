@@ -377,7 +377,12 @@ class ChatService {
      * browser runtime calls the provider directly.
      */
     const enableFetchOnClient = isEnableFetchOnClient(provider);
-    const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
+    // The relay decision is the narrower device-only rule, not the browser's
+      // `fetchOnClient`: a keyed provider on a private base URL defaults to the
+      // device here but not there, and sending the request without the relay
+      // headers makes the server classify it device-only and fail with
+      // `no_executor`.
+      const relayToThisTab = oneShotRelay.needsRelay(provider);
 
     let fetcher: typeof fetch | undefined = undefined;
 

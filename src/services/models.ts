@@ -51,7 +51,12 @@ export class ModelsService {
      * legacy browser runtime asks the provider directly.
      */
     const enableFetchOnClient = isEnableFetchOnClient(provider);
-    const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
+    // The relay decision is the narrower device-only rule, not the browser's
+      // `fetchOnClient`: a keyed provider on a private base URL defaults to the
+      // device here but not there, and sending the request without the relay
+      // headers makes the server classify it device-only and fail with
+      // `no_executor`.
+      const relayToThisTab = oneShotRelay.needsRelay(provider);
     if (enableFetchOnClient && !relayToThisTab) {
       const agentRuntime = await initializeWithClientStore({
         provider,
@@ -94,7 +99,12 @@ export class ModelsService {
       const runtimeProvider = resolveRuntimeProvider(provider);
       const enableFetchOnClient = isEnableFetchOnClient(provider);
       // Within the LLM relay the server downloads through this tab (see `getModels`).
-      const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
+      // The relay decision is the narrower device-only rule, not the browser's
+      // `fetchOnClient`: a keyed provider on a private base URL defaults to the
+      // device here but not there, and sending the request without the relay
+      // headers makes the server classify it device-only and fail with
+      // `no_executor`.
+      const relayToThisTab = oneShotRelay.needsRelay(provider);
 
       if (enableFetchOnClient && !relayToThisTab) {
         const agentRuntime = await initializeWithClientStore({
