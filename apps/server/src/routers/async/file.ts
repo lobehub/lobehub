@@ -489,6 +489,27 @@ export const fileRouter = router({
         }
       };
 
-      return withParseSlot(parse);
+      // Status polling expires tasks by createdAt, even before they get a parse slot.
+      // Keep waiting tasks fresh so the UI never sees a transient timeout and stops polling.
+      const refreshWaitingTask = () =>
+        asyncTaskModel.update(input.taskId, { createdAt: new Date() });
+      await refreshWaitingTask();
+      let refreshing: Promise<unknown> = Promise.resolve();
+      const heartbeat = setInterval(() => {
+        refreshing = refreshing.then(refreshWaitingTask).catch((error) => {
+          console.error('[parseFileToChunks] failed to refresh queued task:', error);
+        });
+      }, ASYNC_TASK_TIMEOUT / 2);
+
+      try {
+        return await withParseSlot(async (slot) => {
+          clearInterval(heartbeat);
+          // Drain an in-flight refresh before parsing changes this task's status or clock.
+          await refreshing;
+          return parse(slot);
+        });
+      } finally {
+        clearInterval(heartbeat);
+      }
     }),
 });
