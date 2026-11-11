@@ -157,12 +157,14 @@ export const UsageBreakdown = memo<{
   // has counted so far, shown beside the last finished figure.
   const [measuring, setMeasuring] = useState<DriveUsageRefreshResult['measuring'] | null>(null);
   const mounted = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set here too: StrictMode replays effects, running the cleanup once
+    // before the component is really gone.
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const [showAllMembers, setShowAllMembers] = useState(false);
 
   const drives = data.drives ?? [];

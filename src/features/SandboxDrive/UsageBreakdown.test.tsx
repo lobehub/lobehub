@@ -1,6 +1,7 @@
 import type * as LobeUI from '@lobehub/ui';
 import { toast } from '@lobehub/ui';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageBreakdown } from './UsageBreakdown';
@@ -121,6 +122,19 @@ describe('UsageBreakdown', () => {
       // Bounded: the cron finishes a walk nobody is waiting on.
       expect(onRefresh).toHaveBeenCalledTimes(12);
       expect(screen.getByText('drive.usage.measuring')).toBeInTheDocument();
+    });
+
+    it('should still refresh under StrictMode, which replays effects', async () => {
+      const onRefresh = vi.fn().mockResolvedValue({});
+      render(
+        <StrictMode>
+          <UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />
+        </StrictMode>,
+      );
+
+      fireEvent.click(screen.getByTitle('drive.usage.refresh'));
+
+      await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
     });
 
     it('should stop measuring once the panel is closed', async () => {
