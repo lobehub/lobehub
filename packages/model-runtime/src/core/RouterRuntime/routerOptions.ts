@@ -1,6 +1,6 @@
 import type { ChatModelCard, RouterRuntimeRequestContext } from '@lobechat/types';
-import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
+import type { ClientOptions } from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import type {
@@ -19,7 +19,7 @@ import type {
   CreateImageOptions,
   CreateVideoOptions,
   CustomClientOptions,
-} from '../openaiCompatibleFactory';
+} from '../openaiCompatible';
 import type { ApiType, RuntimeClass } from './apiTypes';
 import type { RouteAttemptFinished, RouteAttemptResult } from './routeAttempt';
 

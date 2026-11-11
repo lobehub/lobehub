@@ -7,6 +7,7 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
 import FileIcon from '@/components/FileIcon';
+import { useTopicRemoteDeviceId } from '@/features/LocalFile/useTopicRemoteDeviceId';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -83,8 +84,11 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   const { linkHref, linkLabel } = node?.properties || {};
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  // Off desktop the file lives on the topic's device: the portal reads it over
+  // the device RPC while that device is online. Desktop keeps local IPC.
+  const remoteDeviceId = useTopicRemoteDeviceId();
   const parsed = parseLocalFileHref(linkHref, { workingDirectory });
-  const canPreview = isDesktop && !!parsed?.workingDirectory;
+  const canPreview = (isDesktop || !!remoteDeviceId) && !!parsed?.workingDirectory;
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
   const label = linkLabel || parsed?.filePath || linkHref || '';
@@ -99,11 +103,12 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
       event.preventDefault();
       openLocalFile({
         allowExternalFilePreview,
+        deviceId: remoteDeviceId,
         filePath: parsed.filePath,
         workingDirectory: parsed.workingDirectory,
       });
     },
-    [allowExternalFilePreview, canPreview, openLocalFile, parsed],
+    [allowExternalFilePreview, canPreview, openLocalFile, parsed, remoteDeviceId],
   );
 
   if (!canPreview) {

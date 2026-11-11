@@ -12,6 +12,7 @@ import { packageFile } from '../source/aliases';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 import { fileFlags } from '../verdict/fileItems';
+import { attachCounterparts } from './counterparts';
 import { fileReader, flagUncheckedCallers, gitGrepWord } from './forwardCallers';
 import { markUnchangedChains } from './unchanged';
 
@@ -59,11 +60,12 @@ export const synthesize = async (
   const planned: Array<{ file: string; pair: Record<Side, FileExtraction>; plan: FilePlan }> = [];
   for (const entry of scope) {
     const file = entry.head ?? entry.base!;
+    const code: Partial<Record<Side, string>> = {};
     const read = async (side: Side) => {
       const source = entry[side];
       if (!source) return empty(file);
-      const code = await readFile(path.join(roots[side], source), 'utf8');
-      return extractFile(code, source, {
+      code[side] = await readFile(path.join(roots[side], source), 'utf8');
+      return extractFile(code[side], source, {
         adapters: config.adapters,
         layoutComponents: config.layoutComponents,
         readBaseModule: side === 'head' ? moduleReader(roots.base, config.aliases) : undefined,
@@ -74,6 +76,7 @@ export const synthesize = async (
     };
     const pair = { base: await read('base'), head: await read('head') };
     const plan = planFile(file, pair.base, pair.head, config);
+    attachCounterparts(plan, { code, extractions: pair, real: config.realComponents });
     markUnchangedChains(plan, pair, {
       aliases: config.aliases,
       roots,
@@ -115,7 +118,7 @@ export const writeHost = async (
   const written: string[] = [];
   for (const plan of synthesis.plans) {
     const source = scope.find((entry) => (entry.head ?? entry.base) === plan.file)?.[side];
-    if (!source || !plan.cases.length) continue;
+    if (!source || (!plan.cases.length && !plan.unpaired.length)) continue;
     const target = path.join(root, syntheticPath(source));
     await writeFile(
       target,

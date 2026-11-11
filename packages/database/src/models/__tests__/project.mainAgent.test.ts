@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import {
   agentLabelAssignments,
   agentLabels,
@@ -14,7 +15,6 @@ import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 import { AgentLabelModel } from '../agentLabel';
 import type { CreateProjectInput } from '../project';
-import { ProjectModel } from '../project';
 import { createProjectMainAgent, PROJECT_AGENT_LABEL } from '../projectMainAgent';
 import { createProxyTestDB } from './_proxyTestDB';
 
@@ -24,8 +24,8 @@ const memberId = 'project-main-agent-member';
 const workspaceId = 'project-main-agent-workspace';
 let projectIdentifierSequence = 0;
 
-const createProject = (projectModel: ProjectModel, input: Omit<CreateProjectInput, 'identifier'>) =>
-  projectModel.create({
+const createProject = (repo: ProjectRepository, input: Omit<CreateProjectInput, 'identifier'>) =>
+  repo.create({
     ...input,
     identifier: `M${String(++projectIdentifierSequence).padStart(5, '0')}`,
   });
@@ -38,7 +38,7 @@ const labelsOf = async (agentId: string) =>
     .where(eq(agentLabelAssignments.agentId, agentId));
 
 describe('the main agent a project creates', () => {
-  const model = new ProjectModel(serverDB, userId);
+  const repo = new ProjectRepository(serverDB, userId);
 
   beforeEach(async () => {
     await serverDB.delete(users);
@@ -51,7 +51,7 @@ describe('the main agent a project creates', () => {
   });
 
   it('is an ordinary agent named after the project, wearing its avatar and the Project label', async () => {
-    const project = await createProject(model, { avatar: '🚀', name: 'Apollo' });
+    const project = await createProject(repo, { avatar: '🚀', name: 'Apollo' });
 
     const [agent] = await serverDB
       .select()
@@ -60,6 +60,8 @@ describe('the main agent a project creates', () => {
     expect(agent).toEqual(
       expect.objectContaining({ avatar: '🚀', title: 'Apollo Project Agent', virtual: false }),
     );
+    // A project runs in the cloud sandbox unless someone picks a device.
+    expect(agent.agencyConfig).toEqual({ executionTarget: 'sandbox' });
     expect(await labelsOf(agent.id)).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, workspaceId: null }),
     ]);
@@ -70,8 +72,8 @@ describe('the main agent a project creates', () => {
   });
 
   it('shares one Project label across the projects of a scope', async () => {
-    const first = await createProject(model, { name: 'First' });
-    const second = await createProject(model, { name: 'Second' });
+    const first = await createProject(repo, { name: 'First' });
+    const second = await createProject(repo, { name: 'Second' });
 
     const [firstLabel] = await labelsOf(first.coordinatorAgentId!);
     const [secondLabel] = await labelsOf(second.coordinatorAgentId!);
@@ -86,11 +88,11 @@ describe('the main agent a project creates', () => {
     const archived = await labels.create({ name: PROJECT_AGENT_LABEL });
     await labels.update(archived.id, { archived: true });
 
-    const first = await createProject(model, { name: 'First' });
+    const first = await createProject(repo, { name: 'First' });
     const [label] = await labelsOf(first.coordinatorAgentId!);
     expect(label.id).not.toBe(archived.id);
 
-    const second = await createProject(model, { name: 'Second' });
+    const second = await createProject(repo, { name: 'Second' });
     expect(await labelsOf(second.coordinatorAgentId!)).toEqual([
       expect.objectContaining({ id: label.id }),
     ]);
@@ -99,7 +101,7 @@ describe('the main agent a project creates', () => {
   it('labels nothing when the project is led by a picked agent', async () => {
     const picked = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
 
-    await createProject(model, { coordinatorAgentId: picked.id, name: 'Picked' });
+    await createProject(repo, { coordinatorAgentId: picked.id, name: 'Picked' });
 
     expect(await labelsOf(picked.id)).toEqual([]);
     expect(
@@ -114,11 +116,11 @@ describe('the main agent a project creates', () => {
       primaryOwnerId: userId,
       slug: workspaceId,
     });
-    const owner = new ProjectModel(serverDB, userId, workspaceId);
-    const member = new ProjectModel(serverDB, memberId, workspaceId);
+    const ownerRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const memberRepo = new ProjectRepository(serverDB, memberId, workspaceId);
 
-    const shared = await createProject(owner, { name: 'Shared', visibility: 'public' });
-    const own = await createProject(member, { name: 'Own', visibility: 'private' });
+    const shared = await createProject(ownerRepo, { name: 'Shared', visibility: 'public' });
+    const own = await createProject(memberRepo, { name: 'Own', visibility: 'private' });
 
     const [sharedLabel] = await labelsOf(shared.coordinatorAgentId!);
     const [ownLabel] = await labelsOf(own.coordinatorAgentId!);

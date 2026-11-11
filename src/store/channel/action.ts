@@ -8,6 +8,7 @@ import {
   type ChannelAgentSelection,
   channelService,
   type ChannelViewParams,
+  type ChannelWakeConfig,
 } from '@/services/channel';
 import { getElectronStoreState } from '@/store/electron';
 
@@ -190,6 +191,14 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.agentEnvironment(channelId, memberId), () =>
       channelService.agentEnvironment(channelId, memberId),
     );
+  useFetchWakeConfig = (channelId: string | null) =>
+    useClientDataSWR(channelId ? channelKeys.wakeConfig(channelId) : null, () =>
+      channelService.wakeConfig(channelId!),
+    );
+  updateWakeConfig = async (channelId: string, wake: ChannelWakeConfig) => {
+    await channelService.updateWakeConfig(channelId, wake);
+    await this.#refreshAfterWrite(() => mutate(channelKeys.wakeConfig(channelId)));
+  };
   updateAgentEnvironment = async (
     channelId: string,
     memberId: string,

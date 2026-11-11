@@ -1,6 +1,5 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   AccordionHeader,
@@ -21,9 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
-import Avatar from '@/components/Avatar';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { AVATAR_SIZE, ConversationRow, ListHeader } from '@/features/MessageList';
@@ -36,6 +33,8 @@ import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
+import { CONTACT_URL } from './const';
+import ContactAvatar from './ContactAvatar';
 import { styles } from './style';
 
 const byTitle = (fallback: string) => (a: SidebarAgentItem, b: SidebarAgentItem) =>
@@ -47,42 +46,23 @@ const useActiveRouteId = () => {
   const segments = pathname.split('/').filter(Boolean);
   const [root, id] = slug && segments[0] === slug ? segments.slice(1) : segments;
 
-  return root === 'agent' || root === 'group' ? id : undefined;
+  return root === 'agents' || root === 'agent' || root === 'group' ? id : undefined;
 };
 
 const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, item }) => {
   const { t } = useTranslation('chat');
-  const isGroup = item.type === 'group';
-  const title = isGroup
-    ? item.title || t('untitledAgent')
-    : agentDisplayName(item, t('untitledAgent'));
-  const customAvatar = typeof item.avatar === 'string' ? item.avatar : undefined;
+  const title =
+    item.type === 'group'
+      ? item.title || t('untitledAgent')
+      : agentDisplayName(item, t('untitledAgent'));
 
   return (
     <ConversationRow
       singleLine
       active={active}
+      avatar={<ContactAvatar item={item} name={title} size={AVATAR_SIZE} />}
       title={title}
-      url={isGroup ? `/group/${item.id}/profile` : `/agent/${item.id}/profile`}
-      avatar={
-        isGroup ? (
-          <AgentGroupAvatar
-            avatar={customAvatar}
-            backgroundColor={item.backgroundColor || undefined}
-            memberAvatars={Array.isArray(item.avatar) ? item.avatar : []}
-            size={AVATAR_SIZE}
-          />
-        ) : (
-          <Avatar
-            emojiScaleWithBackground
-            avatar={customAvatar || DEFAULT_AVATAR}
-            background={item.backgroundColor || undefined}
-            name={title}
-            shape={'square'}
-            size={AVATAR_SIZE}
-          />
-        )
-      }
+      url={CONTACT_URL(item.id)}
     />
   );
 });
@@ -190,7 +170,8 @@ Header.displayName = 'ContactListHeader';
 
 /**
  * Contacts tab list column: every agent and group, alphabetically. A row opens
- * the profile (`/agent/:id/profile`), which is the agent's edit surface.
+ * the contact card (`/agents/:id`) and keeps the list in place; the card is
+ * where the user starts a chat or goes on to edit the profile.
  */
 const ContactListPortal = () => (
   <NavPanelPortal navKey={NAV_PANEL_CONTACTS_KEY}>

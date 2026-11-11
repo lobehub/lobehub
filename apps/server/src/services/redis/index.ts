@@ -7,6 +7,7 @@ import { linear } from './linear';
 import { pageCollab } from './pageCollab';
 import { skillTools } from './skillTools';
 import { steerQueue } from './steerQueue';
+import { taskRunDelivery } from './taskRunDelivery';
 import { threadStartFence } from './threadStartFence';
 import { workspaceRescan } from './workspaceRescan';
 
@@ -21,6 +22,7 @@ export const redisService = {
   pageCollab,
   skillTools,
   steerQueue,
+  taskRunDelivery,
   threadStartFence,
   workspaceRescan,
 };

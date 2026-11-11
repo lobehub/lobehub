@@ -26,6 +26,7 @@ export interface ReplyTopic {
   agentId: string;
   avatar: string | null;
   name: string;
+  title?: string | null;
   topicId: string;
 }
 
@@ -116,7 +117,7 @@ export function ReplyTopicPanel({
                     size={20}
                   />
                   <Text ellipsis fontSize={14}>
-                    {t('topic.titleNamed', { name: lastTopic.name })}
+                    {lastTopic.title || t('topic.titleNamed', { name: lastTopic.name })}
                   </Text>
                 </Flexbox>
               )

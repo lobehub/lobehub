@@ -94,6 +94,20 @@ describe('dedicated knowledge bases', () => {
     expect(mounted.some(({ id }) => id === null || id === undefined)).toBe(true);
   });
 
+  it('refuses to mount a dedicated space on an agent or project', async () => {
+    await serverDB.insert(agents).values({ id: agentId, userId });
+    await serverDB.insert(projects).values({ id: projectId, name: 'Project', userId });
+
+    await expect(
+      new AgentModel(serverDB, userId).createAgentKnowledgeBase(agentId, 'kb-agent'),
+    ).rejects.toThrow('cannot be mounted');
+    await expect(
+      new ProjectModel(serverDB, userId).addKnowledgeBase(projectId, {
+        knowledgeBaseId: 'kb-project',
+      }),
+    ).rejects.toThrow('Knowledge base not found');
+  });
+
   it('hides a dedicated mount from project knowledge and retrieval', async () => {
     await serverDB.insert(projects).values({ id: projectId, name: 'Project', userId });
     await serverDB.insert(projectKnowledgeBases).values([

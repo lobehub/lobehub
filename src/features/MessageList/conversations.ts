@@ -79,6 +79,16 @@ export const latestActivity = (
   return new Date(Math.max(ownTime, topicTime));
 };
 
+/** The inbox row's activity: once it opens a direct Channel, that replaces its legacy topics. */
+export const inboxActivity = (
+  own: Date | string | undefined,
+  topic: RecentItem | undefined,
+  direct?: ChannelListItem,
+): Date | undefined =>
+  direct
+    ? new Date(Math.max(own ? toTime(own) : 0, channelActivity(direct).getTime()))
+    : latestActivity(own, topic);
+
 /**
  * Turn the sidebar agent/group list into IM-style conversations: each row
  * carries a preview of its latest topic and is ordered by latest activity,
@@ -134,7 +144,7 @@ export const buildConversationSections = (
 };
 
 export type ConversationEntry =
-  | { activeAt: Date; type: 'inbox' }
+  | { activeAt: Date; channel?: ChannelListItem; type: 'inbox' }
   | { activeAt: Date; channel: ChannelListItem; type: 'channel' }
   | (Conversation & { type: 'item' });
 
@@ -145,7 +155,7 @@ export type ConversationEntry =
  */
 export const buildConversationEntries = (
   { pinned, recent }: ConversationSections,
-  inbox: { activeAt?: Date; title: string } | undefined,
+  inbox: { activeAt?: Date; channel?: ChannelListItem; title: string } | undefined,
   query = '',
   channels: ChannelListItem[] = [],
 ): ConversationEntry[] => {
@@ -173,7 +183,11 @@ export const buildConversationEntries = (
   if (inbox && matches(inbox.title)) {
     const activeAt = inbox.activeAt ?? new Date(0);
     const index = rest.findIndex((entry) => entry.activeAt.getTime() < activeAt.getTime());
-    rest.splice(index === -1 ? rest.length : index, 0, { activeAt, type: 'inbox' });
+    rest.splice(index === -1 ? rest.length : index, 0, {
+      activeAt,
+      channel: inbox.channel,
+      type: 'inbox',
+    });
   }
 
   return [...items(pinned), ...rest];

@@ -180,6 +180,21 @@ const parseAnswerSegments = () =>
 const parseWorkflowSegment = () =>
   JSON.parse(screen.getByTestId('workflow-segment').getAttribute('data-blocks') || '[]');
 
+const runningChecksInput = (): Parameters<typeof blk>[0] => ({
+  content: 'Running the checks.',
+  id: 'block-1',
+  tools: [
+    { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+    { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+  ],
+});
+
+const completedToolInput = (): Parameters<typeof blk>[0] => ({
+  content: '',
+  id: 'block-1',
+  tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+});
+
 describe('Group', () => {
   afterEach(() => {
     cleanup();
@@ -466,14 +481,7 @@ describe('Group', () => {
         isLatestItem={false}
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
@@ -501,14 +509,7 @@ describe('Group', () => {
         id="assistant-1"
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
@@ -527,14 +528,7 @@ describe('Group', () => {
         id="assistant-1"
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
@@ -551,14 +545,7 @@ describe('Group', () => {
         id="assistant-1"
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
@@ -657,18 +644,7 @@ describe('Group', () => {
   it('shows a running indicator below a settled single inline tool while still generating', () => {
     mockIsGenerating = true;
     render(
-      <Group
-        isLatestItem
-        id="assistant-1"
-        messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-        ]}
-      />,
+      <Group isLatestItem blocks={[blk(completedToolInput())]} id="assistant-1" messageIndex={0} />,
     );
 
     expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
@@ -682,16 +658,9 @@ describe('Group', () => {
     render(
       <Group
         isLatestItem
+        blocks={[blk(completedToolInput()), blk({ content: LOADING_FLAT, id: 'block-2' })]}
         id="assistant-1"
         messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-          blk({ content: LOADING_FLAT, id: 'block-2' }),
-        ]}
       />,
     );
 
@@ -707,16 +676,9 @@ describe('Group', () => {
     render(
       <Group
         isLatestItem
+        blocks={[blk(completedToolInput()), blk({ content: '', id: 'block-2' })]}
         id="assistant-1"
         messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-          blk({ content: '', id: 'block-2' }),
-        ]}
       />,
     );
 
@@ -779,18 +741,7 @@ describe('Group', () => {
   it('hides the running indicator once generation has finished', () => {
     mockIsGenerating = false;
     render(
-      <Group
-        isLatestItem
-        id="assistant-1"
-        messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-        ]}
-      />,
+      <Group isLatestItem blocks={[blk(completedToolInput())]} id="assistant-1" messageIndex={0} />,
     );
 
     expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();

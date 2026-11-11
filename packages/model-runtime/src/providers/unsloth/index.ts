@@ -3,8 +3,8 @@ import debug from 'debug';
 import { ModelProvider } from 'model-bank';
 import { APIConnectionTimeoutError, APIError } from 'openai';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 
 const log = debug('lobe-model-runtime:unsloth');
 

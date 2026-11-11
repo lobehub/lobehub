@@ -1,4 +1,9 @@
-import { PROJECT_IDENTIFIER_REGEX } from '@lobechat/types';
+import {
+  PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_DUPLICATE_SLUG,
+  PROJECT_IDENTIFIER_REGEX,
+  type ProjectDuplicateField,
+} from '@lobechat/types';
 import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
 
@@ -35,6 +40,55 @@ export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestion
 
 export const isProjectIdentifierValid = (identifier: string) =>
   PROJECT_IDENTIFIER_REGEX.test(identifier.trim().toUpperCase());
+
+/**
+ * Whether an already-loaded project in the active scope claims `identifier`.
+ *
+ * Identifiers are unique per scope (`projects_identifier_workspace_id_unique`),
+ * so the form checks this inline and shows the conflict next to the field. The
+ * list is visibility-filtered, so another member's private project can slip
+ * past here — the server re-checks and answers `CONFLICT` for that case.
+ */
+export const isProjectIdentifierTaken = (
+  identifier: string,
+  projects: readonly { identifier?: string | null }[],
+) => {
+  const normalized = identifier.trim().toUpperCase();
+
+  return Boolean(normalized) && projects.some((project) => project.identifier === normalized);
+};
+
+/**
+ * Whether a `CONFLICT` answered for `submitted` still describes the value in the
+ * field.
+ *
+ * The inputs stay editable while the create request is in flight, so the answer
+ * can come back after the user has typed another value. The verdict belongs to
+ * what was submitted; a different value typed meanwhile must not inherit it. An
+ * empty submission carries no value (the server generates the slug, and leaves
+ * the identifier null), so it has nothing to attribute a conflict to.
+ */
+export const doesConflictApplyTo = (submitted: string, current: string) => {
+  const submittedValue = submitted.trim().toUpperCase();
+
+  return Boolean(submittedValue) && current.trim().toUpperCase() === submittedValue;
+};
+
+/**
+ * The field a project `CONFLICT` belongs to.
+ *
+ * The create router answers a taken slug or identifier with a machine-readable
+ * message (see `PROJECT_DUPLICATE_*`), so the form can put the error under the
+ * input that resolves it. Any other conflict stays a generic failure.
+ */
+export const getProjectConflictField = (error: unknown): ProjectDuplicateField | undefined => {
+  const conflict = error as { data?: { code?: string }; message?: string } | null | undefined;
+  if (conflict?.data?.code !== 'CONFLICT') return undefined;
+  if (conflict.message === PROJECT_DUPLICATE_IDENTIFIER) return 'identifier';
+  if (conflict.message === PROJECT_DUPLICATE_SLUG) return 'slug';
+
+  return undefined;
+};
 
 export const isProjectSlugValid = (slug: string) => {
   const normalizedSlug = slug.trim().toLowerCase();

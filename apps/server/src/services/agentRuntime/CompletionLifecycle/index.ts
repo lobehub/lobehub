@@ -13,7 +13,7 @@ import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorFo
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
-  runVerifyOnCompletion,
+  scheduleVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -27,7 +27,7 @@ import {
 } from './intervention';
 import { buildLifecycleEvent, extractErrorMessage } from './lifecycleEvent';
 import { extractOutboundAttachments, extractTextFromMessageContent } from './messageContent';
-import { persistCompletion } from './persistence';
+import { persistCompletion, settleRunThread } from './persistence';
 import { recallUserOnCompletion } from './recall';
 import { emitSignalEvents, isAgentShareRun } from './signals';
 import type {
@@ -82,6 +82,9 @@ export const isSuccessLikeCompletionReason = (reason: string): boolean =>
  * no-fallback webhook failures are rethrown after terminal persistence so a
  * queue execution can retry the control-flow handoff.
  */
+/** Above the p99 of planning a task run (41 s in production). */
+const VERIFY_PLAN_DISPATCH_WAIT_MS = 45_000;
+
 export class CompletionLifecycle {
   private readonly messageModel: MessageModel;
   private readonly agentOperationModel: AgentOperationModel;
@@ -179,6 +182,32 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Wait, within a bound, for the verify plan {@link recordStart} began. A
+   * dispatched run keeps working on another machine while this request ends, so
+   * work left in flight here can be dropped with the function. Waiting also
+   * means the builder can read its criteria from its first command.
+   *
+   * The bound only keeps a slow plan call from holding the dispatch: past it the
+   * run starts anyway and the finish path still creates the plan.
+   */
+  async waitForVerifyPlan(
+    operationId: string,
+    timeoutMs = VERIFY_PLAN_DISPATCH_WAIT_MS,
+  ): Promise<void> {
+    const instantiation = this.verifyPlanInstantiations.get(operationId);
+    if (!instantiation) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      instantiation,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+
+  /**
    * Persist terminal state to `agent_operations`. Fire-and-forget: a DB
    * outage must never block hook dispatch or the executor's terminal
    * cleanup path.
@@ -233,6 +262,11 @@ export class CompletionLifecycle {
       const messageModel = new MessageModel(this.serverDB, userId, undefined, undefined, {
         includeShareVisitor: this.includeShareVisitor,
       });
+      // One card per run. A producer that retries its terminal call (a
+      // heterogeneous `heteroFinish` the edge timed out) re-enters here for
+      // the same operation, and each pass used to stack another card.
+      if (await messageModel.findVerifyMessageByOperationId(operationId, op.topicId)) return;
+
       await messageModel.create({
         agentId: op.agentId ?? undefined,
         content: '',
@@ -365,6 +399,9 @@ export class CompletionLifecycle {
 
       if (isAsyncToolPark) return;
 
+      // Before the hooks, so a parent resumed by the bridge reads a closed thread.
+      await settleRunThread(this.deps(), operationId, state, reason);
+
       // The run tree no longer works, so its concurrency slot frees now rather
       // than when the lease lapses. A run parked on a human decision frees it
       // too; its continuation takes a slot of its own.
@@ -481,24 +518,20 @@ export class CompletionLifecycle {
           metadata?.assistantMessageId,
           runOrigin.userId || this.userId,
         );
-        // `after`, not a bare `void`: judging is minutes of LLM calls and the
-        // step handler must not wait for it, but a detached promise has nobody
-        // keeping it scheduled — on the serverless path the instance is free to
-        // stop running it the moment this response returns. That is not merely a
-        // lost verification: entering `verifying` is a durable write, so a run
-        // cut off mid-judge stays `verifying` forever. `after` hands the work to
-        // the host as post-response work instead (no-op fallback off Next).
-        after(() =>
-          runVerifyOnCompletion(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            {
-              deliverable: event.lastAssistantContent ?? '',
-              goal,
-              operationId,
-            },
-            this.workspaceId,
-          ),
+        // Judging is minutes of LLM calls and must not ride this request:
+        // entering `verifying` is a durable write, so a gate cut off with the
+        // request (proxy timeout, function limit) leaves the round claimed and
+        // never judged. The gate runs in its own QStash delivery instead, which
+        // also collapses a producer's retried completions into one gate.
+        await scheduleVerifyOnCompletion(
+          this.serverDB,
+          runOrigin.userId || this.userId,
+          {
+            deliverable: event.lastAssistantContent ?? '',
+            goal,
+            operationId,
+          },
+          this.workspaceId,
         );
       }
 

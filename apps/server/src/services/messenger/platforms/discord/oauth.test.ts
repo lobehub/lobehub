@@ -24,6 +24,20 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const appExchangeInput = (): Parameters<typeof discordOAuthAdapter.exchangeCode>[0] => ({
+  clientId: 'app-id-1',
+  clientSecret: 'client-secret-1',
+  code: 'c',
+  redirectUri: 'https://r',
+});
+
+const shortExchangeInput = (): Parameters<typeof discordOAuthAdapter.exchangeCode>[0] => ({
+  clientId: 'a',
+  clientSecret: 'b',
+  code: 'c',
+  redirectUri: 'd',
+});
+
 describe('discordOAuthAdapter.getAppConfig', () => {
   it('returns clientId/clientSecret when both are configured', async () => {
     const cfg = await discordOAuthAdapter.getAppConfig();
@@ -148,12 +162,7 @@ describe('discordOAuthAdapter.exchangeCode', () => {
     fetchSpy.mockResolvedValueOnce(okTokenResponse({ refresh_token: undefined }) as any);
     fetchSpy.mockResolvedValueOnce(okUserResponse() as any);
 
-    const result = await discordOAuthAdapter.exchangeCode({
-      clientId: 'app-id-1',
-      clientSecret: 'client-secret-1',
-      code: 'c',
-      redirectUri: 'https://r',
-    });
+    const result = await discordOAuthAdapter.exchangeCode(appExchangeInput());
     expect((result.credentials as any).refreshToken).toBeUndefined();
   });
 
@@ -161,12 +170,7 @@ describe('discordOAuthAdapter.exchangeCode', () => {
     fetchSpy.mockResolvedValueOnce(okTokenResponse({ application: undefined }) as any);
     fetchSpy.mockResolvedValueOnce(okUserResponse() as any);
 
-    const result = await discordOAuthAdapter.exchangeCode({
-      clientId: 'app-id-1',
-      clientSecret: 'client-secret-1',
-      code: 'c',
-      redirectUri: 'https://r',
-    });
+    const result = await discordOAuthAdapter.exchangeCode(appExchangeInput());
     expect(result.applicationId).toBe('app-id-1');
   });
 
@@ -174,12 +178,7 @@ describe('discordOAuthAdapter.exchangeCode', () => {
     fetchSpy.mockResolvedValueOnce(okTokenResponse({ expires_in: undefined }) as any);
     fetchSpy.mockResolvedValueOnce(okUserResponse() as any);
 
-    const result = await discordOAuthAdapter.exchangeCode({
-      clientId: 'app-id-1',
-      clientSecret: 'client-secret-1',
-      code: 'c',
-      redirectUri: 'https://r',
-    });
+    const result = await discordOAuthAdapter.exchangeCode(appExchangeInput());
     expect(result.tokenExpiresAt).toBeNull();
   });
 
@@ -187,12 +186,7 @@ describe('discordOAuthAdapter.exchangeCode', () => {
     fetchSpy.mockResolvedValueOnce(okTokenResponse() as any);
     fetchSpy.mockResolvedValueOnce(new Response('err', { status: 500 }) as any);
 
-    const result = await discordOAuthAdapter.exchangeCode({
-      clientId: 'app-id-1',
-      clientSecret: 'client-secret-1',
-      code: 'c',
-      redirectUri: 'https://r',
-    });
+    const result = await discordOAuthAdapter.exchangeCode(appExchangeInput());
     expect(result.installedByPlatformUserId).toBeNull();
   });
 
@@ -200,25 +194,15 @@ describe('discordOAuthAdapter.exchangeCode', () => {
     fetchSpy.mockResolvedValueOnce(okTokenResponse() as any);
     fetchSpy.mockRejectedValueOnce(new Error('econnreset'));
 
-    const result = await discordOAuthAdapter.exchangeCode({
-      clientId: 'app-id-1',
-      clientSecret: 'client-secret-1',
-      code: 'c',
-      redirectUri: 'https://r',
-    });
+    const result = await discordOAuthAdapter.exchangeCode(appExchangeInput());
     expect(result.installedByPlatformUserId).toBeNull();
   });
 
   it('throws when the token endpoint returns non-2xx', async () => {
     fetchSpy.mockResolvedValueOnce(new Response('upstream', { status: 502 }) as any);
-    await expect(
-      discordOAuthAdapter.exchangeCode({
-        clientId: 'a',
-        clientSecret: 'b',
-        code: 'c',
-        redirectUri: 'd',
-      }),
-    ).rejects.toThrow(/HTTP 502/);
+    await expect(discordOAuthAdapter.exchangeCode(shortExchangeInput())).rejects.toThrow(
+      /HTTP 502/,
+    );
   });
 
   it('throws when the token response carries a logical error', async () => {
@@ -227,39 +211,24 @@ describe('discordOAuthAdapter.exchangeCode', () => {
         status: 200,
       }) as any,
     );
-    await expect(
-      discordOAuthAdapter.exchangeCode({
-        clientId: 'a',
-        clientSecret: 'b',
-        code: 'c',
-        redirectUri: 'd',
-      }),
-    ).rejects.toThrow(/bad code/);
+    await expect(discordOAuthAdapter.exchangeCode(shortExchangeInput())).rejects.toThrow(
+      /bad code/,
+    );
   });
 
   it('throws missing_token when access_token is absent', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ guild: { id: 'g' } }), { status: 200 }) as any,
     );
-    await expect(
-      discordOAuthAdapter.exchangeCode({
-        clientId: 'a',
-        clientSecret: 'b',
-        code: 'c',
-        redirectUri: 'd',
-      }),
-    ).rejects.toThrow('missing_token');
+    await expect(discordOAuthAdapter.exchangeCode(shortExchangeInput())).rejects.toThrow(
+      'missing_token',
+    );
   });
 
   it('throws missing_tenant when guild.id is absent (e.g. user-only install)', async () => {
     fetchSpy.mockResolvedValueOnce(okTokenResponse({ guild: undefined }) as any);
-    await expect(
-      discordOAuthAdapter.exchangeCode({
-        clientId: 'a',
-        clientSecret: 'b',
-        code: 'c',
-        redirectUri: 'd',
-      }),
-    ).rejects.toThrow('missing_tenant');
+    await expect(discordOAuthAdapter.exchangeCode(shortExchangeInput())).rejects.toThrow(
+      'missing_tenant',
+    );
   });
 });

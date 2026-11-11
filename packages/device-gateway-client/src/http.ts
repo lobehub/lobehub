@@ -319,6 +319,7 @@ export class GatewayHttpClient {
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
     claudeAccountRouting?: AgentRunRequestMessage['claudeAccountRouting'];
+    claudeCodeEntrypoint?: string;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
     cwd?: string;

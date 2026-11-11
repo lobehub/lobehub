@@ -378,8 +378,12 @@ export class ScmChangeRequestModel {
           params.eventKind !== 'reopened');
       const stale = !!existing && (outOfOrder || regressesLifecycle);
 
-      const headChanged =
-        !stale && !!params.headSha && !!existing && existing.headSha !== params.headSha;
+      // The incoming head sha when this upsert moves the head, otherwise null.
+      const newHeadSha =
+        !stale && params.headSha && existing && existing.headSha !== params.headSha
+          ? params.headSha
+          : null;
+      const headChanged = newHeadSha !== null;
       const links = params.links ?? {};
       const now = new Date();
 
@@ -480,16 +484,15 @@ export class ScmChangeRequestModel {
         ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
         : {};
 
-      const ciValues = headChanged
+      const ciValues = newHeadSha
         ? (() => {
             // Results reported before this push became the head belong to
             // the new commit, not to the one being replaced.
             const held = existing?.metadata?.pendingChecks;
-            const adopted = held && held.sha === params.headSha ? held.checks : null;
+            const adopted = held && held.sha === newHeadSha ? held.checks : null;
             return {
               checks: adopted,
-              /* v8 ignore next -- unreachable: `ciValues` is only built when `headChanged`, which already requires a truthy `params.headSha` */
-              ciHeadSha: params.headSha ?? null,
+              ciHeadSha: newHeadSha,
               ciStatus: adopted ? rollupCiStatus(adopted) : null,
             };
           })()

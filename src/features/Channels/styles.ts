@@ -282,9 +282,28 @@ export const statusStyles = stylex.create({
   memberButton: {
     flex: 'none',
     gap: 4,
-    height: 32,
+    height: 28,
     paddingBlock: 4,
     paddingInline: 4,
+  },
+  memberStack: {
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  memberStackItem: {
+    position: 'relative',
+    display: 'inline-flex',
+    flex: 'none',
+    marginInlineStart: { 'default': -6, ':first-child': 0 },
+    borderRadius: '50%',
+    outlineWidth: 2,
+    outlineStyle: 'solid',
+    outlineColor: cssVar.colorBgContainer,
+    // Emoji avatars are transparent; without a fill the neighbour shows through.
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  memberWorking: {
+    color: cssVar.colorWarning,
   },
   memberAvatar: {
     position: 'relative',

@@ -2,8 +2,8 @@
  * @vitest-environment happy-dom
  */
 import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
-import { render, screen } from '@testing-library/react';
-import { createElement, type ReactNode } from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { act, createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import EntityLinkElement from '@/features/EntityLink/element';
@@ -52,6 +52,24 @@ vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
       },
       children,
     ),
+}));
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  DropdownMenu: ({ items }: { items: { key: string; label: string; onClick: () => void }[] }) =>
+    createElement(
+      'div',
+      {},
+      items.map((item) =>
+        createElement('button', { key: item.key, onClick: item.onClick }, item.label),
+      ),
+    ),
+}));
+const collapsibleProps = vi.hoisted(() => ({ current: undefined as any }));
+vi.mock('@/components/CollapsibleContent', () => ({
+  default: (props: { children: ReactNode }) => {
+    collapsibleProps.current = props;
+    return props.children;
+  },
 }));
 const markdownProps = vi.hoisted(() => ({ current: undefined as any }));
 vi.mock('@/features/Conversation/Markdown', () => ({
@@ -105,6 +123,9 @@ describe('ChannelMessage avatar', () => {
     expect(popup.dataset.agentId).toBe('agt_1');
     expect(popup.dataset.trigger).toBe('hover');
     expect(popup.dataset.description).toBe('Architect');
+
+    // `avatar` is the message bubble's default image, which falls back to the legacy default.
+    expect(screen.queryByAltText('avatar')).toBeNull();
   });
 
   it('keeps a plain avatar for a human author', () => {
@@ -137,5 +158,26 @@ describe('ChannelMessage links', () => {
     );
     expect(markdownProps.current.components[CHANNEL_MENTION_TAG]).toBeDefined();
     expect(markdownProps.current.rehypePlugins).toContain(EntityLinkElement.rehypePlugin);
+  });
+});
+
+describe('ChannelMessage collapse', () => {
+  const longMessage = {
+    ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+    content: 'A long reply',
+  };
+
+  it('shows a long message in full and only offers collapsing from the more menu', () => {
+    render(<ChannelMessage detail={detail} message={longMessage} />);
+
+    expect(collapsibleProps.current.collapsed).toBe(false);
+    expect(collapsibleProps.current.hideCollapseToggle).toBe(true);
+    expect(screen.queryByText('message.collapse')).toBeNull();
+
+    act(() => collapsibleProps.current.onOverflowChange(true));
+    fireEvent.click(screen.getByText('message.collapse'));
+
+    expect(collapsibleProps.current.collapsed).toBe(true);
+    expect(screen.getByText('message.expand')).toBeTruthy();
   });
 });

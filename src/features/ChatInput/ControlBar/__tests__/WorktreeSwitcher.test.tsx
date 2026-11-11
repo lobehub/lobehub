@@ -111,6 +111,20 @@ const triggerIconName = () =>
 /** Text of the worktree row owning `el` — rows render as `<button>` (mocked DropdownMenuItem). */
 const rowTextOf = (el: HTMLElement) => el.closest('button')?.textContent ?? '';
 
+const canaryWorktreeEntry = () => ({
+  branch: 'canary',
+  current: false,
+  path: '/repo-canary',
+  status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+});
+
+const currentWorktreeEntry = () => ({
+  branch: 'feat/current',
+  current: true,
+  path: '/repo',
+  status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+});
+
 describe('WorktreeSwitcher', () => {
   it('keeps the dropdown trigger anchored to a stable DOM wrapper', () => {
     render(
@@ -120,20 +134,7 @@ describe('WorktreeSwitcher', () => {
         currentBranch="feat/current"
         path="/repo"
         sourcePath="/repo"
-        worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-        ]}
+        worktrees={[currentWorktreeEntry(), canaryWorktreeEntry()]}
       />,
     );
 
@@ -151,14 +152,7 @@ describe('WorktreeSwitcher', () => {
         currentBranch="feat/current"
         path="/repo"
         sourcePath="/repo"
-        worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-        ]}
+        worktrees={[currentWorktreeEntry()]}
       />,
     );
 
@@ -239,12 +233,7 @@ describe('WorktreeSwitcher', () => {
             path: '/repo',
             status: { added: 2, clean: false, deleted: 1, modified: 3, total: 6 },
           },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          canaryWorktreeEntry(),
         ]}
       />,
     );
@@ -332,12 +321,7 @@ describe('WorktreeSwitcher', () => {
         path="/repo"
         sourcePath="/repo"
         worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          currentWorktreeEntry(),
           {
             current: false,
             detached: true,
@@ -345,12 +329,7 @@ describe('WorktreeSwitcher', () => {
             path: '/repo-detached',
             status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
           },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          canaryWorktreeEntry(),
         ]}
         onWorktreesChange={onWorktreesChange}
       />,
@@ -403,20 +382,7 @@ describe('WorktreeSwitcher', () => {
         deviceId="device-1"
         path="/repo"
         sourcePath="/repo"
-        worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-        ]}
+        worktrees={[currentWorktreeEntry(), canaryWorktreeEntry()]}
         onWorktreesChange={onWorktreesChange}
       />,
     );
@@ -490,12 +456,7 @@ describe('WorktreeSwitcher', () => {
             path: '/repo',
             status: { added: 1, clean: false, deleted: 0, modified: 0, total: 1 },
           },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          canaryWorktreeEntry(),
         ]}
       />,
     );
