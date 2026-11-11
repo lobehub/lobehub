@@ -5,11 +5,17 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
   ChevronLeftIcon,
+  CpuIcon,
   DnaIcon,
+  LibraryBigIcon,
   MailIcon,
+  MonitorSmartphoneIcon,
   RadioTowerIcon,
+  ScrollTextIcon,
   Share2Icon,
+  SparklesIcon,
   UserRoundIcon,
+  WrenchIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -30,11 +36,17 @@ import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
   'channel': RadioTowerIcon,
+  'engine': CpuIcon,
+  'environment': MonitorSmartphoneIcon,
+  'instruction': ScrollTextIcon,
+  'knowledge': LibraryBigIcon,
   'mail': MailIcon,
   'profile': UserRoundIcon,
   'self-evolving': DnaIcon,
   'share': Share2Icon,
+  'skills': SparklesIcon,
   'statistics': ChartColumnBigIcon,
+  'tools': WrenchIcon,
 };
 
 interface ProfileNavProps {
@@ -54,7 +66,7 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
         <Flexbox gap={12} paddingInline={4}>
           {groupAgentProfileTabOptions(options).map((group) => (
             <Flexbox gap={1} key={group.key}>
-              {group.key === 'identity' && (
+              {group.key !== 'general' && group.key !== 'profile' && (
                 <Text
                   ellipsis
                   fontSize={12}
@@ -62,7 +74,7 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
                   type={'secondary'}
                   weight={500}
                 >
-                  {t('tab.group.identity')}
+                  {t(`tab.group.${group.key}`)}
                 </Text>
               )}
               {group.options.map(({ label, value }) => (
