@@ -1,6 +1,6 @@
 import { createStaticStyles, Flexbox, Hotkey } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
@@ -32,7 +32,7 @@ interface HotkeyContentProps {
 
 const HotkeyContent = memo<HotkeyContentProps>(({ groupId }) => {
   const settings = useUserStore(settingsSelectors.currentSettings, isEqual);
-  const { t } = useTranslation('hotkey');
+  const { t } = useTranslation(['hotkey', 'setting']);
   return (
     <>
       {HOTKEYS_REGISTRATION.filter((item) => item.group === groupId).map((item) => (
@@ -43,13 +43,23 @@ const HotkeyContent = memo<HotkeyContentProps>(({ groupId }) => {
               <span className={styles.desc}>{t(`${item.id}.desc`)}</span>
             ) : null}
           </Flexbox>
-          <Hotkey
-            className={styles.hotkey}
-            keys={settings.hotkey[item.id]}
-            style={{
-              zoom: 1.1,
-            }}
-          />
+          {/* A sequence (`g>i`) is keys pressed one after another, not together. */}
+          <Flexbox horizontal align={'center'} gap={6}>
+            {(settings.hotkey[item.id] ?? '').split('>').map((keys, index) => (
+              <Fragment key={index}>
+                {index > 0 && (
+                  <span className={styles.desc}>{t('hotkey.sequenceThen', { ns: 'setting' })}</span>
+                )}
+                <Hotkey
+                  className={styles.hotkey}
+                  keys={keys}
+                  style={{
+                    zoom: 1.1,
+                  }}
+                />
+              </Fragment>
+            ))}
+          </Flexbox>
         </Flexbox>
       ))}
     </>

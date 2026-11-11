@@ -5,6 +5,34 @@ export type HotkeyId =
   | 'deleteLastMessage'
   | 'editMessage'
   | 'findInTopic'
+  | 'mailBack'
+  | 'mailCloseCompose'
+  | 'mailCompose'
+  | 'mailDeselectAll'
+  | 'mailForward'
+  | 'mailGoDrafts'
+  | 'mailGoInbox'
+  | 'mailGoSent'
+  | 'mailGoStarred'
+  | 'mailGoTrash'
+  | 'mailHotkeyHelp'
+  | 'mailMarkRead'
+  | 'mailMarkUnread'
+  | 'mailNext'
+  | 'mailOpen'
+  | 'mailPrevious'
+  | 'mailPurge'
+  | 'mailReply'
+  | 'mailReplyAll'
+  | 'mailSaveDraft'
+  | 'mailSearch'
+  | 'mailSelect'
+  | 'mailSelectAll'
+  | 'mailSend'
+  | 'mailStar'
+  | 'mailTrash'
+  | 'mailTrashDelete'
+  | 'mailUndo'
   | 'navigateToChat'
   | 'nextTab'
   | 'openChatSettings'
@@ -23,9 +51,9 @@ export type HotkeyId =
   | 'toggleRightPanel'
   | 'toggleTerminalPanel';
 
-export type HotkeyGroupId = 'conversation' | 'essential';
+export type HotkeyGroupId = 'conversation' | 'essential' | 'mail';
 
-export type HotkeyScopeId = 'chat' | 'files' | 'global' | 'image';
+export type HotkeyScopeId = 'chat' | 'files' | 'global' | 'image' | 'mail';
 
 export interface HotkeyItem {
   group: HotkeyGroupId;

@@ -110,6 +110,7 @@ const MailRow = ({
       {...stylex.props(styles.row, active && styles.rowActive, mailRowMarker)}
       aria-current={active ? 'true' : undefined}
       aria-label={`${party} — ${subject}`}
+      data-mail-row-id={item.id}
       role={'button'}
       tabIndex={0}
       onClick={onOpen}
@@ -133,7 +134,11 @@ const MailRow = ({
             onToggleSelect(event.shiftKey);
           }}
         >
-          <Checkbox checked={selected} size={14} />
+          <Checkbox
+            aria-label={t('identity.mailbox.action.select', { subject })}
+            checked={selected}
+            size={14}
+          />
         </span>
       )}
       <Flexbox gap={2} style={{ minWidth: 0 }}>

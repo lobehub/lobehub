@@ -19,6 +19,7 @@ import ConversationMessage from './ConversationMessage';
 import InlineError from './InlineError';
 import MailComposer from './MailComposer';
 import MailDetailToolbar from './MailDetailToolbar';
+import { type MailDetailHotkeyTarget, MailHotkeyTarget } from './mailHotkeys';
 import type { SentMail } from './useComposer';
 import { useConversation, type UseConversationOptions } from './useConversation';
 
@@ -82,6 +83,7 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
       data: mails,
       error,
       isLoading,
+      isValidating,
       mutate,
       restore,
       setStarred,
@@ -95,15 +97,20 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     const openedRef = useRef(false);
     const focusRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLDivElement>(null);
+    const rootRef = useRef<HTMLDivElement>(null);
     useSendBlockVersion();
     const [composing, setComposing] = useState<Composing>();
     // A draft named by the URL (a reload, or opened from Drafts) resumes in
     // place, but only under the conversation it answers.
     const linkedDraft = useMailDraft(composing ? undefined : composeId);
     const linked = linkedDraft.data;
+    // The draft just closed: the URL still names it until the navigation lands,
+    // and resuming it from there would reopen the editor the person closed.
+    const [dismissedDraftId, setDismissedDraftId] = useState<string>();
     if (
       !composing &&
       linked &&
+      linked.id !== dismissedDraftId &&
       !linkedDraft.isValidating &&
       linked.id === composeId &&
       linked.mode !== 'compose' &&
@@ -155,7 +162,9 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
       );
     }
 
-    if (isLoading || !mails) {
+    // An empty answer cached from before (the mail was trashed, then restored)
+    // is only believed once the fresh read agrees: "gone" must not flash.
+    if (isLoading || !mails || (mails.length === 0 && isValidating)) {
       return (
         <Flexbox gap={12} padding={4}>
           <Skeleton height={32} width={'40%'} />
@@ -208,10 +217,59 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
       setComposing({ mode, sourceId });
     };
     const stopComposing = () => {
+      const mode = composing?.mode;
+      setDismissedDraftId(composing?.draft?.id ?? composeId);
       setComposing(undefined);
       onComposeChange(undefined);
+      // The editor took focus with it; it goes back to the control that opened it.
+      setTimeout(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        const testId =
+          mode === 'forward'
+            ? 'mail-action-forward'
+            : mode === 'replyAll'
+              ? 'mail-action-reply-all'
+              : 'mail-action-reply';
+        rootRef.current?.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.focus();
+      }, 0);
     };
     const composeAccount = accountOf(composeSource);
+
+    // Unstar clears every star; star marks the newest, as a mail product does —
+    // the newest in this view, so the row the reader came from shows it too.
+    const inView = (mail: AgentMailRow) =>
+      folder === 'inbox'
+        ? mail.direction === 'inbound'
+        : folder === 'sent'
+          ? mail.direction === 'outbound'
+          : true;
+    const toggleStar = () =>
+      void (starred.length > 0
+        ? setStarred(starred, false)
+        : setStarred([mails.findLast(inView) ?? newest], true));
+
+    const hotkeys: MailDetailHotkeyTarget | undefined =
+      readOnly || inTrash
+        ? undefined
+        : {
+            act: (command) => {
+              if (command === 'purge') return false;
+              if (command === 'star') toggleStar();
+              else if (command === 'trash') void trash(mails);
+              // Already in that state: nothing to do, and nothing to say about it.
+              else if (anyUnread === (command === 'unread')) return true;
+              else void setUnread(mails, command === 'unread');
+              return true;
+            },
+            blockedReason: {
+              forward: forwardDisabled || undefined,
+              reply: replyDisabled || undefined,
+            },
+            forward: () => startComposing('forward'),
+            reply: () => startComposing('reply'),
+            replyAll: () => startComposing('replyAll'),
+          };
 
     const toggle = (mail: AgentMailRow) => {
       const opening = !open.has(mail.id);
@@ -225,7 +283,8 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
     };
 
     return (
-      <Flexbox gap={12} padding={4}>
+      <Flexbox gap={12} padding={4} ref={rootRef}>
+        <MailHotkeyTarget kind={'detail'} target={hotkeys} />
         <MailDetailToolbar
           forwardDisabledReason={forwardDisabled || undefined}
           hasNext={hasNext}
@@ -240,16 +299,8 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
           onReplyAll={readOnly || inTrash ? undefined : () => startComposing('replyAll')}
           onRestore={readOnly || !inTrash ? undefined : () => void restore(mails)}
           onToggleRead={readOnly ? undefined : () => void setUnread(mails, !anyUnread)}
+          onToggleStar={readOnly || inTrash ? undefined : toggleStar}
           onTrash={readOnly || inTrash ? undefined : () => void trash(mails)}
-          onToggleStar={
-            readOnly || inTrash
-              ? undefined
-              : // Unstar clears every star; star marks the newest, as a mail product does.
-                () =>
-                  void (starred.length > 0
-                    ? setStarred(starred, false)
-                    : setStarred([newest], true))
-          }
         />
         {released && (
           <Text fontSize={12} type={'secondary'}>

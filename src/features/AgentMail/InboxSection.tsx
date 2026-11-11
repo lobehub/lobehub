@@ -14,13 +14,14 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type KeyboardEvent, type Ref, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatShortenNumber } from '@/utils/format';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import InlineError from './InlineError';
+import { type MailListHotkeyTarget, type MailRowCommand, useMailHotkeyTarget } from './mailHotkeys';
 import { mailListStyles as styles } from './mailListStyles';
 import MailRow from './MailRow';
 import { pendingMailDeltas, useMailWritesStore } from './mailWrites';
@@ -60,6 +61,8 @@ interface InboxSectionProps {
   /** Every address, so the shared counts request matches the switcher's. */
   accountIds: string[];
   agentId: string;
+  /** The open mail covers the list (one column): its keys belong to that page. */
+  covered?: boolean;
   disabled?: boolean;
   onOpen: (item: MailListItem) => void;
   onQueryChange: (query: string) => void;
@@ -77,10 +80,12 @@ const SearchBox = ({
   loading,
   onChange,
   query,
+  ref,
 }: {
   loading: boolean;
   onChange: (query: string) => void;
   query: string;
+  ref?: Ref<HTMLDivElement>;
 }) => {
   const { t } = useTranslation('setting');
   const [value, setValue] = useState(query);
@@ -100,11 +105,9 @@ const SearchBox = ({
   };
 
   return (
-    <div {...stylex.props(styles.searchBox)}>
+    <div {...stylex.props(styles.searchBox)} ref={ref}>
       <Input
-        allowClear
-        // The server's cap; past it a search would only fail.
-        maxLength={200}
+        aria-label={t('identity.mailbox.search.placeholder')}
         placeholder={t('identity.mailbox.search.placeholder')}
         prefix={<Icon icon={Search} size={14} />}
         value={value}
@@ -116,12 +119,22 @@ const SearchBox = ({
         }}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing) return;
-          if (event.key === 'Escape') clear();
+          if (event.key === 'Escape') {
+            // An empty box hands the key on, so Esc can step out a layer further.
+            if (!value) {
+              event.currentTarget.blur();
+              return;
+            }
+            clear();
+          }
           if (event.key === 'Enter') {
             debounced.cancel();
             onChange(value.trim());
           }
         }}
+        allowClear
+        // The server's cap; past it a search would only fail.
+        maxLength={200}
       />
       {loading && (
         <div {...stylex.props(styles.progress)}>
@@ -142,6 +155,7 @@ const InboxSection = ({
   accountId,
   accountIds,
   agentId,
+  covered,
   disabled,
   onOpen,
   onQueryChange,
@@ -204,6 +218,178 @@ const InboxSection = ({
   const runBulk = async (run: () => Promise<{ failed: MailListItem[] }>) => {
     const { failed } = await run();
     setSelection({ ids: failed.map((item) => item.id), scope: scopeKey });
+  };
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const rowElement = (id: string) =>
+    listRef.current?.querySelector<HTMLElement>(`[data-mail-row-id="${CSS.escape(id)}"]`);
+  /** The row holding keyboard focus, if focus is in the list at all. */
+  const focusedRowId = () => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !listRef.current?.contains(active)) return;
+    return active.closest<HTMLElement>('[data-mail-row-id]')?.dataset.mailRowId;
+  };
+  const focusRow = (id: string) => {
+    const element = rowElement(id);
+    element?.focus({ preventScroll: true });
+    element?.scrollIntoView({ block: 'nearest' });
+  };
+
+  // The active view stays in sight when the tabs scroll sideways.
+  useEffect(() => {
+    tabsRef.current
+      ?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [view, searching]);
+
+  /** The rows a row key acts on: the selection, else the focused row. */
+  const rowsInFocus = (command: MailRowCommand) => {
+    if (selectedItems.length > 0) return { fromSelection: true, rows: selectedItems };
+    const focused = focusedRowId();
+    // The open conversation's own row: the reading pane acts on it, so a wide
+    // screen moves on to the next one as it does from the toolbar.
+    if (focused && (focused !== selectedId || command === 'purge')) {
+      return { fromSelection: false, rows: items.filter((item) => item.id === focused) };
+    }
+    // The reading pane has no permanent delete; the open row stands in for it.
+    if (command === 'purge' && selectedId) {
+      return { fromSelection: false, rows: items.filter((item) => item.id === selectedId) };
+    }
+  };
+
+  const act = (command: MailRowCommand) => {
+    if (disabled) return false;
+    const picked = rowsInFocus(command);
+    if (!picked || picked.rows.length === 0) return false;
+    const { fromSelection, rows } = picked;
+    const run = (write: () => Promise<{ failed: MailListItem[] }>) => {
+      if (fromSelection) void runBulk(write);
+      else void write();
+    };
+    const listView = searching ? undefined : view;
+
+    if (command === 'trash' || (command === 'purge' && listView === 'trash')) {
+      // Focus moves on to the row after the last one removed, as the list closes up.
+      const ids = new Set(rows.map((row) => row.id));
+      const lastIndex = Math.max(...rows.map((row) => items.indexOf(row)));
+      const after =
+        items.slice(lastIndex + 1).find((item) => !ids.has(item.id)) ??
+        items.slice(0, lastIndex).findLast((item) => !ids.has(item.id));
+      const refocus = () => {
+        // After the optimistic removal renders; a frame callback would stall in a hidden tab.
+        if (!fromSelection && after) setTimeout(() => focusRow(after.id), 0);
+      };
+      if (listView === 'drafts') {
+        actions.discard(rows);
+        if (fromSelection) clearSelection();
+        refocus();
+        return true;
+      }
+      if (listView === 'trash') {
+        if (command !== 'purge') return false;
+        actions.purge(rows, fromSelection ? clearSelection : undefined);
+        return true;
+      }
+      if (command === 'purge') return false;
+      run(() => actions.trash(rows));
+      refocus();
+      return true;
+    }
+    if (command === 'purge' || listView === 'drafts' || listView === 'trash') return false;
+    if (command === 'star') {
+      run(() =>
+        actions.setStarred(
+          rows,
+          rows.some((row) => !row.isStarred),
+        ),
+      );
+    } else {
+      run(() => actions.setRead(rows, command === 'read'));
+    }
+    return true;
+  };
+
+  // Closing or trashing the open mail unmounts whatever held focus. It lands on
+  // the row now open, else the row of the mail just closed, never on the page.
+  const lastSelectedRef = useRef(selectedId);
+  useEffect(() => {
+    const previous = lastSelectedRef.current;
+    lastSelectedRef.current = selectedId;
+    if (selectedId === previous) return;
+    const target = selectedId ?? previous;
+    if (!target) return;
+    // Runs after the commit that unmounted the pane, so the loss is already visible.
+    const active = document.activeElement;
+    if (!active || active === document.body) focusRow(target);
+  }, [selectedId]);
+
+  const hotkeyTarget: MailListHotkeyTarget = {
+    act,
+    clearSearch: () => {
+      if (!searching) return false;
+      onQueryChange('');
+      return true;
+    },
+    clearSelection: () => {
+      if (selectedItems.length === 0) return false;
+      clearSelection();
+      return true;
+    },
+    focusRow,
+    focusSearch: () => {
+      const focus = () => searchRef.current?.querySelector('input')?.focus();
+      if (selectedItems.length === 0) return focus();
+      // The box comes back once the selection toolbar gives its place up.
+      clearSelection();
+      setTimeout(focus, 0);
+    },
+    move: (step) => {
+      if (items.length === 0) return;
+      const current = focusedRowId() ?? selectedId;
+      const index = items.findIndex((item) => item.id === current);
+      if (index === -1) return focusRow(items[step > 0 ? 0 : items.length - 1].id);
+      const next = items[index + step];
+      if (next) focusRow(next.id);
+      // At the bottom the next page comes in, so another `j` carries on.
+      else if (step > 0 && list.hasMore && !list.isLoadingMore) list.loadMore();
+    },
+    selectAll: (select) => {
+      if (disabled || items.length === 0) return false;
+      if (select) setSelection({ ids: items.map((item) => item.id), scope: scopeKey });
+      else clearSelection();
+      return true;
+    },
+    toggleSelect: () => {
+      if (disabled) return false;
+      const id = focusedRowId() ?? selectedId;
+      const item = items.find((row) => row.id === id);
+      if (!item) return false;
+      toggleSelect(item, false);
+      return true;
+    },
+  };
+  useMailHotkeyTarget('list', covered ? undefined : hotkeyTarget);
+
+  /** Arrow keys walk the views (ARIA tabs), Home / End jump to the ends. */
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const last = MAIL_VIEWS.length - 1;
+    const target =
+      event.key === 'ArrowRight'
+        ? (index + 1) % MAIL_VIEWS.length
+        : event.key === 'ArrowLeft'
+          ? (index + last) % MAIL_VIEWS.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : undefined;
+    if (target === undefined) return;
+    event.preventDefault();
+    onViewChange(MAIL_VIEWS[target]);
+    tabsRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[target]?.focus();
   };
 
   const deltas = pendingMailDeltas(writes, accountId);
@@ -378,18 +564,26 @@ const InboxSection = ({
   return (
     <Flexbox flex={1} gap={8} style={{ minHeight: 0 }}>
       <Flexbox horizontal align={'center'} gap={4}>
-        <div {...stylex.props(styles.tabs)} role={'tablist'}>
-          {MAIL_VIEWS.map((item) => {
+        <div
+          {...stylex.props(styles.tabs)}
+          aria-label={t('identity.mailbox.folders')}
+          ref={tabsRef}
+          role={'tablist'}
+        >
+          {MAIL_VIEWS.map((item, index) => {
             const count = folderCount[item];
             const active = !searching && item === view;
             return (
               <button
-                {...stylex.props(styles.tab, active && styles.tabActive)}
+                {...stylex.props(styles.tab, mobile && styles.tabTouch, active && styles.tabActive)}
                 aria-selected={active}
                 key={item}
                 role={'tab'}
+                // One stop in the tab order; arrows move between the views.
+                tabIndex={item === view ? 0 : -1}
                 type={'button'}
                 onClick={() => onViewChange(item)}
+                onKeyDown={(event) => onTabKeyDown(event, index)}
               >
                 {t(FOLDER_KEYS[item])}
                 {Boolean(count) && (
@@ -437,11 +631,12 @@ const InboxSection = ({
         <SearchBox
           loading={searching && list.isValidating}
           query={query}
+          ref={searchRef}
           onChange={onQueryChange}
         />
       )}
       {/* The list scrolls on its own so the views and search stay in view. */}
-      <Flexbox gap={2} {...stylex.props(styles.list)}>
+      <Flexbox gap={2} ref={listRef} {...stylex.props(styles.list)}>
         {renderBody()}
       </Flexbox>
     </Flexbox>

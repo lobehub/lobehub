@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { agentAccountService, type AgentMailTarget } from '@/services/agentAccount';
 
+import { offerUndo } from './mailUndo';
 import {
   chunk,
   countUnreadInbound,
@@ -248,23 +249,22 @@ export const useMailActions = ({
       retry: trash,
       unreadDelta: -countUnreadInbound(items),
     });
+    const undo = offerUndo(() => {
+      undoToast.close();
+      void pending.then(({ values }) => undoTrash(values.flatMap((value) => value.ids)));
+    });
     const undoToast = toast.success({
-      actions: [
-        {
-          label: t('identity.mailbox.undo'),
-          onClick: () => {
-            undoToast.close();
-            void pending.then(({ values }) => undoTrash(values.flatMap((value) => value.ids)));
-          },
-        },
-      ],
+      actions: [{ label: t('identity.mailbox.undo'), onClick: undo.run }],
       duration: UNDO_WINDOW_MS,
       title: t('identity.mailbox.toast.trashed'),
     });
 
     const result = await pending;
     // Undo stays while anything was moved: it restores only what the server moved.
-    if (result.values.every((value) => value.ids.length === 0)) undoToast.close();
+    if (result.values.every((value) => value.ids.length === 0)) {
+      undo.withdraw();
+      undoToast.close();
+    }
     return result;
   };
 
@@ -353,17 +353,13 @@ export const useMailActions = ({
       }
     }, UNDO_WINDOW_MS);
 
+    const undo = offerUndo(() => {
+      clearTimeout(timer);
+      undoToast.close();
+      mailWriteActions.end(writeId);
+    });
     const undoToast = toast.success({
-      actions: [
-        {
-          label: t('identity.mailbox.undo'),
-          onClick: () => {
-            clearTimeout(timer);
-            undoToast.close();
-            mailWriteActions.end(writeId);
-          },
-        },
-      ],
+      actions: [{ label: t('identity.mailbox.undo'), onClick: undo.run }],
       duration: UNDO_WINDOW_MS,
       title: t('identity.mailbox.toast.discarded'),
     });

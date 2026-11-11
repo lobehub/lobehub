@@ -12,6 +12,7 @@ import {
   type AgentMailTarget,
 } from '@/services/agentAccount';
 
+import { offerUndo } from './mailUndo';
 import {
   chunk,
   countUnreadInbound,
@@ -257,16 +258,12 @@ export const useConversation = (
     // Nothing moved, nothing to undo: another tab may have trashed it first.
     if (moved.length === 0) return;
 
+    const undo = offerUndo(() => {
+      undoToast.close();
+      void undoTrash(moved);
+    });
     const undoToast = toast.success({
-      actions: [
-        {
-          label: t('identity.mailbox.undo'),
-          onClick: () => {
-            undoToast.close();
-            void undoTrash(moved);
-          },
-        },
-      ],
+      actions: [{ label: t('identity.mailbox.undo'), onClick: undo.run }],
       duration: UNDO_WINDOW_MS,
       title: t('identity.mailbox.toast.trashed'),
     });

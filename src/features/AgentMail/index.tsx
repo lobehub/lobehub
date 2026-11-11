@@ -1,8 +1,10 @@
 'use client';
 
-import { ActionIcon, Button, Center, Flexbox } from '@lobehub/ui';
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
+import { ActionIcon, Button, Center, Flexbox, Tooltip } from '@lobehub/ui';
+import { useSize } from 'ahooks';
 import { PenLine } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 import { useSWRConfig } from 'swr';
@@ -29,6 +31,7 @@ import InboxSection from './InboxSection';
 import MailboxCard from './MailboxCard';
 import MailboxEmptyState from './MailboxEmptyState';
 import { SendBlockNotice } from './MailComposer';
+import { MailHotkeys, useMailHotkeyHint } from './mailHotkeys';
 import MailSplitView, { MailNavHeader } from './MailSplitView';
 import { identityStyles } from './styles';
 import { useMailbox, useOpenableChannel } from './useAgentIdentity';
@@ -51,6 +54,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 });
+
+/** Below this page width the list and the open mail take turns (spec §8). */
+const NARROW_MAIL_WIDTH = 768;
 
 interface AgentMailProps {
   agentId: string;
@@ -78,6 +84,14 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const openable = useOpenableChannel();
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const mobile = isMobileSurface();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const width = useSize(rootRef)?.width;
+  // A phone is always one column; a desktop window only once it is too narrow
+  // for two. Before the first measure the window's width stands in (the page
+  // is never wider), so a narrow window does not flash two columns on load.
+  const narrow =
+    mobile ||
+    (width || (typeof window === 'undefined' ? 0 : window.innerWidth)) < NARROW_MAIL_WIDTH;
   const mailPath = urlJoin('/agent', agentId, 'mail');
   // A draft open in the URL belongs to the mail it answers, so moving to
   // another mail, or back to the list, leaves it behind (it saves on unmount).
@@ -209,6 +223,18 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     navigate(`${messageId ? urlJoin(mailPath, messageId) : mailPath}${withCompose()}`, {
       replace: true,
     });
+    // The editor takes focus with it; it goes back to the button that opened it.
+    // Focus still inside the closing page (its back button) counts as lost too.
+    setTimeout(() => {
+      const active = document.activeElement;
+      const lost =
+        !active ||
+        active === document.body ||
+        !active.isConnected ||
+        Boolean(active.closest('[data-mail-narrow-detail]'));
+      if (lost)
+        rootRef.current?.querySelector<HTMLElement>('[data-testid="mail-compose"]')?.focus();
+    }, 0);
   };
 
   const viewSent = (sent: SentMail) =>
@@ -233,8 +259,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     onComposeChange: (id) =>
       navigate(`${urlJoin(mailPath, messageId ?? '')}${withCompose(id)}`, { replace: true }),
     onEmptied: () => {
-      // A wide screen moves on to the next conversation; a phone returns to the list.
-      const target = mobile ? undefined : nextSelectionAfterRemoval(neighbors);
+      // A wide screen moves on to the next conversation; one column returns to the list.
+      const target = narrow ? undefined : nextSelectionAfterRemoval(neighbors);
       if (target) landOn(target);
       else closeMessage();
     },
@@ -265,6 +291,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
       },
       { replace: true },
     );
+
+  const composeHotkey = useMailHotkeyHint(HotkeyEnum.MailCompose);
 
   if (unavailable) return null;
 
@@ -303,27 +331,31 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const composeAction =
     !disabled &&
     mailbox.current &&
-    (mobile ? (
+    (narrow ? (
       <ActionIcon
         aria-label={composeLabel}
         data-testid={'mail-compose'}
         disabled={Boolean(sendBlock)}
         icon={PenLine}
         title={composeTitle}
+        tooltipProps={sendBlock ? undefined : { hotkey: composeHotkey }}
         onClick={startCompose}
       />
     ) : (
-      <Button
-        data-testid={'mail-compose'}
-        disabled={Boolean(sendBlock)}
-        icon={PenLine}
-        size={'small'}
-        title={composeTitle}
-        type={'primary'}
-        onClick={startCompose}
-      >
-        {composeLabel}
-      </Button>
+      // A disabled button gets no pointer events, so its reason stays a plain title.
+      <Tooltip hotkey={composeHotkey} open={sendBlock ? false : undefined} title={composeTitle}>
+        <Button
+          data-testid={'mail-compose'}
+          disabled={Boolean(sendBlock)}
+          icon={PenLine}
+          size={'small'}
+          title={sendBlock ? composeTitle : undefined}
+          type={'primary'}
+          onClick={startCompose}
+        >
+          {composeLabel}
+        </Button>
+      </Tooltip>
     ));
 
   // Always on screen under the address, not behind a tooltip a phone cannot hover.
@@ -349,6 +381,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
       accountId={mailbox.current?.id}
       accountIds={mailbox.accounts.map((account) => account.id)}
       agentId={agentId}
+      covered={narrow && Boolean(messageId || composePane)}
       disabled={disabled}
       query={query}
       selectedId={mobile ? undefined : messageId ? (found.rowId ?? messageId) : composeId}
@@ -383,8 +416,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     )
   );
 
-  return (
-    <Flexbox height={'100%'} style={{ position: 'relative' }} width={'100%'}>
+  const page = (
+    <Flexbox height={'100%'} ref={rootRef} style={{ position: 'relative' }} width={'100%'}>
       {mobile ? (
         <>
           <NavHeader
@@ -425,6 +458,8 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
           inbox={inbox}
           mailbox={mailboxCard}
           messageId={messageId}
+          narrow={narrow}
+          onBack={messageId ? closeMessage : closeCompose}
         />
       )}
       {/* Laid over the list instead of replacing it, so back returns to the same scroll. */}
@@ -437,6 +472,24 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
         </Flexbox>
       )}
     </Flexbox>
+  );
+
+  return (
+    <MailHotkeys
+      page={{
+        back: () => {
+          if (messageId) closeMessage();
+          else if (composePane) closeCompose();
+          else return false;
+          return true;
+        },
+        changeView,
+        compose: !disabled && mailbox.current && !sendBlock ? startCompose : undefined,
+        composeBlockedReason: !disabled && sendBlock ? t(SEND_BLOCK_KEYS[sendBlock]) : undefined,
+      }}
+    >
+      {page}
+    </MailHotkeys>
   );
 };
 

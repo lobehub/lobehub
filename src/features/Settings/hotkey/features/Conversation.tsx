@@ -1,6 +1,6 @@
 'use client';
 
-import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
+import { HotkeyGroupEnum, MAIL_HOTKEY_IDS } from '@lobechat/const/hotkeys';
 import { HotkeyInput } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
@@ -41,7 +41,8 @@ const HotkeySetting = memo(() => {
   const mapHotkeyItem = (item: HotkeyItem) => {
     const hotkeyConflicts = Object.entries(hotkey)
       .map(([key, value]) => {
-        if (key === item.id) return false;
+        // Mail keys only live on the mail page, so they cannot collide with these.
+        if (key === item.id || MAIL_HOTKEY_IDS.has(key as HotkeyItem['id'])) return false;
         return value;
       })
       .filter(Boolean) as string[];

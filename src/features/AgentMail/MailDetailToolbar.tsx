@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import {
   ArchiveRestore,
@@ -16,6 +17,7 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useMailHotkeyHint } from './mailHotkeys';
 import { identityStyles } from './styles';
 
 export interface MailDetailToolbarProps {
@@ -59,6 +61,17 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
     unread,
   }) => {
     const { t } = useTranslation('setting');
+    const hints = {
+      forward: useMailHotkeyHint(HotkeyEnum.MailForward),
+      read: useMailHotkeyHint(unread ? HotkeyEnum.MailMarkRead : HotkeyEnum.MailMarkUnread),
+      reply: useMailHotkeyHint(HotkeyEnum.MailReply),
+      replyAll: useMailHotkeyHint(HotkeyEnum.MailReplyAll),
+      star: useMailHotkeyHint(HotkeyEnum.MailStar),
+      trash: useMailHotkeyHint(HotkeyEnum.MailTrash),
+    };
+    /** A disabled control says why instead, so it names no key. */
+    const tip = (hotkey?: string, disabledReason?: string) =>
+      disabledReason ? undefined : { hotkey };
 
     return (
       <Flexbox
@@ -67,6 +80,8 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
         className={identityStyles.mailToolbar}
         data-testid={'mail-toolbar'}
         justify={'space-between'}
+        // A narrow pane moves the paging pair to a second line instead of clipping it.
+        wrap={'wrap'}
       >
         <Flexbox horizontal gap={4}>
           {onReply && (
@@ -76,6 +91,7 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
               disabled={Boolean(replyDisabledReason)}
               icon={Reply}
               title={replyDisabledReason ?? t('identity.compose.action.reply')}
+              tooltipProps={tip(hints.reply, replyDisabledReason)}
               onClick={onReply}
             />
           )}
@@ -86,6 +102,7 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
               disabled={Boolean(replyDisabledReason)}
               icon={ReplyAll}
               title={replyDisabledReason ?? t('identity.compose.action.replyAll')}
+              tooltipProps={tip(hints.replyAll, replyDisabledReason)}
               onClick={onReplyAll}
             />
           )}
@@ -96,6 +113,7 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
               disabled={Boolean(forwardDisabledReason)}
               icon={Forward}
               title={forwardDisabledReason ?? t('identity.compose.action.forward')}
+              tooltipProps={tip(hints.forward, forwardDisabledReason)}
               onClick={onForward}
             />
           )}
@@ -114,6 +132,7 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
               data-testid={'mail-action-trash'}
               icon={Trash2}
               title={t('identity.mailbox.action.delete')}
+              tooltipProps={tip(hints.trash)}
               onClick={onTrash}
             />
           )}
@@ -124,6 +143,7 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
               data-testid={'mail-action-star'}
               icon={Star}
               title={t(starred ? 'identity.mailbox.action.unstar' : 'identity.mailbox.action.star')}
+              tooltipProps={tip(hints.star)}
               aria-label={t(
                 starred ? 'identity.mailbox.action.unstar' : 'identity.mailbox.action.star',
               )}
@@ -135,6 +155,7 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
               data-testid={'mail-action-unread'}
               data-unread={unread}
               icon={unread ? MailOpen : Mail}
+              tooltipProps={tip(hints.read)}
               aria-label={t(
                 unread ? 'identity.mailbox.action.markRead' : 'identity.mailbox.action.markUnread',
               )}

@@ -7,6 +7,7 @@ import AppMenu from './features/AppMenu';
 import Conversation from './features/Conversation';
 import Desktop from './features/Desktop';
 import Essential from './features/Essential';
+import Mail from './features/Mail';
 
 interface PageProps {
   showSettingHeader?: boolean;
@@ -20,6 +21,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
       {isDesktop && <Desktop />}
       <Essential />
       <Conversation />
+      <Mail />
       {isDesktop && <AppMenu />}
     </>
   );
