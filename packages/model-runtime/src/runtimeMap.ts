@@ -62,6 +62,7 @@ import { LobeSambaNovaAI } from './providers/sambanova';
 import { LobeSearch1API } from './providers/search1api';
 import { LobeSenseNovaAI } from './providers/sensenova';
 import { LobeSiliconCloudAI } from './providers/siliconcloud';
+import { LobeSokkanAI } from './providers/sokkan';
 import { LobeSparkAI } from './providers/spark';
 import { LobeStepfunAI } from './providers/stepfun';
 import { LobeStraicoAI } from './providers/straico';
@@ -152,6 +153,7 @@ export const providerRuntimeMap = {
   search1api: LobeSearch1API,
   sensenova: LobeSenseNovaAI,
   siliconcloud: LobeSiliconCloudAI,
+  sokkan: LobeSokkanAI,
   spark: LobeSparkAI,
   stepfun: LobeStepfunAI,
   straico: LobeStraicoAI,

@@ -76,6 +76,7 @@
     "./search1api": "./src/aiModels/search1api.ts",
     "./sensenova": "./src/aiModels/sensenova.ts",
     "./siliconcloud": "./src/aiModels/siliconcloud.ts",
+    "./sokkan": "./src/aiModels/sokkan.ts",
     "./spark": "./src/aiModels/spark.ts",
     "./stepfun": "./src/aiModels/stepfun.ts",
     "./straico": "./src/aiModels/straico.ts",

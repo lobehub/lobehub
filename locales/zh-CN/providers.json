@@ -63,6 +63,7 @@
   "search1api.description": "Search1API 提供 DeepSeek 模型访问，支持可选联网功能，涵盖多个参数规模的标准与极速版本。",
   "sensenova.description": "SenseNova 基于商汤基础设施，提供高效、易用的全栈大模型服务。",
   "siliconcloud.description": "SiliconCloud 是基于强大开源模型构建的高性价比生成式 AI 云服务。",
+  "sokkan.description": "SOKKAN Router 是由 NINABOT Sàrl（瑞士日内瓦）运营的兼容 OpenAI 的推理网关，在欧盟和瑞士区域提供开放权重的 Qwen 和 gpt-oss 模型，采用预付费计费。",
   "spark.description": "讯飞星火提供强大的多语言 AI 能力，广泛应用于智能硬件、医疗、金融等垂直领域，推动创新发展。",
   "stepfun.description": "Stepfun 模型具备领先的多模态与复杂推理能力，支持长文本理解与强大的自主搜索编排。",
   "straico.description": "Straico 致力于简化 AI 集成，通过提供一个整合了顶尖文本、图像和音频生成式 AI 模型的统一工作空间，赋能营销人员、企业家及爱好者等各类用户，实现对多样化 AI 工具的无缝访问。",

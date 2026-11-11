@@ -1,0 +1,46 @@
+---
+title: Using SOKKAN Router in LobeHub
+description: >-
+  Learn how to configure SOKKAN Router, an OpenAI-compatible inference gateway
+  serving open-weight models from the EU and Switzerland, in LobeHub.
+tags:
+  - LobeHub
+  - SOKKAN Router
+  - API Key
+  - Web UI
+---
+
+# Using SOKKAN Router in LobeHub
+
+[SOKKAN Router](https://router.sokkan.ch) is an OpenAI-compatible inference gateway operated by NINABOT Sàrl (Geneva, Switzerland). It serves open-weight Qwen and gpt-oss models from EU and Swiss regions, with streaming and tool calls, billed per token from a prepaid balance.
+
+This guide walks you through using SOKKAN Router in LobeHub.
+
+<Steps>
+  ### Step 1: Obtain a SOKKAN Router API key
+
+  - Sign up at [router.sokkan.ch](https://router.sokkan.ch) and add prepaid credit
+  - Create an API key from the account page. Keys start with `skr_`
+
+  <Callout type={'warning'}>
+    The key is shown only once. Store it securely; you can revoke it from the account page at any time.
+  </Callout>
+
+  ### Step 2: Configure SOKKAN Router in LobeHub
+
+  - Open **App Settings → AI Providers** and select **SOKKAN Router**
+  - Turn on the provider and paste your API key
+  - Click **Check** to verify the connection, then choose a SOKKAN Router model for your assistant
+
+  <Callout type={'info'}>
+    Fetching the model list only adds the models offered on demand. Models that the public `/v1/models` endpoint marks as `committed` require a committed-throughput contract and return `403 committed_throughput` on a pay-per-token key.
+  </Callout>
+</Steps>
+
+## Pricing
+
+Requests are billed per token in USD from your prepaid balance. Current prices are listed on the [models and pricing page](https://router.sokkan.ch/models) and returned by `GET https://router.sokkan.ch/v1/models`.
+
+## Self-hosting
+
+Set `SOKKAN_API_KEY` to enable the provider for every user of a self-hosted deployment. See [Model provider environment variables](/docs/self-hosting/environment-variables/model-provider#sokkan-router).

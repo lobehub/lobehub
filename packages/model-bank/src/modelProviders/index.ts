@@ -65,6 +65,7 @@ import SambaNovaProvider from './sambanova';
 import Search1APIProvider from './search1api';
 import SenseNovaProvider from './sensenova';
 import SiliconCloudProvider from './siliconcloud';
+import SokkanProvider from './sokkan';
 import SparkProvider from './spark';
 import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
@@ -228,6 +229,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  SokkanProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
   StraicoProvider,
@@ -369,6 +371,7 @@ export { default as SambaNovaProviderCard } from './sambanova';
 export { default as Search1APIProviderCard } from './search1api';
 export { default as SenseNovaProviderCard } from './sensenova';
 export { default as SiliconCloudProviderCard } from './siliconcloud';
+export { default as SokkanProviderCard } from './sokkan';
 export { default as SparkProviderCard } from './spark';
 export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
