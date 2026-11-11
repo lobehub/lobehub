@@ -133,6 +133,65 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
       );
     });
 
+    it('files a seeded reply after the message it answers when the client clock is behind', async () => {
+      const store = createMockStore();
+      // The user row carries the server's time; this client's clock runs a minute behind.
+      const userCreatedAt = Date.now() + 60_000;
+      store.dbMessagesMap = {
+        'session_agent-1_topic-1': [{ createdAt: userCreatedAt, id: 'user-1', role: 'user' }],
+      };
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step1', parentId: 'user-1', role: 'assistant' },
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdAt: userCreatedAt + 1,
+          id: 'msg-step1',
+          type: 'createMessage',
+        }),
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('keeps the server creation times a seeded stream_start ships', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: {
+            createdAt: 1_700_000_000_200,
+            id: 'msg-step2',
+            parentId: 'steer-1',
+            role: 'assistant',
+          },
+          parentMessage: {
+            content: 'x',
+            createdAt: 1_700_000_000_100,
+            id: 'steer-1',
+            metadata: { steer: true },
+            role: 'user',
+          },
+        }),
+      );
+      await flush();
+
+      const created = vi
+        .mocked(store.internal_dispatchMessage)
+        .mock.calls.filter(([action]) => action.type === 'createMessage')
+        .map(([action]) => [action.id, (action as { createdAt?: number }).createdAt]);
+      expect(created).toEqual([
+        ['steer-1', 1_700_000_000_100],
+        ['msg-step2', 1_700_000_000_200],
+      ]);
+    });
+
     it('should keep current ID if event data has no assistantMessage', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
