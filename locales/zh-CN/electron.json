@@ -1,4 +1,5 @@
 {
+  "gateway.autoEnroll.success": "已将本机添加为当前工作区的私人设备，仅你可以在上面运行助理。",
   "gateway.enableConnection": "连接到网关",
   "gateway.error.authRejected": "设备网关拒绝了当前登录凭证。请重试或重新登录；若仍有问题，请联系服务器管理员检查网关配置。",
   "gateway.error.configUnavailable": "无法读取当前服务器的配置。请检查网络后重试。",

@@ -154,9 +154,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // under the workspace principal, not under whoever is looking at it, so a pin
   // outside the pool is one automation can never resolve. Same rule the chat
   // picker applies, shared through `devicePoolForAgent` so the two cannot drift.
-  // A task narrows it further to public workspace devices: its automated runs
-  // execute as the task's creator, who cannot resolve a colleague's private
-  // machine (see `devicePoolForTask`).
+  // Private rows in the list are only the caller's own (see `devicePoolForTask`).
   const agentPool = devicePoolForAgent(devices, !!agentWorkspaceId);
   const pool = devicePoolForTask(devices, !!agentWorkspaceId);
 
@@ -176,9 +174,9 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   const pinApplies = !!pinnedDeviceId && canSelectExecutionTarget;
   const isDeviceTarget = pinApplies;
   const effectiveTarget: DeviceExecutionTarget = pinApplies ? 'device' : inheritedTarget;
-  // A workspace agent's `local` target is the member's own machine, which the
-  // task's automation and collaborators cannot resolve unless it is in the task
-  // pool (public workspace devices); offering it would pin an unreachable device.
+  // A workspace agent's `local` target is the member's own personal machine,
+  // which is never in a workspace task pool; offering it would pin a device the
+  // task's runs cannot resolve.
   const localCandidate = agencyConfig?.boundDeviceId || currentDeviceId;
   const localDeviceId =
     localCandidate &&

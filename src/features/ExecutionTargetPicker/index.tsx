@@ -210,23 +210,71 @@ export const devicePoolForAgent = (
 };
 
 /**
- * The devices a Task may pin.
+ * The devices a Task may pin: the same pool as {@link devicePoolForAgent}.
  *
- * Narrower than {@link devicePoolForAgent} for a workspace agent: a Task's
- * scheduled and heartbeat runs execute as the task's creator, and a private
- * workspace device is only resolvable by the member who enrolled it
- * (`DeviceModel.findWorkspaceDeviceById`). A collaborator's private machine
- * pinned on a shared task is therefore unreachable for automation — and the
- * creator's private machine is unreachable for a collaborator's manual run — so
- * only public workspace devices are offered.
+ * The private workspace rows in a device list are only ever the caller's own
+ * (`DeviceModel.findWorkspaceDeviceById` hides other members' private rows), so
+ * a member can pin a Task to their own private machine. Its scheduled runs
+ * execute as the task's creator, who resolves that machine when they enrolled
+ * it.
  */
 export const devicePoolForTask = (
   devices: DeviceListItem[] | undefined,
   workspaceAgent: boolean,
-): DeviceListItem[] => {
-  const { personal, publicWorkspace } = groupExecutionTargetDevices(devices);
+): DeviceListItem[] => devicePoolForAgent(devices, workspaceAgent);
 
-  return workspaceAgent ? publicWorkspace : personal;
+/**
+ * This machine's private row in the workspace pool, if it has one — the row
+ * auto-enrollment creates. `localMachineIds` are the ids this desktop holds
+ * (`useLocalMachineDeviceIds`); only the workspace one can match. A row shared
+ * as public is a team device: picking it is a shared binding, so it never
+ * stands in for "this machine".
+ */
+export const findOwnWorkspaceDevice = (
+  devices: DeviceListItem[] | undefined,
+  localMachineIds: string[],
+): DeviceListItem | undefined =>
+  devices?.find(
+    (device) =>
+      device.scope === 'workspace' &&
+      device.visibility === 'private' &&
+      localMachineIds.includes(device.deviceId),
+  );
+
+/**
+ * The target a desktop picker writes on its own, or `undefined` to leave the
+ * agent alone.
+ *
+ * - Nothing stored yet: this machine — its workspace row through the gateway
+ *   when it has one, else the in-app `local` path.
+ * - The member's own plain `local` pick on a workspace agent whose machine now
+ *   has a workspace row moves to that row, so runs go through the gateway. A
+ *   sandboxed `local` stays: only the in-app path can fence commands. A shared
+ *   `local` the member merely inherits (`isOwnPick: false`) is not theirs to move.
+ */
+export const getMachineDefaultTarget = ({
+  boundDeviceId,
+  executionTarget,
+  isOwnPick,
+  localSandboxEnabled,
+  ownWorkspaceDeviceId,
+}: {
+  boundDeviceId?: string;
+  executionTarget?: DeviceExecutionTarget;
+  isOwnPick: boolean;
+  localSandboxEnabled: boolean;
+  ownWorkspaceDeviceId?: string;
+}): ExecutionTargetSelection | undefined => {
+  if (executionTarget === undefined && boundDeviceId === undefined) {
+    return ownWorkspaceDeviceId
+      ? { deviceId: ownWorkspaceDeviceId, target: 'device' }
+      : { target: 'local' };
+  }
+
+  if (executionTarget === 'local' && isOwnPick && !localSandboxEnabled && ownWorkspaceDeviceId)
+    return { deviceId: ownWorkspaceDeviceId, target: 'device' };
+
+  return undefined;
 };
 
 interface ExecutionTargetIconProps {

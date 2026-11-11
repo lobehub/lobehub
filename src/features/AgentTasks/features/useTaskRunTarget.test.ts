@@ -268,9 +268,9 @@ describe('useTaskRunTarget', () => {
     expect(result.current.pinnedDeviceId).toBe(PERSONAL_DEVICE.deviceId);
   });
 
-  it('offers a shared task only public workspace devices', () => {
-    // Automated runs execute as the task's creator, who cannot resolve a
-    // colleague's private workspace device — so a private row is not pinnable.
+  it('offers a workspace task the caller’s own private devices with the public pool', () => {
+    // A device list only carries the caller's own private rows, and a Task's
+    // runs execute as its creator, who resolves the machine they enrolled.
     mocks.agentState.agentMap = { 'agent-1': { workspaceId: 'ws-1' } };
     mocks.devices = [
       { deviceId: 'device-private', scope: 'workspace', visibility: 'private' },
@@ -280,6 +280,7 @@ describe('useTaskRunTarget', () => {
     const { result } = renderHook(() => useTaskRunTarget('agent-1'));
 
     expect(result.current.devices?.map((device) => device.deviceId)).toEqual([
+      'device-private',
       WORKSPACE_DEVICE.deviceId,
     ]);
   });

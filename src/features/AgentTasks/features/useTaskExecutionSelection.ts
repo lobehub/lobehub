@@ -18,9 +18,9 @@ import { type TaskRunTarget, useTaskRunTarget } from './useTaskRunTarget';
  * else — and from then on the agent changing its own environment no longer
  * moves the task.
  *
- * A machine outside the task's pool is left unpinned: a workspace task's
- * automated runs cannot reach a member's private device, and pinning it would
- * point every run at a machine they never resolve.
+ * A machine outside the task's pool is left unpinned: a workspace task's runs
+ * cannot reach a member's personal device, and pinning it would point every run
+ * at a machine they never resolve.
  */
 export const seedTaskExecutionSelection = (
   target: Pick<TaskRunTarget, 'devices' | 'inheritedDeviceId' | 'inheritedDirectory'>,
