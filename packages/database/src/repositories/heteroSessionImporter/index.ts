@@ -7,6 +7,7 @@ import type {
 import { and, count, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
 
 import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
+import { sanitizeNullBytes } from '@/utils/sanitizeNullBytes';
 
 import { agents, messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -299,7 +300,7 @@ export class HeteroSessionImporterRepo {
       return {
         agentId,
         clientId: m.clientId,
-        content: m.content,
+        content: sanitizeNullBytes(m.content),
         createdAt: timestamp,
         id: clientIdToDbId.get(m.clientId)!,
         metadata: m.metadata ?? null,
@@ -322,11 +323,11 @@ export class HeteroSessionImporterRepo {
       .filter((m) => m.plugin || m.toolCallId)
       .map((m) => ({
         apiName: clampToolIdentifier(m.plugin?.apiName) ?? null,
-        arguments: m.plugin?.arguments ?? null,
+        arguments: sanitizeNullBytes(m.plugin?.arguments) ?? null,
         clientId: m.clientId,
         id: clientIdToDbId.get(m.clientId)!,
         identifier: clampToolIdentifier(m.plugin?.identifier) ?? null,
-        state: m.pluginState ?? null,
+        state: sanitizeNullBytes(m.pluginState) ?? null,
         toolCallId: m.toolCallId ?? null,
         type: m.plugin?.type ?? null,
         userId: this.userId,
