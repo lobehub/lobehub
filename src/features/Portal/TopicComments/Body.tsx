@@ -65,6 +65,7 @@ const Body = memo(() => {
             const pending = pendingCommentIds.has(root.id);
             return (
               <CommentCard
+                divided
                 comment={root}
                 key={root.id}
                 pending={pending}

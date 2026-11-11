@@ -26,7 +26,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const TopicCommentsSidebar = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const view = useChatStore(chatPortalSelectors.currentView);
   const [goBack, openTopicComments] = useChatStore((s) => [s.goBack, s.openTopicComments]);
 
@@ -48,6 +48,7 @@ const TopicCommentsSidebar = memo(() => {
         <ActionIcon
           icon={ArrowLeft}
           size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={t('back', { ns: 'common' })}
           onClick={isThread ? goBack : () => openTopicComments(view.topicId)}
         />
         <Text fontSize={13} weight={500}>

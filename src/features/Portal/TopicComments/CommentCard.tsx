@@ -5,6 +5,7 @@ import {
   Avatar,
   Button,
   confirmModal,
+  cx,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -19,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import RichTextMessage from '@/features/Conversation/Messages/User/components/RichTextMessage';
 import { useTopicCommentMutations } from '@/features/TopicComment/hooks';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useEnterToSend } from '@/hooks/useEnterToSend';
 
 import AnchorPreview from './AnchorPreview';
 import { createTopicCommentUpdateInput, hasTopicCommentEditorData } from './commentContent';
@@ -30,25 +32,28 @@ import TopicCommentEditor, {
 
 interface CommentCardProps {
   comment: TopicCommentItem;
+  /** A thread in the comment list: separated from its neighbours by a hairline. */
+  divided?: boolean;
   onDeleted?: (mode: 'hard' | 'moderated' | 'soft') => void;
   onMutated?: () => void;
   onOpenThread?: () => void;
   pending?: boolean;
   replyCount?: number;
-  replyStyle?: boolean;
   rootReplyCount?: number;
 }
 
 const CommentContent = memo<Pick<TopicCommentItem, 'content' | 'editorData'>>(
-  ({ content, editorData }) => {
-    return hasTopicCommentEditorData(editorData) ? (
-      <RichTextMessage editorState={editorData} />
-    ) : (
-      <Markdown fontSize={14} variant={'chat'}>
-        {content}
-      </Markdown>
-    );
-  },
+  ({ content, editorData }) => (
+    <div className={styles.content}>
+      {hasTopicCommentEditorData(editorData) ? (
+        <RichTextMessage editorState={editorData} />
+      ) : (
+        <Markdown fontSize={14} variant={'chat'}>
+          {content}
+        </Markdown>
+      )}
+    </div>
+  ),
 );
 
 CommentContent.displayName = 'TopicCommentContent';
@@ -56,15 +61,16 @@ CommentContent.displayName = 'TopicCommentContent';
 const CommentCard = memo<CommentCardProps>(
   ({
     comment,
+    divided,
     onDeleted,
     onMutated,
     onOpenThread,
     pending,
     replyCount,
-    replyStyle,
     rootReplyCount,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'common']);
+    const shouldSendOnEnter = useEnterToSend();
 
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
     const { mutatingIds, remove, restore, update } = useTopicCommentMutations();
@@ -154,7 +160,7 @@ const CommentCard = memo<CommentCardProps>(
 
     return (
       <Flexbox
-        className={`${styles.card} ${replyStyle ? styles.reply : ''}`}
+        className={cx(styles.card, divided && styles.cardDivided)}
         data-topic-comment-id={comment.id}
         gap={8}
       >
@@ -231,6 +237,11 @@ const CommentCard = memo<CommentCardProps>(
                   setNextContent(content);
                   setNextEditorData(editorData);
                 }}
+                onPressEnter={(event) => {
+                  if (!shouldSendOnEnter(event)) return;
+                  void handleUpdate();
+                  return true;
+                }}
               />
             </div>
             <Flexbox horizontal gap={8} justify={'flex-end'}>
@@ -247,8 +258,9 @@ const CommentCard = memo<CommentCardProps>(
         )}
 
         {onOpenThread && (
-          <Flexbox horizontal justify={'flex-end'}>
+          <Flexbox horizontal>
             <Button
+              className={styles.cardFooter}
               icon={<Icon icon={MessageCircle} />}
               size={'small'}
               type={'text'}
@@ -264,7 +276,12 @@ const CommentCard = memo<CommentCardProps>(
         {!editing && menuItems.length > 0 && (
           <div className={`${styles.cardActions} topic-comment-actions`}>
             <DropdownMenu items={menuItems}>
-              <ActionIcon icon={MoreHorizontal} loading={mutating} size={'small'} />
+              <ActionIcon
+                icon={MoreHorizontal}
+                loading={mutating}
+                size={'small'}
+                title={t('more', { ns: 'common' })}
+              />
             </DropdownMenu>
           </div>
         )}
