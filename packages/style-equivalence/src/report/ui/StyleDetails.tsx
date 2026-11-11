@@ -52,6 +52,16 @@ const styles = stylex.create({
   },
   line: { display: 'block' },
   mono: { color: cssVar.colorText, fontFamily: cssVar.fontFamilyCode, fontSize: cssVar.fontSizeSM },
+  movedHead: {
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartWidth: 1,
+    color: cssVar.colorTextSecondary,
+    fontSize: cssVar.fontSizeSM,
+    paddingBlock: 8,
+    paddingInline: 12,
+  },
+  movedNote: { display: 'block', marginBlockStart: 4 },
   pane: { minWidth: 0 },
   paneHead: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -150,6 +160,17 @@ const DeclarationTable = ({ blocks }: { blocks: ReviewView['styles']['blocks'] }
                 </td>
                 <td {...stylex.props(styles.cell, styles.mono)}>
                   <Lines label={row.label} lines={row.after} />
+                  {row.movedTo?.map((where) => (
+                    <Text
+                      as="span"
+                      fontSize={12}
+                      key={where}
+                      type="secondary"
+                      {...stylex.props(styles.movedNote)}
+                    >
+                      写在子元素 {where}
+                    </Text>
+                  ))}
                 </td>
                 <td {...stylex.props(styles.cell)}>
                   <Text fontSize={12} type={result.type}>
@@ -165,18 +186,31 @@ const DeclarationTable = ({ blocks }: { blocks: ReviewView['styles']['blocks'] }
   </div>
 );
 
+type MovedSlots = ReviewView['styles']['moved'][string];
+
 const SourcePane = ({
   children,
   label,
+  moved = [],
   split,
 }: {
   children: string;
   label: string;
+  moved?: MovedSlots;
   split?: boolean;
 }) => (
   <div {...stylex.props(styles.pane, split && styles.paneSplit)}>
     <div {...stylex.props(styles.paneHead)}>{label}</div>
     <pre {...stylex.props(styles.code)}>{children}</pre>
+    {moved.map((group) => (
+      <div key={group.slot}>
+        <div {...stylex.props(styles.movedHead)}>
+          改之前 {group.selectors.join('、')} 的规则，现在写在子元素 &lt;
+          {group.tags.join('> <')}&gt; 的 {group.slot} 上
+        </div>
+        <pre {...stylex.props(styles.code)}>{group.text}</pre>
+      </div>
+    ))}
   </div>
 );
 
@@ -186,13 +220,15 @@ const SourceCompare = ({ styles: data }: { styles: ReviewView['styles'] }) => {
   ].sort();
   const usage = (side: 'base' | 'head') =>
     (data.usage[side] ?? ['（这一侧没有这个元素）']).join('\n');
+  const label = (side: 'base' | 'head', text: string) =>
+    data.counterpart === side ? `${text}：同一位置的元素，没有样式类` : text;
   return (
     <Flexbox gap={12}>
       <div {...stylex.props(styles.block)}>
         <div {...stylex.props(styles.group)}>JSX 用法</div>
         <div {...stylex.props(styles.panes)}>
-          <SourcePane label="改之前">{usage('base')}</SourcePane>
-          <SourcePane split label="改之后">
+          <SourcePane label={label('base', '改之前')}>{usage('base')}</SourcePane>
+          <SourcePane split label={label('head', '改之后')}>
             {usage('head')}
           </SourcePane>
         </div>
@@ -202,7 +238,7 @@ const SourceCompare = ({ styles: data }: { styles: ReviewView['styles'] }) => {
           <div {...stylex.props(styles.group)}>{slot}</div>
           <div {...stylex.props(styles.panes)}>
             <SourcePane label="改之前">{data.source.base?.[slot] ?? '（没有）'}</SourcePane>
-            <SourcePane split label="改之后">
+            <SourcePane split label="改之后" moved={data.moved[slot]}>
               {data.source.head?.[slot] ?? '（没有）'}
             </SourcePane>
           </div>

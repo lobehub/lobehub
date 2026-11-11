@@ -2,6 +2,7 @@ import type {
   DocumentChannel,
   GatewayMuxClient,
   GatewayMuxStatus,
+  MuxDocCapacity,
   MuxDocServerMessage,
 } from '@lobechat/agent-gateway-client';
 import * as Y from 'yjs';
@@ -41,9 +42,18 @@ export interface PageCollabCharLimitRefusal {
 /** `doc_error` code the room sends when the server refuses its page for its length. */
 export const PAGE_ROOM_CHAR_LIMIT_CODE = 'char_limit_exceeded';
 
+export type PageCollabBlockedReason = 'deleted' | 'too_large';
+
+const BLOCKED_REASON: Record<string, PageCollabBlockedReason> = {
+  doc_deleted: 'deleted',
+  doc_too_large: 'too_large',
+};
+
 export interface PageCollabProviderEvents {
   onAccess?: (access: PageCollabAccess) => void;
+  onBlocked?: (reason: PageCollabBlockedReason) => void;
   onBootstrap?: () => void;
+  onCapacity?: (capacity: MuxDocCapacity) => void;
   /**
    * The server stored the room's page again after refusing it. A page already
    * over the limit is stored when it does not grow, so only the server knows.
@@ -55,6 +65,8 @@ export interface PageCollabProviderEvents {
    */
   onCharLimitExceeded?: (refusal: PageCollabCharLimitRefusal) => void;
   onFailure?: (failure: PageCollabFailure) => void;
+  /** This member changed the page, as opposed to the editor syncing or bootstrapping it. */
+  onLocalEdit?: () => void;
   onPendingChange?: (pending: number) => void;
   onReset?: (reason: PageCollabResetReason) => void;
   onStatus?: (status: PageCollabStatus) => void;
@@ -166,6 +178,7 @@ export class PageCollabProvider extends Emitter {
   private bootstrapping = false;
   private conflicted = false;
   private synced = false;
+  private acceptsEdits = false;
   // The hub refuses anything for the document until its subscribe settles, and a
   // refusal before the first sync fails the join.
   private subscribed = false;
@@ -274,6 +287,7 @@ export class PageCollabProvider extends Emitter {
 
   private handleLocalUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === this) return;
+    if (this.acceptsEdits && !this.bootstrapping) this.events.onLocalEdit?.();
     const seq = ++this.seq;
     this.pending.add(seq);
     this.events.onPendingChange?.(this.pending.size);
@@ -294,6 +308,7 @@ export class PageCollabProvider extends Emitter {
     this.waitingForBootstrap = false;
     this.emit('status', { status: 'connected' });
     this.emit('sync', true);
+    this.acceptsEdits = true;
     this.events.onStatus?.('synced');
   }
 
@@ -315,6 +330,11 @@ export class PageCollabProvider extends Emitter {
     this.handleLocalUpdate(update, null);
   }
 
+  private reportCapacity(capacity: MuxDocCapacity) {
+    this.events.onCapacity?.(capacity);
+    if (capacity === 'full') this.events.onBlocked?.('too_large');
+  }
+
   private handleMessage = (message: MuxDocServerMessage) => {
     switch (message.type) {
       case 'doc_synced': {
@@ -334,6 +354,7 @@ export class PageCollabProvider extends Emitter {
           this.awareness.setLocalState(this.awareness.getLocalState());
         }
         this.resendPending();
+        if (message.capacity) this.reportCapacity(message.capacity);
         if (message.bootstrap || message.bootstrapped) {
           // The binding seeds an empty root as soon as it hears `sync`, before
           // the bootstrap below runs; that write is part of our bootstrap too.
@@ -369,6 +390,11 @@ export class PageCollabProvider extends Emitter {
         return;
       }
 
+      case 'doc_capacity': {
+        this.reportCapacity(message.capacity);
+        return;
+      }
+
       case 'doc_error': {
         // Our doc now holds a second copy of the page; the room refuses it until we rejoin with a fresh one.
         if (message.code === 'bootstrap_conflict') {
@@ -389,6 +415,12 @@ export class PageCollabProvider extends Emitter {
           } else {
             console.warn('[PageCollabProvider] char limit refusal without a limit', message);
           }
+          return;
+        }
+        // Not a sync failure: retrying cannot help, the page stays read-only.
+        const blocked = BLOCKED_REASON[message.code];
+        if (blocked) {
+          this.events.onBlocked?.(blocked);
           return;
         }
         // A view-only member is still in the room; only their writes are refused.

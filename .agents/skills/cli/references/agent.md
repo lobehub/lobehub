@@ -30,7 +30,7 @@ View agent configuration details. `agentId` may be omitted when `-s, --slug` is 
 lh agent view [agentId] [-s <slug>] [--json [fields]]
 ```
 
-**Displays**: Title, description, model, provider, system role, plugins, tools.
+**Displays**: Title, description, visibility (workspace agents only), model, provider, system role, plugins, tools.
 
 ---
 
@@ -39,19 +39,23 @@ lh agent view [agentId] [-s <slug>] [--json [fields]]
 Create a new agent.
 
 ```bash
-lh agent create [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--group <groupId>]
+lh agent create [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--group <groupId>] [--visibility <private|public>] [--json [fields]]
 ```
 
-| Option                      | Description    | Required |
-| --------------------------- | -------------- | -------- |
-| `-t, --title <title>`       | Agent title    | No       |
-| `-d, --description <desc>`  | Description    | No       |
-| `-m, --model <model>`       | Model ID       | No       |
-| `-p, --provider <provider>` | Provider ID    | No       |
-| `-s, --system-role <role>`  | System prompt  | No       |
-| `--group <groupId>`         | Agent group ID | No       |
+| Option                      | Description                                                                                                                 | Required |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `-t, --title <title>`       | Agent title                                                                                                                 | No       |
+| `-d, --description <desc>`  | Description                                                                                                                 | No       |
+| `-m, --model <model>`       | Model ID                                                                                                                    | No       |
+| `-p, --provider <provider>` | Provider ID                                                                                                                 | No       |
+| `-s, --system-role <role>`  | System prompt                                                                                                               | No       |
+| `--group <groupId>`         | Agent group ID                                                                                                              | No       |
+| `--visibility <visibility>` | Who can see the agent in a workspace: `private` (only you) or `public` (workspace members). Omit to keep the server default | No       |
+| `--json [fields]`           | Print the created agent as JSON, optionally selecting fields (e.g. `--json id,visibility`)                                  | No       |
 
-**Output**: Created agent ID and session ID.
+The workspace comes from the current scope (`LOBEHUB_WORKSPACE_ID` or `lh workspace use`); `--visibility` only chooses who inside that scope can see the agent. An invalid value exits 1 before any request is sent.
+
+**Output**: Without `--json`, the created agent ID, its session ID when there is one, the requested visibility, and the agent URL. With `--json`, an object `{ id, sessionId?, title, url, visibility, workspaceId }`. `visibility` and `workspaceId` are read back from the server after creation, so they are the stored values (server default or folder-inherited included), not an echo of the flag. If that read-back fails, the agent still exists: `id` is printed, `visibility` and `workspaceId` are `null`, and a warning goes to stderr. Do not retry the create in that case.
 
 ---
 

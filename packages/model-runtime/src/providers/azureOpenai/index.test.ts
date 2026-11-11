@@ -3,8 +3,9 @@ import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as nonStreamToStreamModule from '../../core/openaiCompatibleFactory/nonStreamToStream';
-import * as streamsModule from '../../core/streams';
+import * as nonStreamToStreamModule from '../../core/protocols/openaiChatCompletions/nonStreamToStream';
+import * as chatCompletionsStreamModule from '../../core/protocols/openaiChatCompletions/stream';
+import * as responsesStreamModule from '../../core/protocols/openaiResponses/stream';
 import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as getModelPricingModule from '../../utils/getModelPricing';
@@ -92,7 +93,9 @@ describe('LobeAzureOpenAI', () => {
         );
         vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
-        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+        vi.spyOn(responsesStreamModule, 'OpenAIResponsesStream').mockReturnValue(
+          new ReadableStream(),
+        );
 
         await instance.chat({
           enabledSearch: true,
@@ -119,7 +122,7 @@ describe('LobeAzureOpenAI', () => {
           expect.arrayContaining([expect.objectContaining({ type: 'web_search' })]),
         );
 
-        expect(streamsModule.OpenAIResponsesStream).toHaveBeenCalledWith(
+        expect(responsesStreamModule.OpenAIResponsesStream).toHaveBeenCalledWith(
           mockStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
@@ -138,7 +141,9 @@ describe('LobeAzureOpenAI', () => {
 
         vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
-        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+        vi.spyOn(responsesStreamModule, 'OpenAIResponsesStream').mockReturnValue(
+          new ReadableStream(),
+        );
 
         await instance.chat({
           messages: [{ content: 'Review this migration.', role: 'user' }],
@@ -161,7 +166,9 @@ describe('LobeAzureOpenAI', () => {
         const mockStream = new ReadableStream() as any;
         vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
-        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+        vi.spyOn(responsesStreamModule, 'OpenAIResponsesStream').mockReturnValue(
+          new ReadableStream(),
+        );
 
         await instance.chat({
           messages: [{ content: 'Review this migration.', role: 'system' }],
@@ -197,7 +204,9 @@ describe('LobeAzureOpenAI', () => {
         );
         vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
-        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+        vi.spyOn(responsesStreamModule, 'OpenAIResponsesStream').mockReturnValue(
+          new ReadableStream(),
+        );
 
         await instance.chat({
           deploymentName: 'prod-gpt-54',
@@ -214,7 +223,7 @@ describe('LobeAzureOpenAI', () => {
         expect(createCall.reasoning).toEqual({ summary: 'auto' });
         expect(createCall.deploymentName).toBeUndefined();
 
-        expect(streamsModule.OpenAIResponsesStream).toHaveBeenCalledWith(
+        expect(responsesStreamModule.OpenAIResponsesStream).toHaveBeenCalledWith(
           mockStream,
           expect.objectContaining({
             payload: expect.objectContaining({
@@ -239,7 +248,7 @@ describe('LobeAzureOpenAI', () => {
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(mockStream);
         vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
-        vi.spyOn(streamsModule, 'OpenAIStream').mockReturnValue(new ReadableStream());
+        vi.spyOn(chatCompletionsStreamModule, 'OpenAIStream').mockReturnValue(new ReadableStream());
 
         await instance.chat({
           frequency_penalty: 0.4,
@@ -275,7 +284,7 @@ describe('LobeAzureOpenAI', () => {
           'lobehub',
           undefined,
         );
-        expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
+        expect(chatCompletionsStreamModule.OpenAIStream).toHaveBeenCalledWith(
           mockStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
@@ -293,7 +302,7 @@ describe('LobeAzureOpenAI', () => {
       it('should handle multiple data chunks correctly', async () => {
         const mockStream = new ReadableStream() as any;
         vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(mockStream);
-        vi.spyOn(streamsModule, 'OpenAIStream').mockReturnValue(
+        vi.spyOn(chatCompletionsStreamModule, 'OpenAIStream').mockReturnValue(
           new ReadableStream({
             start(controller) {
               controller.enqueue(new TextEncoder().encode('event: text\ndata: "你好！"\n\n'));
@@ -314,7 +323,7 @@ describe('LobeAzureOpenAI', () => {
         });
 
         expect(result).toBeInstanceOf(Response);
-        expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
+        expect(chatCompletionsStreamModule.OpenAIStream).toHaveBeenCalledWith(
           mockStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
@@ -509,7 +518,7 @@ describe('LobeAzureOpenAI', () => {
 
         process.env.DEBUG_AZURE_CHAT_COMPLETION = '1';
         vi.spyOn(debugStreamModule, 'debugStream').mockImplementation(() => Promise.resolve());
-        vi.spyOn(streamsModule, 'OpenAIStream').mockReturnValue(new ReadableStream());
+        vi.spyOn(chatCompletionsStreamModule, 'OpenAIStream').mockReturnValue(new ReadableStream());
 
         // Act
         await instance.chat({

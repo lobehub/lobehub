@@ -1,3 +1,4 @@
+import type { AcceptanceCommentList } from '@lobechat/types';
 import { useSyncExternalStore } from 'react';
 
 import type { AcceptanceBundle } from '@/services/verify';
@@ -20,6 +21,16 @@ const readBundleMap = (): Record<string, AcceptanceBundle> => {
   }
 };
 
+/** The discussion holds each round's proposal, read from the page data. */
+const readCommentMap = (): Record<string, AcceptanceCommentList> => {
+  try {
+    const report = getLocalReport();
+    return { [report.acceptanceId]: report.comments() };
+  } catch {
+    return {};
+  }
+};
+
 const sync = {
   error: undefined,
   isHydrated: true,
@@ -38,6 +49,8 @@ const useFetchAcceptanceBundle = (
   _options?: { enabled?: boolean; refreshInterval?: number },
 ) => sync;
 
+const useFetchAcceptanceComments = (_acceptanceId?: string | null) => sync;
+
 const refreshAcceptanceBundle = async (_acceptanceId: string) => {
   state = { ...state, acceptanceBundleMap: readBundleMap() };
   for (const listener of listeners) listener();
@@ -45,9 +58,13 @@ const refreshAcceptanceBundle = async (_acceptanceId: string) => {
 
 const emptyState = {
   acceptanceBundleMap: readBundleMap(),
+  acceptanceCommentMap: readCommentMap(),
   refreshAcceptanceBundle,
   useFetchAcceptanceBundle,
+  useFetchAcceptanceComments,
 };
+
+type VerifyState = typeof emptyState;
 
 let state = emptyState;
 
@@ -55,10 +72,22 @@ let state = emptyState;
  * `@/store/verify` for the offline report: the bundle map holds the one local
  * acceptance, recomputed whenever the reviewer records a decision.
  */
-export const useVerifyStore = <T>(selector: (current: typeof emptyState) => T): T =>
+export const useVerifyStore = <T>(selector: (current: VerifyState) => T): T =>
   useSyncExternalStore(subscribe, () => selector(state));
 
 useVerifyStore.getState = () => state;
+
+const acceptanceComments = (acceptanceId?: string | null) => (s: VerifyState) =>
+  acceptanceId ? s.acceptanceCommentMap[acceptanceId] : undefined;
+
+// The page data is the whole discussion, so what it holds is already confirmed.
+const isAcceptanceCommentsConfirmed = (_acceptanceId?: string | null) => (_s: VerifyState) => true;
+
+/** The selectors the offline viewer reads; each mirrors `@/store/verify`'s. */
+export const verifySelectors = {
+  acceptanceComments,
+  isAcceptanceCommentsConfirmed,
+};
 
 try {
   getLocalReport().subscribe(() => void refreshAcceptanceBundle(getLocalReport().acceptanceId));

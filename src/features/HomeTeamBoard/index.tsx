@@ -9,11 +9,14 @@ import AsyncError from '@/components/AsyncError';
 import { useClientPollingSWR } from '@/libs/swr';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { agentRunBoardService } from '@/services/agentRunBoard';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import ActivityPanel from './ActivityPanel';
 import AttentionList from './AttentionList';
 import BoardFilters from './BoardFilters';
 import DayCalendar from './DayCalendar';
+import QuotaCapacity from './QuotaCapacity';
 import Timeline from './Timeline';
 
 // Matches the other overview pages; the gateway only streams a user's own runs.
@@ -32,6 +35,13 @@ const styles = stylex.create({
     },
     alignItems: 'start',
   },
+  columnsFolded: {
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr) 44px',
+      '@media (max-width: 1100px)': 'minmax(0, 1fr)',
+    },
+  },
+  columnsFull: { gridTemplateColumns: 'minmax(0, 1fr)' },
   empty: {
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: 12,
@@ -52,6 +62,7 @@ const HomeTeamBoard = () => {
   const [scope, setScope] = useState<AgentRunBoardScope>('all');
   const [agentId, setAgentId] = useState<string>();
   const [userId, setUserId] = useState<string>();
+  const attentionCollapsed = useGlobalStore(systemStatusSelectors.teamBoardAttentionCollapsed);
 
   // The options depend on the scope and window, so a pick may not exist in the next one.
   const clearPicks = () => {
@@ -72,6 +83,10 @@ const HomeTeamBoard = () => {
   );
 
   if (error && !data) return <AsyncError error={error} variant={'inline'} onRetry={mutate} />;
+
+  // An older server can omit the field; the board must still render.
+  const attention = data?.attention ?? [];
+  const hasAttention = attention.length > 0;
 
   return (
     <Flexbox data-testid={'team-board'} gap={20} {...stylex.props(styles.root)}>
@@ -118,7 +133,13 @@ const HomeTeamBoard = () => {
             onAgentChange={setAgentId}
             onUserChange={setUserId}
           />
-          <div {...stylex.props(styles.columns)}>
+          <div
+            {...stylex.props(
+              styles.columns,
+              attentionCollapsed && styles.columnsFolded,
+              !hasAttention && styles.columnsFull,
+            )}
+          >
             {!data.lanes?.length ? (
               <div {...stylex.props(styles.empty)}>
                 {t(scope === 'involved' ? 'team.emptyInvolved' : 'team.empty', {
@@ -130,10 +151,12 @@ const HomeTeamBoard = () => {
             ) : (
               <Timeline board={data} />
             )}
-            <AttentionList items={data.attention} now={data.generatedAt} />
+            {hasAttention && <AttentionList items={attention} now={data.generatedAt} />}
           </div>
         </Flexbox>
       )}
+      {/* Independent of the run board: it loads, polls and fails on its own. */}
+      <QuotaCapacity />
     </Flexbox>
   );
 };

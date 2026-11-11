@@ -728,8 +728,8 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
       chroma-js:
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.3.0
+        version: 3.3.0
       countries-and-timezones:
         specifier: ^3.9.0
         version: 3.10.0
@@ -4160,6 +4160,9 @@ packages:
 
   chroma-js@3.2.0:
     resolution: {integrity: sha512-os/OippSlX1RlWWr+QDPcGUZs0uoqr32urfxESG9U93lhUfbnlyckte84Q8P1UQY/qth983AS1JONKmLS4T0nw==}
+
+  chroma-js@3.3.0:
+    resolution: {integrity: sha512-afEEP0zHO4dxwrqTllKSFWs83+u+htEsmyvSe8IPjKjrfy3qmNk+vpWAdpbA2fJa14LTgkGyemC74J6v3HSUZA==}
 
   chromium-pickle-js@0.2.0:
     resolution: {integrity: sha512-1R5Fho+jBq0DDydt+/vHWj5KJNJCKdARKOCwZUen84I5BreWoLqRLANH1U87eJy1tiASPtMnGqJJq0ZsLoRPOw==}
@@ -11539,6 +11542,8 @@ snapshots:
   chownr@3.0.0: {}
 
   chroma-js@3.2.0: {}
+
+  chroma-js@3.3.0: {}
 
   chromium-pickle-js@0.2.0: {}
 

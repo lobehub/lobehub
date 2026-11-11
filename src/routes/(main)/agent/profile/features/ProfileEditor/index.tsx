@@ -10,13 +10,14 @@ import {
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Alert, Button, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, MonitorSmartphone, Wrench } from 'lucide-react';
+import { ChevronDown, Fingerprint, MonitorSmartphone, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { ModelIcon } from '@/components/LobeIcons';
+import { ClaudeCodeEntrypointSetting } from '@/features/HeterogeneousAgent/ClaudeCodeEntrypointSetting';
 import { ApiAuthLocalOnlyNotice } from '@/features/HeterogeneousAgent/ExecutionEnvironment/ApiAuthLocalOnlyNotice';
 import { DeviceCliStatusCard } from '@/features/HeterogeneousAgent/ExecutionEnvironment/DeviceCliStatusCard';
 import { HeteroExecutionTargetSelect } from '@/features/HeterogeneousAgent/ExecutionEnvironment/HeteroExecutionTargetSelect';
@@ -302,6 +303,21 @@ const ProfileEditor = memo(() => {
                 />
               </WorkspaceAgentPolicyCard>
               {renderHeterogeneousPanel()}
+              {/* Follows the engine and its sign-in, not where the run lands. */}
+              {heterogeneousProvider.type === 'claude-code' &&
+                (heterogeneousProvider.authMode ?? 'subscription') === 'subscription' && (
+                  <WorkspaceAgentPolicyCard
+                    fullWidth
+                    icon={Fingerprint}
+                    title={t('heterogeneousStatus.entrypoint.label')}
+                  >
+                    <ClaudeCodeEntrypointSetting
+                      disabled={!canEdit}
+                      env={heterogeneousProvider.env}
+                      onEnvChange={updateHeterogeneousEnv}
+                    />
+                  </WorkspaceAgentPolicyCard>
+                )}
             </>
           ) : isWorkspaceAgent ? (
             <>

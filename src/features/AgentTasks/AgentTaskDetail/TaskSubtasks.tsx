@@ -333,7 +333,7 @@ const TaskSubtasks = memo(() => {
                 gap={8}
                 paddingBlock={4}
                 paddingInline={8}
-                style={{ cursor: 'pointer', width: 'fit-content' }}
+                style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
                 variant="borderless"
                 onClick={() => setIsExpanded((prev) => !prev)}
               >
@@ -407,7 +407,7 @@ const TaskSubtasks = memo(() => {
             gap={8}
             paddingBlock={4}
             paddingInline={8}
-            style={{ width: 'fit-content' }}
+            style={{ marginInlineStart: -8, width: 'fit-content' }}
             title={canEditTask ? undefined : reason}
             variant="borderless"
             onClick={toggleCreating}

@@ -586,6 +586,8 @@ export default {
   'acceptance.gate.planFiles': '{{count}} files',
   'acceptance.gate.planTitle': 'Execution plan',
   'acceptance.gate.agentSays': 'Main Agent: {{reason}}',
+  'acceptance.gate.unitArtifacts': 'Outputs',
+  'acceptance.gate.unitArtifactsEmpty': 'No outputs registered for this unit.',
   'acceptance.gate.unitBrief': 'What this unit does',
   'acceptance.gate.unitWaitingHint': 'Not started yet. It runs the plan above once you approve.',
   'acceptance.gate.unitWaiting': 'Starts on approval',

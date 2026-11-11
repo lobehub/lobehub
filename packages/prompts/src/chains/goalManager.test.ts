@@ -21,6 +21,24 @@ const cdataOf = (prompt: string, tag: string) =>
 const turnPart = (prompt: string) => prompt.slice(0, prompt.indexOf('<instruction>'));
 
 describe('buildGoalManagerPrompt', () => {
+  // Regression: a Task that passed 4/4 checks carried a finding reading "nothing
+  // changed", and the turn re-dispatched the whole verification on that wording.
+  it('names verified Tasks and tells the turn the verdict outranks the summary', () => {
+    const prompt = buildGoalManagerPrompt({
+      ...base,
+      verifiedTasks: [{ checks: '4/4', taskId: 'task_1', taskTitle: 'Verify the fix' }],
+    });
+
+    expect(turnPart(prompt)).toContain(
+      '<verifiedTask checks="4/4" taskId="task_1" taskTitle="Verify the fix" />',
+    );
+    expect(prompt).toContain('That verdict outranks how a finding or run summary');
+  });
+
+  it('lists no verified Task when there is none', () => {
+    expect(turnPart(buildGoalManagerPrompt(base))).not.toContain('<verifiedTask');
+  });
+
   it.each([
     '探索怎样从用户历史数据提炼领域判断力',
     'Explore personal predictions from past decisions',
@@ -28,7 +46,7 @@ describe('buildGoalManagerPrompt', () => {
     'keeps supervision language tied to the goal rather than the English control prompt: %s',
     (requirement) => {
       const prompt = buildGoalManagerPrompt({ ...base, requirement });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v14');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v16');
       expect(cdataOf(prompt, 'requirement')).toBe(requirement);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
@@ -85,6 +103,7 @@ describe('buildGoalManagerPrompt', () => {
       .map((line) => JSON.parse(line));
     expect(tasksSchemas.find((schema) => schema.rollout)?.rollout).toMatchObject({
       recipe: expect.any(String),
+      skillName: expect.any(String),
       units: expect.any(Array),
     });
   });
@@ -166,7 +185,7 @@ describe('buildGoalManagerPrompt', () => {
     });
 
     expect(prompt.split('\n')[0]).toBe(
-      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v14">',
+      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v16">',
     );
     expect(prompt.endsWith('</goalTurn>')).toBe(true);
     // CommonMark ends an HTML block at a blank line; the client needs one block.

@@ -91,6 +91,7 @@
   "response.GoogleAIBlockReason.SAFETY": "内容因安全原因被屏蔽。请调整后再试。",
   "response.GoogleAIBlockReason.SPII": "内容可能包含敏感个人信息（SPII）。请移除敏感信息后再试。",
   "response.GoogleAIBlockReason.default": "内容被屏蔽（{{blockReason}}）。请调整后再试。",
+  "response.InsufficientBudgetForAgentRunFee": "额度不足以支付助理运行费。每次助理运行都会收取运行费，使用自己的 CLI 账号也不例外。充值或升级套餐后再试。",
   "response.InsufficientBudgetForModel": "你的余额不足以使用此模型。请充值、升级订阅套餐，或尝试使用费用更低的模型。",
   "response.InvalidAccessCode": "访问密码为空或不正确。请重新输入，或改用自定义 API Key",
   "response.LobeHubModelDeprecated": "模型「{{model}}」已下架，请到模型选择器中重新选择可用模型。",

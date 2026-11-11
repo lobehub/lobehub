@@ -1,3 +1,5 @@
+import { namesObjectBuiltIn } from '../skill/packageFiles';
+
 /**
  * Normalizes package-relative skill paths and rejects unsafe path forms.
  *
@@ -14,6 +16,7 @@ export const assertPackageRelativePath = (path: string) => {
   if (segments.includes('..')) {
     throw new Error('path traversal is not allowed');
   }
+  if (namesObjectBuiltIn(path)) throw new Error('object built-in names are not allowed');
 
   return segments.join('/');
 };

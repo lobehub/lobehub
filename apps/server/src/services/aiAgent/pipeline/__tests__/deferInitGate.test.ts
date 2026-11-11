@@ -24,13 +24,14 @@ describe('shouldDeferOperationInit', () => {
 
   it('does not read the flag for a run that could never defer', async () => {
     const isEnabled = vi.fn(flagOn);
-    await shouldDeferOperationInit({ ...plainSend, autoStart: false }, isEnabled);
+    await expect(
+      shouldDeferOperationInit({ ...plainSend, autoStart: false }, isEnabled),
+    ).resolves.toBe(false);
     expect(isEnabled).not.toHaveBeenCalled();
   });
 
   it.each<[string, Partial<DeferInitInput>]>([
     ['no queue runtime', { queueRuntimeEnabled: false }],
-    ['no auto-start', { autoStart: false }],
     ['an orchestrated run', { hasOrchestration: true }],
     ['a non-chat trigger', { trigger: 'cron' }],
   ])('keeps the init synchronous for %s', async (_, override) => {

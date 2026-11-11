@@ -70,9 +70,14 @@ const sourceTopicsByMessage = async (
   messageIds: string[],
   viewerUserId: string | undefined,
 ) => {
-  if (!viewerUserId || !messageIds.length) return new Map<string, string>();
+  if (!viewerUserId || !messageIds.length)
+    return new Map<string, { id: string; title: string | null }>();
   const rows = await tx
-    .select({ messageId: channelJobs.publishedMessageId, topicId: topics.id })
+    .select({
+      messageId: channelJobs.publishedMessageId,
+      title: topics.title,
+      topicId: topics.id,
+    })
     .from(channelJobs)
     .innerJoin(topics, eq(topics.id, channelJobs.topicId))
     .where(
@@ -83,7 +88,7 @@ const sourceTopicsByMessage = async (
         notTrashed(topics.isDeleted),
       ),
     );
-  return new Map(rows.map((row) => [row.messageId!, row.topicId]));
+  return new Map(rows.map((row) => [row.messageId!, { id: row.topicId, title: row.title }]));
 };
 
 export const readChannelView = async (
@@ -242,13 +247,15 @@ export const readChannelView = async (
     rootMessage: rootMessage
       ? {
           ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
-          sourceTopicId: sourceTopics.get(rootMessage.id) ?? null,
+          sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
+          sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
           replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
         }
       : null,
     messages: page.map((message) => ({
       ...publicMessage(message, files.get(message.id) ?? []),
-      sourceTopicId: sourceTopics.get(message.id) ?? null,
+      sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
+      sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
     })),
   };

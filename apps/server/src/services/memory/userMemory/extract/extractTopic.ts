@@ -27,6 +27,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { UserModel } from '@/database/models/user';
 import type { UserMemoryHybridSearchAggregatedResult } from '@/database/models/userMemory';
 import { UserMemoryModel } from '@/database/models/userMemory';
+import { notEvalTopic } from '@/database/utils/evalTopic';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
@@ -36,6 +37,7 @@ import type { MemoryExtractionExecutorContext } from './context';
 import type { MemoryExtractionTaskErrorItem } from './errors';
 import {
   buildAsyncTaskErrorFrom,
+  describeError,
   makeTaskErrorItem,
   MemoryExtractionAggregateError,
   serializeError,
@@ -113,6 +115,8 @@ export async function extractTopic(ctx: MemoryExtractionExecutorContext, job: To
           where: and(
             eq(topics.id, job.topicId),
             buildWorkspaceWhere({ userId: job.userId, workspaceId: job.workspaceId }, topics),
+            // Eval dialogue never becomes the user's memory.
+            notEvalTopic(),
           ),
         });
 
@@ -447,7 +451,7 @@ export async function extractTopic(ctx: MemoryExtractionExecutorContext, job: To
         }
         span.setStatus({
           code: SpanStatusCode.ERROR,
-          message: error instanceof Error ? error.message : 'Extraction failed',
+          message: describeError(error),
         });
         span.recordException(error as Error);
         console.error(

@@ -102,6 +102,15 @@ class MockWebSocket {
   }
 }
 
+const stalledStreamOptions = (
+  onStall: ReturnType<typeof vi.fn>,
+): Parameters<typeof streamAgentEvents>[0] => ({
+  gatewayUrl: 'https://gw.test.com',
+  onStall,
+  operationId: 'op-1',
+  stallTimeoutMs: 1000,
+});
+
 describe('streamAgentEvents', () => {
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -512,12 +521,7 @@ describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
       .mockResolvedValueOnce(undefined) // still running → keep streaming
       .mockResolvedValueOnce({ kind: 'completed', status: 'done' });
 
-    const promise = streamAgentEvents({
-      gatewayUrl: 'https://gw.test.com',
-      onStall,
-      operationId: 'op-1',
-      stallTimeoutMs: 1000,
-    });
+    const promise = streamAgentEvents(stalledStreamOptions(onStall));
     const settled = vi.fn();
     promise.then(settled, settled);
     const failure = expect(promise).rejects.toMatchObject({ name: 'AgentStreamHistoryError' });
@@ -538,12 +542,7 @@ describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     const onStall = vi.fn().mockResolvedValue({ kind: 'completed', status: 'done' });
 
-    const promise = streamAgentEvents({
-      gatewayUrl: 'https://gw.test.com',
-      onStall,
-      operationId: 'op-1',
-      stallTimeoutMs: 1000,
-    });
+    const promise = streamAgentEvents(stalledStreamOptions(onStall));
     await vi.advanceTimersByTimeAsync(1000);
     expect(onStall).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(0);
@@ -564,12 +563,7 @@ describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
   it('real stream progress restarts the quiet window, so a slow healthy run is not probed', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     const onStall = vi.fn();
-    const promise = streamAgentEvents({
-      gatewayUrl: 'https://gw.test.com',
-      onStall,
-      operationId: 'op-1',
-      stallTimeoutMs: 1000,
-    });
+    const promise = streamAgentEvents(stalledStreamOptions(onStall));
     await vi.advanceTimersByTimeAsync(0);
 
     for (let i = 0; i < 10; i++) {
