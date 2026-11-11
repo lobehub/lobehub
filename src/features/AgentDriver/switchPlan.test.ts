@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { planDriverSwitch } from './switchPlan';
+import { planDriverRollback, planDriverSwitch } from './switchPlan';
 
 const defaults = { model: 'gpt-5.5', provider: 'openai' };
 
@@ -42,5 +42,18 @@ describe('planDriverSwitch', () => {
     expect(plan).toEqual([
       { agencyConfig: { heterogeneousProvider: null }, model: 'gpt-5.5', provider: 'openai' },
     ]);
+  });
+});
+
+describe('planDriverRollback', () => {
+  it('writes the previous provider block and its stamp back', () => {
+    const previous = { command: 'claude', env: { A: '1' }, type: 'claude-code' };
+
+    expect(
+      planDriverRollback({ heterogeneousProvider: previous, provider: 'claude-code' }),
+    ).toEqual({
+      agencyConfig: { heterogeneousProvider: previous },
+      provider: 'claude-code',
+    });
   });
 });

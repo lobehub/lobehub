@@ -54,3 +54,22 @@ export const planDriverSwitch = ({
     ? [clear as unknown as PartialDeep<LobeAgentConfig>, apply]
     : [apply];
 };
+
+/**
+ * The write that puts a heterogeneous agent back as it was, for when a switch between two
+ * heterogeneous drivers fails after the first driver was cleared. Two requests cannot be one
+ * transaction here, so the failure path restores instead: the old provider block and its
+ * `provider` stamp are written back, which leaves the agent on its previous driver rather than
+ * half way to the harness.
+ */
+export const planDriverRollback = ({
+  heterogeneousProvider,
+  provider,
+}: {
+  heterogeneousProvider: unknown;
+  provider?: string;
+}): PartialDeep<LobeAgentConfig> =>
+  ({
+    agencyConfig: { heterogeneousProvider },
+    provider,
+  }) as unknown as PartialDeep<LobeAgentConfig>;

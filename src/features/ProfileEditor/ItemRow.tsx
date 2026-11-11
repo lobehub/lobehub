@@ -3,6 +3,8 @@
 import { cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
+import { shouldActivateRow } from './rowKeys';
+
 interface ItemRowProps {
   /** Controls at the end of the row: remove, switch, … */
   actions?: ReactNode;
@@ -30,8 +32,19 @@ const ItemRow = memo<ItemRowProps>(
       horizontal
       align={'center'}
       gap={12}
+      role={onClick ? 'button' : undefined}
       style={onClick ? { cursor: 'pointer' } : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (event) => {
+              if (!shouldActivateRow(event)) return;
+              event.preventDefault();
+              onClick();
+            }
+          : undefined
+      }
     >
       <Flexbox
         align={'center'}

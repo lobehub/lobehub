@@ -17,11 +17,18 @@ import { resourceService } from '@/services/resource';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+/** The most files counted for one library; past it the row says "N+". */
+const COUNT_PAGE = 50;
+
 /** How much is inside a library, so a row says what the agent can actually search. */
 const LibraryCount = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('setting');
-  const { data } = useClientDataSWR(['agent-library-count', id], () =>
-    resourceService.queryResources({ libraryId: id, limit: 100 }),
+  // One small, cached request per row, and not again on every focus: the count is a hint, so it
+  // stops at a page rather than walking a large library.
+  const { data } = useClientDataSWR(
+    ['agent-library-count', id],
+    () => resourceService.queryResources({ libraryId: id, limit: COUNT_PAGE }),
+    { revalidateOnFocus: false },
   );
   if (!data) return null;
 

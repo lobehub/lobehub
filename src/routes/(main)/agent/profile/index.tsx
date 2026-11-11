@@ -94,7 +94,7 @@ const ProfileArea = memo<{ view: AgentProfileViewKey }>(({ view }) => {
           loading={<ProfileSkeleton />}
           onRetry={() => retryAgentConfigFetch()}
         >
-          <Header />
+          <Header active={view} />
           <Flexbox
             horizontal
             height={'100%'}

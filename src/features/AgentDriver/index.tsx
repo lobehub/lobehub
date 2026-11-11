@@ -13,7 +13,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { type DriverTarget, planDriverSwitch } from './switchPlan';
+import { type DriverTarget, planDriverRollback, planDriverSwitch } from './switchPlan';
 
 const HARNESS = 'lobehub';
 
@@ -108,11 +108,28 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
           target,
         });
 
+        // What the agent is now, kept so a half-finished switch can be undone.
+        const before = agentSelectors.getAgentConfigById(agentId)(useAgentStore.getState());
+        const previous = {
+          heterogeneousProvider: before?.agencyConfig?.heterogeneousProvider,
+          provider: before?.provider,
+        };
+
         try {
           // Sequential on purpose: the second write must merge into the cleared block.
           for (const patch of plan) await updateAgentConfigById(agentId, patch);
           toast.success(t('settingAgent.driver.switched', { name }));
         } catch {
+          // Switching between two external drivers is clear-then-write. If the write fails after
+          // the clear, put the previous driver back rather than leave the agent on LobeHub with a
+          // stale provider stamp.
+          if (plan.length > 1 && previous.heterogeneousProvider) {
+            try {
+              await updateAgentConfigById(agentId, planDriverRollback(previous));
+            } catch {
+              // The failure toast below still tells the person the switch did not happen.
+            }
+          }
           toast.error(t('settingAgent.driver.switchFailed'));
         }
       },
