@@ -49,16 +49,16 @@ CDP is single-port, multi-target: one `--remote-debugging-port` exposes every
 `BrowserWindow` as a target. What actually blocks N independent, write-isolated
 app sessions are dev-build singletons. Validated verdicts:
 
-| Singleton                                | Location                                                         | Verdict for N instances                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Electron single-instance lock            | `App.ts:227`                                                     | ✅ **keyed by userData** — distinct userData dirs each get their own lock; all instances run. No code change needed. |
-| Chromium `SingletonLock`                 | per userData dir                                                 | ✅ one per userData dir automatically (observed distinct PIDs per dir).                                              |
-| userData dir `lobehub-desktop-dev`       | `pre-app-init.ts:12`                                             | ✅ fixed — now env-overridable via `LOBE_DESKTOP_USER_DATA_DIR`.                                                     |
-| Vite dev server `strictPort:true` 5173   | `apps/desktop/vite.shared.ts`                                    | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree).                        |
-| `electron-server-ipc` unix socket        | `App.ts` → `packages/electron-server-ipc/src/ipcServer.ts:23-31` | ✅ fixed — id now env-overridable via `LOBE_IPC_ID`; distinct sockets, no more hijack (was last-writer-wins).        |
-| safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name**                               | 🔑 macOS: a `LOBE_DESKTOP_USER_DATA_DIR` instance uses the mock keychain (fixed key, no prompt per checkout binary). |
-| Global shortcuts / `lobehub://` protocol | OS-global                                                        | first/last wins; harmless for headless automation.                                                                   |
-| Static file server / iMessage bridge     | `getPort()` dynamic                                              | ✅ auto-allocated, safe.                                                                                             |
+| Singleton                                | Location                                                         | Verdict for N instances                                                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Electron single-instance lock            | `App.ts:227`                                                     | ✅ **keyed by userData** — distinct userData dirs each get their own lock; all instances run. No code change needed.         |
+| Chromium `SingletonLock`                 | per userData dir                                                 | ✅ one per userData dir automatically (observed distinct PIDs per dir).                                                      |
+| userData dir `lobehub-desktop-dev`       | `pre-app-init.ts:12`                                             | ✅ fixed — now env-overridable via `LOBE_DESKTOP_USER_DATA_DIR`.                                                             |
+| Vite dev server `strictPort:true` 5173   | `apps/desktop/vite.shared.ts`                                    | ✅ fixed — now env-overridable via `LOBE_DESKTOP_VITE_PORT` (Model B: one Vite per worktree).                                |
+| `electron-server-ipc` unix socket        | `App.ts` → `packages/electron-server-ipc/src/ipcServer.ts:23-31` | ✅ fixed — id now env-overridable via `LOBE_IPC_ID`; distinct sockets, no more hijack (was last-writer-wins).                |
+| safeStorage / Chromium cookie encryption | OS keychain, keyed by **app name**                               | 🔑 macOS: an instance with `LOBE_DESKTOP_MOCK_KEYCHAIN=1` uses the mock keychain (fixed key, no prompt per checkout binary). |
+| Global shortcuts / `lobehub://` protocol | OS-global                                                        | first/last wins; harmless for headless automation.                                                                           |
+| Static file server / iMessage bridge     | `getPort()` dynamic                                              | ✅ auto-allocated, safe.                                                                                                     |
 
 ## The key tension (and its resolution)
 
@@ -77,11 +77,12 @@ Naively "give each instance a different app name" (a tempting first instinct)
 > **Keep `app.setName('lobehub-desktop-dev')` constant for every instance. Vary
 > only the userData dir.** That satisfies the single-instance lock (keyed by
 > userData) AND keeps the keychain key valid so copied tokens/cookies decrypt.
-> On macOS, an instance with its own userData also passes `--use-mock-keychain`:
-> the keychain grants access per binary, and every checkout installs its own
-> ad-hoc-signed Electron, so the real keychain asked for the login password once
-> per checkout. Such instances share the mock key with each other, not with the
-> default profile.
+> On macOS, an instance with its own userData and `LOBE_DESKTOP_MOCK_KEYCHAIN=1`
+> (the pool sets it) also passes `--use-mock-keychain`: the keychain grants access
+> per binary, and every checkout installs its own ad-hoc-signed Electron, so the
+> real keychain asked for the login password once per checkout. Such instances
+> share the mock key with each other, not with the default profile. The mock key
+> is public, so set the flag only for profiles holding test accounts.
 > The IPC socket is decoupled from the app name via its own `LOBE_IPC_ID` knob
 > (not the app name), so each instance still gets a distinct socket.
 
@@ -122,8 +123,8 @@ All three verified live via the `electron-dev.sh` pool (transcript below).
 
 ## Login-state reuse across userData dirs (validated)
 
-On macOS an instance given `LOBE_DESKTOP_USER_DATA_DIR` encrypts tokens and
-cookies with Chromium's mock keychain (`src/main/pre-app-init.ts`), so the
+On macOS a pool instance (its own `LOBE_DESKTOP_USER_DATA_DIR` plus
+`LOBE_DESKTOP_MOCK_KEYCHAIN=1`) encrypts tokens and cookies with Chromium's mock keychain (`src/main/pre-app-init.ts`), so the
 system keychain never asks for the login password once per checkout. A login
 copies only between profiles with the same key: from one such instance to
 another (the pool snapshot), not from the default `lobehub-desktop-dev` profile,
@@ -138,7 +139,7 @@ caches, and drop the install-scoped `gatewayDeviceId`:
 - `lobehub-settings.json` → `encryptedTokens` (OIDC access/refresh, safeStorage).
 - `Cookies` + `Local Storage` + `IndexedDB` → better-auth renderer session.
 - Decryption works because both profiles use the same key: the mock keychain
-  for instances with their own userData on macOS, otherwise the keychain entry
+  for pool instances on macOS, otherwise the keychain entry
   `lobehub-desktop-dev Safe Storage` (app name unchanged). **Same machine only**
   for the keychain key — a copy to another machine won't decrypt.
 - **Stale-token caveat:** if the copied access token's `exp` has passed you'll

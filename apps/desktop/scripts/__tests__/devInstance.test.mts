@@ -58,6 +58,24 @@ describe('instance environment', () => {
     });
   });
 
+  it('asks for the mock keychain only for a profile of its own', () => {
+    expect(
+      getDesktopDevEnvironment(
+        createDesktopDevInstance({
+          cdpPort: 9317,
+          mockKeychain: true,
+          rendererPort: 5217,
+          userDataDirectory: '/tmp/profile',
+        }),
+      ),
+    ).toMatchObject({ LOBE_DESKTOP_MOCK_KEYCHAIN: '1' });
+    expect(
+      getDesktopDevEnvironment(
+        createDesktopDevInstance({ cdpPort: 9223, mockKeychain: true, rendererPort: 5174 }),
+      ),
+    ).not.toHaveProperty('LOBE_DESKTOP_MOCK_KEYCHAIN');
+  });
+
   it('omits the profile and label when the shared default applies', () => {
     expect(
       getDesktopDevEnvironment(createDesktopDevInstance({ cdpPort: 9223, rendererPort: 5174 })),

@@ -28,6 +28,13 @@ export interface DesktopDevInstance {
   ipcId: string;
   /** Shown on every window so a screenshot or a glance tells the checkout apart. */
   label?: string;
+  /**
+   * Encrypt the profile's tokens and cookies with Chromium's fixed mock key
+   * instead of the macOS keychain (`src/main/pre-app-init.ts`). Only for
+   * profiles holding test accounts: the key is public, so a production login
+   * must stay behind the keychain.
+   */
+  mockKeychain?: boolean;
   /** Renderer Vite dev server port (`strictPort`, so it must be free). */
   rendererPort: number;
   /**
@@ -49,6 +56,7 @@ export const getDesktopDevIpcId = (cdpPort: number) => `lobehub-desktop-dev-${cd
 export const createDesktopDevInstance = ({
   cdpPort,
   label,
+  mockKeychain,
   rendererPort,
   userDataDirectory,
 }: Omit<DesktopDevInstance, 'ipcId'>): DesktopDevInstance => ({
@@ -56,6 +64,7 @@ export const createDesktopDevInstance = ({
   ipcId: getDesktopDevIpcId(cdpPort),
   rendererPort,
   ...(label ? { label } : undefined),
+  ...(mockKeychain && userDataDirectory ? { mockKeychain } : undefined),
   ...(userDataDirectory ? { userDataDirectory } : undefined),
 });
 
@@ -65,6 +74,7 @@ export const getDesktopDevEnvironment = (instance: DesktopDevInstance): Record<s
   LOBE_DESKTOP_VITE_PORT: String(instance.rendererPort),
   LOBE_IPC_ID: instance.ipcId,
   ...(instance.label ? { LOBE_DESKTOP_INSTANCE_LABEL: instance.label } : undefined),
+  ...(instance.mockKeychain ? { LOBE_DESKTOP_MOCK_KEYCHAIN: '1' } : undefined),
   ...(instance.userDataDirectory
     ? { LOBE_DESKTOP_USER_DATA_DIR: instance.userDataDirectory }
     : undefined),

@@ -66,6 +66,8 @@ switch (command) {
       createDesktopDevInstance({
         cdpPort: port('cdp-port'),
         label: values.label,
+        // Pool instances sign in to test accounts and copy logins between profiles.
+        mockKeychain: true,
         rendererPort: port('renderer-port'),
         userDataDirectory: values['user-data'],
       }),
