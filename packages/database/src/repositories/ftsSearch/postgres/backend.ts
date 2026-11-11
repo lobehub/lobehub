@@ -79,6 +79,7 @@ export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
           query,
           filters.knowledgeBaseIds ?? [],
           limit,
+          request.query.minimumMatchRatio,
         );
       }
     }

@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { SAFE_BM25_QUERY_OPTIONS } from '../../../utils/bm25';
 import { escapeLike } from '../../../utils/like';
 import type { PostgresFtsSearchDialect, PostgresFtsSearchField } from '../postgres/dialect';
+import { minimumTermMatches } from '../postgres/dialect';
 
 const LIKE_ESCAPE = sql.raw(`ESCAPE '\\'`);
 const LIKE_MAX_TERMS = SAFE_BM25_QUERY_OPTIONS.maxTerms;
@@ -37,6 +38,36 @@ export const pgLikeDialect: PostgresFtsSearchDialect = {
       fields.map((field) => likeAllTerms(field, terms)),
       sql` OR `,
     )})`;
+  },
+  partial: async (_db, _keyColumn, fields, query, ratio) => {
+    // Terms are compared with ILIKE, so dedupe on the case-folded form: `Policy policy` is one
+    // term, otherwise a repeated word would satisfy two clauses and lift the floor on its own.
+    const seen = new Set<string>();
+    const terms = splitLikeTerms(query.trim()).filter((term) => {
+      const key = term.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (terms.length < 2) return undefined;
+
+    const presentInAnyField = terms.map((term) => {
+      const present = sql.join(
+        fields.map(
+          (field) =>
+            sql`${likeTextExpression(field)} ILIKE ${`%${escapeLike(term)}%`} ${LIKE_ESCAPE}`,
+        ),
+        sql` OR `,
+      );
+
+      return sql`(CASE WHEN ${present} THEN 1 ELSE 0 END)`;
+    });
+    const matchedTerms = sql<number>`(${sql.join(presentInAnyField, sql` + `)})`;
+
+    return {
+      match: sql`${matchedTerms} >= ${minimumTermMatches(terms.length, ratio)}`,
+      score: matchedTerms,
+    };
   },
   prepare: (query) => {
     const prepared = query.trim();

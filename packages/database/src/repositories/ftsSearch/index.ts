@@ -46,6 +46,9 @@ export class FtsSearchCandidateError extends Error {
  * Provider-neutral search facade. Backends own candidate retrieval and final
  * PostgreSQL hydration, while this class preserves the public repository API.
  */
+/** Share of terms a document must contain once a strict knowledge-base search finds nothing. */
+const KNOWLEDGE_BASE_RELAXED_MATCH_RATIO = 0.6;
+
 export class FtsSearchRepo {
   readonly ftsSearchCandidateEnabled: boolean;
 
@@ -252,14 +255,24 @@ export class FtsSearchRepo {
     if (!query || query.trim() === '') return [];
     if (!knowledgeBaseIds || knowledgeBaseIds.length === 0) return [];
 
-    const response = await this.execute(
-      this.createRequest('documents', query.trim(), limit, {
-        documentKind: 'knowledgeBaseDocument',
-        knowledgeBaseIds,
-      }),
-    );
+    const request = this.createRequest('documents', query.trim(), limit, {
+      documentKind: 'knowledgeBaseDocument',
+      knowledgeBaseIds,
+    });
 
-    return response.items as FtsSearchKnowledgeBaseDocumentHit[];
+    const strict = await this.execute(request);
+    if (strict.items.length > 0) return strict.items as FtsSearchKnowledgeBaseDocumentHit[];
+
+    // Only a search that found nothing is relaxed, so exact matches never gain weaker neighbors.
+    const relaxed = await this.execute({
+      ...request,
+      query: { ...request.query, minimumMatchRatio: KNOWLEDGE_BASE_RELAXED_MATCH_RATIO },
+    });
+
+    return (relaxed.items as FtsSearchKnowledgeBaseDocumentHit[]).map((hit) => ({
+      ...hit,
+      partialMatch: true,
+    }));
   }
 
   private calculateLimits(

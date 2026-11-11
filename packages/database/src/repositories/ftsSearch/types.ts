@@ -147,6 +147,8 @@ export interface FtsSearchKnowledgeBaseDocumentHit {
   documentId: string;
   fileId?: string;
   knowledgeBaseId: string;
+  /** The document matched only part of the query, from the relaxed retrieval stage. */
+  partialMatch?: boolean;
   relevance: number;
   snippet: string;
   title: string;
@@ -276,6 +278,11 @@ export interface FtsSearchBackendPagination {
 export interface FtsSearchBackendQuery {
   /** Exact mapped fields for a candidate-only production path. */
   fields?: string[];
+  /**
+   * Share of query terms a row must match, for relaxed retrieval. Omitted, every term must match.
+   * Only knowledge-base document searches set it.
+   */
+  minimumMatchRatio?: number;
   text: string;
 }
 
