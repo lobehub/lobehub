@@ -173,7 +173,9 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const activeChannelId = matchChannel(pathname);
   const create = () =>
     openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
-  const activeThreadId = new URLSearchParams(search).get('thread');
+  // Only a thread opened as the page is the current entry; one beside the Channel is not.
+  const query = new URLSearchParams(search);
+  const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
   const menuItems = useChannelMenu();
 
   const renderChannel = (channel: ChannelListItem) => {

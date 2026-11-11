@@ -134,6 +134,7 @@
   "openAgent": "Open Agent",
   "openAgentNamed": "Open {{name}}",
   "openThread": "Open thread",
+  "openThreadPage": "Open as page",
   "otherAgents": "Other Agents",
   "outgoing.discard": "Delete",
   "outgoing.failed": "Not sent",
