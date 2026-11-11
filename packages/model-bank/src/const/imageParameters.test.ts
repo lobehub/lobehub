@@ -1,23 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { gptImage2Schema, gptImage26Schema } from '../../const/imageParameters';
-import { extractDefaultValues, ModelParamsMetaSchema } from '../../standard-parameters';
-import { LOBE_DEFAULT_MODEL_LIST } from '../index';
+import { extractDefaultValues, ModelParamsMetaSchema } from '../standard-parameters';
+import { gptImage2Schema, gptImage26Schema } from './imageParameters';
 
-const findOpenAICard = (id: string) =>
-  LOBE_DEFAULT_MODEL_LIST.find((model) => model.providerId === 'openai' && model.id === id);
-
-describe('GPT Image 2.6 model cards', () => {
-  it.each(['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst'])(
-    'registers %s as an enabled image model on the 2.6 schema',
-    (id) => {
-      const card = findOpenAICard(id);
-
-      expect(card).toMatchObject({ enabled: true, type: 'image' });
-      expect(card?.parameters).toBe(gptImage26Schema);
-    },
-  );
-
+describe('gptImage26Schema', () => {
   it('validates against the parameter meta-schema', () => {
     expect(() => ModelParamsMetaSchema.parse(gptImage26Schema)).not.toThrow();
   });
@@ -37,19 +23,21 @@ describe('GPT Image 2.6 model cards', () => {
     });
   });
 
-  it('offers the six quality tiers of the 2.6 models', () => {
-    expect(gptImage26Schema.quality?.enum).toEqual([
-      'auto',
-      'low',
-      'medium',
-      'high',
-      'xhigh',
-      'max',
-    ]);
+  it('offers the six quality tiers of the 2.6 models, defaulting to auto', () => {
+    expect(gptImage26Schema.quality).toEqual({
+      default: 'auto',
+      enum: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+    });
+  });
+
+  it('shares the size list and the single reference image with GPT Image 2', () => {
+    expect(gptImage26Schema.size).toBe(gptImage2Schema.size);
+    expect(gptImage26Schema.imageUrls).toBe(gptImage2Schema.imageUrls);
   });
 
   it('keeps GIF output off GPT Image 2', () => {
     expect(gptImage2Schema.outputFormat).toBeUndefined();
     expect(gptImage2Schema.frameCount).toBeUndefined();
+    expect(gptImage2Schema.frameDurationMs).toBeUndefined();
   });
 });

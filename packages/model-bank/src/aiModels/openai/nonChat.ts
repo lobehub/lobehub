@@ -171,6 +171,7 @@ export const openaiImageModels: AIImageModelCard[] = [
         { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2026-11-04',
     type: 'image',
   },
   {
@@ -192,6 +193,7 @@ export const openaiImageModels: AIImageModelCard[] = [
         { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2026-11-04',
     type: 'image',
   },
   {

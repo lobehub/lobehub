@@ -27,7 +27,8 @@ export const GIF_EDIT_UNSUPPORTED_MESSAGE =
 
 /**
  * Rename output controls to Images API fields in place and drop frame fields unless the
- * request asks for a GIF. Throws when a GIF is requested on the edit endpoint.
+ * request asks for a GIF. A GIF leaves its frame size to the API. Throws when a GIF is
+ * requested on the edit endpoint.
  */
 export const applyImageOutputParams = (
   userInput: Record<string, any>,
@@ -41,6 +42,11 @@ export const applyImageOutputParams = (
 
   if (userInput.output_format === 'gif') {
     if (isImageEdit) throw new Error(GIF_EDIT_UNSUPPORTED_MESSAGE);
+    // All frames are rendered on one sheet that must fit the request pixel budget, so the
+    // API rejects every listed size (1024px edges and up) for a GIF, even at 2 frames:
+    // "No supported sheet fits 2 GIF frames at size '1024x1024'". `auto` picks a frame
+    // size that fits.
+    delete userInput.size;
     return;
   }
 

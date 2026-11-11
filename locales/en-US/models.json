@@ -697,6 +697,8 @@
   "gpt-image-1.description": "ChatGPT native multimodal image generation model.",
   "gpt-image-2.5-flare.description": "OpenAI's fastest model for high-quality everyday image generation and editing, with quality up to max and up to 4K output.",
   "gpt-image-2.5-sunburst.description": "OpenAI's most capable image generation and editing model, built for workflows where editing precision matters most, with quality up to max and up to 4K output.",
+  "gpt-image-2.6-flare.description": "GPT Image 2.6 Flare generates and edits images from text and image inputs for fast, interactive visual workflows.",
+  "gpt-image-2.6-sunburst.description": "GPT Image 2.6 Sunburst generates and edits images from text and image inputs for detailed compositions and precise visual editing.",
   "gpt-image-2.description": "OpenAI's next-generation multimodal image model with native reasoning, up to 4K resolution, near-perfect text rendering, and high-fidelity multilingual support.",
   "gpt-oss-120b.description": "OpenAI GPT-OSS 120B is a top-tier open-source language model with 120 billion parameters, offering strong reasoning and coding capabilities.",
   "gpt-oss-20b.description": "Access requires an application. GPT-OSS-20B is an open-source mid-size language model from OpenAI with efficient text generation.",

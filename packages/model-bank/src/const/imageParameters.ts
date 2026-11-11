@@ -100,7 +100,8 @@ export const nanoBanana2Parameters: ModelParamsSchema = {
 
 /**
  * GPT Image 2.6 Flare / Sunburst. Animated GIF output is generation-only; the frame fields are
- * sent only with `outputFormat: 'gif'` (see `applyImageOutputParams`).
+ * sent only with `outputFormat: 'gif'`, and a GIF leaves its frame size to the API (see
+ * `applyImageOutputParams`).
  *
  * @see https://developers.openai.com/api/docs/guides/image-generation#generate-animated-gif-output
  */

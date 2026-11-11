@@ -41,6 +41,22 @@ describe('applyImageOutputParams', () => {
     expect(input).toEqual({ prompt: 'p' });
   });
 
+  it('leaves the frame size of a GIF to the API', () => {
+    const input: Record<string, any> = { frameCount: 9, outputFormat: 'gif', size: '1024x1024' };
+
+    applyImageOutputParams(input, { isImageEdit: false });
+
+    expect(input).toEqual({ frame_count: 9, output_format: 'gif' });
+  });
+
+  it('keeps the requested size when the output is not a GIF', () => {
+    const input: Record<string, any> = { outputFormat: 'png', size: '1024x1024' };
+
+    applyImageOutputParams(input, { isImageEdit: false });
+
+    expect(input).toEqual({ output_format: 'png', size: '1024x1024' });
+  });
+
   it('rejects GIF output on the edit endpoint', () => {
     expect(() =>
       applyImageOutputParams({ outputFormat: 'gif' }, { isImageEdit: true }),
