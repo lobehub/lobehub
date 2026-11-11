@@ -610,6 +610,12 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Hotkey,
   },
   {
+    anchor: 'hotkey-mail',
+    keywords: ['shortcut', 'keyboard', 'mail', 'email'],
+    labelKey: 'hotkey.group.mail',
+    tab: SettingsTabs.Hotkey,
+  },
+  {
     anchor: 'hotkey-desktop',
     keywords: ['shortcut', 'keyboard', 'global'],
     labelKey: 'hotkey.group.desktop',

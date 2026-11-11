@@ -13,6 +13,7 @@ export const KeyEnum = {
   BracketRight: 'bracketright',
   Comma: 'comma',
   Ctrl: 'ctrl',
+  Delete: 'delete',
   Down: 'down',
   Enter: 'enter',
   Equal: 'equal',
@@ -48,6 +49,34 @@ export const HotkeyEnum = {
   DeleteLastMessage: 'deleteLastMessage',
   EditMessage: 'editMessage',
   FindInTopic: 'findInTopic',
+  MailBack: 'mailBack',
+  MailCloseCompose: 'mailCloseCompose',
+  MailCompose: 'mailCompose',
+  MailDeselectAll: 'mailDeselectAll',
+  MailForward: 'mailForward',
+  MailGoDrafts: 'mailGoDrafts',
+  MailGoInbox: 'mailGoInbox',
+  MailGoSent: 'mailGoSent',
+  MailGoStarred: 'mailGoStarred',
+  MailGoTrash: 'mailGoTrash',
+  MailHotkeyHelp: 'mailHotkeyHelp',
+  MailMarkRead: 'mailMarkRead',
+  MailMarkUnread: 'mailMarkUnread',
+  MailNext: 'mailNext',
+  MailOpen: 'mailOpen',
+  MailPrevious: 'mailPrevious',
+  MailPurge: 'mailPurge',
+  MailReply: 'mailReply',
+  MailReplyAll: 'mailReplyAll',
+  MailSaveDraft: 'mailSaveDraft',
+  MailSearch: 'mailSearch',
+  MailSelect: 'mailSelect',
+  MailSelectAll: 'mailSelectAll',
+  MailSend: 'mailSend',
+  MailStar: 'mailStar',
+  MailTrash: 'mailTrash',
+  MailTrashDelete: 'mailTrashDelete',
+  MailUndo: 'mailUndo',
   NavigateToChat: 'navigateToChat',
   NextTab: 'nextTab',
   OpenChatSettings: 'openChatSettings',
@@ -70,6 +99,7 @@ export const HotkeyEnum = {
 export const HotkeyGroupEnum = {
   Conversation: 'conversation',
   Essential: 'essential',
+  Mail: 'mail',
 } as const satisfies Record<string, HotkeyGroupId>;
 
 export const HotkeyScopeEnum = {
@@ -77,7 +107,59 @@ export const HotkeyScopeEnum = {
   Files: 'files',
   Global: 'global',
   Image: 'image',
+  Mail: 'mail',
 } as const satisfies Record<string, HotkeyScopeId>;
+
+/** Two keys pressed one after the other, as `g` then `i`; recorded by `react-hotkeys-hook` as `g>i`. */
+const sequence = (keys: string[]) => keys.join('>');
+
+const mail = (id: HotkeyId, keys: string, nonEditable?: boolean): HotkeyRegistration[number] => ({
+  group: HotkeyGroupEnum.Mail,
+  id,
+  keys,
+  ...(nonEditable && { nonEditable }),
+  scopes: [HotkeyScopeEnum.Mail],
+});
+
+/**
+ * The mail page's keys, after Gmail: bare letters, live only while that page is
+ * mounted and never while typing. Sequences and the composer's own keys cannot
+ * be recorded by the settings input, so they are fixed.
+ */
+const MAIL_HOTKEYS: HotkeyRegistration = [
+  mail(HotkeyEnum.MailCompose, 'c'),
+  mail(HotkeyEnum.MailReply, 'r'),
+  mail(HotkeyEnum.MailReplyAll, 'a'),
+  mail(HotkeyEnum.MailForward, 'f'),
+  mail(HotkeyEnum.MailSend, combineKeys([KeyEnum.Mod, KeyEnum.Enter]), true),
+  mail(HotkeyEnum.MailSaveDraft, combineKeys([KeyEnum.Mod, 's']), true),
+  mail(HotkeyEnum.MailCloseCompose, KeyEnum.Esc, true),
+  // `#` as Shift+3 (US / CN layouts); where `#` sits elsewhere, Delete does the same.
+  mail(HotkeyEnum.MailTrash, combineKeys([KeyEnum.Shift, '3'])),
+  mail(HotkeyEnum.MailTrashDelete, KeyEnum.Delete),
+  mail(HotkeyEnum.MailPurge, combineKeys([KeyEnum.Shift, KeyEnum.Delete])),
+  mail(HotkeyEnum.MailUndo, 'z'),
+  mail(HotkeyEnum.MailSearch, KeyEnum.Slash),
+  mail(HotkeyEnum.MailNext, 'j'),
+  mail(HotkeyEnum.MailPrevious, 'k'),
+  mail(HotkeyEnum.MailOpen, KeyEnum.Enter, true),
+  mail(HotkeyEnum.MailBack, KeyEnum.Esc, true),
+  mail(HotkeyEnum.MailSelect, 'x'),
+  mail(HotkeyEnum.MailSelectAll, sequence(['*', 'a']), true),
+  mail(HotkeyEnum.MailDeselectAll, sequence(['*', 'n']), true),
+  mail(HotkeyEnum.MailMarkRead, combineKeys([KeyEnum.Shift, 'i'])),
+  mail(HotkeyEnum.MailMarkUnread, combineKeys([KeyEnum.Shift, 'u'])),
+  mail(HotkeyEnum.MailStar, 's'),
+  mail(HotkeyEnum.MailGoInbox, sequence(['g', 'i']), true),
+  mail(HotkeyEnum.MailGoSent, sequence(['g', 't']), true),
+  mail(HotkeyEnum.MailGoDrafts, sequence(['g', 'd']), true),
+  mail(HotkeyEnum.MailGoStarred, sequence(['g', 's']), true),
+  mail(HotkeyEnum.MailGoTrash, sequence(['g', 'x']), true),
+  mail(HotkeyEnum.MailHotkeyHelp, combineKeys([KeyEnum.Shift, KeyEnum.QuestionMark])),
+];
+
+/** The mail page's hotkeys; their bare keys only conflict with one another. */
+export const MAIL_HOTKEY_IDS: ReadonlySet<HotkeyId> = new Set(MAIL_HOTKEYS.map((item) => item.id));
 
 // mod is the command key on Mac, alt is the ctrl key on Windows
 export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
@@ -225,4 +307,5 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Mod, 's']),
     scopes: [HotkeyScopeEnum.Files],
   },
+  ...MAIL_HOTKEYS,
 ];

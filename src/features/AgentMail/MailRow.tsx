@@ -110,6 +110,7 @@ const MailRow = ({
       {...stylex.props(styles.row, active && styles.rowActive, mailRowMarker)}
       aria-current={active ? 'true' : undefined}
       aria-label={`${party} — ${subject}`}
+      data-mail-row-id={item.id}
       role={'button'}
       tabIndex={0}
       onClick={onOpen}
@@ -127,13 +128,25 @@ const MailRow = ({
             styles.checkbox,
             (selecting || selected || alwaysShowControls) && styles.checkboxAlways,
           )}
+          // The checkbox inside is the control; this wrapper only adds Shift for a range.
+          role={'presentation'}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
             onToggleSelect(event.shiftKey);
           }}
+          onKeyDown={(event) => {
+            if (event.key !== ' ' && event.key !== 'Enter') return;
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleSelect(event.shiftKey);
+          }}
         >
-          <Checkbox checked={selected} size={14} />
+          <Checkbox
+            aria-label={t('identity.mailbox.action.select', { subject })}
+            checked={selected}
+            size={14}
+          />
         </span>
       )}
       <Flexbox gap={2} style={{ minWidth: 0 }}>
@@ -187,6 +200,7 @@ const MailRow = ({
       {!readOnly && (
         <div
           {...stylex.props(styles.actions, alwaysShowControls && styles.actionsAlways)}
+          role={'group'}
           onClick={stop}
         >
           {buttons}

@@ -24,11 +24,13 @@ export const mailListStyles = stylex.create({
       default: 0,
       [stylex.when.ancestor(':hover', mailRowMarker)]: 1,
       [stylex.when.ancestor(':has(:focus-visible)', mailRowMarker)]: 1,
+      [stylex.when.ancestor(':focus-visible', mailRowMarker)]: 1,
     },
     pointerEvents: {
       default: 'none',
       [stylex.when.ancestor(':hover', mailRowMarker)]: 'auto',
       [stylex.when.ancestor(':has(:focus-visible)', mailRowMarker)]: 'auto',
+      [stylex.when.ancestor(':focus-visible', mailRowMarker)]: 'auto',
     },
   },
   actionsAlways: {
@@ -52,6 +54,7 @@ export const mailListStyles = stylex.create({
       default: 0,
       [stylex.when.ancestor(':hover', mailRowMarker)]: 1,
       [stylex.when.ancestor(':has(:focus-visible)', mailRowMarker)]: 1,
+      [stylex.when.ancestor(':focus-visible', mailRowMarker)]: 1,
     },
   },
   checkboxAlways: {
@@ -95,6 +98,11 @@ export const mailListStyles = stylex.create({
     paddingInlineStart: '32px',
     paddingInlineEnd: '14px',
     borderRadius: cssVar.borderRadiusLG,
+    outline: {
+      'default': 'none',
+      ':focus-visible': `2px solid ${cssVar.colorPrimaryBorder}`,
+    },
+    outlineOffset: '-2px',
     backgroundColor: {
       'default': 'transparent',
       ':hover': cssVar.colorFillTertiary,
@@ -130,6 +138,11 @@ export const mailListStyles = stylex.create({
       'default': cssVar.colorTextSecondary,
       ':hover': cssVar.colorText,
     },
+    outline: {
+      'default': 'none',
+      ':focus-visible': `2px solid ${cssVar.colorPrimaryBorder}`,
+    },
+    outlineOffset: '-2px',
     backgroundColor: {
       'default': 'transparent',
       ':hover': cssVar.colorFillTertiary,
@@ -145,6 +158,11 @@ export const mailListStyles = stylex.create({
       'default': cssVar.colorFillSecondary,
       ':hover': cssVar.colorFillSecondary,
     },
+  },
+  /** A finger needs a 44px target (product X-5). */
+  tabTouch: {
+    minHeight: '44px',
+    paddingInline: '12px',
   },
   tabCount: {
     fontSize: '12px',

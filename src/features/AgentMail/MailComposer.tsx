@@ -45,6 +45,7 @@ import {
 } from './compose';
 import { composerStyles as styles } from './composerStyles';
 import InlineError from './InlineError';
+import { offerUndo } from './mailUndo';
 import { mailWriteActions, UNDO_WINDOW_MS } from './mailWrites';
 import RecipientInput from './RecipientInput';
 import { type SentMail, useComposer } from './useComposer';
@@ -240,23 +241,21 @@ const MailComposer = memo<MailComposerProps>(
         await refresh().catch(() => undefined);
         mailWriteActions.end(writeId);
       }, UNDO_WINDOW_MS);
+      const offered = offerUndo(() => {
+        cancelPendingDiscard(id);
+        onReopenDraft?.(id);
+      });
       const undo = toast.success({
-        actions: [
-          {
-            label: t('identity.mailbox.undo'),
-            onClick: () => {
-              cancelPendingDiscard(id);
-              onReopenDraft?.(id);
-            },
-          },
-        ],
+        actions: [{ label: t('identity.mailbox.undo'), onClick: offered.run }],
         duration: UNDO_WINDOW_MS,
+        onClose: offered.withdraw,
         title: t('identity.mailbox.toast.discarded'),
       });
       // Undo, or the same draft opened again (answering that mail once more), keeps it.
       holdDiscard(id, () => {
         clearTimeout(timer);
         mailWriteActions.end(writeId);
+        offered.withdraw();
         undo.close();
       });
     };
