@@ -409,6 +409,19 @@ describe('mail hotkeys', () => {
     dialog.remove();
   });
 
+  it('toggles read on an open Trash mail but does not answer or star it', async () => {
+    page('/agent/agt_1/mail/msg_1?folder=trash');
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+
+    press('U', { code: 'KeyU', shiftKey: true });
+    await waitFor(() => expect(service.markMailUnread).toHaveBeenCalledWith({ ids: ['msg_1'] }));
+
+    press('r');
+    press('s');
+    expect(screen.queryByTestId('mail-composer')).not.toBeInTheDocument();
+    expect(service.setMailStarred).not.toHaveBeenCalled();
+  });
+
   it('still deletes the open Trash mail for good under the narrow overlay', async () => {
     surface.width = 600;
     page('/agent/agt_1/mail/msg_1?folder=trash');

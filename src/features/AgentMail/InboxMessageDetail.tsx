@@ -249,19 +249,22 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
         ? setStarred(starred, false)
         : setStarred([mails.findLast(inView) ?? newest], true));
 
-    const hotkeys: MailDetailHotkeyTarget | undefined =
-      readOnly || inTrash
-        ? undefined
-        : {
-            act: (command) => {
-              if (command === 'purge') return false;
-              if (command === 'star') toggleStar();
-              else if (command === 'trash') void trash(mails);
-              // Already in that state: nothing to do, and nothing to say about it.
-              else if (anyUnread === (command === 'unread')) return true;
-              else void setUnread(mails, command === 'unread');
-              return true;
-            },
+    // Trash offers only the read toggle (as its toolbar does); everything else
+    // waits for the mail to be restored.
+    const hotkeys: MailDetailHotkeyTarget | undefined = readOnly
+      ? undefined
+      : {
+          act: (command) => {
+            if (command === 'purge') return false;
+            if (inTrash && command !== 'read' && command !== 'unread') return false;
+            if (command === 'star') toggleStar();
+            else if (command === 'trash') void trash(mails);
+            // Already in that state: nothing to do, and nothing to say about it.
+            else if (anyUnread === (command === 'unread')) return true;
+            else void setUnread(mails, command === 'unread');
+            return true;
+          },
+          ...(!inTrash && {
             blockedReason: {
               forward: forwardDisabled || undefined,
               reply: replyDisabled || undefined,
@@ -269,7 +272,8 @@ const InboxMessageDetail = memo<InboxMessageDetailProps>(
             forward: () => startComposing('forward'),
             reply: () => startComposing('reply'),
             replyAll: () => startComposing('replyAll'),
-          };
+          }),
+        };
 
     const toggle = (mail: AgentMailRow) => {
       const opening = !open.has(mail.id);
