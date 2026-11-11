@@ -158,6 +158,7 @@ export const readChannelView = async (
         errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
           THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
         writerHeld: channelJobs.writerHeld,
+        worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
         operationStatus: agentOperations.status,
         createdAt: channelJobs.createdAt,
         publicationRevoked: channelJobs.publicationRevoked,

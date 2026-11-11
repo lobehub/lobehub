@@ -170,6 +170,15 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
   Isolation frees the member but keeps the device/directory lock. Never retry an unknown delivery.
+- A job blocked only by another writer in its member's directory moves its conversation branch
+  (a Thread, or the main timeline) into a git worktree instead of waiting: the coordinator asks
+  the device to cut `lobe-channel/<member>-<branch>` from that directory's HEAD under
+  `~/.lobehub/worktrees/` (`deriveWorktreePath`), records it in the member's
+  `metadata.worktrees`, and claims again. The worktree then is the job's working directory and
+  directory lock, and the branch keeps it for later replies until the member's device or
+  directory changes. The grant still checks the configured directory it was cut from. Work stays
+  on the worktree branch; nothing merges it back. A directory that cannot host one (not a git
+  repo, device without a home path) keeps the job waiting and is not retried for 10 minutes.
 - Existing hard-delete paths already reach Channel rows: Agent deletion (including trash purge,
   session and group deletion) cascades direct conversations, `UserModel.deleteUser` removes
   personal channels and direct conversations, and workspace deletion cascades every channel in it.

@@ -155,6 +155,7 @@
   "receipt.errorReason": "Failure reason",
   "receipt.errorUnavailable": "No detailed reason was recorded. Check the Agent’s model and device settings before sending again.",
   "receipt.failedHint": "Mention it again to retry.",
+  "receipt.worktree": "Working in its own worktree · {{branch}}",
   "recipients.all": "All {{count}} Agents will reply",
   "recipients.automatic": "The decision model will choose which Agents reply",
   "recipients.many": "{{first}}, {{second}} and {{count}} more will reply",

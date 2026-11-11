@@ -147,8 +147,27 @@ export interface ChannelConfig {
   wake?: Record<string, unknown>;
 }
 
+/**
+ * A git worktree a member's conversation branch moved into when another run held its
+ * configured directory. Cut from that directory's HEAD; the branch keeps working there until
+ * the member's environment changes.
+ */
+export interface ChannelMemberWorktree {
+  branch: string;
+  deviceId: string;
+  /** Absolute path under `~/.lobehub/worktrees/`, see `deriveWorktreePath`. */
+  path: string;
+  /** The member's configured directory it was cut from. */
+  sourceDirectory: string;
+}
+
 /** Free-form member state that does not need its own column. */
-export type ChannelMemberMetadata = Record<string, unknown>;
+export type ChannelMemberMetadata = Record<string, unknown> & {
+  /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
+  worktrees?: Record<string, ChannelMemberWorktree>;
+  /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
+  worktreeUnavailable?: { at: string; deviceId: string; sourceDirectory: string };
+};
 
 /** Free-form channel state that does not need its own column. */
 export type ChannelMetadata = Record<string, unknown>;
@@ -166,6 +185,8 @@ export type ChannelMessageMetadata = Record<string, unknown>;
 export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberConfig {
   provider: string;
   runtime: ChannelRuntime;
+  /** Set when the run works in its branch's worktree; `workingDirectory` is then that worktree. */
+  worktreeBranch?: string;
 }
 
 /**
@@ -402,6 +423,8 @@ export interface ChannelPublicJob {
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
+  /** Git branch of the worktree the run works in, instead of the member's own directory. */
+  worktreeBranch?: string | null;
   writerHeld: boolean;
 }
 
