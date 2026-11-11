@@ -40,7 +40,7 @@ const styles = stylex.create({
     zIndex: 2,
   },
   back: {
-    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillTertiary,
     borderColor: cssVar.colorBorderSecondary,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -176,7 +176,7 @@ const styles = stylex.create({
     marginInlineStart: 'auto',
   },
   tab: {
-    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillTertiary,
     borderBlockEndWidth: 0,
     borderColor: cssVar.colorBorderSecondary,
     borderStartEndRadius: 12,
