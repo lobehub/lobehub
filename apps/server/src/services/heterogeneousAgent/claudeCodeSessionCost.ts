@@ -13,8 +13,8 @@
  *
  * So the decision is made from evidence on the rows themselves:
  *
- * - `cap` is the most a run could honestly cost for its tokens (about twice the
- *   most expensive list price). A value above it cannot be a per-run cost.
+ * - `cap` is the most a run could honestly cost for its tokens, with headroom over
+ *   the dearest list price on each side. A value above it cannot be a per-run cost.
  * - A cumulative value continues the previous CC op's reported value: the
  *   difference is non-negative and itself within the cap.
  *
@@ -31,9 +31,17 @@
 
 export const CLAUDE_CODE_PROVIDER = 'claude-code';
 
-/** USD per input token the cap allows (2x the most expensive list price). */
-const CAP_INPUT_USD_PER_TOKEN = 10e-6;
-/** USD per output token the cap allows (2x the most expensive list price). */
+/**
+ * USD per input token the cap allows: 2x the dearest input-side rate.
+ *
+ * `inputTokens` counts cache reads and cache writes as input, and a cache write is
+ * the dearest input-side rate there is — $12.50/M at the 5m TTL and $20/M at 1h
+ * (`packages/model-bank/src/aiModels/anthropic.ts`). A run whose input is all 1h
+ * cache writes therefore costs $20/M per token, so a $10/M ceiling would read its
+ * honest per-run cost as a session total and book only the delta.
+ */
+const CAP_INPUT_USD_PER_TOKEN = 40e-6;
+/** USD per output token the cap allows: the dearest output list price. */
 const CAP_OUTPUT_USD_PER_TOKEN = 50e-6;
 
 /** The previous costed Claude Code op on the same topic. */

@@ -6,7 +6,7 @@ describe('resolveClaudeCodeRunCost', () => {
   it('books only the delta when the reported cost exceeds what the tokens can cost', () => {
     // tpc_rRM9YUxTAo2s: a 1-step op with 470k input tokens reported $139.60
     // right after an op that reported $137.00 for the same session.
-    expect(claudeCodeRunCostCap(470_000, 2000)).toBeCloseTo(4.8);
+    expect(claudeCodeRunCostCap(470_000, 2000)).toBeCloseTo(18.9);
     expect(
       resolveClaudeCodeRunCost({
         inputTokens: 470_000,
@@ -23,13 +23,29 @@ describe('resolveClaudeCodeRunCost', () => {
       resolveClaudeCodeRunCost({
         inputTokens: 470_000,
         outputTokens: 2000,
-        // cap = 4.8; the session total is far above it, so the next hop is read the
+        // cap = 18.9; the session total is far above it, so the next hop is read the
         // same way even though its own report moved by less than the cap.
         previous: { reportedCost: 139.6 },
         provider: 'claude-code',
         reportedCost: 141.2,
       }),
     ).toEqual({ reportedSessionTotal: 141.2, total: 1.6 });
+  });
+
+  it('does not read a cache-write-heavy per-run cost as a session total', () => {
+    // 100k input tokens spent as 1h cache writes cost $2.00 on their own, above the
+    // $1.05 a text-input-only ceiling would allow. Against a previous report of
+    // $0.30 the $1.00 delta also fits under that ceiling, so the old constants
+    // booked $1.00 and quietly dropped $0.30 of real spend.
+    expect(
+      resolveClaudeCodeRunCost({
+        inputTokens: 100_000,
+        outputTokens: 1000,
+        previous: { reportedCost: 0.3 },
+        provider: 'claude-code',
+        reportedCost: 1.3,
+      }),
+    ).toEqual({ total: 1.3 });
   });
 
   it('stops treating a value as a session total once it can be a per-run cost', () => {
