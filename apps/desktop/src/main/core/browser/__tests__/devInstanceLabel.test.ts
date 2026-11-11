@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   attachDevInstanceLabel,
-  buildDevInstanceBadgeScript,
-  DEV_INSTANCE_BADGE_ID,
   formatDevInstanceTitle,
   getDevInstanceLabel,
 } from '../devInstanceLabel';
@@ -36,7 +34,6 @@ describe('attachDevInstanceLabel', () => {
     const browserWindow = {
       setTitle: vi.fn(),
       webContents: {
-        executeJavaScript: vi.fn().mockResolvedValue(undefined),
         on: vi.fn((event: string, listener: (...args: any[]) => void) => {
           listeners.set(event, listener);
         }),
@@ -57,27 +54,11 @@ describe('attachDevInstanceLabel', () => {
     expect(formatDevInstanceTitle('', 'feature-x')).toBe('feature-x');
   });
 
-  it('injects the badge on every page load', () => {
+  /** Regression: an in-page badge covered the title bar of every window. */
+  it('draws nothing over the page', () => {
     const { browserWindow, listeners } = createWindow();
     attachDevInstanceLabel(browserWindow as any, 'feature-x');
 
-    listeners.get('dom-ready')!();
-
-    expect(browserWindow.webContents.executeJavaScript).toHaveBeenCalledWith(
-      buildDevInstanceBadgeScript('feature-x'),
-    );
-  });
-
-  it('sets the label as text so markup in a branch name is inert', () => {
-    const script = buildDevInstanceBadgeScript('</script><img src=x onerror=alert(1)>');
-
-    expect(script).toContain(`badge.textContent = "</script><img src=x onerror=alert(1)>"`);
-    expect(script).not.toContain('innerHTML');
-    expect(script).toContain(JSON.stringify(DEV_INSTANCE_BADGE_ID));
-  });
-
-  it('keeps the badge clear of the window controls drawn outside macOS', () => {
-    expect(buildDevInstanceBadgeScript('x', 'darwin')).toContain(`right: '0px'`);
-    expect(buildDevInstanceBadgeScript('x', 'win32')).toContain(`right: '140px'`);
+    expect([...listeners.keys()]).toEqual(['page-title-updated']);
   });
 });
