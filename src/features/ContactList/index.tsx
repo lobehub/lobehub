@@ -12,11 +12,12 @@ import {
   cx,
   DropdownMenu,
   Flexbox,
+  Icon,
   Text,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ArrowDownUpIcon, UserRoundPlusIcon } from 'lucide-react';
+import { ArrowDownUpIcon, Pin, PinOff, UserRoundPlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -39,7 +40,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { CONTACT_URL } from './const';
 import ContactAvatar from './ContactAvatar';
-import { CONTACT_SORT_BYS, sortContacts } from './sortContacts';
+import { CONTACT_SORT_BYS, groupContacts } from './sortContacts';
 import { styles } from './style';
 
 const useActiveRouteId = () => {
@@ -53,6 +54,9 @@ const useActiveRouteId = () => {
 
 const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, item }) => {
   const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
+  const [pinAgent, pinAgentGroup] = useHomeStore((s) => [s.pinAgent, s.pinAgentGroup]);
+  const pinned = !!item.pinned;
   const title =
     item.type === 'group'
       ? item.title || t('untitledAgent')
@@ -65,6 +69,15 @@ const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, ite
       avatar={<ContactAvatar item={item} name={title} size={AVATAR_SIZE} />}
       title={title}
       url={CONTACT_URL(item.id)}
+      contextMenuItems={() => [
+        {
+          icon: <Icon icon={pinned ? PinOff : Pin} />,
+          key: 'pin',
+          label: tCommon(pinned ? 'pinOff' : 'pin'),
+          onClick: () =>
+            item.type === 'group' ? pinAgentGroup(item.id, !pinned) : pinAgent(item.id, !pinned),
+        },
+      ]}
     />
   );
 });
@@ -81,22 +94,15 @@ const Body = memo(() => {
   const sortBy = useGlobalStore(systemStatusSelectors.contactListSortBy);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const { agents, groups } = useMemo(() => {
-    const unique = [...new Map(items.map((item) => [item.id, item])).values()];
-    const fallback = tChat('untitledAgent');
-    return {
-      agents: sortContacts(
-        unique.filter((item) => item.type !== 'group'),
+  const { agents, groups, pinned } = useMemo(
+    () =>
+      groupContacts(
+        [...new Map(items.map((item) => [item.id, item])).values()],
         sortBy,
-        fallback,
+        tChat('untitledAgent'),
       ),
-      groups: sortContacts(
-        unique.filter((item) => item.type === 'group'),
-        sortBy,
-        fallback,
-      ),
-    };
-  }, [items, sortBy, tChat]);
+    [items, sortBy, tChat],
+  );
 
   const sortMenuItems = CONTACT_SORT_BYS.map((by) => ({
     checked: sortBy === by,
@@ -114,7 +120,9 @@ const Body = memo(() => {
     );
 
   const sections = [
-    // Groups first: there are few, and they would sink below every agent.
+    // Pinned contacts lead, like the Messages list; the section is left out until one is pinned.
+    ...(pinned.length > 0 ? [{ items: pinned, key: 'pinned', title: t('contacts.pinned') }] : []),
+    // Groups next: there are few, and they would sink below every agent.
     { items: groups, key: 'groups', title: t('contacts.groups') },
     { items: agents, key: 'agents', title: t('navPanel.agent') },
   ];
@@ -124,7 +132,8 @@ const Body = memo(() => {
   return (
     <Flexbox paddingBlock={'4px 12px'} paddingInline={4}>
       <AccordionRoot
-        defaultValue={sections.map((section) => section.key)}
+        // Listed up front so a section that appears later, like the first pin, opens expanded.
+        defaultValue={['pinned', 'groups', 'agents']}
         indicatorPlacement={'inline'}
         style={{ gap: 8 }}
       >

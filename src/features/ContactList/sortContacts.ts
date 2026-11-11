@@ -19,3 +19,21 @@ export const sortContacts = (
   sortBy: ContactListSortBy,
   fallback: string,
 ) => [...items].sort(sortBy === 'updatedAt' ? byUpdatedAt(fallback) : byTitle(fallback));
+
+/**
+ * The contact list's sections, each in the chosen order: pinned contacts of either kind lead in
+ * their own section and are left out of the groups and agents below.
+ */
+export const groupContacts = (
+  items: SidebarAgentItem[],
+  sortBy: ContactListSortBy,
+  fallback: string,
+) => {
+  const sorted = sortContacts(items, sortBy, fallback);
+  const rest = sorted.filter((item) => !item.pinned);
+  return {
+    agents: rest.filter((item) => item.type !== 'group'),
+    groups: rest.filter((item) => item.type === 'group'),
+    pinned: sorted.filter((item) => item.pinned),
+  };
+};

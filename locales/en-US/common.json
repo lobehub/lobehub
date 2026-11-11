@@ -191,6 +191,7 @@
   "contacts.info.sendMail": "Send email",
   "contacts.noDescription": "No description yet",
   "contacts.notFound": "This contact no longer exists or is not visible to you",
+  "contacts.pinned": "Pinned",
   "contacts.sendMessage": "Send message",
   "contacts.sort.title": "Name",
   "contacts.sort.tooltip": "Sort",

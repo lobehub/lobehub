@@ -441,6 +441,7 @@ export default {
   'contacts.noDescription': 'No description yet',
   'contacts.notFound': 'This contact no longer exists or is not visible to you',
   'contacts.sendMessage': 'Send message',
+  'contacts.pinned': 'Pinned',
   'contacts.sort.title': 'Name',
   'contacts.sort.tooltip': 'Sort',
   'contacts.sort.updatedAt': 'Recently updated',
