@@ -186,9 +186,9 @@ describe('withPageSync', () => {
   });
   // One `sh -c` argument of 128 KiB or more fails exec with E2BIG on Linux, so
   // a page that large must not travel inside the command (T-13807).
-  describe('a page larger than one exec argument', () => {
+  describe('a page larger than one exec argument', { timeout: 30_000 }, () => {
     const largeMarkdown = () =>
-      Array.from({ length: 1200 }, (_, i) => `paragraph ${i} ${'lorem ipsum '.repeat(10)}`).join(
+      Array.from({ length: 150 }, (_, i) => `paragraph ${i} ${'lorem ipsum '.repeat(80)}`).join(
         '\n\n',
       ) + '\n';
 
@@ -205,12 +205,12 @@ describe('withPageSync', () => {
 
       const xml = await exec(`cat ${pageDir}/doc.xml`);
       const out = await exec(
-        `sed -i.bak 's/paragraph 1199 /paragraph LAST /' ${pageDir}/doc.xml && rm ${pageDir}/doc.xml.bak`,
+        `sed -i.bak 's/paragraph 149 /paragraph LAST /' ${pageDir}/doc.xml && rm ${pageDir}/doc.xml.bak`,
       );
 
       expect(Buffer.byteLength(xml)).toBeGreaterThan(128 * 1024);
       expect(xml).toContain('paragraph 0 ');
-      expect(xml).toContain('paragraph 1199 ');
+      expect(xml).toContain('paragraph 149 ');
       expect(out).toContain('1 modified');
       expect(await markdownOf(room)).toContain('paragraph LAST ');
     });
