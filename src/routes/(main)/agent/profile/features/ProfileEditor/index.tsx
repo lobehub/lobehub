@@ -8,54 +8,36 @@ import {
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
-import { Alert, Button, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Alert, createStaticStyles, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, Fingerprint, MonitorSmartphone, Wrench } from 'lucide-react';
+import { Fingerprint, MonitorSmartphone, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
-import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
-import { ModelIcon } from '@/components/LobeIcons';
 import { ClaudeCodeEntrypointSetting } from '@/features/HeterogeneousAgent/ClaudeCodeEntrypointSetting';
 import { ApiAuthLocalOnlyNotice } from '@/features/HeterogeneousAgent/ExecutionEnvironment/ApiAuthLocalOnlyNotice';
 import { DeviceCliStatusCard } from '@/features/HeterogeneousAgent/ExecutionEnvironment/DeviceCliStatusCard';
 import { HeteroExecutionTargetSelect } from '@/features/HeterogeneousAgent/ExecutionEnvironment/HeteroExecutionTargetSelect';
 import { useProfileExecutionTarget } from '@/features/HeterogeneousAgent/ExecutionEnvironment/useProfileExecutionTarget';
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
-import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
-import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import EditorCanvas from '../EditorCanvas';
+import { AgentConfigCard } from './AgentConfigCard';
+import AgentExecutionEnvironment from './AgentExecutionEnvironment';
 import AgentHeader from './AgentHeader';
+import { AgentModelConfig } from './AgentModelConfig';
 import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 import RemoteAgentConfigCard from './RemoteAgentConfigCard';
-import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
-import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
-import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
 const styles = createStaticStyles(({ css }) => ({
-  configLabel: css`
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
   configStack: css`
     container-type: inline-size;
-  `,
-  configPanel: css`
-    padding: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
   `,
   topArea: css`
     cursor: default;
@@ -68,15 +50,6 @@ const ProfileEditor = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const { isShared } = useAgentShareSupported(agentId);
-  const chatModels = useEnabledChatModels();
-  const enabledList =
-    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
-      ? chatModels.filter((provider) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(provider.id))
-      : undefined;
-  const selectedModel = useAiInfraStore(
-    aiModelSelectors.getEnabledModelById(config?.model ?? '', config?.provider ?? ''),
-  );
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -287,7 +260,7 @@ const ProfileEditor = memo(() => {
           ) : isHeterogeneous && heterogeneousProvider ? (
             // CLI agents: pick where new topics run, then configure that environment.
             <>
-              <WorkspaceAgentPolicyCard
+              <AgentConfigCard
                 fullWidth
                 icon={MonitorSmartphone}
                 title={t('settingAgent.devicePolicy.title')}
@@ -301,12 +274,12 @@ const ProfileEditor = memo(() => {
                   providerType={heterogeneousProvider.type}
                   target={executionTarget.target}
                 />
-              </WorkspaceAgentPolicyCard>
+              </AgentConfigCard>
               {renderHeterogeneousPanel()}
               {/* Follows the engine and its sign-in, not where the run lands. */}
               {heterogeneousProvider.type === 'claude-code' &&
                 (heterogeneousProvider.authMode ?? 'subscription') === 'subscription' && (
-                  <WorkspaceAgentPolicyCard
+                  <AgentConfigCard
                     fullWidth
                     icon={Fingerprint}
                     title={t('heterogeneousStatus.entrypoint.label')}
@@ -316,73 +289,28 @@ const ProfileEditor = memo(() => {
                       env={heterogeneousProvider.env}
                       onEnvChange={updateHeterogeneousEnv}
                     />
-                  </WorkspaceAgentPolicyCard>
+                  </AgentConfigCard>
                 )}
             </>
-          ) : isWorkspaceAgent ? (
+          ) : (
+            // Built-in runtime agents: the same cards in personal and workspace scope.
             <>
               <Flexbox horizontal gap={8} wrap={'wrap'}>
-                <WorkspaceAgentModelPolicy agentId={agentId} />
-                <WorkspaceAgentDevicePolicy agentId={agentId} />
+                <AgentModelConfig agentId={agentId} />
+                <AgentExecutionEnvironment agentId={agentId} />
               </Flexbox>
-              <WorkspaceAgentPolicyCard
+              <AgentConfigCard
                 fullWidth
                 action={<RunPriorityHint agentId={agentId} />}
                 icon={Wrench}
                 title={t('settingAgent.toolsConfig.title')}
               >
                 <AgentTool />
-              </WorkspaceAgentPolicyCard>
+              </AgentConfigCard>
             </>
-          ) : (
-            <Flexbox className={styles.configPanel} gap={10}>
-              <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-                <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
-                <RunPriorityHint agentId={agentId} />
-              </Flexbox>
-              <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
-                <ModelSwitchPanel
-                  enabledList={enabledList}
-                  model={config?.model}
-                  open={canEdit ? undefined : false}
-                  openOnHover={false}
-                  placement={'bottomLeft'}
-                  provider={config?.provider}
-                  notice={
-                    enabledList && (
-                      <Alert
-                        showIcon
-                        title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
-                        type={'info'}
-                        description={t('share.settings.modelRestriction.description', {
-                          ns: 'agent',
-                        })}
-                      />
-                    )
-                  }
-                  onModelChange={async (value) => {
-                    if (canEdit) await updateAgentConfigById(agentId, value);
-                  }}
-                >
-                  <Button disabled={!canEdit}>
-                    <ModelIcon model={config?.model} size={20} />
-                    {selectedModel?.displayName || config?.model}
-                    <ChevronDown size={14} />
-                  </Button>
-                </ModelSwitchPanel>
-                {config?.model && config.provider && (
-                  <ReasoningEffortSelect
-                    disabled={!canEdit}
-                    model={config.model}
-                    provider={config.provider}
-                  />
-                )}
-              </Flexbox>
-              <AgentTool />
-            </Flexbox>
           )}
-          {isRemoteHetero ? (
-            <WorkspaceAgentDevicePolicy agentId={agentId} showDevicePicker={false} />
+          {isRemoteHetero && isWorkspaceAgent ? (
+            <AgentExecutionEnvironment agentId={agentId} showDevicePicker={false} />
           ) : null}
         </Flexbox>
       </Flexbox>

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
+import { AgentModelConfig } from './AgentModelConfig';
 
 const testState = vi.hoisted(() => ({
   agent: {
@@ -12,6 +12,7 @@ const testState = vi.hoisted(() => ({
           modelSelectionPolicy: 'member' as const,
         },
         model: 'gpt-4',
+        provider: 'openai',
         visibility: 'public' as 'private' | 'public',
         workspaceId: 'workspace-1',
       },
@@ -24,8 +25,12 @@ vi.mock('@/features/ModelSelect', () => ({
   default: () => <div data-testid="model-select" />,
 }));
 
-vi.mock('./WorkspaceAgentPolicyCard', () => ({
-  WorkspaceAgentPolicyCard: ({ children, title }: { children: ReactNode; title: string }) => (
+vi.mock('@/features/ModelSelect/ReasoningEffortSelect', () => ({
+  default: () => <div data-testid="reasoning-effort-select" />,
+}));
+
+vi.mock('./AgentConfigCard', () => ({
+  AgentConfigCard: ({ children, title }: { children: ReactNode; title: string }) => (
     <div>
       <span>{title}</span>
       {children}
@@ -38,21 +43,37 @@ vi.mock('@/store/agent', () => ({
     selector(testState.agent),
 }));
 
-describe('WorkspaceAgentModelPolicy', () => {
+describe('AgentModelConfig', () => {
   beforeEach(() => {
     testState.agent.agentMap['agent-1'] = {
       agencyConfig: { modelSelectionPolicy: 'member' },
       model: 'gpt-4',
+      provider: 'openai',
       visibility: 'public',
       workspaceId: 'workspace-1',
     };
   });
 
-  it('renders the policy card for a loaded workspace agent', () => {
-    render(<WorkspaceAgentModelPolicy agentId="agent-1" />);
+  it('renders the model and reasoning effort for a workspace agent', () => {
+    render(<AgentModelConfig agentId="agent-1" />);
 
     expect(screen.getByText('settingAgent.modelPolicy.title')).toBeTruthy();
     expect(screen.getByTestId('model-select')).toBeTruthy();
+    expect(screen.getByTestId('reasoning-effort-select')).toBeTruthy();
+  });
+
+  it('renders the same card for a personal agent', () => {
+    testState.agent.agentMap['agent-1'] = {
+      model: 'gpt-4',
+      provider: 'openai',
+      visibility: 'private',
+    };
+
+    render(<AgentModelConfig agentId="agent-1" />);
+
+    expect(screen.getByText('settingAgent.modelPolicy.title')).toBeTruthy();
+    expect(screen.getByTestId('model-select')).toBeTruthy();
+    expect(screen.getByTestId('reasoning-effort-select')).toBeTruthy();
   });
 
   it('renders the model picker without a member-switch control — that moved to the Permission page', () => {
@@ -63,14 +84,14 @@ describe('WorkspaceAgentModelPolicy', () => {
       workspaceId: 'workspace-1',
     };
 
-    render(<WorkspaceAgentModelPolicy agentId="agent-1" />);
+    render(<AgentModelConfig agentId="agent-1" />);
 
     expect(screen.getByTestId('model-select')).toBeTruthy();
     expect(screen.queryByTestId('policy-menu')).toBeNull();
   });
 
   it('renders nothing instead of crashing while the agent config is not loaded yet', () => {
-    const { container } = render(<WorkspaceAgentModelPolicy agentId="missing-agent" />);
+    const { container } = render(<AgentModelConfig agentId="missing-agent" />);
 
     expect(container.firstChild).toBeNull();
   });
