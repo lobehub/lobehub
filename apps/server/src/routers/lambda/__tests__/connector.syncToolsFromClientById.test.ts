@@ -109,6 +109,25 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     ]);
   });
 
+  it('makes a new tool need approval when its manifest requires intervention', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        { humanIntervention: 'required', toolName: 'send_mail' },
+        { humanIntervention: 'always', toolName: 'delete_file' },
+        { humanIntervention: 'never', toolName: 'list_files' },
+        { toolName: 'read_file' },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'send_mail' }),
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'delete_file' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'list_files' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'read_file' }),
+    ]);
+  });
+
   it('rejects an unknown connector id', async () => {
     connectorModelMock.findById.mockResolvedValue(undefined);
 

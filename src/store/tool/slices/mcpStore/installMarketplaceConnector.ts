@@ -11,6 +11,8 @@ import {
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
 
+import { cloudManifestTools } from './cloudManifest';
+
 const log = debug('lobe-mcp:store:installMarketplaceConnector');
 
 type CreateConnectorPayload = Parameters<ToolStore['createConnector']>[0];
@@ -83,11 +85,7 @@ const buildCreatePayload = ({
 const syncCloudTools = async (connectorId: string, manifest: ToolManifest) => {
   await lambdaClient.connector.syncToolsFromClientById.mutate({
     id: connectorId,
-    tools: (manifest.api ?? []).map((api) => ({
-      description: api.description,
-      inputSchema: api.parameters as Record<string, unknown>,
-      toolName: api.name,
-    })),
+    tools: cloudManifestTools(manifest),
   });
 };
 

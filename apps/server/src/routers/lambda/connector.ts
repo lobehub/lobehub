@@ -984,6 +984,11 @@ export const connectorRouter = router({
         tools: z.array(
           z.object({
             description: z.string().optional(),
+            /**
+             * A manifest tool's `humanIntervention` (cloud marketplace installs):
+             * `required` / `always` makes a newly synced tool need approval.
+             */
+            humanIntervention: z.unknown().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
             toolName: z.string(),
             /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
@@ -1000,6 +1005,8 @@ export const connectorRouter = router({
 
       const syncInputs = input.tools.map((t) => ({
         crudType: inferCrudType(t.toolName),
+        // Applies to new tools only: a synced tool keeps the permission it has
+        defaultPermission: resolveDefaultPermission(t.humanIntervention),
         description: t.description,
         inputSchema: t.inputSchema,
         metadata: buildMcpToolMetadata(t.visibility),

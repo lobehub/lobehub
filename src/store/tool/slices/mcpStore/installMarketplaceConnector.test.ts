@@ -102,6 +102,32 @@ describe('installMarketplaceConnector', () => {
     });
   });
 
+  it("carries a cloud manifest's approval requirements into the synced tools", async () => {
+    const api = [
+      { description: 'Send', humanIntervention: 'required', name: 'send', parameters: {} },
+      { description: 'Wipe', humanIntervention: 'always', name: 'wipe', parameters: {} },
+    ];
+    await installMarketplaceConnector(
+      {
+        connection: { cloudEndPoint: 'https://cloud.example', type: 'cloud' },
+        identifier: 'market-mcp',
+        isOAuth: false,
+        manifest: { ...manifest, api } as unknown as ToolManifest,
+        name: 'Market MCP',
+        signal: new AbortController().signal,
+      },
+      () => state,
+    );
+
+    expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
+      id: 'connector-1',
+      tools: [
+        expect.objectContaining({ humanIntervention: 'required', toolName: 'send' }),
+        expect.objectContaining({ humanIntervention: 'always', toolName: 'wipe' }),
+      ],
+    });
+  });
+
   it('only marks the connector an OAuth install already authorized', async () => {
     state.connectors = [{ id: 'oauth-1', identifier: 'market-mcp', metadata: null }] as never;
 

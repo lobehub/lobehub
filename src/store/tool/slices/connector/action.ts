@@ -10,10 +10,12 @@ import {
 } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
+import { discoverService } from '@/services/discover';
 import { type LocalMcpTool, mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
+import { buildCloudMcpManifest, cloudManifestTools } from '../mcpStore/cloudManifest';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
@@ -23,6 +25,7 @@ import {
   connectorsResource,
   withoutConnectorSecrets,
 } from './projection';
+import { connectorSelectors } from './selectors';
 import type { AgentBoundConnector, ConnectorWithTools } from './types';
 
 type Setter = StoreSetter<ToolStore>;
@@ -437,8 +440,9 @@ export class ConnectorActionImpl {
       'syncConnectorTools/start',
     );
     try {
-      const syncedLocally = await this.#syncLocalConnectorTools(id);
-      if (!syncedLocally) await lambdaClient.connector.syncTools.mutate({ id });
+      const synced =
+        (await this.#syncCloudConnectorTools(id)) || (await this.#syncLocalConnectorTools(id));
+      if (!synced) await lambdaClient.connector.syncTools.mutate({ id });
       await this.#refreshConnectorLists();
     } finally {
       this.#set(
@@ -447,6 +451,24 @@ export class ConnectorActionImpl {
         'syncConnectorTools/end',
       );
     }
+  };
+
+  /**
+   * A market-hosted (`cloud`) server has no endpoint to list tools from: the
+   * market serves them in the server's manifest. Returns false for any other
+   * connector.
+   */
+  #syncCloudConnectorTools = async (id: string): Promise<boolean> => {
+    const connector = connectorSelectors.connectorById(id)(this.#get());
+    if (connector?.mcpConnectionType !== 'cloud') return false;
+
+    const { identifier } = connector;
+    const data = await discoverService.getMCPPluginManifest(identifier);
+    await lambdaClient.connector.syncToolsFromClientById.mutate({
+      id,
+      tools: cloudManifestTools(buildCloudMcpManifest({ data, plugin: { identifier } })),
+    });
+    return true;
   };
 
   /**

@@ -1,4 +1,8 @@
-import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import {
+  getComposioAppByIdentifier,
+  getLobehubSkillProviderById,
+  hasCallableMcpEndpoint,
+} from '@lobechat/const';
 import { Button, confirmModal, Flexbox, Tabs, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -206,17 +210,23 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       [connectorId, notifyActionError, settlePermissionRejection],
     );
 
-    // Custom connector sync uses the stored credentials (on desktop it reads them
-    // through the creator/owner-only edit read), so it follows the credentials
-    // gate. Builtin/marketplace bootstrap syncs are no-ops for non-managers.
-    const canSync = canManageCredentials || connector?.sourceType !== ConnectorSourceType.custom;
+    // A marketplace row without an endpoint only projects a legacy plugin's
+    // tools; one installed on the connector path syncs from its own server.
+    const isPluginProjection = isMarketplace && !!connector && !hasCallableMcpEndpoint(connector);
+    // A sync that connects to the server uses the stored credentials (on desktop
+    // it reads them through the creator/owner-only edit read), so it follows the
+    // credentials gate. Builtin/manifest bootstrap syncs are no-ops for non-managers.
+    const syncsFromServer =
+      connector?.sourceType === ConnectorSourceType.custom ||
+      (isMarketplace && !isPluginProjection && connector?.mcpConnectionType !== 'cloud');
+    const canSync = canManageCredentials || !syncsFromServer;
 
     const handleSync = useCallback(async () => {
       if (!connector) return;
       try {
         if (connector.sourceType === ConnectorSourceType.builtin) {
           await syncBuiltinTool(connector.identifier);
-        } else if (connector.sourceType === ConnectorSourceType.marketplace) {
+        } else if (isPluginProjection) {
           await syncPluginTools(connector.identifier);
         } else {
           await syncConnectorTools(connectorId);
@@ -227,6 +237,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     }, [
       connector,
       connectorId,
+      isPluginProjection,
       notifyActionError,
       syncBuiltinTool,
       syncPluginTools,
