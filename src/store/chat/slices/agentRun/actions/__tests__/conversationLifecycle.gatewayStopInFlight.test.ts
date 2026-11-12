@@ -50,7 +50,7 @@ const sendAndStop = async ({
 }: {
   /** What the user typed into the composer after pressing Stop. */
   draftAfterStop?: string;
-  finish: () => Promise<unknown>;
+  finish: (params: any) => Promise<unknown>;
   sendRequest: boolean;
 }) => {
   const { result } = renderHook(() => useChatStore());
@@ -79,7 +79,7 @@ const sendAndStop = async ({
         if (sendRequest) params.onStartRequestSent?.();
         parked();
         await released;
-        return finish();
+        return finish(params);
       }) as any,
       isGatewayModeEnabled: () => true,
       mainInputEditor: editor as any,
@@ -132,13 +132,29 @@ describe('Stop while a gateway send is starting', () => {
     expect(editor.setDocument).not.toHaveBeenCalled();
   });
 
-  it('still restores the composer when Stop lands before the request is sent', async () => {
+  // ROOT CAUSE:
+  //
+  // Before the request is sent, `executeGatewayAgent` rethrows the signal's
+  // abort reason (`'canceled'`, a string). The failed-send restore only knew
+  // `AbortError`s, so it also recorded the Stop as an "Unknown error" notice.
+  //
+  // Before: the composer came back with a send-error banner. After: silently.
+  it('still restores the composer silently when Stop lands before the request is sent', async () => {
     const editor = await sendAndStop({
-      finish: () => Promise.reject(new DOMException('Aborted', 'AbortError')),
+      finish: (params) =>
+        Promise.reject(
+          useChatStore.getState().getOperationAbortSignal(params.parentOperationId).reason,
+        ),
       sendRequest: false,
     });
 
     expect(editor.setJSONState).toHaveBeenCalledWith(typedDraft);
+    expect(editor.setDocument).not.toHaveBeenCalled();
+    const send = Object.values(useChatStore.getState().operations).find(
+      (operation) => operation.type === 'sendMessage',
+    );
+    expect(send?.status).toBe('cancelled');
+    expect(send?.metadata.inputSendErrorMsg).toBeUndefined();
   });
 
   it('hands the text back when the server refuses a turn stopped in flight', async () => {

@@ -890,12 +890,12 @@ export class ConversationLifecycleActionImpl {
     const restoreComposerAfterFailedSend = (error: unknown) => {
       if (preserveComposer || hasNotifiedMessageAccepted) return;
 
-      // Cancellation is a deliberate user action with its own restore path
-      // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
-      // composer here would fight it.
+      // A Stop (an AbortError, or the signal's own reason a transport rethrows) has its
+      // own restore path (the cancel flow replays `inputEditorTempState`); don't fight it.
       const isAbort =
-        error instanceof Error &&
-        (error.message.includes('aborted') || error.name === 'AbortError');
+        (abortController.signal.aborted && error === abortController.signal.reason) ||
+        (error instanceof Error &&
+          (error.message.includes('aborted') || error.name === 'AbortError'));
       if (isAbort) return;
 
       this.#get().updateOperationMetadata(operationId, {
