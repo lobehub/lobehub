@@ -57,8 +57,8 @@ describe('UsageBreakdown', () => {
     expect(screen.queryByText('drive.usage.over')).not.toBeInTheDocument();
   });
 
-  // LOBE-15436: a refresh whose walk timed out used to answer with the old
-  // figure as if it had been re-measured.
+  // A refresh whose walk timed out used to answer with the old figure as if
+  // it had been re-measured.
   it('should say the figure is the last measurement when the drive could not be measured', async () => {
     const onRefresh = vi.fn().mockRejectedValue(new Error('STORAGE_USAGE_MEASURE_FAILED'));
     render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
@@ -79,7 +79,7 @@ describe('UsageBreakdown', () => {
     );
   });
 
-  // LOBE-15436: a drive too large to walk in one call is measured over several.
+  // A drive too large to walk in one call is measured over several calls.
   describe('a drive measured over several calls', () => {
     beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout'] });
