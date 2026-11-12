@@ -186,6 +186,9 @@ export const prepareHeteroRun = async (
   }> => {
     const recentMsgs = await recentMessagesPromise;
     if (!recentMsgs) return {};
+    // Assigned before the attachments are signed: a signing failure drops only
+    // the unanswered turns, never the text history the resume fallback needs.
+    let conversationHistory: ConversationHistoryEntry[] | undefined;
     try {
       const topicMsgs = recentMsgs.filter((m) => !m.threadId && !selfMessageIds.has(m.id));
       const turns = topicMsgs
@@ -200,7 +203,7 @@ export const prepareHeteroRun = async (
           content: m.content ?? '',
           role: m.role as 'assistant' | 'user',
         }));
-      const conversationHistory = turns.length > 0 ? turns : undefined;
+      conversationHistory = turns.length > 0 ? turns : undefined;
       if (!resumeSessionId) return { conversationHistory };
       const unanswered = collectUnansweredUserTurns(topicMsgs, prompt);
       if (unanswered.length === 0) return { conversationHistory };
@@ -227,7 +230,7 @@ export const prepareHeteroRun = async (
       return { conversationHistory, unansweredUserTurns };
     } catch (err) {
       log('execAgent: failed to load conversation history for hetero context: %O', err);
-      return {};
+      return { conversationHistory };
     }
   };
 

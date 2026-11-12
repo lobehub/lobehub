@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     gated,
+    getFullFileUrl: vi.fn(),
     getResumeSessionId: vi.fn(),
     reset: () => {
       started.length = 0;
@@ -60,6 +61,12 @@ vi.mock('@lobechat/observability-otel/modules/agent-runtime', () => ({
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
     return { getHeterogeneousResumeSessionId: mocks.getResumeSessionId };
+  }),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return { getFullFileUrl: mocks.getFullFileUrl };
   }),
 }));
 
@@ -211,5 +218,36 @@ describe('prepareHeteroRun — overlapping reads', () => {
     expect(mocks.spans.ended).toEqual(
       expect.arrayContaining(['hetero_dispatch sign_operation_jwt', 'hetero_dispatch topic']),
     );
+  });
+
+  it('keeps the text history when signing an unanswered attachment fails', async () => {
+    const { deps, messageModel, topicModel } = createDeps();
+    topicModel.findById.mockResolvedValue({ metadata: {} });
+    deps.getMarketService.mockRejectedValue(new Error('market down'));
+    mocks.getResumeSessionId.mockResolvedValue('session-1');
+    mocks.signHeteroOperationJWT.mockResolvedValue('jwt');
+    mocks.getFullFileUrl.mockRejectedValue(new Error('signing failed'));
+    messageModel.query.mockResolvedValue([
+      { content: 'earlier question', id: 'm-1', role: 'user' },
+      { content: 'earlier answer', id: 'm-2', role: 'assistant' },
+      {
+        content: 'stopped before the CLI saw it',
+        fileList: [{ name: 'spec.pdf', url: 'files/spec.pdf' }],
+        id: 'm-3',
+        role: 'user',
+      },
+    ]);
+
+    const prepared = await prepareHeteroRun(deps, ctx, input, 'op-1');
+
+    expect(mocks.getFullFileUrl).toHaveBeenCalledWith('files/spec.pdf');
+    expect(prepared.conversationHistory).toEqual([
+      { content: 'earlier question', role: 'user' },
+      { content: 'earlier answer', role: 'assistant' },
+      { content: 'stopped before the CLI saw it', role: 'user' },
+    ]);
+    expect(prepared.unansweredUserTurns).toBeUndefined();
+    // A resumed run still gets its fallback context built from that history.
+    expect(prepared.heteroParams.resumeFallbackSystemContext).toBeDefined();
   });
 });

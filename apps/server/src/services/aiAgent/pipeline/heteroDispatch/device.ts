@@ -93,6 +93,14 @@ export const dispatchToCliDevice = async (
     heteroPlan: CliDispatchPlan;
     heteroType: HeteroDispatchInput['heteroType'];
     heterogeneousProvider: HeteroDispatchInput['heterogeneousProvider'];
+    /**
+     * For a dispatch that runs after the response, when a Stop can land while
+     * it prepares: checked right before the gateway hop (a stopped run is not
+     * sent) and right after it (a run stopped mid-hop is cancelled on the
+     * device). The synchronous send leaves it out: the client cannot stop a
+     * run it has not been told about yet.
+     */
+    isStopped?: () => Promise<boolean>;
     prepared: PreparedHeteroRun;
   },
 ): Promise<ExecAgentResult | undefined> => {
@@ -103,6 +111,7 @@ export const dispatchToCliDevice = async (
     heteroPlan,
     heteroType,
     heterogeneousProvider,
+    isStopped,
     prepared,
   } = params;
   const {
@@ -255,6 +264,14 @@ export const dispatchToCliDevice = async (
         })
       : undefined;
 
+  // A Stop that settled the run while it prepared found no process to cancel;
+  // sending it now would start a CLI nobody can see. The stop path already
+  // settled the operation and its marker, so there is nothing left to write.
+  if (!authorizationError && (await isStopped?.())) {
+    log('execAgent: op=%s stopped while its dispatch prepared, not dispatching', operationId);
+    return undefined;
+  }
+
   // Anything that touches the run after this instant proves it started.
   const dispatchedAt = new Date();
   const result = authorizationError
@@ -307,6 +324,25 @@ export const dispatchToCliDevice = async (
 
     log('execAgent: hetero device dispatch unconfirmed, awaiting first ingest op=%s', operationId);
     scheduleTimedOutDispatchConfirmation(deps, run, { dispatchedAt, finalize, result: failure });
+  }
+
+  // A Stop that landed during the gateway hop may have found no process yet.
+  // The device registers the process before it acks, so cancel it now; the
+  // stop path already settled the operation, so the route is not recorded.
+  if (result.success && (await isStopped?.())) {
+    log('execAgent: op=%s stopped during its dispatch, cancelling on the device', operationId);
+    await traceHeteroStage('device cancel_stopped_dispatch', () =>
+      deviceGateway.executeToolCall(
+        { deviceId: dispatchDeviceId, userId: deps.userId, workspaceId: dispatchWorkspaceId },
+        {
+          apiName: 'cancelHeteroTask',
+          arguments: JSON.stringify({ signal: 'SIGINT', taskId: operationId }),
+          identifier: 'cancelHeteroTask',
+        },
+        10_000,
+      ),
+    ).catch((err) => log('execAgent: cancelling a stopped dispatch failed: %O', err));
+    return undefined;
   }
 
   // Local CLI hetero agents dispatch to a device just like remote platform
@@ -373,7 +409,8 @@ const failDispatchAfterResponse = async (
  * the gateway hop) move off the send. A refused dispatch settles through
  * `failHeteroDispatch` exactly like an immediate one: the error lands on the
  * assistant message and the run's stream closes. A run stopped before the
- * dispatch starts is not dispatched.
+ * gateway hop is not dispatched, and one stopped during it is cancelled on
+ * the device (see `isStopped` on `dispatchToCliDevice`).
  */
 export const deferCliDeviceDispatch = (
   deps: HeteroDispatchDeps,
@@ -388,7 +425,10 @@ export const deferCliDeviceDispatch = (
           log('execAgent: op=%s settled before its deferred dispatch, skipping', run.operationId);
           return;
         }
-        await dispatchToCliDevice(deps, run, params);
+        await dispatchToCliDevice(deps, run, {
+          ...params,
+          isStopped: () => isRunStopped(deps, run),
+        });
       } catch (error) {
         await failDispatchAfterResponse(
           deps,
@@ -465,7 +505,11 @@ export const dispatchToWakingCliDevice = async (
         online,
         run.operationId,
       );
-      await dispatchToCliDevice(deps, run, { ...dispatchParams, heteroPlan: devicePlan });
+      await dispatchToCliDevice(deps, run, {
+        ...dispatchParams,
+        heteroPlan: devicePlan,
+        isStopped,
+      });
     } catch (error) {
       await failDispatchAfterResponse(
         deps,

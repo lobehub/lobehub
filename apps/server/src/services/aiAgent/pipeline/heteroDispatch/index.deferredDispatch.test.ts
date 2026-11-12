@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     completeOperation: vi.fn(),
     createOperationMetadata: vi.fn(),
     dispatchAgentRun: vi.fn(),
+    executeToolCall: vi.fn(),
     featureFlags: vi.fn(),
     finalizeHeteroDispatchError: vi.fn(),
     findByDeviceId: vi.fn(),
@@ -108,6 +109,7 @@ vi.mock('@/server/services/agentQuota', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mocks.dispatchAgentRun,
+    executeToolCall: mocks.executeToolCall,
     readDeviceSystemInfo: vi.fn(),
   },
 }));
@@ -369,6 +371,44 @@ describe('dispatchHeteroAgent — agent_deferred_hetero_dispatch', () => {
         message: 'Hetero agent device dispatch failed',
       }),
     );
+  });
+
+  it('does not dispatch a run stopped while its dispatch prepared', async () => {
+    // Live when the deferred work starts, stopped by the time the device steps finish.
+    mocks.isRunningOnTopic.mockResolvedValueOnce(true).mockResolvedValue(false);
+    const { deps, topicModel } = createDeps();
+
+    await dispatchHeteroAgent(deps, deviceCtx(), plainInput());
+    await runAfterResponse();
+
+    expect(mocks.dispatchAgentRun).not.toHaveBeenCalled();
+    expect(mocks.executeToolCall).not.toHaveBeenCalled();
+    expect(topicModel.patchRunningOperation).not.toHaveBeenCalled();
+    expect(mocks.finalizeHeteroDispatchError).not.toHaveBeenCalled();
+  });
+
+  it('cancels on the device a run stopped during the gateway hop', async () => {
+    mocks.isRunningOnTopic
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    mocks.executeToolCall.mockResolvedValue({ success: true });
+    const { deps, topicModel } = createDeps();
+
+    const result = await dispatchHeteroAgent(deps, deviceCtx(), plainInput());
+    await runAfterResponse();
+
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+    expect(mocks.executeToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'dev-1' }),
+      expect.objectContaining({
+        apiName: 'cancelHeteroTask',
+        arguments: JSON.stringify({ signal: 'SIGINT', taskId: result.operationId }),
+      }),
+      10_000,
+    );
+    expect(topicModel.patchRunningOperation).not.toHaveBeenCalled();
+    expect(mocks.finalizeHeteroDispatchError).not.toHaveBeenCalled();
   });
 
   it('does not dispatch a run stopped before the deferred dispatch started', async () => {
