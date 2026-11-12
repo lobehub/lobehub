@@ -32,6 +32,14 @@ const logProvider = debug('lobe-oidc:provider');
 
 export const API_AUDIENCE = 'urn:lobehub:chat';
 
+/**
+ * Access-token claim naming the grant the token was issued under. JWT access
+ * tokens are never stored, so this is the only link from a presented token back
+ * to its grant: a revoked grant's token can then be told apart from a later,
+ * live grant of the same user and client.
+ */
+export const ACCESS_TOKEN_GRANT_CLAIM = 'grant_id';
+
 const MINUTE_SECONDS = 60;
 const HOUR_SECONDS = 60 * MINUTE_SECONDS;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
@@ -118,6 +126,11 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
     // Added: ensure ID Token includes claims for all scopes, not just openid scope
     conformIdTokenClaims: false,
+
+    extraTokenClaims: async (_ctx, token) =>
+      token.kind === 'AccessToken' && token.grantId
+        ? { [ACCESS_TOKEN_GRANT_CLAIM]: token.grantId }
+        : undefined,
 
     // 7. Cookie configuration
     cookies: {

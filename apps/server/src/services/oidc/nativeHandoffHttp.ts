@@ -19,6 +19,34 @@ const MAX_BODY_BYTES = 4096;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { headers: { 'cache-control': 'no-store' }, status });
 
+const tooLarge = () => new NativeHandoffError('invalid_request', 'body is too large');
+
+/**
+ * Reads the body as text, refusing it once it passes `MAX_BODY_BYTES`: a declared
+ * `Content-Length` over the cap is refused before reading, and a chunked body
+ * stops being read at the cap, so an oversized request is never buffered whole.
+ */
+const readLimitedBody = async (request: Request) => {
+  const declared = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) throw tooLarge();
+  if (!request.body) return '';
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+};
+
 const errorResponse = (error: unknown) => {
   if (error instanceof NativeHandoffError) return json(error.toJSON(), error.status);
 
@@ -48,7 +76,7 @@ const createService = async () =>
     countRequest: (userId) =>
       redisService.oidcNativeHandoff.countRequest(userId, NATIVE_HANDOFF_RATE_WINDOW_SECONDS),
     findUser: async (userId) => UserModel.findById(await getServerDB(), userId),
-    hasLiveSession: async (userId, clientId) => {
+    hasLiveSession: async (userId, clientId, grantId) => {
       const db = await getServerDB();
       const [row] = await db
         .select({ id: oidcRefreshTokens.id })
@@ -57,6 +85,7 @@ const createService = async () =>
           and(
             eq(oidcRefreshTokens.userId, userId),
             eq(oidcRefreshTokens.clientId, clientId),
+            eq(oidcRefreshTokens.grantId, grantId),
             isNull(oidcRefreshTokens.consumedAt),
             gt(oidcRefreshTokens.expiresAt, new Date()),
           ),
@@ -83,10 +112,7 @@ export const handleNativeHandoffIssue = async (request: Request) => {
     if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
       throw new NativeHandoffError('invalid_request', 'body must be application/json');
     }
-    const text = await request.text();
-    if (Buffer.byteLength(text) > MAX_BODY_BYTES) {
-      throw new NativeHandoffError('invalid_request', 'body is too large');
-    }
+    const text = await readLimitedBody(request);
 
     let body: NativeHandoffRequest;
     try {

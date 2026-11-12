@@ -88,6 +88,47 @@ describe('native handoff HTTP adapter', () => {
     expect(issue).not.toHaveBeenCalled();
   });
 
+  it('refuses a declared oversized body without reading it', async () => {
+    const pull = vi.fn();
+    const request = new Request('http://localhost:3010/oidc/handoff/native', {
+      body: new ReadableStream({ pull }, { highWaterMark: 0 }),
+      // @ts-expect-error -- Node's fetch needs duplex for a streamed body
+      duplex: 'half',
+      headers: { 'content-length': '1048576', 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    const response = await handleNativeHandoffIssue(request);
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error_description).toBe('body is too large');
+    expect(pull).not.toHaveBeenCalled();
+  });
+
+  it('stops reading a chunked body once it passes the cap', async () => {
+    let served = 0;
+    const request = new Request('http://localhost:3010/oidc/handoff/native', {
+      body: new ReadableStream({
+        pull(controller) {
+          served += 1;
+          controller.enqueue(new Uint8Array(1024));
+        },
+      }),
+      // @ts-expect-error -- Node's fetch needs duplex for a streamed body
+      duplex: 'half',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    const response = await handleNativeHandoffIssue(request);
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error_description).toBe('body is too large');
+    // 4 KiB cap: the fifth 1 KiB chunk crosses it, and nothing is pulled far beyond.
+    expect(served).toBeLessThanOrEqual(6);
+    expect(issue).not.toHaveBeenCalled();
+  });
+
   it('maps service errors to their status and error code', async () => {
     issue.mockRejectedValue(new NativeHandoffError('issuer_mismatch', 'other issuer'));
 

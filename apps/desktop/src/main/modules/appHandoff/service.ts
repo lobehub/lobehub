@@ -97,7 +97,12 @@ export const issuerFor = (serverUrl: string) => `${normalizeIssuer(serverUrl)}/o
  * the code.
  */
 export class AppHandoffService {
-  private targets?: { promise: Promise<HandoffTargets>; serverUrl: string };
+  /**
+   * Cached per session, not per server: the list carries the signed-in user's
+   * `sub`, so a re-login as another account on the same server must refetch it.
+   * The key is the access token, which changes with every sign-in and refresh.
+   */
+  private targets?: { accessToken: string; promise: Promise<HandoffTargets>; serverUrl: string };
   private recent: number[] = [];
 
   constructor(private readonly deps: AppHandoffServiceDeps) {}
@@ -115,9 +120,13 @@ export class AppHandoffService {
     const current = session ?? (await this.deps.getSession({ refresh: false }));
     if (!current) return null;
 
-    if (!this.targets || this.targets.serverUrl !== current.serverUrl) {
+    if (
+      !this.targets ||
+      this.targets.serverUrl !== current.serverUrl ||
+      this.targets.accessToken !== current.accessToken
+    ) {
       const promise = this.fetchTargets(current);
-      this.targets = { promise, serverUrl: current.serverUrl };
+      this.targets = { accessToken: current.accessToken, promise, serverUrl: current.serverUrl };
       promise.catch(() => {
         if (this.targets?.promise === promise) this.targets = undefined;
       });

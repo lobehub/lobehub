@@ -321,6 +321,21 @@ describe('GET /app-handoff/v1/status', () => {
     });
   });
 
+  it('names the new user after a re-login as another account on the same server', async () => {
+    await expect(service.status(5000, 61000)).resolves.toMatchObject({ sub: 'user_a' });
+
+    // Same server, another account: the session-change sync loads targets again.
+    deps.getSession.mockResolvedValue({ accessToken: 'token-of-user-b', serverUrl: SERVER });
+    deps.fetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'GET'
+        ? Response.json({ ...targetsBody, sub: 'user_b' })
+        : new Response(null, { status: 200 }),
+    );
+    await service.loadTargets();
+
+    await expect(service.status(5000, 61000)).resolves.toMatchObject({ sub: 'user_b' });
+  });
+
   it('keeps the user id from an unrecognised caller and never asks', async () => {
     deps.verifyExecutable.mockResolvedValue(false);
 

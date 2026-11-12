@@ -4,7 +4,11 @@ import debug from 'debug';
 
 import { isOIDCUserBanned } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
-import { API_AUDIENCE, type OIDCProvider } from '@/libs/oidc-provider/provider';
+import {
+  ACCESS_TOKEN_GRANT_CLAIM,
+  API_AUDIENCE,
+  type OIDCProvider,
+} from '@/libs/oidc-provider/provider';
 
 const log = debug('lobe-oidc:native-handoff');
 
@@ -107,13 +111,15 @@ export interface NativeHandoffDeps {
   countRequest?: (userId: string) => Promise<number | undefined>;
   findUser: (userId: string) => Promise<HandoffUser | null | undefined>;
   /**
-   * Whether the caller's client still holds a live session for the user: an
-   * unconsumed, unexpired refresh token. Access tokens are stateless JWTs that
-   * stay valid after their grant is revoked, and the desktop app shares its
-   * access token with local agent runs; requiring the refreshable session keeps
-   * a copied or revoked access token from minting a fresh native grant.
+   * Whether the grant the caller's token was issued under is still a live
+   * session: it holds an unconsumed, unexpired refresh token for this user and
+   * client. Access tokens are stateless JWTs that stay valid after their grant is
+   * revoked, and the desktop app shares its access token with local agent runs;
+   * requiring that same grant's refreshable session keeps a copied or revoked
+   * access token from minting a fresh native grant, even after the user signs in
+   * again and so holds another live grant.
    */
-  hasLiveSession: (userId: string, clientId: string) => Promise<boolean>;
+  hasLiveSession: (userId: string, clientId: string, grantId: string) => Promise<boolean>;
   policy?: NativeHandoffPolicy;
   provider: OIDCProvider;
   validateToken?: typeof validateOIDCJWT;
@@ -299,7 +305,10 @@ export class NativeHandoffService {
     if (!user || isOIDCUserBanned(user)) {
       throw new NativeHandoffError('access_denied', 'account is not active');
     }
-    if (!(await this.deps.hasLiveSession(result.userId, clientId))) {
+    // A token from before the grant claim existed cannot be tied to its grant;
+    // the native app falls back to its own sign-in until the desktop refreshes.
+    const grantId = asString(payload[ACCESS_TOKEN_GRANT_CLAIM]);
+    if (!grantId || !(await this.deps.hasLiveSession(result.userId, clientId, grantId))) {
       throw new NativeHandoffError('invalid_token', 'the caller has no active session');
     }
 

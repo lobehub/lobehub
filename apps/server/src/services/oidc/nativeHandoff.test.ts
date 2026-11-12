@@ -96,7 +96,8 @@ vi.mock('@/libs/oidc-provider/adapter', () => {
 });
 
 // Imported after the mocks above.
-const { createOIDCProvider } = await import('@/libs/oidc-provider/provider');
+const { ACCESS_TOKEN_GRANT_CLAIM, createOIDCProvider } =
+  await import('@/libs/oidc-provider/provider');
 const { __store: adapterStore } = (await import('@/libs/oidc-provider/adapter')) as any;
 const {
   NATIVE_HANDOFF_CODE_TTL_SECONDS,
@@ -162,12 +163,13 @@ const createService = (
   new NativeHandoffService({
     findUser: async (id) => users.get(id),
     // Same rule as production (nativeHandoffHttp.ts), read from the in-memory adapter.
-    hasLiveSession: async (userId, clientId) =>
+    hasLiveSession: async (userId, clientId, grantId) =>
       [...adapterStore.entries()].some(
         ([key, entry]: [string, any]) =>
           key.startsWith('RefreshToken:') &&
           entry.payload.accountId === userId &&
           entry.payload.clientId === clientId &&
+          entry.payload.grantId === grantId &&
           !entry.payload.consumed &&
           (!entry.expiresAt || entry.expiresAt > Date.now()),
       ),
@@ -566,6 +568,41 @@ describe('NativeHandoffService', () => {
       code: 'invalid_token',
       description: 'the caller has no active session',
     });
+  });
+
+  it('rejects a revoked session token even after the user signs in again', async () => {
+    users.set('user_relogin', { banExpires: null, banned: false, id: 'user_relogin' });
+    const revoked = await signInDesktop('user_relogin');
+    await provider.Grant.adapter.revokeByGrantId(revoked.grantId);
+    // A later sign-in gives the same user and client another live grant…
+    const current = await signInDesktop('user_relogin');
+    const service = createService();
+
+    // …which must not vouch for the revoked grant's still-valid JWT.
+    await expect(
+      service.issue(revoked.accessToken, handoffRequest().request),
+    ).rejects.toMatchObject({
+      code: 'invalid_token',
+      description: 'the caller has no active session',
+    });
+    await expect(
+      service.issue(current.accessToken, handoffRequest().request),
+    ).resolves.toMatchObject({ code: expect.any(String) });
+  });
+
+  it('rejects a caller token that names no grant', async () => {
+    const desktop = await signInDesktop();
+    const { [ACCESS_TOKEN_GRANT_CLAIM]: _grant, ...payload } = decode(desktop.accessToken);
+    const validateToken = vi.fn(async () => ({
+      clientId: DESKTOP_CLIENT_ID,
+      payload,
+      tokenData: {} as any,
+      userId: USER_ID,
+    }));
+
+    await expect(
+      createService({ validateToken }).issue(desktop.accessToken, handoffRequest().request),
+    ).rejects.toMatchObject({ code: 'invalid_token' });
   });
 
   it('rejects a missing, forged or banned caller', async () => {
