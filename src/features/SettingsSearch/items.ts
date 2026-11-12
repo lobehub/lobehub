@@ -369,6 +369,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
+    anchor: 'about-remote-debugging',
+    keywords: ['remote debugging', 'cdp', 'devtools', 'diagnostics', 'debug port'],
+    labelKey: 'settingAbout.remoteDebugging.title',
+    tab: SettingsTabs.About,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
     anchor: 'appearance-font-family',
     descKey: 'settingAppearance.font.fontFamily.desc',
     keywords: ['font', 'font family', 'typeface', 'interface font'],

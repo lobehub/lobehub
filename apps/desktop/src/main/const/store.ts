@@ -42,6 +42,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   localFileWorkspaceRoots: [],
   networkProxy: defaultProxySettings,
   pendingRestoreRoute: '',
+  remoteDebuggingEnabled: false,
   shortcuts: DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
   storagePath: appStorageDir,
   themeMode: 'system',
