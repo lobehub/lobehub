@@ -6,7 +6,7 @@ import { RefreshCwIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SubscriptionAccountsPurchase from '@/business/client/features/SubscriptionAccountsPurchase';
+import { SubscriptionAccountsPurchase } from '@/business/client/features/SubscriptionAccountsPurchase';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import { cacheScope } from '@/libs/replica';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
