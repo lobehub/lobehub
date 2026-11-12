@@ -1,9 +1,9 @@
 import type * as BaseUI from '@lobehub/ui';
 import { act, render, screen } from '@testing-library/react';
 import type { ComponentType } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
+import AgentExecutionEnvironment from './AgentExecutionEnvironment';
 
 const testState = vi.hoisted(() => ({
   agent: {
@@ -14,11 +14,11 @@ const testState = vi.hoisted(() => ({
           executionTargetSelectionPolicy: 'member',
         } as {
           boundDeviceId?: string;
-          executionTarget: string;
+          executionTarget?: string;
           executionTargetSelectionPolicy: string;
         },
         visibility: 'public' as 'private' | 'public',
-        workspaceId: 'workspace-1',
+        workspaceId: 'workspace-1' as string | undefined,
       },
     },
     updateAgentConfigById: vi.fn(),
@@ -32,6 +32,23 @@ const testState = vi.hoisted(() => ({
 }));
 
 const selectPropsSpy = vi.hoisted(() => vi.fn());
+const selectExecutionTargetSpy = vi.hoisted(() => vi.fn());
+const constState = vi.hoisted(() => ({ isDesktop: false }));
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  get isDesktop() {
+    return constState.isDesktop;
+  },
+}));
+
+vi.mock('@/features/ChatInput/hooks/useSelectExecutionTarget', () => ({
+  useSelectExecutionTarget: () => selectExecutionTargetSpy,
+}));
+
+vi.mock('@/helpers/gatewayMode', () => ({
+  useIsGatewayModeEnabled: () => true,
+}));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof BaseUI>();
@@ -58,7 +75,7 @@ vi.mock('@/store/agent', () => ({
     selector(testState.agent),
 }));
 
-describe('WorkspaceAgentDevicePolicy', () => {
+describe('AgentExecutionEnvironment', () => {
   beforeEach(() => {
     testState.agent.agentMap['agent-1'].visibility = 'public';
     testState.agent.updateAgentConfigById.mockReset();
@@ -68,7 +85,7 @@ describe('WorkspaceAgentDevicePolicy', () => {
   });
 
   it('renders the environment picker without a member-switch control', () => {
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     expect(screen.getByText('settingAgent.devicePolicy.title')).toBeTruthy();
     // Whether members may switch moved to the Agent's Permission page — the
@@ -90,7 +107,7 @@ describe('WorkspaceAgentDevicePolicy', () => {
         }),
     );
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     expect(screen.queryByText('settingAgent.devicePolicy.defaultTarget')).toBeNull();
     expect(screen.queryByRole('switch')).toBeNull();
@@ -104,7 +121,7 @@ describe('WorkspaceAgentDevicePolicy', () => {
   });
 });
 
-describe('WorkspaceAgentDevicePolicy over an unconfirmed device list', () => {
+describe('AgentExecutionEnvironment over an unconfirmed device list', () => {
   const workspaceDevice = {
     channels: [],
     deviceId: 'ws-device',
@@ -129,7 +146,7 @@ describe('WorkspaceAgentDevicePolicy over an unconfirmed device list', () => {
   it('shows stored workspace devices but does not let them be bound yet', () => {
     testState.deviceList = { data: [workspaceDevice], isConfirmed: false, isLoading: false };
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     const [option] = workspaceGroup();
     expect(option.value).toContain('ws-device');
@@ -139,7 +156,7 @@ describe('WorkspaceAgentDevicePolicy over an unconfirmed device list', () => {
   it('reads a stored copy without workspace devices as loading, not empty', () => {
     testState.deviceList = { data: [], isConfirmed: false, isLoading: false };
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     expect(workspaceGroup().map((option) => option.value)).toEqual(['status:loading']);
   });
@@ -151,13 +168,13 @@ describe('WorkspaceAgentDevicePolicy over an unconfirmed device list', () => {
       isLoading: false,
     };
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     expect(workspaceGroup()[0].disabled).toBeFalsy();
   });
 });
 
-describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
+describe('AgentExecutionEnvironment with a private workspace device', () => {
   const privateDevice = {
     channels: [],
     deviceId: 'private-device',
@@ -194,7 +211,7 @@ describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
   it("lets a private agent's owner bind their own private device", () => {
     testState.agent.agentMap['agent-1'].visibility = 'private';
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     const option = deviceOption();
     expect(option?.disabled).toBeFalsy();
@@ -209,7 +226,7 @@ describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
   it('keeps private devices unselectable on a public agent and says why', () => {
     testState.agent.agentMap['agent-1'].visibility = 'public';
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     expect(deviceOption()?.disabled).toBe(true);
     expect(privateGroupOptions().map((option) => option.value)).toContain(
@@ -224,7 +241,7 @@ describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
       executionTargetSelectionPolicy: 'fixed',
     };
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     expect(deviceOption()?.disabled).toBe(true);
     expect(privateGroupOptions().map((option) => option.value)).toContain(
@@ -240,10 +257,106 @@ describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
       executionTargetSelectionPolicy: 'member',
     };
 
-    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
 
     const { value } = selectPropsSpy.mock.lastCall?.[0] as { value?: string };
     expect(value).toContain('private-device');
     expect(value).toBe(deviceOption()?.value);
+  });
+});
+
+describe('AgentExecutionEnvironment for a personal agent', () => {
+  const personalDevice = {
+    channels: [],
+    deviceId: 'my-mac',
+    friendlyName: 'My Mac',
+    online: true,
+    scope: 'personal',
+  };
+  const workspaceDevice = {
+    channels: [],
+    deviceId: 'ws-device',
+    friendlyName: 'Build Server',
+    online: true,
+    scope: 'workspace',
+    visibility: 'public',
+  };
+
+  const lastSelectProps = () =>
+    selectPropsSpy.mock.lastCall?.[0] as {
+      onChange: (v: string) => void;
+      options: { label?: unknown; options?: unknown[]; value?: string }[];
+      value?: string;
+    };
+  const optionValues = () => lastSelectProps().options.map((option) => option.value);
+
+  beforeEach(() => {
+    selectPropsSpy.mockClear();
+    selectExecutionTargetSpy.mockReset();
+    testState.agent.updateAgentConfigById.mockReset();
+    constState.isDesktop = false;
+    testState.agent.agentMap['agent-1'].workspaceId = undefined;
+    testState.agent.agentMap['agent-1'].visibility = 'private';
+    testState.agent.agentMap['agent-1'].agencyConfig = {
+      executionTarget: 'none',
+      executionTargetSelectionPolicy: 'member',
+    };
+    testState.deviceList = {
+      data: [personalDevice, workspaceDevice],
+      isConfirmed: true,
+      isLoading: false,
+    };
+  });
+
+  afterAll(() => {
+    testState.agent.agentMap['agent-1'].workspaceId = 'workspace-1';
+  });
+
+  it('renders the environment picker instead of nothing', () => {
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    expect(screen.getByText('settingAgent.devicePolicy.title')).toBeTruthy();
+    expect(lastSelectProps().value).toBe('target:none');
+  });
+
+  it("lists the account's own devices flat, never workspace devices", () => {
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    expect(optionValues()).toEqual([
+      'target:none',
+      'target:auto',
+      'target:sandbox',
+      'device:my-mac',
+    ]);
+    expect(lastSelectProps().options.some((option) => option.options)).toBe(false);
+  });
+
+  it('offers this machine on desktop and shows it as the default', () => {
+    constState.isDesktop = true;
+    testState.agent.agentMap['agent-1'].agencyConfig = {
+      executionTargetSelectionPolicy: 'member',
+    };
+
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    expect(optionValues()).toContain('target:local');
+    expect(lastSelectProps().value).toBe('target:local');
+  });
+
+  it('saves a pick through the chat-input writer, not the shared-default write', () => {
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    lastSelectProps().onChange('device:my-mac');
+
+    expect(selectExecutionTargetSpy).toHaveBeenCalledWith('device', 'my-mac');
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('says when the account has no devices instead of an empty list', () => {
+    testState.deviceList = { data: [workspaceDevice], isConfirmed: true, isLoading: false };
+
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    expect(optionValues()).toContain('status:empty');
   });
 });
