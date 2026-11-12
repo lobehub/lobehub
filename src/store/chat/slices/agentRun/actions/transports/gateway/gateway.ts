@@ -82,7 +82,7 @@ import {
   markGatewayMuxUnavailable,
 } from './muxRegistry';
 import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMessagesFlag';
-import { gatewayRunOperationMetadata } from './runOperationMetadata';
+import { gatewayRunOperationMetadata, isLocalStopNotice } from './runOperationMetadata';
 import { isCompletedRuntimeEnd } from './runtimeEndReason';
 import * as serverSteerQueue from './serverSteerQueue';
 import { watchSubAgentRun, type WatchSubAgentRunParams } from './watchSubAgentRun';
@@ -347,8 +347,8 @@ export class GatewayActionImpl {
    *   up as a sub-agent (right panel, the result message's thread link); when
    *   its parent is not streaming here (a background sub-agent), refetch the
    *   messages on its end too so its tool card settles.
-   * - A top-level run ending that this tab did not follow: refetch the topic's
-   *   messages and row, in case the live attach missed a short run.
+   * - A top-level run ending that this tab neither followed nor stopped: refetch
+   *   its messages and row, in case the live attach missed a short run.
    */
   #followUnownedRun = (lifecycle: MuxOpLifecycleMessage): void => {
     const { agentId, groupId, parentOperationId, topicId } = lifecycle.meta ?? {};
@@ -379,7 +379,8 @@ export class GatewayActionImpl {
     // and a short wake-up may finish before anything else refetches the topic
     // — so its end converges the conversation even if the live attach missed.
     if (!parentOperationId) {
-      // A turn of this tab still finishing settles through its own stream.
+      // A turn of this tab still finishing, or stopped here, settles through its own stream.
+      if (isLocalStopNotice(state.operations, lifecycle)) return;
       if (ended && !operationSelectors.isInputLoadingByContext({ agentId, topicId })(state)) {
         state.refreshMessages({ agentId, topicId }).catch(console.error);
         state.refreshTopic(topicMapKey({ agentId, groupId })).catch(console.error);
@@ -389,9 +390,7 @@ export class GatewayActionImpl {
 
     // The parent's stream carries the child's result but never the topic's
     // thread list, so the sub-agent list refreshes either way.
-    if (lifecycle.status === 'running' || ended) {
-      state.refreshThreads(topicId).catch(console.error);
-    }
+    if (lifecycle.status === 'running' || ended) state.refreshThreads(topicId).catch(console.error);
     if (ended && !state.gatewayConnections[parentOperationId]) {
       state.refreshMessages({ agentId, topicId }).catch(console.error);
     }
