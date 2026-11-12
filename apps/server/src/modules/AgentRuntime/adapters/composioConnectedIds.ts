@@ -2,7 +2,7 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
-import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 
 const log = debug('lobe-server:composio-connected-ids');
@@ -25,7 +25,7 @@ export async function loadConnectedComposioIds(
   serverDB: LobeChatDatabase,
   userId: string,
   workspaceId: string | undefined,
-  agentId: string | undefined,
+  target: ConnectorRunTarget,
 ): Promise<Set<string>> {
   const validComposioIds = new Set(COMPOSIO_APP_TYPES.map((tool) => tool.identifier));
   const connected = new Set<string>();
@@ -45,7 +45,7 @@ export async function loadConnectedComposioIds(
     const connectorModel = new ConnectorModel(serverDB, userId, workspaceId);
     // Agent-aware: resolves the agent's own Composio connectors plus the base
     // (workspace/personal) ones, scoped by the model's workspace ownership.
-    const connectors = await connectorModel.resolveAll({ agentId });
+    const connectors = await connectorModel.resolveAll(target);
     for (const connector of connectors) {
       if (
         connector.isEnabled &&

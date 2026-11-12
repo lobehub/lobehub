@@ -1,7 +1,7 @@
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
-import { upsertPluginMode } from '@lobechat/types';
+import { CONNECTOR_VISIBILITIES, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -63,6 +63,11 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
+import {
+  assertPrivateConnectorTarget,
+  resolveVisibilityChange,
+  resolveWriteVisibility,
+} from './_helpers/connectorVisibility';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -142,6 +147,12 @@ const createConnectorSchema = z.object({
     ConnectorSourceType.custom,
     ConnectorSourceType.marketplace,
   ]),
+  /**
+   * Workspace only: `private` keeps the connector to its creator and their
+   * private agents (私人); `public` (default) shares it with the workspace.
+   * Ignored in personal mode and for agent-scoped connectors.
+   */
+  visibility: z.enum(CONNECTOR_VISIBILITIES).optional(),
 });
 
 export const connectorRouter = router({
@@ -403,14 +414,24 @@ export const connectorRouter = router({
     // enforcing "one connector per identifier per agent" at the app layer (the
     // DB indexes are non-unique so multiple same-identifier rows can coexist
     // across scopes).
-    const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
+    //
+    // A private connector is looked up among the caller's own private rows, so
+    // adding one never rewrites the shared connector of the same identifier.
+    const visibility = agentId ? 'public' : resolveWriteVisibility(ctx, input.visibility);
+    const existing = await ctx.connectorModel.findScopedByIdentifier(
+      input.identifier,
+      agentId,
+      undefined,
+      visibility,
+    );
     // Adding a workspace connector follows the member policy. Re-adding over
     // someone else's row rewrites its server/command while the row stays theirs
     // (their runs would execute it, and they could read the new credentials), so
-    // that keeps the creator-or-owner rule.
+    // that keeps the creator-or-owner rule. A private connector is the caller's
+    // own and skips the member policy.
     if (existing && existing.userId !== ctx.userId)
       await assertConnectorCredentialsManageable(ctx, existing);
-    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
+    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId, visibility });
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
@@ -432,6 +453,7 @@ export const connectorRouter = router({
       isEnabled: input.isEnabled ?? true,
       sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
+      visibility,
     });
     return { id: created.id, isNew: true };
   }),
@@ -456,6 +478,7 @@ export const connectorRouter = router({
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Rebinding routes the connector's credentials to the agent — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
+      await assertPrivateConnectorTarget(ctx, connector, input.agentId);
 
       const existingAgentRow = await ctx.connectorModel.findScopedByIdentifier(
         connector.identifier,
@@ -514,8 +537,10 @@ export const connectorRouter = router({
       const source = await ctx.connectorModel.findById(input.connectorId);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Cloning duplicates the source's encrypted credentials into a row the
-      // agent owner controls — creator/owner only.
+      // agent owner controls — creator/owner only. The copy keeps the source's
+      // visibility, so a private connector stays private on the agent.
       await assertConnectorCredentialsManageable(ctx, source);
+      await assertPrivateConnectorTarget(ctx, source, input.agentId);
 
       const existing = await ctx.connectorModel.findScopedByIdentifier(
         source.identifier,
@@ -551,6 +576,7 @@ export const connectorRouter = router({
       // Mounting routes the source's credentials to the agent and locks the
       // row (metadata.mountedByAgentId) — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
+      await assertPrivateConnectorTarget(ctx, connector, input.agentId);
       if (connector.agentId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -714,7 +740,8 @@ export const connectorRouter = router({
       // URL, which would send them elsewhere — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, target);
 
-      const { credentials, ...patch } = input.patch;
+      const { credentials, visibility: requestedVisibility, ...patch } = input.patch;
+      const visibility = await resolveVisibilityChange(ctx, target, requestedVisibility);
       // Preserve the server-owned `composio.linkedByUserId` from the stored row
       // and ignore whatever the client sent, so an edit can never spoof (or
       // silently clear) the connector's authorizer. Untouched when the patch
@@ -723,6 +750,7 @@ export const connectorRouter = router({
       try {
         await ctx.connectorModel.update(input.id, {
           ...patch,
+          ...(visibility && { visibility }),
           ...(patch.metadata === undefined ? {} : { metadata }),
           // undefined → leave untouched; null → clear; object → encrypt the JSON string.
           // When credentials are cleared, also drop the cached expiry timestamp so
@@ -832,11 +860,27 @@ export const connectorRouter = router({
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
         toolName: z.string().min(1),
+        /**
+         * The conversation the call belongs to. A private agent's own topic
+         * lets it use its owner's private connectors; without it the call
+         * resolves the workspace's shared connectors only.
+         */
+        topicId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, ctx);
+        return await callConnectorToolById(input, {
+          ...ctx,
+          // A private agent's call may run on its owner's personal connector,
+          // whose tool rows live in the personal scope.
+          connectorToolModel: new ConnectorToolModel(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+            { agentRun: true },
+          ),
+        });
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });
@@ -860,6 +904,8 @@ export const connectorRouter = router({
         identifier: z.string().min(1),
         /** The server the result came from (`getMcpServerFingerprint`). */
         server: z.string().min(1),
+        /** The conversation the result belongs to; see `callTool`. */
+        topicId: z.string().optional(),
         uri: z.string().startsWith('ui://'),
       }),
     )

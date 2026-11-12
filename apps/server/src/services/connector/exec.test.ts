@@ -410,6 +410,23 @@ describe('callConnectorToolById agent resolution', () => {
     });
     expect(ctx.connectorModel.queryByIdentifiers).not.toHaveBeenCalled();
   });
+
+  // A private agent's own private connectors resolve only with the proof that
+  // the call belongs to that agent's own topic.
+  it("resolves within the call's topic so a private agent reaches its own connectors", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true } as any);
+    const ctx = makeCtx([connector], [tool()]);
+
+    await callConnectorToolById(
+      { agentId: 'agt_1', identifier: 'my-conn', toolName: 'do_thing', topicId: 'tpc_1' },
+      ctx,
+    );
+
+    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], {
+      agentId: 'agt_1',
+      topicId: 'tpc_1',
+    });
+  });
 });
 
 // Connector rows are scoped by workspace only: another member's private agent

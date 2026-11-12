@@ -60,6 +60,12 @@ export interface ToolsEngineConfig {
   /** Custom enable checker for plugins */
   enableChecker?: PluginEnableChecker;
   /**
+   * Offer the caller's private (私人) workspace connectors. Only a private
+   * agent's own conversation may load them — the server applies the same rule
+   * when it resolves the call — so every other caller leaves them out.
+   */
+  includePrivateConnectors?: boolean;
+  /**
    * Runtime context for context-aware builtin manifests. When provided, each
    * builtin tool with a `resolveManifest` produces its manifest for this context
    * (trimming APIs or opting out via `null`). Omit for context-free callers
@@ -77,6 +83,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     additionalManifests = [],
     defaultToolIds,
     disabledPluginIds = [],
+    includePrivateConnectors = false,
     manifestContext,
   } = config;
 
@@ -107,7 +114,9 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
         .composioAsLobeTools(toolStoreState)
         .map((tool) => tool.manifest as LobeToolManifest),
       connectors: buildClientConnectorManifests(
-        connectorSelectors.executableMcpConnectors(toolStoreState),
+        connectorSelectors
+          .executableMcpConnectors(toolStoreState)
+          .filter((connector) => includePrivateConnectors || connector.visibility !== 'private'),
       ) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,
@@ -138,6 +147,9 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     manifestSchemas: allManifests as ToolManifest[],
   });
 };
+
+/** Conversation scopes whose transcript other members can read. */
+const PRIVATE_CONNECTOR_EXCLUDED_SCOPES = new Set(['group', 'group_agent', 'sub_agent']);
 
 export const createAgentToolsEngine = (
   workingModel: WorkingModel,
@@ -196,6 +208,12 @@ export const createAgentToolsEngine = (
   return createToolsEngine({
     defaultToolIds: resolved.defaultToolIds,
     disabledPluginIds: [...resolved.excludedIdentifiers],
+    // A private agent's own conversation only: a group or sub-agent run writes
+    // into a conversation other members can read.
+    includePrivateConnectors:
+      agentSelectors.currentAgentVisibility(agentState) === 'private' &&
+      !manifestContext?.isSubAgent &&
+      !PRIVATE_CONNECTOR_EXCLUDED_SCOPES.has(manifestContext?.scope ?? ''),
     manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: resolved.allowExplicitActivation,

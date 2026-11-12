@@ -39,12 +39,18 @@ describe('loadConnectedComposioIds', () => {
       },
     ]);
 
-    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', 'agent-1');
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', {
+      agentId: 'agent-1',
+      topicId: 'tpc-1',
+    });
 
     expect(ids.has('gmail')).toBe(true);
     // scoped to the caller's workspace + resolved agent-aware
     expect(ConnectorModel).toHaveBeenCalledWith(expect.anything(), 'user_test', 'ws-1');
-    expect(connectorModelMock.resolveAll).toHaveBeenCalledWith({ agentId: 'agent-1' });
+    expect(connectorModelMock.resolveAll).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      topicId: 'tpc-1',
+    });
   });
 
   it('still counts a base connection projected into the plugin table', async () => {
@@ -52,7 +58,7 @@ describe('loadConnectedComposioIds', () => {
       { customParams: { composio: { status: 'ACTIVE' } }, identifier: 'gmail' },
     ]);
 
-    const ids = await loadConnectedComposioIds({} as any, 'user_test', undefined, undefined);
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', undefined, {});
 
     expect(ids.has('gmail')).toBe(true);
   });
@@ -67,7 +73,10 @@ describe('loadConnectedComposioIds', () => {
       },
     ]);
 
-    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', 'agent-1');
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', {
+      agentId: 'agent-1',
+      topicId: 'tpc-1',
+    });
 
     expect(ids.has('gmail')).toBe(false); // disabled connector row
     expect(ids.has('my-custom-mcp')).toBe(false); // not a Composio app type
@@ -78,7 +87,10 @@ describe('loadConnectedComposioIds', () => {
       { identifier: 'gmail', isEnabled: true, metadata: { composio: { status: 'PENDING' } } },
     ]);
 
-    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', 'agent-1');
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', {
+      agentId: 'agent-1',
+      topicId: 'tpc-1',
+    });
 
     expect(ids.has('gmail')).toBe(false);
   });
@@ -89,7 +101,10 @@ describe('loadConnectedComposioIds', () => {
     ]);
     connectorModelMock.resolveAll.mockRejectedValueOnce(new Error('db down'));
 
-    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', 'agent-1');
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', {
+      agentId: 'agent-1',
+      topicId: 'tpc-1',
+    });
 
     expect(ids.has('gmail')).toBe(true); // plugin-based result survives the error
   });

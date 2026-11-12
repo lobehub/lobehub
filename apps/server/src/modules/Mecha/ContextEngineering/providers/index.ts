@@ -265,7 +265,10 @@ export const createServerContextFactProviders = ({
     // discovered for this run (their manifests are only fetched for connected
     // providers, so presence in the tool set is the connection).
     listConnectedConnectorIds: async (agentId) => {
-      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, agentId);
+      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, {
+        agentId,
+        topicId: ctx.topicId,
+      });
       const sourceMap = selectToolSourceMap(state);
       for (const [identifier, source] of Object.entries(sourceMap)) {
         if (source === 'lobehubSkill') connected.add(identifier);

@@ -151,7 +151,7 @@ const readConnectors = async (
       candidateIds.length > 0
         ? deps.connectorModel.resolveByIdentifiers(
             candidateIds,
-            { agentId: resolvedAgentId },
+            { agentId: resolvedAgentId, topicId: ctx.topicId },
             connectorGateKeeper,
           )
         : [],
@@ -236,11 +236,14 @@ const readDiscoverableConnectors = async (
       if (grantedUnpinnedIds.length === 0) return none;
       resolved = await deps.connectorModel.resolveByIdentifiers(
         grantedUnpinnedIds,
-        { agentId: ctx.resolvedAgentId },
+        { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
         gateKeeper,
       );
     } else {
-      resolved = await deps.connectorModel.resolveAll({ agentId: ctx.resolvedAgentId }, gateKeeper);
+      resolved = await deps.connectorModel.resolveAll(
+        { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
+        gateKeeper,
+      );
     }
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
       (c) => !candidates.has(c.identifier) && (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
@@ -471,7 +474,7 @@ export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =
         ? Promise.resolve<LobeToolManifest[]>([])
         : traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(
-              ctx.resolvedAgentId,
+              { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
               ctx.shareGrantedExtensionIds && { identifiers: [...ctx.shareGrantedExtensionIds] },
             ),
           )

@@ -3,7 +3,7 @@ import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
-import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import type { UserConnectorToolItem } from '@/database/schemas';
@@ -28,6 +28,11 @@ export interface ComposioToolExecuteParams {
   args: Record<string, any>;
   identifier: string;
   toolSlug: string;
+  /**
+   * The topic the run writes into. A private agent's own topic lets it use its
+   * owner's private Composio connection (see `ConnectorRunTarget`).
+   */
+  topicId?: string;
 }
 
 export interface ComposioServiceOptions {
@@ -66,7 +71,7 @@ export class ComposioService {
       // connector model's resolve* methods.
       this.pluginModel = new PluginModel(db, userId, workspaceId);
       this.connectorModel = new ConnectorModel(db, userId, workspaceId);
-      this.connectorToolModel = new ConnectorToolModel(db, userId, workspaceId);
+      this.connectorToolModel = new ConnectorToolModel(db, userId, workspaceId, { agentRun: true });
     }
 
     log(
@@ -79,7 +84,7 @@ export class ComposioService {
   }
 
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
-    const { identifier, toolSlug, args, agentId } = params;
+    const { identifier, toolSlug, args, agentId, topicId } = params;
     let resolvedConnectedAccountId: string | undefined;
     let resolvedConnectorId: string | undefined;
 
@@ -116,7 +121,7 @@ export class ComposioService {
     }
 
     try {
-      const account = await this.resolveComposioAccount(identifier, agentId);
+      const account = await this.resolveComposioAccount(identifier, { agentId, topicId });
       if (!account) {
         return {
           content: `Composio configuration not found for server "${identifier}"`,
@@ -225,12 +230,12 @@ export class ComposioService {
    */
   private async resolveComposioAccount(
     identifier: string,
-    agentId?: string,
+    target: ConnectorRunTarget,
   ): Promise<
     { connectedAccountId: string; connectorId?: string; ownerUserId: string } | undefined
   > {
     if (this.connectorModel) {
-      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], { agentId });
+      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], target);
       const composio = connector?.metadata?.composio;
       if (composio?.connectedAccountId) {
         return {
@@ -261,7 +266,7 @@ export class ComposioService {
    * grant.
    */
   async getComposioManifests(
-    agentId?: string,
+    target: ConnectorRunTarget = {},
     options?: { identifiers?: string[] },
   ): Promise<LobeToolManifest[]> {
     const manifests: LobeToolManifest[] = [];
@@ -277,8 +282,8 @@ export class ComposioService {
     if (this.connectorModel && this.connectorToolModel) {
       try {
         const connectors = identifiers
-          ? await this.connectorModel.resolveByIdentifiers(identifiers, { agentId })
-          : await this.connectorModel.resolveAll({ agentId });
+          ? await this.connectorModel.resolveByIdentifiers(identifiers, target)
+          : await this.connectorModel.resolveAll(target);
         const composioConnectors = connectors.filter(
           (c) =>
             VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&

@@ -296,6 +296,7 @@ class MCPService {
             ...(fromMcpApp && { fromApp: true, server }),
             identifier,
             toolName: apiName,
+            topicId,
           },
           { signal },
         )) as MCPToolCallResult;

@@ -169,7 +169,7 @@ export class AiAgentService {
     this.agentService = new AgentService(db, userId, wsId);
     this.messageModel = new MessageModel(db, userId, wsId, undefined, messageModelOptions);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
-    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
+    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId, { agentRun: true });
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);

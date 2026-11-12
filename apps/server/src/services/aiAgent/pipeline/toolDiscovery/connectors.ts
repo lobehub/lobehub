@@ -2,7 +2,11 @@ import type { LobeToolManifest } from '@lobechat/context-engine';
 import debug from 'debug';
 import pMap from 'p-map';
 
-import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
+import {
+  ConnectorModel,
+  type ConnectorRunTarget,
+  type DecryptedConnector,
+} from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
@@ -86,10 +90,15 @@ export const scheduleConnectorRefresh = (
     const refreshConnectorModel = params.connectorGateKeeper
       ? new ConnectorModel(deps.db, deps.userId, deps.workspaceId, params.connectorGateKeeper)
       : deps.connectorModel;
+    // A private agent's workspace run can resolve its owner's personal
+    // connectors; their tool rows live in the personal scope this
+    // workspace-scoped sync cannot write, so they refresh from personal runs.
+    const inRunScope = (connector: DecryptedConnector) =>
+      !deps.workspaceId || connector.workspaceId !== null;
     // Discoverable (unpinned) connectors are refreshed too: the model can
     // activate them, so a stale list would offer removed APIs and hide new ones.
     scheduleStaleConnectorToolsRefresh(
-      [...params.connectorsMcp, ...params.discoverableConnectorsMcp],
+      [...params.connectorsMcp, ...params.discoverableConnectorsMcp].filter(inRunScope),
       buildLastSyncedAtMap([...params.connectorTools, ...params.discoverableConnectorTools]),
       {
         connectorModel: refreshConnectorModel,
@@ -122,7 +131,7 @@ interface PermissionPatchTargets<P> {
  */
 export const patchConnectorPermissions = async <P extends { identifier: string }>(
   deps: ToolDiscoveryDeps,
-  resolvedAgentId: string,
+  runTarget: ConnectorRunTarget,
   targets: PermissionPatchTargets<P>,
 ): Promise<PermissionPatchTargets<P>> => {
   let { composioManifests, lobehubSkillManifests, pluginsWithoutConnectors } = targets;
@@ -142,13 +151,13 @@ export const patchConnectorPermissions = async <P extends { identifier: string }
     ];
     const connectorEntries =
       allIdentifiers.length > 0
-        ? await deps.connectorModel.resolveByIdentifiers(allIdentifiers, {
-            agentId: resolvedAgentId,
-          })
+        ? await deps.connectorModel.resolveByIdentifiers(allIdentifiers, runTarget)
         : [];
 
     if (connectorEntries.length > 0) {
-      const toolModel = new ConnectorToolModel(deps.db, deps.userId, deps.workspaceId);
+      const toolModel = new ConnectorToolModel(deps.db, deps.userId, deps.workspaceId, {
+        agentRun: true,
+      });
       const connectorToolsMap = new Map<string, Map<string, string>>();
       await pMap(
         connectorEntries,

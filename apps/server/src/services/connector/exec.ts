@@ -35,21 +35,25 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
 /**
  * The connector an identifier names. With an agent, resolve the way that agent's
  * runs do (agent-owned > mounted > free base row); without one, keep the base
- * lookup the classic chat path has always used.
+ * lookup the classic chat path has always used (the workspace's shared rows).
  *
- * Connector rows are scoped by workspace only, so in a workspace another
- * member's private agent would resolve to its connectors and their
+ * Agent-owned and mounted rows are scoped by workspace only, so in a workspace
+ * another member's private agent would resolve to its connectors and their
  * credentials. Only an agent the caller can see may be resolved; any other id
- * reads as not found.
+ * reads as not found. A private agent's own private connectors also need the
+ * call's `topicId` to be that agent's own topic (see `ConnectorRunTarget`).
  */
 const findConnector = async (
-  params: { agentId?: string; identifier: string },
+  params: { agentId?: string; identifier: string; topicId?: string },
   ctx: ConnectorExecContext,
 ) => {
   if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
-  return ctx.connectorModel.resolveByIdentifiers([params.identifier], { agentId: params.agentId });
+  return ctx.connectorModel.resolveByIdentifiers([params.identifier], {
+    agentId: params.agentId,
+    topicId: params.topicId,
+  });
 };
 
 /**
@@ -90,6 +94,8 @@ export const callConnectorToolById = async (
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
     toolName: string;
+    /** The conversation the call belongs to; see {@link findConnector}. */
+    topicId?: string;
   },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
@@ -191,7 +197,7 @@ export const callConnectorToolById = async (
  */
 export const readConnectorUiResourceById = async (
   /** `server`: the server the result came from; the view is read from no other. */
-  params: { agentId?: string; identifier: string; server: string; uri: string },
+  params: { agentId?: string; identifier: string; server: string; topicId?: string; uri: string },
   ctx: ConnectorExecContext,
 ) => {
   if (!(await isMcpAppsEnabled(ctx.userId))) {

@@ -29,6 +29,13 @@ const oauthConnector = (id: string, expiresAt: number) =>
     oidcConfig: { clientId: 'client', issuer: 'https://auth.example.com' },
   }) as any;
 
+/** A run-scoped model whose rows are all in its own scope (`forRow` is itself). */
+const runModel = (methods: Record<string, unknown>) => {
+  const model: Record<string, unknown> = { ...methods };
+  model.forRow = () => model;
+  return model as any;
+};
+
 describe('refreshExpiredConnectorTokens', () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: NOW });
@@ -49,7 +56,7 @@ describe('refreshExpiredConnectorTokens', () => {
       const expired = oauthConnector('discovery-failed', NOW - 1000);
       const findById = vi.fn().mockResolvedValue(expired);
       vi.mocked(discoverAuthorizationServerMetadata).mockRejectedValueOnce(error);
-      const pending = refreshExpiredConnectorTokens([expired], { findById } as any);
+      const pending = refreshExpiredConnectorTokens([expired], runModel({ findById }));
       await vi.advanceTimersByTimeAsync(1000);
       expect(await pending).toEqual([expired]);
       expect(findById).toHaveBeenCalledTimes(2);
@@ -64,9 +71,10 @@ describe('refreshExpiredConnectorTokens', () => {
     } as any);
     const update = vi.fn();
 
-    const [connector] = await refreshExpiredConnectorTokens([oauthConnector('xmind', NOW - 1000)], {
-      update,
-    } as any);
+    const [connector] = await refreshExpiredConnectorTokens(
+      [oauthConnector('xmind', NOW - 1000)],
+      runModel({ update }),
+    );
 
     expect(connector.credentials).toMatchObject({ accessToken: 'new-token' });
     expect(update).toHaveBeenCalledWith(
@@ -78,7 +86,7 @@ describe('refreshExpiredConnectorTokens', () => {
   it('leaves a valid token alone without contacting the authorization server', async () => {
     const valid = oauthConnector('valid', NOW + 3_600_000);
 
-    const result = await refreshExpiredConnectorTokens([valid], { update: vi.fn() } as any);
+    const result = await refreshExpiredConnectorTokens([valid], runModel({ update: vi.fn() }));
 
     expect(result).toEqual([valid]);
     expect(discoverAuthorizationServerMetadata).not.toHaveBeenCalled();
@@ -87,7 +95,7 @@ describe('refreshExpiredConnectorTokens', () => {
   it('skips disabled connectors, which never reach the manifests', async () => {
     const disabled = { ...oauthConnector('disabled', NOW - 1000), isEnabled: false };
 
-    const result = await refreshExpiredConnectorTokens([disabled], { update: vi.fn() } as any);
+    const result = await refreshExpiredConnectorTokens([disabled], runModel({ update: vi.fn() }));
 
     expect(result).toEqual([disabled]);
     expect(discoverAuthorizationServerMetadata).not.toHaveBeenCalled();
@@ -97,7 +105,7 @@ describe('refreshExpiredConnectorTokens', () => {
     const unknown = oauthConnector('unknown-expiry', NOW);
     delete unknown.credentials.expiresAt;
 
-    const result = await refreshExpiredConnectorTokens([unknown], { update: vi.fn() } as any);
+    const result = await refreshExpiredConnectorTokens([unknown], runModel({ update: vi.fn() }));
 
     expect(result).toEqual([unknown]);
     expect(discoverAuthorizationServerMetadata).not.toHaveBeenCalled();
@@ -109,7 +117,7 @@ describe('refreshExpiredConnectorTokens', () => {
 
     const onTimeout = vi.fn();
 
-    const pending = refreshExpiredConnectorTokens([expired], { update: vi.fn() } as any, {
+    const pending = refreshExpiredConnectorTokens([expired], runModel({ update: vi.fn() }), {
       onTimeout,
     });
     await vi.advanceTimersByTimeAsync(5000);
@@ -121,7 +129,7 @@ describe('refreshExpiredConnectorTokens', () => {
   it('retries on a later run after a refresh hung past the timeout', async () => {
     vi.mocked(refreshConnectorToken).mockReturnValue(new Promise(() => {}));
     const expired = oauthConnector('hung', NOW - 1000);
-    const model = { update: vi.fn() } as any;
+    const model = runModel({ update: vi.fn() });
 
     const first = refreshExpiredConnectorTokens([expired], model);
     await vi.advanceTimersByTimeAsync(5000);
@@ -141,7 +149,10 @@ describe('refreshExpiredConnectorTokens', () => {
     const expired = oauthConnector('revoked', NOW - 1000);
     const findById = vi.fn().mockResolvedValue(expired);
 
-    const pending = refreshExpiredConnectorTokens([expired], { findById, update: vi.fn() } as any);
+    const pending = refreshExpiredConnectorTokens(
+      [expired],
+      runModel({ findById, update: vi.fn() }),
+    );
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(await pending).toEqual([expired]);
@@ -151,7 +162,7 @@ describe('refreshExpiredConnectorTokens', () => {
     vi.mocked(refreshConnectorToken).mockResolvedValue({
       tokens: { access_token: 'new-token', expires_in: 3600, token_type: 'Bearer' },
     } as any);
-    const model = { update: vi.fn() } as any;
+    const model = runModel({ update: vi.fn() });
     const expired = oauthConnector('shared', NOW - 1000);
 
     const [[first], [second]] = await Promise.all([
@@ -172,10 +183,10 @@ describe('refreshExpiredConnectorTokens', () => {
       credentials: { accessToken: 'winner', expiresAt: NOW + 3_600_000, type: 'oauth2' },
     };
 
-    const [connector] = await refreshExpiredConnectorTokens([expired], {
-      findById: vi.fn().mockResolvedValue(rotated),
-      update: vi.fn(),
-    } as any);
+    const [connector] = await refreshExpiredConnectorTokens(
+      [expired],
+      runModel({ findById: vi.fn().mockResolvedValue(rotated), update: vi.fn() }),
+    );
 
     expect(connector.credentials).toMatchObject({ accessToken: 'winner' });
   });
@@ -189,11 +200,40 @@ describe('refreshExpiredConnectorTokens', () => {
     };
     const findById = vi.fn().mockResolvedValueOnce(expired).mockResolvedValueOnce(rotated);
 
-    const pending = refreshExpiredConnectorTokens([expired], { findById, update: vi.fn() } as any);
+    const pending = refreshExpiredConnectorTokens(
+      [expired],
+      runModel({ findById, update: vi.fn() }),
+    );
     await vi.advanceTimersByTimeAsync(1000);
 
     expect((await pending)[0].credentials).toMatchObject({ accessToken: 'winner' });
     expect(findById).toHaveBeenCalledTimes(2);
+  });
+
+  // A private agent's workspace run resolves its owner's personal connector;
+  // the workspace-scoped model cannot write that row, so a rotated refresh
+  // token must go through the row's own scope or it is lost.
+  it("persists the rotated token through the connector's own scope", async () => {
+    vi.mocked(refreshConnectorToken).mockResolvedValue({
+      tokens: { access_token: 'new-token', expires_in: 3600, token_type: 'Bearer' },
+    } as any);
+    const personal = { ...oauthConnector('personal-gmail', NOW - 1000), workspaceId: null };
+    const homeModel = { update: vi.fn() };
+    const runUpdate = vi.fn();
+    const forRow = vi.fn().mockReturnValue(homeModel);
+
+    const [connector] = await refreshExpiredConnectorTokens([personal], {
+      forRow,
+      update: runUpdate,
+    } as any);
+
+    expect(connector.credentials).toMatchObject({ accessToken: 'new-token' });
+    expect(forRow).toHaveBeenCalledWith(personal);
+    expect(homeModel.update).toHaveBeenCalledWith(
+      'personal-gmail',
+      expect.objectContaining({ tokenExpiresAt: new Date(NOW + 3_600_000) }),
+    );
+    expect(runUpdate).not.toHaveBeenCalled();
   });
 
   it('uses a rotated token whose authorization server omitted an expiry', async () => {
@@ -201,10 +241,10 @@ describe('refreshExpiredConnectorTokens', () => {
     const expired = oauthConnector('no-expiry', NOW - 1000);
     const rotated = { ...expired, credentials: { accessToken: 'winner', type: 'oauth2' } };
 
-    const [connector] = await refreshExpiredConnectorTokens([expired], {
-      findById: vi.fn().mockResolvedValue(rotated),
-      update: vi.fn(),
-    } as any);
+    const [connector] = await refreshExpiredConnectorTokens(
+      [expired],
+      runModel({ findById: vi.fn().mockResolvedValue(rotated), update: vi.fn() }),
+    );
 
     expect(connector.credentials).toMatchObject({ accessToken: 'winner' });
   });
