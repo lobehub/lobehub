@@ -18,6 +18,7 @@ import mime from 'mime';
 
 import { QQApiClient } from './api';
 import { signWebhookResponse } from './crypto';
+import { isQQActiveRateLimited, isQQDuplicateReply, isQQPassiveExpired } from './errors';
 import { QQFormatConverter } from './format-converter';
 import { QQGatewayConnection } from './gateway';
 import {
@@ -33,6 +34,7 @@ import type {
   QQAttachment,
   QQRawMessage,
   QQThreadId,
+  QQSendMessageResponse,
   QQWebhookEventData,
   QQWebhookPayload,
 } from './types';
@@ -161,9 +163,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       return Response.json({ ok: true });
     }
 
-    // Every inbound message opens (or restarts) the passive-reply window the answer must go out
-    // in — QQ has no active-message channel since 2025-04-21. A reply the previous window could
-    // not carry goes out first, before the new message is answered.
+    // Every inbound message opens (or restarts) the passive-reply window the answer prefers: a
+    // passive reply costs no quota, an active one is rate limited per bot and per group. A reply
+    // parked because both were unavailable goes out first, before the new message is answered.
     await this.passive.open(this.passiveKey(threadId), {
       at: Date.now(),
       eventId: payload.id,
@@ -258,12 +260,8 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     const { type, id, guildId } = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
 
-    const slot = await this.reserveReplySlot(threadId, type);
-    if (!slot) {
-      // The window is closed or its reply budget is spent: QQ would reject the send, and there
-      // is no active-message channel to fall back to. Keep the text for the next inbound message.
-      await this.deferReply(threadId, text);
-
+    const response = await this.sendReply(threadId, type, id, guildId, text);
+    if (!response) {
       return {
         id: `qq-deferred-${Date.now()}`,
         raw: {
@@ -275,8 +273,6 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
         threadId,
       };
     }
-
-    const response = await this.sendInThread(type, id, guildId, text, slot);
 
     return {
       id: response.id,
@@ -302,7 +298,65 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     return this.decodeThreadId(threadId).type;
   }
 
-  /** One reply slot inside the conversation's window, or null when nothing may be sent. */
+  /**
+   * Send one reply, cheapest transport first.
+   *
+   * A passive reply (inside the inbound message's window) costs no quota; once the window closes
+   * or its five replies are spent, QQ still accepts an active message — it is rate limited per bot
+   * and per group, not forbidden — so the reply goes out uncoupled. Only when that quota is gone
+   * too does the text get parked for the next inbound message.
+   *
+   * @returns the sent message, or undefined when the text was parked instead.
+   */
+  private async sendReply(
+    threadId: string,
+    type: QQPassiveThreadType,
+    id: string,
+    guildId: string | undefined,
+    text: string,
+  ): Promise<QQSendMessageResponse | undefined> {
+    const slot = await this.reserveReplySlot(threadId, type);
+
+    if (slot) {
+      try {
+        return await this.sendInThread(type, id, guildId, text, slot);
+      } catch (error) {
+        if (isQQDuplicateReply(error)) {
+          // QQ already has this (msg_id, msg_seq): the text is in the chat, do not repeat it.
+          this.logger?.warn('QQ rejected a duplicate reply in %s, keeping the first', threadId);
+          return undefined;
+        }
+        if (!isQQPassiveExpired(error)) throw error;
+
+        this.logger?.warn('QQ passive window refused a reply in %s, retrying as active', threadId);
+      }
+    }
+
+    return this.sendAsActiveMessage(threadId, type, id, guildId, text);
+  }
+
+  /** Uncoupled send, subject to QQ's active-message frequency cap. */
+  private async sendAsActiveMessage(
+    threadId: string,
+    type: QQPassiveThreadType,
+    id: string,
+    guildId: string | undefined,
+    text: string,
+  ): Promise<QQSendMessageResponse | undefined> {
+    try {
+      return await this.sendInThread(type, id, guildId, text, undefined);
+    } catch (error) {
+      if (!isQQActiveRateLimited(error)) throw error;
+
+      // Bot-wide / per-group quota is exhausted right now: wait for the next inbound message,
+      // which reopens a free window.
+      this.logger?.warn('QQ active-message quota exhausted in %s, deferring', threadId);
+      await this.deferReply(threadId, text);
+      return undefined;
+    }
+  }
+
+  /** One reply slot inside the conversation's window, or null when nothing may go out passively. */
   private async reserveReplySlot(
     threadId: string,
     type: QQPassiveThreadType,
@@ -320,9 +374,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     id: string,
     guildId: string | undefined,
     text: string,
-    slot: QQPassiveSlot,
+    slot: QQPassiveSlot | undefined,
   ) {
-    const options = { eventId: slot.eventId, msgId: slot.msgId, msgSeq: slot.seq };
+    const options = slot && { eventId: slot.eventId, msgId: slot.msgId, msgSeq: slot.seq };
 
     switch (type) {
       case 'group': {
@@ -370,16 +424,16 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     }
     if (!text?.trim()) return;
 
-    const slot = await this.reserveReplySlot(threadId, type);
-    if (!slot) {
-      await this.deferReply(threadId, text);
-      return;
-    }
-
     const { id, guildId } = this.decodeThreadId(threadId);
     try {
-      await this.sendInThread(type, id, guildId, `${QQ_DEFERRED_PREFIX}${text}`, slot);
-      this.logger?.info('QQ delivered a deferred reply in %s', threadId);
+      const sent = await this.sendReply(
+        threadId,
+        type,
+        id,
+        guildId,
+        `${QQ_DEFERRED_PREFIX}${text}`,
+      );
+      if (sent) this.logger?.info('QQ delivered a deferred reply in %s', threadId);
     } catch (error) {
       this.logger?.error('QQ failed to deliver a deferred reply in %s: %O', threadId, error);
     }

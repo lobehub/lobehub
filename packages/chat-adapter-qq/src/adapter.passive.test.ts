@@ -56,7 +56,7 @@ const createMemoryState = (): StateAdapter => {
 const SEND_PATH = '/v2/groups/group_1/messages';
 
 /** QQ's auth and bot-info endpoints; send calls are recorded so the body can be asserted. */
-const stubQQHttp = () => {
+const stubQQHttp = ({ activeLimited = false }: { activeLimited?: boolean } = {}) => {
   const sent: Array<Record<string, any>> = [];
 
   vi.stubGlobal(
@@ -66,7 +66,15 @@ const stubQQHttp = () => {
       const json = { 'content-type': 'application/json' };
 
       if (url.includes(SEND_PATH)) {
-        sent.push(JSON.parse(String(init?.body ?? '{}')));
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        sent.push(body);
+        // `activeLimited` mimics QQ's frequency cap: an uncoupled send is refused.
+        if (activeLimited && !body.msg_id) {
+          return new Response(
+            JSON.stringify({ code: 40034100, message: '主动消息发送超过频控限制' }),
+            { headers: json, status: 403 },
+          );
+        }
         return new Response(JSON.stringify({ id: `sent_${sent.length}`, timestamp: 'now' }), {
           headers: json,
           status: 200,
@@ -150,7 +158,7 @@ describe('QQ passive replies', () => {
     expect(sent.map((body) => body.msg_seq)).toEqual([1, 2]);
   });
 
-  it('sends nothing once the five replies are spent, and carries the text to the next message', async () => {
+  it('falls back to an active message once the five replies are spent', async () => {
     const { adapter, sent } = await setup();
     await adapter.handleWebhook(makeRequest(inbound('msg_1')));
     for (let i = 0; i < 5; i++) {
@@ -159,13 +167,41 @@ describe('QQ passive replies', () => {
 
     await adapter.postMessage('qq:group:group_1', '最后一段');
 
-    expect(sent).toHaveLength(5);
+    // Still delivered — QQ accepts active messages, it only rate limits them.
+    expect(sent).toHaveLength(6);
+    expect(sent[5].content).toBe('最后一段');
+    expect(sent[5].msg_id).toBeUndefined();
+    expect(sent[5].msg_seq).toBeUndefined();
+  });
+
+  it('parks the text when the active quota is exhausted too, and delivers it on the next message', async () => {
+    const sent = stubQQHttp({ activeLimited: true });
+    const adapter = createQQAdapter({ appId: 'app', clientSecret: 'secret' });
+    const chat = new Chat({
+      adapters: { qq: adapter },
+      state: createMemoryState(),
+      userName: 'qq-bot',
+    });
+    await chat.initialize();
+
+    await adapter.handleWebhook(makeRequest(inbound('msg_1')));
+    for (let i = 0; i < 5; i++) {
+      await adapter.postMessage('qq:group:group_1', `chunk ${i}`);
+    }
+
+    const before = sent.length;
+    await adapter.postMessage('qq:group:group_1', '最后一段');
+
+    expect(sent.length).toBe(before + 1);
 
     await adapter.handleWebhook(makeRequest(inbound('msg_2')));
 
-    // The missed chunk goes out first, on the new window, then the new message is answered.
-    expect(sent).toHaveLength(6);
-    expect(sent[5]).toMatchObject({ content: `${QQ_DEFERRED_PREFIX}最后一段`, msg_id: 'msg_2', msg_seq: 1 });
+    // Passive again: the parked text goes out first, on the new window.
+    expect(sent.at(-1)).toMatchObject({
+      content: `${QQ_DEFERRED_PREFIX}最后一段`,
+      msg_id: 'msg_2',
+      msg_seq: 1,
+    });
   });
 
   it('sends nothing for a thread that never received an inbound message', async () => {

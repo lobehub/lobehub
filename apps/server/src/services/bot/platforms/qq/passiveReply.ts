@@ -20,9 +20,9 @@ const limitsFor = (threadType: string) =>
 /**
  * Reserve one reply inside the conversation's passive window.
  *
- * QQ has no active-message channel since 2025-04-21: without the `msg_id` of an inbound message
- * the server rejects the send, and a window that has run out (5 minutes / 5 replies for a group)
- * cannot be reopened from our side.
+ * A passive reply carries the `msg_id` of an inbound message and costs no quota. QQ also accepts
+ * active messages, but those are rate limited (per bot and per group, and a group receives at most
+ * 1000 messages a day), so the passive slot is tried first.
  */
 export const reserveQQReply = async (
   applicationId: string,
@@ -78,6 +78,36 @@ export const sendQQMessageInSlot = async (
     }
     default: {
       await api.sendGroupMessage(targetId, content, options);
+    }
+  }
+};
+
+/** Uncoupled send — QQ's active-message path, subject to its frequency cap. */
+export const sendQQMessageActive = async (
+  api: QQApiClient,
+  threadType: string,
+  targetId: string,
+  content: string,
+): Promise<void> => {
+  switch (threadType) {
+    case 'group': {
+      await api.sendGroupMessage(targetId, content);
+      return;
+    }
+    case 'guild': {
+      await api.sendGuildMessage(targetId, content);
+      return;
+    }
+    case 'c2c': {
+      await api.sendC2CMessage(targetId, content);
+      return;
+    }
+    case 'dms': {
+      await api.sendDmsMessage(targetId, content);
+      return;
+    }
+    default: {
+      await api.sendGroupMessage(targetId, content);
     }
   }
 };

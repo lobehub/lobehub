@@ -1,6 +1,7 @@
 export { createQQAdapter, QQAdapter } from './adapter';
 export { QQApiClient } from './api';
 export { signWebhookResponse } from './crypto';
+export { isQQActiveRateLimited, isQQDuplicateReply, isQQPassiveExpired } from './errors';
 export { QQFormatConverter } from './format-converter';
 export type { GatewayLogger, QQGatewayOptions } from './gateway';
 export { QQGatewayConnection } from './gateway';

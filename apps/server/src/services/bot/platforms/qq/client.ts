@@ -1,5 +1,5 @@
 import type { QQAdapter } from '@lobechat/chat-adapter-qq';
-import { createQQAdapter, QQApiClient } from '@lobechat/chat-adapter-qq';
+import { createQQAdapter, isQQActiveRateLimited, isQQDuplicateReply, isQQPassiveExpired, QQApiClient } from '@lobechat/chat-adapter-qq';
 import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
@@ -23,7 +23,12 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
-import { deferQQReply, reserveQQReply, sendQQMessageInSlot } from './passiveReply';
+import {
+  deferQQReply,
+  reserveQQReply,
+  sendQQMessageActive,
+  sendQQMessageInSlot,
+} from './passiveReply';
 import { sendQQAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:qq:bot');
@@ -44,7 +49,11 @@ function extractThreadType(platformThreadId: string): string {
   return platformThreadId.split(':')[1] || 'group';
 }
 
-/** Text send that respects the conversation's passive window, deferring when it is closed. */
+/**
+ * Text send, cheapest transport first: a passive reply inside the inbound message's window, then
+ * an active message (QQ accepts those, rate limited per bot and per group), and only when both are
+ * unavailable park the text for the next inbound message.
+ */
 async function sendQQMessage(
   api: QQApiClient,
   applicationId: string,
@@ -54,12 +63,27 @@ async function sendQQMessage(
   content: string,
 ): Promise<void> {
   const slot = await reserveQQReply(applicationId, platformThreadId, threadType);
-  if (!slot) {
-    await deferQQReply(applicationId, platformThreadId, content);
-    return;
+
+  if (slot) {
+    try {
+      await sendQQMessageInSlot(api, threadType, targetId, content, slot);
+      return;
+    } catch (error) {
+      if (isQQDuplicateReply(error)) return;
+      if (!isQQPassiveExpired(error)) throw error;
+
+      log('passive window refused a reply in %s, retrying as active', platformThreadId);
+    }
   }
 
-  await sendQQMessageInSlot(api, threadType, targetId, content, slot);
+  try {
+    await sendQQMessageActive(api, threadType, targetId, content);
+  } catch (error) {
+    if (!isQQActiveRateLimited(error)) throw error;
+
+    log('active-message quota exhausted in %s, deferring', platformThreadId);
+    await deferQQReply(applicationId, platformThreadId, content);
+  }
 }
 
 /**
