@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { topicService } from '@/services/topic';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import {
   findUntrackedHeteroMarker,
-  noteServerIdleMarker,
   reattachUntrackedHeteroRun,
-  resetServerIdleMarkers,
+  refreshUntrackedHeteroMarker,
+  releaseUntrackedMarker,
+  resetReleasedMarkers,
 } from './untrackedHeteroRun';
 
 const context = { agentId: 'agt-1', threadId: null, topicId: 'tpc-1' };
@@ -31,7 +33,7 @@ const makeGet = (params: { heteroType?: string | null; operations?: Record<strin
 };
 
 afterEach(() => {
-  resetServerIdleMarkers();
+  resetReleasedMarkers();
   vi.restoreAllMocks();
 });
 
@@ -64,12 +66,20 @@ describe('findUntrackedHeteroMarker', () => {
     expect(findUntrackedHeteroMarker(get, { ...context, threadId: 'thd-1' })).toBeUndefined();
   });
 
-  it('stops finding a marker once the server found no live run behind it', () => {
+  it('stops finding a marker once it was released', () => {
     const { get } = makeGet({ heteroType: 'amp' });
 
-    noteServerIdleMarker(get, 'tpc-1');
+    releaseUntrackedMarker('op-amp', 'idle');
 
     expect(findUntrackedHeteroMarker(get, context)).toBeUndefined();
+  });
+
+  it('keeps finding a newer marker when an older one was released', () => {
+    const { get } = makeGet({ heteroType: 'codex' });
+
+    releaseUntrackedMarker('op-older', 'idle');
+
+    expect(findUntrackedHeteroMarker(get, context)?.operationId).toBe('op-codex');
   });
 });
 
@@ -96,5 +106,50 @@ describe('reattachUntrackedHeteroRun', () => {
     reattachUntrackedHeteroRun(get, context);
 
     expect(reconnectToGatewayOperation).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshUntrackedHeteroMarker', () => {
+  const topicWith = (operationId: string | null) =>
+    ({
+      id: 'tpc-1',
+      metadata: {
+        runningOperation: operationId ? { operationId, heteroType: 'claude-code' } : null,
+      },
+    }) as any;
+
+  it('takes the server marker when it changed', async () => {
+    let local = topicWith('op-old');
+    vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(() => local);
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(topicWith(null));
+    const dispatch = vi.fn((action: any) => {
+      local = { ...local, ...action.value };
+    });
+
+    await refreshUntrackedHeteroMarker(
+      () => ({ internal_dispatchTopic: dispatch }) as any,
+      'tpc-1',
+    );
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ value: { metadata: { runningOperation: null } } }),
+    );
+  });
+
+  it('keeps a newer local marker that landed while the read was in flight', async () => {
+    let local = topicWith('op-old');
+    vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(() => local);
+    vi.spyOn(topicService, 'getTopicDetail').mockImplementation(async () => {
+      local = topicWith('op-new');
+      return topicWith(null);
+    });
+    const dispatch = vi.fn();
+
+    await refreshUntrackedHeteroMarker(
+      () => ({ internal_dispatchTopic: dispatch }) as any,
+      'tpc-1',
+    );
+
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

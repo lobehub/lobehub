@@ -17,9 +17,9 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 import { scheduleQueuedFollowUp } from '../../lifecycle/queuedFollowUp';
 import {
   findUntrackedHeteroMarker,
-  noteServerIdleMarker,
   reattachUntrackedHeteroRun,
   refreshUntrackedHeteroMarker,
+  releaseUntrackedMarker,
 } from './untrackedHeteroRun';
 
 const log = debug('lobe-store:server-steer-queue');
@@ -177,6 +177,14 @@ export const handOffQueuedMessage = (
       sendIfIdle(get, contextKey, context);
     };
 
+    // The untracked hetero run this send is held behind, if any: a follow-up
+    // the server does not take must not be held behind it again.
+    const heldMarkerId = findUntrackedHeteroMarker(get, context)?.operationId;
+    const giveUp = (reason: string) => {
+      releaseUntrackedMarker(heldMarkerId, reason);
+      keepHere();
+    };
+
     const queue = queueOf(get, contextKey);
     const index = queue.findIndex((message) => message.id === id);
     if (index < 0) return;
@@ -192,16 +200,16 @@ export const handOffQueuedMessage = (
         console.error('[serverSteerQueue] building the queued request failed:', error);
       }
     }
-    if (!request) return keepHere();
+    if (!request) return giveUp('request-unavailable');
 
     get().updateQueuedMessage(contextKey, id, { serverDelivery: 'appending' });
     let queued = false;
     let unconfirmed = false;
+    let refusal: string | undefined;
     try {
       const result = await appendWithRetry(id, request, findQueued(get, contextKey, id));
       queued = result.queued;
-      if (!result.queued && result.reason === 'idle')
-        noteServerIdleMarker(get, request.appContext?.topicId);
+      if (!result.queued) refusal = result.reason;
     } catch (error) {
       console.error('[serverSteerQueue] queueing on the server failed:', error);
       // Unless refused outright it may have been stored, and sending it from
@@ -216,7 +224,7 @@ export const handOffQueuedMessage = (
         await aiAgentService.removeQueuedFollowUp({ ...surfaceOf(request), id }).catch(() => {});
       return;
     }
-    if (!queued && !unconfirmed) return keepHere();
+    if (!queued && !unconfirmed) return giveUp(refusal ?? 'rejected');
 
     log('[%s] %s queued on the server%s', contextKey, id, unconfirmed ? ' (unconfirmed)' : '');
     get().updateQueuedMessage(contextKey, id, {

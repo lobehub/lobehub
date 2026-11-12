@@ -9,7 +9,7 @@ import { useUserStore } from '@/store/user';
 import { topicSelectors } from '../../../../selectors';
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
-import { resetServerIdleMarkers } from '../transports/gateway/untrackedHeteroRun';
+import { resetReleasedMarkers } from '../transports/gateway/untrackedHeteroRun';
 import { createMockAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
@@ -251,7 +251,7 @@ describe('sendMessage while the topic names a hetero run this tab no longer foll
   });
 
   afterEach(() => {
-    resetServerIdleMarkers();
+    resetReleasedMarkers();
   });
 
   it('steers the live run through the server queue and re-attaches its stream', async () => {
@@ -274,33 +274,38 @@ describe('sendMessage while the topic names a hetero run this tab no longer foll
     );
   });
 
-  it('sends fresh once the server finds no live run behind the marker', async () => {
-    vi.useFakeTimers();
-    vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
-      queued: false,
-      reason: 'idle',
-    } as any);
-    const sendQueued = vi.fn().mockResolvedValue(undefined);
-    const { result } = renderHook(() => useChatStore());
-    const original = result.current.sendMessage;
+  // `full` / `unavailable` used to bounce: the fallback re-entered the send,
+  // which queued behind the same marker again every 100ms, never sending.
+  it.each(['idle', 'full', 'unavailable'])(
+    'sends fresh once the server does not take the follow-up (%s)',
+    async (reason) => {
+      vi.useFakeTimers();
+      vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
+        queued: false,
+        reason,
+      } as any);
+      const sendQueued = vi.fn().mockResolvedValue(undefined);
+      const { result } = renderHook(() => useChatStore());
+      const original = result.current.sendMessage;
 
-    await act(async () => {
-      await original({ context, message: 'hello' });
-    });
-    useChatStore.setState({ sendMessage: sendQueued });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
-    });
-    vi.useRealTimers();
+      await act(async () => {
+        await original({ context, message: 'hello' });
+      });
+      useChatStore.setState({ sendMessage: sendQueued });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      vi.useRealTimers();
 
-    // The client sends it itself; a re-entry no longer queues behind the stale marker.
-    expect(sendQueued).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello' }));
-    // No local reconnect op was started that could block that send.
-    expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
-    useChatStore.setState({ sendMessage: original });
-    await act(async () => {
-      await useChatStore.getState().sendMessage({ context, message: 'again' });
-    });
-    expect(useChatStore.getState().executeGatewayAgent).toHaveBeenCalled();
-  });
+      // The client sends it itself; a re-entry no longer queues behind the stale marker.
+      expect(sendQueued).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello' }));
+      // No local reconnect op was started that could block that send.
+      expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
+      useChatStore.setState({ sendMessage: original });
+      await act(async () => {
+        await useChatStore.getState().sendMessage({ context, message: 'again' });
+      });
+      expect(useChatStore.getState().executeGatewayAgent).toHaveBeenCalled();
+    },
+  );
 });

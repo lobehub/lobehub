@@ -16,6 +16,7 @@ import {
   watchServerQueue,
   withdrawQueuedMessage,
 } from './serverSteerQueue';
+import { findUntrackedHeteroMarker, resetReleasedMarkers } from './untrackedHeteroRun';
 
 const context = { agentId: 'agt-1', topicId: 'tpc-1' };
 const key = messageMapKey(context);
@@ -48,6 +49,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  resetReleasedMarkers();
   // An emptied tray ends any watch a test left running.
   useChatStore.setState(useChatStore.getInitialState());
   await vi.runOnlyPendingTimersAsync();
@@ -594,6 +596,25 @@ describe('server queue watch behind a hetero run this tab no longer follows', ()
 
     expect(remove).toHaveBeenCalledWith({ id: 'q1', threadId: null, topicId: 'tpc-1' });
     expect(queue()[0].serverDelivery).toBeUndefined();
+  });
+
+  // The answer is about the run the follow-up was handed off behind; a run
+  // another client started meanwhile was never checked and stays held.
+  it('releases only the marker it was handed off behind', async () => {
+    vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockImplementation(async () => {
+      const newer = { ...marker, operationId: 'op-newer' };
+      get().internal_dispatchTopic({
+        id: 'tpc-1',
+        type: 'updateTopic',
+        value: { metadata: { runningOperation: newer } } as any,
+      });
+      return { queued: false, reason: 'idle' } as any;
+    });
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+
+    expect(findUntrackedHeteroMarker(get, context)?.operationId).toBe('op-newer');
   });
 
   it('keeps holding them while the server still names the run', async () => {
