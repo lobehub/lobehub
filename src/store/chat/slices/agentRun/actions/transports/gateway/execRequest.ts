@@ -115,6 +115,8 @@ export const resolveDesktopDeviceHints = async (
   const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: true,
+    // this request goes through the device-gateway
+    deviceRoutingAvailable: true,
     isHetero: !!agencyConfig?.heterogeneousProvider,
     workspaceScoped,
   });

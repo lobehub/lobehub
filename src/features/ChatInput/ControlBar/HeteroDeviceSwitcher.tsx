@@ -382,8 +382,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     selectExecutionTarget,
   });
 
-  // Auto-default to THIS desktop's local execution on first open, for both
-  // personal and workspace agents (workspace behaviour used to be a hostname
+  // Auto-default to THIS desktop's local execution on first open when the
+  // unset target does not resolve to `auto` (hetero agents, or gateway mode
+  // off), for both personal and workspace agents (workspace behaviour used to be a hostname
   // lookup against the workspace device pool — see — but with
   // per-user overrides that lookup is unnecessary: `useSelectExecutionTarget`
   // resolves `'local'` to this desktop's personal gateway `deviceId` and, for
@@ -401,6 +402,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     if (isWorkspacePreferenceLoading) return;
     if (agencyConfig?.executionTarget !== undefined) return;
     if (agencyConfig?.boundDeviceId !== undefined) return;
+    // the unset target already defaults to `auto` wherever the gateway routes
+    if (executionTarget === 'auto') return;
     if (!currentDeviceId) return;
     // `silent`: this is a mount-time default, so a rejected write must not
     // surface a save-failure toast on an agent the user only opened.
@@ -410,6 +413,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     agencyConfig?.executionTarget,
     agencyConfig?.boundDeviceId,
     currentDeviceId,
+    executionTarget,
     canShowExecutionTargetSelector,
     isWorkspacePreferenceLoading,
   ]);
