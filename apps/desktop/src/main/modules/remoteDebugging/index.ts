@@ -5,10 +5,13 @@ import { EXPOSE_STORES_ARG } from '~common/remoteDebugging';
 
 const logger = createLogger('modules:remoteDebugging');
 
-/** Port the persisted "Allow Remote Debugging" toggle opens CDP on. */
+/** Port the persisted Settings → About → Remote Debugging toggle opens CDP on. */
 export const REMOTE_DEBUGGING_PORT = 9222;
 
 const REMOTE_DEBUGGING_SWITCH = 'remote-debugging-port';
+
+/** Whether this launch opened CDP because of the persisted toggle, not a launch option. */
+let openedByToggle = false;
 
 /**
  * Open the Chromium DevTools protocol port when the user turned the toggle on.
@@ -22,6 +25,7 @@ export const applyRemoteDebuggingSwitch = (enabled: boolean): void => {
   if (!enabled || app.commandLine.hasSwitch(REMOTE_DEBUGGING_SWITCH)) return;
 
   app.commandLine.appendSwitch(REMOTE_DEBUGGING_SWITCH, String(REMOTE_DEBUGGING_PORT));
+  openedByToggle = true;
   logger.warn(`Remote debugging is enabled on 127.0.0.1:${REMOTE_DEBUGGING_PORT}`);
 };
 
@@ -32,3 +36,15 @@ export const applyRemoteDebuggingSwitch = (enabled: boolean): void => {
  */
 export const getRemoteDebuggingRendererArgs = (): string[] =>
   app.commandLine.hasSwitch(REMOTE_DEBUGGING_SWITCH) ? [EXPOSE_STORES_ARG] : [];
+
+export interface RemoteDebuggingLaunchState {
+  /** CDP is open in this launch, by the toggle or a launch option. */
+  active: boolean;
+  /** A launch option opened CDP, so the toggle cannot close it. */
+  openedByLaunchOption: boolean;
+}
+
+export const getRemoteDebuggingLaunchState = (): RemoteDebuggingLaunchState => {
+  const active = app.commandLine.hasSwitch(REMOTE_DEBUGGING_SWITCH);
+  return { active, openedByLaunchOption: active && !openedByToggle };
+};

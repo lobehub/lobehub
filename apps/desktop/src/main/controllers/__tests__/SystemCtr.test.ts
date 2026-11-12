@@ -90,6 +90,12 @@ const structuredLogMock = vi.hoisted(() => ({
 }));
 vi.mock('@/utils/structuredLog', () => structuredLogMock);
 
+const remoteDebuggingMock = vi.hoisted(() => ({
+  REMOTE_DEBUGGING_PORT: 9222,
+  getRemoteDebuggingLaunchState: vi.fn(() => ({ active: false, openedByLaunchOption: false })),
+}));
+vi.mock('@/modules/remoteDebugging', () => remoteDebuggingMock);
+
 // Mock platform detection
 vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => true),
@@ -253,6 +259,28 @@ describe('SystemController', () => {
       await invokeIpc('system.openLogDirectory');
 
       expect(shell.openPath).toHaveBeenCalledWith('/mock/path/userData/logs');
+    });
+  });
+
+  describe('remote debugging', () => {
+    it('reports the persisted toggle with the current launch state', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true);
+
+      expect(await invokeIpc('system.getRemoteDebuggingSettings')).toEqual({
+        active: false,
+        enabled: true,
+        openedByLaunchOption: false,
+        port: 9222,
+      });
+    });
+
+    it('persists the toggle for the next launch without opening CDP now', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true);
+
+      const result = await invokeIpc('system.setRemoteDebuggingEnabled', true);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('remoteDebuggingEnabled', true);
+      expect(result).toMatchObject({ active: false, enabled: true });
     });
   });
 

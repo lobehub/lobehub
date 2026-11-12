@@ -29,6 +29,20 @@ class DesktopSettingsService {
   };
 
   /**
+   * Get the Remote debugging setting (Settings → About)
+   */
+  getRemoteDebuggingSettings = async () => {
+    return ensureElectronIpc().system.getRemoteDebuggingSettings();
+  };
+
+  /**
+   * Persist the CDP toggle; it applies at the next launch
+   */
+  setRemoteDebuggingEnabled = async (enabled: boolean) => {
+    return ensureElectronIpc().system.setRemoteDebuggingEnabled(enabled);
+  };
+
+  /**
    * Reveal the desktop log directory in the system file manager
    */
   openLogDirectory = async () => {

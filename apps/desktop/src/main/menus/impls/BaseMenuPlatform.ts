@@ -1,9 +1,8 @@
 // apps/desktop/src/main/menus/impl/BaseMenuPlatform.ts
-import type { BaseWindow, MenuItem, MenuItemConstructorOptions } from 'electron';
-import { BrowserWindow, dialog } from 'electron';
+import type { BaseWindow, MenuItemConstructorOptions } from 'electron';
+import { BrowserWindow } from 'electron';
 
 import type { App } from '@/core/App';
-import { REMOTE_DEBUGGING_PORT } from '@/modules/remoteDebugging';
 import ZoomService, { type ZoomAction } from '@/services/zoomSrv';
 
 import type { ContextMenuData } from '../types';
@@ -100,21 +99,6 @@ export abstract class BaseMenuPlatform {
   }
 
   /**
-   * Help > Allow Remote Debugging: persist the CDP toggle read at the next launch.
-   * Turning it on first warns that local programs gain control of the app.
-   */
-  protected buildRemoteDebuggingMenuItem(label: string): MenuItemConstructorOptions {
-    return {
-      checked: this.app.storeManager.get('remoteDebuggingEnabled', false),
-      click: (item) => {
-        void this.toggleRemoteDebugging(item);
-      },
-      label,
-      type: 'checkbox',
-    };
-  }
-
-  /**
    * File > New Window: ask the window the user is working in to open its current
    * workspace in a new window. Only full-app windows mount the File-menu bridge,
    * so popups, devtools, or no focused window fall back to the main window.
@@ -154,36 +138,6 @@ export abstract class BaseMenuPlatform {
     } else {
       focused.close();
     }
-  }
-
-  private async toggleRemoteDebugging(item: MenuItem): Promise<void> {
-    const dialogT = this.app.i18n.ns('dialog');
-
-    if (item.checked) {
-      // Electron flips a checkbox before `click` runs. Keep it off until the user allows,
-      // so the menu never shows the toggle on while the setting is still off.
-      item.checked = false;
-      const { response } = await dialog.showMessageBox({
-        buttons: [dialogT('remoteDebugging.enable.confirm'), dialogT('confirm.cancel')],
-        cancelId: 1,
-        defaultId: 1,
-        detail: dialogT('remoteDebugging.enable.detail', { port: REMOTE_DEBUGGING_PORT }),
-        message: dialogT('remoteDebugging.enable.message'),
-        type: 'warning',
-      });
-      if (response !== 0) return;
-
-      this.app.storeManager.set('remoteDebuggingEnabled', true);
-      item.checked = true;
-      return;
-    }
-
-    this.app.storeManager.set('remoteDebuggingEnabled', false);
-    await dialog.showMessageBox({
-      buttons: [this.app.i18n.ns('common')('actions.ok')],
-      message: dialogT('remoteDebugging.disabled.message'),
-      type: 'info',
-    });
   }
 
   private toggleOrFocusDevTools(targetWindow?: BaseWindow | null): void {

@@ -12,6 +12,8 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { desktopSettingsService } from '@/services/electron/settings';
 
+import { useRemoteDebuggingItem } from './useRemoteDebuggingItem';
+
 /**
  * Desktop-only: packaged builds record `info` and above by default; this switch
  * adds `debug` records while a user reproduces a bug. Dev builds always record
@@ -21,6 +23,7 @@ const DebugLogs = memo(() => {
   const { t } = useTranslation('setting');
   const [updating, setUpdating] = useState(false);
   const form = useForm();
+  const remoteDebuggingItem = useRemoteDebuggingItem();
 
   const { data, mutate } = useSWR(
     isDesktop ? 'desktop-debug-logging-settings' : null,
@@ -69,6 +72,7 @@ const DebugLogs = memo(() => {
         label: t('settingAbout.debugLogs.directory'),
         minWidth: undefined,
       },
+      ...(remoteDebuggingItem ? [remoteDebuggingItem] : []),
     ],
     title: t('settingAbout.diagnostics.title'),
   };

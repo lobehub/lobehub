@@ -4,11 +4,13 @@ import process from 'node:process';
 import type {
   DebugLoggingSettings,
   ElectronAppState,
+  RemoteDebuggingSettings,
   ThemeMode,
 } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 
 import { legacyLocalDbDir } from '@/const/dir';
+import { getRemoteDebuggingLaunchState, REMOTE_DEBUGGING_PORT } from '@/modules/remoteDebugging';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -221,6 +223,23 @@ export default class SystemController extends ControllerModule {
     applyDebugLogging(enabled);
     logger.info(`Debug logging ${enabled ? 'enabled' : 'disabled'}`);
     return this.getDebugLoggingSettings();
+  }
+
+  @IpcMethod()
+  getRemoteDebuggingSettings(): RemoteDebuggingSettings {
+    return {
+      ...getRemoteDebuggingLaunchState(),
+      enabled: this.app.storeManager.get('remoteDebuggingEnabled', false),
+      port: REMOTE_DEBUGGING_PORT,
+    };
+  }
+
+  /** Persists the toggle; Chromium reads the CDP switch only at startup, so it applies on restart. */
+  @IpcMethod()
+  setRemoteDebuggingEnabled(enabled: boolean): RemoteDebuggingSettings {
+    this.app.storeManager.set('remoteDebuggingEnabled', enabled);
+    logger.info(`Remote debugging ${enabled ? 'enabled' : 'disabled'} for the next launch`);
+    return this.getRemoteDebuggingSettings();
   }
 
   /** Reveals `<userData>/logs/` so a user can attach the files to a bug report. */

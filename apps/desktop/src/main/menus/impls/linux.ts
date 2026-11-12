@@ -235,7 +235,6 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('help.toggleHeteroTracing'),
             type: 'checkbox',
           },
-          this.buildRemoteDebuggingMenuItem(t('help.toggleRemoteDebugging')),
           { type: 'separator' },
           {
             click: () => {
