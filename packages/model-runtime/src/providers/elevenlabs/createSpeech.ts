@@ -462,8 +462,9 @@ export async function createElevenLabsSpeech(
     // the request starts over from the default voice.
     if (!response.ok && cachedVoice) {
       const error = await toSpeechError(response);
-      fallbackVoices.delete(fallbackKey!);
+      // Transient failures (429, 5xx) keep the entry: the cached voice is still valid.
       if (!isVoiceUnavailable(error)) throw error;
+      fallbackVoices.delete(fallbackKey!);
       response = await send(payload.voice);
     }
 

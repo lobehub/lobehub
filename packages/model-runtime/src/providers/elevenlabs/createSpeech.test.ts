@@ -433,6 +433,13 @@ describe('createElevenLabsSpeech', () => {
       });
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
+      // Still cached within the TTL: the next request goes straight to the cached voice.
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await callDefault();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toContain('/v1/text-to-speech/clone-1?');
+
       const now = Date.now();
       vi.spyOn(Date, 'now').mockReturnValue(now + FALLBACK_VOICE_TTL_MS + 1);
       fetchMock.mockClear();
