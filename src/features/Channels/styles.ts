@@ -74,12 +74,15 @@ export const styles = stylex.create({
     paddingBlockStart: 8,
     paddingBlockEnd: 24,
   },
-  /** One message row; hovering highlights it and reveals its toolbar, like a chat app. */
+  /**
+   * One message row; hovering highlights it and reveals its toolbar, like a chat app.
+   * The wash spans the feed edge to edge (cancelling the feed's 16px padding), square,
+   * so it reads as a list row rather than a floating card.
+   */
   messageRow: {
     position: 'relative',
-    marginInline: -12,
-    paddingInline: 12,
-    borderRadius: cssVar.borderRadiusLG,
+    marginInline: -16,
+    paddingInline: 16,
     backgroundColor: {
       default: 'transparent',
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
@@ -95,7 +98,7 @@ export const styles = stylex.create({
   },
   // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
-    paddingInlineEnd: 84,
+    paddingInlineEnd: 88,
   },
   messageTime: {
     flexShrink: 0,
@@ -109,7 +112,7 @@ export const styles = stylex.create({
   continuationTime: {
     position: 'absolute',
     insetBlockStart: 4,
-    insetInlineStart: 0,
+    insetInlineStart: 4,
     width: 54,
     textAlign: 'center',
     opacity: {
@@ -134,7 +137,7 @@ export const styles = stylex.create({
   messageToolbar: {
     position: 'absolute',
     insetBlockStart: 6,
-    insetInlineEnd: 12,
+    insetInlineEnd: 16,
     zIndex: 1,
     display: 'flex',
     alignItems: 'center',
