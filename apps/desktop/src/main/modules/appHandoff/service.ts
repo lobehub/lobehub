@@ -13,6 +13,9 @@ import type { AppHandoffVerification } from './verifyExecutable';
 
 export const NATIVE_HANDOFF_SERVER_PATH = '/oidc/handoff/native';
 
+/** Upper bound on one request to the server's handoff endpoint. */
+export const APP_HANDOFF_SERVER_TIMEOUT_MS = 10_000;
+
 export interface DesktopSession {
   /** A currently valid access token of the desktop app's own client. */
   accessToken: string;
@@ -64,6 +67,8 @@ export interface AppHandoffServiceDeps {
   isTrusted: (clientId: string, exePath: string) => Promise<boolean>;
   log?: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void };
   now?: () => number;
+  /** How long a request to the server may take; `APP_HANDOFF_SERVER_TIMEOUT_MS` by default. */
+  serverTimeoutMs?: number;
   trust: (clientId: string, exePath: string) => Promise<void>;
   userAgent?: string;
   verifyExecutable: (
@@ -195,7 +200,7 @@ export class AppHandoffService {
       throw new AppHandoffError('forbidden', 'the caller runs as another OS user');
     await this.assertRedirectOwner(request.redirect_uri, peer.pid);
 
-    const { target } = await this.preflight(request);
+    const { target, targets } = await this.preflight(request);
 
     const verified = await this.deps.verifyExecutable(peer.exePath, target.verification);
     if (!verified) {
@@ -217,7 +222,7 @@ export class AppHandoffService {
       pid: peer.pid,
       verified,
     });
-    return this.requestCode(request);
+    return this.requestCode(request, targets.sub);
   }
 
   /**
@@ -245,10 +250,10 @@ export class AppHandoffService {
 
     let result: Record<string, string>;
     try {
-      const { target } = await this.preflight(request);
+      const { target, targets } = await this.preflight(request);
       const answer = await this.deps.confirm({ appName: target.name, rememberable: false });
       if (!answer.allowed) throw new AppHandoffError('denied', 'the user did not allow this app');
-      const issued = await this.requestCode(request);
+      const issued = await this.requestCode(request, targets.sub);
       result = { code: issued.code, iss: issued.iss, state: issued.state };
     } catch (error) {
       const code = error instanceof AppHandoffError ? error.code : 'server_error';
@@ -307,10 +312,18 @@ export class AppHandoffService {
       throw new AppHandoffError('user_mismatch', 'LobeHub Desktop is signed in as another user');
     }
 
-    return { session, target };
+    return { session, target, targets };
   }
 
-  private async requestCode(request: AppHandoffCodeRequest): Promise<AppHandoffCodeResponse> {
+  /**
+   * `checkedSub` is the account the preflight (and the user's consent) covered.
+   * It is always sent, so if Desktop switched accounts meanwhile the server
+   * refuses with `user_mismatch` instead of issuing a code for the new account.
+   */
+  private async requestCode(
+    request: AppHandoffCodeRequest,
+    checkedSub: string,
+  ): Promise<AppHandoffCodeResponse> {
     // Every check and the consent have passed: only now may the token be refreshed.
     const session = await this.deps.getSession({ refresh: true });
     if (!session) throw new AppHandoffError('not_signed_in', 'LobeHub Desktop is not signed in');
@@ -323,7 +336,7 @@ export class AppHandoffService {
       redirect_uri: request.redirect_uri,
       resource: request.resource,
       scope: request.scope,
-      sub: request.sub,
+      sub: request.sub ?? checkedSub,
     };
     const data = await this.call(session, 'POST', body);
     if (
@@ -354,6 +367,8 @@ export class AppHandoffService {
     if (body) headers['Content-Type'] = 'application/json';
     if (this.deps.userAgent) headers['User-Agent'] = this.deps.userAgent;
 
+    // A server that never answers must not hold the session-change sync forever.
+    const signal = AbortSignal.timeout(this.deps.serverTimeoutMs ?? APP_HANDOFF_SERVER_TIMEOUT_MS);
     let response: Response;
     try {
       response = await this.deps.fetch(
@@ -362,13 +377,16 @@ export class AppHandoffService {
           body: body ? JSON.stringify(body) : undefined,
           headers,
           method,
+          signal,
         },
       );
     } catch {
       throw new AppHandoffError('server_error', 'could not reach the server');
     }
 
+    // The same signal bounds the body: a server that stalls mid-response times out too.
     const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (signal.aborted) throw new AppHandoffError('server_error', 'the server did not respond');
     if (response.ok) return data;
 
     const mapped =

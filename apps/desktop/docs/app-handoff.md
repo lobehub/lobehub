@@ -105,6 +105,8 @@ Same-user malware is outside the threat model (as in RFC 8252): such a process c
 ## Token independence
 
 - Desktop's refresh token is never sent, logged or used by the handoff. Desktop only sends its access token, and only to its own server. A token close to expiry is renewed through Desktop's usual single-flight refresh, and only after every check and the user's consent have passed, so no outside process can make Desktop rotate its refresh token (status requests never refresh).
+- The code request always names the account the checks and the user's consent covered (the caller's `sub`, or Desktop's own when the caller sent none). If Desktop switches accounts while the dialog is open, the server refuses with `user_mismatch` instead of issuing a code for the new account.
+- Every request to the server's handoff endpoint times out after 10 seconds, so a server that never answers cannot hold up Desktop's session-change handling (sign-out, server switch).
 - Every handoff creates a new grant for the target client. Refresh-token rotation and reuse detection are per grant, so either side can refresh, rotate or be revoked without affecting the other.
 - Signing out of the native app (revoking its refresh token at `/oidc/token/revocation`) ends only its grant. Signing out of Desktop closes the local interface and leaves the native app's grant alone.
 

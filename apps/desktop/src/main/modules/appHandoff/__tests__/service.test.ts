@@ -92,6 +92,8 @@ describe('POST /app-handoff/v1/code', () => {
       issuer: ISSUER,
       redirect_uri: validRequest.redirect_uri,
       scope: validRequest.scope,
+      // The account preflight checked, so the server refuses a switched one.
+      sub: 'user_a',
     });
   });
 
@@ -309,6 +311,35 @@ describe('handle()', () => {
       route: 'code',
     });
     expect(JSON.stringify(fields)).not.toContain(DESKTOP_TOKEN);
+  });
+});
+
+describe('account and server changes during a request', () => {
+  it('binds the code to the account checked before consent', async () => {
+    const { sub: _omitted, ...withoutSub } = validRequest as Record<string, unknown>;
+    // Preflight sees user_a; the refreshed session after consent belongs to user_b.
+    deps.getSession.mockImplementation(async (options?: { refresh?: boolean }) =>
+      options?.refresh
+        ? { accessToken: 'token-of-user-b', serverUrl: SERVER }
+        : { accessToken: DESKTOP_TOKEN, serverUrl: SERVER },
+    );
+
+    await code(withoutSub);
+
+    const [, init] = postCalls()[0];
+    expect(JSON.parse(init.body).sub).toBe('user_a');
+  });
+
+  it('gives up on a server that never answers', async () => {
+    deps.fetch.mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+        }),
+    );
+    service = new AppHandoffService({ ...deps, serverTimeoutMs: 20 });
+
+    await expect(service.loadTargets()).rejects.toMatchObject({ code: 'server_error' });
   });
 });
 
