@@ -378,9 +378,11 @@ describe('server queue watch while a run delivers', () => {
 
     await handOffQueuedMessage(get, key, context, 'q1', async () => request);
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
-    expect(queue()).toHaveLength(1);
+    expect(queue()).toEqual([expect.objectContaining({ id: 'q1', serverDelivering: true })]);
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
+    // Given back: waiting again, so it can be edited or withdrawn once more.
     expect(queue()).toHaveLength(1);
+    expect(queue()[0].serverDelivering).toBeUndefined();
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
     expect(list).toHaveBeenCalledTimes(3);
     expect(queue()).toHaveLength(0);
@@ -448,7 +450,10 @@ describe('server queue watch while a run delivers', () => {
     });
 
     await expect(withdrawQueuedMessage(get, key, 'q1')).resolves.toBe(false);
-    expect(queue()).toEqual([expect.objectContaining({ id: 'q1', serverDelivery: 'server' })]);
+    // Marked as on its way, so the tray stops offering edit / send now / delete.
+    expect(queue()).toEqual([
+      expect.objectContaining({ id: 'q1', serverDelivering: true, serverDelivery: 'server' }),
+    ]);
   });
 
   it('stores the composer state with the follow-up, so a reload can resend it as typed', async () => {
@@ -575,6 +580,17 @@ describe('restoreServerQueuedMessages', () => {
 
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
     expect(queue()).toHaveLength(0);
+  });
+
+  it('restores one a run is already delivering as on its way', async () => {
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps')
+      .mockResolvedValueOnce([pending('q1', { delivering: true })])
+      .mockResolvedValue([pending('q1', { delivering: true })]);
+    startRun();
+
+    await restoreServerQueuedMessages(get, context);
+
+    expect(queue()).toEqual([expect.objectContaining({ id: 'q1', serverDelivering: true })]);
   });
 
   it('brings back the composer state and selections it was sent with', async () => {
@@ -736,6 +752,22 @@ describe('withdrawQueuedMessage / reclaimServerQueuedMessages', () => {
     await reclaimServerQueuedMessages(get, key);
 
     expect(queue()).toHaveLength(0);
+  });
+
+  it('after a stop, clears the delivering mark of one it took back', async () => {
+    get().enqueueMessage(
+      key,
+      queued('q1', { serverDelivering: true, serverDelivery: 'server', serverRequest: request }),
+    );
+    vi.spyOn(aiAgentService, 'removeQueuedFollowUp').mockResolvedValue({
+      removed: true,
+      state: 'removed',
+    });
+
+    await reclaimServerQueuedMessages(get, key);
+
+    expect(queue()[0].serverDelivering).toBeUndefined();
+    expect(queue()[0].serverDelivery).toBeUndefined();
   });
 
   it('after a stop, keeps here what the server still had and drops what it took', async () => {

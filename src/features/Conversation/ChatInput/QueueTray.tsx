@@ -10,6 +10,7 @@ import { useSingleton } from '@/hooks/useSingleton';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import {
+  isServerDeliveringQueuedMessage,
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
@@ -218,6 +219,24 @@ const QueueTray = memo(() => {
   // when the user clicks the pencil.
   // A follow-up queued on the server may already be on its way into the run;
   // then it is neither edited nor sent again.
+  // Still in the tray: a run took it and the agent has not read it yet.
+  // Gone: it already landed in the conversation.
+  const toastAlreadyDelivered = useCallback(
+    (id: string) => {
+      const pending = useChatStore
+        .getState()
+        .queuedMessages[contextKey]?.find((queued) => queued.id === id);
+      toast.info(
+        t(
+          pending && isServerDeliveringQueuedMessage(pending)
+            ? 'inputQueue.alreadyDelivering'
+            : 'inputQueue.alreadyDelivered',
+        ),
+      );
+    },
+    [contextKey, t],
+  );
+
   const withdraw = useCallback(
     async (msg: QueuedMessage) => {
       const withdrawn = await withdrawQueuedMessage(contextKey, msg.id).catch((error) => {
@@ -225,10 +244,10 @@ const QueueTray = memo(() => {
         toast.error(t('inputQueue.withdrawFailed'));
         return undefined;
       });
-      if (withdrawn === false) toast.info(t('inputQueue.alreadyDelivered'));
+      if (withdrawn === false) toastAlreadyDelivered(msg.id);
       return !!withdrawn;
     },
-    [contextKey, t, withdrawQueuedMessage],
+    [contextKey, toastAlreadyDelivered, withdrawQueuedMessage],
   );
 
   const handleEdit = useCallback(
@@ -267,7 +286,7 @@ const QueueTray = memo(() => {
               msg,
               withdraw: (queued) => withdrawQueuedMessage(contextKey, queued.id),
             });
-            if (outcome === 'delivered') toast.info(t('inputQueue.alreadyDelivered'));
+            if (outcome === 'delivered') toastAlreadyDelivered(msg.id);
           } finally {
             setSendingId(undefined);
           }
@@ -277,7 +296,7 @@ const QueueTray = memo(() => {
           toast.error(t('inputQueue.sendNowFailed'));
         });
     },
-    [context, contextKey, sendNowGate, t, withdrawQueuedMessage],
+    [context, contextKey, sendNowGate, t, toastAlreadyDelivered, withdrawQueuedMessage],
   );
 
   if (queuedMessages.length === 0) return null;
@@ -289,12 +308,19 @@ const QueueTray = memo(() => {
   // The queue drains as one take-all and is merged into a single send, so a
   // multi-item queue has to say "merges" instead of "sends". A heterogeneous
   // CLI run only drains once the whole run ends, not after the current step.
-  const hintText = t(getQueuedHintKey({ count: queuedMessages.length, waitsForRunEnd }));
+  // One a run already took is no longer part of that merge: it says where it
+  // is instead and offers nothing to do with it.
+  const waitingCount = queuedMessages.filter((msg) => !isServerDeliveringQueuedMessage(msg)).length;
+  const hintText = t(getQueuedHintKey({ count: waitingCount, waitsForRunEnd }));
 
   return (
     <Flexbox className={styles.container} gap={0}>
       {queuedMessages.map((msg, index) => {
         const previews = msg.filesPreview ?? [];
+        // A "send now" in progress keeps its row as is: it is interrupting the
+        // run to take this message back, and shows that with its spinner.
+        const delivering = isServerDeliveringQueuedMessage(msg) && sendingId !== msg.id;
+        const rowHint = delivering ? t('inputQueue.deliveringHint') : hintText;
         return (
           <Flexbox
             horizontal
@@ -332,39 +358,43 @@ const QueueTray = memo(() => {
               {/* Collapsed form. It is display:none while the sentence fits, so
                   it adds no tab stop there; when it shows it is a real
                   focusable control carrying the wording as its name. */}
-              <Tooltip title={hintText}>
-                <button aria-label={hintText} className={styles.hintGlyph} type={'button'}>
+              <Tooltip title={rowHint}>
+                <button aria-label={rowHint} className={styles.hintGlyph} type={'button'}>
                   <Icon icon={Info} size={13} />
                 </button>
               </Tooltip>
-              <span className={styles.hintText}>{hintText}</span>
+              <span className={styles.hintText}>{rowHint}</span>
             </span>
             <div style={{ flex: 1 }} />
-            <ActionIcon
-              aria-label={t('inputQueue.edit')}
-              disabled={sendingId === msg.id}
-              icon={Pencil}
-              size="small"
-              title={t('inputQueue.edit')}
-              onClick={() => handleEdit(msg)}
-            />
-            <ActionIcon
-              aria-label={t('inputQueue.sendNow')}
-              disabled={!!sendingId}
-              icon={ArrowUp}
-              loading={sendingId === msg.id}
-              size="small"
-              title={t('inputQueue.sendNow')}
-              onClick={() => handleSendNow(msg)}
-            />
-            <ActionIcon
-              aria-label={t('inputQueue.delete')}
-              disabled={sendingId === msg.id}
-              icon={Trash2}
-              size="small"
-              title={t('inputQueue.delete')}
-              onClick={() => withdraw(msg)}
-            />
+            {!delivering && (
+              <>
+                <ActionIcon
+                  aria-label={t('inputQueue.edit')}
+                  disabled={sendingId === msg.id}
+                  icon={Pencil}
+                  size="small"
+                  title={t('inputQueue.edit')}
+                  onClick={() => handleEdit(msg)}
+                />
+                <ActionIcon
+                  aria-label={t('inputQueue.sendNow')}
+                  disabled={!!sendingId}
+                  icon={ArrowUp}
+                  loading={sendingId === msg.id}
+                  size="small"
+                  title={t('inputQueue.sendNow')}
+                  onClick={() => handleSendNow(msg)}
+                />
+                <ActionIcon
+                  aria-label={t('inputQueue.delete')}
+                  disabled={sendingId === msg.id}
+                  icon={Trash2}
+                  size="small"
+                  title={t('inputQueue.delete')}
+                  onClick={() => withdraw(msg)}
+                />
+              </>
+            )}
           </Flexbox>
         );
       })}
