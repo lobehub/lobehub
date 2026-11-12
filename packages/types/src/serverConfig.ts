@@ -82,6 +82,11 @@ export type IFeatureFlagsState = {
    */
   enableMcpApps: boolean | undefined;
   /**
+   * MCP Code Mode (`mcp_code_mode`). Off by default: every connector tool is
+   * offered to the model as its own function.
+   */
+  enableMcpCodeMode: boolean | undefined;
+  /**
    * Agent documents move into a dedicated knowledge base at runtime
    * (`agent_knowledge_space`). Off by default.
    */

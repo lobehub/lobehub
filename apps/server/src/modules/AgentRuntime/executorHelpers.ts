@@ -31,6 +31,7 @@ import {
   type ToolExecutionResultResponse,
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import { getCodeModeToolIds } from '@/server/services/toolExecution/codeMode/manifest';
 import { buildWorkVersionCumulativeUsage } from '@/utils/workCumulativeUsage';
 
 import { type RuntimeExecutorContext } from './context';
@@ -713,8 +714,12 @@ export const buildToolDiscoveryConfig = (
 
   if (!enabledToolSet.has(LobeActivatorIdentifier)) return undefined;
 
+  // Connectors folded into Code Mode stay in the map for execution, but they
+  // are reached through `execute`, not by activating them.
+  const codeModeToolIds = new Set(getCodeModeToolIds(operationToolSet.manifestMap));
+
   const availableTools = Object.entries(operationToolSet.manifestMap)
-    .filter(([identifier]) => !enabledToolSet.has(identifier))
+    .filter(([identifier]) => !enabledToolSet.has(identifier) && !codeModeToolIds.has(identifier))
     .map(([identifier, manifest]) => ({
       description: manifest.meta?.description || '',
       identifier,

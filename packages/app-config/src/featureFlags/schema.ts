@@ -90,6 +90,14 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
+   * MCP Code Mode: when a run has many connector tools, they are folded into
+   * one `lobe-code-mode` tool (`docs` + `execute`) and the model calls them
+   * from a sandboxed script instead of one function call per step. Server-side
+   * only. Array values are user ids.
+   */
+  mcp_code_mode: FeatureFlagValue.optional(),
+
+  /**
    * Rollout gate for moving an agent's documents into its dedicated knowledge
    * base at runtime, and for showing those spaces in the library. Off: no space
    * is created and existing ones stay hidden. Array values are user ids.
@@ -233,6 +241,8 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
+  // Off until an admin publishes a user allowlist or flips it to true.
+  mcp_code_mode: false,
   agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -299,6 +309,7 @@ export const mapFeatureFlagsEnvToState = (
     ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableMcpCodeMode: evaluateFeatureFlag(config.mcp_code_mode, userId, 'mcp_code_mode'),
     enableAgentKnowledgeSpace: evaluateFeatureFlag(
       config.agent_knowledge_space,
       userId,
