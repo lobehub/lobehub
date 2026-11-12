@@ -10,25 +10,20 @@ import { ToolsChannelsSkeleton } from '@/components/Skeleton/Settings/tabs/Tools
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useSaveState } from '@/hooks/useSaveState';
-import { useClientDataSWR } from '@/libs/swr';
-import { searchService } from '@/services/search';
 import { useUserStore } from '@/store/user';
 
 import ChannelSection from './ChannelSection';
-
-const FETCH_AVAILABLE_CHANNELS_KEY = 'FETCH_AVAILABLE_WEB_BROWSING_CHANNELS';
+import { useAvailableChannels } from './useAvailableChannels';
 
 const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }) => {
   const { t } = useTranslation('setting');
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
-  const { data, error, isLoading, mutate } = useClientDataSWR(FETCH_AVAILABLE_CHANNELS_KEY, () =>
-    searchService.getAvailableChannels(),
-  );
+  const { data, error, isLoading, retry: retryChannels } = useAvailableChannels();
 
   // `ChannelSection` (via `useChannelRows`) seeds its local rows ONCE on mount
   // from the saved channel order. So it must only mount after BOTH the available
-  // channels (SWR) AND the user settings store have hydrated — otherwise on a
+  // channels (replica) AND the user settings store have hydrated — otherwise on a
   // hard refresh it seeds from an unhydrated (undefined) `savedOrder`, silently
   // rendering the default order and ignoring the user's saved priority (and any
   // edit then overwrites the real saved order). Fold the user-state init into the
@@ -65,7 +60,7 @@ const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader =
         isLoading={isLoading || !isUserStateInit}
         loading={<ToolsChannelsSkeleton />}
         onRetry={() => {
-          void mutate();
+          void retryChannels();
           void refreshUserState();
         }}
       >
@@ -74,6 +69,8 @@ const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader =
             availableIds={(data?.searchProviders ?? []).map((c) => c.id)}
             channelKey={'searchProviders'}
             desc={t('settingTool.search.desc')}
+            // Rows are seeded once on mount: reseed when a refresh changes the set.
+            key={(data?.searchProviders ?? []).map((c) => c.id).join(',')}
             save={save}
             title={t('settingTool.search.title')}
           />
@@ -81,6 +78,8 @@ const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader =
             availableIds={(data?.crawlerImpls ?? []).map((c) => c.id)}
             channelKey={'crawlerImpls'}
             desc={t('settingTool.crawler.desc')}
+            // Rows are seeded once on mount: reseed when a refresh changes the set.
+            key={(data?.crawlerImpls ?? []).map((c) => c.id).join(',')}
             save={save}
             title={t('settingTool.crawler.title')}
           />

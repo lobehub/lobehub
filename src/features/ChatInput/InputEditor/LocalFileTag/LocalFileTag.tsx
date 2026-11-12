@@ -11,13 +11,14 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { useTopicRemoteDeviceId } from '@/features/LocalFile/useTopicRemoteDeviceId';
-import { useClientDataSWR } from '@/libs/swr';
-import { localFileKeys } from '@/libs/swr/keys';
 import { localFileService } from '@/services/electron/localFileService';
-import type { LocalFilePreview } from '@/services/projectFile';
-import { projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import {
+  type LocalFilePreviewTarget,
+  useLocalFilePreview,
+  useLocalFilePreviewStore,
+} from '@/store/localFilePreview';
 
 import { parseLocalFileHref } from '../../../Conversation/Markdown/plugins/LocalFileLink/parse';
 import { getFileExtension } from '../MentionMenu/localFileDisplay';
@@ -223,26 +224,24 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
     (isDesktop || !!remoteDeviceId) && !file.isDirectory && !!parsed?.workingDirectory;
   const canRenderImagePreview = canPreview && isPreviewableImageFile(file);
 
-  const { data: imagePreview } = useClientDataSWR<LocalFilePreview>(
-    canRenderImagePreview && parsed
-      ? localFileKeys.preview({
-          accept: 'image',
-          allowExternalFile: allowExternalFilePreview || undefined,
-          deviceId: remoteDeviceId,
-          filePath: parsed.filePath,
-          workingDirectory: parsed.workingDirectory,
-        })
-      : null,
+  // The thumbnail is read through the local-file preview replica (one request
+  // per file however many tags show it). Image previews hold a Blob, which that
+  // replica keeps in memory only.
+  const imageTarget = useMemo<LocalFilePreviewTarget | undefined>(
     () =>
-      projectFileService.getLocalFilePreview({
-        accept: 'image',
-        allowExternalFile: allowExternalFilePreview || undefined,
-        deviceId: remoteDeviceId,
-        path: parsed!.filePath,
-        workingDirectory: parsed!.workingDirectory,
-      }),
-    { revalidateOnFocus: false },
+      canRenderImagePreview && parsed
+        ? {
+            accept: 'image',
+            allowExternalFile: allowExternalFilePreview || undefined,
+            deviceId: remoteDeviceId,
+            filePath: parsed.filePath,
+            workingDirectory: parsed.workingDirectory,
+          }
+        : undefined,
+    [allowExternalFilePreview, canRenderImagePreview, parsed, remoteDeviceId],
   );
+  useLocalFilePreviewStore((s) => s.useFetchPreview)(imageTarget);
+  const imagePreview = useLocalFilePreview(imageTarget);
   const [imageSrc, setImageSrc] = useState<string>();
 
   useEffect(() => {
