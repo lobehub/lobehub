@@ -79,6 +79,7 @@ interface RunOptions {
   selectedToolIds?: string[];
   shareGate?: unknown;
   sourceType?: 'custom' | 'marketplace';
+  status?: string;
 }
 
 const connectorModel = {
@@ -93,7 +94,7 @@ const run = (options: RunOptions = {}) => {
     ...(options.metadata && { metadata: options.metadata }),
     agentId: options.agentId ?? null,
     sourceType: options.sourceType ?? 'custom',
-    status: 'connected',
+    status: options.status ?? 'connected',
   };
   connectorModel.resolveAll.mockReset().mockResolvedValue([connector]);
   connectorModel.resolveByIdentifiers
@@ -237,6 +238,28 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
       toolIds: [YINGMI],
     });
     expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
+  // A reinstall over a plugin row rewrites the endpoint and resets the row to
+  // disconnected until its tools sync: the old tools must not run against it
+  it('rejects a pending reinstall over a plugin row until its connector is connected', async () => {
+    const result = await run({
+      installed: true,
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+  });
+
+  it('keeps an endpoint-less plugin projection on its plugin row whatever its status', async () => {
+    const result = await run({
+      connection: { mcpConnectionType: null as never, mcpServerUrl: null },
+      installed: true,
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    });
+    // Not routed as an MCP connector, but not filtered out of discovery either
+    expect(result.toolSourceMap[YINGMI]).not.toBe('mcp');
   });
 
   it('rejects an unfinished cloud marketplace install that has no plugin row', async () => {

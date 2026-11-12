@@ -10,7 +10,7 @@ import { AgentAccountModel } from '@/database/models/agentAccount';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import type { UserConnectorToolItem } from '@/database/schemas';
+import { ConnectorStatus, type UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
@@ -118,8 +118,11 @@ const refreshConnectorTokens = async (
 };
 
 /**
- * Base marketplace rows with an endpoint require a finished install (the
- * connector's own mark, or a pre-connector plugin row); agent-owned copies are
+ * Base marketplace rows with an endpoint require a finished install: the
+ * connector's own mark, or a pre-connector plugin row on a connected row. A
+ * reinstall over a plugin row rewrites the endpoint and resets the row to
+ * disconnected until its tools sync, so the plugin row alone must not make the
+ * old tools callable against the new endpoint. Agent-owned copies are
  * independent.
  */
 const filterInstalledMarketplaceConnectors = (
@@ -132,7 +135,7 @@ const filterInstalledMarketplaceConnectors = (
       connector.sourceType !== 'marketplace' ||
       !hasCallableMcpEndpoint(connector) ||
       isMarketplaceInstallCompleted(connector.metadata) ||
-      installedIds.has(connector.identifier),
+      (installedIds.has(connector.identifier) && connector.status === ConnectorStatus.connected),
   );
 
 const readConnectors = async (
