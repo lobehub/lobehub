@@ -2,8 +2,8 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
-  ContactListSortBy,
   ChannelListSort,
+  ContactListSortBy,
   DocsPageSectionKey,
   DocsPageSectionView,
   GlobalState,
