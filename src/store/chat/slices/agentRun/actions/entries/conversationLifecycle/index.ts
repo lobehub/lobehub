@@ -8,10 +8,7 @@ import {
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
 import type {
-  ChatAudioItem,
-  ChatImageItem,
   ChatTopicMetadata,
-  ChatVideoItem,
   ConversationContext,
   MessageMetadata,
   SendMessageParams,
@@ -141,6 +138,7 @@ import { pageConversationNeedsGateway, preparePageConversation } from '../pageCo
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { buildOptimisticMediaLists } from './optimisticMedia';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
 
@@ -955,33 +953,10 @@ export class ConversationLifecycleActionImpl {
       runtimeType,
     });
 
-    // Construct local media preview for server-mode temporary messages (S3 URL takes priority).
+    // Local previews first so attached images paint without a network round trip.
     // Use the captured `files` param (not the global file store) so the optimistic preview
     // also works on the queue-drain path, where chatUploadFileList has already been cleared.
-    const filesForPreview = files ?? [];
-    const tempImages: ChatImageItem[] = filesForPreview
-      .filter((f) => f.file?.type?.startsWith('image'))
-      .map((f) => ({
-        ...f.dimensions,
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
-    const tempVideos: ChatVideoItem[] = filesForPreview
-      .filter((f) => f.file?.type?.startsWith('video'))
-      .map((f) => ({
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
-    const tempAudios: ChatAudioItem[] = filesForPreview
-      .filter((f) => f.audioMetadata || f.file?.type?.startsWith('audio'))
-      .map((f) => ({
-        ...f.audioMetadata,
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
+    const optimisticMedia = buildOptimisticMediaLists(files ?? []);
 
     const optimisticUserMessage = {
       content: message,
@@ -993,9 +968,9 @@ export class ConversationLifecycleActionImpl {
       // if there is topicId, then add topicId to message
       topicId: operationContext.topicId ?? undefined,
       threadId: operationContext.threadId ?? undefined,
-      audioList: tempAudios.length > 0 ? tempAudios : undefined,
-      imageList: tempImages.length > 0 ? tempImages : undefined,
-      videoList: tempVideos.length > 0 ? tempVideos : undefined,
+      audioList: optimisticMedia.audioList.length > 0 ? optimisticMedia.audioList : undefined,
+      imageList: optimisticMedia.imageList.length > 0 ? optimisticMedia.imageList : undefined,
+      videoList: optimisticMedia.videoList.length > 0 ? optimisticMedia.videoList : undefined,
       // Pass metadata for immediate display
       metadata: userMessageMetadata,
     };

@@ -20,6 +20,7 @@ import { type StoreSetter } from '@/store/types';
 import { type FileListItem } from '@/types/files';
 import { type UploadFileItem } from '@/types/files/upload';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
+import { rememberLocalMediaPreview } from '@/utils/localMediaPreview';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -463,7 +464,7 @@ export class FileActionImpl {
     dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
 
     // upload files and process it
-    const pools = files.map(async (file) => {
+    const pools = files.map(async (file, index) => {
       let fileResult: { id: string; url: string } | undefined;
 
       try {
@@ -495,6 +496,9 @@ export class FileActionImpl {
       }
 
       if (!fileResult) return;
+
+      // The sent message renders this file by its uploaded id; keep it on the local copy.
+      rememberLocalMediaPreview(fileResult.id, uploadFiles[index].previewUrl);
 
       // image don't need to be chunked and embedding
       if (isChunkingUnsupported(file.type)) return;
