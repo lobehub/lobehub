@@ -314,4 +314,27 @@ describe('useTokenBreakdown', () => {
       toolsToken: 0,
     });
   });
+
+  it('counts the history window, not recorded messages, when a history count truncates', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useTokenBreakdown());
+
+    publishComposer({
+      contextWindow: {
+        history: [message({ content: 'latest question', id: 'u9', role: 'user' })],
+        // No `messages`: the recorded request's history may drop out of the next one.
+        request: { accounting: recordedAccounting, model: 'model-1', provider: 'provider-1' },
+      },
+    });
+
+    expect(result.current).toMatchObject({
+      chatsToken: estimateTokenCount('latest question'),
+      fileContextToken: 0,
+      reasoningToken: 0,
+      // System and tools still come from the recorded request.
+      systemToken: 2000,
+      toolCallsToken: 0,
+      toolsToken: 4000,
+    });
+  });
 });

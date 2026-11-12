@@ -195,8 +195,7 @@ describe('getContextWindow', () => {
       { content: 'file body', id: 't1', role: 'tool', tool_call_id: 'call_1' },
     ] as UIChatMessage[];
 
-    // History count must not cut the recorded request out: it already reflects truncation.
-    const window = getContextWindow(messages, { enableHistoryCount: true, historyCount: 1 });
+    const window = getContextWindow(messages, { enableHistoryCount: false });
 
     expect(window.request).toMatchObject({
       accounting,
@@ -204,8 +203,16 @@ describe('getContextWindow', () => {
       model: 'deepseek-v4-flash',
       provider: 'deepseek',
     });
-    expect(window.request?.messages.map((message) => message.id)).toEqual(['a2', 't1']);
-    expect(window.history.map((message) => message.id)).toEqual(['t1']);
+    expect(window.request?.messages?.map((message) => message.id)).toEqual(['a2', 't1']);
+
+    // ROOT CAUSE: with a history count every request re-truncates history, so
+    // messages the recorded request covered can drop out of the next one;
+    // adding everything after the recorded reply on top overstated usage.
+    const truncated = getContextWindow(messages, { enableHistoryCount: true, historyCount: 1 });
+
+    expect(truncated.request).toMatchObject({ accounting, model: 'deepseek-v4-flash' });
+    expect(truncated.request?.messages).toBeUndefined();
+    expect(truncated.history.map((message) => message.id)).toEqual(['t1']);
   });
 
   it('ignores accounting on non-assistant messages', () => {

@@ -1,8 +1,8 @@
+import { getSlicedMessages } from '@lobechat/context-engine';
 import type { ConversationContext, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import type { ContextWindow, SendButtonProps } from '@/features/ChatInput/store/initialState';
-import { chatHelpers } from '@/store/chat/helpers';
 import { operationSelectors } from '@/store/chat/selectors';
 import {
   type QueuedMessage,
@@ -118,13 +118,14 @@ const getRecordedInputTokens = (message: UIChatMessage) =>
  * - `messages` are the conversation's flat DB messages in send order.
  *
  * Returns:
- * - `history`: the window the next request includes, as the agent's history
- *   count slices it.
+ * - `history`: the window the next request includes, sliced with the context
+ *   engine's own group-aware history truncation.
  * - `request`, when the latest assistant message carries
- *   `metadata.contextAccounting`: that request's accounting, its model, and the
- *   messages after it was sent — the reply itself, its tool results and any
- *   later turns. The request already reflects history truncation, so these are
- *   not sliced.
+ *   `metadata.contextAccounting`: that request's accounting and model. Without
+ *   a history count it also carries the messages sent since — the reply
+ *   itself, its tool results and later turns — which the next request appends
+ *   to the recorded one. With a history count every request re-truncates, so
+ *   those older messages may drop out and only `history` is reliable.
  */
 export const getContextWindow = (
   messages: UIChatMessage[],
@@ -133,7 +134,8 @@ export const getContextWindow = (
     historyCount?: number;
   },
 ): ContextWindow => {
-  const history = chatHelpers.getSlicedMessages(messages, options);
+  const history = getSlicedMessages(messages, options) as UIChatMessage[];
+  const historyTruncated = !!options.enableHistoryCount && options.historyCount !== undefined;
 
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
@@ -146,7 +148,7 @@ export const getContextWindow = (
       request: {
         accounting,
         ...(inputTokens ? { inputTokens } : {}),
-        messages: messages.slice(index),
+        ...(historyTruncated ? {} : { messages: messages.slice(index) }),
         model: message.model ?? undefined,
         provider: message.provider ?? undefined,
       },

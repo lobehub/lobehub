@@ -190,7 +190,10 @@ export const useTokenBreakdown = (): TokenBreakdown => {
       ? recordedRequest
       : undefined;
   const hasRequest = !!request;
-  const messages = request ? sinceRequest : history;
+  // The recorded messages plus what came after describe the next request only
+  // while nothing drops out of history; otherwise count the history window.
+  const recordedMessages = request?.messages ? request.accounting.bySource : undefined;
+  const messages = recordedMessages ? sinceRequest : history;
   const [
     activeAgentId,
     systemRole,
@@ -299,7 +302,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   const inputTokenCount = useTokenCount(input);
 
   const recorded = request?.accounting;
-  const sum = (key: TokenSourceType) => (recorded?.bySource[key] ?? 0) + messages[key];
+  const sum = (key: TokenSourceType) => (recordedMessages?.[key] ?? 0) + messages[key];
 
   const systemToken = recorded
     ? recorded.system

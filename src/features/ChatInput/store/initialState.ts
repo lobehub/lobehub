@@ -53,8 +53,12 @@ export interface ContextWindow {
     accounting: MessageContextAccounting;
     /** Provider-reported input tokens of that request, when known. */
     inputTokens?: number;
-    /** Messages added since: the recorded reply itself and everything after it. */
-    messages: UIChatMessage[];
+    /**
+     * Messages added since: the recorded reply itself and everything after it.
+     * Absent when a history count re-truncates every request; the recorded
+     * messages may then drop out, so count `history` instead.
+     */
+    messages?: UIChatMessage[];
     /** Model and provider that request went to. */
     model?: string;
     provider?: string;
