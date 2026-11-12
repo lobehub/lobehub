@@ -56,6 +56,30 @@ describe('operation dispatch failure', () => {
     expect(rejected).toBe(true);
   });
 
+  it('leaves a prepared intervention continuation running for its own recovery', async () => {
+    const { deps, failure, recordDispatchFailure } = setup();
+    const interventionResolution = {
+      resolutionRequestId: 'resolution-1',
+      sourceOperationId: 'source-operation',
+      sourceToolMessageIds: ['tool-message-1'],
+    };
+    Object.assign(deps.agentOperationModel, {
+      findById: vi.fn().mockResolvedValue({
+        metadata: { agentInterventionContinuation: interventionResolution },
+        status: 'running',
+      }),
+      recordAgentInterventionPreparation: vi.fn().mockResolvedValue(true),
+    });
+    Object.assign(deps.coordinator, {
+      loadAgentState: vi.fn().mockResolvedValue({ metadata: {} }),
+    });
+
+    await expect(createOperation(deps, { ...params, interventionResolution })).rejects.toBe(
+      failure,
+    );
+    expect(recordDispatchFailure).not.toHaveBeenCalled();
+  });
+
   it('keeps a successful first delivery running', async () => {
     const { deps, recordDispatchFailure } = setup();
     vi.mocked(deps.queueService!.scheduleMessage).mockResolvedValue('queued');
