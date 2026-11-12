@@ -24,7 +24,10 @@ const styles = stylex.create({
     alignSelf: 'flex-start',
     width: '100%',
     maxWidth: 520,
-    marginBlock: 0,
+    // Sit close to the message it continues: the body's 8px gap plus the paragraph's trailing
+    // margin left the card looking detached.
+    marginBlockStart: -6,
+    marginBlockEnd: 0,
     marginInline: 0,
     paddingBlock: 6,
     paddingInline: 10,
