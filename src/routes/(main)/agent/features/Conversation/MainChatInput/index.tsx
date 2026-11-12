@@ -58,7 +58,8 @@ const MainChatInput = memo(() => {
   // left bar keeps the "+" menu, dictation and the expand toggle.
   const leftActions: ActionKeys[] = useMemo(() => ['plus', 'voiceDictation'], []);
   // `im_layout` opens conversations as channels: the slim composer preset of
-  // the side panels (small actions and send button, no control bar).
+  // the side panels (small actions and send button). The control bar stays —
+  // it is the only place to pick the device and working directory.
   const imLayout = useImLayout();
 
   const input = (
@@ -69,7 +70,6 @@ const MainChatInput = memo(() => {
       isConfigLoading={isAgentConfigLoading}
       leftActions={leftActions}
       rightActions={rightActions}
-      showControlBar={!imLayout}
       {...(isDevMode
         ? { sendMenu: { items: sendMenuItems } }
         : {

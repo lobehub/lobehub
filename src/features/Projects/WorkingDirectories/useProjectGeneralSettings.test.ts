@@ -3,17 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectDetail } from '@/store/project';
 
-import { useGeneralSettingsForm, useSaveProjectField } from './useProjectGeneralSettings';
+import { useProjectLogo, useSaveProjectField } from './useProjectGeneralSettings';
 
 const mocks = vi.hoisted(() => ({
-  confirmModal: vi.fn(),
   toast: { error: vi.fn(), success: vi.fn() },
   updateProject: vi.fn(),
   uploadWithProgress: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@lobehub/ui', () => ({ confirmModal: mocks.confirmModal, toast: mocks.toast }));
+vi.mock('@lobehub/ui', () => ({ toast: mocks.toast }));
 vi.mock('@/store/file', () => ({
   useFileStore: (selector: (s: unknown) => unknown) =>
     selector({ uploadWithProgress: mocks.uploadWithProgress }),
@@ -64,69 +63,57 @@ describe('useSaveProjectField', () => {
   });
 });
 
-describe('useGeneralSettingsForm', () => {
-  const current = project as unknown as ProjectDetail['project'];
-
+describe('useProjectLogo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.updateProject.mockResolvedValue({ id: 'prj_1', slug: 'alpha' });
+    mocks.updateProject.mockResolvedValue(project);
   });
 
-  it('keeps a picked logo in the draft until saved', async () => {
-    const { result } = renderHook(() => useGeneralSettingsForm(current));
+  it('saves a picked logo straight away', async () => {
+    const { result } = renderHook(() => useProjectLogo(project));
 
     await act(async () => {
-      result.current.logo.onChange('🚀');
+      result.current.onChange('🚀');
     });
 
-    expect(result.current.draft.avatar).toBe('🚀');
-    expect(result.current.count).toBe(1);
-    expect(mocks.updateProject).not.toHaveBeenCalled();
+    expect(mocks.updateProject).toHaveBeenCalledWith('prj_1', { avatar: '🚀' });
+    expect(mocks.toast.success).toHaveBeenCalledWith('settings.logoUpdated');
   });
 
-  it('puts an uploaded file in the draft by its stored URL, not the data URL preview', async () => {
+  it('saves a deleted logo as null, once', async () => {
+    const { result } = renderHook(() => useProjectLogo({ ...project, avatar: '🚀' }));
+
+    await act(async () => {
+      // The picker reports the cleared value before calling onDelete.
+      result.current.onChange(null);
+      await result.current.onDelete();
+    });
+
+    expect(mocks.updateProject).toHaveBeenCalledTimes(1);
+    expect(mocks.updateProject).toHaveBeenCalledWith('prj_1', { avatar: null });
+  });
+
+  it('saves an uploaded file by its stored URL, not the data URL preview', async () => {
     mocks.uploadWithProgress.mockResolvedValue({ url: 'https://cdn/logo.png' });
-    const { result } = renderHook(() => useGeneralSettingsForm(current));
+    const { result } = renderHook(() => useProjectLogo(project));
     const file = new File(['x'], 'logo.png', { type: 'image/png' });
 
     await act(async () => {
-      result.current.logo.onChange('data:image/png;base64,eA==');
-      await result.current.logo.onUpload(file);
+      result.current.onChange('data:image/png;base64,eA==');
+      await result.current.onUpload(file);
     });
 
-    expect(result.current.draft.avatar).toBe('https://cdn/logo.png');
-    expect(mocks.updateProject).not.toHaveBeenCalled();
-  });
-
-  it('saves every change in one update without asking and resolves to the saved project', async () => {
-    const { result } = renderHook(() => useGeneralSettingsForm(current));
-
-    act(() => {
-      result.current.setField('name', 'Beta');
-      result.current.setField('description', 'Relaunch');
-    });
-    let saved: unknown;
-    await act(async () => {
-      saved = await result.current.save();
-    });
-
-    expect(mocks.confirmModal).not.toHaveBeenCalled();
     expect(mocks.updateProject).toHaveBeenCalledTimes(1);
-    expect(mocks.updateProject).toHaveBeenCalledWith('prj_1', {
-      description: 'Relaunch',
-      name: 'Beta',
-    });
-    expect(saved).toEqual({ id: 'prj_1', slug: 'alpha' });
+    expect(mocks.updateProject).toHaveBeenCalledWith('prj_1', { avatar: 'https://cdn/logo.png' });
   });
 
-  it('reverts the draft to the saved project', () => {
-    const { result } = renderHook(() => useGeneralSettingsForm(current));
+  it('does not save a logo that did not change', async () => {
+    const { result } = renderHook(() => useProjectLogo({ ...project, avatar: '🚀' }));
 
-    act(() => result.current.setField('name', 'Beta'));
-    expect(result.current.count).toBe(1);
-    act(() => result.current.revert());
+    await act(async () => {
+      result.current.onChange('🚀');
+    });
 
-    expect(result.current.count).toBe(0);
-    expect(result.current.draft.name).toBe('Alpha');
+    expect(mocks.updateProject).not.toHaveBeenCalled();
   });
 });

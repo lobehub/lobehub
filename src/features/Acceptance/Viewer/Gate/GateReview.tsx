@@ -7,6 +7,7 @@ import {
   createStaticStyles,
   cssVar,
   cx,
+  DraggablePanel,
   Flexbox,
   Icon,
   Markdown,
@@ -28,17 +29,17 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { GoalDecisionAsker } from '@/features/AgentGoals/GoalDecision';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { acceptanceOverviewPath } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canReviewAcceptance, isReadOnlyAcceptanceDecider } from '../visibility';
-import { latestRound, unitArtifacts } from './dossier';
+import { latestRound } from './dossier';
 import SkillDirectory from './SkillDirectory';
+import UnitArtifacts from './UnitArtifacts';
 import { usePlanFiles } from './usePlanFiles';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -98,12 +99,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   panel: css`
     overflow: hidden auto;
-    flex: none;
-
-    width: 340px;
-    padding-block: 20px;
-    padding-inline: 20px;
-    border-inline-start: 1px solid ${cssVar.colorBorder};
+    height: 100%;
+    padding-block: 16px;
+    padding-inline: 16px;
   `,
   plan: css`
     padding-block: 4px;
@@ -160,6 +158,9 @@ const formatTokens = (tokens: number) =>
 
 /** A unit the owner has to look at: it was reworked, or did not settle cleanly. */
 const isException = (unit: GoalReleaseGateUnit) => unit.runs > 1 || unit.status !== 'resolved';
+
+/** The detail panel opens at this width; its edge drags it between the bounds. */
+const PANEL_WIDTH = { default: 360, max: 720, min: 280 };
 
 /** What the side panel shows: a unit that ran, or one the next wave would start. */
 type Selection =
@@ -283,69 +284,63 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
     const title = selection.kind === 'result' ? selection.unit.title : selection.title;
     const brief = selection.kind === 'result' ? selection.unit.brief : selection.brief;
     return (
-      <Flexbox className={styles.panel} gap={16}>
-        <Flexbox horizontal align={'flex-start'} gap={8}>
-          <Text strong style={{ flex: 1, minWidth: 0 }}>
-            {title}
-          </Text>
-          <ActionIcon icon={X} size={'small'} onClick={onClose} />
-        </Flexbox>
-        {selection.kind === 'result' ? (
-          <Flexbox gap={8}>
-            <span className={styles.meta}>
-              {t('acceptance.gate.unitMeta', {
-                runs: selection.unit.runs,
-                tokens: formatTokens(selection.unit.tokens),
-              })}
-            </span>
-            {selection.unit.acceptance && (
-              <a
-                className={styles.link}
-                rel="noreferrer"
-                target="_blank"
-                href={buildWorkspaceAwarePath(
-                  acceptanceOverviewPath(selection.unit.acceptance.id),
-                  workspaceSlug,
-                )}
-              >
-                {selection.unit.acceptance.checks
-                  ? t('acceptance.gate.unitAcceptance', {
-                      passed: selection.unit.acceptance.checks.passed,
-                      total: selection.unit.acceptance.checks.total,
-                    })
-                  : t('acceptance.gate.unitAcceptanceOpen')}
-              </a>
-            )}
-            {unitArtifacts(selection.unit).map((artifact) =>
-              artifact.url ? (
+      <DraggablePanel
+        backgroundColor={'transparent'}
+        classNames={{ content: styles.panel }}
+        defaultSize={{ height: '100%', width: PANEL_WIDTH.default }}
+        expandable={false}
+        maxWidth={PANEL_WIDTH.max}
+        minWidth={PANEL_WIDTH.min}
+        placement={'right'}
+      >
+        <Flexbox gap={12}>
+          <Flexbox horizontal align={'flex-start'} gap={8}>
+            <Text strong style={{ flex: 1, minWidth: 0 }}>
+              {title}
+            </Text>
+            <ActionIcon icon={X} size={'small'} onClick={onClose} />
+          </Flexbox>
+          {selection.kind === 'result' ? (
+            <Flexbox gap={8}>
+              <span className={styles.meta}>
+                {t('acceptance.gate.unitMeta', {
+                  runs: selection.unit.runs,
+                  tokens: formatTokens(selection.unit.tokens),
+                })}
+              </span>
+              {selection.unit.acceptance && (
                 <a
                   className={styles.link}
-                  href={artifact.url}
-                  key={artifact.url}
                   rel="noreferrer"
                   target="_blank"
+                  href={buildWorkspaceAwarePath(
+                    acceptanceOverviewPath(selection.unit.acceptance.id),
+                    workspaceSlug,
+                  )}
                 >
-                  {artifact.title}
+                  {selection.unit.acceptance.checks
+                    ? t('acceptance.gate.unitAcceptance', {
+                        passed: selection.unit.acceptance.checks.passed,
+                        total: selection.unit.acceptance.checks.total,
+                      })
+                    : t('acceptance.gate.unitAcceptanceOpen')}
                 </a>
-              ) : (
-                <span className={styles.meta} key={artifact.title}>
-                  {artifact.title}
-                </span>
-              ),
-            )}
-          </Flexbox>
-        ) : (
-          <span className={styles.meta}>{t('acceptance.gate.unitWaitingHint')}</span>
-        )}
-        {brief && (
-          <Flexbox gap={6}>
-            <span className={styles.meta}>{t('acceptance.gate.unitBrief')}</span>
-            <Text className={styles.body} type={'secondary'}>
-              {brief.replace(/^\[origin=\w+\]\s*/, '')}
-            </Text>
-          </Flexbox>
-        )}
-      </Flexbox>
+              )}
+            </Flexbox>
+          ) : (
+            <span className={styles.meta}>{t('acceptance.gate.unitWaitingHint')}</span>
+          )}
+          {brief && (
+            <Flexbox gap={4}>
+              <span className={styles.meta}>{t('acceptance.gate.unitBrief')}</span>
+              <Markdown fontSize={13} variant={'chat'}>
+                {brief.replace(/^\[origin=\w+\]\s*/, '')}
+              </Markdown>
+            </Flexbox>
+          )}
+          {selection.kind === 'result' && <UnitArtifacts unit={selection.unit} />}
+        </Flexbox>
+      </DraggablePanel>
     );
   },
 );
@@ -385,7 +380,7 @@ const GateDecision = memo<{
     try {
       await action();
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       onDecided?.(decision);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
@@ -494,7 +489,10 @@ interface GateReviewProps {
 const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided }) => {
   const { t } = useTranslation('verify');
   const [selected, setSelected] = useState<Selection>();
-  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(dossier.plan.skillId);
+  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(
+    dossier.plan.skillId,
+    dossier.plan.revision,
+  );
   const average =
     dossier.units.reduce((sum, unit) => sum + unit.tokens, 0) / Math.max(1, dossier.units.length);
   const probes = dossier.kind === 'probes';

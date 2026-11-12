@@ -56,6 +56,23 @@ export const FeatureFlagsSchema = z.object({
   agent_llm_relay: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for deferring an operation's init: a plain chat send returns
+   * once its messages are durable and the step-0 worker runs tool discovery and
+   * context assembly. Off: the send path runs them before returning. Array
+   * values are user ids.
+   */
+  agent_deferred_init: FeatureFlagValue.optional(),
+
+  /**
+   * Keep the immutable per-operation tool set out of the agent state blob that
+   * is rewritten at every step; it is written once to its own Redis key and
+   * re-attached on load. Off: the blob keeps its inline copy. Server only;
+   * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0|1` overrides it. Array values are
+   * user ids (the operation's owner).
+   */
+  agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -71,6 +88,13 @@ export const FeatureFlagsSchema = z.object({
    * tool results. Array values are user ids.
    */
   mcp_apps: FeatureFlagValue.optional(),
+
+  /**
+   * Rollout gate for moving an agent's documents into its dedicated knowledge
+   * base at runtime, and for showing those spaces in the library. Off: no space
+   * is created and existing ones stay hidden. Array values are user ids.
+   */
+  agent_knowledge_space: FeatureFlagValue.optional(),
 
   /**
    * Trial gate for the rail layout: icon rail + one wrapped list column and
@@ -106,7 +130,8 @@ export const FeatureFlagsSchema = z.object({
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
   onboarding_v2: FeatureFlagValue.optional(),
-  new_tier_plans: FeatureFlagValue.optional(),
+  mobile_new_tier_sales: FeatureFlagValue.optional(),
+  mobile_sandbox_grant: FeatureFlagValue.optional(),
   storage_overage: FeatureFlagValue.optional(),
   workspace: FeatureFlagValue.optional(),
 
@@ -197,6 +222,8 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
+  agent_deferred_init: false,
+  agent_runtime_strip_operation_toolset: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -206,6 +233,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
+  agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
@@ -223,7 +251,10 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   onboarding_v2: isDev,
   // Cloud-only grayscale for the new subscription tiers: off until an admin
   // publishes a whitelist (array of user IDs) or flips it to true.
-  new_tier_plans: false,
+  mobile_new_tier_sales: false,
+  // Server-only: Cloud lets a store sandbox purchase grant entitlement only for user IDs listed
+  // explicitly; `true` and percentage rollout count as off, and it never reaches the client state.
+  mobile_sandbox_grant: false,
   storage_overage: true,
   workspace: isDev,
 
@@ -256,8 +287,23 @@ export const mapFeatureFlagsEnvToState = (
       'agent_gateway_mux_mobile',
     ),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableDeferredInit: evaluateFeatureFlag(
+      config.agent_deferred_init,
+      userId,
+      'agent_deferred_init',
+    ),
+    enableStripOperationToolset: evaluateFeatureFlag(
+      config.agent_runtime_strip_operation_toolset,
+      userId,
+      'agent_runtime_strip_operation_toolset',
+    ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableAgentKnowledgeSpace: evaluateFeatureFlag(
+      config.agent_knowledge_space,
+      userId,
+      'agent_knowledge_space',
+    ),
     enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
     enableManagedCloudDevice: evaluateFeatureFlag(
@@ -285,7 +331,13 @@ export const mapFeatureFlagsEnvToState = (
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId, 'dev_dock'),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId, 'auth_captcha'),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId, 'onboarding_v2'),
-    enableNewTierPlans: evaluateFeatureFlag(config.new_tier_plans, userId, 'new_tier_plans'),
+    // Deprecated constant for released desktop clients; see IFeatureFlagsState.
+    enableNewTierPlans: true,
+    enableMobileNewTierSales: evaluateFeatureFlag(
+      config.mobile_new_tier_sales,
+      userId,
+      'mobile_new_tier_sales',
+    ),
     enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId, 'storage_overage'),
 
     showCloudPromotion: evaluateFeatureFlag(config.cloud_promotion, userId, 'cloud_promotion'),

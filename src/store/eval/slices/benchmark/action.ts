@@ -104,7 +104,6 @@ export class BenchmarkActionImpl {
     metadata?: Record<string, unknown>;
     name: string;
     rubrics?: any[];
-    tags?: string[];
   }): Promise<any> => {
     const result = await agentEvalService.createBenchmark({
       description: params.description,
@@ -112,14 +111,16 @@ export class BenchmarkActionImpl {
       metadata: params.metadata,
       name: params.name,
       rubrics: params.rubrics ?? [],
-      tags: params.tags,
     });
     await this.refreshBenchmarks();
     return result;
   };
 
   deleteBenchmark = async (id: string): Promise<void> => {
-    await agentEvalService.deleteBenchmark(id);
+    const result = await agentEvalService.deleteBenchmark(id);
+    // Built-in benchmarks are refused with `{ success: false }`; surface it instead of
+    // dropping the row and letting the refresh bring it back.
+    if (result?.success === false) throw new Error(result.error);
     // Drop the row from the list and the detail cache at once, then converge.
     this.#entity.remove(id);
     await this.refreshBenchmarks();
@@ -128,10 +129,8 @@ export class BenchmarkActionImpl {
   updateBenchmark = async (params: {
     description?: string;
     id: string;
-    identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
-    tags?: string[];
   }): Promise<void> => {
     // Optimistic on every copy; the refetch below reconciles server-owned fields.
     await this.#entity.optimistic(
@@ -141,10 +140,8 @@ export class BenchmarkActionImpl {
         agentEvalService.updateBenchmark({
           description: params.description,
           id: params.id,
-          identifier: params.identifier,
           metadata: params.metadata,
           name: params.name,
-          tags: params.tags,
         }),
     );
     await Promise.all([this.refreshBenchmarks(), this.refreshBenchmarkDetail(params.id)]);

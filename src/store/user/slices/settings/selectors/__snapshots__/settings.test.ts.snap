@@ -77,10 +77,6 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "deepseek-v4-flash",
     "provider": "deepseek",
   },
-  "historyCompress": {
-    "model": "gpt-5.6-luna",
-    "provider": "openai",
-  },
   "inputCompletion": {
     "enabled": false,
     "model": "gpt-5.6-luna",

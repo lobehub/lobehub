@@ -5,7 +5,7 @@ import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
-import resultStyles from '../resultStyles.module.css';
+import { resultStyles } from '../resultStyles';
 
 const SuccessPage = memo(() => {
   const { t } = useTranslation('oauth');

@@ -23,6 +23,8 @@ interface UpdateMessage {
 }
 
 interface CreateMessage {
+  /** Creation time to keep, e.g. the server's; defaults to the client clock. */
+  createdAt?: number;
   id: string;
   type: 'createMessage';
   value: CreateMessageParams;
@@ -248,8 +250,9 @@ export const messagesReducer = (
     case 'createMessage': {
       return produce(state, (draftState) => {
         const { value, id } = payload;
+        const now = Date.now();
 
-        draftState.push({ ...value, createdAt: Date.now(), id, updatedAt: Date.now() });
+        draftState.push({ ...value, createdAt: payload.createdAt ?? now, id, updatedAt: now });
       });
     }
 

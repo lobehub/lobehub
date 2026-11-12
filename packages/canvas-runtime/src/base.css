@@ -14,12 +14,26 @@
     margin-inline: auto !important;
     padding: 24px;
     padding-inline: 24px !important;
+
     font-family: var(--lobe-font-family);
     font-size: var(--lobe-font-size);
+    -webkit-font-smoothing: subpixel-antialiased;
     line-height: var(--lobe-line-height);
     color: var(--lobe-color-text);
+
     background: var(--lobe-color-bg-layout, var(--lobe-color-bg-container));
-    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Whether the page scrolls is part of the frame the host owns, so the document's
+     vertical axis is never clipped. Models pin the viewport with
+     `html, body { height: 100%; overflow: hidden }` while nothing inside scrolls; the
+     preview panel then had no scroll host at all — the frame is exactly one viewport
+     tall and the page clipped whatever ran past it. Forcing the axis to `visible`
+     leaves an app-shell page's own `overflow: auto` region scrolling and lets a
+     clipped report grow instead. Horizontal clipping stays as the page wrote it. */
+  html,
+  body {
+    overflow-y: visible !important;
   }
 
   /* Models wrap pages in <main>/<section> and stack blocks inside tabs, so block
@@ -86,14 +100,15 @@
   }
 
   table {
-    width: 100%;
     border-collapse: collapse;
+    width: 100%;
     font-variant-numeric: tabular-nums;
   }
 
   th,
   td {
-    padding: 8px 12px;
+    padding-block: 8px;
+    padding-inline: 12px;
     border-block-end: 1px solid var(--lobe-color-border-secondary);
     text-align: start;
   }
@@ -171,10 +186,13 @@
 @layer lobe-canvas-base {
   pre {
     overflow: auto;
+
     margin: 0;
-    padding: 12px 16px;
+    padding-block: 12px;
+    padding-inline: 16px;
     border: 1px solid var(--lobe-color-border-secondary);
     border-radius: var(--lobe-border-radius);
+
     background: var(--lobe-color-fill-quaternary);
   }
 
@@ -196,9 +214,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+
     padding-block: 4px;
     padding-inline: 12px 4px;
     border-block-end: 1px solid var(--lobe-color-border-secondary);
+
     font-family: var(--lobe-font-family-code);
     font-size: 12px;
     color: var(--lobe-color-text-description);

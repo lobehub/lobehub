@@ -1442,6 +1442,55 @@
       "when": 1793930690156,
       "tag": "0205_lobe_bench_environments_and_memory",
       "breakpoints": true
+    },
+    {
+      "idx": 206,
+      "version": "7",
+      "when": 1793984982722,
+      "tag": "0206_channel_job_wake",
+      "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "7",
+      "when": 1794065054788,
+      "tag": "0207_agent_account_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 208,
+      "version": "7",
+      "when": 1794068654788,
+      "tag": "0208_add_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 209,
+      "version": "7",
+      "when": 1794149966527,
+      "tag": "0209_add_meeting_error",
+      "breakpoints": true
+    },
+    {
+      "idx": 210,
+      "version": "7",
+      "when": 1794152994440,
+      "tag": "0210_agent_operations_workspace_created_at_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 211,
+      "version": "7",
+      "when": 1794233764532,
+      "tag": "0211_add_documents_created_by_agent_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 212,
+      "version": "7",
+      "when": 1794296581452,
+      "tag": "0212_workspace_member_config",
+      "breakpoints": true
     }
   ],
   "version": "6"

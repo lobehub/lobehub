@@ -6,7 +6,7 @@ import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Archive } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -34,7 +34,8 @@ import {
   buildConversationSections,
   channelActivity,
   type Conversation,
-  latestActivity,
+  type ConversationEntry,
+  inboxActivity,
   latestTopicOf,
 } from './conversations';
 import GroupConversation from './GroupConversation';
@@ -95,11 +96,21 @@ const Body = memo(() => {
   const { t } = useTranslation(['common', 'channel']);
   const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  useHomeStore((s) => s.useFetchConversationRecents)(ALL_RECENTS_LIMIT);
+  const { error: recentsError, revalidate: revalidateRecents } = useHomeStore(
+    (s) => s.useFetchConversationRecents,
+  )(ALL_RECENTS_LIMIT);
 
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const recents = useHomeStore(homeRecentSelectors.conversationRecents(RECENTS_QUERY_KEY));
   const activeRouteId = useActiveRouteId();
+  // The open conversation keeps its row, so a first topic started there only needs to reach the
+  // recents by the time the person moves on: refresh them whenever the routed conversation changes.
+  const lastRouteIdRef = useRef(activeRouteId);
+  useEffect(() => {
+    if (lastRouteIdRef.current === activeRouteId) return;
+    lastRouteIdRef.current = activeRouteId;
+    void revalidateRecents();
+  }, [activeRouteId, revalidateRecents]);
   const channelsEnabled = useChannelsEnabled();
   const allChannels = useChannelStore(channelSelectors.list);
   const { query } = useMessageSearch();
@@ -150,44 +161,83 @@ const Body = memo(() => {
     [recents, inboxAgentId],
   );
 
+  const inboxChannel = inboxAgentId ? directChannels.get(inboxAgentId) : undefined;
+
   const entries = useMemo(
     () =>
       buildConversationEntries(
-        buildConversationSections(items, recents, directChannels),
-        { activeAt: latestActivity(inboxUpdatedAt, inboxTopic), title: inboxTitle },
+        buildConversationSections(items, recents, directChannels, {
+          activeId: activeRouteId,
+          includeIdle: !!query.trim(),
+        }),
+        {
+          activeAt: inboxActivity(inboxUpdatedAt, inboxTopic, inboxChannel),
+          channel: inboxChannel,
+          title: inboxTitle,
+        },
         query,
         channels,
       ),
-    [items, recents, directChannels, inboxUpdatedAt, inboxTitle, inboxTopic, query, channels],
+    [
+      items,
+      recents,
+      directChannels,
+      activeRouteId,
+      inboxUpdatedAt,
+      inboxTitle,
+      inboxTopic,
+      inboxChannel,
+      query,
+      channels,
+    ],
   );
 
-  // Only the agent rows wait on the agent list: Lobe AI and Channels load on
-  // their own, so a slow or failed agent-list request must not hide them.
-  const agentsLoading = !isInit && items.length === 0;
+  // Pinned rows lead the list; they render as one block rather than a card each.
+  const pinnedCount = entries.findIndex((entry) => entry.type !== 'item' || !entry.item.pinned);
+  const pinnedEntries = pinnedCount === -1 ? entries : entries.slice(0, pinnedCount);
+  const otherEntries = pinnedCount === -1 ? [] : entries.slice(pinnedCount);
+
+  const renderEntry = (entry: ConversationEntry) =>
+    entry.type === 'inbox' ? (
+      <InboxConversation
+        activeAt={entry.activeAt}
+        activeRouteId={activeRouteId}
+        channel={entry.channel}
+        key={'inbox'}
+        topic={inboxTopic}
+      />
+    ) : entry.type === 'channel' ? (
+      <ChannelConversation
+        active={entry.channel.id === activeRouteId}
+        activeAt={entry.activeAt}
+        channel={entry.channel}
+        key={entry.channel.id}
+      />
+    ) : (
+      <ConversationItem activeRouteId={activeRouteId} conversation={entry} key={entry.item.id} />
+    );
+
+  // Only the agent rows wait on the agent list and recents (which decide what has a conversation):
+  // Lobe AI and Channels load on their own, so a slow or failed request must not hide them.
+  const agentsLoading = (!isInit && items.length === 0) || recents === undefined;
 
   return (
     <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
-      {entries.map((entry) =>
-        entry.type === 'inbox' ? (
-          <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
-        ) : entry.type === 'channel' ? (
-          <ChannelConversation
-            active={entry.channel.id === activeRouteId}
-            activeAt={entry.activeAt}
-            channel={entry.channel}
-            key={entry.channel.id}
-          />
-        ) : (
-          <ConversationItem
-            activeRouteId={activeRouteId}
-            conversation={entry}
-            key={entry.item.id}
-          />
-        ),
+      {pinnedEntries.length > 0 && (
+        <div aria-label={t('navPanel.pinned')} role="group" {...stylex.props(styles.pinnedGroup)}>
+          {pinnedEntries.map(renderEntry)}
+        </div>
       )}
+      {otherEntries.map(renderEntry)}
       {agentsLoading ? (
         agentsError ? (
           <AsyncError error={agentsError} variant="inline" onRetry={() => void retryAgents()} />
+        ) : recents === undefined && recentsError ? (
+          <AsyncError
+            error={recentsError}
+            variant="inline"
+            onRetry={() => void revalidateRecents()}
+          />
         ) : (
           <SkeletonList paddingBlock={8} />
         )

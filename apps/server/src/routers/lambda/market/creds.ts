@@ -9,6 +9,7 @@ import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspace
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
 const log = debug('lambda-router:market:creds');
 
@@ -365,7 +366,9 @@ export const credsRouter = router({
       log('inject input: %O', input);
 
       try {
-        const userId = input.userId || ctx.userId;
+        // The authenticated caller wins: the session is keyed by this id, and
+        // the placement and claim below are resolved for it.
+        const userId = ctx.userId || input.userId;
         if (!userId) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -373,9 +376,45 @@ export const credsRouter = router({
           });
         }
 
-        const result = await ctx.marketService.market.creds.inject({
+        // Injection often creates the topic's sandbox, so it has to land where
+        // the topic's tool calls run. Resolved here, as `execInSandbox` does,
+        // rather than taken from the client: the browser cannot see the
+        // topic's placement, and without the storage claim on the signed
+        // identity Market ignores the mode and uses the throwaway runtime.
+        // Read as the authenticated caller only, so a request cannot resolve
+        // someone else's topic placement.
+        const sandbox =
+          input.sandbox && ctx.userId
+            ? await resolveSandboxSessionConfig({
+                // Direct client call, so the caller is always acting as themselves.
+                isShareVisitorRun: false,
+                serverDB: ctx.serverDB,
+                topicId: input.topicId,
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId ?? undefined,
+              })
+            : undefined;
+
+        // The claim has to ride on the signed identity: Market reads the
+        // entitlement off the trusted-client token, and `ctx.marketService`
+        // was built before it was known.
+        const marketService =
+          sandbox?.claim && ctx.userId
+            ? new MarketService({
+                accessToken: ctx.marketAccessToken,
+                userInfo: {
+                  ...ctx.marketUserInfo,
+                  sandboxStorage: sandbox.claim,
+                  userId: ctx.userId,
+                },
+              })
+            : ctx.marketService;
+
+        const result = await marketService.market.creds.inject({
           keys: input.keys,
           sandbox: input.sandbox,
+          sandboxInstanceId: sandbox?.environment,
+          sandboxMode: sandbox?.mode,
           topicId: input.topicId,
           userId,
         });

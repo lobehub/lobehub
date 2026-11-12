@@ -1,5 +1,7 @@
-import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentType } from './agent';
+import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
+import type { BotWakeKind } from './signal';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -8,17 +10,32 @@ import { getWorkingDirEffectivePath } from './device';
  * and operations; the internal transcript stays separate from the public timeline.
  */
 
-export const CHANNEL_RUNTIMES = [
-  'native',
-  'codex',
-  'amp',
-  'grok-build',
-  'claude-code',
-  'pi',
-] as const;
-export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
+/**
+ * Runtimes a Channel can seat, derived rather than listed: LobeHub's own `native` loop plus every
+ * heterogeneous runtime that executes on its user's machine (descriptor-backed CLIs and
+ * protocol-driven local runtimes). A new local runtime joins Channels when it joins the provider
+ * registry; only runtimes known not to work are excluded below, each with its reason.
+ */
+const LOCAL_EXECUTION_RUNTIMES = LocalExecutionHeterogeneousAgentTypeSchema.options;
+
+/**
+ * Remote-task runtimes (`openclaw`, `hermes`) run a task on a remote host instead of on a seated
+ * device, so a Channel's "pick a device + working directory" premise does not hold for them.
+ * They are not part of LOCAL_EXECUTION_RUNTIMES; this list documents the exclusion and is
+ * asserted by tests so a remote runtime cannot slip in by being reclassified.
+ */
+export const CHANNEL_EXCLUDED_RUNTIMES: Readonly<Record<RemoteHeterogeneousAgentType, string>> = {
+  hermes:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+  openclaw:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+};
+
+export const CHANNEL_RUNTIMES = ['native', ...LOCAL_EXECUTION_RUNTIMES] as const;
+export type ChannelRuntime = 'native' | (typeof LOCAL_EXECUTION_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
+  !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
 
 /**
@@ -112,6 +129,11 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
+   * shared wake schema; never part of the execution environment.
+   */
+  wake?: Record<string, unknown>;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
 }
@@ -125,8 +147,27 @@ export interface ChannelConfig {
   wake?: Record<string, unknown>;
 }
 
+/**
+ * A git worktree a member's conversation branch moved into when another run held its
+ * configured directory. Cut from that directory's HEAD; the branch keeps working there until
+ * the member's environment changes.
+ */
+export interface ChannelMemberWorktree {
+  branch: string;
+  deviceId: string;
+  /** Absolute path under `~/.lobehub/worktrees/`, see `deriveWorktreePath`. */
+  path: string;
+  /** The member's configured directory it was cut from. */
+  sourceDirectory: string;
+}
+
 /** Free-form member state that does not need its own column. */
-export type ChannelMemberMetadata = Record<string, unknown>;
+export type ChannelMemberMetadata = Record<string, unknown> & {
+  /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
+  worktrees?: Record<string, ChannelMemberWorktree>;
+  /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
+  worktreeUnavailable?: { at: string; deviceId: string; sourceDirectory: string };
+};
 
 /** Free-form channel state that does not need its own column. */
 export type ChannelMetadata = Record<string, unknown>;
@@ -144,6 +185,8 @@ export type ChannelMessageMetadata = Record<string, unknown>;
 export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberConfig {
   provider: string;
   runtime: ChannelRuntime;
+  /** Set when the run works in its branch's worktree; `workingDirectory` is then that worktree. */
+  worktreeBranch?: string;
 }
 
 /**
@@ -176,11 +219,45 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `completed`: the final reply was published.
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
+ * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
  */
-export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' | 'running';
+export type ChannelJobStatus =
+  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+
+/**
+ * Why a job was woken, frozen when it is delivered.
+ *
+ * - `mention`: someone addressed the member (an @mention, a reply, the paired Agent of a direct
+ *   conversation) or routing chose it; it owes an answer.
+ * - `followup`: nobody addressed it; speaking is optional and it may end in `silent`.
+ *
+ * The details are what the woken Agent is told about the wake.
+ */
+export interface ChannelJobWake {
+  /**
+   * The member whose reply to the same message this wake waits for: the message's one primary
+   * responder. The job starts only after that member's job settles, with its reply in the prompt,
+   * so it can stay silent when the reply already covers the request.
+   */
+  afterMemberId?: string;
+  /** The message falls within the member's duties (`helpful`: it can settle an open question). */
+  duty?: { helpful?: boolean; matched?: string };
+  /** The member spoke here lately and this message followed. */
+  followup?: {
+    participants: { isBot: boolean; isOwner: boolean; name: string }[];
+    score?: number;
+  };
+  kind: BotWakeKind;
+  /** The message says the member's name without @-mentioning it. */
+  named?: boolean;
+  /** The rule that woke it, as the decision row records it. */
+  reason?: string;
+}
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** A deferred `followup` waiting for the message's primary responder to settle. */
+  | 'awaiting_primary'
   | 'device_approval_pending'
   | 'device_offline'
   | 'device_required'
@@ -244,6 +321,11 @@ export interface ChannelHistoryMessageDetail {
 export interface ChannelInputManifest {
   /** Immutable at claim time; later public messages belong to the next run. */
   cutoffSequence: number;
+  /**
+   * A deferred `followup` (see `ChannelJobWake.afterMemberId`): the reply the primary responder
+   * published to the same request, delivered with the request even though it is past the cutoff.
+   */
+  primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
   requestMessageId: string;
@@ -267,8 +349,15 @@ export interface ChannelListItem {
   id: string;
   /** The newest main-channel message, cut for a preview; set by the Channel list. */
   lastMessage?: { content: string; createdAt: Date } | null;
+  /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
+  mentionCount?: number;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
+  /**
+   * Main-conversation replies still pending (queued, running, or stopping), so a list row can
+   * show them without loading the conversation; set by the Channel list.
+   */
+  replyJobs?: ChannelReplyJob[];
   sequence: number;
   status: ChannelStatus;
   title: string;
@@ -317,6 +406,9 @@ export interface ChannelPublicMessage {
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;
+  /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
+  sourceTopicId?: string | null;
+  sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
 }
@@ -333,8 +425,16 @@ export interface ChannelPublicJob {
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
+  /** Git branch of the worktree the run works in, instead of the member's own directory. */
+  worktreeBranch?: string | null;
   writerHeld: boolean;
 }
+
+/** A pending reply in the fields its status is derived from. */
+export type ChannelReplyJob = Pick<
+  ChannelPublicJob,
+  'blockedCode' | 'id' | 'memberId' | 'publicationRevoked' | 'status' | 'threadId' | 'writerHeld'
+>;
 
 export interface ChannelPublicThread {
   followerMemberIds: string[];

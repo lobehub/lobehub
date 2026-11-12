@@ -8,10 +8,11 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { $getSelection, $isRangeSelection } from 'lexical';
-import { CirclePlus, Reply, X } from 'lucide-react';
+import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
+import { Reply, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,21 +20,23 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
-import DraftFile from '@/features/ChatInput/Mobile/FilePreview/FileItem/File';
-import DraftImage from '@/features/ChatInput/Mobile/FilePreview/FileItem/Image';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { cacheScope } from '@/libs/replica';
 import type { ChannelQueuedSendInput } from '@/store/channel';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ComposerActions } from './ComposerActions';
+import { ComposerAttachments } from './ComposerAttachments';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
-import { getMentionGroups } from './mentionGroups';
+import { getMentionGroups, mentionDescription } from './mentionGroups';
 import type { ChannelMentionInvite } from './mentions';
 import {
   $insertChannelMentionBoundary,
@@ -73,15 +76,14 @@ type ComposerDelivery =
       onSend: ChannelComposerSend;
     };
 
-const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
+const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin];
 
-/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
-const inputShell = {
-  backgroundColor: cssVar.colorFillTertiary,
-  borderColor: 'transparent',
-  borderRadius: 12,
-  boxShadow: 'none',
-};
+/** Highlighted text like the rest of the line, not the editor's default boxed tag. */
+const mentionTheme = { mention: stylex.props(styles.composerMention).className };
+const writeMention = (node: { label: string }) => `@${node.label}`;
+
+/** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
+const inputShell = { borderRadius: 12 };
 
 export function Composer({
   activity,
@@ -94,7 +96,7 @@ export function Composer({
   replyTarget,
   onCancelReply,
 }: {
-  /** Who is replying right now; shown on the line above the input. */
+  /** Who is replying right now; shown on the line above the input. Omit to drop that line. */
   activity?: ReactNode;
   /** Lets an @mention invite people and Agents from outside the Channel. */
   channel?: ChannelListItem;
@@ -119,9 +121,11 @@ export function Composer({
   const sending = useRef(false);
   const previousDocument = useRef('');
   const [error, setError] = useState('');
+  /** The card the mention picker docks to, full width above the input like an IM. */
+  const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
-  const attachments = useAttachments();
-  const { allowed, reason } = usePermission('create_content');
+  const attachments = useAttachments(draftKey);
+  const { allowed } = usePermission('create_content');
   const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
@@ -135,6 +139,26 @@ export function Composer({
   // Mentioning yourself notifies nobody and picks no reply.
   const mentionable = members.filter((member) => !isCurrentUserMember(member, userId));
   const invites = useMentionInvites(channel, members);
+  const canMention = mentionable.length > 0 || invites.enabled;
+  /** Types an @ at the caret and opens the same mention picker as typing it. */
+  const startMention = () => {
+    const lexical = editor.getLexicalEditor();
+    lexical?.focus(
+      () =>
+        lexical.update(() => {
+          // The picker ignores programmatic text until a keystroke re-arms it; doing both in
+          // one update keeps the intermediate state from closing it again.
+          lexical.dispatchCommand(
+            KEY_DOWN_COMMAND,
+            new KeyboardEvent('keydown', { key: 'Process' }),
+          );
+          if ($insertChannelMentionBoundary(new KeyboardEvent('keydown', { key: '@' }))) return;
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) selection.insertText('@');
+        }),
+      { defaultSelection: 'rootEnd' },
+    );
+  };
   const send = async () => {
     const value = String(editor.getDocument('markdown') || '').trim();
     const fileIds = attachments.readyFileIds();
@@ -200,38 +224,29 @@ export function Composer({
     }
   };
   const preview = attachments.items.length > 0 && (
-    <Flexbox horizontal gap={8} inert={busy} padding={8} wrap="wrap">
-      {attachments.items.map((item) =>
-        item.file.type.startsWith('image/') && item.status === 'success' ? (
-          <DraftImage
-            alt={item.file.name}
-            key={item.id}
-            src={item.fileUrl}
-            onRemove={() => attachments.remove(item.id)}
-          />
-        ) : (
-          <DraftFile
-            {...item}
-            key={item.id}
-            onRemove={() => attachments.remove(item.id)}
-            onRetry={() => attachments.retry(item.id)}
-          />
-        ),
-      )}
-    </Flexbox>
+    <ComposerAttachments
+      disabled={busy}
+      items={attachments.items}
+      onRemove={attachments.remove}
+      onRetry={attachments.retry}
+    />
   );
   return (
-    <WideScreenContainer fullWidth paddingInline={24}>
+    <WideScreenContainer fullWidth paddingInline={8}>
       <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
-        <div {...stylex.props(styles.composerStatus)}>
-          <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
-            {activity}
-          </Flexbox>
-        </div>
+        {/* Without an activity line the input meets the feed directly, with no empty strip. */}
+        {activity != null && (
+          <div {...stylex.props(styles.composerStatus)}>
+            <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
+              {activity}
+            </Flexbox>
+          </div>
+        )}
         <ChatInput
           maxHeight={480}
           minHeight={0}
           resize={false}
+          slashMenuRef={setCard}
           style={inputShell}
           styles={{ body: { overflow: 'visible', padding: 0 } }}
           header={
@@ -239,9 +254,9 @@ export function Composer({
               <Flexbox gap={4}>
                 {replyTarget && (
                   <Flexbox horizontal align="center" gap={8} padding={8}>
-                    <Reply size={14} />
+                    <Reply color={cssVar.colorTextTertiary} size={14} />
                     <Flexbox flex={1} style={{ minWidth: 0 }}>
-                      <Text ellipsis fontSize={12}>
+                      <Text ellipsis fontSize={12} type="secondary">
                         {t('reply.to', { name: replyTarget.author.name || t('deletedMember') })}
                         {' · '}
                         {replyTarget.content || t('reply.attachment')}
@@ -262,21 +277,15 @@ export function Composer({
           }
         >
           <div {...stylex.props(styles.composerRow)}>
-            {enableUpload && (
-              <Upload
-                multiple
-                disabled={busy || !canUpload}
-                onFiles={(files) => void upload(files)}
-              >
-                <ActionIcon
-                  aria-label={t('attachments.upload')}
-                  disabled={busy || !canUpload}
-                  icon={CirclePlus}
-                  size={{ blockSize: 28, size: 20 }}
-                  title={reason || t('attachments.upload')}
-                />
-              </Upload>
-            )}
+            <ComposerActions
+              disabled={busy}
+              upload={
+                enableUpload
+                  ? { blocked: !allowed, onFiles: (files) => void upload(files) }
+                  : undefined
+              }
+              onMention={canMention ? startMention : undefined}
+            />
             <div {...stylex.props(styles.composerEditor)}>
               <Editor
                 autoFocus
@@ -284,6 +293,7 @@ export function Composer({
                 content=""
                 editable={!busy}
                 editor={editor}
+                getPopupContainer={() => card}
                 placeholder={placeholder}
                 plugins={plugins}
                 slashPlacement="top"
@@ -299,12 +309,25 @@ export function Composer({
                       t('deletedMember'),
                       !!workspaceId,
                     ).flatMap<ISlashOption>((group) => {
-                      const items = group.members.map((member) => ({
-                        icon: <MemberAvatar member={member} size={24} />,
-                        key: member.id,
-                        label: memberName(member, t('deletedMember')),
-                        metadata: { type: 'channel-member', id: member.id },
-                      }));
+                      // Read when the picker opens; subscribing would rerender on every list change.
+                      const agents = homeAgentListSelectors.allAgents(useHomeStore.getState());
+                      const items = group.members.map((member) => {
+                        const label = memberName(member, t('deletedMember'));
+                        const agent = member.agentId
+                          ? agents.find((item) => item.id === member.agentId)
+                          : undefined;
+                        return {
+                          description: mentionDescription(
+                            label,
+                            agent?.title,
+                            agent?.description || member.description,
+                          ),
+                          icon: <MemberAvatar member={member} size={24} />,
+                          key: member.id,
+                          label,
+                          metadata: { type: 'channel-member', id: member.id },
+                        };
+                      });
                       return group.actorType
                         ? [
                             {
@@ -328,7 +351,7 @@ export function Composer({
                         ]
                       : options;
                   },
-                  markdownWriter: (node) => `@${node.label}`,
+                  markdownWriter: writeMention,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
                       label: String(option.label),
@@ -366,7 +389,11 @@ export function Composer({
                   void send();
                   return true;
                 }}
-              />
+              >
+                {/* <Editor> registers its own mention plugin after `plugins`, and a later
+                    registration replaces the config; a child registers last, so this theme wins. */}
+                <ReactMentionPlugin markdownWriter={writeMention} theme={mentionTheme} />
+              </Editor>
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
             {/* Enter sends; like an IM, the button only appears once there is something to send. */}
@@ -375,6 +402,7 @@ export function Composer({
                 aria-label={t('send')}
                 disabled={busy || attachments.blocked}
                 loading={busy}
+                shape="round"
                 size={28}
                 type="primary"
                 onSend={() => void send()}

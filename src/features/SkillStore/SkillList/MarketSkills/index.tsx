@@ -1,19 +1,13 @@
 'use client';
 
 import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { uniqBy } from 'es-toolkit/compat';
 import { ServerCrash } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { discoverKeys } from '@/libs/swr/keys';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
-import { discoverService } from '@/services/discover';
-import { globalHelpers } from '@/store/global/helpers';
 import { useToolStore } from '@/store/tool';
-import { type DiscoverSkillItem, SkillSorts } from '@/types/discover';
 
 import MarketSkillItem from '../Community/MarketSkillItem';
 import Empty from '../Empty';
@@ -21,22 +15,11 @@ import Loading from '../Loading';
 import { virtuosoGridStyles } from '../style';
 import VirtuosoLoading from '../VirtuosoLoading';
 import WantMoreSkills from '../WantMoreSkills';
+import { useMarketSkillList } from './useMarketSkillList';
 
 interface MarketSkillListProps {
   keywords?: string;
 }
-
-/**
- * Collapse repeat mounts of the store into one upstream request.
- *
- * All three store tabs mount at once (they toggle with `display`, not
- * conditional rendering), so this list fetches whenever the modal opens — even
- * while the user is looking at another tab. The global `useClientDataSWR`
- * default is `dedupingInterval: 0`, which is right for interactive data the user
- * edits but wrong here: reopening the modal is not a request for fresher data,
- * and Market rate limits this endpoint.
- */
-const MARKET_SKILL_LIST_DEDUPING_INTERVAL = 60_000;
 
 const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
   const { t } = useTranslation(['setting', 'common']);
@@ -45,62 +28,8 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
   useFetchAgentSkills(true);
 
-  // Market skills pagination state
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState<DiscoverSkillItem[]>([]);
-  const [totalPages, setTotalPages] = useState<number>();
-
-  const locale = globalHelpers.getCurrentLanguage();
-  const { data, isLoading, error, mutate } = useClientDataSWR(
-    discoverKeys.skillStoreMarketSkills(locale, keywords || '', page),
-    () =>
-      discoverService.getSkillList({
-        page,
-        pageSize: 20,
-        q: keywords || undefined,
-        sort: SkillSorts.InstallCount,
-      }),
-    {
-      dedupingInterval: MARKET_SKILL_LIST_DEDUPING_INTERVAL,
-      revalidateOnFocus: false,
-    },
-  );
-
-  // Accumulate items across pages
-  useEffect(() => {
-    if (!data) return;
-    setTotalPages(data.totalPages);
-
-    if (page === 1) {
-      setItems(data.items);
-    } else {
-      setItems((prev) => uniqBy([...prev, ...data.items], (i) => i.identifier));
-    }
-  }, [data, page]);
-
-  // Reset on keyword change
-  const prevKeywordsRef = useRef(keywords);
-  useEffect(() => {
-    if (prevKeywordsRef.current !== keywords) {
-      prevKeywordsRef.current = keywords;
-      setPage(1);
-      setItems([]);
-      setTotalPages(undefined);
-    }
-  }, [keywords]);
-
-  const loadMore = useCallback(() => {
-    // Don't let the scroll observer walk into the next page while the current
-    // one is still failing — that turns a rate limit into a silent retry loop.
-    if (error) return;
-    if (totalPages === undefined || page < totalPages) {
-      setPage((p) => p + 1);
-    }
-  }, [error, page, totalPages]);
-
-  const retry = useCallback(() => {
-    void mutate();
-  }, [mutate]);
+  const { error, isLoading, items, loadMore, page, retry, totalPages } =
+    useMarketSkillList(keywords);
 
   // A rate limit is not a network error, and saying so sends the user off
   // debugging their connection. Both are retryable, just not immediately.

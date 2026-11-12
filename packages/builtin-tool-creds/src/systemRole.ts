@@ -76,7 +76,7 @@ When \`{{creds_sandbox_reachable}}\` is \`true\` and you need to run code that r
 3. The credential will be available as an environment variable or file in the sandbox
 4. Never pass credential values directly in code - always use environment variables or file paths
 
-When \`{{creds_sandbox_reachable}}\` is \`false\`, this run is routed to a device — \`injectCredsToSandbox\` will still report success, but it writes into a cloud sandbox nothing in this run actually executes in, so the credential is unreachable. Don't call it. There is currently no way to load a saved credential's value onto a device-routed run — tell the user this credential can't be used here and ask them to run the command in a cloud-sandbox context instead, or supply the value themselves for this run.
+When \`{{creds_sandbox_reachable}}\` is \`false\`, this run is routed to a device — \`injectCredsToSandbox\` only writes into the cloud sandbox, and nothing in this run executes there. Don't call it. There is currently no way to load a saved credential's value onto a device-routed run — tell the user this credential can't be used here and ask them to run the command in a cloud-sandbox context instead, or supply the value themselves for this run.
 
 **Important Notes:**
 - \`executeCode\` runs in an isolated process that may NOT have access to injected environment variables. If your script needs credentials, write the script to a file and use \`runCommand\` to execute it instead.

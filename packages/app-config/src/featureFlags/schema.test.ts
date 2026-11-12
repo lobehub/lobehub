@@ -192,27 +192,12 @@ describe('evaluateFeatureFlag', () => {
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
-  it('should enable auth captcha by default', () => {
+  it('should map the default feature flags', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
     expect(mappedState.enableAuthCaptcha).toBe(true);
-  });
-
-  it('should enable storage overage by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
     expect(mappedState.enableStorageOverage).toBe(true);
-  });
-
-  it('should keep realtime voice dictation disabled by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
     expect(mappedState.enableVoiceDictation).toBe(false);
-  });
-
-  it('should keep onboarding v2 off by default outside development', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
     expect(mappedState.enableOnboardingV2).toBe(false);
   });
 
@@ -257,17 +242,32 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
-  it('should keep the new subscription tiers off by default and enable them for listed users', () => {
-    expect(DEFAULT_FEATURE_FLAGS.new_tier_plans).toBe(false);
-    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableNewTierPlans).toBe(
-      false,
-    );
+  it('should keep mobile new-tier sales off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_new_tier_sales).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMobileNewTierSales,
+    ).toBe(false);
 
-    const config = { new_tier_plans: ['tester-123'] };
+    const config = { mobile_new_tier_sales: ['tester-123'] };
 
-    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableNewTierPlans).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableNewTierPlans).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableNewTierPlans).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableMobileNewTierSales).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMobileNewTierSales).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableMobileNewTierSales).toBe(false);
+  });
+
+  it('should always report the new tiers as on for released clients that still read the flag', () => {
+    expect(mapFeatureFlagsEnvToState({}, 'user-1').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS).enableNewTierPlans).toBe(true);
+  });
+
+  it('should keep the mobile sandbox grant off by default and out of the client state', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_sandbox_grant).toBe(false);
+    expect(FeatureFlagsSchema.parse({ mobile_sandbox_grant: ['tester-123'] })).toEqual({
+      mobile_sandbox_grant: ['tester-123'],
+    });
+    expect(
+      mapFeatureFlagsEnvToState({ mobile_sandbox_grant: ['tester-123'] }, 'tester-123'),
+    ).toEqual(mapFeatureFlagsEnvToState({}, 'tester-123'));
   });
 
   it('should keep topic previews off by default and enable them for listed users', () => {
@@ -318,6 +318,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     const config = { mcp_apps: ['user-123'] };
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApps).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
+  });
+
+  it('should keep agent knowledge spaces off by default and enable them per user', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentKnowledgeSpace,
+    ).toBe(false);
+
+    const config = { agent_knowledge_space: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableAgentKnowledgeSpace).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentKnowledgeSpace).toBe(false);
   });
 
   it('should keep the rail layout off by default and enable it per user or globally', () => {
@@ -496,5 +507,31 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.enableChannels).toBe(true);
     expect(mappedState.enableDashboard).toBe(false);
+  });
+
+  describe('agent_runtime_strip_operation_toolset', () => {
+    it('is off by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);
+      expect(
+        mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableStripOperationToolset,
+      ).toBe(false);
+    });
+
+    it('maps true to enabled for every user', () => {
+      const config = { agent_runtime_strip_operation_toolset: true };
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(true);
+    });
+
+    it('maps a user allowlist to the listed users only', () => {
+      const config = FeatureFlagsSchema.parse({
+        agent_runtime_strip_operation_toolset: ['user-1'],
+      });
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableStripOperationToolset).toBe(false);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
+    });
   });
 });

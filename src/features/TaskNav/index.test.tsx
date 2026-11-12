@@ -35,7 +35,7 @@ vi.mock('@/store/user', () => ({
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableGoals: () => false, enableProjects: () => true },
 }));
-vi.mock('@/features/HomeSidebar/Body/Project/ProjectItem', () => ({ projectIcon: () => null }));
+vi.mock('@/features/Projects/ProjectAvatar', () => ({ projectIcon: () => null }));
 vi.mock('@/features/MessageList', () => ({
   ListHeader: ({ title }: { title: string }) => createElement('div', {}, title),
 }));

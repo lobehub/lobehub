@@ -15,6 +15,14 @@ export const styles = stylex.create({
     fontSize: '12px',
     color: cssVar.colorTextQuaternary,
   },
+  /** Pinned rows share one tinted block, like WeChat's 置顶, instead of a card per row. */
+  pinnedGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
   preview: {
     overflow: 'hidden',
     minWidth: 0,
@@ -34,19 +42,21 @@ export const styles = stylex.create({
     paddingBlock: '8px',
     paddingInline: '8px',
     borderRadius: cssVar.borderRadiusLG,
-    color: { default: cssVar.colorText, ':hover': cssVar.colorText },
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
     textDecoration: 'none',
-    backgroundColor: { default: null, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     transition: 'background-color 0.15s',
   },
-  rowPinned: {
-    backgroundColor: { default: cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
-  },
   rowActive: {
-    backgroundColor: { default: cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
   },
-  running: {
-    color: cssVar.colorSuccess,
+  /** Title plus preview line, so a row without a preview keeps the same height. */
+  rowText: {
+    minWidth: 0,
+    minHeight: '36px',
+  },
+  rowTextSingleLine: {
+    minHeight: 0,
   },
   time: {
     flex: 'none',
@@ -63,6 +73,12 @@ export const styles = stylex.create({
     fontSize: '13px',
     fontWeight: 500,
     lineHeight: '18px',
+  },
+  /** Same quiet colour as the preview it replaces, so a reply in progress does not shout. */
+  typing: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
   },
   unread: {
     pointerEvents: 'none',

@@ -1,9 +1,29 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import { type CreateImageOptions } from '../../core/openaiCompatible';
 import { type CreateImagePayload } from '../../types/image';
 import { createQwenImage } from './createImage';
+
+const createSucceededTaskResponse = (taskId: string, imageUrl: string) => ({
+  ok: true,
+  json: async () => ({
+    output: {
+      task_id: taskId,
+      task_status: 'SUCCEEDED',
+      results: [{ url: imageUrl }],
+    },
+    request_id: 'req-124',
+  }),
+});
+
+const createSubmittedTaskResponse = (taskId: string) => ({
+  ok: true,
+  json: async () => ({
+    output: { task_id: taskId },
+    request_id: 'req-123',
+  }),
+});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -32,24 +52,8 @@ describe('createQwenImage', () => {
       // Mock fetch for task creation and immediate success
       global.fetch = vi
         .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            output: { task_id: mockTaskId },
-            request_id: 'req-123',
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            output: {
-              task_id: mockTaskId,
-              task_status: 'SUCCEEDED',
-              results: [{ url: mockImageUrl }],
-            },
-            request_id: 'req-124',
-          }),
-        });
+        .mockResolvedValueOnce(createSubmittedTaskResponse(mockTaskId))
+        .mockResolvedValueOnce(createSucceededTaskResponse(mockTaskId, mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'wanx-v1',
@@ -88,24 +92,8 @@ describe('createQwenImage', () => {
       // Mock fetch for task creation and immediate success
       global.fetch = vi
         .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            output: { task_id: mockTaskId },
-            request_id: 'req-123',
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            output: {
-              task_id: mockTaskId,
-              task_status: 'SUCCEEDED',
-              results: [{ url: mockImageUrl }],
-            },
-            request_id: 'req-124',
-          }),
-        });
+        .mockResolvedValueOnce(createSubmittedTaskResponse(mockTaskId))
+        .mockResolvedValueOnce(createSucceededTaskResponse(mockTaskId, mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'wanx-v1',
@@ -134,24 +122,8 @@ describe('createQwenImage', () => {
       // Mock fetch for task creation and immediate success
       global.fetch = vi
         .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            output: { task_id: mockTaskId },
-            request_id: 'req-123',
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            output: {
-              task_id: mockTaskId,
-              task_status: 'SUCCEEDED',
-              results: [{ url: mockImageUrl }],
-            },
-            request_id: 'req-124',
-          }),
-        });
+        .mockResolvedValueOnce(createSubmittedTaskResponse(mockTaskId))
+        .mockResolvedValueOnce(createSucceededTaskResponse(mockTaskId, mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'wanx2.1-t2i-turbo',

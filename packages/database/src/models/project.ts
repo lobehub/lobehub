@@ -21,13 +21,24 @@ import { tasks } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
+import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
 import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
-import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import {
+  buildWorkspacePayload,
+  buildWorkspaceWhere,
+  normalizeWorkspaceId,
+} from '../utils/workspace';
 import { AgentModel } from './agent';
 import { EnvironmentModel } from './environment';
-import { createProjectMainAgent } from './projectMainAgent';
+import {
+  isProjectIdentifierConflict,
+  normalizeProjectIdentifier,
+  ProjectIdentifierTakenError,
+} from './projectIdentifier';
 import { topicHasGoal } from './topicGoal';
+
+export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from './projectIdentifier';
 
 export interface CreateProjectInput {
   avatar?: string;
@@ -37,8 +48,19 @@ export interface CreateProjectInput {
   /** Task prefix for this project; omit to keep the scope's default prefix. */
   identifier?: string | null;
   name: string;
+  /** GitHub repository the project works on; attached as the project's environment. */
+  repository?: { defaultBranch?: string; name: string; url: string };
   slug?: string;
   visibility?: ProjectVisibility;
+}
+
+/**
+ * Input for the single-aggregate insert. The main agent belongs to AgentModel's
+ * aggregate, so `ProjectRepository.create` resolves or creates it first and only
+ * its id reaches this model.
+ */
+export interface InsertProjectInput extends Omit<CreateProjectInput, 'repository'> {
+  coordinatorAgentId: string;
 }
 
 const BUILTIN_SLUGS: ReadonlySet<string> = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
@@ -131,7 +153,7 @@ export class ProjectModel {
    * or library is visible to its creator alone, so such a project binds only
    * public resources. Anything else would show each reader a different project.
    */
-  private assertSharedResource(
+  assertSharedResource(
     project: { visibility: string; workspaceId: string | null },
     resourceVisibility: string,
     message: string,
@@ -147,50 +169,73 @@ export class ProjectModel {
       : this.ownedByCaller();
   }
 
-  async create(input: CreateProjectInput) {
-    const identifier = input.identifier?.trim().toUpperCase() || null;
-    if (identifier && (identifier.length < 3 || identifier.length > 6)) {
-      throw new Error('Project identifier must be between 3 and 6 characters');
-    }
+  /**
+   * Ownership predicate for `identifier` allocation — **visibility-blind**,
+   * unlike {@link readable}.
+   *
+   * The unique index that guards the column (`projects_identifier_workspace_id_unique`)
+   * is scope-wide, so a private project created by another member still occupies
+   * its identifier. Filtering by visibility here would let a member compute a
+   * "free" identifier that the index then rejects. The index also carries no
+   * recycle-bin predicate, so a stamped-but-present row keeps its identifier —
+   * this must not add `is_deleted` filtering either.
+   */
+  private identifierScope() {
+    const workspaceId = normalizeWorkspaceId(this.workspaceId);
 
-    return this.db.transaction(async (tx) => {
-      const coordinator = input.coordinatorAgentId
-        ? await this.findAccessibleAgent(tx as LobeChatDatabase, input.coordinatorAgentId)
-        : await createProjectMainAgent(
-            tx as LobeChatDatabase,
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { avatar: input.avatar, name: input.name, visibility: input.visibility },
-          );
-      if (!coordinator) throw new Error('Agent not found');
-      if (input.coordinatorAgentId) {
-        this.assertSharedResource(
-          { visibility: input.visibility ?? 'private', workspaceId: this.workspaceId ?? null },
-          (coordinator as { visibility: string }).visibility,
-          'A shared project only takes shared agents',
-        );
-      }
+    return workspaceId
+      ? eq(projects.workspaceId, workspaceId)
+      : and(eq(projects.userId, this.userId), isNull(projects.workspaceId));
+  }
 
-      const [project] = await tx
+  /**
+   * Whether another project already claims `identifier` in this scope.
+   * Mirrors the unique index exactly — see {@link identifierScope}.
+   */
+  async isIdentifierTaken(identifier: string): Promise<boolean> {
+    const normalized = identifier.trim().toUpperCase();
+    if (!normalized) return false;
+
+    const [existing] = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(this.identifierScope(), eq(projects.identifier, normalized)))
+      .limit(1);
+
+    return Boolean(existing);
+  }
+
+  /**
+   * Insert the project row only, as a plain single-table insert. The coordinator
+   * agent and the `projectAgents` link that seats it span another aggregate, so
+   * `ProjectRepository.create` owns the transaction (and the identifier
+   * pre-check) that ties them together — see {@link ProjectRepository}.
+   */
+  async create(input: InsertProjectInput) {
+    const identifier = normalizeProjectIdentifier(input.identifier);
+
+    try {
+      const [project] = await this.db
         .insert(projects)
         .values(
           buildWorkspacePayload(
             { userId: this.userId, workspaceId: this.workspaceId },
-            { ...input, coordinatorAgentId: coordinator.id, identifier },
+            { ...input, identifier },
           ),
         )
         .returning();
 
-      await tx.insert(projectAgents).values({
-        addedByUserId: this.userId,
-        agentId: coordinator.id,
-        projectId: project.id,
-        responsibility: 'Coordinates project conversations, work, and resources',
-        role: 'coordinator',
-        workspaceId: this.workspaceId ?? null,
-      });
-
       return project;
-    });
+    } catch (error) {
+      // The unique index stays the final authority: a caller that skipped the
+      // repository's pre-check, or a concurrent create, lands here. Translate it
+      // into the field error instead of leaking the raw insert failure.
+      if (error instanceof ProjectIdentifierTakenError) throw error;
+      if (identifier && isProjectIdentifierConflict(error)) {
+        throw new ProjectIdentifierTakenError(identifier);
+      }
+      throw error;
+    }
   }
 
   async delete(id: string) {
@@ -544,7 +589,7 @@ export class ProjectModel {
     await joinTopicAgentsToProjects(this.db, { projectId });
   }
 
-  private async findAccessibleAgent(db: LobeChatDatabase, agentId: string) {
+  async findAccessibleAgent(db: LobeChatDatabase, agentId: string) {
     const [agent] = await db
       .select({ id: agents.id, visibility: agents.visibility })
       .from(agents)
@@ -698,6 +743,7 @@ export class ProjectModel {
       .where(
         and(
           eq(projectKnowledgeBases.projectId, projectId),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,
@@ -717,6 +763,7 @@ export class ProjectModel {
       .where(
         and(
           eq(knowledgeBases.id, input.knowledgeBaseId),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,
@@ -893,6 +940,7 @@ export class ProjectModel {
         and(
           eq(projectKnowledgeBases.projectId, projectId),
           eq(projectKnowledgeBases.enabled, true),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,
@@ -1042,6 +1090,7 @@ export class ProjectModel {
         id: environments.id,
         name: environments.name,
         configuration: environments.configuration,
+        visibility: environments.visibility,
       })
       .from(environments)
       .innerJoin(

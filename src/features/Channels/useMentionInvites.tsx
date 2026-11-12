@@ -22,7 +22,7 @@ import { channelAgentIssueKey, toChannelAgentSelection } from './CreateChannel/a
 import { getChannelSaveErrorKey } from './CreateChannel/saveError';
 import { useChannelAgentDraft } from './CreateChannel/useChannelAgentDraft';
 import { useChannelAgentOptions } from './CreateChannel/useChannelAgentOptions';
-import { matchInviteAgents, MENTION_INVITE_LIMIT } from './mentionGroups';
+import { matchInviteAgents, MENTION_INVITE_LIMIT, mentionDescription } from './mentionGroups';
 import type { ChannelMentionInvite } from './mentions';
 
 /** Like a chosen Agent in the invite dialog: it keeps its own device and directory. */
@@ -193,7 +193,14 @@ export const useMentionInvites = (
       ...persons.map((person) => {
         const name = person.fullName || person.username || t('person');
         return {
-          icon: <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} size={24} title={name} />,
+          icon: (
+            <Avatar
+              avatar={person.avatar || DEFAULT_USER_AVATAR}
+              shape={'circle'}
+              size={24}
+              title={name}
+            />
+          ),
           key: `invite:${inviteKey({ actorType: 'user', id: person.userId })}`,
           label: name,
           metadata: {
@@ -207,6 +214,7 @@ export const useMentionInvites = (
       ...agents.map((agent) => {
         const name = agentDisplayName(agent, t('unnamedAgent'));
         return {
+          description: mentionDescription(name, agent.title, agent.description),
           icon: (
             <AgentAvatar
               agentId={agent.id}

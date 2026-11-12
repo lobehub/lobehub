@@ -185,6 +185,7 @@ table agent_accounts {
   credentials text
   credential_hint jsonb
   metadata jsonb [default: `{}`]
+  settings jsonb [not null, default: `{}`]
   revoked_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -606,6 +607,7 @@ table agent_inbox_messages {
     (account_id, created_at) [name: 'agent_inbox_messages_account_created_at_idx']
     (account_id, sender, created_at) [name: 'agent_inbox_messages_account_sender_created_at_idx']
     (account_id, thread_key) [name: 'agent_inbox_messages_account_thread_idx']
+    topic_id [name: 'agent_inbox_messages_topic_id_idx']
     user_id [name: 'agent_inbox_messages_user_id_idx']
   }
 }
@@ -847,6 +849,7 @@ table agent_operations {
     parent_operation_id [name: 'agent_operations_parent_operation_id_idx']
     status [name: 'agent_operations_status_idx']
     (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
+    (workspace_id, created_at) [name: 'agent_operations_workspace_id_created_at_idx']
     metadata [name: 'agent_operations_metadata_idx']
   }
 }
@@ -1325,6 +1328,7 @@ table channel_jobs {
   claimed_at "timestamp with time zone"
   topic_id text
   operation_id text [unique]
+  wake jsonb
   manifest jsonb
   execution_config jsonb
   device_id varchar(64)
@@ -2160,6 +2164,7 @@ table documents {
   editor_data jsonb
   slug varchar(255)
   workspace_id text
+  created_by_agent_id text
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -2734,6 +2739,88 @@ table llm_generation_tracing {
     validation_failed [name: 'llm_generation_tracing_validation_failed_idx']
     feedback_signal [name: 'llm_generation_tracing_feedback_signal_idx']
     created_at [name: 'llm_generation_tracing_created_at_idx']
+  }
+}
+
+table meeting_minutes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  meeting_id uuid [not null]
+  summary text
+  chapters jsonb [not null, default: `[]`]
+  decisions jsonb [not null, default: `[]`]
+  action_items jsonb [not null, default: `[]`]
+  keywords jsonb [not null, default: `[]`]
+  document_id text
+  model text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    meeting_id [name: 'meeting_minutes_meeting_id_unique', unique]
+    document_id [name: 'meeting_minutes_document_id_idx']
+  }
+}
+
+table meeting_segments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  meeting_id uuid [not null]
+  speaker_id uuid
+  source text [not null]
+  seq integer [not null]
+  start_ms integer [not null]
+  end_ms integer [not null]
+  text text [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (meeting_id, source, seq) [name: 'meeting_segments_meeting_id_source_seq_unique', unique]
+    (meeting_id, source, start_ms) [name: 'meeting_segments_meeting_id_source_start_ms_idx']
+    speaker_id [name: 'meeting_segments_speaker_id_idx']
+  }
+}
+
+table meeting_speakers {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  meeting_id uuid [not null]
+  label text [not null]
+  display_name text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (meeting_id, label) [name: 'meeting_speakers_meeting_id_label_unique', unique]
+  }
+}
+
+table meetings {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  title text [not null]
+  status text [not null, default: 'recording']
+  platform text [not null]
+  realtime_provider text [not null]
+  refine_provider text [not null]
+  language text [not null, default: 'auto']
+  started_at "timestamp with time zone" [not null, default: `now()`]
+  ended_at "timestamp with time zone"
+  duration_ms integer
+  audio_file_id text
+  local_audio_path text
+  error jsonb
+  visibility text [not null, default: 'private']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, workspace_id, created_at) [name: 'meetings_user_id_workspace_id_created_at_idx']
+    (workspace_id, created_at) [name: 'meetings_workspace_id_created_at_idx']
+    audio_file_id [name: 'meetings_audio_file_id_idx']
   }
 }
 
@@ -5600,6 +5687,7 @@ table workspace_members {
   role text [not null, default: 'member']
   title text
   responsibilities text
+  config jsonb [not null, default: `{}`]
   joined_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
   deleted_at "timestamp with time zone"

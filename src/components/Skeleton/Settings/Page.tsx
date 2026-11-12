@@ -1,59 +1,84 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import { useLocation } from 'react-router';
 
-import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
+import { OWN_FRAME_TABS } from '@/features/Settings/features/ownFrameTabs';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
-import SkeletonBar from '../Bar';
-import { MessengerPlatformDetailSkeleton } from './MessengerDetail';
-import SettingsProfileSkeleton from './Profile';
+import { SettingsSkeletonFrame } from './Frame';
 import SettingsSectionSkeleton from './Section';
-import { SettingsSectionsBody } from './Sections';
-import { SETTINGS_SECTION_SHAPES } from './sectionShapes';
+import { getSettingsTabSkeleton, type SettingsTabSkeleton } from './tabs';
 
-type SettingsSkeletonBody =
-  | { kind: 'messengerDetail'; platform: string }
-  | { kind: 'profile' }
-  | { kind: 'section' }
-  | { kind: 'sections'; tab: string };
+const GENERIC: SettingsTabSkeleton = { Body: () => <SettingsSectionSkeleton /> };
 
-export const resolveSettingsSkeletonBody = (pathname: string): SettingsSkeletonBody => {
+/** The tab and sub-segment a settings pathname renders; `/settings` opens the profile. */
+export const resolveSettingsSkeletonTab = (pathname: string): { sub?: string; tab: string } => {
   const [, tab = 'profile', sub] = pathname.match(/\/settings\/([^/]+)(?:\/([^/]+))?/) ?? [];
-
-  if (tab === 'profile') return { kind: 'profile' };
-  if (tab === 'messenger' && sub) return { kind: 'messengerDetail', platform: sub };
-  if (Object.hasOwn(SETTINGS_SECTION_SHAPES, tab)) return { kind: 'sections', tab };
-  return { kind: 'section' };
+  return { sub, tab };
 };
 
+const useTabSkeleton = () => {
+  const { sub, tab } = resolveSettingsSkeletonTab(useLocation().pathname);
+  return { skeleton: getSettingsTabSkeleton(tab) ?? GENERIC, sub, tab };
+};
+
+/** The active tab's body alone, for hosts that already draw the header and container. */
 export const SettingsBodySkeleton = () => {
-  const body = resolveSettingsSkeletonBody(useLocation().pathname);
-
-  if (body.kind === 'profile') return <SettingsProfileSkeleton />;
-  if (body.kind === 'messengerDetail')
-    return <MessengerPlatformDetailSkeleton platform={body.platform} />;
-  if (body.kind === 'sections')
-    return <SettingsSectionsBody shape={SETTINGS_SECTION_SHAPES[body.tab]} />;
-  return <SettingsSectionSkeleton />;
+  const { skeleton, sub } = useTabSkeleton();
+  return <skeleton.Body sub={sub} />;
 };
 
-const SettingsPageSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
-  const profile = resolveSettingsSkeletonBody(useLocation().pathname).kind === 'profile';
+/**
+ * Chunk fallback of a settings tab component. `SettingsContent` draws the frame
+ * around in-frame tabs before their chunk loads, so they get the body plus their
+ * page-action placeholders in the real page-actions row; own-frame tabs get their whole
+ * page, except under the mobile layout.
+ */
+export const SettingsChunkSkeleton = () => {
+  const { skeleton, sub, tab } = useTabSkeleton();
+  if (OWN_FRAME_TABS.has(tab) && skeleton.Page && !isMobileSurface())
+    return <skeleton.Page sub={sub} />;
 
   return (
-    <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-      {chrome !== 'body' && (
-        <NavHeader styles={{ center: { alignItems: 'center' } }}>
-          <SkeletonBar height={16} width={profile ? 52 : 88} />
-        </NavHeader>
+    <>
+      {skeleton.PageActions && (
+        <SettingsPageActions>
+          <skeleton.PageActions sub={sub} />
+        </SettingsPageActions>
       )}
+      <skeleton.Body sub={sub} />
+    </>
+  );
+};
+
+/**
+ * Route fallback of a settings tab: the shared header with the real tab title,
+ * the padded container and the tab body. Under `chrome='body'` the host layout
+ * already draws the header, so only the container and body render.
+ */
+const SettingsPageSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
+  const { skeleton, sub, tab } = useTabSkeleton();
+  const body = <skeleton.Body sub={sub} />;
+
+  if (chrome === 'body')
+    return (
       <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
-        <SettingsBodySkeleton />
+        {body}
       </SettingContainer>
-    </Flexbox>
+    );
+
+  if (OWN_FRAME_TABS.has(tab) && skeleton.Page) return <skeleton.Page sub={sub} />;
+
+  return (
+    <SettingsSkeletonFrame
+      actions={skeleton.PageActions && <skeleton.PageActions sub={sub} />}
+      tab={tab}
+    >
+      {body}
+    </SettingsSkeletonFrame>
   );
 };
 

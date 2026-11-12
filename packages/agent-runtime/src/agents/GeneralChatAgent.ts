@@ -27,6 +27,7 @@ import {
   type SubAgentsBatchResultPayload,
 } from '../types';
 import {
+  buildEmptyArgsToolContent,
   EMPTY_ARGS_TOOL_CONTENT,
   EMPTY_ARGS_TOOL_REASON,
   partitionEmptyArgumentsCalls,
@@ -681,6 +682,9 @@ export class GeneralChatAgent implements Agent {
             instructions.push({
               payload: {
                 blockedContent: EMPTY_ARGS_TOOL_CONTENT,
+                blockedContentByCallId: Object.fromEntries(
+                  emptyArgsCalls.map((call) => [call.id, buildEmptyArgsToolContent(call)]),
+                ),
                 blockedReason: EMPTY_ARGS_TOOL_REASON,
                 parentMessageId,
                 toolsCalling: emptyArgsCalls,

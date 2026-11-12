@@ -42,7 +42,8 @@ const MainChatInput = memo(() => {
   const sendMenuItems = useSendMenuItems();
 
   // `im_layout` opens conversations as channels: the slim composer preset of
-  // the side panels (small actions and send button, no control bar).
+  // the side panels (small actions and send button). The control bar stays —
+  // it is the only place to pick the device and working directory.
   const imLayout = useImLayout();
 
   const input = (
@@ -54,7 +55,6 @@ const MainChatInput = memo(() => {
       rightActions={rightActions}
       sendButtonProps={imLayout ? COMPACT_SEND_BUTTON_PROPS : undefined}
       sendMenu={{ items: sendMenuItems }}
-      showControlBar={!imLayout}
       onEditorReady={(instance) => {
         // Sync to global ChatStore for compatibility with other features
         useChatStore.setState({ mainInputEditor: instance });

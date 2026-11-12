@@ -40,7 +40,6 @@
   "generation.editing.hint": "Descreva o que mudar; todo o resto permanece o mesmo",
   "generation.editing.modelLocked": "As edições mantêm o modelo do vídeo original",
   "generation.editing.title": "Editando V{{version}}",
-  "generation.freeQuota.remaining": "🎁 {{remaining}} vídeos gratuitos hoje",
   "generation.status.editing": "Gerando Edição...",
   "generation.status.failed": "Falha na Geração",
   "generation.status.generating": "Gerando...",

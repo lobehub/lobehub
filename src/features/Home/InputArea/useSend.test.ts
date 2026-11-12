@@ -181,6 +181,13 @@ vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: typeof taskState) => unknown) => selector(taskState),
 }));
 
+const weeklyReportSubmission = (): Parameters<SendButtonHandler>[0] => ({
+  clearContent: vi.fn(),
+  editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+  getEditorData: () => ({ type: 'doc' }),
+  getMarkdownContent: () => 'Prepare the weekly report',
+});
+
 describe('Home InputArea useSend', () => {
   beforeEach(() => {
     routerMock.push.mockReset();
@@ -233,12 +240,7 @@ describe('Home InputArea useSend', () => {
       identifier: 'T-26',
     });
     const { result } = renderHook(() => useSend('task'));
-    const params: Parameters<SendButtonHandler>[0] = {
-      clearContent: vi.fn(),
-      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
-      getEditorData: () => ({ type: 'doc' }),
-      getMarkdownContent: () => 'Prepare the weekly report',
-    };
+    const params: Parameters<SendButtonHandler>[0] = weeklyReportSubmission();
 
     await act(async () => {
       await result.current.send(params);
@@ -307,12 +309,7 @@ describe('Home InputArea useSend', () => {
     ] as any;
     createTaskMock.mockRejectedValue(new Error('create failed'));
     const { result } = renderHook(() => useSend('task'));
-    const params: Parameters<SendButtonHandler>[0] = {
-      clearContent: vi.fn(),
-      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
-      getEditorData: () => ({ type: 'doc' }),
-      getMarkdownContent: () => 'Prepare the weekly report',
-    };
+    const params: Parameters<SendButtonHandler>[0] = weeklyReportSubmission();
 
     await act(async () => {
       await result.current.send(params);
@@ -337,12 +334,7 @@ describe('Home InputArea useSend', () => {
     ] as any;
     createTaskMock.mockResolvedValue({ identifier: 'T-27' });
     const { result } = renderHook(() => useSend('task'));
-    const params: Parameters<SendButtonHandler>[0] = {
-      clearContent: vi.fn(),
-      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
-      getEditorData: () => ({ type: 'doc' }),
-      getMarkdownContent: () => 'Prepare the weekly report',
-    };
+    const params: Parameters<SendButtonHandler>[0] = weeklyReportSubmission();
 
     await act(async () => {
       await result.current.send(params);

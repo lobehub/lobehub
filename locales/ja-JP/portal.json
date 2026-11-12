@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "古いバージョンが公開されています",
   "artifacts.deploy.publish": "公開",
   "artifacts.deploy.publishNewVersion": "このバージョンを公開",
+  "artifacts.deploy.quotaUnavailable": "デプロイメント上限のチェックが一時的に利用できません。後でもう一度お試しください。",
   "artifacts.deploy.serviceOverloaded": "アーティファクトホスティングが一時的に過負荷状態です。少し時間を置いて再度公開を試みてください。",
   "artifacts.deploy.success": "公開しました",
   "artifacts.deploy.writeInProgress": "別のデプロイ変更が進行中です。少し待ってから再試行してください。",

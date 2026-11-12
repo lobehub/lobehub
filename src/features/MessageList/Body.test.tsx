@@ -18,6 +18,8 @@ const home = vi.hoisted(() => ({
   items: [] as unknown[],
   mutate: () => {},
   recents: [] as unknown[],
+  recentsError: undefined as unknown,
+  revalidateRecents: vi.fn(async () => {}),
 }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -51,7 +53,8 @@ vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => ({ error: home.error, mutate: home.mutate }),
 }));
 vi.mock('@/components/AsyncError', () => ({
-  default: () => createElement('div', {}, 'Agents failed'),
+  default: ({ error, onRetry }: { error: unknown; onRetry: () => void }) =>
+    createElement('button', { onClick: onRetry }, `Failed: ${String(error)}`),
 }));
 vi.mock('@/features/AgentRoute/useResolvedAgentRouteId', () => ({
   resolveInboxAgentRouteId: (id: string) => id,
@@ -59,7 +62,12 @@ vi.mock('@/features/AgentRoute/useResolvedAgentRouteId', () => ({
 
 vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: object) => unknown) =>
-    selector({ useFetchConversationRecents: () => {} }),
+    selector({
+      useFetchConversationRecents: () => ({
+        error: home.recentsError,
+        revalidate: home.revalidateRecents,
+      }),
+    }),
 }));
 vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: { allAgents: () => home.items, isAgentListInit: () => home.isInit },
@@ -114,6 +122,8 @@ beforeEach(() => {
   home.isInit = false;
   home.items = [];
   home.recents = [];
+  home.recentsError = undefined;
+  home.revalidateRecents.mockClear();
 });
 
 describe('MessageList Body', () => {
@@ -130,7 +140,7 @@ describe('MessageList Body', () => {
 
     render(createElement(Body));
 
-    expect(screen.getByText('Agents failed')).toBeInTheDocument();
+    expect(screen.getByText('Failed: Error: network')).toBeInTheDocument();
     expect(screen.queryByText('Loading agents')).not.toBeInTheDocument();
     expect(screen.getByText('Lobe AI row')).toBeInTheDocument();
     expect(screen.getByText('# Team')).toBeInTheDocument();
@@ -141,12 +151,98 @@ describe('MessageList Body', () => {
     home.items = [
       { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
     ];
+    home.recents = [{ agentId: 'a', routePath: '/agent/a', type: 'topic', updatedAt: new Date() }];
 
     render(createElement(Body));
 
     expect(screen.getByText('Agent A')).toBeInTheDocument();
     expect(screen.queryByText('Loading agents')).not.toBeInTheDocument();
     expect(screen.getByText('# Team')).toBeInTheDocument();
+  });
+
+  // Each pinned row used to paint its own tinted card, so the pinned rows read as separate items.
+  it('renders the pinned rows together in one block', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'p1', pinned: true, title: 'Pinned 1', type: 'agent', updatedAt: new Date() },
+      { id: 'p2', pinned: true, title: 'Pinned 2', type: 'agent', updatedAt: new Date() },
+      { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
+    ];
+
+    render(createElement(Body));
+
+    const group = screen.getByRole('group', { name: 'navPanel.pinned' });
+    expect(group).toHaveTextContent('Pinned 1');
+    expect(group).toHaveTextContent('Pinned 2');
+    expect(group).not.toHaveTextContent('Agent A');
+    expect(group).not.toHaveTextContent('Lobe AI row');
+  });
+
+  // A failed recents request with nothing cached kept the skeleton up with no way to retry.
+  it('replaces the skeleton with a recents retry when recents fail', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
+    ];
+    home.recents = undefined as unknown as unknown[];
+    home.recentsError = 'recents down';
+
+    render(createElement(Body));
+
+    expect(screen.queryByText('Loading agents')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Failed: recents down'));
+    expect(home.revalidateRecents).toHaveBeenCalledTimes(1);
+  });
+
+  // A first topic started in an idle agent never reached the recents, so leaving it dropped the row.
+  it('refreshes recents when the routed conversation changes, not on mount', () => {
+    home.isInit = true;
+    home.pathname = '/agent/a';
+
+    const { rerender } = render(createElement(Body, { key: 'list' }));
+    expect(home.revalidateRecents).not.toHaveBeenCalled();
+
+    home.pathname = '/agent/b';
+    // A new props object re-renders the memoized Body with the new route.
+    rerender(createElement(Body, { 'data-route': 'b', 'key': 'list' } as object));
+
+    expect(home.revalidateRecents).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for recents before deciding which agents have a conversation', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
+    ];
+    home.recents = undefined as unknown as unknown[];
+
+    render(createElement(Body));
+
+    expect(screen.getByText('Loading agents')).toBeInTheDocument();
+  });
+
+  // Every agent and group got a row, so the list read like Contacts instead of open conversations.
+  it('lists only agents with a conversation, and every agent while searching', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'a', pinned: false, title: 'Talked', type: 'agent', updatedAt: new Date() },
+      { id: 'b', pinned: false, title: 'Idle', type: 'agent', updatedAt: new Date() },
+      { id: 'c', pinned: false, title: 'Direct', type: 'agent', updatedAt: new Date() },
+    ];
+    home.recents = [{ agentId: 'a', routePath: '/agent/a', type: 'topic', updatedAt: new Date() }];
+    home.channels = [{ agentId: 'c', createdAt: new Date(), id: 'chn_c', projectId: null }];
+
+    const { unmount } = render(createElement(Body));
+
+    expect(screen.getByText('Talked')).toBeInTheDocument();
+    expect(screen.getByText('Direct')).toBeInTheDocument();
+    expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+
+    unmount();
+    home.query = 'idle';
+    render(createElement(Body));
+
+    expect(screen.getByText('Idle')).toBeInTheDocument();
   });
 });
 
@@ -243,6 +339,9 @@ describe('MessageList Body active row', () => {
   it('leaves Agent rows unhighlighted inside a group Channel', () => {
     home.isInit = true;
     home.items = [agent];
+    home.recents = [
+      { agentId: 'agt_nasa', routePath: '/agent/agt_nasa', type: 'topic', updatedAt: new Date() },
+    ];
     home.pathname = '/channels/chn_000000000002';
     home.channels = [{ agentId: null, id: 'chn_000000000002' }];
 

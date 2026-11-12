@@ -98,9 +98,21 @@ const MarkdownViewer = memo<MarkdownViewerProps>(({ url }) => {
         />
       </Flexbox>
       {mode === 'render' ? (
-        <Markdown style={{ paddingBlock: 16, paddingInline: 24 }}>{fileData}</Markdown>
+        // `flex: none` keeps the article at its full height; as a shrinkable
+        // flex item it was squeezed to the page and its `overflow: hidden` cut
+        // the rest off, so the page had nothing to scroll.
+        <Markdown style={{ flex: 'none', paddingBlock: 16, paddingInline: 24 }}>
+          {fileData}
+        </Markdown>
       ) : (
-        <Highlighter language={'markdown'} showLanguage={false} variant={'borderless'}>
+        // The source scrolls inside the highlighter, so its horizontal scrollbar
+        // stays in view; the inset matches `Renderer/Code`.
+        <Highlighter
+          language={'markdown'}
+          showLanguage={false}
+          style={{ paddingBlock: 16, paddingInline: '24px 4px' }}
+          variant={'borderless'}
+        >
           {fileData}
         </Highlighter>
       )}

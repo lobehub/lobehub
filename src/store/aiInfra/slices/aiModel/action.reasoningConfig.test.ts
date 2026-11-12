@@ -649,13 +649,15 @@ describe('AiModelAction reasoning config', () => {
       });
 
       act(() => {
-        useStore.getState().seedModelReasoningConfigs(
-          { 'anthropic/claude-sonnet-4-5': { reasoningEffort: 'low' } },
-          [
-            { id: 'gpt-5.2', providerId: 'openai' },
-            { id: 'claude-sonnet-4-5', providerId: 'anthropic' },
-          ] as any,
-        );
+        useStore
+          .getState()
+          .seedModelReasoningConfigs(
+            { 'anthropic/claude-sonnet-4-5': { reasoningEffort: 'low' } },
+            [
+              { id: 'gpt-5.2', providerId: 'openai' },
+              { id: 'claude-sonnet-4-5', providerId: 'anthropic' },
+            ] as any,
+          );
       });
 
       const state = useStore.getState();
@@ -670,6 +672,117 @@ describe('AiModelAction reasoning config', () => {
       expect(
         state.modelReasoningConfigReplica.entries['anthropic/claude-sonnet-4-5'],
       ).toBeDefined();
+    });
+
+    const SEED_MODELS = [{ id: 'gpt-5.2', providerId: 'openai' }] as any;
+    const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    const readRow = () =>
+      aiModelReasoningConfigResource.storage!.get({
+        queryKey: REASONING_STORAGE_KEY,
+        scope: rowScope(),
+      });
+    const deferredRead = () => {
+      let resolve!: (value: any) => void;
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        }),
+      );
+      return (value: any) => resolve(value);
+    };
+
+    it('keeps a stored row from repainting a key the snapshot confirmed as nothing saved', async () => {
+      await aiModelReasoningConfigResource.storage!.set(
+        { queryKey: REASONING_STORAGE_KEY, scope: rowScope() },
+        { value: { reasoningEffort: 'high' } } as any,
+      );
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockImplementation(pending);
+
+      act(() => {
+        useStore.getState().seedModelReasoningConfigs({}, SEED_MODELS);
+      });
+      renderHook(() => useStore.getState().useFetchAiModelReasoningConfig('gpt-5.2', 'openai'), {
+        wrapper,
+      });
+      await settle();
+
+      const state = useStore.getState();
+      expect('openai/gpt-5.2' in state.modelReasoningConfigMap).toBe(true);
+      expect(state.modelReasoningConfigMap['openai/gpt-5.2']).toBeUndefined();
+    });
+
+    it('does not spend persisted rows on models with nothing saved', async () => {
+      act(() => {
+        useStore.getState().seedModelReasoningConfigs({}, SEED_MODELS);
+      });
+      await settle();
+
+      expect(
+        useStore.getState().modelReasoningConfigReplica.entries['openai/gpt-5.2'],
+      ).toBeDefined();
+      expect(await readRow()).toBeUndefined();
+    });
+
+    it('lets the snapshot win over a per-model read that started before it', async () => {
+      const resolveRead = deferredRead();
+      renderHook(() => useStore.getState().useFetchAiModelReasoningConfig('gpt-5.2', 'openai'), {
+        wrapper,
+      });
+      await waitFor(() =>
+        expect(aiModelService.getAiModelReasoningConfig).toHaveBeenCalledTimes(1),
+      );
+
+      act(() => {
+        useStore
+          .getState()
+          .seedModelReasoningConfigs(
+            { 'openai/gpt-5.2': { reasoningEffort: 'high' } },
+            SEED_MODELS,
+          );
+      });
+      await act(async () => {
+        resolveRead({ reasoningEffort: 'low' });
+      });
+      await settle();
+
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'high',
+      });
+      expect(await readRow()).toMatchObject({ data: { value: { reasoningEffort: 'high' } } });
+    });
+
+    it('lets a post-save refresh win over a snapshot that may predate the save', async () => {
+      vi.spyOn(aiModelService, 'updateAiModelReasoningConfig').mockResolvedValue(undefined as any);
+      const resolveRead = deferredRead();
+
+      let saving!: Promise<void>;
+      act(() => {
+        saving = useStore
+          .getState()
+          .updateModelReasoningConfig('gpt-5.2', 'openai', { reasoningEffort: 'high' });
+      });
+      await waitFor(() =>
+        expect(aiModelService.getAiModelReasoningConfig).toHaveBeenCalledTimes(1),
+      );
+
+      act(() => {
+        useStore
+          .getState()
+          .seedModelReasoningConfigs({ 'openai/gpt-5.2': { reasoningEffort: 'low' } }, SEED_MODELS);
+      });
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'high',
+      });
+
+      await act(async () => {
+        resolveRead({ reasoningEffort: 'high', thinkingBudget: 1024 });
+        await saving;
+      });
+
+      expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
+        reasoningEffort: 'high',
+        thinkingBudget: 1024,
+      });
     });
   });
 });

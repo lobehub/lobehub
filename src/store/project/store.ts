@@ -52,6 +52,8 @@ interface ProjectStore extends ProjectStoreState {
     coordinatorAgentId?: string;
     identifier?: string;
     name: string;
+    /** GitHub repository to attach as the project's environment, in the same write. */
+    repository?: { defaultBranch?: string; name: string; url: string };
     slug?: string;
   }) => Promise<ProjectListItem>;
   deleteProject: (id: string) => Promise<void>;
@@ -344,6 +346,12 @@ export const useCurrentProjectList = () =>
  */
 export const useLoadedProjectList = () =>
   useProjectStore((state): ProjectListItem[] | undefined => state.projectListMap[PROJECT_LIST_KEY]);
+
+/** One row of the cached project list; `undefined` when it is not (yet) in the list. */
+export const projectListItemSelector =
+  (id: string | null | undefined) =>
+  (state: ProjectStoreState): ProjectListItem | undefined =>
+    id ? state.projectListMap[PROJECT_LIST_KEY]?.find((project) => project.id === id) : undefined;
 
 export const useCurrentProjectDetail = (idOrSlug?: string) =>
   useProjectStore((state) => (idOrSlug ? state.projectDetailMap[idOrSlug] : undefined));

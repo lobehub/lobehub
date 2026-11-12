@@ -1,5 +1,5 @@
 import type { ChannelDetail, ChannelPublicMember } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Spin, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, FolderCog } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { ChannelStatus } from './ChannelStatus';
 import type { ChannelStatusTone } from './jobStatus';
-import { channelJobStatus, channelJobTone, memberCurrentJob } from './jobStatus';
+import { channelJobTone, memberCurrentJob, memberJobStatus } from './jobStatus';
 import { MemberAvatar } from './MemberAvatar';
 import { memberName } from './memberName';
 import { statusStyles, styles, toneStyles } from './styles';
@@ -28,7 +28,11 @@ export const StatusAvatar = ({ entry, size }: { entry: MemberEntry; size: number
     {entry.member.actorType === 'agent' && (
       <span
         aria-hidden
-        {...stylex.props(statusStyles.state, statusStyles.memberDot, toneStyles[entry.tone])}
+        {...stylex.props(
+          statusStyles.state,
+          statusStyles.memberDot,
+          entry.tone === 'working' ? statusStyles.memberWorking : toneStyles[entry.tone],
+        )}
       >
         <span {...stylex.props(statusStyles.dot)} />
       </span>
@@ -43,7 +47,7 @@ export function useMemberEntries(detail: ChannelDetail) {
     (member) => {
       const job = member.actorType === 'agent' ? memberCurrentJob(jobs, member.id) : undefined;
       return {
-        label: member.actorType === 'agent' ? t(job ? channelJobStatus(job) : 'status.idle') : '',
+        label: member.actorType === 'agent' ? t(job ? memberJobStatus(job) : 'status.idle') : '',
         member,
         name: memberName(member, t('deletedMember')),
         tone: job ? channelJobTone(job) : 'quiet',
@@ -53,8 +57,28 @@ export function useMemberEntries(detail: ChannelDetail) {
   return entries;
 }
 
+/** A working member spins amber, like a running Agent in the sidebar. */
+const MemberState = ({ entry }: { entry: MemberEntry }) =>
+  entry.tone === 'working' ? (
+    <span {...stylex.props(statusStyles.state, statusStyles.memberWorking)}>
+      <Spin size={12} style={{ color: 'inherit' }} />
+      {entry.label}
+    </span>
+  ) : (
+    <ChannelStatus hideDot label={entry.label} tone={entry.tone} />
+  );
+
 /** The same roster and member actions in the personal popover and workspace sidebar. */
-export function MemberList({ detail, onAction }: { detail: ChannelDetail; onAction?: () => void }) {
+export function MemberList({
+  detail,
+  onAction,
+  showDescription,
+}: {
+  detail: ChannelDetail;
+  onAction?: () => void;
+  /** Roomy layouts: who each member is under the name, with the status moved to the row's end. */
+  showDescription?: boolean;
+}) {
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const entries = useMemberEntries(detail);
@@ -69,12 +93,19 @@ export function MemberList({ detail, onAction }: { detail: ChannelDetail; onActi
             <Text ellipsis title={entry.name} weight={500}>
               {entry.name}
             </Text>
-            {entry.member.actorType === 'agent' ? (
-              <ChannelStatus label={entry.label} tone={entry.tone} />
+            {showDescription && entry.member.actorType === 'agent' ? (
+              entry.member.description && (
+                <Text ellipsis fontSize={12} title={entry.member.description} type="secondary">
+                  {entry.member.description}
+                </Text>
+              )
+            ) : entry.member.actorType === 'agent' ? (
+              <MemberState entry={entry} />
             ) : (
               <span {...stylex.props(styles.muted)}>{t('person')}</span>
             )}
           </Flexbox>
+          {showDescription && entry.member.actorType === 'agent' && <MemberState entry={entry} />}
           {entry.member.agentId && entry.member.status === 'active' && manageable && (
             <ActionIcon
               aria-label={t('environment.editNamed', { name: entry.name })}

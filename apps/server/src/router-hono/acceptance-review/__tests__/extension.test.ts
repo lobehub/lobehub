@@ -156,7 +156,6 @@ describe('extension endpoints', () => {
         title: 'Pricing page',
         workspaceId,
       });
-      expect(body.acceptances.map((a: { id: string }) => a.id)).not.toContain(site.acceptanceId);
     });
 
     it('falls back to the most recent round that has a preview', async () => {

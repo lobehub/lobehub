@@ -1,10 +1,21 @@
 export default {
   'directories.currentFolder': 'Current folder',
-  'settings.reuseEnvironmentDescription':
-    'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
   'settings.startDirectoryConversation': 'New topic here',
+  'settings.editDirectory': 'Edit folder',
+  'settings.editDirectoryBusy':
+    'A topic is running in this folder. Wait for it to finish and try again.',
+  'settings.editDirectoryOtherEnvironment':
+    'This folder already belongs to another environment. Choose a different folder or device.',
+  'settings.editDirectoryDescription':
+    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+  'settings.editDirectoryFailed': 'Could not update the folder',
+  'settings.removeDirectory': 'Remove folder',
+  'settings.removeDirectoryConfirmDescription':
+    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+  'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
+  'settings.removeDirectoryFailed':
+    'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
   'settings.configureDirectory': 'Add a working directory',
-  'settings.reuseEnvironment': 'Add an existing environment to this project',
   'settings.addDirectoryFailed': 'Could not add working directory',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
@@ -14,8 +25,8 @@ export default {
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
   'settings.workLocations': 'Working directories',
-  'settings.directoryDescription':
-    'Choose a folder and start a topic. The Agent will work with files in that folder on the connected device.',
+  'settings.directoryListDescription':
+    'Device folders this project works in. Agents read and change files in them on that device.',
   'settings.environmentDescription':
     'Keep repository sources together in an environment, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
@@ -68,8 +79,16 @@ export default {
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'directories.topicsSkipped':
     'Directory linked. {{count}} topics were left out because they run in another directory or on another device, belong to another project, are still running, or no longer exist.',
+  'settings.createdAt': 'Created {{date}}',
+  'settings.creator': 'Creator',
+  'settings.creatorUnknown': 'Former member',
   'settings.general': 'General',
-  'settings.logoHint': 'Click the logo to upload an image or pick an emoji.',
+  'settings.logo': 'Logo',
+  'settings.logoDescription': 'Shown in the project header, sidebar and switcher.',
+  'settings.logoHint':
+    'Click the logo to upload an image or pick an emoji. Changes are saved right away.',
+  'settings.logoUpdated': 'Logo updated',
+  'settings.nameHint': 'Use 255 characters at most.',
   'settings.saveFailed': 'Could not save the change',
   'settings.saved': 'Saved',
   'settings.logoSizeExceeded': 'The logo must be smaller than 2 MB.',
@@ -85,7 +104,7 @@ export default {
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
-  'directories.coordinator': 'Project coordinator',
+  'directories.coordinator': 'Lead',
   'directories.environment': 'Environment',
   'directories.newEnvironment': 'Create environment',
 
@@ -159,17 +178,19 @@ export default {
   'create.avatarHint': 'Pick an emoji or upload an image. You can also drop an image here.',
   'create.avatarInvalidType': 'Use a JPG, PNG, GIF, or WEBP image.',
   'create.avatarUploadFailed': "Couldn't upload the image. Try again.",
+  'create.blank': 'Blank project',
+  'create.fromGithub': 'From GitHub repository',
   'create.identifierDescription':
     'Replaces the task number prefix for this project, for example ACE. Leave it empty to use the default prefix.',
   'create.identifierInvalid': 'Use 3–6 uppercase letters or numbers, starting with a letter.',
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
+  'create.identifierTaken': 'Another project in this workspace already uses this identifier.',
   'create.mainAgentDedicatedDescription':
-    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list. Your choice is reused next time.',
+    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
   'create.mainAgentDedicatedTag': 'New',
-  'create.mainAgentDescription':
-    'Manages this project’s conversations, tasks, and goals. Your choice is reused next time.',
+  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
   'create.mainAgentMode.dedicated': 'Create a dedicated agent',
   'create.mainAgentMode.existing': 'Use an existing agent',
@@ -180,7 +201,34 @@ export default {
   'create.slugInvalid': 'Use lowercase letters, numbers, and single hyphens only.',
   'create.slugLabel': 'Slug (optional)',
   'create.slugPlaceholder': 'my-project',
+  'create.slugTaken': 'Another project in this workspace already uses this link name.',
   'create.title': 'New project',
+  'createFromGithub.connect': 'Connect GitHub',
+  'createFromGithub.disconnected':
+    'Connect GitHub to choose from your repositories, or paste a public repository URL below.',
+  'createFromGithub.duplicateIdentifier':
+    'Another project already uses this identifier. Choose a different one.',
+  'createFromGithub.duplicateName':
+    'A project with this name already exists, including in the trash. Choose a different name.',
+  'createFromGithub.empty':
+    "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
+  'createFromGithub.environmentHint':
+    "The repository becomes this project's environment, so agents can check it out when they work on the project.",
+  'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
+  'createFromGithub.manageAccess': 'Manage access',
+  'createFromGithub.private': 'Private',
+  'createFromGithub.repositoriesLabel': 'Your repositories',
+  'createFromGithub.searchEmpty': 'No matching repositories',
+  'createFromGithub.searchPlaceholder': 'Search repositories…',
+  'createFromGithub.title': 'New project from GitHub',
+  'createFromGithub.truncated':
+    "Only {{count}} repositories are listed. If yours isn't here, paste its URL below.",
+  'createFromGithub.unconfigured':
+    "GitHub isn't set up on this server. Paste a public repository URL below.",
+  'createFromGithub.urlInvalid':
+    'Enter a GitHub repository URL, such as https://github.com/owner/repo.',
+  'createFromGithub.urlLabel': 'Or paste a repository URL',
+  'createFromGithub.urlPlaceholder': 'https://github.com/owner/repo',
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'delete.confirm.continue': 'Delete project',
@@ -251,8 +299,37 @@ export default {
   'rename.nameLabel': 'Project name',
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
+  'environment.add.action': 'Add',
+  'environment.add.existing': 'Add an existing one',
+  'environment.add.failed': "Couldn't add the environment to this project",
+  'environment.add.github': 'New from GitHub',
+  'environment.add.noExisting': 'All of your environments are already in this project.',
+  'environment.add.noPublished':
+    'No published environments to add. A shared project only uses published environments.',
+  'environment.add.title': 'Add environment',
+  'environment.privateInShared': 'Private',
+  'environment.privateInSharedTooltip':
+    "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
+  'overview.context.location.devices': 'Devices',
+  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directoryUnavailable':
+    "Couldn't reach this folder. Check that the device is online and the folder still exists.",
+  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectoryTooltip':
+    "This device has no project folder yet, so the conversation starts in the device's default directory.",
+  'overview.context.location.environments': 'Code environments',
+  'overview.context.location.noEnvironments': 'No code environments yet.',
+  'overview.context.location.title': 'Work location',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
+  'overview.context.repository.publishHint':
+    'This agent is shared with the workspace and only uses published environments, so the repository is added as one that workspace members can see.',
+  'overview.context.target.device': 'A connected device',
+  'overview.context.target.noneTooltip':
+    'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',
+  'overview.context.target.sandboxTooltip':
+    'Runs in the cloud sandbox, so none of your devices need to be online.',
+  'overview.context.target.switchFailed': "Couldn't change where this agent runs",
   'overview.sendHint': '⌘ ↵ to send',
   'overview.startConversation': 'Start moving',
   'overview.tasksEmpty': 'No tasks belong to this project yet.',
@@ -404,9 +481,6 @@ export default {
   'review.sites.detectWaitingDescription':
     "Put the line above in your site's <head> and deploy, then open any page of the site. This notice disappears once the script is detected.",
   'review.sites.detectWaitingTitle': 'Waiting for the script to load for the first time',
-  'settings.logoAndName': 'Logo and name',
-  'settings.revert': 'Revert',
-  'settings.unsavedChanges': 'Unsaved changes: {{count}}',
   'create.moreSettings': 'More settings (identifier, slug)',
   'create.afterCreateHint':
     "After it's created, the project home helps you connect code folders, sites and libraries.",

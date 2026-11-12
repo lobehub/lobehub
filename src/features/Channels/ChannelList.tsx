@@ -9,13 +9,14 @@ import {
   AccordionTrigger,
   ActionIcon,
   cx,
+  type DropdownItem,
   DropdownMenu,
   Flexbox,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Archive, Hash, MoreHorizontal, Plus } from 'lucide-react';
+import { Archive, ArrowDownUp, Hash, MoreHorizontal, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,20 +29,27 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
+import { useGlobalStore } from '@/store/global';
+import type { ChannelListSort } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
 import { matchChannel } from './paths';
+import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
 import { useChannelMenu } from './useChannelMenu';
 import { useChannelsEnabled } from './useChannelsEnabled';
 import { useThreadMenu } from './useThreadMenu';
 
-// The connector runs down from the centre of the Channel's 18px icon (4px row padding + half
+// The connector runs down from the centre of the Channel's icon (4px row padding + half
 // its 28px slot) and bends into each thread row, the way Discord nests threads. A 2px line
 // centres on that axis; Chromium floors fractional border widths, so 1.5px drew as 1px.
 const SPINE_X = 17;
+
+const SORT_BYS: ChannelListSort['by'][] = ['createdAt', 'updatedAt', 'title'];
+const SORT_ORDERS: ChannelListSort['order'][] = ['desc', 'asc'];
 
 const styles = stylex.create({
   thread: {
@@ -76,6 +84,37 @@ const styles = stylex.create({
   },
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
+  channel: { position: 'relative' },
+  // An unread Channel gets a pill on the row's leading edge and a bright, bold title, the way
+  // Discord marks it; an @mention adds a count badge. The accordion panel clips anything
+  // outside the row, so the pill sits in the row's own inline padding.
+  unreadPill: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockStart: 14,
+    insetInlineStart: 0,
+    width: 4,
+    height: 8,
+    borderStartEndRadius: 4,
+    borderEndEndRadius: 4,
+    backgroundColor: cssVar.colorText,
+  },
+  unreadTitle: { fontWeight: 600 },
+  mentionBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 16,
+    height: 16,
+    paddingInline: 4,
+    borderRadius: 999,
+    fontSize: 10,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: '#fff',
+    backgroundColor: cssVar.colorError,
+    cursor: 'pointer',
+  },
 });
 
 const ChannelThreads = ({
@@ -166,35 +205,97 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
   const allChannels = useChannelStore(channelSelectors.list);
-  const channels = useMemo(() => channelsInScope(allChannels, projectId), [allChannels, projectId]);
+  const sort = useGlobalStore(systemStatusSelectors.channelListSort);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const channels = useMemo(() => {
+    const scoped = channelsInScope(allChannels, projectId);
+    return scoped && sortChannels(scoped, sort);
+  }, [allChannels, projectId, sort]);
   useChannelEvents();
 
   const [showArchived, setShowArchived] = useState(false);
   const activeChannelId = matchChannel(pathname);
   const create = () =>
     openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
-  const activeThreadId = new URLSearchParams(search).get('thread');
+  // Only a thread opened as the page is the current entry; one beside the Channel is not.
+  const query = new URLSearchParams(search);
+  const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
   const menuItems = useChannelMenu();
+  const setSort = (channelListSort: ChannelListSort) => updateSystemStatus({ channelListSort });
+  // Name sorts read as A–Z / Z–A; time sorts as newest / oldest first.
+  const orderLabelKey = sort.by === 'title' ? 'alpha' : 'time';
+  const sortMenuItems: DropdownItem[] = [
+    {
+      children: SORT_BYS.map((by) => ({
+        checked: sort.by === by,
+        key: `sort-by-${by}`,
+        label: t(`sort.by.${by}`),
+        onCheckedChange: () => setSort({ ...sort, by }),
+        type: 'checkbox' as const,
+      })),
+      key: 'sort-by',
+      label: t('sort.by'),
+      type: 'group' as const,
+    },
+    { type: 'divider' as const },
+    {
+      children: SORT_ORDERS.map((order) => ({
+        checked: sort.order === order,
+        key: `sort-order-${order}`,
+        label: t(`sort.order.${orderLabelKey}.${order}`),
+        onCheckedChange: () => setSort({ ...sort, order }),
+        type: 'checkbox' as const,
+      })),
+      key: 'sort-order',
+      label: t('sort.order'),
+      type: 'group' as const,
+    },
+  ];
 
   const renderChannel = (channel: ChannelListItem) => {
     const path = CHANNEL_URL(channel.id, null, channel.projectId);
     const open = activeChannelId === channel.id;
+    // The open Channel is being read; its count clears once the read receipt lands.
+    const unread = !open && (channel.unreadCount ?? 0) > 0;
+    const mentions = open ? 0 : (channel.mentionCount ?? 0);
     return (
-      <Flexbox key={channel.id}>
+      <Flexbox key={channel.id} {...stylex.props(styles.channel)}>
+        {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
         <NavItem
           active={open && !activeThreadId}
           aria-current={open && !activeThreadId ? 'page' : undefined}
           contextMenuItems={() => menuItems(channel)}
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
-          icon={Hash}
-          title={channel.title}
+          titleColor={unread ? cssVar.colorText : undefined}
           actions={() => (
             <DropdownMenu items={menuItems(channel)}>
               <ActionIcon icon={MoreHorizontal} size="small" title={t('more', { ns: 'common' })} />
             </DropdownMenu>
           )}
+          extra={
+            mentions > 0 ? (
+              <span
+                aria-label={t('unreadMentions', { count: mentions })}
+                {...stylex.props(styles.mentionBadge)}
+                // NavItem stops clicks inside `extra`; the badge still opens the Channel.
+                onClick={() => navigate(path)}
+              >
+                {mentions > 99 ? '99+' : mentions}
+              </span>
+            ) : undefined
+          }
+          title={
+            unread ? (
+              <span {...stylex.props(styles.unreadTitle)}>{channel.title}</span>
+            ) : (
+              channel.title
+            )
+          }
           onClick={() => navigate(path)}
+          icon={Hash}
+          // The glyph fills its whole box, so it reads larger than other nav icons at 18px.
+          iconSize={14}
         />
         {open && (
           <ChannelThreads
@@ -231,6 +332,15 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
             accordionStyles.actionBorderless,
           )}
         >
+          <DropdownMenu items={sortMenuItems} placement="bottomRight">
+            <ActionIcon
+              aria-label={t('sort.title')}
+              icon={ArrowDownUp}
+              size="small"
+              title={t('sort.title')}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </DropdownMenu>
           <ActionIcon
             aria-label={t('create')}
             icon={Plus}

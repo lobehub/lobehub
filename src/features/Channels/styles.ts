@@ -40,6 +40,28 @@ export const styles = stylex.create({
     height: '100%',
     minHeight: 0,
   },
+  // The Channel half of a thread page's `# Channel › thread` title, leading back to the Channel.
+  crumb: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: 8,
+    alignItems: 'center',
+    maxWidth: 200,
+    minWidth: 0,
+    marginBlock: 0,
+    marginInline: 0,
+    paddingBlock: 2,
+    paddingInline: 4,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: 6,
+    font: 'inherit',
+    backgroundColor: {
+      default: 'transparent',
+      [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    },
+    cursor: 'pointer',
+  },
   threadHeader: {
     borderBlockEndWidth: 1,
     borderBlockEndStyle: 'solid',
@@ -64,6 +86,8 @@ export const styles = stylex.create({
     },
   },
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
+  /** A message still on its way shows faded instead of carrying a status line. */
+  pendingMessage: { opacity: 0.6 },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 8,
@@ -77,7 +101,8 @@ export const styles = stylex.create({
     flexShrink: 0,
     fontSize: cssVar.fontSizeSM,
     fontVariantNumeric: 'tabular-nums',
-    color: cssVar.colorTextSecondary,
+    // One step below the author name, which is one step below the message.
+    color: cssVar.colorTextTertiary,
     whiteSpace: 'nowrap',
     opacity: 1,
   },
@@ -96,18 +121,14 @@ export const styles = stylex.create({
       },
     },
   },
+  /** A plain centered date; a rule on each side read heavier than the messages it separates. */
   dateDivider: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
     paddingBlock: 12,
     fontSize: cssVar.fontSizeSM,
     color: cssVar.colorTextSecondary,
-  },
-  dateLine: {
-    flex: '1',
-    height: 1,
-    backgroundColor: cssVar.colorBorderSecondary,
   },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
   messageToolbar: {
@@ -157,6 +178,9 @@ export const styles = stylex.create({
     marginInline: 2,
     verticalAlign: 'baseline',
   },
+  eventMemberAgent: {
+    cursor: 'pointer',
+  },
   eventMemberName: {
     // Let the name supply the inline flex baseline instead of the avatar.
     alignSelf: 'baseline',
@@ -172,11 +196,31 @@ export const styles = stylex.create({
     color: cssVar.colorInfo,
     backgroundColor: cssVar.colorInfoBg,
   },
-  composer: {
-    flexShrink: 0,
-    paddingBlockEnd: 12,
+  /** A mention inside the composer: highlighted text, no tag; tinted like selected text while selected. */
+  composerMention: {
+    userSelect: 'none',
+    fontWeight: 500,
+    color: cssVar.colorInfo,
+    // `.selected` is added by the editor's selection observer, not by React.
+    borderRadius: { 'default': null, ':is(.selected)': cssVar.borderRadiusXS },
+    backgroundColor: { 'default': null, ':is(.selected)': cssVar.colorInfoBgHover },
   },
-  /** Typing activity above the input; keeps its height when empty. */
+  composer: {
+    'position': 'relative',
+    'flexShrink': 0,
+    'paddingBlockEnd': 12,
+    // The feed fades out into the composer instead of being cut at its top edge.
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      insetBlockEnd: '100%',
+      insetInline: 0,
+      height: 24,
+      backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer}, transparent)`,
+    },
+  },
+  /** Typing activity above the input; rendered only while someone is replying. */
   composerStatus: {
     display: 'flex',
     alignItems: 'center',
@@ -191,8 +235,9 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'flex-end',
     gap: 8,
-    minHeight: 44,
-    paddingBlock: 8,
+    // 10px around the 28px buttons centers a single line in the 50px card.
+    minHeight: 48,
+    paddingBlock: 10,
     paddingInline: 8,
   },
   composerEditor: {
@@ -200,7 +245,10 @@ export const styles = stylex.create({
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    paddingBlock: 2,
+    // Buttons sit on the last line; the glyphs ride about 1.5px high in the line box,
+    // so drop the text that much to center it on the 28px icons beside it. Layout snaps
+    // text to whole pixels, so only a transform can move it the half pixel.
+    transform: 'translateY(1.5px)',
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {
@@ -281,9 +329,28 @@ export const statusStyles = stylex.create({
   memberButton: {
     flex: 'none',
     gap: 4,
-    height: 32,
+    height: 28,
     paddingBlock: 4,
     paddingInline: 4,
+  },
+  memberStack: {
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  memberStackItem: {
+    position: 'relative',
+    display: 'inline-flex',
+    flex: 'none',
+    marginInlineStart: { 'default': -6, ':first-child': 0 },
+    borderRadius: '50%',
+    outlineWidth: 2,
+    outlineStyle: 'solid',
+    outlineColor: cssVar.colorBgContainer,
+    // Emoji avatars are transparent; without a fill the neighbour shows through.
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  memberWorking: {
+    color: cssVar.colorWarning,
   },
   memberAvatar: {
     position: 'relative',
@@ -332,6 +399,14 @@ export const activityStyles = stylex.create({
     height: 24,
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
+  },
+  /** Beside the Agent's name in a direct conversation's header. */
+  header: {
+    color: cssVar.colorTextDescription,
+  },
+  headerButton: {
+    height: 22,
+    paddingInline: 4,
   },
   avatars: {
     display: 'inline-flex',

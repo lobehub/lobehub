@@ -45,10 +45,17 @@ export type IFeatureFlagsState = {
    */
   enableImLayout: boolean | undefined;
   /**
-   * New subscription tiers (`new_tier_plans`). Off by default: the plans page keeps
-   * selling the current tiers; listed users see and can buy the new tiers instead.
+   * @deprecated The new subscription tiers are always on. Kept as a constant
+   * `true` because released desktop clients still read it and fall back to the
+   * retired plans when it is missing. Remove once those clients are no longer
+   * supported.
    */
-  enableNewTierPlans: boolean | undefined;
+  enableNewTierPlans: true;
+  /**
+   * Rollout gate for buying the new tiers in the mobile app
+   * (`mobile_new_tier_sales`).
+   */
+  enableMobileNewTierSales: boolean | undefined;
   /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
    * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
@@ -61,6 +68,8 @@ export type IFeatureFlagsState = {
    * as an executor only when this is on; the server checks it again.
    */
   enableLlmRelay: boolean | undefined;
+  /** A plain chat send leaves its init to the step-0 worker (`agent_deferred_init`). */
+  enableDeferredInit: boolean | undefined;
   /**
    * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
    * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
@@ -72,10 +81,21 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
+  /**
+   * Agent documents move into a dedicated knowledge base at runtime
+   * (`agent_knowledge_space`). Off by default.
+   */
+  enableAgentKnowledgeSpace: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /**
+   * Keep the immutable `operationToolSet` out of the per-step agent state blob
+   * and in its own Redis key (`agent_runtime_strip_operation_toolset`). Server
+   * only; `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET` (`0` / `1`) overrides it.
+   */
+  enableStripOperationToolset: boolean | undefined;
   /** Hover previews of a topic's final answer (`topic_preview`). */
   enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
@@ -153,6 +173,12 @@ export interface GlobalServerConfig {
    * events via the Gateway instead of running the agent loop client-side.
    */
   agentGatewayUrl?: string;
+  /**
+   * Agent identity providers this deployment has credentials for
+   * (`agent-mail`). Empty means an agent cannot be given an address
+   * here, so the identity settings have nothing to offer.
+   */
+  agentIdentityProviders?: string[];
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */
@@ -181,6 +207,8 @@ export interface GlobalServerConfig {
   /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
   enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
+  /** Workspace pages collaborate live through the gateway's durable rooms (LobeHub Cloud). */
+  enableWorkspacePageCollab?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
    * Whether the server can relay an LLM call to a browser tab (Agent Gateway

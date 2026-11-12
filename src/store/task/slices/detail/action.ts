@@ -1,4 +1,4 @@
-import type { TaskDetailActivityAuthor, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { TaskDetailActivity, TaskDetailActivityAuthor, TaskDetailData } from '@lobechat/types';
 import {
   clearTaskReposSelection,
   readTaskExecutionConfig,
@@ -11,6 +11,7 @@ import { t } from 'i18next';
 import { cacheScope, createReplicaSlice, recordLens, revalidateReplica } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import { goalGraphResource } from '@/store/goal/projection';
@@ -24,6 +25,7 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
+import { hasInFlightActivity, TASK_DETAIL_POLL_INTERVAL } from './inFlight';
 import {
   appendOptimisticPropertyActivity,
   buildOptimisticAssignmentActivities,
@@ -51,6 +53,8 @@ export interface TaskUpdatePayload {
   name?: string;
   parentTaskId?: string | null;
   priority?: number;
+  /** `null` takes the task out of its project. */
+  projectId?: string | null;
 }
 
 export interface TaskUpdateOptions {
@@ -80,31 +84,6 @@ export interface TaskUpdateOptions {
    */
   source?: 'editor' | 'external';
 }
-
-const TASK_DETAIL_POLL_INTERVAL = 10_000;
-
-const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean =>
-  subtasks?.some(
-    (subtask) =>
-      Boolean(subtask.runningTopic) ||
-      subtask.status === 'running' ||
-      subtask.status === 'pending' ||
-      hasInFlightSubtask(subtask.children),
-  ) ?? false;
-
-// Poll while the task itself or any topic activity is still in flight, so the
-// UI picks up status transitions (running → completed/failed) without needing
-// a manual refresh. Returns false once everything settles so SWR stops polling.
-const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
-  if (!detail) return false;
-  if (detail.status === 'running' || detail.status === 'pending') return true;
-  if (hasInFlightSubtask(detail.subtasks)) return true;
-  return (
-    detail.activities?.some(
-      (a) => a.type === 'topic' && (a.status === 'running' || a.status === 'pending'),
-    ) ?? false
-  );
-};
 
 const hasInstructionSnapshotChanged = (
   current: TaskDetailData | undefined,
@@ -428,6 +407,7 @@ export class TaskDetailSliceActionImpl {
         activeTaskId: cachedTaskId(taskId, this.#get().taskRefIndex),
         activeTopicDrawerAgentId: undefined,
         activeTopicDrawerFocusRequest: undefined,
+        activeTopicDrawerRunningOperation: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
@@ -446,7 +426,12 @@ export class TaskDetailSliceActionImpl {
    */
   openTopicDrawer = (
     topicId: string,
-    topic?: { agentId?: string; autoFocus?: boolean; title?: string },
+    topic?: {
+      agentId?: string;
+      autoFocus?: boolean;
+      runningOperation?: TaskDetailActivity['runningOperation'];
+      title?: string;
+    },
   ): void => {
     const current = this.#get();
     if (current.activeTopicDrawerTopicId === topicId && !topic?.autoFocus) return;
@@ -456,6 +441,7 @@ export class TaskDetailSliceActionImpl {
         activeTopicDrawerFocusRequest: topic?.autoFocus
           ? (current.activeTopicDrawerFocusRequest ?? 0) + 1
           : undefined,
+        activeTopicDrawerRunningOperation: topic?.runningOperation,
         activeTopicDrawerTitle: topic?.title,
         activeTopicDrawerTopicId: topicId,
       },
@@ -470,6 +456,7 @@ export class TaskDetailSliceActionImpl {
       {
         activeTopicDrawerAgentId: undefined,
         activeTopicDrawerFocusRequest: undefined,
+        activeTopicDrawerRunningOperation: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
@@ -653,6 +640,7 @@ export class TaskDetailSliceActionImpl {
       ...task,
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.priority !== undefined ? { priority: data.priority } : {}),
+      ...(data.projectId !== undefined ? { projectId: data.projectId } : {}),
       ...(data.assigneeAgentId !== undefined ? { assigneeAgentId: data.assigneeAgentId } : {}),
       ...(data.assigneeUserId !== undefined ? { assigneeUserId: data.assigneeUserId } : {}),
     }));
@@ -682,6 +670,15 @@ export class TaskDetailSliceActionImpl {
               ...options,
               source: 'external',
             }));
+        // A refused project move repeats on retry until its links are moved, and the
+        // server's reason is English-only, so the toast says what to do instead.
+        if (data.projectId !== undefined && normalizeAsyncError(error).code === 'BAD_REQUEST') {
+          saveToast(error, {
+            hideCause: true,
+            title: t('taskProject.moveRefused', { ns: 'chat' }),
+          });
+          return;
+        }
         saveToast(error, { retry });
       },
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
@@ -698,7 +695,10 @@ export class TaskDetailSliceActionImpl {
       assigneeAgentId !== undefined ||
       assigneeUserId !== undefined ||
       data.parentTaskId !== undefined ||
-      data.priority !== undefined
+      data.priority !== undefined ||
+      // The optimistic patch drops the row from its old project's lists; only a
+      // refetch can add it to the lists of the project it moved into.
+      data.projectId !== undefined
     ) {
       await Promise.all([
         this.#get().refreshTaskList(),

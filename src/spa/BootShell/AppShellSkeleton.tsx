@@ -135,7 +135,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
       <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
         {isDesktop && (
           <div
-            {...sx([styles.dragRegion], electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}
+            {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}
           />
         )}
         <Flexbox
@@ -184,9 +184,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   return (
     <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
       {isDesktop && (
-        <div
-          {...sx([styles.dragRegion], electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}
-        />
+        <div {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })} />
       )}
       <Flexbox
         horizontal

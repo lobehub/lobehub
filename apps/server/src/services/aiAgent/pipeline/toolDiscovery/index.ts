@@ -34,11 +34,16 @@ import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import {
+  AgentEvalConnectorService,
+  getEvalConnectorDatasetId,
+} from '@/server/services/agentEvalConnector';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
+import { applyFrozenEvalManifests } from '../../evalGate/frozenManifests';
 import {
   filterPluginsByShareGate,
   getShareGrantActivatedPluginIds,
@@ -102,6 +107,7 @@ export const discoverTools = async (
     disableTools,
     disabledPluginIds: requestedDisabledPluginIds,
     discordContext,
+    evalConnectorSnapshots,
     exclusivePluginIds,
     externalFileTypes: rawExternalFileTypes,
     functionTools,
@@ -143,6 +149,18 @@ export const discoverTools = async (
   let hasEnabledKnowledgeBases = false;
   let operationAgentGroup: AgentGroupConfig | undefined;
   const isBotConversation = !!(botContext || discordContext);
+  const boundConnectorIds = new Set(Object.keys(evalConnectorSnapshots ?? {}));
+  const boundConnectorManifests =
+    evalConnectorSnapshots && boundConnectorIds.size
+      ? (
+          await new AgentEvalConnectorService(
+            deps.db,
+            deps.userId,
+            getEvalConnectorDatasetId(evalConnectorSnapshots),
+            deps.workspaceId,
+          ).resolveBindings(evalConnectorSnapshots, evalConnectorSnapshots)
+        ).manifests
+      : [];
 
   // Device-tool access (`canUseDevice` / `deviceAccessReason`) was resolved
   // once before the hetero early exit; the decision flows into the
@@ -217,8 +235,11 @@ export const discoverTools = async (
     : startToolReads(deps, {
         agentConfig,
         attachedFileIds,
-        candidateIds: [...agentPlugins],
-        exclusivePluginIds,
+        candidateIds: agentPlugins.filter((identifier) => !boundConnectorIds.has(identifier)),
+        // Bound eval tools must not auto-discover unrelated credential-bearing
+        // connectors. This limits reads only; progressive activation remains enabled.
+        exclusivePluginIds:
+          exclusivePluginIds ?? (evalConnectorSnapshots ? agentPlugins : undefined),
         isGoalTurn,
         projectId: appContext?.projectId,
         requestedDeviceId,
@@ -250,6 +271,7 @@ export const discoverTools = async (
     const disabledPluginIdSet = new Set(disabledPluginIds);
     const installedPlugins = (await toolReads.installedPlugins).filter(
       (p) =>
+        !boundConnectorIds.has(p.identifier) &&
         !disabledPluginIdSet.has(p.identifier) &&
         (!shareGrantedExtensionIds || shareGrantedExtensionIds.has(p.identifier)),
     );
@@ -274,7 +296,10 @@ export const discoverTools = async (
     // borrowed tool runs on (see `buildOwnershipNote`).
     connectorOwnershipNote = await buildOwnershipNote(deps, connectors);
 
-    connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+    connectorManifests = [
+      ...buildConnectorManifests(connectorsMcp, connectorTools),
+      ...boundConnectorManifests,
+    ];
 
     scheduleConnectorRefresh(deps, {
       connectorGateKeeper,
@@ -342,6 +367,7 @@ export const discoverTools = async (
 
     hasAgentDocuments = await toolReads.agentDocuments;
     const hasOversizedFiles = await toolReads.oversizedFiles;
+    const hasIdentityAccount = await toolReads.hasIdentityAccount;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
@@ -493,6 +519,7 @@ export const discoverTools = async (
       executionPlan,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
+      hasIdentityAccount,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,
@@ -534,7 +561,10 @@ export const discoverTools = async (
     // read off here and await it at the end: it is one Market round trip, and
     // every step of the run reads the answer back off the operation instead of
     // asking again.
-    if (toolsResult.enabledToolIds?.includes(CredsIdentifier)) {
+    if (
+      toolsResult.enabledToolIds?.includes(CredsIdentifier) &&
+      !boundConnectorIds.has(CredsIdentifier)
+    ) {
       credentialFactsPromise = readCredentialFacts(deps);
     }
 
@@ -685,6 +715,26 @@ export const discoverTools = async (
       ...toolManifestMap[RemoteDeviceManifest.identifier],
       systemRole: generateSystemPrompt(onlineDevices),
     };
+  }
+
+  if (!disableTools && boundConnectorManifests.length > 0) {
+    const frozenToolSet = {
+      activatableToolIds: [],
+      enabledToolIds: toolsResult.enabledToolIds,
+      executorMap: toolExecutorMap,
+      manifestMap: toolManifestMap,
+      sourceMap: toolSourceMap,
+      tools,
+    };
+    applyFrozenEvalManifests(
+      frozenToolSet,
+      boundConnectorManifests.filter(
+        (manifest) =>
+          (!exclusivePluginIds || exclusivePluginIds.includes(manifest.identifier)) &&
+          !requestedDisabledPluginIds.includes(manifest.identifier),
+      ),
+    );
+    tools = frozenToolSet.tools;
   }
 
   return {

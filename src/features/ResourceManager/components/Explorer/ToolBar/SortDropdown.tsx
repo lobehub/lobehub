@@ -1,47 +1,38 @@
-import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
-import { type LucideIcon } from 'lucide-react';
-import { ArrowDownAZ, CalendarIcon, Check, HardDriveIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-
-import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { ActionIcon, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { Check } from 'lucide-react';
+import { memo } from 'react';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
+import { useSortDropdown } from './useSortDropdown';
 
-const SortDropdown = memo(() => {
-  const { t } = useTranslation('components');
-  const sorter = useResourceManagerStore((s) => s.sorter);
-  const setSorter = useResourceManagerStore((s) => s.setSorter);
+interface SortDropdownProps {
+  /**
+   * Render only the current sort icon, for the narrow sidebar header, instead
+   * of the wider icon + chevron trigger used by the Explorer toolbar.
+   */
+  iconOnly?: boolean;
+}
 
-  const sortOptions: { icon: LucideIcon; key: string; label: string }[] = useMemo(
-    () => [
-      { icon: ArrowDownAZ, key: 'name', label: t('FileManager.sort.name') },
-      { icon: CalendarIcon, key: 'createdAt', label: t('FileManager.sort.dateAdded') },
-      { icon: HardDriveIcon, key: 'size', label: t('FileManager.sort.size') },
-    ],
-    [t],
-  );
+const SortDropdown = memo<SortDropdownProps>(({ iconOnly = false }) => {
+  const { currentSortIcon, currentSortLabel, menuItems } = useSortDropdown();
+  const items = menuItems.map<DropdownItem>((item) => {
+    if (item.type === 'divider') return item;
 
-  const selectedKey = sorter || 'createdAt';
-
-  const menuItems: DropdownItem[] = useMemo(
-    () =>
-      sortOptions.map((option) => ({
-        extra: option.key === selectedKey ? <Icon icon={Check} /> : undefined,
-        icon: <Icon icon={option.icon} />,
-        key: option.key,
-        label: option.label,
-        onClick: () => setSorter(option.key as 'name' | 'createdAt' | 'size'),
-      })),
-    [selectedKey, setSorter, sortOptions],
-  );
-
-  const currentSortLabel =
-    sortOptions.find((option) => option.key === sorter)?.label || t('FileManager.sort.dateAdded');
+    const { checked, icon, ...props } = item;
+    return {
+      ...props,
+      extra: checked ? <Icon icon={Check} /> : undefined,
+      icon: <Icon icon={icon} />,
+    };
+  });
 
   return (
-    <DropdownMenu items={menuItems}>
-      <ActionIconWithChevron icon={ArrowDownAZ} title={currentSortLabel} />
+    <DropdownMenu items={items}>
+      {iconOnly ? (
+        <ActionIcon icon={currentSortIcon} title={currentSortLabel} />
+      ) : (
+        <ActionIconWithChevron icon={currentSortIcon} title={currentSortLabel} />
+      )}
     </DropdownMenu>
   );
 });

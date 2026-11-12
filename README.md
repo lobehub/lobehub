@@ -199,6 +199,10 @@ Start with one, and add more when you need them.
 
 [**Try LobeHub Cloud**][vercel-link] · [**Self-host it**](#-self-hosting)
 
+![enterprise](https://github.com/user-attachments/assets/ff924737-7d3f-410e-a310-d1f44291e7c7)
+
+Contact: <business@lobehub.com>
+
 </div>
 
 <div align="right">

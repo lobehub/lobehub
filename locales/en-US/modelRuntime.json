@@ -45,6 +45,7 @@
   "ProviderNetworkError": "Connection to the provider timed out or was dropped. Please check your network and try again.",
   "ProviderNoImageGenerated": "The provider returned no image for this request. Try rephrasing the request, or choose a model that supports image generation.",
   "ProviderServiceUnavailable": "The provider is temporarily overloaded or unavailable. Please try again shortly.",
+  "ProviderStreamInterrupted": "The provider closed the connection before finishing the response. This is usually temporary, please try again.",
   "QuotaLimitReached": "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   "RateLimitExceeded": "Sorry, the token usage or request count has reached the rate limit for this key. Please try again later or increase the key's quota.",
   "RemoteMediaDownloadTimeout": "The provider timed out while downloading an attached image or file. Please try again.",

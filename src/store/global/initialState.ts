@@ -184,6 +184,16 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
   type: 'all',
 };
 
+/** How the Contacts list is ordered: by name, or most recently updated first. */
+export type ContactListSortBy = 'title' | 'updatedAt';
+
+/** How a sidebar Channel section orders its Channels. */
+export interface ChannelListSort {
+  /** `updatedAt` follows the latest message, so it orders by activity. */
+  by: 'createdAt' | 'title' | 'updatedAt';
+  order: 'asc' | 'desc';
+}
+
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
 
@@ -230,6 +240,10 @@ export interface SystemStatus {
    * scalars instead of index-merging arrays.
    */
   assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
+  /**
+   * Order of the sidebar Channel sections. Device-local view setting.
+   */
+  channelListSort?: ChannelListSort;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -239,6 +253,8 @@ export interface SystemStatus {
    * match and every group would render collapsed.
    */
   collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
+  /** Order of the Contacts list; absent means by name. Device-local view setting. */
+  contactListSortBy?: ContactListSortBy;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**
@@ -479,7 +495,7 @@ export interface SystemStatus {
      */
     completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
     /** `label:<groupId>` groups by one label group. */
-    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'project' | 'status' | `label:${string}`;
     /** @deprecated Replaced by `completedTasks`; read once to migrate. */
     hideCompleted?: boolean;
     nestedSubTasks: boolean;
@@ -487,8 +503,14 @@ export interface SystemStatus {
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
     showSubTasks: boolean;
-    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
+    subGroupBy:
+      'assignee' | 'member' | 'none' | 'priority' | 'project' | 'status' | `label:${string}`;
   };
+  /**
+   * Home team board: the attention list folded to a slim rail so the timeline
+   * gets the width. Persisted, like the other folded panels.
+   */
+  teamBoardAttentionCollapsed?: boolean;
   /**
    * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
    */

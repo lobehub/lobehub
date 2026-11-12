@@ -264,6 +264,9 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const taskDetailWorkspace = (s: ChatStoreState) =>
+  getStackViewData(s, PortalViewType.TaskDetail)?.workspace;
+
 const taskResultId = (s: ChatStoreState): string | undefined => {
   const view = getStackViewData(s, PortalViewType.TaskResult);
   return view?.taskId;
@@ -391,6 +394,7 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+  taskDetailWorkspace,
   taskResultId,
 
   // Topic chat data

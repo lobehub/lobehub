@@ -8,6 +8,8 @@ import { readBlobWithLimit } from '@lobechat/utils/readBlobWithLimit';
 import { QstashError } from '@upstash/qstash';
 
 import { OtelQstashClient } from '@/libs/qstash';
+import { toQStashDeduplicationId } from '@/libs/qstash/deduplicationId';
+import { signInternalCallback } from '@/libs/qstash/internalSignature';
 
 import type { AgentHookWebhook } from './types';
 
@@ -95,9 +97,11 @@ async function fetchWebhook<T>(
   const combinedSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     combinedSignal.throwIfAborted();
-    const response = await fetch(resolveUrl(webhook.url), {
-      body: JSON.stringify(payload),
-      headers: resolveWebhookHeaders(webhook),
+    const url = resolveUrl(webhook.url);
+    const body = JSON.stringify(payload);
+    const response = await fetch(url, {
+      body,
+      headers: { ...resolveWebhookHeaders(webhook), ...signInternalCallback(url, body) },
       method: 'POST',
       redirect: 'error',
       signal: combinedSignal,
@@ -145,6 +149,10 @@ async function readControlBody(response: Response, signal: AbortSignal): Promise
 export async function deliverWebhook(
   webhook: AgentHookWebhook,
   payload: Record<string, unknown>,
+  options: {
+    /** Logical id QStash drops repeats of; encoded at the provider boundary. */
+    deduplicationId?: string;
+  } = {},
 ): Promise<void> {
   const parsed = agentHookWebhookSchema.safeParse(webhook);
   if (!parsed.success || webhook.responseHandling === 'toolCall')
@@ -162,6 +170,9 @@ export async function deliverWebhook(
     const client = new OtelQstashClient({ token: process.env.QSTASH_TOKEN });
     await client.publishJSON({
       body: payload,
+      ...(options.deduplicationId && {
+        deduplicationId: toQStashDeduplicationId(options.deduplicationId),
+      }),
       headers: {
         ...headers,
         ...(isApplicationOrigin(url) &&

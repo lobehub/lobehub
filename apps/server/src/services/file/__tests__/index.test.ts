@@ -331,8 +331,19 @@ describe('FileService', () => {
     expect(service['impl'].uploadContent).toHaveBeenCalledWith(testPath, testContent);
   });
 
+  it('should return an empty URL for native document placeholders without accessing storage', async () => {
+    vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(
+      'https://example.com/invalid-object',
+    );
+
+    const result = await service.getFullFileUrl('internal://document/placeholder', 3600);
+
+    expect(result).toBe('');
+    expect(service['impl'].getFullFileUrl).not.toHaveBeenCalled();
+  });
+
   it('should delegate getFullFileUrl to implementation', async () => {
-    const testUrl = 'test-url';
+    const testUrl = 'files/report.pdf';
     const expiresIn = 3600;
     const expectedUrl = 'https://example.com/full-url';
     vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(expectedUrl);
@@ -450,7 +461,7 @@ describe('FileService', () => {
       );
     });
 
-    it('should write metadata compatible with UI upload path', async () => {
+    it('records upload metadata and a nonempty content hash', async () => {
       const content = Buffer.from('test content');
 
       await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
@@ -467,6 +478,10 @@ describe('FileService', () => {
         expect.any(Boolean),
         expect.anything(),
       );
+
+      expect(mockFileModel.checkHash).toHaveBeenCalled();
+      const createdRecord = mockFileModel.create.mock.calls[0][0];
+      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
     });
 
     it('preserves private visibility and page-editor source for rehosted images', async () => {
@@ -512,16 +527,6 @@ describe('FileService', () => {
         tx,
       );
       expect(mockFileModel.create).toHaveBeenCalledWith(expect.anything(), false, tx);
-    });
-
-    it('should compute hash for deduplication', async () => {
-      const content = Buffer.from('test content');
-
-      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
-
-      expect(mockFileModel.checkHash).toHaveBeenCalled();
-      const createdRecord = mockFileModel.create.mock.calls[0][0];
-      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
     });
   });
 

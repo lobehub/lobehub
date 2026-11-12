@@ -1,14 +1,35 @@
 import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
-import { ActionIcon, Button, Divider, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  copyToClipboard,
+  Divider,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { GitBranch, Reply } from 'lucide-react';
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Copy,
+  GitBranch,
+  MessagesSquare,
+  MoreHorizontal,
+  Reply,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import Markdown from '@/features/Conversation/Markdown';
+import EntityLinkElement from '@/features/EntityLink/element';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -16,9 +37,10 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
-import { channelTimeFormatters } from './messagePresentation';
+import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
 import { showsReplyQuote } from './replyQuote';
+import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import type { ChannelReplyTarget } from './useReplyTarget';
@@ -26,7 +48,12 @@ import type { ChannelReplyTarget } from './useReplyTarget';
 const MentionChip = ({ children }: { children?: ReactNode }) => (
   <span {...stylex.props(styles.mention)}>{children}</span>
 );
-const mentionComponents = { [CHANNEL_MENTION_TAG]: MentionChip };
+// GitHub and LobeHub links render as the same chips the conversation shows.
+const messageComponents = {
+  [CHANNEL_MENTION_TAG]: MentionChip,
+  [EntityLinkElement.tag]: EntityLinkElement.Component,
+};
+const rehypePlugins = [EntityLinkElement.rehypePlugin];
 
 /** Message text with the members it mentioned shown as chips. */
 const MessageText = ({ content, names }: { content: string; names: string[] }) => {
@@ -35,7 +62,11 @@ const MessageText = ({ content, names }: { content: string; names: string[] }) =
   // memoized Markdown parse each message again on every refresh.
   const remarkPlugins = useMemo(() => [remarkChannelMentions(key ? key.split('\n') : [])], [key]);
   return (
-    <Markdown components={mentionComponents} remarkPlugins={remarkPlugins}>
+    <Markdown
+      components={messageComponents}
+      rehypePlugins={rehypePlugins}
+      remarkPlugins={remarkPlugins}
+    >
       {content}
     </Markdown>
   );
@@ -53,6 +84,8 @@ export const ChannelMessage = ({
   onStartThread,
   onReply,
   onJumpToMessage,
+  onOpenTopic,
+  pending = false,
 }: {
   continuation?: boolean;
   /** For a message the server has not confirmed: its send status, in place of routing. */
@@ -65,6 +98,10 @@ export const ChannelMessage = ({
   onStartThread?: (draft: ChannelThreadDraft) => void;
   onReply?: (message: ChannelPublicMessage) => void;
   onJumpToMessage?: (message: ChannelReplyTarget) => void;
+  /** Opens the Agent topic a reply came from; offered only when the server shares it. */
+  onOpenTopic?: (topic: ReplyTopic) => void;
+  /** Sent from this tab and not yet confirmed by the server. */
+  pending?: boolean;
   threadId?: string | null;
 }) => {
   const { t, i18n } = useTranslation('channel');
@@ -76,13 +113,16 @@ export const ChannelMessage = ({
     !isRoot &&
     message.routingStatus !== 'unassigned' &&
     !detail.jobs.some((job) => job.messageId === message.id && job.status === 'failed');
+  // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
       dateTime={date.toISOString()}
       title={timeFormats.full.format(date)}
       {...stylex.props(styles.messageTime)}
     >
-      {timeFormats.time.format(date)}
+      {compact
+        ? timeFormats.time.format(date)
+        : channelMessageTime(date, { locale: i18n.language, yesterday: t('date.yesterday') })}
     </time>
   );
   const isOwnMessage = useUserStore((s) =>
@@ -98,29 +138,85 @@ export const ChannelMessage = ({
       attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
     });
   const isRequest = message.author.type === 'user' && !isRoot;
+  const agentAuthorId = message.author.type === 'agent' ? message.author.id : null;
+  const agentMember = agentAuthorId
+    ? detail.members.find((member) => member.agentId === agentAuthorId)
+    : undefined;
+  const sourceTopicId = message.sourceTopicId;
+  // A direct conversation is a chat with one Agent; folding its answers only adds a click.
+  const collapsible = !detail.channel.agentId;
+  // Long messages stay open by default; folding one is an explicit choice from "more".
+  const [collapsed, setCollapsed] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const moreItems = [
+    ...(agentAuthorId && sourceTopicId && onOpenTopic
+      ? [
+          {
+            icon: MessagesSquare,
+            key: 'openTopic',
+            label: t('topic.open'),
+            onClick: () =>
+              onOpenTopic({
+                agentId: agentAuthorId,
+                avatar: message.author.avatar,
+                name: message.author.name || t('unnamedAgent'),
+                title: message.sourceTopicTitle,
+                topicId: sourceTopicId,
+              }),
+          },
+        ]
+      : []),
+    ...(message.content
+      ? [
+          {
+            icon: Copy,
+            key: 'copy',
+            label: t('message.copy'),
+            onClick: async () => {
+              await copyToClipboard(message.content);
+              toast.success(t('message.copied'));
+            },
+          },
+        ]
+      : []),
+    ...(collapsible && overflowing
+      ? [
+          {
+            icon: collapsed ? ChevronsUpDown : ChevronsDownUp,
+            key: 'toggleCollapse',
+            label: t(collapsed ? 'message.expand' : 'message.collapse'),
+            onClick: () => setCollapsed(!collapsed),
+          },
+        ]
+      : []),
+  ];
+  const hasToolbar = !!onReply || canBranch || moreItems.length > 0;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
     .map((member) => memberName(member, ''))
     .filter(Boolean);
   return (
     <div
+      aria-busy={pending || undefined}
       aria-label={message.author.name || t('deletedMember')}
       data-continuation={compact || undefined}
       data-message-id={message.id}
       role="article"
       {...stylex.props(
         styles.messageRow,
-        compact && (onReply || canBranch) && styles.continuationWithAction,
+        compact && hasToolbar && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
+        pending && styles.pendingMessage,
         stylex.defaultMarker(),
       )}
     >
       {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
+        quietHeader
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
-        avatarProps={{ size: 36 }}
+        avatarProps={{ shape: 'circle', size: 36 }}
         gap={4}
         id={message.id}
         paddingBlock={compact ? 2 : 8}
@@ -148,7 +244,32 @@ export const ChannelMessage = ({
         }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
-            {isOwnMessage ? <UserAvatar size={36} /> : avatar}
+            {isOwnMessage ? (
+              <UserAvatar shape={'circle'} size={36} />
+            ) : agentAuthorId ? (
+              // Same profile card an Agent shows on hover in goals and tasks.
+              <AgentProfilePopup
+                agentId={agentAuthorId}
+                trigger={'hover'}
+                agent={{
+                  avatar: message.author.avatar,
+                  description: agentMember?.description,
+                  title: message.author.name,
+                }}
+              >
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <AgentAvatar
+                    agentId={agentAuthorId}
+                    avatar={message.author.avatar}
+                    name={message.author.name}
+                    shape={'circle'}
+                    size={36}
+                  />
+                </span>
+              </AgentProfilePopup>
+            ) : (
+              avatar
+            )}
           </Flexbox>
         )}
         message={
@@ -178,11 +299,21 @@ export const ChannelMessage = ({
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}
-            {message.content && (
-              <CollapsibleContent key={message.id} maxHeight={160}>
+            {message.content &&
+              (collapsible ? (
+                <CollapsibleContent
+                  hideCollapseToggle
+                  collapsed={collapsed}
+                  key={message.id}
+                  maxHeight={160}
+                  onCollapsedChange={setCollapsed}
+                  onOverflowChange={setOverflowing}
+                >
+                  <MessageText content={message.content} names={mentionNames} />
+                </CollapsibleContent>
+              ) : (
                 <MessageText content={message.content} names={mentionNames} />
-              </CollapsibleContent>
-            )}
+              ))}
           </Flexbox>
         }
         titleAddon={
@@ -192,36 +323,37 @@ export const ChannelMessage = ({
           </>
         }
       />
-      {(onReply || canBranch) && (
+      {hasToolbar && (
+        // Icon-only, like a chat app's hover toolbar; rarer actions sit behind "more".
         <div {...stylex.props(styles.messageToolbar)}>
-          {onReply &&
-            (compact ? (
+          {onReply && (
+            <ActionIcon
+              aria-label={t('reply.action')}
+              icon={Reply}
+              size="small"
+              title={t('reply.action')}
+              onClick={() => onReply(message)}
+            />
+          )}
+          {canBranch && (
+            <ActionIcon
+              aria-label={t('startThread')}
+              icon={GitBranch}
+              size="small"
+              title={t('startThread')}
+              onClick={startThread}
+            />
+          )}
+          {moreItems.length > 0 && (
+            <DropdownMenu items={moreItems}>
               <ActionIcon
-                aria-label={t('reply.action')}
-                icon={Reply}
+                aria-label={t('more', { ns: 'common' })}
+                icon={MoreHorizontal}
                 size="small"
-                title={t('reply.action')}
-                onClick={() => onReply(message)}
+                title={t('more', { ns: 'common' })}
               />
-            ) : (
-              <Button icon={Reply} size="small" type="text" onClick={() => onReply(message)}>
-                {t('reply.action')}
-              </Button>
-            ))}
-          {canBranch &&
-            (compact ? (
-              <ActionIcon
-                aria-label={t('startThread')}
-                icon={GitBranch}
-                size="small"
-                title={t('startThread')}
-                onClick={startThread}
-              />
-            ) : (
-              <Button icon={GitBranch} size="small" type="text" onClick={startThread}>
-                {t('startThread')}
-              </Button>
-            ))}
+            </DropdownMenu>
+          )}
         </div>
       )}
     </div>

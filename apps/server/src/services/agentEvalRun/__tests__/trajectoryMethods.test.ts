@@ -1,6 +1,6 @@
 import type { EvalCaseEnvironment, ImportedMessage } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { AgentEvalBenchmarkModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
@@ -58,6 +58,10 @@ beforeEach(async () => {
   mockExecAgent.mockReset();
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 /**
  * Helper: create benchmark → dataset → testCase → run (minimal chain for loadTrajectoryData tests)
  */
@@ -112,6 +116,16 @@ async function setupTrajectoryChain(opts?: {
 
   return { benchmark, dataset, run, testCase };
 }
+
+const basicTrajectoryInput = (
+  run: Pick<typeof agentEvalRuns.$inferSelect, 'datasetId' | 'id'>,
+  testCase: { id: string },
+): Parameters<AgentEvalRunService['executeTrajectory']>[0] => ({
+  run: { datasetId: run.datasetId, targetAgentId: null },
+  runId: run.id,
+  testCase: { content: { input: 'test' }, sortOrder: 1 },
+  testCaseId: testCase.id,
+});
 
 describe('AgentEvalRunService', () => {
   describe('createRun restored history', () => {
@@ -168,19 +182,23 @@ describe('AgentEvalRunService', () => {
       }
     });
 
-    it('should load the complete environment from the test case', async () => {
-      const environment = {
-        toolForwarding: {
-          memory: { endpoint: 'https://mock.test/tool-calls' },
-        },
-      };
-      const { run, testCase } = await setupTrajectoryChain({ environment });
-
+    it('refuses legacy unbound forwarding', async () => {
+      const { run, testCase } = await setupTrajectoryChain();
+      await serverDB
+        .update(agentEvalTestCases)
+        .set({
+          content: {
+            input: 'test',
+            environment: {
+              toolForwarding: { memory: { endpoint: 'https://old.test/exec' } },
+            },
+          },
+        })
+        .where(eq(agentEvalTestCases.id, testCase.id));
       const service = new AgentEvalRunService(serverDB, userId);
-      const data = await service.loadTrajectoryData(run.id, testCase.id);
-
-      expect('error' in data).toBe(false);
-      if (!('error' in data)) expect(data.environment).toEqual(environment);
+      await expect(service.loadTrajectoryData(run.id, testCase.id)).rejects.toThrow(
+        'Bind these mock services',
+      );
     });
 
     it('should return error when run not found', async () => {
@@ -234,10 +252,10 @@ describe('AgentEvalRunService', () => {
       expect(runTopic).toBeDefined();
       expect(runTopic?.topicId).toBe(result.topicId);
 
-      // Verify operationId was stored in evalResult
+      // Verify operationId was stored in evalResult, bound to this execution
       expect(runTopic?.evalResult).toMatchObject({
+        executionId: expect.any(String),
         operationId: 'op-123',
-        rubricScores: [],
       });
 
       // Verify execAgent was called with correct params
@@ -250,7 +268,13 @@ describe('AgentEvalRunService', () => {
               id: 'eval-trajectory-complete',
               type: 'onComplete',
               webhook: {
-                body: { runId: run.id, testCaseId: testCase.id, userId },
+                body: {
+                  executionId: runTopic?.evalResult?.executionId,
+                  runId: run.id,
+                  testCaseId: testCase.id,
+                  topicId: result.topicId,
+                  userId,
+                },
                 delivery: 'qstash',
                 url: '/api/workflows/agent-eval-run/on-trajectory-complete',
               },
@@ -283,30 +307,19 @@ describe('AgentEvalRunService', () => {
       );
     });
 
-    it('should derive tool forwarding from the case environment', async () => {
+    it('rejects an unbound mock before starting an attempt', async () => {
       const { run, testCase } = await setupTrajectoryChain();
-      const environment = {
-        toolForwarding: {
-          memory: { endpoint: 'https://mock.test/tool-calls' },
-        },
-      };
-
-      mockExecAgent.mockResolvedValue({ operationId: 'op-789' });
-
       const service = new AgentEvalRunService(serverDB, userId);
-      await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'What is 6*7?' }, sortOrder: testCase.sortOrder },
-        testCaseId: testCase.id,
-        environment,
-      });
-
-      expect(mockExecAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          evalRuntime: { toolForwarding: environment.toolForwarding },
+      await expect(
+        service.executeTrajectory({
+          run: { datasetId: run.datasetId, targetAgentId: null },
+          runId: run.id,
+          testCase: { content: { input: 'Question' } },
+          testCaseId: testCase.id,
+          environment: { toolForwarding: { memory: { endpoint: 'https://old.test/exec' } } },
         }),
-      );
+      ).rejects.toThrow('Bind these mock services');
+      expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
     it('should pass the dataset case id through evalRuntime', async () => {
@@ -327,7 +340,18 @@ describe('AgentEvalRunService', () => {
       });
 
       expect(mockExecAgent).toHaveBeenCalledWith(
-        expect.objectContaining({ evalRuntime: { caseId: 'case-42' } }),
+        expect.objectContaining({
+          appContext: expect.objectContaining({ suppressSignal: true }),
+          evalRuntime: {
+            attemptId: expect.any(String),
+            caseId: 'case-42',
+            memory: {
+              fixtureHash: expect.any(String),
+              runId: expect.any(String),
+              topicId: expect.any(String),
+            },
+          },
+        }),
       );
     });
 
@@ -337,12 +361,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockResolvedValue({});
 
       const service = new AgentEvalRunService(serverDB, userId);
-      await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       const callArgs = mockExecAgent.mock.calls[0][0];
       expect(callArgs).not.toHaveProperty('evalContext');
@@ -354,12 +373,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockResolvedValue({}); // no operationId
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      const result = await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       expect(result).toHaveProperty('topicId');
       expect(result).not.toHaveProperty('error');
@@ -376,12 +390,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockRejectedValue(new Error('Connection refused'));
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      const result = await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       // Should return error and topicId
       expect(result).toHaveProperty('error', 'Connection refused');
@@ -406,12 +415,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockRejectedValue('some string error');
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      const result = await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       expect(result).toHaveProperty('error', 'Agent execution failed to start');
     });

@@ -1,3 +1,4 @@
+import type { DeviceClient } from '@lobechat/types';
 import debug from 'debug';
 
 import { deviceService } from '@/services/device';
@@ -42,6 +43,8 @@ const decodeBase64 = (base64: string): string => {
 };
 
 interface DeviceTerminalInfo {
+  /** The device client hosting the shell; every later call is kept on it. */
+  client?: DeviceClient;
   cwd: string;
   id: string;
   pid: number;
@@ -51,8 +54,9 @@ interface DeviceTerminalInfo {
 /**
  * One interactive shell on a remote device, driven over the device RPC surface.
  *
- * The PTY itself lives in the device's `lh connect` process; this object owns
- * only the polling cursor and the sink that routes keystrokes back. Because the
+ * The PTY itself lives on the device, in its `lh connect` process or desktop
+ * app; this object owns only the polling cursor and the sink that routes
+ * keystrokes back. Because the
  * shell is a real PTY, `sudo` sees a controlling terminal and prompts for its
  * password exactly as it would locally — the password never leaves the device
  * and nothing about it is stored anywhere.
@@ -107,6 +111,15 @@ export class DeviceTerminalSession {
     return this.info.id;
   }
 
+  /**
+   * Where this session's calls go. A device can hold both `lh connect` and the
+   * desktop app, each with its own sessions, so the calls name the client that
+   * created this shell instead of letting the gateway pick one per call.
+   */
+  private get target() {
+    return { client: this.info.client, deviceId: this.deviceId };
+  }
+
   /** How this session's keystrokes and resizes reach the device. */
   readonly sink: TerminalSessionSink = {
     close: () => {
@@ -114,7 +127,7 @@ export class DeviceTerminalSession {
     },
     resize: (sessionId, cols, rows) => {
       void deviceService
-        .resizeTerminal({ cols, deviceId: this.deviceId, id: sessionId, rows })
+        .resizeTerminal({ ...this.target, cols, id: sessionId, rows })
         .catch((error) => log('resizeTerminal %s failed: %O', sessionId, error));
     },
     write: (sessionId, data) => {
@@ -135,8 +148,8 @@ export class DeviceTerminalSession {
         const batch = this.pendingInput;
         this.pendingInput = '';
         await deviceService.writeTerminal({
+          ...this.target,
           data: encodeBase64(batch),
-          deviceId: this.deviceId,
           id: sessionId,
         });
       }
@@ -159,7 +172,7 @@ export class DeviceTerminalSession {
       this.timer = undefined;
     }
     try {
-      await deviceService.closeTerminal({ deviceId: this.deviceId, id: this.info.id });
+      await deviceService.closeTerminal({ ...this.target, id: this.info.id });
     } catch (error) {
       log('closeTerminal %s failed: %O', this.info.id, error);
     }
@@ -173,8 +186,8 @@ export class DeviceTerminalSession {
       // per interval, so a burst (a build log) is not paced by the poll.
       for (;;) {
         const result = await deviceService.readTerminal({
+          ...this.target,
           cursor: this.cursor,
-          deviceId: this.deviceId,
           id: this.info.id,
         });
 

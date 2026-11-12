@@ -89,6 +89,7 @@
   "response.GoogleAIBlockReason.SAFETY": "تم حظر المحتوى لأسباب تتعلق بالسلامة. يرجى تعديله والمحاولة مرة أخرى.",
   "response.GoogleAIBlockReason.SPII": "قد يتضمن المحتوى معلومات شخصية حساسة (SPII). يرجى إزالة التفاصيل الحساسة والمحاولة مرة أخرى.",
   "response.GoogleAIBlockReason.default": "تم حظر المحتوى ({{blockReason}}). يرجى تعديله والمحاولة مرة أخرى.",
+  "response.InsufficientBudgetForModel": "رصيدك المتبقي غير كافٍ لهذا النموذج. يرجى إعادة التعبئة أو ترقية خطتك أو تجربة نموذج أقل تكلفة.",
   "response.InvalidAccessCode": "رمز الوصول غير صالح أو فارغ. يرجى إدخال رمز الوصول الصحيح أو إضافة مفتاح API مخصص.",
   "response.LobeHubModelDeprecated": "النموذج \"{{model}}\" لم يعد متاحًا. يرجى اختيار نموذج حالي من محدد النماذج.",
   "response.ModelContentModerationCooldown": "لا يمكن استخدام النموذج المحدد أو النماذج ذات الصلة لهذا الطلب بسبب قيود مؤقتة تتعلق بسلامة المحتوى. حاول مرة أخرى لاحقًا أو اختر نموذجًا مختلفًا.",
@@ -121,6 +122,8 @@
   "response.RemoteServerTimeout": "انتهت مهلة الاتصال بالخادم. عادةً ما يشير ذلك إلى مشكلة في الشبكة المحلية — يرجى التحقق من جودة الشبكة أو إعدادات الوكيل أو VPN والمحاولة مرة أخرى.",
   "response.RemoteServerUnreachable": "تعذر الوصول إلى الخادم. عادةً ما يشير ذلك إلى مشكلة في الشبكة المحلية — يرجى التحقق من اتصالك بالإنترنت أو إعدادات الوكيل أو VPN والمحاولة مرة أخرى.",
   "response.ServerAgentRuntimeError": "عذرًا، خدمة الوكيل غير متوفرة حاليًا. يرجى المحاولة لاحقًا أو التواصل معنا عبر البريد الإلكتروني.",
+  "response.SubscriptionPlanLimit": "لقد وصلت إلى حد استخدام اشتراكك، لذا هذه الميزة غير متاحة. قم بترقية خطتك أو تكوين واجهة API لنموذج مخصص للمتابعة.",
+  "response.SubscriptionPlanLimitUltimate": "لقد وصلت إلى حد استخدام اشتراكك، لذا هذه الميزة غير متاحة. أعد التعبئة أو قم بتكوين واجهة API لنموذج مخصص للمتابعة.",
   "response.SystemTimeNotMatchError": "عذرًا، لا يتطابق وقت نظامك مع الخادم. يرجى التحقق من الوقت والمحاولة مجددًا.",
   "response.UnknownChatFetchError": "عذرًا، حدث خطأ غير معروف في الطلب. يرجى التحقق من المعلومات أدناه أو إعادة المحاولة.",
   "response.UnreadableServerResponse": "أعاد الخادم استجابة لا يمكن للتطبيق قراءتها. عادةً ما تكون هذه مشكلة مؤقتة في الشبكة أو البوابة — يرجى المحاولة مرة أخرى بعد قليل.",
@@ -210,9 +213,13 @@
   "workspaceFrozenByAdmin.frozenAt": "تم التجميد في",
   "workspaceFrozenByAdmin.reason": "السبب",
   "workspaceFrozenByAdmin.title": "تم تجميد مساحة العمل",
+  "workspaceFrozenByRiskControl.available": "الرصيد المتاح",
+  "workspaceFrozenByRiskControl.bannerDescription": "أعد التعبئة لاستئناف الإنفاق.",
   "workspaceFrozenByRiskControl.bannerHint": "انقر للحصول على التفاصيل",
   "workspaceFrozenByRiskControl.bannerTitle": "تم تجميد مساحة العمل بواسطة التحكم في المخاطر",
   "workspaceFrozenByRiskControl.contactSupport": "اتصل بالدعم",
+  "workspaceFrozenByRiskControl.description": "تم تجميد مساحة العمل هذه تلقائيًا بواسطة التحكم في المخاطر بعد اكتشاف إنفاق غير طبيعي. أعد التعبئة لتكون مساحة العمل جاهزة للاستئناف، واتصل بالدعم لإلغاء التجميد.",
   "workspaceFrozenByRiskControl.frozenAt": "تم التجميد في",
-  "workspaceFrozenByRiskControl.title": "تم تجميد مساحة العمل تلقائيًا بواسطة التحكم في المخاطر"
+  "workspaceFrozenByRiskControl.title": "تم تجميد مساحة العمل تلقائيًا بواسطة التحكم في المخاطر",
+  "workspaceFrozenByRiskControl.topup": "إعادة التعبئة"
 }

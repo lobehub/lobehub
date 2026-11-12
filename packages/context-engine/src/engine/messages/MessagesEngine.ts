@@ -33,6 +33,7 @@ import {
 } from '../../processors';
 import {
   ActiveTopicDocumentContextInjector,
+  AgentAccountContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -166,6 +167,7 @@ export class MessagesEngine {
       provider,
       systemRole,
       agentIdentity,
+      agentAccountContext,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -242,6 +244,8 @@ export class MessagesEngine {
     const hasDateAwareTools =
       toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
     const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    // An eval attempt renders "today" from its case clock, never the wall clock.
+    const evalClock = evalContext?.sessionDate ? new Date(evalContext.sessionDate) : undefined;
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
@@ -325,6 +329,13 @@ export class MessagesEngine {
         enabled: !isGroupContextEnabled,
         identity: agentIdentity,
       }),
+      // The agent's own accounts + inbox, as first-class state. Injected right
+      // after the person's identity because it refines "who am I" with "and I
+      // can be reached here". Skipped entirely when the agent owns nothing.
+      new AgentAccountContextInjector({
+        context: agentAccountContext,
+        enabled: isAgentMode,
+      }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
@@ -333,7 +344,7 @@ export class MessagesEngine {
         enabled: !!botPlatformContext,
       }),
       // System date
-      new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled, now: evalClock, timezone }),
       // Model info (name / id / knowledge cutoff)
       new ModelInfoProvider({
         displayName: modelDisplayName,

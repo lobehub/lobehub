@@ -43,6 +43,19 @@ const oneLine = (text: string | null | undefined) =>
 export const channelPreview = (channel: Pick<ChannelListItem, 'lastMessage'>) =>
   channel.lastMessage ? oneLine(markdownToTxt(channel.lastMessage.content)) : undefined;
 
+/**
+ * A row's preview line: its direct Channel's latest message once it has one, else its latest
+ * topic (assistant reply, else title), else its description.
+ */
+export const conversationPreview = (
+  description: string | null | undefined,
+  topic: RecentItem | undefined,
+  direct?: Pick<ChannelListItem, 'lastMessage'>,
+) =>
+  direct
+    ? (channelPreview(direct) ?? oneLine(description))
+    : oneLine(topic?.lastAssistantMessage || topic?.title || description);
+
 /** When a Channel last had a message, else when it was opened. */
 export const channelActivity = (channel: ChannelListItem): Date =>
   new Date(channel.lastMessage?.createdAt ?? channel.updatedAt ?? channel.createdAt);
@@ -79,16 +92,37 @@ export const latestActivity = (
   return new Date(Math.max(ownTime, topicTime));
 };
 
+/** The inbox row's activity: once it opens a direct Channel, that replaces its legacy topics. */
+export const inboxActivity = (
+  own: Date | string | undefined,
+  topic: RecentItem | undefined,
+  direct?: ChannelListItem,
+): Date | undefined =>
+  direct
+    ? new Date(Math.max(own ? toTime(own) : 0, channelActivity(direct).getTime()))
+    : latestActivity(own, topic);
+
 /**
  * Turn the sidebar agent/group list into IM-style conversations: each row
  * carries a preview of its latest topic and is ordered by latest activity,
- * pinned rows first.
+ * pinned rows first. Only conversations that exist get a row — a direct Channel
+ * or a topic; the rest stay in Contacts. Pinned rows and the open one stay,
+ * and a search lists every agent so a new conversation can start from it.
  */
 export const buildConversationSections = (
   items: SidebarAgentItem[],
   recents: RecentItem[] | undefined,
   /** The person's direct Channel per agent id. A row that opens one shows that conversation. */
   directChannels?: Map<string, ChannelListItem>,
+  {
+    activeId,
+    includeIdle = false,
+  }: {
+    /** The routed conversation, kept so the open chat always has its row. */
+    activeId?: string;
+    /** Keep agents and groups without any conversation yet. */
+    includeIdle?: boolean;
+  } = {},
 ): ConversationSections => {
   const latestByOwner = topicsByOwner(recents);
 
@@ -106,22 +140,21 @@ export const buildConversationSections = (
         activeAt: new Date(Math.max(itemTime, channelActivity(direct).getTime())),
         channel: direct,
         item,
-        preview: channelPreview(direct) ?? oneLine(item.description),
+        preview: conversationPreview(item.description, undefined, direct),
         unread: direct.unreadCount ?? 0,
       });
       continue;
     }
 
     const latest = latestByOwner.get(item.id);
+    if (!latest && !includeIdle && !item.pinned && item.id !== activeId) continue;
+
     const latestTime = latest ? toTime(latest.updatedAt) : 0;
 
     conversations.push({
       activeAt: new Date(Math.max(itemTime, latestTime)),
       item,
-      preview:
-        (latest?.lastAssistantMessage || latest?.title || item.description || '')
-          .replaceAll(/\s+/g, ' ')
-          .trim() || undefined,
+      preview: conversationPreview(item.description, latest),
     });
   }
 
@@ -134,7 +167,7 @@ export const buildConversationSections = (
 };
 
 export type ConversationEntry =
-  | { activeAt: Date; type: 'inbox' }
+  | { activeAt: Date; channel?: ChannelListItem; type: 'inbox' }
   | { activeAt: Date; channel: ChannelListItem; type: 'channel' }
   | (Conversation & { type: 'item' });
 
@@ -145,7 +178,7 @@ export type ConversationEntry =
  */
 export const buildConversationEntries = (
   { pinned, recent }: ConversationSections,
-  inbox: { activeAt?: Date; title: string } | undefined,
+  inbox: { activeAt?: Date; channel?: ChannelListItem; title: string } | undefined,
   query = '',
   channels: ChannelListItem[] = [],
 ): ConversationEntry[] => {
@@ -173,7 +206,11 @@ export const buildConversationEntries = (
   if (inbox && matches(inbox.title)) {
     const activeAt = inbox.activeAt ?? new Date(0);
     const index = rest.findIndex((entry) => entry.activeAt.getTime() < activeAt.getTime());
-    rest.splice(index === -1 ? rest.length : index, 0, { activeAt, type: 'inbox' });
+    rest.splice(index === -1 ? rest.length : index, 0, {
+      activeAt,
+      channel: inbox.channel,
+      type: 'inbox',
+    });
   }
 
   return [...items(pinned), ...rest];
