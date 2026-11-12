@@ -3,7 +3,6 @@ import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openConnectorEditDrawer } from '@/features/Connectors/CustomConnectorModal/imperative';
 import { createMcpSettingsModal } from '@/features/MCP/MCPSettings/McpSettingsModal';
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
@@ -15,6 +14,7 @@ import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type LobeToolType } from '@/types/tool/tool';
 
+import ConnectorConfigureButton from './ConnectorConfigureButton';
 import EditCustomPlugin from './EditCustomPlugin';
 
 interface ActionsProps {
@@ -62,17 +62,17 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const showConfigureButton = marketConnector
     ? marketConnector.mcpConnectionType !== 'cloud'
     : isCustomPlugin || isMCP || hasSettings;
-  const confirming = isConfirming && !marketConnector;
+  const confirming = isConfirming;
 
-  const configureButton = (
+  const configureButton = marketConnector ? (
+    <ConnectorConfigureButton canEdit={canEdit} connector={marketConnector} />
+  ) : (
     <Button
       disabled={!canEdit || confirming}
       loading={confirming}
       onClick={() => {
         if (!canEdit || confirming) return;
-        if (marketConnector) {
-          openConnectorEditDrawer(marketConnector.id);
-        } else if (isCustomPlugin) {
+        if (isCustomPlugin) {
           setModal(true);
         } else if (isCommunityMCP) {
           createMcpSettingsModal({ identifier });
