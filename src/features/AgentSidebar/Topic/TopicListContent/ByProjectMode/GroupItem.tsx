@@ -80,6 +80,18 @@ const SUB_GROUP_MODES: ProjectTopicSubGroupMode[] = ['none', 'byDevice', 'byTime
 // identities; only those section by device.
 const FOLDER_SUB_GROUP_MODES = SUB_GROUP_MODES.filter((mode) => mode !== 'byDevice');
 
+/**
+ * Keeps the device list synced from a leaf that renders nothing. The sync hook
+ * re-renders its caller on every revalidation, which a topic switch can start;
+ * calling it in the group body re-rendered every group with it.
+ */
+const DeviceListSync = memo(() => {
+  useDeviceStore((s) => s.useFetchDevices)(true);
+  return null;
+});
+
+DeviceListSync.displayName = 'TopicByProjectDeviceListSync';
+
 interface GroupItemBodyProps extends GroupItemComponentProps {
   navigate: WorkspaceAwareNavigateFunction;
   /** Path prefix in front of `/agent/...` (e.g. a popup route), kept on new-topic navigation. */
@@ -223,15 +235,19 @@ const GroupItemBody = memo<GroupItemBodyProps>((props) => {
 
   // The same folder on another machine is its own group with the same name:
   // name the device, and its category for one machine's several identities.
-  useDeviceStore((s) => s.useFetchDevices)(!!groupDeviceId);
-  const devices = useDeviceStore(deviceSelectors.deviceList);
+  // Select strings, not the list: every device-list revalidation writes a new
+  // array, and each switch to a topic on another device triggers one.
+  const deviceName = useDeviceStore((s) =>
+    groupDeviceId ? deviceDisplayName(groupDeviceId, deviceSelectors.deviceList(s)) : undefined,
+  );
+  const deviceCategory = useDeviceStore((s) =>
+    groupDeviceId
+      ? deviceCategoryKey(groupDeviceId, deviceSelectors.deviceList(s), currentDeviceId)
+      : undefined,
+  );
   const { t: tChat } = useTranslation('chat');
-  const deviceLabel = useMemo(() => {
-    if (!groupDeviceId) return;
-    const name = deviceDisplayName(groupDeviceId, devices);
-    const categoryKey = deviceCategoryKey(groupDeviceId, devices, currentDeviceId);
-    return categoryKey ? `${name} · ${tChat(categoryKey)}` : name;
-  }, [groupDeviceId, devices, currentDeviceId, tChat]);
+  const deviceLabel =
+    deviceName && deviceCategory ? `${deviceName} · ${tChat(deviceCategory)}` : deviceName;
   const storedSubGroupMode = useGlobalStore(systemStatusSelectors.projectTopicSubGroupMode(id));
   const subGroupMode = subGroupModes.includes(storedSubGroupMode) ? storedSubGroupMode : 'none';
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
@@ -346,6 +362,7 @@ const GroupItemBody = memo<GroupItemBodyProps>((props) => {
             height={24}
             style={{ overflow: 'hidden' }}
           >
+            {groupDeviceId && <DeviceListSync />}
             <Center flex="none" height={24} width={metrics.iconBox}>
               {project ? (
                 <ProjectAvatar
