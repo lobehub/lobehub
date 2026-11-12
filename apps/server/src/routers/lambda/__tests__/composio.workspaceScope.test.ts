@@ -61,6 +61,9 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     workspaceMocks.getConnectorMemberManage.mockResolvedValue('all_members');
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      // The row a write updates — the caller's own row in either visibility.
+      findManageableByIdentifier: vi.fn().mockResolvedValue(null),
+      // The shared row only (the lookup a create of a new row uses).
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue(undefined),
     };
@@ -158,15 +161,59 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
 
   it('lets a member reconnect another member’s workspace connection by default', async () => {
     // Shared connectors are co-maintained unless an admin restricted them.
-    connectorModelMock.findScopedByIdentifier.mockResolvedValue({
+    const sharedRow = {
+      agentId: null,
       id: 'conn-other',
       identifier: 'gmail',
       userId: 'another-user',
+      visibility: 'public' as const,
+    };
+    connectorModelMock.findManageableByIdentifier.mockResolvedValue(sharedRow);
+    connectorModelMock.findScopedByIdentifier.mockResolvedValue(sharedRow);
+
+    await expect(
+      memberCaller().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
+    ).resolves.toBeDefined();
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-other', expect.anything());
+  });
+
+  it('lets a member reconnect their own private connection when admins restricted management', async () => {
+    // Regression: the gate looked up the shared row while the write updates the
+    // caller's own private row, so `admins_only` blocked the owner from
+    // reconnecting a connector that is theirs alone. The gate must judge the
+    // row the write touches.
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+    connectorModelMock.findManageableByIdentifier.mockResolvedValue({
+      agentId: null,
+      id: 'conn-private',
+      identifier: 'gmail',
+      userId: 'user_test',
+      visibility: 'private',
     });
 
     await expect(
       memberCaller().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
     ).resolves.toBeDefined();
+
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-private', expect.anything());
+  });
+
+  it('still blocks a member from the shared connection when they also have no private one', async () => {
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+    connectorModelMock.findManageableByIdentifier.mockResolvedValue({
+      agentId: null,
+      id: 'conn-shared',
+      identifier: 'gmail',
+      userId: 'user_test',
+      visibility: 'public',
+    });
+
+    await expect(
+      memberCaller().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
   });
 
   it('blocks a member from connecting when admins restricted connector management', async () => {

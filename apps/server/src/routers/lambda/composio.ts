@@ -77,9 +77,12 @@ async function assertComposioRowManageable(
   agentId?: string,
 ): Promise<void> {
   if (!ctx.workspaceId) return;
-  const existing = await ctx.connectorModel.findScopedByIdentifier(identifier, agentId);
-  // Pass the row as found: a private row is only its creator's (or a workspace
-  // owner's) to maintain, and the lookup now sees one.
+  // Judge the row the write will touch: upsert/delete resolve it with the same
+  // any-visibility lookup, so the caller's own private row wins over the shared
+  // one. A private row is only its creator's (or a workspace owner's) to
+  // maintain and skips the member policy; checking the shared row instead would
+  // let `admins_only` block a member from reconnecting their own connector.
+  const existing = await ctx.connectorModel.findManageableByIdentifier(identifier, agentId);
   await assertConnectorMaintainable(ctx, {
     agentId,
     userId: existing?.userId,
