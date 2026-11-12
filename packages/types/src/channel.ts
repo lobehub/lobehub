@@ -2,6 +2,7 @@ import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentTy
 import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
+import type { ExternalWorkSummaryItem } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -411,6 +412,11 @@ export interface ChannelPublicMessage {
   sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
+  /**
+   * External Works a reply's run touched: the conversation's work summaries, for every member,
+   * without the ids that link them to the requester's Work, topic and run. Empty on requests.
+   */
+  works?: ExternalWorkSummaryItem[];
 }
 
 export interface ChannelPublicJob {

@@ -41,6 +41,7 @@ import { channelMessageTime, channelTimeFormatters } from './messagePresentation
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
+import { ReplyWorks } from './ReplyWorks';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import type { ChannelReplyTarget } from './useReplyTarget';
@@ -314,6 +315,7 @@ export const ChannelMessage = ({
               ) : (
                 <MessageText content={message.content} names={mentionNames} />
               ))}
+            {!!message.works?.length && <ReplyWorks works={message.works} />}
           </Flexbox>
         }
         titleAddon={
