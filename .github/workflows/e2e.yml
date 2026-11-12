@@ -256,6 +256,31 @@ jobs:
           E2E_REPORTS: '0'
           HEADLESS: 'true'
 
+      # Render budgets time frames in the page, so they run after the functional
+      # suite, alone and serially, against the same production build.
+      - name: Run render performance budgets
+        id: render_budgets
+        if: ${{ !cancelled() }}
+        working-directory: e2e
+        run: bun run test:perf
+        env:
+          BASE_URL: http://localhost:3006
+          E2E_REPORTS: '0'
+          HEADLESS: 'true'
+
+      - name: Summarize render performance budgets
+        if: ${{ !cancelled() && steps.render_budgets.outcome != 'skipped' }}
+        run: node .github/scripts/render-budget-summary.cjs e2e/reports/perf >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload render performance receipts
+        if: ${{ !cancelled() && steps.render_budgets.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: render-performance-receipts
+          path: e2e/reports/perf/
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Upload E2E test artifacts (on failure)
         if: failure()
         uses: actions/upload-artifact@v6
