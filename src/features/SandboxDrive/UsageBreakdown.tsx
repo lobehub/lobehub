@@ -160,8 +160,8 @@ export const UsageBreakdown = memo<{
   // Which refresh is running, and in which workspace: the spinner belongs to
   // that workspace, and only that refresh may clear it.
   const [busy, setBusy] = useState<{ token: object; workspaceId: string | null } | null>(null);
-  // A drive too large to measure in one call (LOBE-15436): how much the walk
-  // has counted so far, shown beside the last finished figure.
+  // A drive too large to measure in one call: how much the walk has counted
+  // so far, shown beside the last finished figure.
   const [measurement, setMeasurement] = useState<{
     progress: NonNullable<DriveUsageRefreshResult['measuring']>;
     workspaceId: string | null;
@@ -262,7 +262,7 @@ export const UsageBreakdown = memo<{
       setMeasuring(null);
       // The execution plane could not walk the drive, so the figure on screen
       // is the last one it measured — say so, rather than let a refresh that
-      // changed nothing pass for one that confirmed it (LOBE-15436).
+      // changed nothing pass for one that confirmed it.
       toast.error(
         (error as { message?: string } | undefined)?.message === USAGE_MEASURE_FAILED
           ? t('drive.usage.refreshFailed')
