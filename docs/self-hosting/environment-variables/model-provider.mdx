@@ -918,4 +918,27 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## Hubris
+
+### `HUBRIS_API_KEY`
+
+- Type: Required
+- Description: This is the API key you created in the Hubris dashboard, you can check it out [here](https://hubris.pw/keys)
+- Default: -
+- Example: `sk-gw-xxxxxx...xxxxxx`
+
+### `HUBRIS_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the Hubris model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+anthropic/claude-sonnet-5,+google/gemini-3.8-flash`
+
+### `HUBRIS_PROXY_URL`
+
+- Type: Optional
+- Description: Used to override the Hubris API base URL, set it only if you route requests through your own gateway
+- Default: `https://api.hubris.pw/v1`
+- Example: `https://api.hubris.pw/v1`
+
 [model-list]: /docs/self-hosting/advanced/model-list

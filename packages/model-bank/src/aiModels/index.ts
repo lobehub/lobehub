@@ -30,6 +30,7 @@ import { default as glmcodingplan } from './glmCodingPlan';
 import { default as google } from './google';
 import { default as groq } from './groq';
 import { default as higress } from './higress';
+import { default as hubris } from './hubris';
 import { default as huggingface } from './huggingface';
 import { default as hunyuan } from './hunyuan';
 import { default as infiniai } from './infiniai';
@@ -202,6 +203,8 @@ const staticModelMap: ModelsMap = {
   zenmux,
   zeroone,
   zhipu,
+  // Last on purpose: a gateway's entries must not win a lookup by model name over the vendor's.
+  hubris,
 };
 
 export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList(staticModelMap);
@@ -264,6 +267,7 @@ export { default as glmcodingplan } from './glmCodingPlan';
 export { default as google } from './google';
 export { default as groq } from './groq';
 export { default as higress } from './higress';
+export { default as hubris } from './hubris';
 export { default as huggingface } from './huggingface';
 export { default as hunyuan } from './hunyuan';
 export { default as infiniai } from './infiniai';
