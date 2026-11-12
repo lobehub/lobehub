@@ -511,7 +511,7 @@
     "@alint-js/cli": "0.7.3",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
-    "@huggingface/tasks": "^0.19.90",
+    "@huggingface/tasks": "^0.22.2",
     "@inquirer/prompts": "^8.5.2",
     "@lobechat/agent-tracing": "workspace:*",
     "@lobechat/types": "workspace:*",
