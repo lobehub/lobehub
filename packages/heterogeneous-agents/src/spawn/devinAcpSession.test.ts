@@ -579,7 +579,11 @@ describe('DevinAcpSession', () => {
     ).toEqual({ configId: 'mode', sessionId: 'devin-session-1', value: 'bypass' });
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('Failed to set session mode "bypass"'),
-      expect.any(AcpRpcResponseError),
+      {
+        error: expect.any(AcpRpcResponseError),
+        operationId: 'operation-1',
+        sessionId: 'devin-session-1',
+      },
     );
     expect(options.onSessionId).toHaveBeenCalledWith('devin-session-1');
     expect(options.onModel).toHaveBeenCalledWith('glm-5-2');

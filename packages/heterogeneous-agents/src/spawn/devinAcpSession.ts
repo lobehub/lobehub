@@ -271,9 +271,13 @@ export class DevinAcpSession extends AcpAgentSession<
         value: DEVIN_FORCED_SESSION_MODE,
       });
     } catch (error) {
+      // Kept on console.warn rather than a `debug` namespace on purpose: a
+      // silent fallback to Devin's default (approval-gated) mode must be
+      // visible without opting into DEBUG, like the package's other degraded
+      // paths. The ids let concurrent desktop / CLI sessions be told apart.
       console.warn(
         `[DevinAcpSession] Failed to set session mode "${DEVIN_FORCED_SESSION_MODE}"; continuing with Devin's default mode:`,
-        error,
+        { error, operationId: this.options.operationId, sessionId },
       );
     }
   }
