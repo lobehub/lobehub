@@ -80,7 +80,7 @@ const AudioViewer = memo<AudioViewerProps>(({ url, fileName }) => {
         {error && (
           <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
             <Text type={'secondary'}>{t('preview.audioLoadFailed')}</Text>
-            <Button loading={downloading} size={'small'} onClick={handleDownload}>
+            <Button loading={downloading} onClick={handleDownload}>
               {t('preview.downloadFile')}
             </Button>
           </Flexbox>
