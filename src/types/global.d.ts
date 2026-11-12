@@ -41,6 +41,9 @@ declare global {
   /** Vite define: running under Vitest */
   const __TEST__: boolean;
 
+  /** Vite define: renderer built against react-dom/profiling (LOBE_REACT_PROFILING=1) */
+  const __REACT_PROFILING__: boolean;
+
   /** Vite define: enable react-scan diagnostic runtime */
   const __REACT_SCAN__: boolean;
 
