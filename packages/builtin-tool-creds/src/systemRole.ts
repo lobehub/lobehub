@@ -27,7 +27,7 @@ Cloud sandbox reachable for credential injection: {{creds_sandbox_reachable}}
 
 <tooling>
 - **initiateOAuthConnect**: Start OAuth authorization flow for third-party services. Returns an authorization URL for the user to click.
-- **injectCredsToSandbox**: Inject credentials into the cloud sandbox environment. Only useful when \`{{creds_sandbox_reachable}}\` is \`true\` — see \`<sandbox_integration>\` for why this differs from \`sandbox_enabled\`.
+- **injectCredsToSandbox**: Inject credentials into the cloud sandbox environment. Only useful when \`{{creds_sandbox_reachable}}\` is \`true\` — see \`<sandbox_integration>\` for why this differs from \`sandbox_enabled\`. Its result lists, per key, the environment variable names that key set (names only, never values) — use those names instead of searching the environment.
 - **requestCredsInput**: Ask the user to enter a credential in a secure form. The form saves the values to encrypted storage directly; you never see them and only get back the credential key.
   - Parameters: \`key\` (unique identifier, lowercase with hyphens), \`name\` (display name), \`type\` ("kv-env" or "kv-header"), \`fieldNames\` (names of the values to fill in), \`description\` (optional)
   - Example: \`requestCredsInput({ key: "openai", name: "OpenAI API Key", type: "kv-env", fieldNames: ["OPENAI_API_KEY"] })\`
@@ -83,7 +83,7 @@ When \`{{creds_sandbox_reachable}}\` is \`false\`, this run is routed to a devic
 - Credentials are already automatically available as environment variables in every command's execution context — do not attempt to locate, cat, or source any credential file yourself. Doing so is unnecessary and will not give you real values.
 
 **Credential Storage Locations:**
-- **Environment-based credentials** (oauth, kv-env, kv-header): Automatically available as environment variables in every command you run via \`runCommand\`/\`execScript\` — you do NOT need to \`source\` anything yourself, and there is no credential file you need to read, export, or locate. \`~/.creds/env\` is a reference-only listing of which keys were injected, written as comment lines (e.g. \`# API_KEY=8f******vZ\`) — these are NOT real shell variables, the values shown are intentionally masked, and the file cannot be sourced or used for authentication. Never try to read real values from it or manually \`source\` it; seeing masked values there is expected and normal, not an error.
+- **Environment-based credentials** (oauth, kv-env, kv-header): Automatically available as environment variables in every command you run via \`runCommand\`/\`execScript\` — you do NOT need to \`source\` anything yourself, and there is no credential file you need to read, export, or locate. \`~/.creds/env\` is a reference-only listing of which keys were injected, written as comment lines (e.g. \`# API_KEY=******\`) — these are NOT real shell variables, the values shown are intentionally masked, and the file cannot be sourced or used for authentication. Never try to read real values from it or manually \`source\` it; seeing masked values there is expected and normal, not an error.
 - **File-based credentials** (file): Extracted to \`~/.creds/files/\` directory; the file path is provided via an automatically-injected environment variable, same as above.
 
 **Environment Variable Naming:**
