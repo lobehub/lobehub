@@ -98,7 +98,12 @@ describe('useToolStore:customPlugin', () => {
         mcpConnectionType: 'http',
         mcpServerUrl: 'https://mcp.example.com',
         mcpStdioConfig: undefined,
-        metadata: { avatar: 'icon', customHeaders: { 'X-Key': 'k' }, description: 'desc' },
+        metadata: {
+          avatar: 'icon',
+          customHeaders: { 'X-Key': 'k' },
+          description: 'desc',
+          desktopStdioExecution: true,
+        },
         name: 'My MCP',
         sourceType: 'custom',
       });
@@ -122,6 +127,8 @@ describe('useToolStore:customPlugin', () => {
           mcpConnectionType: 'stdio',
           mcpServerUrl: undefined,
           mcpStdioConfig: { args: ['-y', 'pkg'], command: 'npx', env: { A: '1' } },
+          // Its calls stay on the desktop, as the custom plugin's did
+          metadata: expect.objectContaining({ desktopStdioExecution: true }),
           name: 'local-mcp',
         }),
       );

@@ -66,6 +66,27 @@ export const isMarketplaceInstallCompleted = (metadata: unknown): boolean =>
   (metadata as Record<string, unknown>)[MARKETPLACE_INSTALL_COMPLETED_KEY] === true;
 
 /**
+ * `user_connectors.metadata` key a custom MCP installed from a protocol link
+ * sets. Those installs used to be custom plugins, whose stdio calls ran on the
+ * desktop over IPC with or without a device gateway.
+ */
+export const DESKTOP_STDIO_EXECUTION_KEY = 'desktopStdioExecution';
+
+/**
+ * Whether a stdio connector's conversation calls stay on the desktop that makes
+ * them even when a device gateway is configured (the connector route refuses
+ * stdio): marketplace and protocol-link installs, which ran there as plugins.
+ */
+export const keepsDesktopStdioExecution = (connector: {
+  metadata?: unknown;
+  sourceType?: string | null;
+}): boolean =>
+  connector.sourceType === 'marketplace' ||
+  (!!connector.metadata &&
+    typeof connector.metadata === 'object' &&
+    (connector.metadata as Record<string, unknown>)[DESKTOP_STDIO_EXECUTION_KEY] === true);
+
+/**
  * A connector the tool runtime can call: an HTTP URL, a stdio command, or a
  * marketplace server the market hosts (`cloud`). Rows without one only
  * project tools another executor runs.

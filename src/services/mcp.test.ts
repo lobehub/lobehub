@@ -263,15 +263,19 @@ describe('MCPService', () => {
         },
       );
 
-      // A marketplace stdio server ran over IPC as a plugin; installed as a
-      // connector it still does, while the connector route refuses stdio
-      it.each([true, undefined])(
-        'runs a marketplace stdio install over local IPC when gateway=%s',
-        async (gateway) => {
+      // Marketplace and protocol-link stdio servers ran over IPC as plugins;
+      // installed as connectors they still do, while the connector route refuses stdio
+      const marketplace = { sourceType: 'marketplace' };
+      const protocolLink = { metadata: { desktopStdioExecution: true }, sourceType: 'custom' };
+      it.each([
+        { gateway: true, install: 'marketplace', source: marketplace },
+        { gateway: undefined, install: 'marketplace', source: marketplace },
+        { gateway: true, install: 'protocol-link', source: protocolLink },
+      ])(
+        'runs a $install stdio install over local IPC when gateway=$gateway',
+        async ({ gateway, source }) => {
           environment.deviceGatewayConfigured = gateway;
-          mockGetToolStoreState.mockReturnValue({
-            connectors: [{ ...connector, sourceType: 'marketplace' }],
-          });
+          mockGetToolStoreState.mockReturnValue({ connectors: [{ ...connector, ...source }] });
           const { lambdaClient } = await import('@/libs/trpc/client');
           const result = {
             content: 'local result',

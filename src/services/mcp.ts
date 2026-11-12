@@ -1,4 +1,9 @@
-import { CURRENT_VERSION, hasCallableMcpEndpoint, isDesktop } from '@lobechat/const';
+import {
+  CURRENT_VERSION,
+  hasCallableMcpEndpoint,
+  isDesktop,
+  keepsDesktopStdioExecution,
+} from '@lobechat/const';
 import {
   getMcpServerFingerprint,
   isSyncedMcpToolVisibleTo,
@@ -218,7 +223,7 @@ class MCPService {
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
     // gateways keep the existing server route for conversation calls, except
-    // for marketplace stdio installs, which always ran here as plugins.
+    // for marketplace and protocol-link stdio installs, which ran here as plugins.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
@@ -242,8 +247,8 @@ class MCPService {
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
         (fromMcpApp ||
-          // A marketplace stdio server ran on this desktop as a plugin, gateway or not
-          connector.sourceType === 'marketplace' ||
+          // These stdio servers ran on this desktop as plugins, gateway or not
+          keepsDesktopStdioExecution(connector) ||
           getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);

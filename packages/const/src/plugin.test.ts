@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ARTIFACT_TAG_REGEX } from './plugin';
+import { ARTIFACT_TAG_REGEX, keepsDesktopStdioExecution } from './plugin';
 
 describe('ARTIFACT_TAG_REGEX', () => {
   it('should match a simple lobeArtifact tag', () => {
@@ -76,5 +76,22 @@ OpenAI的存在,就像是一场精心编排的默剧。台上的演员们摆出�
 
     const matches = ARTIFACT_TAG_REGEX.exec(input);
     expect(matches).toHaveLength(2);
+  });
+});
+
+describe('keepsDesktopStdioExecution', () => {
+  it.each([
+    { connector: { sourceType: 'marketplace' }, expected: true },
+    {
+      connector: { metadata: { desktopStdioExecution: true }, sourceType: 'custom' },
+      expected: true,
+    },
+    {
+      connector: { metadata: { desktopStdioExecution: 'true' }, sourceType: 'custom' },
+      expected: false,
+    },
+    { connector: { metadata: null, sourceType: 'custom' }, expected: false },
+  ])('is $expected for $connector', ({ connector, expected }) => {
+    expect(keepsDesktopStdioExecution(connector)).toBe(expected);
   });
 });

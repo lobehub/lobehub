@@ -1,3 +1,4 @@
+import { DESKTOP_STDIO_EXECUTION_KEY } from '@lobechat/const';
 import { merge } from 'es-toolkit/compat';
 
 import { mcpService } from '@/services/mcp';
@@ -42,9 +43,10 @@ export class CustomPluginActionImpl {
   }
 
   /**
-   * Add a custom MCP server as a `custom` connector and sync its tools. When
-   * the tool sync fails, a row this call created is removed again and a row it
-   * reinstalled over is restored.
+   * Add a custom MCP server from a protocol link as a `custom` connector and
+   * sync its tools. Its stdio calls keep running on the desktop, as the custom
+   * plugin's did. When the tool sync fails, a row this call created is removed
+   * again and a row it reinstalled over is restored.
    */
   installCustomMcpConnector = async ({
     config,
@@ -55,7 +57,12 @@ export class CustomPluginActionImpl {
   }: CustomMcpConnectorParams): Promise<void> => {
     const { createConnector, deleteConnector, syncConnectorTools } = this.#get();
     const isHttp = config.type === 'http';
-    const metadata: Record<string, unknown> = { avatar: icon, description };
+    // Set whatever the transport: it can be edited to stdio later
+    const metadata: Record<string, unknown> = {
+      avatar: icon,
+      description,
+      [DESKTOP_STDIO_EXECUTION_KEY]: true,
+    };
     if (isHttp && config.headers && Object.keys(config.headers).length > 0)
       metadata.customHeaders = config.headers;
 
