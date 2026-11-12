@@ -45,6 +45,7 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 @home         # Home 模块
 @community    # 社区模块
 @routes       # 核心路由
+@perf         # 渲染速度预算：默认套件跳过，`bun run test:perf` 单独串行跑，预算在 src/performance/budgets.ts
 ```
 
 ### 执行策略

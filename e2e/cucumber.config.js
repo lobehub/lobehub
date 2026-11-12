@@ -5,6 +5,9 @@ const reportsEnabled = !['0', 'false'].includes(String(process.env.E2E_REPORTS).
 const parsedParallel = Number(process.env.E2E_PARALLEL || process.env.CUCUMBER_PARALLEL || 1);
 const requestedParallel = Number.isFinite(parsedParallel) ? parsedParallel : 1;
 const canRunInParallel = Boolean(process.env.BASE_URL);
+// Render budgets (`@perf`) time frames in the page, so they run alone and
+// serially through `test:perf`; the functional suite skips them.
+const perfRun = process.env.E2E_PERF === '1';
 
 export default {
   format: reportsEnabled
@@ -13,12 +16,12 @@ export default {
   formatOptions: {
     snippetInterface: 'async-await',
   },
-  parallel: canRunInParallel ? Math.max(1, requestedParallel) : 1,
+  parallel: canRunInParallel && !perfRun ? Math.max(1, requestedParallel) : 1,
   paths: ['src/features/**/*.feature'],
   publishQuiet: true,
   require: ['src/steps/**/!(*.test).ts', 'src/support/**/*.ts'],
   requireModule: ['tsx/cjs'],
   retry: 0,
-  tags: 'not @skip',
+  tags: perfRun ? '@perf and not @skip' : 'not @skip and not @perf',
   timeout: 30_000,
 };
