@@ -70,6 +70,7 @@ export enum ModelProvider {
   SuperGrok = 'supergrok',
   Taichu = 'taichu',
   TencentCloud = 'tencentcloud',
+  Tensorix = 'tensorix',
   TogetherAI = 'togetherai',
   TypeSafe = 'typesafe',
   Unsloth = 'unsloth',
