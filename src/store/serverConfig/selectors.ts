@@ -31,9 +31,6 @@ export const serverConfigSelectors = {
   enableWorkspacePageCollab: (s: ServerConfigStore) =>
     s.serverConfig.enableWorkspacePageCollab || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
-  /** Workspaces are available to this user (business deployment + per-user `workspace` flag). */
-  enableWorkspace: (s: ServerConfigStore) =>
-    (s.serverConfig.enableBusinessFeatures || false) && s.featureFlags.enableWorkspace === true,
   enableMultimodalUnderstanding: (s: ServerConfigStore) =>
     s.serverConfig.enableMultimodalUnderstanding || false,
   enabledTelemetryChat: (s: ServerConfigStore) => s.serverConfig.telemetry.langfuse || false,

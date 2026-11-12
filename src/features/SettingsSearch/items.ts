@@ -15,8 +15,6 @@ export interface SettingsSearchContext {
   enableChannels: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
-  /** Workspaces are available to this user */
-  enableWorkspace: boolean;
   /** Whether the signed-in user has an email on their profile */
   hasEmail: boolean;
   hideDocs: boolean;
@@ -477,7 +475,9 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
       ns: 'labs',
       tab: SettingsTabs.Labs,
       ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
-      ...(workspaceOnly ? { visible: (ctx: SettingsSearchContext) => ctx.enableWorkspace } : {}),
+      ...(workspaceOnly
+        ? { visible: (ctx: SettingsSearchContext) => ctx.enableBusinessFeatures }
+        : {}),
     }),
   ),
   // Service Model

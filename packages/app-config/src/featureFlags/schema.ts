@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import type { IFeatureFlagsState } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -28,7 +29,6 @@ export const FeatureFlagsSchema = z.object({
 
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
-  voice_dictation: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
 
   welcome_suggest: FeatureFlagValue.optional(),
@@ -38,13 +38,6 @@ export const FeatureFlagsSchema = z.object({
   knowledge_base: FeatureFlagValue.optional(),
 
   rag_eval: FeatureFlagValue.optional(),
-
-  /**
-   * LobeHub Mobile rollout switch for the multiplexed gateway socket and
-   * protocol-v2 payloads. Web needs no flag: it takes v2 wherever
-   * `serverConfig.agentGatewayProtocol === 2`. Array values are user ids.
-   */
-  agent_gateway_mux_mobile: FeatureFlagValue.optional(),
 
   /**
    * Rollout gate for relaying LLM calls to the user's device: a model provider
@@ -132,8 +125,6 @@ export const FeatureFlagsSchema = z.object({
   onboarding_v2: FeatureFlagValue.optional(),
   mobile_new_tier_sales: FeatureFlagValue.optional(),
   mobile_sandbox_grant: FeatureFlagValue.optional(),
-  storage_overage: FeatureFlagValue.optional(),
-  workspace: FeatureFlagValue.optional(),
 
   // the flags below can only be used with commercial license
   // if you want to use it in the commercial usage
@@ -216,10 +207,6 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   knowledge_base: true,
   rag_eval: false,
 
-  // Off until an admin publishes a user allowlist or flips it to true; Mobile
-  // stays on the v1 socket until then.
-  agent_gateway_mux_mobile: false,
-
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
   agent_deferred_init: false,
@@ -255,12 +242,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Server-only: Cloud lets a store sandbox purchase grant entitlement only for user IDs listed
   // explicitly; `true` and percentage rollout count as off, and it never reaches the client state.
   mobile_sandbox_grant: false,
-  storage_overage: true,
-  workspace: isDev,
 
   market: true,
   speech_to_text: true,
-  voice_dictation: false,
   changelog: true,
 
   // the flags below can only be used with commercial license
@@ -281,11 +265,8 @@ export const mapFeatureFlagsEnvToState = (
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId, 'edit_agent'),
 
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId, 'agent_share'),
-    enableGatewayMuxMobile: evaluateFeatureFlag(
-      config.agent_gateway_mux_mobile,
-      userId,
-      'agent_gateway_mux_mobile',
-    ),
+    // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
+    enableGatewayMuxMobile: ENABLE_BUSINESS_FEATURES,
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
     enableDeferredInit: evaluateFeatureFlag(
       config.agent_deferred_init,
@@ -338,14 +319,15 @@ export const mapFeatureFlagsEnvToState = (
       userId,
       'mobile_new_tier_sales',
     ),
-    enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId, 'storage_overage'),
 
     showCloudPromotion: evaluateFeatureFlag(config.cloud_promotion, userId, 'cloud_promotion'),
-    enableWorkspace: evaluateFeatureFlag(config.workspace, userId, 'workspace'),
+    // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
+    enableWorkspace: ENABLE_BUSINESS_FEATURES,
 
     showMarket: evaluateFeatureFlag(config.market, userId, 'market'),
     enableSTT: evaluateFeatureFlag(config.speech_to_text, userId, 'speech_to_text'),
-    enableVoiceDictation: evaluateFeatureFlag(config.voice_dictation, userId, 'voice_dictation'),
+    // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
+    enableVoiceDictation: ENABLE_BUSINESS_FEATURES,
 
     hideGitHub: evaluateFeatureFlag(
       config.commercial_hide_github,
