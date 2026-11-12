@@ -44,20 +44,29 @@ export const acceptanceReviewMarkContextSchema = z.object({
 });
 export type AcceptanceReviewMarkContext = z.infer<typeof acceptanceReviewMarkContextSchema>;
 
+export const acceptanceReviewPageMetaSchema = z.object({
+  description: z.string().max(500).optional(),
+  favicon: z.string().max(2000).optional(),
+  lang: z.string().max(35).optional(),
+  title: z.string().max(300).optional(),
+});
+export type AcceptanceReviewPageMeta = z.infer<typeof acceptanceReviewPageMetaSchema>;
+
 export const acceptanceReviewMarkInputSchema = z.object({
   clientId: z.string().trim().min(1).max(255),
   content: z.string().trim().min(1).max(4000),
   context: acceptanceReviewMarkContextSchema.optional(),
   kind: z.enum(acceptanceReviewMarkKinds),
-  pageUrl: z.string().url().max(2000),
+  pageMeta: acceptanceReviewPageMetaSchema.optional(),
   rectDocument: rectSchema,
   rectViewport: rectSchema,
   regionRefs: anchorShape.regionRefs,
   regions: z.array(rectSchema).max(6).optional(),
-  route: z.string().max(500),
+  routeKey: z.string().max(500),
   scroll: z.object({ x: finite, y: finite }),
   sketch: z.array(sketchNodeSchema).max(50).optional(),
   targets: anchorShape.targets.optional(),
+  url: z.string().url().max(2000),
   viewport: z.object({ dpr: z.number().positive(), height: finite, width: finite }),
 });
 export type AcceptanceReviewMarkInput = z.infer<typeof acceptanceReviewMarkInputSchema>;
@@ -93,16 +102,9 @@ export const updateAcceptanceReviewMarkSchema = z
   });
 export type UpdateAcceptanceReviewMarkInput = z.infer<typeof updateAcceptanceReviewMarkSchema>;
 
-export const startAcceptanceReviewSchema = z.object({
-  pageTitle: z.string().max(300).optional(),
-  pageUrl: z.string().url().max(2000),
-  route: z.string().max(500),
-});
-
 export const submitAcceptanceReviewSchema = z.object({
   agentId: z.string().trim().min(1).max(255).optional(),
-  summary: z.string().trim().max(4000).optional(),
-  title: z.string().trim().min(1).max(300),
+  feedback: z.string().trim().max(4000).optional(),
 });
 export type SubmitAcceptanceReviewInput = z.infer<typeof submitAcceptanceReviewSchema>;
 
@@ -150,24 +152,17 @@ export interface AcceptanceReviewMarkDto extends Omit<
 }
 
 export interface AcceptanceReviewDto {
-  agentId: string | null;
-  author: AcceptanceReviewUserDto;
   counts: { agentPassed: number; humanPassed: number; marks: number };
   createdAt: string;
-  deliveryAcceptanceId: string | null;
   id: string;
   marks?: AcceptanceReviewMarkDto[];
   mine: boolean;
-  pageTitle: string | null;
-  pageUrl: string;
   phase: AcceptanceReviewPhase;
   reportUrl: string | null;
-  route: string;
   status: AcceptanceReviewStatus;
   submittedAt: string | null;
-  summary: string | null;
-  task: { id: string; identifier: string | null } | null;
-  title: string | null;
+  task: { id: string; identifier: string | null; name: string | null } | null;
+  user: AcceptanceReviewUserDto;
 }
 
 export interface AcceptanceReviewSourceLink {

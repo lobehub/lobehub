@@ -1,5 +1,17 @@
 import type { AcceptanceReviewMarkInput, UpdateAcceptanceReviewMarkInput } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+  TransactionRollbackError,
+} from 'drizzle-orm';
 
 import { acceptanceComments } from '../schemas/acceptanceComment';
 import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '../schemas/acceptanceReview';
@@ -7,12 +19,9 @@ import { acceptanceReviewMarks, acceptanceReviews } from '../schemas/acceptanceR
 import type { LobeChatDatabase } from '../type';
 
 export interface CreateAcceptanceReviewDraftParams {
-  acceptanceId: string;
-  authorUserId: string;
-  pageTitle?: string;
-  pageUrl: string;
   projectId?: string | null;
-  route: string;
+  siteId: string;
+  userId: string;
   workspaceId?: string | null;
 }
 
@@ -30,13 +39,10 @@ export class AcceptanceReviewModel {
     const [row] = await this.db
       .insert(acceptanceReviews)
       .values({
-        acceptanceId: params.acceptanceId,
-        authorUserId: params.authorUserId,
-        pageTitle: params.pageTitle,
-        pageUrl: params.pageUrl,
         projectId: params.projectId ?? null,
-        route: params.route,
+        siteId: params.siteId,
         status: 'draft',
+        userId: params.userId,
         workspaceId: params.workspaceId ?? null,
       })
       .returning();
@@ -52,14 +58,14 @@ export class AcceptanceReviewModel {
     return row;
   };
 
-  findDraft = async (acceptanceId: string, authorUserId: string) => {
+  findDraft = async (siteId: string, userId: string) => {
     const [row] = await this.db
       .select()
       .from(acceptanceReviews)
       .where(
         and(
-          eq(acceptanceReviews.acceptanceId, acceptanceId),
-          eq(acceptanceReviews.authorUserId, authorUserId),
+          eq(acceptanceReviews.siteId, siteId),
+          eq(acceptanceReviews.userId, userId),
           eq(acceptanceReviews.status, 'draft'),
         ),
       )
@@ -67,24 +73,36 @@ export class AcceptanceReviewModel {
     return row;
   };
 
-  findByDeliveryAcceptance = async (deliveryAcceptanceId: string) => {
+  findByTask = async (taskId: string) => {
     const [row] = await this.db
       .select()
       .from(acceptanceReviews)
-      .where(eq(acceptanceReviews.deliveryAcceptanceId, deliveryAcceptanceId))
+      .where(eq(acceptanceReviews.taskId, taskId))
       .limit(1);
     return row;
   };
 
-  listSubmitted = async (acceptanceId: string, route?: string) =>
+  listSubmitted = async (siteId: string, routeKey?: string) =>
     this.db
       .select()
       .from(acceptanceReviews)
       .where(
         and(
-          eq(acceptanceReviews.acceptanceId, acceptanceId),
+          eq(acceptanceReviews.siteId, siteId),
           eq(acceptanceReviews.status, 'submitted'),
-          route === undefined ? undefined : eq(acceptanceReviews.route, route),
+          routeKey === undefined
+            ? undefined
+            : exists(
+                this.db
+                  .select({ id: acceptanceReviewMarks.id })
+                  .from(acceptanceReviewMarks)
+                  .where(
+                    and(
+                      eq(acceptanceReviewMarks.reviewId, acceptanceReviews.id),
+                      eq(acceptanceReviewMarks.routeKey, routeKey),
+                    ),
+                  ),
+              ),
         ),
       )
       .orderBy(desc(acceptanceReviews.submittedAt), desc(acceptanceReviews.createdAt));
@@ -102,19 +120,10 @@ export class AcceptanceReviewModel {
     return row;
   };
 
-  markSubmitted = async (
-    reviewId: string,
-    params: { agentId?: string | null; summary?: string | null; title: string },
-  ) => {
+  markSubmitted = async (reviewId: string) => {
     const [row] = await this.db
       .update(acceptanceReviews)
-      .set({
-        agentId: params.agentId ?? null,
-        status: 'submitted',
-        submittedAt: new Date(),
-        summary: params.summary ?? null,
-        title: params.title,
-      })
+      .set({ status: 'submitted', submittedAt: sql`now()` })
       .where(isDraft(reviewId))
       .returning();
     return row;
@@ -129,18 +138,10 @@ export class AcceptanceReviewModel {
     return row;
   };
 
-  linkDelivery = async (
-    reviewId: string,
-    params: { deliveryAcceptanceId?: string | null; taskId?: string | null },
-  ) => {
+  linkTask = async (reviewId: string, taskId: string) => {
     const [row] = await this.db
       .update(acceptanceReviews)
-      .set({
-        ...(params.deliveryAcceptanceId !== undefined
-          ? { deliveryAcceptanceId: params.deliveryAcceptanceId }
-          : {}),
-        ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
-      })
+      .set({ taskId })
       .where(eq(acceptanceReviews.id, reviewId))
       .returning();
     return row;
@@ -149,51 +150,64 @@ export class AcceptanceReviewModel {
   addMark = async (
     reviewId: string,
     params: AddAcceptanceReviewMarkParams,
-  ): Promise<AcceptanceReviewMarkRow> =>
-    this.db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(acceptanceReviewMarks)
-        .where(
-          and(
-            eq(acceptanceReviewMarks.reviewId, reviewId),
-            eq(acceptanceReviewMarks.clientId, params.clientId),
-          ),
-        )
-        .limit(1);
-      if (existing) return existing;
+  ): Promise<AcceptanceReviewMarkRow | undefined> => {
+    const inserted = await this.db
+      .transaction(async (tx) => {
+        const [counter] = await tx
+          .update(acceptanceReviews)
+          .set({ lastMarkSeq: sql`${acceptanceReviews.lastMarkSeq} + 1` })
+          .where(isDraft(reviewId))
+          .returning({ seq: acceptanceReviews.lastMarkSeq });
+        if (!counter) return undefined;
 
-      const [counter] = await tx
-        .update(acceptanceReviews)
-        .set({ lastMarkSeq: sql`${acceptanceReviews.lastMarkSeq} + 1` })
-        .where(eq(acceptanceReviews.id, reviewId))
-        .returning({ seq: acceptanceReviews.lastMarkSeq });
-      if (!counter) throw new Error(`Review "${reviewId}" not found`);
+        const [row] = await tx
+          .insert(acceptanceReviewMarks)
+          .values({
+            clientId: params.clientId,
+            content: params.content,
+            context: params.context,
+            kind: params.kind,
+            pageMeta: params.pageMeta,
+            rectDocument: params.rectDocument,
+            rectViewport: params.rectViewport,
+            regionRefs: params.regionRefs,
+            regions: params.regions,
+            reviewId,
+            routeKey: params.routeKey,
+            screenshotFileId: params.screenshotFileId,
+            scroll: params.scroll,
+            seq: counter.seq,
+            sketch: params.sketch,
+            targets: params.targets,
+            url: params.url,
+            viewport: params.viewport,
+          })
+          .onConflictDoNothing({
+            target: [acceptanceReviewMarks.reviewId, acceptanceReviewMarks.clientId],
+          })
+          .returning();
+        // A retry must not consume a number: rolling back returns the counter bump.
+        if (!row) tx.rollback();
+        return row;
+      })
+      .catch((error: unknown) => {
+        if (error instanceof TransactionRollbackError) return undefined;
+        throw error;
+      });
+    if (inserted) return inserted;
 
-      const [row] = await tx
-        .insert(acceptanceReviewMarks)
-        .values({
-          clientId: params.clientId,
-          content: params.content,
-          context: params.context,
-          kind: params.kind,
-          pageUrl: params.pageUrl,
-          rectDocument: params.rectDocument,
-          rectViewport: params.rectViewport,
-          regionRefs: params.regionRefs,
-          regions: params.regions,
-          reviewId,
-          route: params.route,
-          screenshotFileId: params.screenshotFileId,
-          scroll: params.scroll,
-          seq: counter.seq,
-          sketch: params.sketch,
-          targets: params.targets,
-          viewport: params.viewport,
-        })
-        .returning();
-      return row;
-    });
+    const [existing] = await this.db
+      .select()
+      .from(acceptanceReviewMarks)
+      .where(
+        and(
+          eq(acceptanceReviewMarks.reviewId, reviewId),
+          eq(acceptanceReviewMarks.clientId, params.clientId),
+        ),
+      )
+      .limit(1);
+    return existing;
+  };
 
   updateMark = async (reviewId: string, markId: string, patch: UpdateAcceptanceReviewMarkInput) => {
     const review = await this.findById(reviewId);

@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "43fa8b34-2984-4846-8458-2dabc4696b56",
+  "id": "46e3c4ea-97e4-4a8e-87d2-d89b786c7131",
   "policies": {},
   "prevId": "839a7f65-d033-45df-8b5e-1f80a983f758",
   "roles": {},
@@ -134,7 +134,7 @@
         },
         "review_mark_id": {
           "name": "review_mark_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -777,13 +777,14 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "review_id": {
           "name": "review_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -799,17 +800,23 @@
           "primaryKey": false,
           "notNull": true
         },
-        "page_url": {
-          "name": "page_url",
+        "url": {
+          "name": "url",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "route": {
-          "name": "route",
+        "route_key": {
+          "name": "route_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "page_meta": {
+          "name": "page_meta",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "rect_document": {
           "name": "rect_document",
@@ -940,6 +947,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "acceptance_review_marks_route_key_review_id_idx": {
+          "name": "acceptance_review_marks_route_key_review_id_idx",
+          "columns": [
+            {
+              "expression": "route_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "review_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -974,18 +1002,19 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "acceptance_id": {
-          "name": "acceptance_id",
           "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "author_user_id": {
-          "name": "author_user_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1009,38 +1038,8 @@
           "notNull": true,
           "default": "'draft'"
         },
-        "page_url": {
-          "name": "page_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "route": {
-          "name": "route",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "page_title": {
-          "name": "page_title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "agent_id": {
-          "name": "agent_id",
+        "task_id": {
+          "name": "task_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1051,18 +1050,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "task_id": {
-          "name": "task_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "delivery_acceptance_id": {
-          "name": "delivery_acceptance_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         },
         "submitted_at": {
           "name": "submitted_at",
@@ -1086,17 +1073,11 @@
         }
       },
       "indexes": {
-        "acceptance_reviews_acceptance_route_created_idx": {
-          "name": "acceptance_reviews_acceptance_route_created_idx",
+        "acceptance_reviews_site_id_created_at_idx": {
+          "name": "acceptance_reviews_site_id_created_at_idx",
           "columns": [
             {
-              "expression": "acceptance_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "route",
+              "expression": "site_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1128,26 +1109,11 @@
           "method": "btree",
           "with": {}
         },
-        "acceptance_reviews_delivery_acceptance_id_idx": {
-          "name": "acceptance_reviews_delivery_acceptance_id_idx",
+        "acceptance_reviews_user_id_idx": {
+          "name": "acceptance_reviews_user_id_idx",
           "columns": [
             {
-              "expression": "delivery_acceptance_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "acceptance_reviews_author_user_id_idx": {
-          "name": "acceptance_reviews_author_user_id_idx",
-          "columns": [
-            {
-              "expression": "author_user_id",
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1173,17 +1139,17 @@
           "method": "btree",
           "with": {}
         },
-        "acceptance_reviews_one_draft_per_author_unique": {
-          "name": "acceptance_reviews_one_draft_per_author_unique",
+        "acceptance_reviews_one_draft_per_user_unique": {
+          "name": "acceptance_reviews_one_draft_per_user_unique",
           "columns": [
             {
-              "expression": "acceptance_id",
+              "expression": "site_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "author_user_id",
+              "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1197,20 +1163,20 @@
         }
       },
       "foreignKeys": {
-        "acceptance_reviews_acceptance_id_acceptances_id_fk": {
-          "name": "acceptance_reviews_acceptance_id_acceptances_id_fk",
+        "acceptance_reviews_site_id_project_sites_id_fk": {
+          "name": "acceptance_reviews_site_id_project_sites_id_fk",
           "tableFrom": "acceptance_reviews",
-          "tableTo": "acceptances",
-          "columnsFrom": ["acceptance_id"],
+          "tableTo": "project_sites",
+          "columnsFrom": ["site_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "acceptance_reviews_author_user_id_users_id_fk": {
-          "name": "acceptance_reviews_author_user_id_users_id_fk",
+        "acceptance_reviews_user_id_users_id_fk": {
+          "name": "acceptance_reviews_user_id_users_id_fk",
           "tableFrom": "acceptance_reviews",
           "tableTo": "users",
-          "columnsFrom": ["author_user_id"],
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -1238,15 +1204,6 @@
           "tableFrom": "acceptance_reviews",
           "tableTo": "tasks",
           "columnsFrom": ["task_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "acceptance_reviews_delivery_acceptance_id_acceptances_id_fk": {
-          "name": "acceptance_reviews_delivery_acceptance_id_acceptances_id_fk",
-          "tableFrom": "acceptance_reviews",
-          "tableTo": "acceptances",
-          "columnsFrom": ["delivery_acceptance_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"

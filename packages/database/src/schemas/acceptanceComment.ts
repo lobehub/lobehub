@@ -121,7 +121,7 @@ export const acceptanceComments = pgTable(
      * Set on replies under a review mark. The mark itself carries the reviewer's
      * remark; only the discussion under it lives in this table.
      */
-    reviewMarkId: text('review_mark_id').references(() => acceptanceReviewMarks.id, {
+    reviewMarkId: uuid('review_mark_id').references(() => acceptanceReviewMarks.id, {
       onDelete: 'cascade',
     }),
     /** Client-generated idempotency key for retried creates. */
