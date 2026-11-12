@@ -156,7 +156,10 @@ describe('open project Channels', () => {
     await owner.archive(channel.id);
 
     expect(await teammate.list()).toEqual([]);
+    await expect(teammate.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(teammate.join(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // Its members still read it.
+    expect((await owner.detail(channel.id)).joined).toBe(true);
 
     await owner.unarchive(channel.id);
     await owner.remove(channel.id);
