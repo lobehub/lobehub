@@ -10,7 +10,7 @@ import { AgentAccountModel } from '@/database/models/agentAccount';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import { ConnectorStatus, type UserConnectorToolItem } from '@/database/schemas';
+import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
@@ -135,7 +135,7 @@ const filterInstalledMarketplaceConnectors = (
       connector.sourceType !== 'marketplace' ||
       !hasCallableMcpEndpoint(connector) ||
       isMarketplaceInstallCompleted(connector.metadata) ||
-      (installedIds.has(connector.identifier) && connector.status === ConnectorStatus.connected),
+      (installedIds.has(connector.identifier) && connector.status === 'connected'),
   );
 
 const readConnectors = async (
