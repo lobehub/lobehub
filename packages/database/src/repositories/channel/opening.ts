@@ -148,9 +148,9 @@ export const findOpeningCandidate = async (
 };
 
 /**
- * Applies the opener's decision to a still-queued job, once: opens the Thread under the request
- * and moves the job into it, then posts the acknowledgement as the replying Agent where the reply
- * will land. Records the opening even when nothing was posted, so the opener is not asked again.
+ * Applies the opener's decision to a still-queued job, once: posts the acknowledgement as the
+ * replying Agent in the request's branch, then opens the Thread under it (under the request when
+ * there is none) and moves the job into it. Records the opening even when nothing was posted, so the opener is not asked again.
  * Returns false when another worker opened the job first or it already started.
  */
 export const applyOpening = async (
@@ -177,14 +177,31 @@ export const applyOpening = async (
       .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
     if (!member?.agentId) return false;
 
+    // The acknowledgement goes where the person is looking: the request's own branch, answering
+    // the request. A Thread opens under it, so the person sees the reply start and where it went.
+    const ack = decision.ack?.trim();
+    const posted = ack
+      ? await appendMessage(tx, {
+          agentId: member.agentId,
+          channelId,
+          content: ack,
+          replyToId: job.messageId,
+          requestKey: openingRequestKey(job.id),
+          routingStatus: 'reply',
+          threadId: job.threadId,
+        })
+      : undefined;
+
     let threadId = job.threadId;
     const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
-    // An archived Thread under the request takes no new work: the reply stays where it was asked.
+    // Without an acknowledgement the Thread opens under the request itself, unless an archived
+    // one already sits there: it takes no new work, so the reply stays where it was asked.
+    const rootMessageId = posted?.id ?? job.messageId;
     if (
       title &&
       !threadId &&
       !channel.agentId &&
-      !(await hasArchivedThread(tx, channelId, job.messageId))
+      !(await hasArchivedThread(tx, channelId, rootMessageId))
     ) {
       // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
       const deferred = await tx
@@ -221,10 +238,10 @@ export const applyOpening = async (
       ).map(({ id }) => id);
       const thread = await createChannelThread(tx, channelId, {
         followerMemberIds: followers,
-        rootMessageId: job.messageId,
+        rootMessageId,
       });
-      // A Thread already open under the request (another Agent's answer, or one someone
-      // branched) keeps its name, and gains whoever now answers in it.
+      // A Thread already open under the request (another Agent's answer without an
+      // acknowledgement, or one someone branched) keeps its name, and gains whoever answers in it.
       await followThread(tx, thread, followers);
       if (!thread.metadata?.title) await nameThread(tx, thread.id, title);
       threadId = thread.id;
@@ -234,19 +251,6 @@ export const applyOpening = async (
         .where(inArray(channelJobs.id, [job.id, ...deferred.map(({ id }) => id)]));
     }
 
-    const ack = decision.ack?.trim();
-    const posted = ack
-      ? await appendMessage(tx, {
-          agentId: member.agentId,
-          channelId,
-          content: ack,
-          // In the main timeline it answers the request; in its Thread the request is the root.
-          replyToId: threadId ? null : job.messageId,
-          requestKey: openingRequestKey(job.id),
-          routingStatus: 'reply',
-          threadId,
-        })
-      : undefined;
     await audit(tx, channelId, REPLY_OPENED_EVENT, job.id, {
       ...(posted && { messageId: posted.id }),
       ...(threadId !== job.threadId && { threadId }),

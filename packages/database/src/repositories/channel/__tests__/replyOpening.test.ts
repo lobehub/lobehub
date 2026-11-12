@@ -74,7 +74,7 @@ describe('Channel reply opening', () => {
     expect((await jobById(db, job.id)).threadId).toBeNull();
   });
 
-  it('moves the reply into a named Thread under the request before the claim', async () => {
+  it('acknowledges in the main timeline and moves the reply into a named Thread under it', async () => {
     const { channel, job, member, message } = await mentionAgent();
 
     await execution.open(channel.id, job.id, {
@@ -82,13 +82,7 @@ describe('Channel reply opening', () => {
       threadTitle: 'Deploy failure',
     });
 
-    const [thread] = await db
-      .select()
-      .from(channelThreads)
-      .where(eq(channelThreads.rootMessageId, message.id));
-    expect(thread).toMatchObject({ metadata: { title: 'Deploy failure' } });
-    expect(new Set(thread.followerMemberIds)).toEqual(new Set([member.id, job.memberId]));
-    expect((await jobById(db, job.id)).threadId).toBe(thread.id);
+    // The acknowledgement answers the request where it was asked …
     const [ack] = await db
       .select()
       .from(channelMessages)
@@ -98,15 +92,24 @@ describe('Channel reply opening', () => {
           eq(channelMessages.requestKey, `opening:${job.id}`),
         ),
       );
-    expect(ack).toMatchObject({ replyToId: null, threadId: thread.id });
+    expect(ack).toMatchObject({ replyToId: message.id, threadId: null });
+    // … and the Thread opens under it.
+    const [thread] = await db
+      .select()
+      .from(channelThreads)
+      .where(eq(channelThreads.channelId, channel.id));
+    expect(thread).toMatchObject({ metadata: { title: 'Deploy failure' }, rootMessageId: ack.id });
+    expect(new Set(thread.followerMemberIds)).toEqual(new Set([member.id, job.memberId]));
+    expect((await jobById(db, job.id)).threadId).toBe(thread.id);
 
-    // The run starts in the Thread, and its answer lands there.
+    // The run starts in the Thread, still sees the request, and its answer lands there.
     const claim = await execution.claim(channel.id, job.id, lease);
     expect(claim?.job.manifest).toMatchObject({
       cutoffSequence: message.sequence,
       threadId: thread.id,
-      threadRootSequence: message.sequence,
+      threadRootSequence: ack.sequence,
     });
+    expect((await execution.input(channel.id, job.id)).map(({ id }) => id)).toEqual([message.id]);
     await execution.accepted(channel.id, job.id);
     await execution.saveDraft(channel.id, job.id, 'The token expired.');
     const replyId = await execution.publish(channel.id, job.id);
@@ -117,6 +120,7 @@ describe('Channel reply opening', () => {
       channel.id,
     );
     expect(detail.threads).toEqual([expect.objectContaining({ title: 'Deploy failure' })]);
+    expect(detail.messages.map(({ id }) => id)).toEqual([message.id, ack.id]);
   });
 
   /** A request mentioning two Agents, one job each. */
@@ -190,19 +194,27 @@ describe('Channel reply opening', () => {
     });
   });
 
-  it('keeps the reply in place when the request’s Thread is archived', async () => {
+  it('keeps a reply without an acknowledgement in place when the request’s Thread is archived', async () => {
     const { asOwner, channel, job, message } = await mentionAgent();
     const thread = await asOwner.createThread(channel.id, { rootMessageId: message.id });
     await asOwner.archiveThread(channel.id, thread.id);
 
-    await execution.open(channel.id, job.id, { ack: 'On it.', threadTitle: 'Deploy failure' });
+    await execution.open(channel.id, job.id, { threadTitle: 'Deploy failure' });
 
     expect((await jobById(db, job.id)).threadId).toBeNull();
-    const [ack] = await db
-      .select()
-      .from(channelMessages)
-      .where(eq(channelMessages.requestKey, `opening:${job.id}`));
-    expect(ack).toMatchObject({ replyToId: message.id, threadId: null });
+    expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
+  });
+
+  it('opens a fresh Thread under the acknowledgement even when the request’s is archived', async () => {
+    const { asOwner, channel, job, message } = await mentionAgent();
+    const archived = await asOwner.createThread(channel.id, { rootMessageId: message.id });
+    await asOwner.archiveThread(channel.id, archived.id);
+
+    await execution.open(channel.id, job.id, { ack: 'On it.', threadTitle: 'Deploy failure' });
+
+    const { threadId } = await jobById(db, job.id);
+    expect(threadId).not.toBeNull();
+    expect(threadId).not.toBe(archived.id);
     expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
   });
 
