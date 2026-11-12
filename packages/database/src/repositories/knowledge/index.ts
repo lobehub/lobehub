@@ -68,6 +68,16 @@ const documentNeedsContentPreview = or(
   ilike(d.filename, '%.markdown'),
 );
 
+// Pad the first numeric run after extracting it: regexp replacement strings
+// cannot evaluate LPAD separately for each match in PostgreSQL.
+const naturalNameKey = (name: SQL | AnyPgColumn) =>
+  sql<string>`
+  CASE WHEN ${name} ~ '^[^0-9]*[0-9]+'
+    THEN LOWER(SUBSTRING(${name} FROM '^([^0-9]*)'))
+      || LPAD(SUBSTRING(${name} FROM '^[^0-9]*([0-9]+)'), 20, '0')
+      || LOWER(SUBSTRING(${name} FROM '^[^0-9]*[0-9]+(.*)$'))
+    ELSE LOWER(${name}) END`.as('natural_name_key');
+
 /**
  * The two arms of the resource UNION.
  *
@@ -93,6 +103,9 @@ const fileArmColumns = {
   embeddingTaskId: f.embeddingTaskId,
   fileId: sql<string | null>`${f.id}`.as('file_id'),
   fileType: f.fileType,
+  folderRank: sql<number>`CASE WHEN ${f.fileType} = 'custom/folder' THEN 0 ELSE 1 END`.as(
+    'folder_rank',
+  ),
   // A file that backs a derived page is addressed by the page id.
   id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
   knowledgeBaseIds: sql<
@@ -102,8 +115,14 @@ const fileArmColumns = {
   ),
   metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
   name: f.name,
+  naturalNameKey: naturalNameKey(f.name),
   size: f.size,
   slug: d.slug,
+  sortOrder: sql<
+    number | null
+  >`CASE WHEN jsonb_typeof(COALESCE(${d.metadata}, ${f.metadata}) -> 'sortOrder') = 'number' THEN (COALESCE(${d.metadata}, ${f.metadata}) ->> 'sortOrder')::double precision ELSE NULL END`.as(
+    'sort_order',
+  ),
   sourceType: sql<'file' | 'document'>`'file'`.as('source_type'),
   updatedAt: f.updatedAt,
   uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
@@ -138,6 +157,9 @@ const documentArmColumns = {
   embeddingTaskId: sql<string | null>`NULL::uuid`.as('embedding_task_id'),
   fileId: d.fileId,
   fileType: d.fileType,
+  folderRank: sql<number>`CASE WHEN ${d.fileType} = 'custom/folder' THEN 0 ELSE 1 END`.as(
+    'folder_rank',
+  ),
   id: d.id,
   knowledgeBaseIds: sql<
     string[]
@@ -146,8 +168,14 @@ const documentArmColumns = {
   ),
   metadata: d.metadata,
   name: sql<string>`COALESCE(${d.title}, ${d.filename}, 'Untitled')`.as('name'),
+  naturalNameKey: naturalNameKey(sql`COALESCE(${d.title}, ${d.filename}, 'Untitled')`),
   size: sql<number>`${d.totalCharCount}`.as('size'),
   slug: d.slug,
+  sortOrder: sql<
+    number | null
+  >`CASE WHEN jsonb_typeof(${d.metadata} -> 'sortOrder') = 'number' THEN (${d.metadata} ->> 'sortOrder')::double precision ELSE NULL END`.as(
+    'sort_order',
+  ),
   sourceType: sql<'file' | 'document'>`'document'`.as('source_type'),
   updatedAt: d.updatedAt,
   uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
@@ -183,13 +211,16 @@ interface KnowledgeRow {
   embeddingTaskId: string | null;
   fileId: string | null;
   fileType: string;
+  folderRank: number;
   hasChildren: boolean;
   id: string;
   knowledgeBaseIds: string[] | null;
   metadata: Record<string, any> | null;
   name: string;
+  naturalNameKey: string;
   size: number;
   slug: string | null;
+  sortOrder: number | null;
   sourceType: 'file' | 'document';
   updatedAt: Date;
   uploaderAvatar: string | null;
@@ -608,7 +639,7 @@ export class KnowledgeRepo {
     );
 
     const rows = await unionAll(fileArm, documentArm)
-      .orderBy(this.orderBy(sortType, sorter))
+      .orderBy(...this.resourceOrderBy(sortType, sorter, Boolean(knowledgeBaseId)))
       .limit(limit)
       .offset(offset);
 
@@ -861,6 +892,31 @@ export class KnowledgeRepo {
     const filter = buildDocumentCategoryFilter(d.fileType, category as FilesTabs);
     if (filter === 'all') return undefined;
     return filter === 'none' ? sql`false` : filter;
+  };
+
+  private resourceOrderBy = (
+    sortType?: string,
+    sorter?: string,
+    inKnowledgeBase = false,
+  ): SQL[] => {
+    const direction = sortType?.toLowerCase() === SortType.Asc ? asc : desc;
+    const foldersFirst = asc(sql.raw('folder_rank'));
+    const stableId = asc(sql.raw('id'));
+    if (sorter === 'custom') {
+      return [
+        foldersFirst,
+        sortType?.toLowerCase() === SortType.Desc
+          ? sql`sort_order DESC NULLS LAST`
+          : sql`sort_order ASC NULLS LAST`,
+        asc(sql.raw('natural_name_key')),
+        stableId,
+      ];
+    }
+    if (sorter === 'name') {
+      return [foldersFirst, direction(sql.raw('natural_name_key')), stableId];
+    }
+    const order = this.orderBy(sortType, sorter);
+    return inKnowledgeBase ? [foldersFirst, order, stableId] : [order];
   };
 
   /**

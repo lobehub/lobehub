@@ -1,6 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 
-import { type ResourceItem, type ResourceQueryParams } from '@/types/resource';
+import { SortType } from '@/types/files';
+import { type ResourceItem, type ResourceQueryParams, type ResourceSorter } from '@/types/resource';
 
 import { type ResourceListParams, type ResourceListValue } from './projection';
 
@@ -73,36 +74,64 @@ export const isOptimisticRowInRequestedPool = (
 
 // ---- move reconciliation into cached folder lists ------------------------
 
-const toTime = (value: Date | string | number | undefined | null) =>
-  value == null ? 0 : new Date(value).getTime();
+const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-const SORT_ACCESSORS: Record<string, (item: ResourceItem) => number | string> = {
-  createdAt: (item) => toTime(item.createdAt),
-  name: (item) => item.name ?? '',
-  size: (item) => item.size ?? 0,
-  updatedAt: (item) => toTime(item.updatedAt),
+type SortableResource = {
+  createdAt?: Date | string | null;
+  fileType?: string;
+  id: string;
+  isFolder?: boolean;
+  metadata?: Record<string, unknown> | null;
+  name?: string | null;
+  size?: number | null;
 };
 
-/**
- * The order the server returns a list in, mirrored from the knowledge
- * repository's `orderBy`: both `sorter` and `sortType` have to be present for a
- * custom sort, anything else is newest-first.
- */
-const compareResourcesForList =
-  ({ sorter, sortType }: ResourceListParams) =>
-  (a: ResourceItem, b: ResourceItem) => {
-    const custom = sorter && sortType && sorter in SORT_ACCESSORS;
-    const accessor = custom ? SORT_ACCESSORS[sorter!] : SORT_ACCESSORS.createdAt;
-    const direction = custom && String(sortType).toLowerCase() === 'asc' ? 1 : -1;
+const toTime = (value?: Date | string | null): number => {
+  const time = value == null ? 0 : new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
 
-    const left = accessor(a);
-    const right = accessor(b);
-    const order =
-      typeof left === 'string' && typeof right === 'string'
-        ? left.localeCompare(right)
-        : Number(left) - Number(right);
-    return order * direction;
-  };
+/** Shared ordering for Explorer, sidebar and cached destination lists. */
+export const compareResourceItems = (
+  a: SortableResource,
+  b: SortableResource,
+  sorter: ResourceSorter,
+  sortType: SortType,
+): number => {
+  const aFolder = a.isFolder === true || a.fileType === CUSTOM_FOLDER_FILE_TYPE;
+  const bFolder = b.isFolder === true || b.fileType === CUSTOM_FOLDER_FILE_TYPE;
+  if (aFolder !== bFolder) return aFolder ? -1 : 1;
+
+  const direction = sortType === SortType.Desc ? -1 : 1;
+  let cmp = 0;
+  if (sorter === 'custom') {
+    const aOrder = a.metadata?.sortOrder;
+    const bOrder = b.metadata?.sortOrder;
+    const aHasOrder = typeof aOrder === 'number' && Number.isFinite(aOrder);
+    const bHasOrder = typeof bOrder === 'number' && Number.isFinite(bOrder);
+    if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
+    if (aHasOrder && bHasOrder) cmp = aOrder - bOrder;
+  } else if (sorter === 'size') {
+    cmp = (a.size ?? 0) - (b.size ?? 0);
+  } else if (sorter === 'createdAt') {
+    cmp = toTime(a.createdAt) - toTime(b.createdAt);
+  }
+  return (
+    (cmp ||
+      naturalCollator.compare(a.name ?? '', b.name ?? '') ||
+      naturalCollator.compare(a.id, b.id)) * direction
+  );
+};
+
+const compareResourcesForList =
+  ({ libraryId, sorter, sortType }: ResourceListParams) =>
+  (a: ResourceItem, b: ResourceItem) =>
+    compareResourceItems(
+      a,
+      b,
+      sorter ?? (libraryId ? 'custom' : 'createdAt'),
+      sortType ?? (libraryId ? SortType.Asc : SortType.Desc),
+    );
 
 /**
  * Whether a cached list is a plain folder listing the moved row certainly

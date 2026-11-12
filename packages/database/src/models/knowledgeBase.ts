@@ -1,5 +1,5 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, or, sql, sum } from 'drizzle-orm';
 
 import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
@@ -39,6 +39,65 @@ export class KnowledgeBaseModel {
       .returning();
 
     return result;
+  };
+
+  /** Persist a sibling order without turning a move into a content edit. */
+  reorderItems = async (knowledgeBaseId: string, orderedIds: string[]) => {
+    return this.db.transaction(async (trx) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      const links = await trx
+        .select({ fileId: knowledgeBaseFiles.fileId })
+        .from(knowledgeBaseFiles)
+        .where(eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId));
+      const linkedFileIds = links.map((link) => link.fileId);
+      const documentMembership = linkedFileIds.length
+        ? or(
+            eq(documents.knowledgeBaseId, knowledgeBaseId),
+            inArray(documents.fileId, linkedFileIds),
+          )
+        : eq(documents.knowledgeBaseId, knowledgeBaseId);
+
+      for (const [index, id] of [...new Set(orderedIds)].entries()) {
+        const sortOrder = (index + 1) * 1000;
+        const documentUpdate = {
+          metadata: sql`jsonb_set(COALESCE(${documents.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
+          updatedAt: documents.updatedAt,
+        };
+        const fileUpdate = {
+          metadata: sql`jsonb_set(COALESCE(${files.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
+          updatedAt: files.updatedAt,
+        };
+        if (id.startsWith('docs_')) {
+          const updated = await trx
+            .update(documents)
+            .set(documentUpdate)
+            .where(
+              and(eq(documents.id, id), documentMembership, buildWorkspaceWhere(scope, documents)),
+            )
+            .returning({ fileId: documents.fileId });
+          const fileIds = updated.flatMap((row) => (row.fileId ? [row.fileId] : []));
+          if (fileIds.length) {
+            await trx
+              .update(files)
+              .set(fileUpdate)
+              .where(and(inArray(files.id, fileIds), buildWorkspaceWhere(scope, files)));
+          }
+        } else if (linkedFileIds.includes(id)) {
+          const updated = await trx
+            .update(files)
+            .set(fileUpdate)
+            .where(and(eq(files.id, id), buildWorkspaceWhere(scope, files)))
+            .returning({ id: files.id });
+          if (updated.length) {
+            await trx
+              .update(documents)
+              .set(documentUpdate)
+              .where(and(eq(documents.fileId, id), buildWorkspaceWhere(scope, documents)));
+          }
+        }
+      }
+      return { success: true };
+    });
   };
 
   addFilesToKnowledgeBase = async (id: string, fileIds: string[]) => {

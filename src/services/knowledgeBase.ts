@@ -64,6 +64,14 @@ class KnowledgeBaseService {
     return lambdaClient.knowledgeBase.addFilesToKnowledgeBase.mutate({ ids, knowledgeBaseId });
   };
 
+  reorderKnowledgeItems = async (params: {
+    knowledgeBaseId: string;
+    orderedIds: string[];
+    parentId?: string | null;
+  }) => {
+    return lambdaClient.knowledgeBase.reorderKnowledgeItems.mutate(params);
+  };
+
   removeFilesFromKnowledgeBase = async (knowledgeBaseId: string, ids: string[]) => {
     return lambdaClient.knowledgeBase.removeFilesFromKnowledgeBase.mutate({ ids, knowledgeBaseId });
   };

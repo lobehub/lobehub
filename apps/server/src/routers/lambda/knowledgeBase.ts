@@ -153,6 +153,27 @@ export const knowledgeBaseRouter = router({
       }
     }),
 
+  reorderKnowledgeItems: knowledgeBaseProcedure
+    .use(withScopedPermission('knowledge_base:update'))
+    .input(
+      z.object({
+        knowledgeBaseId: z.string(),
+        orderedIds: z.array(z.string()).min(1).max(1000),
+        parentId: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+      await assertKnowledgeItemsAccessible(ctx, input.orderedIds);
+      return ctx.knowledgeBaseModel.reorderItems(input.knowledgeBaseId, input.orderedIds);
+    }),
+
   createKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:create'))
     .input(
