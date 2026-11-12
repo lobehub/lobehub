@@ -41,7 +41,8 @@ const createdTask = {
 
 const setup = (
   overrides: { parent?: { id: string; identifier: string; projectId: string } },
-  runProjectId: string | undefined = 'proj-apollo',
+  /** `null` runs outside any project; omitted runs inside the fixture project. */
+  runProjectId: string | null = 'proj-apollo',
 ) => {
   const taskService = {
     createTask: vi.fn().mockResolvedValue(createdTask),
@@ -56,7 +57,7 @@ const setup = (
     agentId: 'agt-coordinator',
     agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
     db: {} as any,
-    projectId: runProjectId,
+    projectId: runProjectId ?? undefined,
     taskCaller: { update: vi.fn().mockResolvedValue({ data: { id: 'task-1' } }) } as any,
     taskModel: taskModel as any,
     taskService: taskService as any,
@@ -155,7 +156,7 @@ describe('task runtime inside a project', () => {
   });
 
   it('leaves a run outside any project its tasks unfiled', async () => {
-    const { runtime, taskService } = setup({}, undefined);
+    const { runtime, taskService } = setup({}, null);
 
     const result = await runtime.createTask({ instruction: 'Workspace chore', name: 'Chore' });
 
