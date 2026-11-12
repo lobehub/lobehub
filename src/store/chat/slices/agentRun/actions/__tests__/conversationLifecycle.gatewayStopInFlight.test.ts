@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { getElectronStoreState } from '@/store/electron/store';
 import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
 
@@ -181,5 +182,81 @@ describe('Stop while a gateway send is starting', () => {
 
     expect(editor.setDocument).not.toHaveBeenCalled();
     expect(editor.setJSONState).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  //
+  // The restorable snapshot was written only after the send's preflight awaits
+  // (topic lookup, device id). A Stop there found no snapshot to replay, and
+  // the abort that later reached the failed-send restore is skipped as a Stop,
+  // so the draft was never handed back.
+  //
+  // Before: the composer stayed empty. After: the exact draft comes back.
+  it('hands the draft back when Stop lands during the preflight awaits', async () => {
+    const { result } = renderHook(() => useChatStore());
+    const editor = {
+      clearContent: vi.fn(),
+      getJSONState: vi.fn(() => typedDraft),
+      getMarkdownContent: vi.fn(() => ''),
+      setDocument: vi.fn(),
+      setJSONState: vi.fn(),
+    };
+    let releasePreflight!: () => void;
+    const preflight = new Promise<void>((resolve) => {
+      releasePreflight = resolve;
+    });
+    const resolveGatewayDeviceId = vi.fn(async () => {
+      await preflight;
+      return undefined;
+    });
+    vi.spyOn(getElectronStoreState(), 'resolveGatewayDeviceId').mockImplementation(
+      resolveGatewayDeviceId as any,
+    );
+    // Before sending, the real transport rethrows the aborted signal's reason.
+    const executeGatewayAgent = vi.fn(async (params: any) => {
+      const signal = useChatStore.getState().getOperationAbortSignal(params.parentOperationId);
+      if (signal.aborted) throw signal.reason;
+      return { topicId };
+    });
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: topicId,
+        executeGatewayAgent: executeGatewayAgent as any,
+        isGatewayModeEnabled: () => true,
+        mainInputEditor: editor as any,
+      });
+    });
+
+    const context = { agentId, threadId: null, topicId };
+    let sending!: Promise<unknown>;
+    await act(async () => {
+      sending = result.current.sendMessage({ context, message: 'hello' });
+      await vi.waitFor(() => expect(resolveGatewayDeviceId).toHaveBeenCalled());
+    });
+
+    act(() => {
+      const store = useChatStore.getState();
+      store.cancelOperations(
+        { ...context, status: 'running', type: INPUT_LOADING_OPERATION_TYPES },
+        MESSAGE_CANCEL_FLAT,
+      );
+      store.cancelSendMessageInServer(context, editor as any);
+    });
+    expect(editor.setJSONState).toHaveBeenCalledWith(typedDraft);
+
+    await act(async () => {
+      releasePreflight();
+      await sending;
+    });
+
+    expect(executeGatewayAgent).toHaveBeenCalledOnce();
+    expect(editor.setJSONState).toHaveBeenCalledOnce();
+    expect(editor.setDocument).not.toHaveBeenCalled();
+    const send = Object.values(useChatStore.getState().operations).find(
+      (operation) => operation.type === 'sendMessage',
+    );
+    expect(send?.status).toBe('cancelled');
+    expect(send?.metadata.inputSendErrorMsg).toBeUndefined();
   });
 });

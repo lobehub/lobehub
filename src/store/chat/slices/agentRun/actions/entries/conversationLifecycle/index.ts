@@ -855,6 +855,11 @@ export class ConversationLifecycleActionImpl {
     const steeredTurnStartTime = (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
       ? operationSelectors.getLatestAgentRuntimeTurnStartTime(operationContext)(this.#get())
       : undefined;
+    // Editor state for cancel restoration, on the op from its start: a Stop during
+    // the preflight awaits below must find it, or the draft is never handed back.
+    const jsonState = preserveComposer
+      ? undefined
+      : (inputEditorData ?? targetInputEditor?.getJSONState());
     const { operationId, abortController } = this.#get().startOperation({
       type: 'sendMessage',
       context: { ...operationContext, messageId: tempId },
@@ -862,6 +867,7 @@ export class ConversationLifecycleActionImpl {
       metadata: {
         // Mark this as thread operation if threadId exists
         inThread: !!operationContext.threadId,
+        inputEditorTempState: jsonState,
         ...(steeredTurnStartTime === undefined ? {} : { turnStartTime: steeredTurnStartTime }),
       },
     });
@@ -1391,15 +1397,6 @@ export class ConversationLifecycleActionImpl {
       }
       optimisticTopicActive = true;
     }
-
-    // Store editor state in operation metadata for cancel restoration
-    const jsonState = preserveComposer
-      ? undefined
-      : (inputEditorData ?? targetInputEditor?.getJSONState());
-    this.#get().updateOperationMetadata(operationId, {
-      inputEditorTempState: jsonState,
-      inputSendErrorMsg: undefined,
-    });
 
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
