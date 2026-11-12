@@ -1,5 +1,11 @@
 import type { QQAdapter } from '@lobechat/chat-adapter-qq';
-import { createQQAdapter, isQQActiveRateLimited, isQQDuplicateReply, isQQPassiveExpired, QQApiClient } from '@lobechat/chat-adapter-qq';
+import {
+  createQQAdapter,
+  isQQActiveRateLimited,
+  isQQDuplicateReply,
+  isQQPassiveExpired,
+  QQApiClient,
+} from '@lobechat/chat-adapter-qq';
 import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 

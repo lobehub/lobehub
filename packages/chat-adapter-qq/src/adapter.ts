@@ -401,7 +401,11 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
   private async deferReply(threadId: string, text: string): Promise<void> {
     if (!text.trim()) return;
 
-    this.logger?.warn('QQ passive window closed for %s, deferring reply (%d chars)', threadId, text.length);
+    this.logger?.warn(
+      'QQ passive window closed for %s, deferring reply (%d chars)',
+      threadId,
+      text.length,
+    );
 
     try {
       await this.passive.savePending(this.passiveKey(threadId), text);

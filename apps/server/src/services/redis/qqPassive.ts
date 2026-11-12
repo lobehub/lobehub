@@ -68,12 +68,11 @@ export const qqPassive: QQPassiveStore = {
       const windowKey = RedisKeys.qqPassive.window(key);
       const pipeline = redis.pipeline();
       pipeline.del(windowKey);
-      pipeline.hset(windowKey, {
-        at: String(token.at),
-        eventId: token.eventId ?? '',
-        msgId: token.msgId ?? '',
-        seq: '0',
-      });
+      // Field by field: the client's `hset` signature takes one field, not an object.
+      pipeline.hset(windowKey, 'at', String(token.at));
+      pipeline.hset(windowKey, 'eventId', token.eventId ?? '');
+      pipeline.hset(windowKey, 'msgId', token.msgId ?? '');
+      pipeline.hset(windowKey, 'seq', '0');
       pipeline.expire(windowKey, WINDOW_TTL_SECONDS);
       await pipeline.exec();
     } catch {
