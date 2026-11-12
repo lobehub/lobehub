@@ -864,6 +864,7 @@ table agent_account_bindings {
   priority integer [not null, default: 0]
   weight integer [not null, default: 1]
   enabled boolean [not null, default: true]
+  last_selected_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]

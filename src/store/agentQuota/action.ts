@@ -1,5 +1,10 @@
 import { isDesktop } from '@lobechat/const';
 import type { ClaudeCodeLocalAccount } from '@lobechat/electron-client-ipc';
+import {
+  isAuthorizedQuotaBinding,
+  type QuotaAccountProvider,
+  type QuotaLoadBalanceConfig,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand';
@@ -365,6 +370,56 @@ export class ActionImpl {
     );
     await this.#refresh(this.#bindings, agentId);
   };
+
+  /**
+   * Replace the accounts an agent may schedule (Agent Profile "subscription
+   * accounts"). With `provider`, only that provider's accounts are rewritten.
+   * Dropped accounts leave the replica at once; the server's rows (ids for new
+   * bindings, a cleared pin, dropped device picks) arrive with the refresh. Returns the resulting
+   * load-balancing configuration.
+   */
+  setQuotaAgentAccounts = async (
+    agentId: string,
+    accountIds: string[],
+    provider?: QuotaAccountProvider,
+  ): Promise<QuotaLoadBalanceConfig> => {
+    const loading = this.#ensureBindings(agentId);
+    if (loading) await loading;
+    const scope = new Set(
+      (this.#get().quotaAccountsMap[QUOTA_ACCOUNTS_KEY] ?? [])
+        .filter((account) => !provider || account.provider === provider)
+        .map((account) => account.id),
+    );
+    const wanted = new Set(accountIds);
+
+    const config = await this.#bindings.optimistic(
+      agentId,
+      (bindings) =>
+        bindings
+          .filter((binding) => !scope.has(binding.accountId) || wanted.has(binding.accountId))
+          .map((binding) =>
+            wanted.has(binding.accountId) && !isAuthorizedQuotaBinding(binding)
+              ? { ...binding, enabled: true, role: 'pool' }
+              : binding,
+          ),
+      () => agentQuotaService.setAgentAccounts(agentId, accountIds, provider),
+    );
+    // The server also dropped this agent's device picks of unauthorized
+    // accounts: re-read the bindings and every pick of the agent on screen.
+    await Promise.all([
+      this.#refresh(this.#bindings, agentId),
+      ...Object.keys(this.#get().quotaDeviceAccountMap)
+        .filter((key) => parseQuotaDeviceAccountKey(key).agentId === agentId)
+        .map((key) => this.#refresh(this.#deviceAccount, key)),
+    ]);
+    return config;
+  };
+
+  /** Auto / Manual mode and the candidates (= the agent's authorized, usable accounts). */
+  readQuotaLoadBalanceConfig = (
+    agentId: string,
+    options?: Parameters<typeof agentQuotaService.getLoadBalanceConfig>[1],
+  ): Promise<QuotaLoadBalanceConfig> => agentQuotaService.getLoadBalanceConfig(agentId, options);
 
   /** Drop an account from an agent's pool; the row leaves the replica and its stored copy. */
   unbindQuotaAccount = async (agentId: string, bindingId: string): Promise<void> => {
