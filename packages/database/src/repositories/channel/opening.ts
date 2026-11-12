@@ -11,6 +11,7 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
 import { audit, withChannelLock } from './transaction';
@@ -178,7 +179,13 @@ export const applyOpening = async (
 
     let threadId = job.threadId;
     const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
-    if (title && !threadId && !channel.agentId) {
+    // An archived Thread under the request takes no new work: the reply stays where it was asked.
+    if (
+      title &&
+      !threadId &&
+      !channel.agentId &&
+      !(await hasArchivedThread(tx, channelId, job.messageId))
+    ) {
       // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
       const deferred = await tx
         .select({ id: channelJobs.id, memberId: channelJobs.memberId })
@@ -247,6 +254,20 @@ export const applyOpening = async (
 
     return true;
   });
+
+const hasArchivedThread = async (tx: Transaction, channelId: string, rootMessageId: string) => {
+  const [thread] = await tx
+    .select({ status: channelThreads.status })
+    .from(channelThreads)
+    .where(
+      and(
+        eq(channelThreads.channelId, channelId),
+        eq(channelThreads.rootMessageId, rootMessageId),
+        notTrashed(channelThreads.isDeleted),
+      ),
+    );
+  return thread?.status === 'archived';
+};
 
 /** Adds `memberIds` the Thread does not follow yet; the caller passes active members only. */
 const followThread = async (

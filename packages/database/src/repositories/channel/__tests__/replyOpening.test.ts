@@ -190,6 +190,22 @@ describe('Channel reply opening', () => {
     });
   });
 
+  it('keeps the reply in place when the request’s Thread is archived', async () => {
+    const { asOwner, channel, job, message } = await mentionAgent();
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: message.id });
+    await asOwner.archiveThread(channel.id, thread.id);
+
+    await execution.open(channel.id, job.id, { ack: 'On it.', threadTitle: 'Deploy failure' });
+
+    expect((await jobById(db, job.id)).threadId).toBeNull();
+    const [ack] = await db
+      .select()
+      .from(channelMessages)
+      .where(eq(channelMessages.requestKey, `opening:${job.id}`));
+    expect(ack).toMatchObject({ replyToId: message.id, threadId: null });
+    expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
+  });
+
   it('keeps the acknowledgement out of the next run’s unseen context', async () => {
     const { agent, asMember, channel, job } = await mentionAgent();
     await execution.open(channel.id, job.id, { ack: 'Got it, checking the logs.' });
