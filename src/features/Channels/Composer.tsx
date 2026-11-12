@@ -76,7 +76,11 @@ type ComposerDelivery =
       onSend: ChannelComposerSend;
     };
 
-const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
+const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin];
+
+/** Highlighted text like the rest of the line, not the editor's default boxed tag. */
+const mentionTheme = { mention: stylex.props(styles.composerMention).className };
+const writeMention = (node: { label: string }) => `@${node.label}`;
 
 /** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
 const inputShell = { borderRadius: 12 };
@@ -347,7 +351,7 @@ export function Composer({
                         ]
                       : options;
                   },
-                  markdownWriter: (node) => `@${node.label}`,
+                  markdownWriter: writeMention,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
                       label: String(option.label),
@@ -385,7 +389,11 @@ export function Composer({
                   void send();
                   return true;
                 }}
-              />
+              >
+                {/* <Editor> registers its own mention plugin after `plugins`, and a later
+                    registration replaces the config; a child registers last, so this theme wins. */}
+                <ReactMentionPlugin markdownWriter={writeMention} theme={mentionTheme} />
+              </Editor>
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
             {/* Enter sends; like an IM, the button only appears once there is something to send. */}

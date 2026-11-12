@@ -196,6 +196,15 @@ export const styles = stylex.create({
     color: cssVar.colorInfo,
     backgroundColor: cssVar.colorInfoBg,
   },
+  /** A mention inside the composer: highlighted text, no tag; tinted like selected text while selected. */
+  composerMention: {
+    userSelect: 'none',
+    fontWeight: 500,
+    color: cssVar.colorInfo,
+    // `.selected` is added by the editor's selection observer, not by React.
+    borderRadius: { 'default': null, ':is(.selected)': cssVar.borderRadiusXS },
+    backgroundColor: { 'default': null, ':is(.selected)': cssVar.colorInfoBgHover },
+  },
   composer: {
     'position': 'relative',
     'flexShrink': 0,
