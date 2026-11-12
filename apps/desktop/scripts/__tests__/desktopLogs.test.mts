@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import * as layout from '../../src/main/utils/structuredLog/layout';
 import {
+  createFollowCursors,
   describeRun,
   discoverLogDirectories,
   formatRecord,
@@ -111,6 +112,33 @@ describe('queryLogs', () => {
 
     const last = await queryLogs(directory, allProcesses, 2);
     expect(last.map((match) => match.record.msg)).toEqual(['renderer', 'new main']);
+  });
+});
+
+describe('createFollowCursors', () => {
+  it('hands lines written during the initial tail to follow, whole and once', async () => {
+    const directory = path.join(root, 'logs');
+    await mkdir(directory, { recursive: true });
+    const file = path.join(directory, 'main.jsonl');
+    const partial = toLine(record({ msg: 'mid-append', ts: '2026-11-12T10:00:01.000Z' }));
+    await writeFile(
+      file,
+      toLine(record({ msg: 'before', ts: '2026-11-12T10:00:00.000Z' })) + partial.slice(0, 10),
+    );
+    const filter: LogFilter = { processes: ['main'] };
+
+    const cursors = await createFollowCursors(directory, filter);
+    await appendFile(
+      file,
+      partial.slice(10) + toLine(record({ msg: 'during tail', ts: '2026-11-12T10:00:02.000Z' })),
+    );
+
+    const tail = await queryLogs(directory, filter, 10, cursors);
+    expect(tail.map((match) => match.record.msg)).toEqual(['before']);
+    const followed = (await readAppended(file, cursors.get(file)!)).map(
+      (line) => JSON.parse(line).msg,
+    );
+    expect(followed).toEqual(['mid-append', 'during tail']);
   });
 });
 

@@ -234,18 +234,28 @@ interface Match {
   record: LogRecord;
 }
 
-/** Last `limit` matches across processes and rotated files, oldest first. */
+/**
+ * Last `limit` matches across processes and rotated files, oldest first. With
+ * `cursors` (from `createFollowCursors`), each live file is read only up to its
+ * cursor, so `follow` resumes exactly where this tail ends.
+ */
 export const queryLogs = async (
   directory: string,
   filter: LogFilter,
   limit: number,
+  cursors?: Map<string, Cursor>,
 ): Promise<Match[]> => {
   const matches: Match[] = [];
   for (const process of filter.processes) {
     const kept: Match[] = [];
     for (const file of getGenerationPaths(directory, process)) {
-      if (!(await exists(file))) continue;
-      const lines = createInterface({ crlfDelay: Infinity, input: createReadStream(file) });
+      const stats = await stat(file).catch(() => undefined);
+      if (!stats) continue;
+      const cursor = cursors?.get(file);
+      // A rotation since the cursor was taken means this live file is all new: follow reads it.
+      if (cursor && (cursor.ino !== stats.ino || cursor.offset === 0)) continue;
+      const input = createReadStream(file, cursor ? { end: cursor.offset - 1 } : undefined);
+      const lines = createInterface({ crlfDelay: Infinity, input });
       for await (const line of lines) {
         const record = parseLine(line);
         if (!record || !matchesFilter(record, line, filter)) continue;
@@ -283,16 +293,22 @@ interface Cursor {
   remainder: string;
 }
 
-const readRange = async (file: string, start: number, end: number) => {
+const readBytes = async (file: string, start: number, end: number) => {
   const handle = await open(file, 'r');
   try {
     const buffer = Buffer.alloc(end - start);
     await handle.read(buffer, 0, end - start, start);
-    return buffer.toString('utf8');
+    return buffer;
   } finally {
     await handle.close();
   }
 };
+
+const readRange = async (file: string, start: number, end: number) =>
+  (await readBytes(file, start, end)).toString('utf8');
+
+/** How far back `createFollowCursors` looks for a line boundary; records are capped well below it. */
+const FOLLOW_ALIGN_BYTES = 256 * 1024;
 
 /**
  * Reads what a live file gained since `cursor`. A new inode means the writer
@@ -322,20 +338,35 @@ export const readAppended = async (file: string, cursor: Cursor): Promise<string
   return lines;
 };
 
-const FOLLOW_POLL_MS = 500;
-
-const follow = async (
-  directory: string,
-  filter: LogFilter,
-  print: (match: Match) => void,
-  durationMs?: number,
-) => {
+/**
+ * Marks the current end of each live file, backed up to the last complete line
+ * so a record mid-append is read whole by `follow` rather than split in two.
+ * Taken before the initial tail so lines written during it are not skipped.
+ */
+export const createFollowCursors = async (directory: string, filter: LogFilter) => {
   const cursors = new Map<string, Cursor>();
   for (const process of filter.processes) {
     const file = path.join(directory, getLogFileName(process));
     const stats = await stat(file).catch(() => undefined);
-    cursors.set(file, { ino: stats?.ino, offset: stats?.size ?? 0, remainder: '' });
+    let offset = stats?.size ?? 0;
+    if (offset > 0) {
+      const start = Math.max(0, offset - FOLLOW_ALIGN_BYTES);
+      const lastNewline = (await readBytes(file, start, offset)).lastIndexOf(0x0a);
+      offset = lastNewline === -1 ? start : start + lastNewline + 1;
+    }
+    cursors.set(file, { ino: stats?.ino, offset, remainder: '' });
   }
+  return cursors;
+};
+
+const FOLLOW_POLL_MS = 500;
+
+const follow = async (
+  cursors: Map<string, Cursor>,
+  filter: LogFilter,
+  print: (match: Match) => void,
+  durationMs?: number,
+) => {
   const deadline = durationMs === undefined ? undefined : Date.now() + durationMs;
   while (deadline === undefined || Date.now() < deadline) {
     const batch: Match[] = [];
@@ -467,9 +498,10 @@ const main = async (argv: string[]) => {
   }
 
   const tail = values.tail ? Number(values.tail) : 20;
-  if (tail > 0) (await queryLogs(directory, filter, tail)).forEach(print);
+  const cursors = await createFollowCursors(directory, filter);
+  if (tail > 0) (await queryLogs(directory, filter, tail, cursors)).forEach(print);
   await follow(
-    directory,
+    cursors,
     filter,
     print,
     values.duration ? parseDuration(values.duration) : undefined,
