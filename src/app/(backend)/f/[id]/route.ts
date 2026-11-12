@@ -1,32 +1,18 @@
-import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import debug from 'debug';
 import { NextRequest } from 'next/server';
 
 import { FileModel } from '@/database/models/file';
 import { getServerDB } from '@/database/server';
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
-import { resolveEnterpriseContentScopes } from '@/server/services/enterpriseKnowledge/contentAccess';
+import {
+  resolveEnterpriseContentScopes,
+  resolveManagedContentReader,
+} from '@/server/services/enterpriseKnowledge/contentAccess';
 import { FileService } from '@/server/services/file';
 
 const log = debug('lobe-file:proxy');
 
 type Params = Promise<{ id: string }>;
-
-type ProxyIdentity = Awaited<ReturnType<typeof createLambdaContext>>;
-
-/**
- * tRPC enforces credential limits in middleware this route never runs. Accept only
- * credentials allowed to read files: sessions, ordinary OIDC, and API keys with
- * file read scope. Sandbox operation tokens never qualify.
- */
-const readerOf = (identity: ProxyIdentity): string | undefined => {
-  if (!identity.userId) return undefined;
-  if (identity.oidcAuth?.purpose === 'hetero-operation') return undefined;
-  const scopes = identity.apiKeyScopes;
-  if (scopes && !isFullAccessApiKey(scopes) && !hasApiKeyScope(scopes, 'file:read'))
-    return undefined;
-  return identity.userId;
-};
 
 /**
  * File proxy service
@@ -70,7 +56,7 @@ export const GET = async (req: Request, segmentData: { params: Params }) => {
         id,
       ]);
       if (scopes.has(id)) {
-        const reader = readerOf(await createLambdaContext(new NextRequest(req)));
+        const reader = resolveManagedContentReader(await createLambdaContext(new NextRequest(req)));
         if (!reader) return new Response('File not found', { status: 404 });
         await resolveEnterpriseContentScopes({ serverDB: db, userId: reader }, [id]);
       }

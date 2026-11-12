@@ -359,6 +359,8 @@ describe('knowledge content read boundaries', () => {
     expect((await proxy('file_content_a')).status).toBe(404);
     boundary.credential = { apiKeyScopes: ['file:read'] };
     expect((await proxy('file_content_a')).status).not.toBe(404);
+    boundary.credential = { apiKeyScopes: ['file:read'], workspaceId: 'ws-bound' };
+    expect((await proxy('file_content_a')).status).toBe(404);
     boundary.credential = { oidcAuth: { purpose: 'hetero-operation', sub: viewer } };
     boundary.identity = undefined;
     expect((await proxy('file_content_personal')).status).toBe(302);
