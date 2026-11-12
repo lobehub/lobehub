@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   ensureBuiltinToolSurfaces: vi.fn().mockResolvedValue(undefined),
+  purgeLegacySWRCache: vi.fn().mockResolvedValue(undefined),
   registerBuiltinToolExecutors: vi.fn(),
   setPostRenderReady: vi.fn(),
   shouldSkipRoutePreload: vi.fn().mockReturnValue(false),
@@ -22,6 +23,10 @@ vi.mock('@/store/tool/slices/builtin/executors', () => ({
 
 vi.mock('./connectors', () => ({
   startConnectorInitialization: mocks.startConnectorInitialization,
+}));
+
+vi.mock('./purgeLegacySWRCache', () => ({
+  purgeLegacySWRCache: mocks.purgeLegacySWRCache,
 }));
 
 vi.mock('./routePreload', () => ({
@@ -68,8 +73,11 @@ describe('startPostRenderInitialization', () => {
     expect(mocks.startConnectorInitialization).not.toHaveBeenCalled();
     expect(mocks.ensureBuiltinToolSurfaces).not.toHaveBeenCalled();
     expect(mocks.setPostRenderReady).not.toHaveBeenCalled();
+    expect(mocks.purgeLegacySWRCache).not.toHaveBeenCalled();
 
     await vi.runAllTimersAsync();
+
+    expect(mocks.purgeLegacySWRCache).toHaveBeenCalledTimes(1);
 
     expect(mocks.registerBuiltinToolExecutors).not.toHaveBeenCalled();
     expect(mocks.ensureBuiltinToolSurfaces).toHaveBeenCalledTimes(1);

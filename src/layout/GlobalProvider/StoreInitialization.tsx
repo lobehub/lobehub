@@ -18,7 +18,7 @@ import { useUserStateRedirect } from './useUserStateRedirect';
 
 const DeferredStoreInitialization = lazy(() => import('./DeferredStoreInitialization'));
 
-/** Subscribe only after the durable cache is hydrated by CacheHydrationGate. */
+/** Initializes the builtin Inbox agent inside the app tree (`PrePaintSignal`). */
 export const BuiltinAgentInitialization = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
