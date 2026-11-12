@@ -11,6 +11,10 @@ const { getMember, resolveSandboxSessionConfig } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/sandbox', () => ({
+  getSandboxProviderKind: () => 'market',
+  MarketSandboxProvider: vi.fn(function (this: any) {
+    this.callTool = vi.fn(async () => ({ result: {}, success: true }));
+  }),
   resolveSandboxSessionConfig,
 }));
 
