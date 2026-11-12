@@ -448,6 +448,8 @@ export interface ChannelPublicThread {
   rootMessageId: string;
   rootSequence: number;
   status: ChannelThreadStatus;
+  /** Name an Agent gave the Thread when it moved its reply there; otherwise the root names it. */
+  title?: string;
 }
 
 export interface ChannelDetail {

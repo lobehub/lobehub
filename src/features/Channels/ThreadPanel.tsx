@@ -93,7 +93,7 @@ export function ThreadPanel({
   const channelId = detail.channel?.id ?? '';
   const { messages = [], threads = [] } = detail;
   const lastThreadId = typeof lastTarget === 'string' ? lastTarget : null;
-  // Same name as the sidebar entry: the first line of the message the thread branched from.
+  // Same name as the sidebar entry: the Agent's title, or the first line of its root message.
   const threadView = useChannelStore(
     channelSelectors.detail({ channelId, threadId: lastThreadId }),
   );
@@ -104,6 +104,7 @@ export function ThreadPanel({
     threadTitle(
       (lastTarget && typeof lastTarget !== 'string' ? lastTarget.root : threadView?.rootMessage) ??
         messages.find((message) => message.id === rootMessageId),
+      threads.find((entry) => entry.id === lastThreadId),
     ) || t('thread');
 
   return (

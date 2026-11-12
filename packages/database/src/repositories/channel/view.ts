@@ -244,7 +244,10 @@ export const readChannelView = async (
     hasMore: reversed.length > limit,
     jobs,
     members,
-    threads,
+    threads: threads.map((thread) => {
+      const title = thread.metadata?.title;
+      return typeof title === 'string' && title ? { ...thread, title } : thread;
+    }),
     rootMessage: rootMessage
       ? {
           ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),

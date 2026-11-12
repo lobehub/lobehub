@@ -172,6 +172,7 @@ const ChannelThreads = ({
               title={
                 threadTitle(
                   detail.messages.find((message) => message.id === thread.rootMessageId),
+                  thread,
                 ) || `${t('thread')} ${index + 1}`
               }
               onClick={() => navigate(path)}
