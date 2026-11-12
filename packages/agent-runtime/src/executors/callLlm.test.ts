@@ -353,6 +353,40 @@ describe('callLlm executor', () => {
     expect(transport.trace.close).toHaveBeenCalledWith(undefined);
   });
 
+  it('persists the context builder request accounting on the assistant message', async () => {
+    const contextAccounting = {
+      bySource: {
+        content: 3,
+        fileContext: 0,
+        reasoning: 0,
+        thoughtSignature: 0,
+        toolCallId: 0,
+        toolCalls: 0,
+        toolDefinition: 0,
+      },
+      estimator: 'tokenx' as const,
+      messageCount: 1,
+      system: 0,
+      total: 3,
+    };
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    const context: ContextBuilder = {
+      build: vi.fn().mockResolvedValue({ ...contextOutput, contextAccounting }),
+    };
+    const host = createHost(transport.llm, messages, createStreamSink(), context);
+
+    await callLlm(host)(instruction, createState(), {
+      instructionIndex: 0,
+      phase: 'user_input',
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ metadata: expect.objectContaining({ contextAccounting }) }),
+    );
+  });
+
   it('reuses an existing assistant message without creating a new one', async () => {
     const state = createState();
     const transport = createCallTransport();

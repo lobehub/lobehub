@@ -1,5 +1,6 @@
 export * from './base';
 export * from './composerUserMessage';
+export * from './contextAccounting';
 export * from './contextSelection';
 export * from './image';
 export * from './messageGroup';

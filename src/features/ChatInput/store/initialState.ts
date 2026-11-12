@@ -1,4 +1,9 @@
-import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
+import {
+  type MessageContextAccounting,
+  type OpenAIChatMessage,
+  type UIChatMessage,
+  type VoiceMessageRecording,
+} from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type DropdownItem } from '@lobehub/ui';
@@ -36,8 +41,24 @@ export const initialSendButtonState: SendButtonProps = {
 
 export type SlashPlacement = 'top' | 'bottom';
 
-export interface ContextWindowMessage {
-  content: string;
+/**
+ * What the conversation's next request carries before the composer draft, for
+ * the context breakdown (see `getContextWindow`).
+ */
+export interface ContextWindow {
+  /** The history window the next request includes, as the history count slices it. */
+  history: UIChatMessage[];
+  /** The latest request the agent runtime recorded in this conversation. */
+  request?: {
+    accounting: MessageContextAccounting;
+    /** Provider-reported input tokens of that request, when known. */
+    inputTokens?: number;
+    /** Messages added since: the recorded reply itself and everything after it. */
+    messages: UIChatMessage[];
+    /** Model and provider that request went to. */
+    model?: string;
+    provider?: string;
+  };
 }
 
 export interface ChatInputFeature {
@@ -67,7 +88,7 @@ export interface PublicState {
   allowExpand?: boolean;
   canRecordVoiceMessage?: boolean;
   contextSelectionKey?: string;
-  contextWindowMessages?: ContextWindowMessage[];
+  contextWindow?: ContextWindow;
   draftKey?: string;
   expand?: boolean;
   feature?: ChatInputFeature;
