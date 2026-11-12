@@ -27,7 +27,8 @@ const ChannelDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   usePublishDynamicRouteMeta(
     agentId
       ? {
-          avatar: agent?.avatar || memberAvatar || undefined,
+          // A loaded Agent without an avatar publishes `null`, so the tab drops a cached one.
+          avatar: agent ? agent.avatar || null : memberAvatar || undefined,
           avatarKind: 'agent',
           avatarSeed: agentId,
           backgroundColor: agent?.backgroundColor || undefined,

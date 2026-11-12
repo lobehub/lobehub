@@ -62,6 +62,23 @@ describe('ChannelDynamicMeta', () => {
     );
   });
 
+  it('clears the avatar once a loaded agent has none, even with a stale member avatar', () => {
+    const channel = listItem({ agentId: 'agt_c', title: '小C' });
+    useChannelStore.setState({
+      detailMap: {
+        [channelViewKey({ channelId: channel.id, threadId: null })]: {
+          channel,
+          members: [{ agentId: 'agt_c', avatar: '🌟' }],
+        } as any,
+      },
+    });
+    useAgentStore.setState({ agentMap: { agt_c: { avatar: null } as any } });
+
+    expect(render()).toHaveBeenLastCalledWith(
+      expect.objectContaining({ avatar: null, avatarKind: 'agent', avatarSeed: 'agt_c' }),
+    );
+  });
+
   it('falls back to the member avatar before the agent has loaded', () => {
     const channel = listItem({ agentId: 'agt_c', title: '小C' });
     useChannelStore.setState({
