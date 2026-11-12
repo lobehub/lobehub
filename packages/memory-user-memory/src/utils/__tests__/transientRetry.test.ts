@@ -18,6 +18,31 @@ describe('isTransientModelError', () => {
     ).toBe(true);
   });
 
+  it('reads a transient outage nested under a wrapper message', () => {
+    // handleOpenAIError keeps the SDK's `Connection error.` and tucks the socket error underneath,
+    // so matching only the top-level message drops every reset and timeout on the floor.
+    expect(
+      isTransientModelError({
+        message: 'Connection error.',
+        error: new Error('read ECONNRESET'),
+      }),
+    ).toBe(true);
+    expect(
+      isTransientModelError({
+        error: { message: 'Connection error.', error: { error: { code: 'ETIMEDOUT' } } },
+      }),
+    ).toBe(true);
+    expect(isTransientModelError({ message: 'Connection error.', error: { status: 503 } })).toBe(
+      true,
+    );
+    expect(
+      isTransientModelError({
+        message: 'Connection error.',
+        error: new Error('getaddrinfo ENOTFOUND api.openai.com'),
+      }),
+    ).toBe(false);
+  });
+
   it('does not retry quota, budget, context or content errors', () => {
     expect(isTransientModelError(new Error('429 You exceeded your current quota'))).toBe(false);
     expect(isTransientModelError({ errorType: 'InsufficientBudgetForModel', error: {} })).toBe(

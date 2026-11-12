@@ -7,13 +7,34 @@ const TRANSIENT_MESSAGE =
 const readField = (value: unknown, key: string): unknown =>
   value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined;
 
-const messageOf = (error: unknown): string => {
-  const message = readField(error, 'message');
-  if (typeof message === 'string') return message;
-  const nested = readField(readField(readField(error, 'error'), 'error'), 'message');
-  if (typeof nested === 'string') return nested;
-  const inner = readField(readField(error, 'error'), 'message');
-  return typeof inner === 'string' ? inner : typeof error === 'string' ? error : '';
+// Wrapped provider errors keep their own message and put the real cause underneath, up to a few
+// levels deep (SDK error -> wrapper -> socket error). The top-level message alone loses the cause.
+const MAX_NESTED_DEPTH = 3;
+const NESTED_KEYS = ['message', 'code', 'error', 'cause'] as const;
+
+const inspectError = (error: unknown): { messages: string[]; statuses: number[] } => {
+  const messages: string[] = [];
+  const statuses: number[] = [];
+  const seen = new Set<unknown>();
+
+  const visit = (value: unknown, depth: number) => {
+    if (value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      messages.push(value);
+      return;
+    }
+    // Only objects recurse, so strings at the bottom of the chain are always read.
+    if (typeof value !== 'object' || depth > MAX_NESTED_DEPTH || seen.has(value)) return;
+    seen.add(value);
+
+    const record = value as Record<string, unknown>;
+    const status = record.status;
+    if (typeof status === 'number') statuses.push(status);
+    for (const key of NESTED_KEYS) visit(record[key], depth + 1);
+  };
+
+  visit(error, 0);
+  return { messages, statuses };
 };
 
 /**
@@ -23,9 +44,9 @@ const messageOf = (error: unknown): string => {
 export const isTransientModelError = (error: unknown): boolean => {
   const errorType = readField(error, 'errorType');
   if (typeof errorType === 'string' && TRANSIENT_ERROR_TYPES.has(errorType)) return true;
-  for (const status of [readField(error, 'status'), readField(readField(error, 'error'), 'status')])
-    if (typeof status === 'number' && TRANSIENT_STATUS.has(status)) return true;
-  return TRANSIENT_MESSAGE.test(messageOf(error));
+  const { messages, statuses } = inspectError(error);
+  if (statuses.some((status) => TRANSIENT_STATUS.has(status))) return true;
+  return messages.some((message) => TRANSIENT_MESSAGE.test(message));
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
