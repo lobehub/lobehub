@@ -49,6 +49,7 @@ const createDeps = (): Deps => {
     isTrusted: vi.fn(async () => false),
     log: { info: vi.fn(), warn: vi.fn() },
     now: vi.fn(() => Date.now()),
+    serverTimeoutMs: undefined,
     trust: vi.fn(async () => {}),
     userAgent: 'LobeHub-Desktop/test',
     verifyExecutable: vi.fn(async () => true),
