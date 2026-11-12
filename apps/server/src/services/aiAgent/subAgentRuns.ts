@@ -176,12 +176,13 @@ const findCallSubAgentThread = async (
 const readSubAgentThreadRun = async (
   deps: Pick<SubAgentRunDeps, 'agentOperationModel'>,
   thread: ThreadRow,
-): Promise<{ operationId?: string; running: boolean }> => {
+): Promise<{ operationId?: string; ownerId?: string; running: boolean }> => {
   const operationId = (thread.metadata as ThreadMetadata | null)?.operationId;
   const operation = operationId ? await deps.agentOperationModel.findById(operationId) : null;
 
   return {
     operationId,
+    ownerId: operation?.userId ?? undefined,
     running: operation
       ? isAgentOperationInFlight(operation.status)
       : thread.status === ThreadStatus.Processing,
@@ -212,10 +213,11 @@ const claimSubAgentThread = async (
 
   const { thread } = found;
   const previousMetadata = thread.metadata as ThreadMetadata | null;
-  const { operationId: previousOperationId, running: stillRunning } = await readSubAgentThreadRun(
-    deps,
-    thread,
-  );
+  const {
+    operationId: previousOperationId,
+    ownerId,
+    running: stillRunning,
+  } = await readSubAgentThreadRun(deps, thread);
 
   if (stillRunning) {
     // A `processing` thread without an operation id names no run to queue behind.
@@ -228,6 +230,13 @@ const claimSubAgentThread = async (
     if (await isStopping(deps, previousOperationId)) {
       return {
         error: `Sub-agent "${threadId}" was cancelled and is still finishing its current step. Send this instruction again in a moment; its history is kept.`,
+      };
+    }
+    // The run reads its steer queue as the member whose turn started it; an
+    // instruction from another member's turn would be queued where it never looks.
+    if (ownerId && ownerId !== deps.userId) {
+      return {
+        error: `Sub-agent "${threadId}" is running for another member's turn and cannot take your instruction while it runs. Wait for its result, then send this instruction again; its history is kept.`,
       };
     }
     return { running: { operationId: previousOperationId } };

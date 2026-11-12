@@ -628,6 +628,33 @@ describe('AiAgentService.execSubAgent', () => {
         });
       });
 
+      it('refuses an instruction for a sub-agent another member’s turn is running', async () => {
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-old' ? { status: 'running', userId: 'another-member' } : { trigger: 'cli' },
+        );
+        const execAgentSpy = vi.spyOn(service, 'execAgent');
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        // It reads its queue as that member, so a steer from this turn would never arrive.
+        expect(mockQueueSubAgentSteer).not.toHaveBeenCalled();
+        expect(mockThreadModel.claimForRun).not.toHaveBeenCalled();
+        expect(execAgentSpy).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('is running for another member');
+      });
+
+      it('steers a sub-agent its own member’s earlier turn is running', async () => {
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-old' ? { status: 'running', userId } : { trigger: 'cli' },
+        );
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(mockQueueSubAgentSteer).toHaveBeenCalled();
+        expect(result).toMatchObject({ steered: true, success: true });
+      });
+
       it('starts a new run when the sub-agent finished while the instruction was queued', async () => {
         mockQueueSubAgentSteer.mockResolvedValue({ queued: false, reason: 'ended' });
         let reads = 0;
