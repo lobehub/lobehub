@@ -6,7 +6,7 @@ import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Archive } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -96,11 +96,21 @@ const Body = memo(() => {
   const { t } = useTranslation(['common', 'channel']);
   const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  useHomeStore((s) => s.useFetchConversationRecents)(ALL_RECENTS_LIMIT);
+  const { error: recentsError, revalidate: revalidateRecents } = useHomeStore(
+    (s) => s.useFetchConversationRecents,
+  )(ALL_RECENTS_LIMIT);
 
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const recents = useHomeStore(homeRecentSelectors.conversationRecents(RECENTS_QUERY_KEY));
   const activeRouteId = useActiveRouteId();
+  // The open conversation keeps its row, so a first topic started there only needs to reach the
+  // recents by the time the person moves on: refresh them whenever the routed conversation changes.
+  const lastRouteIdRef = useRef(activeRouteId);
+  useEffect(() => {
+    if (lastRouteIdRef.current === activeRouteId) return;
+    lastRouteIdRef.current = activeRouteId;
+    void revalidateRecents();
+  }, [activeRouteId, revalidateRecents]);
   const channelsEnabled = useChannelsEnabled();
   const allChannels = useChannelStore(channelSelectors.list);
   const { query } = useMessageSearch();
@@ -221,6 +231,12 @@ const Body = memo(() => {
       {agentsLoading ? (
         agentsError ? (
           <AsyncError error={agentsError} variant="inline" onRetry={() => void retryAgents()} />
+        ) : recents === undefined && recentsError ? (
+          <AsyncError
+            error={recentsError}
+            variant="inline"
+            onRetry={() => void revalidateRecents()}
+          />
         ) : (
           <SkeletonList paddingBlock={8} />
         )
