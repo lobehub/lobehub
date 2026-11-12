@@ -23,6 +23,7 @@ import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
+import { notChannelTopic } from '../utils/topicVisibility';
 import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
 import {
   buildWorkspacePayload,
@@ -1158,6 +1159,10 @@ export class ProjectModel {
           eq(topics.projectId, projectId),
           buildWorkspaceWhere(scope, topics),
           isNull(topics.deletedAt),
+          // A Channel run topic holds the requester's Channel request and the
+          // history the Agent read there; it is surfaced through the Channel
+          // UI only, never as a project conversation — see `notChannelTopic`.
+          notChannelTopic(),
         ),
       )
       .orderBy(desc(topics.updatedAt));
