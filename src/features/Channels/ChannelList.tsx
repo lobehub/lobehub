@@ -35,7 +35,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
-import { matchChannel } from './paths';
+import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
@@ -200,7 +200,7 @@ interface ChannelSectionProps {
  */
 const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSectionProps) => {
   const { t } = useTranslation('channel');
-  const { pathname, search } = useActiveLocation();
+  const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
@@ -218,8 +218,7 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const create = () =>
     openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
   // Only a thread opened as the page is the current entry; one beside the Channel is not.
-  const query = new URLSearchParams(search);
-  const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
+  const activeThreadId = matchChannelThread(pathname) ?? null;
   const menuItems = useChannelMenu();
   const setSort = (channelListSort: ChannelListSort) => updateSystemStatus({ channelListSort });
   // Name sorts read as A–Z / Z–A; time sorts as newest / oldest first.
