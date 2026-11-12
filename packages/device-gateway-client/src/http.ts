@@ -376,10 +376,15 @@ export class GatewayHttpClient {
    * (e.g. `desktop` alongside `cli`). A gateway that predates the hint ignores
    * it and picks by its own channel priority, so callers must still handle an
    * answer from another channel.
+   *
+   * `clientKinds`, when given, replaces the per-method answer of
+   * `resolveClientKinds` — e.g. to keep a terminal session's calls on the
+   * client that created it.
    */
   async invokeRpc<T = unknown>(
     params: {
       channel?: string;
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       timeout?: number;
       userId: string;
@@ -395,7 +400,9 @@ export class GatewayHttpClient {
       '/api/device/rpc',
       {
         channel: params.channel,
-        clientKinds: this.clientKindsFor({ kind: 'rpc', method: rpc.method }),
+        clientKinds: params.clientKinds?.length
+          ? params.clientKinds
+          : this.clientKindsFor({ kind: 'rpc', method: rpc.method }),
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,
