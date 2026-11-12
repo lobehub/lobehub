@@ -271,10 +271,9 @@ const Timeline = ({
                 members={activeMembers}
                 replyTarget={reply.target}
                 activity={
-                  // A direct conversation shows its Agent's state beside the name in the header.
-                  (direct && !threadId) || !hasReplyActivity(detail, threadId) ? null : (
+                  hasReplyActivity(detail, threadId) ? (
                     <ReplyActivity detail={detail} threadId={threadId} />
-                  )
+                  ) : null
                 }
                 placeholder={
                   threadId
