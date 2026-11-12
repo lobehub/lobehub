@@ -42,6 +42,8 @@ import { type ChannelReplyTarget, useReplyTarget } from './useReplyTarget';
 
 interface ChannelConversationProps {
   channelId: string;
+  /** Covered by a thread page: still mounted, so the composer keeps the draft it was writing. */
+  hidden?: boolean;
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
@@ -52,6 +54,7 @@ interface ChannelConversationProps {
 
 const Timeline = ({
   channelId,
+  hidden,
   inert,
   threadId = null,
   onOpenThread,
@@ -140,7 +143,7 @@ const Timeline = ({
     <Flexbox
       data-channel-conversation={threadId || 'main'}
       inert={inert}
-      {...stylex.props(styles.body)}
+      {...stylex.props(styles.body, hidden && styles.bodyCovered)}
     >
       <AsyncBoundary
         data={detail}
