@@ -92,19 +92,14 @@ interface EnvironmentManagerProps {
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
-  const { confirmed, environments, error, revalidate } = useEnvironments(visibility);
+  // `settled`: a list to paint — the stored one on a reload, confirmed behind
+  // it, a tab switch included. A stored empty list waits for the server.
+  const { environments, error, revalidate, settled } = useEnvironments(visibility);
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
   const [refreshing, setRefreshing] = useState(false);
 
-  /**
-   * Whether there is a list to paint. The last list paints from storage on the
-   * first frames and the network confirms it behind it, a tab switch included.
-   * An empty list restored from storage is not an answer: it may be stale, so
-   * it shows the skeleton rather than "no environments" until the server says.
-   */
-  const settled = environments !== undefined && (environments.length > 0 || confirmed);
   const list = environments ?? [];
   const selected = selectedId
     ? list.find((environment) => environment.id === selectedId)

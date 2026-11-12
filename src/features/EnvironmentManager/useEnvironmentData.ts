@@ -10,19 +10,22 @@ export type { CreatedEnvironment, SandboxEnvironment } from '@/store/sandbox';
  *
  * Read from the sandbox store's environments replica, which the composer's
  * picker shares, so a reload paints the last list from storage and the network
- * only confirms it. A restored row has no `configuration` (it carries `env`), so
- * `confirmed` says when the server has answered: until then an empty list or a
- * missing row is not an answer yet.
+ * only confirms it. A restored row has no `configuration` (it carries `env`).
+ *
+ * `settled` says whether there is a list to paint. An empty list restored from
+ * storage is not an answer — it may be stale — so it stays unsettled (the
+ * skeleton, not "no environments") until the server says.
  *
  * Partitioned by the cache scope (user + workspace): a list fetched in one
  * workspace is never served in another.
  */
 export const useEnvironments = (visibility?: EnvironmentVisibility) => {
-  const sync = sandboxActions.useFetchEnvironments(visibility);
+  const { error, revalidate } = sandboxActions.useFetchEnvironments(visibility);
   const environments = useSandboxStore(sandboxSelectors.environments(visibility));
   const confirmed = useSandboxStore(sandboxSelectors.isEnvironmentsConfirmed(visibility));
+  const settled = environments !== undefined && (environments.length > 0 || confirmed);
 
-  return { ...sync, confirmed, environments };
+  return { environments, error, revalidate, settled };
 };
 
 /**

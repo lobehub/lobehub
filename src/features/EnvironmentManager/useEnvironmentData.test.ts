@@ -1,15 +1,13 @@
 /**
  * @vitest-environment happy-dom
  *
- * The environments page paints the last list from the sandbox environments
- * replica on a reload, while the network confirms it. A restored empty list
- * is not an answer: it keeps the skeleton until the server says.
+ * The environments page's list hook paints the last list from the sandbox
+ * environments replica on a reload, while the network confirms it. A restored
+ * empty list is not an answer: it stays unsettled until the server says.
  */
 import { randomUUID } from 'node:crypto';
 
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type PropsWithChildren, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,17 +19,14 @@ import { initialState } from '@/store/sandbox/initialState';
 import { sandboxEnvironmentsResource } from '@/store/sandbox/projection';
 import { useSandboxStore } from '@/store/sandbox/store';
 
-import EnvironmentManager from './index';
-
-// The app extends dayjs at boot; rows render "created … ago".
-dayjs.extend(relativeTime);
+import { useEnvironments } from './useEnvironmentData';
 
 const MutateBridge = () => {
   const { mutate } = useSWRConfig();
   useEffect(() => setScopedMutate(mutate), [mutate]);
   return null;
 };
-const Wrapper = ({ children }: PropsWithChildren) =>
+const wrapper = ({ children }: PropsWithChildren) =>
   createElement(
     SWRConfig,
     { value: { dedupingInterval: 0, provider: () => new Map() } },
@@ -54,7 +49,7 @@ const storedRow = {
   workspaceId: 'ws-1',
 };
 
-describe('EnvironmentManager', () => {
+describe('useEnvironments', () => {
   let scope = '';
   let answer: (value: Listed) => void;
 
@@ -63,9 +58,8 @@ describe('EnvironmentManager', () => {
     vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
     vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
     vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
-    vi.spyOn(cacheScope, 'canHydrate').mockReturnValue(true);
     useSandboxStore.setState({ ...initialState });
-    // Held until the test answers it: what paints first can only come from storage.
+    // Held until the test answers it: what the hook has first can only come from storage.
     vi.spyOn(environmentService, 'listEnvironments').mockImplementation(
       () => new Promise<Listed>((resolve) => (answer = resolve)),
     );
@@ -87,13 +81,17 @@ describe('EnvironmentManager', () => {
       { data: data as never, updatedAt: 1 },
     );
 
-  it('paints the stored list on a reload before the network answers, then the server answer', async () => {
+  it('has the stored list on a reload before the network answers, then the server answer', async () => {
     await seed([storedRow]);
 
-    render(<EnvironmentManager visibility={'private'} />, { wrapper: Wrapper });
+    const { result } = renderHook(() => useEnvironments('private'), { wrapper });
 
-    expect(await screen.findByText('Lobehub Dev')).toBeTruthy();
-    expect(screen.getByText('lobehub/lobehub')).toBeTruthy();
+    await waitFor(() =>
+      expect(result.current).toMatchObject({
+        environments: [expect.objectContaining({ name: 'Lobehub Dev' })],
+        settled: true,
+      }),
+    );
 
     await act(async () =>
       answer({
@@ -109,22 +107,22 @@ describe('EnvironmentManager', () => {
       } as unknown as Listed),
     );
 
-    await waitFor(() => expect(screen.getByText('Lobehub Renamed')).toBeTruthy());
-    expect(screen.queryByText('Lobehub Dev')).toBeNull();
+    await waitFor(() =>
+      expect(result.current.environments?.map(({ name }) => name)).toEqual(['Lobehub Renamed']),
+    );
   });
 
-  it('keeps the skeleton over an empty stored list until the server confirms it', async () => {
+  it('keeps an empty stored list unsettled until the server confirms it', async () => {
     await seed([]);
 
-    render(<EnvironmentManager visibility={'private'} />, { wrapper: Wrapper });
+    const { result } = renderHook(() => useEnvironments('private'), { wrapper });
 
-    await waitFor(() =>
-      expect(useSandboxStore.getState().sandboxEnvironmentsMap.private).toEqual([]),
-    );
-    expect(screen.queryByText('environments.empty')).toBeNull();
+    await waitFor(() => expect(result.current).toMatchObject({ environments: [] }));
+    expect(result.current.settled).toBe(false);
 
     await act(async () => answer({ environments: [] } as unknown as Listed));
 
-    expect(await screen.findByText('environments.empty')).toBeTruthy();
+    await waitFor(() => expect(result.current.settled).toBe(true));
+    expect(result.current.environments).toEqual([]);
   });
 });
