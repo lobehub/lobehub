@@ -121,17 +121,24 @@ const connectorByIdentifierForAgent =
       ? (s.agentConnectors?.[agentId] ?? []).filter((c) => c.identifier === identifier)
       : [];
 
+    // A base connector another agent mounted serves only that agent, as the
+    // server's scope rule has it (`ConnectorModel.scopePredicate`).
+    const baseRows = (s.connectors ?? []).filter(
+      (c) =>
+        c.identifier === identifier &&
+        !isMountedByAnotherAgent(c, agentId) &&
+        (includePrivate || c.visibility !== 'private'),
+    );
+
     return (
       agentRows.find((c) => c.agentId === agentId) ??
       agentRows[0] ??
-      // A base connector another agent mounted serves only that agent, as the
-      // server's scope rule has it (`ConnectorModel.scopePredicate`)
-      (s.connectors ?? []).find(
-        (c) =>
-          c.identifier === identifier &&
-          !isMountedByAnotherAgent(c, agentId) &&
-          (includePrivate || c.visibility !== 'private'),
-      )
+      // Rank base rows the way `ConnectorModel.pickByPriority` does: the owner's
+      // private row shadows the shared one. Row order is not a ranking — with a
+      // shared row first, desktop IPC would run that row's command and
+      // credentials while the server resolves the private account.
+      baseRows.find((c) => c.visibility === 'private') ??
+      baseRows[0]
     );
   };
 

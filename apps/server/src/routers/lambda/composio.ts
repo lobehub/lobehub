@@ -78,7 +78,13 @@ async function assertComposioRowManageable(
 ): Promise<void> {
   if (!ctx.workspaceId) return;
   const existing = await ctx.connectorModel.findScopedByIdentifier(identifier, agentId);
-  await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
+  // Pass the row as found: a private row is only its creator's (or a workspace
+  // owner's) to maintain, and the lookup now sees one.
+  await assertConnectorMaintainable(ctx, {
+    agentId,
+    userId: existing?.userId,
+    visibility: existing?.visibility,
+  });
 }
 
 type ComposioToolInput = {
@@ -152,7 +158,13 @@ async function upsertComposioConnector(
 
   // Exact-scope idempotency: an agent connection updates/creates the agent's own
   // row, a personal connection the base row — never crossing scopes.
-  const existing = await connectorModel.findScopedByIdentifier(params.identifier, params.agentId);
+  // Any visibility: a connector switched to private must still be found here, or
+  // this upsert creates a second, public row for the same account and republishes
+  // the private connection to the workspace.
+  const existing = await connectorModel.findManageableByIdentifier(
+    params.identifier,
+    params.agentId,
+  );
   let connectorId: string;
   if (existing) {
     await connectorModel.update(existing.id, {
@@ -204,7 +216,9 @@ async function deleteComposioConnector(
   identifier: string,
   agentId?: string,
 ): Promise<void> {
-  const existing = await connectorModel.findScopedByIdentifier(identifier, agentId);
+  // Any visibility, for the same reason as the upsert: a connector switched to
+  // private must still be removable by its owner.
+  const existing = await connectorModel.findManageableByIdentifier(identifier, agentId);
   if (existing) await connectorModel.delete(existing.id);
 }
 

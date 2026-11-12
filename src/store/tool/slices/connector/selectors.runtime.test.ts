@@ -81,7 +81,8 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
   it('skips a private base row when the run may not use one, so the shared row wins', () => {
     const privateRow = connector({ id: 'private-row', visibility: 'private' });
     const sharedRow = connector({ id: 'shared-row', visibility: 'public' });
-    const s = state([privateRow, sharedRow]);
+    // The shared row listed first: physical order is not a ranking
+    const s = state([sharedRow, privateRow]);
 
     // A public agent's run: the private row must not shadow the shared one
     expect(
