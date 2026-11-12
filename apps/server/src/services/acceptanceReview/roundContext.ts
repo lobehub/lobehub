@@ -1,4 +1,4 @@
-import { and, count, eq, lte } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '@/database/schemas';
@@ -28,9 +28,10 @@ export const loadReviewerName = async (db: LobeChatDatabase, userId: string | nu
 
 export const countRound = async (
   db: LobeChatDatabase,
-  review: Pick<AcceptanceReviewRow, 'siteId' | 'submittedAt' | 'userId'>,
+  review: Pick<AcceptanceReviewRow, 'id' | 'siteId' | 'submittedAt' | 'userId'>,
 ) => {
   if (!review.userId || !review.submittedAt) return 1;
+  const own = sql`(select ${acceptanceReviews.submittedAt} from ${acceptanceReviews} where ${acceptanceReviews.id} = ${review.id})`;
   const [row] = await db
     .select({ n: count() })
     .from(acceptanceReviews)
@@ -39,7 +40,7 @@ export const countRound = async (
         eq(acceptanceReviews.siteId, review.siteId),
         eq(acceptanceReviews.userId, review.userId),
         eq(acceptanceReviews.status, 'submitted'),
-        lte(acceptanceReviews.submittedAt, review.submittedAt),
+        sql`${acceptanceReviews.submittedAt} <= ${own}`,
       ),
     );
   return Math.max(Number(row?.n ?? 0), 1);
