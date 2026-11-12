@@ -1,13 +1,19 @@
 import {
   ChartColumnBigIcon,
+  CpuIcon,
   FileUserIcon,
   GraduationCapIcon,
+  LibraryBigIcon,
   MailIcon,
   MessageSquare,
   MessagesSquareIcon,
+  MonitorSmartphoneIcon,
   RadioTowerIcon,
+  ScrollTextIcon,
   Share2Icon,
+  SparklesIcon,
   UsersIcon,
+  WrenchIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
 
@@ -28,6 +34,36 @@ const AgentDynamicMeta = lazy(() => import('@/features/RouteMeta/AgentDynamicMet
 const TopicsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.TopicsDynamicMeta,
+  })),
+);
+const EngineDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.EngineDynamicMeta,
+  })),
+);
+const InstructionDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.InstructionDynamicMeta,
+  })),
+);
+const KnowledgeDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.KnowledgeDynamicMeta,
+  })),
+);
+const SkillsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.SkillsDynamicMeta,
+  })),
+);
+const EnvironmentDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.EnvironmentDynamicMeta,
+  })),
+);
+const ToolsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ToolsDynamicMeta,
   })),
 );
 const ProfileDynamicMeta = lazy(() =>
@@ -86,6 +122,48 @@ export const agentProfileRouteMeta = routeMeta({
   icon: FileUserIcon,
   Skeleton: ProfileSkeleton,
   titleKey: 'navigation.profile',
+});
+
+export const agentInstructionRouteMeta = routeMeta({
+  DynamicMeta: InstructionDynamicMeta,
+  icon: ScrollTextIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.instruction',
+});
+
+export const agentKnowledgeRouteMeta = routeMeta({
+  DynamicMeta: KnowledgeDynamicMeta,
+  icon: LibraryBigIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.knowledge',
+});
+
+export const agentSkillsRouteMeta = routeMeta({
+  DynamicMeta: SkillsDynamicMeta,
+  icon: SparklesIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.skills',
+});
+
+export const agentEngineRouteMeta = routeMeta({
+  DynamicMeta: EngineDynamicMeta,
+  icon: CpuIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.engine',
+});
+
+export const agentEnvironmentRouteMeta = routeMeta({
+  DynamicMeta: EnvironmentDynamicMeta,
+  icon: MonitorSmartphoneIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.environment',
+});
+
+export const agentToolsRouteMeta = routeMeta({
+  DynamicMeta: ToolsDynamicMeta,
+  icon: WrenchIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.tools',
 });
 
 export const agentMailRouteMeta = routeMeta({
