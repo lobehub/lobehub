@@ -61,6 +61,8 @@ export const resolveEffectiveReasoningChatConfig = (
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  /** Opt-in Anthropic `1h` prompt-cache TTL (see `ChatStreamPayload.contextCachingTTL`). */
+  contextCachingTTL?: '5m' | '1h';
   deepseekV4ReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;

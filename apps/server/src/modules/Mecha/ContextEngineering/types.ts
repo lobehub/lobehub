@@ -168,6 +168,11 @@ export interface ServerMessagesEngineParams {
 
   /** Model ID */
   model: string;
+  /**
+   * Prompt-cache TTL the LLM payload writes (from the resolved extend params). Prices the
+   * stale-tool-result trim's warmth check; undefined → the provider's default TTL.
+   */
+  contextCachingTTL?: '5m' | '1h';
   /** Human-friendly model name, e.g. `Fable 5`. Omit when unknown. */
   modelDisplayName?: string;
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */

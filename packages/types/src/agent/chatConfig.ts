@@ -30,6 +30,13 @@ export interface AgentSelfIterationChatConfig {
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  /**
+   * Advanced: prompt-cache lifetime requested from Anthropic. `1h` breakpoints cost 2× base
+   * input to write instead of 1.25× for `5m`, so they only pay off when turns sharing a prefix
+   * start more than 5 minutes apart. Undefined → `5m`. Only the first-party Anthropic provider
+   * honours it; the context engine prices its stale-tool-result trim with the same TTL.
+   */
+  contextCachingTTL?: '5m' | '1h';
   deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
   deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
@@ -243,6 +250,7 @@ export const SelfIterationChatConfigSchema = z.object({
 export const AgentChatConfigSchema = z
   .object({
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    contextCachingTTL: z.enum(['5m', '1h']).optional(),
     deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),

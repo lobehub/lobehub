@@ -306,6 +306,36 @@ describe('resolveModelParams', () => {
       );
       expect(off.resolvedExtendParams?.enabledSearch).toBeUndefined();
     });
+
+    it('resolves the 1h prompt-cache TTL only where the Anthropic runtime writes it', async () => {
+      const claudeCards: ModelCardFacts[] = ['anthropic', 'bedrock', 'openrouter'].map(
+        (providerId) => ({
+          abilities: { functionCall: true },
+          extendParams: ['disableContextCaching'],
+          id: 'claude-sonnet-4-6',
+          providerId,
+        }),
+      );
+      const resolveTTL = async (provider: string, chatConfig: Record<string, unknown>) =>
+        (
+          await resolveModelParams(
+            request({ agent: { chatConfig, id: 'agt_1' }, model: 'claude-sonnet-4-6', provider }),
+            providers({ listModelCards: () => claudeCards }),
+          )
+        ).resolvedExtendParams?.contextCachingTTL;
+
+      expect(await resolveTTL('anthropic', { contextCachingTTL: '1h' })).toBe('1h');
+      // The default (unset or explicit 5m) adds nothing, keeping the payload byte-identical.
+      expect(await resolveTTL('anthropic', {})).toBeUndefined();
+      expect(await resolveTTL('anthropic', { contextCachingTTL: '5m' })).toBeUndefined();
+      // No breakpoints without caching, so no TTL either.
+      expect(
+        await resolveTTL('anthropic', { contextCachingTTL: '1h', disableContextCaching: true }),
+      ).toBeUndefined();
+      // Other runtimes would forward the field into their request body.
+      expect(await resolveTTL('bedrock', { contextCachingTTL: '1h' })).toBeUndefined();
+      expect(await resolveTTL('openrouter', { contextCachingTTL: '1h' })).toBeUndefined();
+    });
   });
 });
 

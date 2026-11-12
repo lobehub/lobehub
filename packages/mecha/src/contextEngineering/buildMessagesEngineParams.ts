@@ -86,6 +86,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
 
     // --- model ---
     capabilities: model.capabilities,
+    contextCachingTTL: model.contextCachingTTL,
     model: model.model,
     modelDisplayName: model.displayName,
     modelKnowledgeCutoff: model.knowledgeCutoff,

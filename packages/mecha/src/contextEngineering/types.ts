@@ -61,6 +61,12 @@ export interface ContextAgentSnapshot {
  */
 export interface ContextModelSnapshot {
   capabilities?: ModelCapabilityChecker;
+  /**
+   * Prompt-cache TTL the request writes (`ChatStreamPayload.contextCachingTTL`, as resolved
+   * into the payload's extend params). Prices the stale-tool-result trim's warmth check, so
+   * it must be the value the payload actually carries; undefined → the provider's default.
+   */
+  contextCachingTTL?: '5m' | '1h';
   displayName?: string;
   knowledgeCutoff?: string;
   model: string;

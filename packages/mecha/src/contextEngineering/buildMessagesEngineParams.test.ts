@@ -52,6 +52,16 @@ describe('buildMessagesEngineParams', () => {
     expect(filled.documentReferences).toEqual([{ documentId: 'd1' }]);
   });
 
+  it('carries the prompt-cache TTL the payload writes to the engine', () => {
+    expect(buildMessagesEngineParams(baseSnapshot()).contextCachingTTL).toBeUndefined();
+
+    const params = buildMessagesEngineParams({
+      ...baseSnapshot(),
+      model: { contextCachingTTL: '1h', model: 'claude-sonnet-4-6', provider: 'anthropic' },
+    });
+    expect(params.contextCachingTTL).toBe('1h');
+  });
+
   it('places world and step facts without leaking undefined keys', () => {
     const params = buildMessagesEngineParams({
       ...baseSnapshot(),
