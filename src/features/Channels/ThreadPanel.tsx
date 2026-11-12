@@ -13,6 +13,7 @@ import { ChannelConversation } from './ChannelConversation';
 import { DraftThreadConversation } from './DraftThreadConversation';
 import { MemberAvatar } from './MemberAvatar';
 import { memberName } from './memberName';
+import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { type ChannelThreadDraft, draftThreadFollowerIds } from './threadDraft';
 import { threadTitle } from './threadTitle';
@@ -70,6 +71,7 @@ export function ThreadPanel({
   draft,
   onClose,
   onOpenPage,
+  onOpenTopic,
   onSendDraft,
 }: {
   availableWidth?: number;
@@ -77,6 +79,8 @@ export function ThreadPanel({
   draft: ChannelThreadDraft | null;
   onClose: () => void;
   onOpenPage: (threadId: string) => void;
+  /** Opens the run topic a reply in this thread came from. */
+  onOpenTopic?: (topic: ReplyTopic) => void;
   onSendDraft: ComponentProps<typeof DraftThreadConversation>['onSend'];
   threadId: string | null;
 }) {
@@ -182,6 +186,7 @@ export function ThreadPanel({
             <ChannelConversation
               channelId={detail.channel.id}
               key={lastTarget}
+              onOpenTopic={onOpenTopic}
               threadId={lastTarget}
             />
           ) : lastTarget ? (

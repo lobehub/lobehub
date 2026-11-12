@@ -20,12 +20,16 @@ import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
 import { openTopic } from './openTopic';
-import { CHANNEL_ENTITY_PORTAL_SCOPE, PortalPanel } from './PortalPanel';
+import { PortalPanel } from './PortalPanel';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { ThreadPageActions, ThreadPageTitle } from './ThreadPageTitle';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
-import { channelBrowserSessionId, usePortalPanelOpen } from './usePortalPanel';
+import {
+  CHANNEL_ENTITY_PORTAL_SCOPE,
+  channelBrowserSessionId,
+  usePortalPanelOpen,
+} from './usePortalPanel';
 import { useThreadPanel } from './useThreadPanel';
 
 /** One Channel: the main conversation, with a thread beside it, or one thread as the page. */
@@ -61,9 +65,21 @@ function EnabledChannelPage() {
   const visibleTopic = openTopic(topic, channelId, {
     portal: portalOpen,
     members: membersOpen,
-    thread: !!(threadId || threadDraft || pageThreadId),
+    // Only a side thread shares the topic's slot. A thread opened as the page keeps its own
+    // column, so the topic its replies link opens beside it.
+    thread: !!(threadId || threadDraft),
   });
   if (!channelId) return null;
+
+  // The run topic behind a reply, wherever that reply is read: the feed, a thread beside it,
+  // or the thread page. A side thread gives up its slot to the topic — the Channel is what you
+  // come back to — while the thread page keeps both.
+  const openReplyTopic = (next: ReplyTopic) => {
+    setMembersChannelId(null);
+    clearPortalStack();
+    if (!pageThreadId) panel.close();
+    setTopic({ ...next, channelId });
+  };
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>
@@ -124,8 +140,10 @@ function EnabledChannelPage() {
               threadId={pageThreadId}
               inert={
                 (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-                (portalOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+                (portalOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
+                (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
               }
+              onOpenTopic={openReplyTopic}
             />
           ) : (
             <ChannelConversation
@@ -144,12 +162,7 @@ function EnabledChannelPage() {
                 // Under a report the thread only looks closed, so bring it back, don't toggle it off.
                 panel.openThread(nextThreadId, portalOpen ? false : toggle);
               }}
-              onOpenTopic={(next) => {
-                panel.close();
-                setMembersChannelId(null);
-                clearPortalStack();
-                setTopic({ ...next, channelId });
-              }}
+              onOpenTopic={openReplyTopic}
               onStartThread={(draft) => {
                 setTopic(null);
                 clearPortalStack();
@@ -190,6 +203,7 @@ function EnabledChannelPage() {
               threadId={threadId}
               onClose={panel.close}
               onOpenPage={panel.openPage}
+              onOpenTopic={openReplyTopic}
               onSendDraft={panel.send}
             />
           )}
