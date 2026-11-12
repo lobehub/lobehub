@@ -41,7 +41,7 @@ describe('TTSService with provider elevenlabs', () => {
     fetchMock = vi.fn(
       async () =>
         new Response(AUDIO, {
-          headers: { 'content-type': 'audio/mpeg', 'x-character-count': '11' },
+          headers: { 'content-type': 'audio/mpeg', 'character-cost': '4' },
         }),
     );
     vi.stubGlobal('fetch', fetchMock);

@@ -129,7 +129,7 @@ describe('createElevenLabsSpeech', () => {
 
   describe('success', () => {
     it('POSTs to /v1/text-to-speech/{voice_id} with xi-api-key and returns the audio bytes', async () => {
-      fetchMock.mockResolvedValue(audioResponse({ 'x-character-count': '11' }));
+      fetchMock.mockResolvedValue(audioResponse({ 'character-cost': '4' }));
       const onUsage = vi.fn();
 
       const result = await createElevenLabsSpeech(
@@ -172,15 +172,16 @@ describe('createElevenLabsSpeech', () => {
       );
     });
 
-    it('prefers the billed x-character-count header over the local count', async () => {
-      fetchMock.mockResolvedValue(audioResponse({ 'x-character-count': '3' }));
+    it('bills input characters, not the character-cost credits header', async () => {
+      // Real Flash responses report e.g. character-cost=7 for 34 characters.
+      fetchMock.mockResolvedValue(audioResponse({ 'character-cost': '3' }));
 
       const result = await createElevenLabsSpeech(
         { input: 'Hello world', model: 'eleven_multilingual_v2', voice: VOICE },
         options,
       );
 
-      expect(result.usage?.inputCharacters).toBe(3);
+      expect(result.usage?.inputCharacters).toBe(11);
     });
 
     it('falls back to counting code points when the header is missing', async () => {
@@ -254,40 +255,41 @@ describe('createElevenLabsSpeech', () => {
         .mockResolvedValueOnce(
           errorResponse(404, { detail: { message: 'Voice not found', status: 'voice_not_found' } }),
         )
-        // cloned: none; generated: one (after the rejected default)
-        .mockResolvedValueOnce(voicesResponse([]))
+        // personal: the rejected default is skipped, an owned clone is taken
         .mockResolvedValueOnce(
           voicesResponse([
-            { category: 'generated', voice_id: ELEVENLABS_DEFAULT_VOICE_ID },
-            { category: 'generated', voice_id: 'designed-1' },
+            { category: 'generated', is_owner: true, voice_id: ELEVENLABS_DEFAULT_VOICE_ID },
+            { category: 'professional', is_owner: true, voice_id: 'pvc-1' },
           ]),
         )
-        .mockResolvedValueOnce(audioResponse({ 'x-character-count': '5' }));
+        .mockResolvedValueOnce(audioResponse());
 
       const result = await callDefault();
 
       expect(result.audio.byteLength).toBe(AUDIO_BYTES.byteLength);
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(fetchMock.mock.calls[1][0]).toBe(
-        'https://api.elevenlabs.io/v2/voices?category=cloned&page_size=2',
+        'https://api.elevenlabs.io/v2/voices?voice_type=personal&page_size=2',
       );
       expect(fetchMock.mock.calls[1][1].headers['xi-api-key']).toBe('xi-test-key');
-      expect(fetchMock.mock.calls[2][0]).toContain('category=generated');
-      expect(fetchMock.mock.calls[3][0]).toContain('/v1/text-to-speech/designed-1?');
+      expect(fetchMock.mock.calls[2][0]).toContain('/v1/text-to-speech/pvc-1?');
     });
 
-    it('falls through to premade voices when the account created none', async () => {
+    it('skips Voice Library voices the account does not own, then uses premade ones', async () => {
       fetchMock
         .mockResolvedValueOnce(paymentRequired())
-        .mockResolvedValueOnce(voicesResponse([]))
-        .mockResolvedValueOnce(voicesResponse([]))
+        .mockResolvedValueOnce(
+          voicesResponse([{ category: 'professional', is_owner: false, voice_id: 'library-1' }]),
+        )
         .mockResolvedValueOnce(voicesResponse([{ category: 'premade', voice_id: 'premade-1' }]))
         .mockResolvedValueOnce(audioResponse());
 
       await callDefault();
 
-      expect(fetchMock.mock.calls[3][0]).toContain('category=premade');
-      expect(fetchMock.mock.calls[4][0]).toContain('/v1/text-to-speech/premade-1?');
+      expect(fetchMock.mock.calls[2][0]).toBe(
+        'https://api.elevenlabs.io/v2/voices?category=premade&page_size=2',
+      );
+      expect(fetchMock.mock.calls[3][0]).toContain('/v1/text-to-speech/premade-1?');
     });
 
     it('explains how to pick a voice when the account voices cannot be listed', async () => {
@@ -307,7 +309,9 @@ describe('createElevenLabsSpeech', () => {
     it('surfaces the retry error when the account voice also fails', async () => {
       fetchMock
         .mockResolvedValueOnce(paymentRequired())
-        .mockResolvedValueOnce(voicesResponse([{ category: 'cloned', voice_id: 'clone-1' }]))
+        .mockResolvedValueOnce(
+          voicesResponse([{ category: 'cloned', is_owner: true, voice_id: 'clone-1' }]),
+        )
         .mockResolvedValueOnce(
           errorResponse(429, { detail: { message: 'busy', status: 'system_busy' } }),
         );
@@ -321,7 +325,9 @@ describe('createElevenLabsSpeech', () => {
     const warmCache = async () => {
       fetchMock
         .mockResolvedValueOnce(paymentRequired())
-        .mockResolvedValueOnce(voicesResponse([{ category: 'cloned', voice_id: 'clone-1' }]))
+        .mockResolvedValueOnce(
+          voicesResponse([{ category: 'cloned', is_owner: true, voice_id: 'clone-1' }]),
+        )
         .mockResolvedValueOnce(audioResponse());
       await callDefault();
       fetchMock.mockClear();

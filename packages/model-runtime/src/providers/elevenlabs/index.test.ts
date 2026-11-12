@@ -18,7 +18,7 @@ describe('LobeElevenLabsAI', () => {
     fetchMock = vi.fn(
       async () =>
         new Response(new Uint8Array([1, 2, 3]), {
-          headers: { 'content-type': 'audio/mpeg', 'x-character-count': '5' },
+          headers: { 'content-type': 'audio/mpeg', 'character-cost': '2' },
         }),
     );
     vi.stubGlobal('fetch', fetchMock);

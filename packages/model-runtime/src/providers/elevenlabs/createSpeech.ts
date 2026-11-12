@@ -249,27 +249,32 @@ const isVoiceUnavailable = (error: ElevenLabsSpeechError) => {
 };
 
 /**
- * Categories the account can always call, best first: voices it created, then premade
- * ones it still has. Voice Library (`professional`) voices need a paid plan on the API.
+ * Queries for a voice the account can always call, best first: voices it created
+ * (`voice_type=personal`: instant and professional clones and designed voices), then the
+ * premade ones it still has. Voice Library voices saved to the account are also
+ * `professional` but not owned, and need a paid plan on the API, so they are skipped.
+ * @see https://elevenlabs.io/docs/api-reference/voices/search
  */
-const ACCOUNT_VOICE_CATEGORIES = ['cloned', 'generated', 'premade'];
+const ACCOUNT_VOICE_QUERIES: Record<string, string>[] = [
+  { voice_type: 'personal' },
+  { category: 'premade' },
+];
 
 /**
- * First voice in the account that it can call, from the paginated `GET /v2/voices`
- * filtered by category (the legacy `GET /v1/voices` stops working past 500 voices). Two
- * results per category are enough to skip the rejected default. Returns undefined when
- * the key lacks `voices_read` or the account has no such voice.
- * @see https://elevenlabs.io/docs/api-reference/voices/search
+ * First voice in the account that it can call, from the paginated `GET /v2/voices` (the
+ * legacy `GET /v1/voices` stops working past 500 voices). Two results per query are enough
+ * to skip the rejected default. Returns undefined when the key lacks `voices_read` or the
+ * account has no such voice.
  */
 export const resolveAccountVoice = async (
   baseURL: string,
   apiKey: string,
   options: Pick<ElevenLabsSpeechOptions, 'headers' | 'signal'>,
 ): Promise<string | undefined> => {
-  for (const category of ACCOUNT_VOICE_CATEGORIES) {
+  for (const query of ACCOUNT_VOICE_QUERIES) {
     try {
       const url = new URL(`${baseURL}/v2/voices`);
-      url.searchParams.set('category', category);
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
       url.searchParams.set('page_size', '2');
 
       const response = await fetch(url.toString(), {
@@ -277,21 +282,25 @@ export const resolveAccountVoice = async (
         signal: options.signal,
       });
       if (!response.ok) {
-        log('list %s voices failed: %d', category, response.status);
-        // A missing permission or bad key fails every category the same way.
+        log('list voices %o failed: %d', query, response.status);
+        // A missing permission or bad key fails every query the same way.
         return;
       }
 
       const { voices = [] } = (await response.json()) as {
-        voices?: { category?: string; voice_id?: string }[];
+        voices?: { is_owner?: boolean; voice_id?: string }[];
       };
       const voice = voices.find(
-        (item) => item.voice_id && item.voice_id !== ELEVENLABS_DEFAULT_VOICE_ID,
+        (item) =>
+          item.voice_id &&
+          item.voice_id !== ELEVENLABS_DEFAULT_VOICE_ID &&
+          // Owned voices only from the personal query; premade voices report no owner.
+          (query.voice_type !== 'personal' || item.is_owner !== false),
       );
       if (voice?.voice_id) return voice.voice_id;
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') throw error;
-      log('list %s voices error: %O', category, error);
+      log('list voices %o error: %O', query, error);
       return;
     }
   }
@@ -338,19 +347,12 @@ const writeFallbackVoice = (key: string, voice: string) => {
 /** Test helper: forget every cached fallback voice. */
 export const clearElevenLabsFallbackVoices = () => fallbackVoices.clear();
 
-/** Billed characters reported by ElevenLabs, if the header is present and numeric. */
-const readCharacterCount = (response: Response): number | undefined => {
-  const raw = response.headers.get('x-character-count');
-  if (raw === null || raw.trim() === '') return;
-
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? value : undefined;
-};
-
 /**
  * Synthesize speech with ElevenLabs' `POST /v1/text-to-speech/{voice_id}`, which returns
- * the audio bytes directly. Usage is the billed `x-character-count` header, falling back
- * to a local character count.
+ * the audio bytes directly. Usage is the input character count, which is what the
+ * per-character API price applies to. The `character-cost` response header is logged but
+ * not used: it reports plan credits (e.g. 7 for a 34-character Flash request, 14 on
+ * Multilingual v2), not characters.
  * @see https://elevenlabs.io/docs/api-reference/text-to-speech/convert
  */
 export async function createElevenLabsSpeech(
@@ -441,20 +443,14 @@ export async function createElevenLabsSpeech(
       );
     }
 
-    const characterCount = readCharacterCount(response);
-
     log(
-      'text-to-speech done: %d bytes, x-character-count=%s, request-id=%s',
+      'text-to-speech done: %d bytes, character-cost=%s, request-id=%s',
       audio.byteLength,
-      characterCount,
+      response.headers.get('character-cost'),
       response.headers.get('request-id'),
     );
 
-    const usage = convertTextToSpeechUsage(
-      payload.input,
-      pricing,
-      characterCount === undefined ? undefined : { inputCharacters: characterCount },
-    );
+    const usage = convertTextToSpeechUsage(payload.input, pricing);
 
     result = { audio, format, usage };
   } catch (error) {
