@@ -568,12 +568,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       <DeviceOptionRow
         active={isActive('device', d.deviceId)}
         device={d}
-        isCurrentMachine={isCurrentMachine}
         key={d.deviceId}
         reconnecting={reconnectingDeviceId === d.deviceId}
         tags={tagsFor(
           isActive('device', d.deviceId),
-          isCurrentMachine ? [t('heteroAgent.executionTarget.gateway')] : [],
+          // Users pick a machine, not a transport: tag this one as "This device".
+          isCurrentMachine ? [t('heteroAgent.executionTarget.thisDevice')] : [],
         )}
         onReconnect={() => void handleReconnectDevice(d)}
         onSelect={() => void handleSelect('device', d.deviceId)}

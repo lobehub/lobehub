@@ -22,8 +22,6 @@ const styles = stylex.create({
 interface DeviceOptionRowProps {
   active: boolean;
   device: DeviceListItem;
-  /** This app's own machine: described as the local process instead of by status. */
-  isCurrentMachine: boolean;
   onReconnect: () => void;
   onSelect: () => void;
   reconnecting: boolean;
@@ -37,7 +35,6 @@ interface DeviceOptionRowProps {
 const DeviceOptionRow = ({
   active,
   device,
-  isCurrentMachine,
   onReconnect,
   onSelect,
   reconnecting,
@@ -65,19 +62,15 @@ const DeviceOptionRow = ({
           tags={tags}
           desc={
             <>
-              {isCurrentMachine ? (
-                t('heteroAgent.executionTarget.gatewayDesc')
-              ) : (
-                <ExecutionTargetDeviceStatus
-                  offlineLabel={t(offlineLabelKey)}
-                  online={device.online}
-                  unknown={presenceUnknown}
-                  unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
-                  onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
-                    count: device.channels.length,
-                  })}
-                />
-              )}
+              <ExecutionTargetDeviceStatus
+                offlineLabel={t(offlineLabelKey)}
+                online={device.online}
+                unknown={presenceUnknown}
+                unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
+                onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
+                  count: device.channels.length,
+                })}
+              />
               {showReconnect ? (
                 <Button
                   className={stylex.props(styles.reconnectButton).className}
