@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useFavoriteToggle } from '@/features/Favorites';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useIsDark } from '@/hooks/useIsDark';
 import type { ProjectListItem } from '@/store/project';
 import { useProjectOverview, useProjectOverviewsLoaded } from '@/store/project';
 
@@ -24,6 +25,9 @@ const PAPER_EASE = 'cubic-bezier(.2,.8,.2,1)';
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 // Opaque, so the tab laid over the back panel joins it without a darker overlap.
 const FOLDER_COLOR = `color-mix(in srgb, ${cssVar.colorText} 6%, ${cssVar.colorBgContainer})`;
+// Dark mode keeps the light layering: a recessed folder, the paper as the
+// brightest surface, and a pocket close to the page.
+const FOLDER_COLOR_DARK = `color-mix(in srgb, ${cssVar.colorBgLayout} 50%, ${cssVar.colorBgContainer})`;
 
 const styles = stylex.create({
   actions: {
@@ -54,6 +58,9 @@ const styles = stylex.create({
     insetBlockStart: 8,
     insetInline: 0,
     position: 'absolute',
+  },
+  backDark: {
+    backgroundColor: FOLDER_COLOR_DARK,
   },
   dot: {
     backgroundColor: cssVar.colorInfo,
@@ -144,6 +151,12 @@ const styles = stylex.create({
       [stylex.when.ancestor(':focus-within', folderCardMarker)]: 'translateY(-9px)',
     },
   },
+  paperBehindDark: {
+    backgroundColor: cssVar.colorBgElevated,
+  },
+  paperDark: {
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorText} 8%, ${cssVar.colorBgElevated})`,
+  },
   pocket: {
     backdropFilter: 'blur(16px) saturate(1.2)',
     backgroundColor: `color-mix(in srgb, ${cssVar.colorBgLayout} 78%, transparent)`,
@@ -161,6 +174,9 @@ const styles = stylex.create({
     paddingBlockStart: 16,
     paddingInline: 18,
     position: 'absolute',
+  },
+  pocketDark: {
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 78%, transparent)`,
   },
   root: {
     height: 300,
@@ -207,6 +223,7 @@ export const FolderCard = memo<FolderCardProps>(({ project }) => {
   const overviewsLoaded = useProjectOverviewsLoaded();
   const { deleting, menuItems } = useProjectMenuItems(project);
   const { isFavorite } = useFavoriteToggle(projectFavoriteTarget(project));
+  const isDark = useIsDark();
 
   const sheet = resolveFolderSheet(overview, overviewsLoaded);
   const rich = isRichFolder(overview);
@@ -228,10 +245,19 @@ export const FolderCard = memo<FolderCardProps>(({ project }) => {
   return (
     <ContextMenuTrigger items={menuItems}>
       <div {...stylex.props(styles.root, folderCardMarker)}>
-        <div {...stylex.props(styles.back)} />
-        <div {...stylex.props(styles.tab)} />
-        {rich && <div {...stylex.props(styles.paper, styles.paperBehind)} />}
-        <div {...stylex.props(styles.paper)}>
+        <div {...stylex.props(styles.back, isDark && styles.backDark)} />
+        <div {...stylex.props(styles.tab, isDark && styles.backDark)} />
+        {rich && (
+          <div
+            {...stylex.props(
+              styles.paper,
+              isDark && styles.paperDark,
+              styles.paperBehind,
+              isDark && styles.paperBehindDark,
+            )}
+          />
+        )}
+        <div {...stylex.props(styles.paper, isDark && styles.paperDark)}>
           <FolderPaper project={project} sheet={sheet} />
         </div>
         <WorkspaceLink
@@ -239,7 +265,7 @@ export const FolderCard = memo<FolderCardProps>(({ project }) => {
           to={`/project/${project.slug ?? project.id}`}
           {...stylex.props(styles.link)}
         >
-          <div {...stylex.props(styles.pocket)}>
+          <div {...stylex.props(styles.pocket, isDark && styles.pocketDark)}>
             <div {...stylex.props(styles.nameRow)}>
               <span {...stylex.props(styles.name)}>{project.name}</span>
               <span {...stylex.props(styles.identifier)}>{project.identifier}</span>
