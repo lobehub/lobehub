@@ -8,7 +8,7 @@ import {
   MessageCircleIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
-  SquareArrowOutUpRightIcon,
+  Settings2Icon,
   UserRoundIcon,
   UserRoundXIcon,
 } from 'lucide-react';
@@ -200,7 +200,7 @@ const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
             </WorkspaceLink>
             {agentId && channelsEnabled && (
               <WorkspaceLink to={chatUrl} {...stylex.props(styles.tile)}>
-                <TileContent icon={SquareArrowOutUpRightIcon} label={t('contacts.view')} />
+                <TileContent icon={Settings2Icon} label={t('contacts.manage')} />
               </WorkspaceLink>
             )}
             <DropdownMenu items={moreItems}>
