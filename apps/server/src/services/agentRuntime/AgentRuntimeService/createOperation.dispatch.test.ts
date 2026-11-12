@@ -94,9 +94,9 @@ describe('uncertain delivery of a terminal operation', () => {
       agentOperationModel: { findById: vi.fn().mockRejectedValue(error) },
       coordinator: { tryClaimStep },
     } as unknown as ExecuteStepDeps;
-    await expect(executeStep(deps, { operationId: params.operationId, stepIndex: 0 })).rejects.toBe(
-      error,
-    );
+    await expect(
+      executeStep(deps, { operationId: params.operationId, stepIndex: 0 }),
+    ).rejects.toMatchObject({ cause: error, name: 'DurableStatusUnavailableError' });
     expect(tryClaimStep).not.toHaveBeenCalled();
   });
 });
