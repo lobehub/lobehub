@@ -361,6 +361,14 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
+    anchor: 'about-debug-logs',
+    descKey: 'settingAbout.debugLogs.desc',
+    keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
+    labelKey: 'settingAbout.debugLogs.title',
+    tab: SettingsTabs.About,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
     anchor: 'appearance-font-family',
     descKey: 'settingAppearance.font.fontFamily.desc',
     keywords: ['font', 'font family', 'typeface', 'interface font'],

@@ -1358,6 +1358,14 @@ export default {
   'settingAgent.tag.placeholder': 'Enter tag',
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
+  'settingAbout.debugLogs.desc':
+    'Also record detailed debug logs. Turn on while reproducing an issue, then turn off: debug logs use more disk space and may include file paths and URLs.',
+  'settingAbout.debugLogs.devDesc': 'Development builds always record debug logs.',
+  'settingAbout.debugLogs.directory': 'Log Files',
+  'settingAbout.debugLogs.openDirectory': 'Open Folder',
+  'settingAbout.debugLogs.openDirectoryDesc': 'Attach these files when you report an issue.',
+  'settingAbout.debugLogs.title': 'Debug Logs',
+  'settingAbout.diagnostics.title': 'Diagnostics',
   'settingAppearance.appTray.desc':
     'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
   'settingAppearance.appTray.title': 'Show App Tray',

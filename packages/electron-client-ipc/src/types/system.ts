@@ -32,3 +32,11 @@ export type ThemeAppearance = 'dark' | 'light' | string;
 
 export type GuidedPermission = 'accessibility' | 'fullDisk' | 'inputMonitoring' | 'screen';
 export type PermissionGuideStatus = 'active' | 'dismissed' | 'granted';
+
+/** Settings → About → Debug logs. */
+export interface DebugLoggingSettings {
+  /** Dev builds record `debug` regardless of `enabled`, so the switch is shown on and locked. */
+  alwaysOn: boolean;
+  /** Whether packaged builds also write `debug` records to `<userData>/logs/*.jsonl`. */
+  enabled: boolean;
+}

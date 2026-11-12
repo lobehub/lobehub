@@ -765,7 +765,6 @@ export default class Browser {
       if (requestHeaders['Origin']) {
         originMap.set(details.id, requestHeaders['Origin']);
         delete requestHeaders['Origin'];
-        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
 
       appendVercelCookie(requestHeaders);
