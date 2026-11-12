@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProjectListItem } from '@/store/project';
 
 import { FolderCard } from './FolderCard';
+import type { OverviewStatus } from './FolderCard/folderSheet';
 import SortableProjectRows from './SortableProjectRows';
 
 const styles = stylex.create({
@@ -75,11 +76,17 @@ interface FolderGridProps {
   createMenuItems: DropdownItem[];
   /** Cards can be dragged into the shared custom order. */
   draggable: boolean;
+  overviewStatus: OverviewStatus;
   projects: ProjectListItem[];
 }
 
 /** Projects as folder cards, ending with a card that creates one. */
-export const FolderGrid = ({ createMenuItems, draggable, projects }: FolderGridProps) => {
+export const FolderGrid = ({
+  createMenuItems,
+  draggable,
+  overviewStatus,
+  projects,
+}: FolderGridProps) => {
   const { t } = useTranslation('project');
 
   return (
@@ -88,10 +95,12 @@ export const FolderGrid = ({ createMenuItems, draggable, projects }: FolderGridP
         <SortableProjectRows
           layout={'grid'}
           projects={projects}
-          renderRow={(project) => <FolderCard project={project} />}
+          renderRow={(project) => <FolderCard overviewStatus={overviewStatus} project={project} />}
         />
       ) : (
-        projects.map((project) => <FolderCard key={project.id} project={project} />)
+        projects.map((project) => (
+          <FolderCard key={project.id} overviewStatus={overviewStatus} project={project} />
+        ))
       )}
       <DropdownMenu items={createMenuItems} placement={'bottom'}>
         <button type={'button'} {...stylex.props(styles.create)}>

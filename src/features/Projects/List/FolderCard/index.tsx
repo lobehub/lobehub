@@ -12,13 +12,13 @@ import { useFavoriteToggle } from '@/features/Favorites';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useIsDark } from '@/hooks/useIsDark';
 import type { ProjectListItem } from '@/store/project';
-import { useProjectOverview, useProjectOverviewsLoaded } from '@/store/project';
+import { useProjectOverview } from '@/store/project';
 
 import { projectFavoriteTarget } from '../../projectFavorite';
 import { useProjectMenuItems } from '../useProjectMenuItems';
 import { AgentStack } from './AgentStack';
 import { FolderPaper } from './FolderPaper';
-import { isRichFolder, resolveFolderSheet } from './folderSheet';
+import { isRichFolder, type OverviewStatus, resolveFolderSheet } from './folderSheet';
 import { folderCardMarker } from './markers.stylex';
 
 const PAPER_EASE = 'cubic-bezier(.2,.8,.2,1)';
@@ -210,6 +210,8 @@ const styles = stylex.create({
 });
 
 interface FolderCardProps {
+  /** Where the page's overview batch stands; the page owns the fetch and its error. */
+  overviewStatus: OverviewStatus;
   project: ProjectListItem;
 }
 
@@ -217,18 +219,17 @@ interface FolderCardProps {
  * A project as a folder: a back panel with a tab, the project's latest content
  * on a paper inside, and a frosted pocket in front with its name and numbers.
  */
-export const FolderCard = memo<FolderCardProps>(({ project }) => {
+export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) => {
   const { t } = useTranslation('project');
   const overview = useProjectOverview(project.id);
-  const overviewsLoaded = useProjectOverviewsLoaded();
   const { deleting, menuItems } = useProjectMenuItems(project);
   const { isFavorite } = useFavoriteToggle(projectFavoriteTarget(project));
   const isDark = useIsDark();
 
-  const sheet = resolveFolderSheet(overview, overviewsLoaded);
+  const sheet = resolveFolderSheet(overview, overviewStatus);
   const rich = isRichFolder(overview);
   const running = project.status === 'active';
-  const showCounts = overviewsLoaded;
+  const showCounts = overviewStatus === 'loaded';
   const topicCount = overview?.topicCount ?? 0;
   const taskCount = overview?.taskCount ?? 0;
 

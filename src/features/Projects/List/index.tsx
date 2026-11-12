@@ -53,13 +53,14 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import type { ProjectListSortBy, ProjectListViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useLoadedProjectList, useProjectStore } from '@/store/project';
+import { useLoadedProjectList, useProjectOverviewsLoaded, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import { projectFavoriteTarget } from '../projectFavorite';
 import { resolveProjectListState } from '../projectListState';
+import { resolveOverviewStatus } from './FolderCard/folderSheet';
 import { FolderGrid, FolderGridSkeleton } from './FolderGrid';
 import SortableProjectRows from './SortableProjectRows';
 import { sortProjects } from './sortProjects';
@@ -276,7 +277,14 @@ const ProjectListPage = memo(() => {
   const sortBy = useGlobalStore(systemStatusSelectors.projectListSortBy);
   const viewMode = useGlobalStore(systemStatusSelectors.projectListViewMode);
   // Cards draw recent topics, tasks and members, which the light list row never needs.
-  useProjectStore((s) => s.useFetchProjectOverviews)(enabled && viewMode === 'folder');
+  const overviewSync = useProjectStore((s) => s.useFetchProjectOverviews)(
+    enabled && viewMode === 'folder',
+  );
+  const overviewsLoaded = useProjectOverviewsLoaded();
+  const overviewStatus = resolveOverviewStatus({
+    error: overviewSync.error,
+    loaded: overviewsLoaded,
+  });
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   // The custom order is shared by the workspace, so only editors may change it.
   const canManage = useCanManageProject();
@@ -392,11 +400,23 @@ const ProjectListPage = memo(() => {
             />
           </Center>
         ) : viewMode === 'folder' ? (
-          <FolderGrid
-            createMenuItems={createMenuItems}
-            draggable={draggable}
-            projects={filteredProjects}
-          />
+          <Flexbox gap={16}>
+            {overviewStatus === 'failed' && (
+              // The cards stay usable; only their conversations and tasks are missing.
+              <AsyncError
+                error={overviewSync.error}
+                title={t('list.folder.overviewError')}
+                variant={'inline'}
+                onRetry={() => overviewSync.revalidate()}
+              />
+            )}
+            <FolderGrid
+              createMenuItems={createMenuItems}
+              draggable={draggable}
+              overviewStatus={overviewStatus}
+              projects={filteredProjects}
+            />
+          </Flexbox>
         ) : (
           <Flexbox gap={4}>
             {draggable ? (

@@ -159,11 +159,13 @@ export const FolderPaper = ({ project, sheet }: FolderPaperProps) => {
       {sheet.kind === 'intro' && (
         <p {...stylex.props(styles.hint)}>{t('list.folder.noTopicsHint')}</p>
       )}
-      <div aria-hidden {...stylex.props(styles.placeholders)}>
-        {PLACEHOLDER_WIDTHS.map((width) => (
-          <span key={width} {...sx(styles.placeholder, { width })} />
-        ))}
-      </div>
+      {sheet.kind !== 'unavailable' && (
+        <div aria-hidden {...stylex.props(styles.placeholders)}>
+          {PLACEHOLDER_WIDTHS.map((width) => (
+            <span key={width} {...sx(styles.placeholder, { width })} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

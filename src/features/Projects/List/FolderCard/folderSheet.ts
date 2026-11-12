@@ -9,26 +9,44 @@ export const FOLDER_TOPIC_ROWS = 3;
 const RICH_TOPIC_COUNT = 3;
 
 /**
+ * Where the overview batch stands. A cached batch counts as `loaded` even when
+ * its revalidation failed: the cards keep showing it.
+ */
+export type OverviewStatus = 'failed' | 'loaded' | 'loading';
+
+export const resolveOverviewStatus = ({
+  error,
+  loaded,
+}: {
+  error: unknown;
+  loaded: boolean;
+}): OverviewStatus => (loaded ? 'loaded' : error ? 'failed' : 'loading');
+
+/**
  * What the front paper of a folder card shows:
  * - `topics`: the latest conversation as its headline, the next few as rows;
  * - `intro`: the project brief, with a "no conversations yet" hint;
  * - `pending`: the brief alone while the overview loads, so a project with
- *   conversations never flashes the empty hint first.
+ *   conversations never flashes the empty hint first;
+ * - `unavailable`: the brief alone after the overview failed to load, without
+ *   the loading placeholders, so a failed card does not look pending forever.
  */
 export type FolderSheet =
   | { kind: 'intro' }
   | { kind: 'pending' }
+  | { kind: 'unavailable' }
   | { kind: 'topics'; latest: OverviewTopic; others: OverviewTopic[] };
 
 /**
  * @param overview the project's overview row, `undefined` when it has none
- * @param loaded whether the overview batch has arrived at all
+ * @param status where the overview batch stands
  */
 export const resolveFolderSheet = (
   overview: ProjectOverview | undefined,
-  loaded: boolean,
+  status: OverviewStatus,
 ): FolderSheet => {
-  if (!overview && !loaded) return { kind: 'pending' };
+  if (!overview && status === 'loading') return { kind: 'pending' };
+  if (!overview && status === 'failed') return { kind: 'unavailable' };
 
   const [latest, ...others] = overview?.recentTopics ?? [];
   if (!latest) return { kind: 'intro' };

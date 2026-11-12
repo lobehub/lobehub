@@ -265,6 +265,7 @@ export default {
   'list.folder.noTopics': 'No conversations',
   'list.folder.noTopicsHint':
     'No conversations yet. Start the first one in this project and it shows up here.',
+  'list.folder.overviewError': "Couldn't load the conversations and tasks shown on the cards.",
   'list.folder.recentTopic': 'Latest conversation',
   'list.folder.running': 'In progress',
   'list.folder.taskProgress': '{{done}}/{{total}} tasks',
