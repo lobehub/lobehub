@@ -39,6 +39,7 @@
   "composer": "发消息到 #{{name}}",
   "composer.actions": "更多操作",
   "composer.mention": "提及成员或 Agent",
+  "composerToJoin": "发消息即可加入 #{{name}}",
   "conversationEmpty": "开始一起讨论吧",
   "copyId": "复制 ID",
   "copyIdSuccess": "已复制频道 ID",

@@ -8,7 +8,11 @@ import { ChannelError } from './error';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 
-const requireWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
+export const requireWorkspaceMember = async (
+  tx: Transaction,
+  workspaceId: string,
+  userId: string,
+) => {
   const [member] = await tx
     .select({ userId: workspaceMembers.userId })
     .from(workspaceMembers)

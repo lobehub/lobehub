@@ -258,22 +258,32 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
     // The open Channel is being read; its count clears once the read receipt lands.
     const unread = !open && (channel.unreadCount ?? 0) > 0;
     const mentions = open ? 0 : (channel.mentionCount ?? 0);
+    // A project Channel the caller can read but has not joined: dimmed, with no member actions.
+    const joined = channel.joined !== false;
     return (
       <Flexbox key={channel.id} {...stylex.props(styles.channel)}>
         {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
         <NavItem
           active={open && !activeThreadId}
           aria-current={open && !activeThreadId ? 'page' : undefined}
-          contextMenuItems={() => menuItems(channel)}
+          contextMenuItems={joined ? () => menuItems(channel) : undefined}
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
           title={channel.title}
-          titleColor={unread ? cssVar.colorText : undefined}
-          actions={() => (
-            <DropdownMenu items={menuItems(channel)}>
-              <ActionIcon icon={MoreHorizontal} size="small" title={t('more', { ns: 'common' })} />
-            </DropdownMenu>
-          )}
+          titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
+          actions={
+            joined
+              ? () => (
+                  <DropdownMenu items={menuItems(channel)}>
+                    <ActionIcon
+                      icon={MoreHorizontal}
+                      size="small"
+                      title={t('more', { ns: 'common' })}
+                    />
+                  </DropdownMenu>
+                )
+              : undefined
+          }
           extra={
             mentions > 0 ? (
               <span
