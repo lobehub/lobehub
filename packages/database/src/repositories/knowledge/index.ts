@@ -238,6 +238,16 @@ const SORTABLE_COLUMNS: Record<string, string> = {
   updatedAt: 'updated_at',
 };
 
+export interface ReorderKnowledgeItemsParams {
+  dragIds: string[];
+  knowledgeBaseId: string;
+  parentId: string | null;
+  position: 'before' | 'after';
+  sorter?: string;
+  sortType?: string;
+  targetId: string;
+}
+
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
   content?: string | null;
@@ -896,11 +906,8 @@ export class KnowledgeRepo {
   };
 
   /** Persist a sibling order without turning a move into a content edit. */
-  reorderItems = async (
-    knowledgeBaseId: string,
-    orderedIds: string[],
-    options?: { parentId?: string | null; sorter?: string; sortType?: string },
-  ): Promise<{ success: boolean }> => {
+  reorderItems = async (params: ReorderKnowledgeItemsParams): Promise<{ success: boolean }> => {
+    const { knowledgeBaseId } = params;
     return this.db.transaction(async (trx) => {
       const scope = { userId: this.userId, workspaceId: this.workspaceId };
       const [kb] = await trx
@@ -929,80 +936,89 @@ export class KnowledgeRepo {
           )
         : eq(documents.knowledgeBaseId, knowledgeBaseId);
 
-      let siblingIds = [...new Set(orderedIds)];
-      if (options?.parentId !== undefined) {
-        const siblings = await new KnowledgeRepo(
-          trx as unknown as LobeChatDatabase,
-          this.userId,
-          this.workspaceId,
-        ).query({
-          includeContent: false,
-          knowledgeBaseId: kb.id,
-          limit: 100_000,
-          parentId: options.parentId,
-          sorter: options.sorter ?? 'custom',
-          sortType: options.sortType ?? SortType.Asc,
-        });
-        // The query may expose a file-backed page under its document ID.
-        const byId = new Map<string, KnowledgeItem>();
-        for (const sibling of siblings) {
-          byId.set(sibling.id, sibling);
-          if (sibling.fileId) byId.set(sibling.fileId, sibling);
-        }
-        const submitted = new Set(
-          orderedIds.flatMap((id) => {
-            const sibling = byId.get(id);
-            return sibling ? [sibling.id] : [];
-          }),
-        );
-        const reordered = [
-          ...[...submitted].map((id) => byId.get(id)!),
-          ...siblings.filter((item) => !submitted.has(item.id)),
-        ];
-        siblingIds = [
-          ...reordered.filter((item) => item.fileType === CUSTOM_FOLDER_FILE_TYPE),
-          ...reordered.filter((item) => item.fileType !== CUSTOM_FOLDER_FILE_TYPE),
-        ].map((item) => item.id);
+      const siblings = await new KnowledgeRepo(
+        trx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).query({
+        includeContent: false,
+        knowledgeBaseId: kb.id,
+        limit: 1_000_000,
+        parentId: params.parentId,
+        sorter: params.sorter ?? 'custom',
+        sortType: params.sortType ?? SortType.Asc,
+      });
+      // File-backed pages can be addressed by either their page or file ID.
+      const byId = new Map<string, KnowledgeItem>();
+      for (const sibling of siblings) {
+        byId.set(sibling.id, sibling);
+        if (sibling.fileId) byId.set(sibling.fileId, sibling);
       }
-
-      for (const [index, id] of siblingIds.entries()) {
+      const target = byId.get(params.targetId);
+      if (!target) return { success: true };
+      const dragged = [...new Set(params.dragIds.map((id) => byId.get(id)))].filter(
+        (item): item is KnowledgeItem => !!item && item.id !== target.id,
+      );
+      const isFolder = (item: KnowledgeItem) => item.fileType === CUSTOM_FOLDER_FILE_TYPE;
+      let moving = dragged.filter((item) => isFolder(item) === isFolder(target));
+      let boundary = false;
+      if (!moving.length) {
+        const folders = siblings.filter(isFolder);
+        const firstFile = siblings.find((item) => !isFolder(item));
+        boundary =
+          (isFolder(target) && params.position === 'after' && folders.at(-1)?.id === target.id) ||
+          (!isFolder(target) && params.position === 'before' && firstFile?.id === target.id);
+        if (!boundary) return { success: true };
+        moving = dragged.filter((item) => isFolder(item) !== isFolder(target));
+      }
+      if (!moving.length) return { success: true };
+      const movingIds = new Set(moving.map((item) => item.id));
+      const folderGroup = siblings.filter((item) => isFolder(item) && !movingIds.has(item.id));
+      const fileGroup = siblings.filter((item) => !isFolder(item) && !movingIds.has(item.id));
+      const group = isFolder(moving[0]) ? folderGroup : fileGroup;
+      const index = boundary
+        ? isFolder(moving[0])
+          ? group.length
+          : 0
+        : group.findIndex((item) => item.id === target.id) + (params.position === 'after' ? 1 : 0);
+      group.splice(index, 0, ...moving);
+      const documentOrders = [];
+      const fileOrders = [];
+      const linkedFiles = new Set(linkedFileIds);
+      for (const [index, item] of [...folderGroup, ...fileGroup].entries()) {
         const sortOrder = (index + 1) * 1000;
-        const documentUpdate = {
-          metadata: sql`jsonb_set(COALESCE(${documents.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
-          updatedAt: documents.updatedAt,
-        };
-        const fileUpdate = {
-          metadata: sql`jsonb_set(COALESCE(${files.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
-          updatedAt: files.updatedAt,
-        };
-        if (id.startsWith('docs_')) {
-          const updated = await trx
-            .update(documents)
-            .set(documentUpdate)
-            .where(
-              and(eq(documents.id, id), documentMembership, buildWorkspaceWhere(scope, documents)),
-            )
-            .returning({ fileId: documents.fileId });
-          const fileIds = updated.flatMap((row) => (row.fileId ? [row.fileId] : []));
-          if (fileIds.length) {
-            await trx
-              .update(files)
-              .set(fileUpdate)
-              .where(and(inArray(files.id, fileIds), buildWorkspaceWhere(scope, files)));
-          }
-        } else if (linkedFileIds.includes(id)) {
-          const updated = await trx
-            .update(files)
-            .set(fileUpdate)
-            .where(and(eq(files.id, id), buildWorkspaceWhere(scope, files)))
-            .returning({ id: files.id });
-          if (updated.length) {
-            await trx
-              .update(documents)
-              .set(documentUpdate)
-              .where(and(eq(documents.fileId, id), buildWorkspaceWhere(scope, documents)));
-          }
+        if (item.documentId)
+          documentOrders.push(sql`(${item.documentId}::text, ${sortOrder}::int)`);
+        if (item.fileId && linkedFiles.has(item.fileId)) {
+          fileOrders.push(sql`(${item.fileId}::text, ${sortOrder}::int)`);
         }
+      }
+      // One statement per table, preserving both unrelated metadata and content timestamps.
+      if (documentOrders.length) {
+        await trx
+          .update(documents)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${documents.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(v.sort_order), true)`,
+            updatedAt: documents.updatedAt,
+          })
+          .from(sql`(VALUES ${sql.join(documentOrders, sql`, `)}) AS v(id, sort_order)`)
+          .where(
+            and(
+              eq(documents.id, sql`v.id`),
+              documentMembership,
+              buildWorkspaceWhere(scope, documents),
+            ),
+          );
+      }
+      if (fileOrders.length) {
+        await trx
+          .update(files)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${files.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(v.sort_order), true)`,
+            updatedAt: files.updatedAt,
+          })
+          .from(sql`(VALUES ${sql.join(fileOrders, sql`, `)}) AS v(id, sort_order)`)
+          .where(and(eq(files.id, sql`v.id`), buildWorkspaceWhere(scope, files)));
       }
       return { success: true };
     });

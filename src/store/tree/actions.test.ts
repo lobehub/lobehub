@@ -919,7 +919,9 @@ describe('TreeActionImpl sorting and reorder', () => {
       expect(mockReorder).toHaveBeenCalledWith({
         knowledgeBaseId: 'kb-1',
         parentId: null,
-        orderedIds: ['folder', 'b', 'a'],
+        dragIds: ['b'],
+        targetId: 'a',
+        position: 'before',
         sorter: 'name',
         sortType: SortType.Desc,
       });
@@ -938,6 +940,30 @@ describe('TreeActionImpl sorting and reorder', () => {
       }
     },
   );
+
+  it('sends only moved IDs when more than 1000 siblings are loaded', async () => {
+    const state = createState();
+    state.children = { '': Array.from({ length: 1005 }, (_, i) => row(`item-${i}`)) };
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    vi.spyOn(actions, 'revalidate').mockResolvedValue();
+    mockReorder.mockResolvedValue({ success: true });
+    await actions.reorderItems('', ['item-1004'], 'item-0', 'before');
+    expect(mockReorder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dragIds: ['item-1004'],
+        targetId: 'item-0',
+        position: 'before',
+      }),
+    );
+    expect(mockReorder.mock.calls[0][0]).not.toHaveProperty('orderedIds');
+    expect(state.children[''].map((item) => item.id)).toEqual([
+      'item-1004',
+      ...Array.from({ length: 1004 }, (_, i) => `item-${i}`),
+    ]);
+  });
 
   it('allows only the two cross-group boundary drops', async () => {
     const state = createState();

@@ -753,7 +753,9 @@ export class TreeActionImpl {
     tx.mutation = async () => {
       await knowledgeBaseService.reorderKnowledgeItems({
         knowledgeBaseId,
-        orderedIds,
+        dragIds: moving.map((item) => item.id),
+        targetId,
+        position,
         parentId: folderId || null,
         sorter: previousSorter,
         sortType: previousSortType,

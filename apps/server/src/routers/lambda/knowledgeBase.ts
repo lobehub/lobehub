@@ -160,8 +160,10 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         knowledgeBaseId: z.string(),
-        orderedIds: z.array(z.string()).min(1).max(1000),
-        parentId: z.string().nullable().optional(),
+        dragIds: z.array(z.string()).min(1).max(10_000),
+        targetId: z.string(),
+        position: z.enum(['before', 'after']),
+        parentId: z.string().nullable(),
         sorter: z.enum(['custom', 'name', 'createdAt', 'size', 'updatedAt']).optional(),
         sortType: z.enum(['desc', 'asc']).optional(),
       }),
@@ -174,12 +176,8 @@ export const knowledgeBaseRouter = router({
         visibility: kb.visibility ?? null,
         workspaceId: kb.workspaceId ?? null,
       });
-      await assertKnowledgeItemsAccessible(ctx, input.orderedIds);
-      return ctx.knowledgeRepo.reorderItems(input.knowledgeBaseId, input.orderedIds, {
-        parentId: input.parentId,
-        sorter: input.sorter,
-        sortType: input.sortType,
-      });
+      await assertKnowledgeItemsAccessible(ctx, [...input.dragIds, input.targetId]);
+      return ctx.knowledgeRepo.reorderItems(input);
     }),
 
   createKnowledgeBase: knowledgeBaseProcedure

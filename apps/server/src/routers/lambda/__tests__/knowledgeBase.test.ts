@@ -165,7 +165,9 @@ describe('knowledgeBaseRouter', () => {
   describe('reorderKnowledgeItems', () => {
     const input = {
       knowledgeBaseId: 'kb-1',
-      orderedIds: ['docs_page', 'file_raw'],
+      dragIds: ['docs_page'],
+      targetId: 'file_raw',
+      position: 'before' as const,
       parentId: null,
       sorter: 'custom' as const,
       sortType: 'desc' as const,
@@ -191,13 +193,9 @@ describe('knowledgeBaseRouter', () => {
       );
       expect(routerMocks.assertContentsNotInRestrictedKnowledgeBase).toHaveBeenCalledWith(
         expect.anything(),
-        input.orderedIds,
+        [...input.dragIds, input.targetId],
       );
-      expect(mockKnowledgeRepoReorderItems).toHaveBeenCalledWith('kb-1', input.orderedIds, {
-        parentId: null,
-        sorter: 'custom',
-        sortType: 'desc',
-      });
+      expect(mockKnowledgeRepoReorderItems).toHaveBeenCalledWith(input);
     });
 
     it('rejects a missing KB before writing', async () => {
@@ -232,15 +230,15 @@ describe('knowledgeBaseRouter', () => {
       },
     );
 
-    it.each([
-      { orderedIds: [] },
-      { orderedIds: Array.from({ length: 1001 }, (_, i) => `file_${i}`) },
-    ])('rejects an invalid order length', async ({ orderedIds }) => {
-      await expect(caller.reorderKnowledgeItems({ ...input, orderedIds })).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
-      });
-      expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
-    });
+    it.each([{ dragIds: [] }, { dragIds: Array.from({ length: 10_001 }, (_, i) => `file_${i}`) }])(
+      'rejects an invalid order length',
+      async ({ dragIds }) => {
+        await expect(caller.reorderKnowledgeItems({ ...input, dragIds })).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+        });
+        expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('updateKnowledgeBase', () => {

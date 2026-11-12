@@ -66,8 +66,10 @@ class KnowledgeBaseService {
 
   reorderKnowledgeItems = async (params: {
     knowledgeBaseId: string;
-    orderedIds: string[];
-    parentId?: string | null;
+    dragIds: string[];
+    targetId: string;
+    position: 'before' | 'after';
+    parentId: string | null;
     sorter?: 'custom' | 'name' | 'createdAt' | 'size' | 'updatedAt';
     sortType?: 'asc' | 'desc';
   }) => {

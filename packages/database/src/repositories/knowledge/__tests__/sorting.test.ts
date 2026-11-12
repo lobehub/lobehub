@@ -188,6 +188,42 @@ describe('knowledge resource sorting', () => {
     },
   );
 
+  it('moves one item across more than 1000 siblings without truncating the order', async () => {
+    const ids = Array.from({ length: 1005 }, (_, i) => `docs_large_${i}`);
+    await db.insert(documents).values(
+      ids.map((id, i) => ({
+        id,
+        knowledgeBaseId,
+        userId,
+        title: `Item ${i}`,
+        fileType: 'custom/document',
+        source: 'internal://sorting',
+        sourceType: 'topic',
+        totalCharCount: 0,
+        totalLineCount: 0,
+      })),
+    );
+    expect(
+      await repo.reorderItems({
+        dragIds: [ids[1004]],
+        knowledgeBaseId,
+        parentId: null,
+        position: 'before',
+        targetId: ids[1],
+        sorter: 'name',
+        sortType: SortType.Asc,
+      }),
+    ).toEqual({ success: true });
+    const rows = await repo.query({
+      knowledgeBaseId,
+      parentId: null,
+      sorter: 'custom',
+      limit: 2000,
+    });
+    expect(rows.map((row) => row.id)).toEqual([ids[0], ids[1004], ...ids.slice(1, 1004)]);
+    expect(rows.map((row) => row.metadata?.sortOrder)).toEqual(ids.map((_, i) => (i + 1) * 1000));
+  });
+
   it('renumbers unloaded siblings after a reordered descending first page', async () => {
     for (let n = 1; n <= 60; n++) {
       await addDocument(`docs_${n}`, `Item ${n}`, { metadata: { sortOrder: n * 1000 } });
@@ -200,7 +236,11 @@ describe('knowledge resource sorting', () => {
     });
     const orderedIds = page.map((item) => item.id);
     orderedIds.splice(1, 0, orderedIds.pop()!);
-    await repo.reorderItems(knowledgeBaseId, orderedIds, {
+    await repo.reorderItems({
+      knowledgeBaseId,
+      dragIds: [page.at(-1)!.id],
+      targetId: page[1].id,
+      position: 'before',
       parentId: null,
       sorter: 'custom',
       sortType: SortType.Desc,
@@ -221,6 +261,59 @@ describe('knowledge resource sorting', () => {
     );
   });
 
+  it.each([
+    {
+      dragIds: ['docs_b'],
+      targetId: 'docs_f2',
+      position: 'after',
+      expected: ['docs_f1', 'docs_f2', 'docs_b', 'docs_a'],
+    },
+    {
+      dragIds: ['docs_f1'],
+      targetId: 'docs_a',
+      position: 'before',
+      expected: ['docs_f2', 'docs_f1', 'docs_a', 'docs_b'],
+    },
+    { dragIds: ['docs_b'], targetId: 'docs_f1', position: 'after', expected: null },
+    { dragIds: ['docs_f1'], targetId: 'docs_b', position: 'before', expected: null },
+    { dragIds: ['docs_a'], targetId: 'missing', position: 'before', expected: null },
+    { dragIds: ['docs_a'], targetId: 'docs_a', position: 'before', expected: null },
+    {
+      dragIds: ['docs_f1', 'docs_b'],
+      targetId: 'docs_a',
+      position: 'before',
+      expected: ['docs_f1', 'docs_f2', 'docs_b', 'docs_a'],
+    },
+    {
+      dragIds: ['docs_b', 'docs_a', 'docs_f2'],
+      targetId: 'docs_f1',
+      position: 'before',
+      expected: ['docs_f2', 'docs_f1', 'docs_a', 'docs_b'],
+    },
+  ] as const)(
+    'applies boundary and group rules for $dragIds $position $targetId',
+    async ({ dragIds, targetId, position, expected }) => {
+      await addDocument('docs_f1', 'Folder 1', { fileType: 'custom/folder' });
+      await addDocument('docs_f2', 'Folder 2', { fileType: 'custom/folder' });
+      await addDocument('docs_a', 'A');
+      await addDocument('docs_b', 'B');
+      const before = await db.select().from(documents);
+      expect(
+        await repo.reorderItems({
+          knowledgeBaseId,
+          parentId: null,
+          dragIds: [...dragIds],
+          targetId,
+          position,
+          sorter: 'name',
+          sortType: SortType.Asc,
+        }),
+      ).toEqual({ success: true });
+      if (expected) expect(await listIds('custom')).toEqual(expected);
+      else expect(await db.select().from(documents)).toEqual(before);
+    },
+  );
+
   it('normalizes paired IDs and keeps complete folder and file groups', async () => {
     await addDocument('docs_folder_a', 'Folder A', { fileType: 'custom/folder' });
     await addDocument('docs_folder_b', 'Folder B', { fileType: 'custom/folder' });
@@ -232,15 +325,15 @@ describe('knowledge resource sorting', () => {
       .update(documents)
       .set({ parentId: 'docs_folder_a' })
       .where(eq(documents.id, 'docs_outside'));
-    await repo.reorderItems(
+    await repo.reorderItems({
       knowledgeBaseId,
-      ['docs_pair', 'file_pair', 'docs_folder_b', 'docs_outside'],
-      {
-        parentId: null,
-        sorter: 'name',
-        sortType: SortType.Asc,
-      },
-    );
+      dragIds: ['docs_pair', 'file_pair', 'docs_outside'],
+      targetId: 'docs_folder_b',
+      position: 'after',
+      parentId: null,
+      sorter: 'name',
+      sortType: SortType.Asc,
+    });
     const rows = await repo.query({
       knowledgeBaseId,
       parentId: null,
@@ -248,8 +341,8 @@ describe('knowledge resource sorting', () => {
       sortType: SortType.Asc,
     });
     expect(rows.map((item) => item.id)).toEqual([
-      'docs_folder_b',
       'docs_folder_a',
+      'docs_folder_b',
       'docs_pair',
       'file_unloaded',
     ]);
@@ -327,7 +420,15 @@ describe('knowledge resource sorting', () => {
     const beforeFiles = await db.select().from(files);
     const beforeLinks = await db.select().from(knowledgeBaseFiles);
 
-    expect(await repo.reorderItems('foreign-kb', ['docs_owned', 'file_owned'])).toEqual({
+    expect(
+      await repo.reorderItems({
+        knowledgeBaseId: 'foreign-kb',
+        dragIds: ['docs_owned'],
+        targetId: 'file_owned',
+        position: 'before',
+        parentId: null,
+      }),
+    ).toEqual({
       success: false,
     });
     expect(await db.select().from(documents)).toEqual(beforeDocs);
@@ -350,7 +451,13 @@ describe('knowledge resource sorting', () => {
       userId: 'sorting-other',
     });
 
-    await repo.reorderItems(knowledgeBaseId, ['docs_unlinked', 'file_unlinked', 'file_foreign']);
+    await repo.reorderItems({
+      knowledgeBaseId,
+      dragIds: ['docs_unlinked', 'file_unlinked'],
+      targetId: 'file_foreign',
+      position: 'before',
+      parentId: null,
+    });
 
     expect((await db.select().from(documents)).every((row) => !row.metadata?.sortOrder)).toBe(true);
     const fileRows = await db.select().from(files);
@@ -381,15 +488,20 @@ describe('knowledge resource sorting', () => {
     });
 
     expect(
-      await repo.reorderItems(knowledgeBaseId, [
-        'docs_folder',
-        'docs_page',
-        'docs_page',
-        'docs_backing',
-        'file_direct',
-        'file_raw',
-        'docs_foreign',
-      ]),
+      await repo.reorderItems({
+        knowledgeBaseId,
+        parentId: null,
+        targetId: 'docs_folder',
+        position: 'after',
+        dragIds: [
+          'docs_page',
+          'docs_page',
+          'docs_backing',
+          'file_direct',
+          'file_raw',
+          'docs_foreign',
+        ],
+      }),
     ).toEqual({ success: true });
     const docRows = await db.select().from(documents);
     const fileRows = await db.select().from(files);
