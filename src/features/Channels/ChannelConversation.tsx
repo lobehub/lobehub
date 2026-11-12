@@ -107,9 +107,12 @@ const Timeline = ({
   }, [detail, jumpTarget]);
 
   useEffect(() => {
+    // A Channel covered by a thread page has no layout: scrolling it there targets a zero-height
+    // box, so the scroll is deferred and replayed once the Channel is visible again.
+    if (hidden) return;
     const feed = feedRef.current;
     if (feed && followLatest.current && before === undefined) feed.scrollTop = feed.scrollHeight;
-  }, [feedTail, before]);
+  }, [feedTail, before, hidden]);
 
   useEffect(() => {
     // A Channel covered by a thread page is not being read: mark it read once it is back.
