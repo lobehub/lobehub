@@ -353,6 +353,9 @@ export class GoalActionImpl {
    * They leave the island at once; the ask itself stays pending on the goal
    * page and in the Home inbox. The server keeps the keys, and the island
    * reads leave them out, so another client drops them on its next poll.
+   *
+   * Rejects only when the server did not keep the keys; the cards then come
+   * back from the cached lists as they were, even when a re-read fails too.
    */
   dismissIslandItems = async (keys: string[]): Promise<void> => {
     if (keys.length === 0) return;
@@ -360,37 +363,54 @@ export class GoalActionImpl {
     type IslandData = Awaited<ReturnType<typeof goalService.pendingForIsland>>;
     type ClarificationData = Awaited<ReturnType<typeof goalService.pendingClarifications>>;
 
+    let islandBefore: IslandData | undefined;
+    let clarificationsBefore: ClarificationData | undefined;
     await Promise.all([
       mutate(
         goalKeys.pendingForIsland(),
-        (data?: IslandData) =>
-          data && {
-            decisions: data.decisions.filter(
-              (row) => !hidden.has(goalDecisionIslandKey(row.decisionId)),
-            ),
-            signOffs: data.signOffs.filter(
-              (row) => !hidden.has(goalSignOffIslandKey(row.acceptanceId)),
-            ),
-          },
+        (data?: IslandData) => {
+          islandBefore = data;
+          return (
+            data && {
+              decisions: data.decisions.filter(
+                (row) => !hidden.has(goalDecisionIslandKey(row.decisionId)),
+              ),
+              signOffs: data.signOffs.filter(
+                (row) => !hidden.has(goalSignOffIslandKey(row.acceptanceId)),
+              ),
+            }
+          );
+        },
         { revalidate: false },
       ),
       mutate(
         goalKeys.pendingClarifications(),
-        (groups?: ClarificationData) =>
-          groups?.filter((group) => !hidden.has(goalClarificationIslandKey(group))),
+        (groups?: ClarificationData) => {
+          clarificationsBefore = groups;
+          return groups?.filter((group) => !hidden.has(goalClarificationIslandKey(group)));
+        },
         { revalidate: false },
       ),
     ]);
 
-    try {
-      await userService.addIslandDismissals(keys);
-    } finally {
-      // On failure this brings the cards back instead of hiding them on this client only.
-      await Promise.all([
+    // A failed re-read must not decide the outcome: the write is what counts.
+    const reread = () =>
+      Promise.all([
         mutate(goalKeys.pendingForIsland()),
         mutate(goalKeys.pendingClarifications()),
+      ]).catch((error) => console.error('[island] failed to re-read goal asks', error));
+
+    try {
+      await userService.addIslandDismissals(keys);
+    } catch (error) {
+      await Promise.all([
+        mutate(goalKeys.pendingForIsland(), islandBefore, { revalidate: false }),
+        mutate(goalKeys.pendingClarifications(), clarificationsBefore, { revalidate: false }),
       ]);
+      void reread();
+      throw error;
     }
+    void reread();
   };
 
   pauseGoal = async (goalId: string): Promise<void> => {

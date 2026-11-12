@@ -55,15 +55,37 @@ describe('dismissIslandItems', () => {
     expect(mutate).toHaveBeenCalledWith(goalKeys.pendingClarifications());
   });
 
-  it('brings the cards back when the server rejects the dismissal', async () => {
+  it('brings the cards back from the cache when the server rejects the dismissal', async () => {
     vi.mocked(userService.addIslandDismissals).mockRejectedValue(new Error('offline'));
+    const island = { decisions: [{ decisionId: 'd1' }], signOffs: [] };
+    const clarifications = [{ goalId: 'g1', questions: [{ decisionId: 'q1' }] }];
+    vi.mocked(mutate).mockImplementation(async (key: any, updater?: any) => {
+      if (typeof updater !== 'function') return;
+      updater(key[0] === goalKeys.pendingForIsland()[0] ? island : clarifications);
+    });
 
     await expect(useGoalStore.getState().dismissIslandItems(['goal-decision:d1'])).rejects.toThrow(
       'offline',
     );
 
-    expect(mutate).toHaveBeenCalledWith(goalKeys.pendingForIsland());
-    expect(mutate).toHaveBeenCalledWith(goalKeys.pendingClarifications());
+    // Restored without a fetch, so it holds even while the re-read fails offline.
+    expect(mutate).toHaveBeenCalledWith(goalKeys.pendingForIsland(), island, {
+      revalidate: false,
+    });
+    expect(mutate).toHaveBeenCalledWith(goalKeys.pendingClarifications(), clarifications, {
+      revalidate: false,
+    });
+  });
+
+  it('resolves once the server kept the keys even if re-reading the island fails', async () => {
+    vi.mocked(mutate).mockImplementation(async (_key: any, updater?: any) => {
+      if (updater === undefined) throw new Error('offline');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      useGoalStore.getState().dismissIslandItems(['goal-decision:d1']),
+    ).resolves.toBeUndefined();
   });
 
   it('does nothing without keys', async () => {
