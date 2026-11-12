@@ -53,6 +53,7 @@ describe('openChannelReply', () => {
 
     expect(opener).toHaveBeenCalledWith(
       {
+        ackPlacement: 'before-thread',
         agent: { name: 'Coder', title: 'Engineer' },
         botNames: ['Coder'],
         canOpenThread: true,

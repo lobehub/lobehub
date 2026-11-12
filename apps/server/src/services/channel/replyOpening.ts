@@ -39,6 +39,8 @@ const decide = async (
     return await Promise.race([
       opener(
         {
+          // The acknowledgement goes in the request's timeline with the Thread opening under it.
+          ackPlacement: 'before-thread',
           agent: {
             name: candidate.agent.name ?? undefined,
             title: candidate.agent.title ?? undefined,
