@@ -79,12 +79,16 @@ export const collaborationRoutes: RouteObject[] = [
     path: 'dashboard',
   },
 
-  // Channels are listed in the home sidebar; a thread opens beside its Channel via `?thread=`.
+  // Channels are listed in the home sidebar; a thread opens beside its Channel via `?thread=`,
+  // or as the page at `threads/:threadId`.
   {
     children: [
       // No collection page: old `/channels` links return home, where the list lives.
       { element: redirectElement('..'), index: true },
       {
+        // A thread opened as the page. The Channel page reads it from the path, so moving
+        // between the thread beside the Channel and the thread page keeps the page mounted.
+        children: [{ path: 'threads/:threadId' }],
         element: dynamicElement(
           () => import('@/routes/(main)/channels/[channelId]'),
           'Desktop > Channel',
