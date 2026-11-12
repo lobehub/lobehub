@@ -35,6 +35,7 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
+import { type ConnectorSnapshot, snapshotReplacedConnector } from '../connector/replaceConnector';
 import { buildCloudMcpManifest } from './cloudManifest';
 import { type MCPPluginListData, type MCPStoreState } from './initialState';
 import { installMarketplaceConnector } from './installMarketplaceConnector';
@@ -496,6 +497,9 @@ export class PluginMCPStoreActionImpl {
       }
 
       let manifest: ToolManifest | undefined;
+      // The marketplace row an OAuth install authorizes over, read before the
+      // authorization rewrites it, so a cancel while finishing can restore it
+      let oauthReplaced: ConnectorSnapshot | undefined;
 
       if (connection?.type === 'stdio') {
         manifest = await mcpService.getStdioMcpServerManifest(
@@ -528,6 +532,7 @@ export class PluginMCPStoreActionImpl {
             progress: 70,
             step: MCPInstallStep.AUTHORIZING,
           });
+          oauthReplaced = await snapshotReplacedConnector(identifier, 'marketplace', this.#get);
           manifest = await installOAuthPlugin(
             {
               connection: { ...connection, headers: mergedHttpHeaders },
@@ -631,6 +636,7 @@ export class PluginMCPStoreActionImpl {
           icon: plugin.icon,
           identifier: plugin.identifier,
           isOAuth,
+          oauthReplaced,
           manifest,
           name: manifest.meta?.title || data.name || plugin.identifier,
           signal: abortController.signal,

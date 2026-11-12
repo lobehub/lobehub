@@ -321,4 +321,59 @@ describe('installMarketplaceConnector', () => {
     expect(state.updateConnector).toHaveBeenCalled();
     expect(state.deleteConnector).toHaveBeenCalledWith('connector-1');
   });
+
+  describe('an OAuth install canceled while the mark is written', () => {
+    const cancelOAuth = (oauthReplaced?: unknown) => {
+      const controller = new AbortController();
+      state.connectors = [{ id: 'oauth-1', identifier: 'market-mcp', metadata: null }] as never;
+      vi.mocked(state.updateConnector).mockImplementation(async () => controller.abort());
+
+      return installMarketplaceConnector(
+        {
+          connection: { auth: { type: 'oauth2' }, type: 'http', url: 'https://mcp.example.com' },
+          identifier: 'market-mcp',
+          isOAuth: true,
+          manifest,
+          name: 'Market MCP',
+          oauthReplaced: oauthReplaced as never,
+          signal: controller.signal,
+        },
+        () => state,
+      );
+    };
+
+    it('removes the connector its authorization created', async () => {
+      await expect(cancelOAuth()).rejects.toThrow();
+
+      expect(state.deleteConnector).toHaveBeenCalledWith('oauth-1');
+    });
+
+    it('restores the connector it authorized over, without the mark', async () => {
+      const previous = {
+        credentials: null,
+        id: 'oauth-1',
+        isEnabled: true,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://old.example.com',
+        mcpStdioConfig: null,
+        metadata: { avatar: 'old' },
+        name: 'Old MCP',
+        oidcConfig: { scheme: 'dcr' },
+        status: 'disconnected',
+        tools: [],
+      };
+
+      await expect(cancelOAuth(previous)).rejects.toThrow();
+
+      expect(state.deleteConnector).not.toHaveBeenCalled();
+      // The mark write, then the restore of the previous row
+      expect(state.updateConnector).toHaveBeenLastCalledWith(
+        'oauth-1',
+        expect.objectContaining({
+          metadata: { avatar: 'old' },
+          mcpServerUrl: 'https://old.example.com',
+        }),
+      );
+    });
+  });
 });

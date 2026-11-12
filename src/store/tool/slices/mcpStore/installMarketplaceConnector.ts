@@ -28,6 +28,11 @@ interface InstallMarketplaceConnectorParams {
   /** The manifest read during install; a `cloud` connector takes its tools from it. */
   manifest: ToolManifest;
   name: string;
+  /**
+   * OAuth only: the marketplace row the authorization overwrote, read before it
+   * (`snapshotReplacedConnector`). None means the authorization created the row.
+   */
+  oauthReplaced?: ConnectorSnapshot;
   signal: AbortSignal;
 }
 
@@ -110,6 +115,10 @@ export const installMarketplaceConnector = async (
     const connector = connectorSelectors.connectorByIdentifier(identifier)(get());
     if (!connector) throw new Error('The MCP connector did not finish authorization');
     connectorId = connector.id;
+    // Authorization already wrote the row: a cancel while finishing removes the
+    // row it created, or restores the one it authorized over
+    snapshot = params.oauthReplaced;
+    isNew = !params.oauthReplaced;
   } else {
     snapshot = await snapshotReplacedConnector(identifier, 'marketplace', get);
     ({ id: connectorId, isNew } = await get().createConnector(buildCreatePayload(params)));
