@@ -79,9 +79,8 @@ describe('ConversationRow', () => {
     expect(row.textContent).toBe('Dario');
   });
 
-  // The row said a green "running" with a spinner; it now reads like the header's typing line,
-  // beside the name, and keeps the preview below it.
-  it('says typing beside the name while the Agent replies, keeping the preview', () => {
+  // The row said a green "running" with a spinner; it now reads like the header's typing line.
+  it('says typing in place of the preview while the Agent replies', () => {
     render(
       createElement(ConversationRow, {
         avatar: null,
@@ -93,7 +92,6 @@ describe('ConversationRow', () => {
     );
 
     expect(screen.getByRole('status')).toHaveTextContent('activity.typing');
-    expect(screen.getByRole('status').previousElementSibling).toHaveTextContent('Dario');
-    expect(screen.getByText('last message')).toBeInTheDocument();
+    expect(screen.queryByText('last message')).toBeNull();
   });
 });

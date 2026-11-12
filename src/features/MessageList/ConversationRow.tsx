@@ -31,7 +31,7 @@ export interface ConversationRowProps {
   /** Title only, no preview line — for directory lists like the contacts tab. */
   singleLine?: boolean;
   title: string;
-  /** The Agent is replying: "typing" follows the name, like the conversation header. */
+  /** The Agent is replying: the preview line says "typing" like the conversation header. */
   typing?: boolean;
   unread?: number;
   url: string;
@@ -102,21 +102,22 @@ const ConversationRow = memo<ConversationRowProps>(
           {...stylex.props(styles.rowText, singleLine && styles.rowTextSingleLine)}
         >
           <Flexbox horizontal align={'center'} gap={8}>
-            <span {...stylex.props(styles.title, typing && styles.titleBesideTyping)}>{title}</span>
-            {typing && (
-              <span role="status" {...stylex.props(styles.typing)}>
-                {activityLabel(t('activity.typing'))}
-                <TypingDots />
-              </span>
-            )}
+            <span {...stylex.props(styles.title)}>{title}</span>
             {activeAt && (
               <span {...stylex.props(styles.time)}>{formatConversationTime(activeAt)}</span>
             )}
           </Flexbox>
           {/* No preview: the title sits centered at the full row height, not over a blank line. */}
-          {!singleLine && preview && (
+          {!singleLine && (typing || preview) && (
             <Flexbox horizontal align={'center'} gap={8}>
-              <span {...stylex.props(styles.preview)}>{preview}</span>
+              {typing ? (
+                <span role="status" {...stylex.props(styles.preview, styles.typing)}>
+                  {activityLabel(t('activity.typing'))}
+                  <TypingDots />
+                </span>
+              ) : (
+                <span {...stylex.props(styles.preview)}>{preview}</span>
+              )}
             </Flexbox>
           )}
         </Flexbox>

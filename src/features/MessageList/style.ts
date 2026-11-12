@@ -74,28 +74,11 @@ export const styles = stylex.create({
     fontWeight: 500,
     lineHeight: '18px',
   },
-  /** The name gives up the spare width to the typing label beside it. */
-  titleBesideTyping: {
-    flexGrow: '0',
-    flexShrink: '1',
-    flexBasis: 'auto',
-  },
-  /**
-   * Beside the name like the conversation header's typing line, in the quiet preview colour. It
-   * keeps its own width and takes the spare room up to the time; a long name ellipsizes instead,
-   * so the dots never run into the time.
-   */
+  /** Same quiet colour as the preview it replaces, so a reply in progress does not shout. */
   typing: {
     display: 'flex',
-    flexGrow: '1',
-    flexShrink: '0',
-    flexBasis: 'auto',
     gap: '6px',
     alignItems: 'center',
-    fontSize: '12px',
-    lineHeight: '18px',
-    color: cssVar.colorTextTertiary,
-    whiteSpace: 'nowrap',
   },
   unread: {
     pointerEvents: 'none',
