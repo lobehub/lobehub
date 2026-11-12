@@ -1,7 +1,6 @@
 /**
  * Locating the run's own assistant message row in the database.
  */
-import { LOADING_FLAT } from '@lobechat/const';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
@@ -113,27 +112,29 @@ export async function resolveErrorMessageId(
 }
 
 /**
- * Mark the run's assistant row stopped when the run was interrupted before its
- * first output. Such a row still holds the `LOADING_FLAT` placeholder, which
- * every client renders as an empty bubble once no live operation backs it;
- * the persisted `interruptedMidStream` marker (the one a stop with partial
- * output carries) lets them render the stopped state instead. Non-fatal.
+ * Mark the assistant row of the step a Stop interrupted, so every client can
+ * render the turn as stopped after a refresh: the run's newest row (the step
+ * that was streaming or calling tools, not an earlier completed one), or the
+ * placeholder the send created when the run stopped before step 0 stamped any
+ * row. The `call_llm` finalizer marks a Stop that ends its stream; this covers
+ * every other way an interrupted run settles. Non-fatal.
  */
-export async function markInterruptedPlaceholder(
+export async function markInterruptedTurn(
   deps: CompletionLifecycleDeps,
   operationId: string,
-  assistantMessageId: string | undefined,
+  state: { metadata?: { assistantMessageId?: string }; origin?: { assistantMessageId?: string } },
+  runOrigin: { topicId?: string; userId?: string },
 ): Promise<void> {
+  const assistantMessageId =
+    (await resolveErrorMessageId(deps, operationId, state?.metadata, runOrigin)) ??
+    state?.origin?.assistantMessageId;
   if (!assistantMessageId) return;
 
   try {
-    const row = await deps.messageModel.findById(assistantMessageId);
-    if (row?.content !== LOADING_FLAT || row.tools?.length) return;
-
     await deps.messageModel.update(assistantMessageId, {
       metadata: { interruptedMidStream: true },
     });
   } catch (error) {
-    log('[%s] Failed to mark the stopped placeholder (non-fatal): %O', operationId, error);
+    log('[%s] Failed to mark the interrupted turn (non-fatal): %O', operationId, error);
   }
 }

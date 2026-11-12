@@ -20,7 +20,7 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
 import {
-  markInterruptedPlaceholder,
+  markInterruptedTurn,
   recoverLastAssistantContent,
   resolveErrorMessageId,
 } from './assistantMessage';
@@ -406,14 +406,10 @@ export class CompletionLifecycle {
       // Before the hooks, so a parent resumed by the bridge reads a closed thread.
       await settleRunThread(this.deps(), operationId, state, reason);
 
-      // One rule for every stop (before step 0, during a deferred init, or before
-      // the first token): a run that produced nothing must not leave a bare `...`.
+      // Every stop (before step 0, during a deferred init, mid-stream, during a
+      // tool call) marks the turn it interrupted; a run that finished is untouched.
       if (reason === 'interrupted') {
-        await markInterruptedPlaceholder(
-          this.deps(),
-          operationId,
-          state?.origin?.assistantMessageId ?? assistantMessageId,
-        );
+        await markInterruptedTurn(this.deps(), operationId, state, runOrigin);
       }
 
       // The run tree no longer works, so its concurrency slot frees now rather

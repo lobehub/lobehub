@@ -120,16 +120,18 @@ describe('isMessageInterrupted', () => {
     expect(messageStateSelectors.isMessageInterrupted('a1')(withRow(row))).toBe(true);
   });
 
-  it('ignores the marker on a row with output or a run generating again', () => {
-    const marker = { metadata: { interruptedMidStream: true } };
+  it('reads the persisted marker on a turn stopped mid-stream', () => {
+    const row = { content: 'Roses are', metadata: { interruptedMidStream: true } };
 
-    expect(
-      messageStateSelectors.isMessageInterrupted('a1')(withRow({ ...marker, content: 'partial' })),
-    ).toBe(false);
-    expect(
-      messageStateSelectors.isMessageInterrupted('a1')(
-        withRow({ ...marker, content: '...' }, true),
-      ),
-    ).toBe(false);
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow(row))).toBe(true);
+  });
+
+  it('ignores the marker while the row is generating again, and rows without it', () => {
+    const row = { content: '...', metadata: { interruptedMidStream: true } };
+
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow(row, true))).toBe(false);
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow({ content: 'done' }))).toBe(
+      false,
+    );
   });
 });

@@ -676,10 +676,13 @@ describe('callLlmFinalizer', () => {
       state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
     });
 
+    // Before: a Stop mid-stream persisted the partial with no stopped marker,
+    // so after a refresh the turn read as finished. After: it carries one.
     expect(messages.update).toHaveBeenCalledWith(
       'assistant-1',
       expect.objectContaining({
-        metadata: { finishType: 'abort' },
+        content: 'Partial answer',
+        metadata: { finishType: 'abort', interruptedMidStream: true },
         observationId: 'observation-1',
         reasoning: { content: 'Reasoning', duration: 120, signature: 'signature-1' },
         traceId: 'trace-1',
@@ -692,6 +695,44 @@ describe('callLlmFinalizer', () => {
       },
       phase: 'human_abort',
     });
+  });
+
+  it('keeps the placeholder and marks a turn stopped before its first token', async () => {
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'claude',
+      output: createOutput({ content: '', finishReason: 'abort', thinkingContent: '' }),
+      provider: 'anthropic',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    const [, update] = vi.mocked(messages.update).mock.calls[0];
+    expect(update.content).toBeUndefined();
+    expect(update.metadata).toMatchObject({ interruptedMidStream: true });
+  });
+
+  it('does not mark a turn that finished normally', async () => {
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'claude',
+      output: createOutput({ finishReason: 'stop' }),
+      provider: 'anthropic',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    const [, update] = vi.mocked(messages.update).mock.calls[0];
+    expect(update.content).toBe('Answer');
+    expect(update.metadata).not.toHaveProperty('interruptedMidStream');
   });
 
   it('records a client-executed attempt and its estimated usage on the message', async () => {

@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { LOADING_FLAT } from '@lobechat/const';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { hookDispatcher } from '../hooks';
@@ -26,21 +25,28 @@ const stoppedState = {
   status: 'interrupted',
 };
 
-const run = async (row: Record<string, unknown> | undefined, reason = 'interrupted') => {
+const marker = { metadata: { interruptedMidStream: true } };
+
+const run = async (latestRunRow: { id: string } | undefined, reason = 'interrupted') => {
   const lifecycle = new CompletionLifecycle({} as any, 'user-1');
   vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
   vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
   vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
   const update = vi.fn().mockResolvedValue({ success: true });
-  const findById = vi.fn().mockResolvedValue(row);
-  (lifecycle as any).messageModel = { findById, update };
+  // `call_llm` stamps `metadata.operationId` on every row a step creates or reuses.
+  const findLatestAssistantByOperationId = vi.fn().mockResolvedValue(latestRunRow);
+  (lifecycle as any).messageModel = {
+    findById: vi.fn().mockResolvedValue(undefined),
+    findLatestAssistantByOperationId,
+    update,
+  };
 
   await lifecycle.dispatchHooks('op-1', stoppedState, reason);
 
-  return { findById, update };
+  return { update };
 };
 
-describe('CompletionLifecycle.dispatchHooks — run stopped before its first output', () => {
+describe('CompletionLifecycle.dispatchHooks — interrupted turn marker', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -48,32 +54,31 @@ describe('CompletionLifecycle.dispatchHooks — run stopped before its first out
   // ROOT CAUSE:
   //
   // A stop that lands before the first token (before step 0 runs, during a
-  // deferred init, or while the LLM call has produced nothing) settles the
-  // operation but never touches the assistant row. It keeps the `...`
-  // placeholder with no marker, so every client renders an empty bubble.
+  // deferred init) settles the operation but never touches the assistant row.
+  // It keeps the `...` placeholder with no marker, so every client renders an
+  // empty bubble.
   //
   // Before: the row stayed a bare placeholder. After: it carries the persisted
   // stopped marker the clients render.
-  it('marks the placeholder row stopped', async () => {
-    const { findById, update } = await run({ content: LOADING_FLAT, id: 'msg-ast' });
+  it('marks the placeholder when the run stopped before any step stamped a row', async () => {
+    const { update } = await run(undefined);
 
-    expect(findById).toHaveBeenCalledWith('msg-ast');
-    expect(update).toHaveBeenCalledWith('msg-ast', { metadata: { interruptedMidStream: true } });
+    expect(update).toHaveBeenCalledWith('msg-ast', marker);
   });
 
-  it('leaves a row that already holds output alone', async () => {
-    const withText = await run({ content: 'Roses are', id: 'msg-ast' });
-    const withTools = await run({ content: LOADING_FLAT, id: 'msg-ast', tools: [{ id: 't1' }] });
+  // A Stop during a later step (a tool call, or a stream that did not end
+  // through the finalizer) left the interrupted step's row unmarked, so after a
+  // refresh the turn read as finished.
+  it('marks the row of the interrupted step, not the placeholder of an earlier step', async () => {
+    const { update } = await run({ id: 'msg-step-3' });
 
-    expect(withText.update).not.toHaveBeenCalled();
-    expect(withTools.update).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith('msg-step-3', marker);
+    expect(update).not.toHaveBeenCalledWith('msg-ast', marker);
   });
 
-  it('does not mark the placeholder for a run that did not stop', async () => {
-    const { update } = await run({ content: LOADING_FLAT, id: 'msg-ast' }, 'done');
+  it('does not mark a run that finished normally', async () => {
+    const { update } = await run({ id: 'msg-step-3' }, 'done');
 
-    expect(update).not.toHaveBeenCalledWith('msg-ast', {
-      metadata: { interruptedMidStream: true },
-    });
+    expect(update).not.toHaveBeenCalledWith(expect.anything(), marker);
   });
 });
