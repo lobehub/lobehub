@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -90,6 +90,49 @@ const sourceTopicsByMessage = async (
       ),
     );
   return new Map(rows.map((row) => [row.messageId!, { id: row.topicId, title: row.title }]));
+};
+
+const THREAD_PREVIEW_LENGTH = 240;
+
+type ThreadSummary = {
+  lastReply: Pick<ReturnType<typeof publicMessage>, 'author' | 'content' | 'createdAt' | 'id'>;
+  replyCount: number;
+};
+
+/** Reply count and newest reply per thread, so a root can show what it branched into. */
+const threadSummaries = async (tx: Transaction, channelId: string, threadIds: string[]) => {
+  if (!threadIds.length) return new Map<string, ThreadSummary>();
+  const scope = and(
+    eq(channelMessages.channelId, channelId),
+    inArray(channelMessages.threadId, threadIds),
+  );
+  const [counts, latest] = await Promise.all([
+    tx
+      .select({ replyCount: count(), threadId: channelMessages.threadId })
+      .from(channelMessages)
+      .where(scope)
+      .groupBy(channelMessages.threadId),
+    tx
+      .selectDistinctOn([channelMessages.threadId], publicMessageColumns)
+      .from(channelMessages)
+      .leftJoin(users, eq(users.id, channelMessages.userId))
+      .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+      .where(scope)
+      .orderBy(asc(channelMessages.threadId), desc(channelMessages.sequence)),
+  ]);
+  const replyCounts = new Map(counts.map((row) => [row.threadId, row.replyCount]));
+  return new Map<string, ThreadSummary>(
+    latest.map((row) => {
+      const { author, content, createdAt, id } = publicMessage(row, []);
+      return [
+        row.threadId!,
+        {
+          lastReply: { author, content: content.slice(0, THREAD_PREVIEW_LENGTH), createdAt, id },
+          replyCount: replyCounts.get(row.threadId) ?? 0,
+        },
+      ];
+    }),
+  );
 };
 
 export const readChannelView = async (
@@ -194,6 +237,12 @@ export const readChannelView = async (
         )
     : [];
   const page = reversed.slice(0, limit).reverse();
+  // Only main-timeline roots on this page show a thread card; other views skip the scan.
+  const pageIds = new Set(page.map((message) => message.id));
+  const summarized = options.threadId
+    ? []
+    : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
+  const summaries = await threadSummaries(tx, channelId, summarized);
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -244,9 +293,16 @@ export const readChannelView = async (
     hasMore: reversed.length > limit,
     jobs,
     members,
-    threads: threads.map((thread) => {
-      const title = thread.metadata?.title;
-      return typeof title === 'string' && title ? { ...thread, title } : thread;
+    threads: threads.map((entry) => {
+      const title = entry.metadata?.title;
+      const named = typeof title === 'string' && title ? { ...entry, title } : entry;
+      return summarized.includes(entry.id)
+        ? {
+            ...named,
+            lastReply: summaries.get(entry.id)?.lastReply ?? null,
+            replyCount: summaries.get(entry.id)?.replyCount ?? 0,
+          }
+        : named;
     }),
     rootMessage: rootMessage
       ? {

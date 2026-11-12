@@ -246,6 +246,8 @@
   "submit": "Create",
   "thread": "Thread",
   "threadArchivedNotice": "This thread is archived. Its replies stay readable, but it takes no new messages.",
+  "threadCard.messages_one": "{{count}} message",
+  "threadCard.messages_other": "{{count}} messages",
   "threadComposer": "Reply in thread",
   "threadDivider": "Replies in this thread",
   "threadEmpty": "Keep discussing this message here.",
