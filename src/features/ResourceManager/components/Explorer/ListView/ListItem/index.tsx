@@ -55,6 +55,20 @@ const styles = createStaticStyles(({ css }) => {
       }
     `,
 
+    dropAfter: css`
+      &,
+      &:hover {
+        box-shadow: inset 0 -2px 0 0 ${cssVar.colorPrimary};
+      }
+    `,
+
+    dropBefore: css`
+      &,
+      &:hover {
+        box-shadow: inset 0 2px 0 0 ${cssVar.colorPrimary};
+      }
+    `,
+
     dragging: css`
       will-change: transform;
       opacity: 0.5;
@@ -139,6 +153,7 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface FileListItemProps extends FileListItemType {
+  allowReorder?: boolean;
   columnWidths: {
     date: number;
     name: number;
@@ -154,6 +169,7 @@ interface FileListItemProps extends FileListItemType {
 }
 
 const FileListItem = ({
+  allowReorder = true,
   chunkCount,
   chunkingError,
   chunkingStatus,
@@ -170,6 +186,7 @@ const FileListItem = ({
   metadata,
   name,
   onSelectedChange,
+  parentId,
   selectable = true,
   selected,
   showUploader = true,
@@ -221,17 +238,20 @@ const FileListItem = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
   const {
+    dropPosition,
     handleDragEnd,
     handleDragLeave,
     handleDragOver,
     handleDragStart,
     handleDrop,
     isDragging,
-    isOver,
+    parentKey,
   } = useFileListItemDrag({
+    allowReorder,
     fileType,
     id,
     isFolder,
+    itemParentId: parentId,
     libraryId: resourceManagerState.libraryId,
     name,
     sourceType,
@@ -335,8 +355,11 @@ const FileListItem = ({
       <Flexbox
         horizontal
         align={'center'}
+        data-allow-reorder={allowReorder ? undefined : 'false'}
+        data-drop-item="true"
         data-drop-target-id={id}
         data-is-folder={String(isFolder)}
+        data-parent-key={parentKey}
         data-row-index={index}
         draggable={!!resourceManagerState.libraryId}
         height={48}
@@ -347,7 +370,9 @@ const FileListItem = ({
           index % 2 === 0 && styles.evenRow,
           isSelected && styles.selected,
           isDragging && styles.dragging,
-          isOver && styles.dragOver,
+          dropPosition === 'inside' && styles.dragOver,
+          dropPosition === 'before' && styles.dropBefore,
+          dropPosition === 'after' && styles.dropAfter,
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,

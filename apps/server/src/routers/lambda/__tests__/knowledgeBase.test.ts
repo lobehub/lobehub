@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { knowledgeBaseRouter } from '@/server/routers/lambda/knowledgeBase';
@@ -17,6 +18,7 @@ const routerMocks = vi.hoisted(() => ({
   businessFileTransferStorageCheck: vi.fn(),
   filterRestrictedKnowledgeBases: vi.fn(async (_ctx: unknown, items: unknown) => items),
   hasWorkspaceScopedPermission: vi.fn(),
+  scopedPermission: vi.fn(),
 }));
 
 const mockKnowledgeBaseModelCountFileUsage = vi.fn();
@@ -25,6 +27,7 @@ const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
 const mockKnowledgeBaseModelDeleteWithFiles = vi.fn();
 const mockKnowledgeBaseModelFindById = vi.fn();
 const mockKnowledgeBaseModelQuery = vi.fn();
+const mockKnowledgeRepoReorderItems = vi.fn();
 const mockKnowledgeBaseModelRemoveFiles = vi.fn();
 const mockKnowledgeBaseModelTransferTo = vi.fn();
 const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(false);
@@ -33,6 +36,17 @@ const mockDocumentModelFindByIds = vi.fn();
 const mockFileModelFindByIds = vi.fn();
 
 const agentSpaceMocks = vi.hoisted(() => ({ flags: vi.fn(), list: vi.fn() }));
+
+vi.mock('@/business/server/trpc-middlewares/rbacPermission', async () => {
+  const { trpc } = await import('@/libs/trpc/lambda/init');
+  return {
+    withScopedPermission: (action: string) =>
+      trpc.middleware(async (opts) => {
+        await routerMocks.scopedPermission(action);
+        return opts.next();
+      }),
+  };
+});
 
 vi.mock('@/server/featureFlags', () => ({
   getServerFeatureFlagsStateFromRuntimeConfig: agentSpaceMocks.flags,
@@ -93,6 +107,12 @@ vi.mock('@/database/models/resourcePermission', () => ({
   }),
 }));
 
+vi.mock('@/database/repositories/knowledge', () => ({
+  KnowledgeRepo: vi.fn(function () {
+    return { reorderItems: mockKnowledgeRepoReorderItems };
+  }),
+}));
+
 vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(function () {
     return {
@@ -122,6 +142,7 @@ describe('knowledgeBaseRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    routerMocks.scopedPermission.mockResolvedValue(undefined);
     routerMocks.assertContentsNotInRestrictedKnowledgeBase.mockResolvedValue(undefined);
     routerMocks.assertKnowledgeBaseBrowsable.mockResolvedValue(undefined);
     routerMocks.assertCanPerformResourceAction.mockResolvedValue(undefined);
@@ -139,6 +160,85 @@ describe('knowledgeBaseRouter', () => {
     mockKnowledgeBaseModelQuery.mockResolvedValue([]);
     mockKnowledgeBaseModelTransferTo.mockResolvedValue({ id: 'kb-1' });
     mockKnowledgeBaseModelUpdate.mockResolvedValue({ id: 'kb-1' });
+  });
+
+  describe('reorderKnowledgeItems', () => {
+    const input = {
+      knowledgeBaseId: 'kb-1',
+      dragIds: ['docs_page'],
+      targetId: 'file_raw',
+      position: 'before' as const,
+      parentId: null,
+      sorter: 'custom' as const,
+      sortType: 'desc' as const,
+    };
+
+    beforeEach(() => {
+      mockDocumentModelFindByIds.mockResolvedValue([{ id: 'docs_page' }]);
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file_raw' }]);
+      mockKnowledgeRepoReorderItems.mockResolvedValue({ success: true });
+    });
+
+    it('checks edit permission and resource access before persisting the order', async () => {
+      expect(await caller.reorderKnowledgeItems(input)).toEqual({ success: true });
+      expect(routerMocks.scopedPermission).toHaveBeenCalledWith('knowledge_base:update');
+      expect(routerMocks.assertKnowledgeBaseBrowsable).toHaveBeenCalledWith(
+        expect.anything(),
+        'kb-1',
+        {
+          userId: 'test-user',
+          visibility: 'public',
+          workspaceId: 'workspace-active',
+        },
+      );
+      expect(routerMocks.assertContentsNotInRestrictedKnowledgeBase).toHaveBeenCalledWith(
+        expect.anything(),
+        [...input.dragIds, input.targetId],
+      );
+      expect(mockKnowledgeRepoReorderItems).toHaveBeenCalledWith(input);
+    });
+
+    it('rejects a missing KB before writing', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue(undefined);
+      await expect(caller.reorderKnowledgeItems(input)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
+    });
+
+    it('rejects inaccessible resources before writing', async () => {
+      mockDocumentModelFindByIds.mockResolvedValue([]);
+      await expect(caller.reorderKnowledgeItems(input)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
+    });
+
+    it.each(['permission', 'library', 'contents'])(
+      'rejects denied %s access before writing',
+      async (gate) => {
+        const denied = new TRPCError({ code: 'FORBIDDEN' });
+        if (gate === 'permission') routerMocks.scopedPermission.mockRejectedValueOnce(denied);
+        if (gate === 'library')
+          routerMocks.assertKnowledgeBaseBrowsable.mockRejectedValueOnce(denied);
+        if (gate === 'contents')
+          routerMocks.assertContentsNotInRestrictedKnowledgeBase.mockRejectedValueOnce(denied);
+        await expect(caller.reorderKnowledgeItems(input)).rejects.toMatchObject({
+          code: 'FORBIDDEN',
+        });
+        expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([{ dragIds: [] }, { dragIds: Array.from({ length: 10_001 }, (_, i) => `file_${i}`) }])(
+      'rejects an invalid order length',
+      async ({ dragIds }) => {
+        await expect(caller.reorderKnowledgeItems({ ...input, dragIds })).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+        });
+        expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('updateKnowledgeBase', () => {
