@@ -272,6 +272,7 @@ export async function createAgentRuntime(
           deps,
           modelRuntimeConfig.model,
           modelRuntimeConfig.provider,
+          modelRuntimeConfig.modelFacts,
         )
       : {};
 
