@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -112,6 +112,10 @@ const attachNotes = async (name = 'notes.txt') => {
   });
 };
 
+/** The files the Channel's own composer is holding, whichever conversations sit beside it. */
+const channelFiles = () =>
+  within(screen.getByTestId('conversation-main')).getAllByTestId('attached-file');
+
 describe('Channel page composition', () => {
   beforeEach(() => {
     panel.pageThreadId = null;
@@ -119,13 +123,17 @@ describe('Channel page composition', () => {
     upload.mockReset();
     upload.mockResolvedValue({ id: 'file-1', url: 'https://cdn/notes.txt' });
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    // This suite renders the page twice; without an explicit cleanup the previous DOM would leak in.
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('keeps the Channel composer mounted — and its draft — while a thread is the page', async () => {
     const { rerender } = render(<ChannelPage />);
     expect(screen.getByTestId('conversation-main').getAttribute('data-hidden')).toBe('false');
     await attachNotes();
-    expect(screen.getAllByTestId('attached-file')).toHaveLength(1);
+    expect(channelFiles()).toHaveLength(1);
 
     // Opening a sidebar thread as the page used to swap the Channel conversation out entirely.
     panel.pageThreadId = 'thread-1';
@@ -133,13 +141,13 @@ describe('Channel page composition', () => {
 
     expect(screen.getByTestId('conversation-thread-1')).toBeTruthy();
     expect(screen.getByTestId('conversation-main').getAttribute('data-hidden')).toBe('true');
-    expect(screen.getAllByTestId('attached-file')).toHaveLength(1);
+    expect(channelFiles()).toHaveLength(1);
 
     // Closing the thread brings the Channel back with the file still attached.
     panel.pageThreadId = null;
     rerender(<ChannelPage />);
     expect(screen.getByTestId('conversation-main').getAttribute('data-hidden')).toBe('false');
-    expect(screen.getAllByTestId('attached-file')).toHaveLength(1);
+    expect(channelFiles()).toHaveLength(1);
   });
 
   it('keeps an unfinished upload running while the Channel is covered', async () => {
@@ -157,6 +165,6 @@ describe('Channel page composition', () => {
 
     expect(signal.aborted).toBe(false);
     await act(async () => finish({ id: 'file-2', url: 'https://cdn/report.pdf' }));
-    expect(screen.getAllByTestId('attached-file')).toHaveLength(1);
+    expect(channelFiles()).toHaveLength(1);
   });
 });
