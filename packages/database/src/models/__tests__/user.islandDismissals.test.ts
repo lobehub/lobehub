@@ -66,6 +66,25 @@ describe('UserModel island dismissals', () => {
     ]);
   });
 
+  it('keeps a dismissal that commits while a preference save waits on the row', async () => {
+    let saving: Promise<void> | undefined;
+    await serverDB.transaction(async (trx) => {
+      await trx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
+      // On a real server this save starts while the dismissal below holds the
+      // row; read without the lock, it would write the old JSON back over it.
+      saving = userModel.updatePreference({ topicGroupMode: 'byProject' });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await trx
+        .update(users)
+        .set({ preference: { islandDismissals: ['goal-decision:d1'], topicGroupMode: 'byTime' } })
+        .where(eq(users.id, userId));
+    });
+    await saving;
+
+    expect(await userModel.getIslandDismissals()).toEqual(['goal-decision:d1']);
+    expect(await readPreference()).toMatchObject({ topicGroupMode: 'byProject' });
+  });
+
   it('is not overwritten by a stale client saving its whole preference', async () => {
     await userModel.addIslandDismissals(['goal-decision:d1', 'goal-decision:d2']);
 

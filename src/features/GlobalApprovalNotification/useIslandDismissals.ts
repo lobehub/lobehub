@@ -32,11 +32,6 @@ export const useIslandDismissals = (enabled: boolean) => {
     );
   }, [dismissIslandItems, enabled, isStatusInit, legacyKeys, updateSystemStatus, uploaded]);
 
-  return useCallback(
-    (key: string) =>
-      dismissIslandItems([key]).catch((error) =>
-        console.error('[island] failed to dismiss', error),
-      ),
-    [dismissIslandItems],
-  );
+  // Rejects when the server did not keep it, so the caller can say so.
+  return useCallback((key: string) => dismissIslandItems([key]), [dismissIslandItems]);
 };

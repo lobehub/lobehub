@@ -51,9 +51,15 @@ const GlobalApprovalNotification = memo(() => {
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const { allowed: canAnswerGoals } = usePermission('create_content');
   const dismissKey = useIslandDismissals(enableGoals && canAnswerGoals);
-  const dismiss = (key: string) => {
-    void dismissKey(key);
-    toast.info({ placement: 'top', title: t('globalApproval.dismissed') });
+  // Confirm only once the server kept it; on failure the card comes back.
+  const dismiss = async (key: string) => {
+    try {
+      await dismissKey(key);
+      toast.info({ placement: 'top', title: t('globalApproval.dismissed') });
+    } catch (error) {
+      console.error('[island] failed to dismiss', error);
+      toast.error({ placement: 'top', title: t('globalApproval.dismissFailed') });
+    }
   };
   const total = groups.length + goalGroups.length + goalItems.length;
   const [collapsed, setCollapsed] = useApprovalIslandCollapse(total);

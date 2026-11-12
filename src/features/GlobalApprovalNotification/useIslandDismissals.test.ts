@@ -38,6 +38,14 @@ describe('useIslandDismissals', () => {
     expect(useGlobalStore.getState().status.dismissedIslandItemKeys).toBeUndefined();
   });
 
+  it('rejects when the server does not keep the dismissal', async () => {
+    setStatus({ islandDismissalsUploaded: true });
+    dismissIslandItems.mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useIslandDismissals(true));
+
+    await expect(result.current('goal-decision:d1')).rejects.toThrow('offline');
+  });
+
   it('uploads the keys this client dismissed locally before, once', async () => {
     setStatus({ dismissedIslandItemKeys: ['goal-decision:old', 'goal-sign-off:a1'] });
     const { rerender } = renderHook(() => useIslandDismissals(true));

@@ -324,7 +324,7 @@ export interface UserPreference {
    * by every client of the account. Written only through
    * `UserModel.addIslandDismissals`; deliberately absent from
    * {@link UserPreferenceSchema}, because `updatePreference` sends the whole
-   * object and merges arrays by index, so a stale client would overwrite keys
+   * object and replaces arrays, so a stale client would overwrite keys
    * another client added.
    */
   islandDismissals?: string[];
