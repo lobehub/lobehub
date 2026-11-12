@@ -267,7 +267,13 @@ describe('ChannelMessage thread card', () => {
     );
 
     expect(screen.getByText('Topic header is unclickable')).toBeTruthy();
-    expect(screen.getByText('threadCard.replies')).toBeTruthy();
+    expect(screen.getByText('threadCard.messages')).toBeTruthy();
+    // The card reads as part of the message: no branch glyph in front of the title.
+    expect(
+      screen
+        .getByRole('button', { name: /Topic header is unclickable/ })
+        .querySelector('.lucide-git-branch'),
+    ).toBeNull();
     expect(screen.getByText('Nasa')).toBeTruthy();
     expect(screen.getByText('PR is up')).toBeTruthy();
 
@@ -299,6 +305,6 @@ describe('ChannelMessage thread card', () => {
 
     expect(screen.getByText('thread')).toBeTruthy();
     expect(screen.getByText('openThread')).toBeTruthy();
-    expect(screen.queryByText('threadCard.replies')).toBeNull();
+    expect(screen.queryByText('threadCard.messages')).toBeNull();
   });
 });

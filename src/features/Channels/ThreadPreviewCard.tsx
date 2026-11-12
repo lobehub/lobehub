@@ -4,7 +4,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { ChevronRight, GitBranch } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/features/User/UserAvatar';
@@ -26,20 +26,17 @@ const styles = stylex.create({
     maxWidth: 520,
     marginBlock: 0,
     marginInline: 0,
-    paddingBlock: 8,
-    paddingInline: 12,
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: {
-      'default': cssVar.colorBorderSecondary,
-      ':hover': cssVar.colorBorder,
-    },
-    borderRadius: cssVar.borderRadiusLG,
+    paddingBlock: 6,
+    paddingInline: 10,
+    // A quiet fill instead of a bordered box: the card follows the message, it is not a new one.
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
     font: 'inherit',
     textAlign: 'start',
     backgroundColor: {
-      'default': cssVar.colorBgContainer,
-      ':hover': cssVar.colorFillQuaternary,
+      'default': cssVar.colorFillQuaternary,
+      ':hover': cssVar.colorFillTertiary,
     },
     cursor: 'pointer',
   },
@@ -53,7 +50,7 @@ const styles = stylex.create({
     overflow: 'hidden',
     minWidth: 0,
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 500,
     color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -62,11 +59,9 @@ const styles = stylex.create({
     display: 'inline-flex',
     flexShrink: 0,
     alignItems: 'center',
-    fontSize: 13,
-    fontWeight: 500,
-    color: cssVar.colorPrimary,
+    fontSize: 12,
+    color: cssVar.colorTextSecondary,
   },
-  icon: { flexShrink: 0, color: cssVar.colorTextTertiary },
   author: {
     flexShrink: 0,
     maxWidth: 160,
@@ -115,12 +110,11 @@ export const ThreadPreviewCard = ({
   return (
     <button type="button" {...stylex.props(styles.card)} onClick={onOpen}>
       <span {...stylex.props(styles.row)}>
-        <Icon icon={GitBranch} size={14} {...stylex.props(styles.icon)} />
         <span {...stylex.props(styles.title)}>{threadTitle(root) ?? t('thread')}</span>
         <span {...stylex.props(styles.count)}>
           {/* Views cached before thread summaries existed only know that the thread exists. */}
-          {replyCount ? t('threadCard.replies', { count: replyCount }) : t('openThread')}
-          <Icon icon={ChevronRight} size={14} />
+          {replyCount ? t('threadCard.messages', { count: replyCount }) : t('openThread')}
+          <Icon icon={ChevronRight} size={12} />
         </span>
       </span>
       {lastReply && (
