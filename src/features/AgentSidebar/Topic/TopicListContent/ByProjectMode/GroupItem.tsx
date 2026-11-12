@@ -38,7 +38,10 @@ import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
 import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import {
+  useWorkspaceAwareNavigate,
+  type WorkspaceAwareNavigateFunction,
+} from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -73,10 +76,19 @@ const SUB_GROUP_MODES: ProjectTopicSubGroupMode[] = ['none', 'byDevice', 'byTime
 // nothing — unless it merges one machine's personal and workspace identities.
 const FOLDER_SUB_GROUP_MODES = SUB_GROUP_MODES.filter((mode) => mode !== 'byDevice');
 
-const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
+interface GroupItemBodyProps extends GroupItemComponentProps {
+  navigate: WorkspaceAwareNavigateFunction;
+  /** Path prefix in front of `/agent/...` (e.g. a popup route), kept on new-topic navigation. */
+  routePrefix: string | undefined;
+  router: ReturnType<typeof useQueryRoute>;
+  /** The agent this sidebar belongs to: the route's agent, else the active one. */
+  targetAgentId: string | undefined;
+}
+
+const GroupItemBody = memo<GroupItemBodyProps>((props) => {
+  const { group, expanded, navigate, router, routePrefix, targetAgentId } = props;
   const { id, title, children, deviceId: groupDeviceId } = group;
   const scope = useTopicListScope();
-  const navigate = useWorkspaceAwareNavigate();
   // `project-id:` groups merge every directory of one project — resolve the
   // project through any of its directories; directory/path groups keep the
   // first child's exact directory so a shared path can't cross projects.
@@ -103,15 +115,15 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     [id, children],
   );
 
-  const agentId = useAgentStore((s) => s.activeAgentId);
-  const { aid: routeAgentId } = useActiveRouteParams<{ aid?: string }>();
-  const { pathname } = useActiveLocation();
-  const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
-  const targetAgentId = routeAgentId ?? agentRoute?.agentId ?? agentId;
-  const currentAgentId = targetAgentId ?? agentId;
-  const router = useQueryRoute();
+  const currentAgentId = targetAgentId;
+  const agentRoute = useMemo(
+    () => (routePrefix ? { prefix: routePrefix } : undefined),
+    [routePrefix],
+  );
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '');
+  // `null`: the group "+" starts a new conversation, so the write targets the
+  // agent default, never the device bound to whichever topic is open.
+  const { commitAgentDefault } = useCommitWorkingDirectory(currentAgentId ?? '', null);
 
   const handleAddTopic = useCallback(
     async (projectWorkingDirectoryId?: string) => {
@@ -455,6 +467,34 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     </AccordionItem>
   );
 }, isEqual);
+
+GroupItemBody.displayName = 'TopicByProjectGroupItemBody';
+
+/**
+ * Reads the route for the group body. React Router's location, params and
+ * navigate contexts change on every navigation, including each topic switch;
+ * reading them here and passing primitives (plus stable navigate functions)
+ * keeps the heavy body behind its memo boundary.
+ */
+const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
+  const navigate = useWorkspaceAwareNavigate();
+  const router = useQueryRoute();
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const { aid: routeAgentId } = useActiveRouteParams<{ aid?: string }>();
+  const { pathname } = useActiveLocation();
+  const agentRoute = parseAgentPathname(pathname);
+
+  return (
+    <GroupItemBody
+      expanded={expanded}
+      group={group}
+      navigate={navigate}
+      routePrefix={agentRoute?.prefix}
+      router={router}
+      targetAgentId={routeAgentId ?? agentRoute?.agentId ?? activeAgentId}
+    />
+  );
+});
 
 GroupItem.displayName = 'TopicByProjectGroupItem';
 

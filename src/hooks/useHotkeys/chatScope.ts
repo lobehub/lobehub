@@ -54,7 +54,20 @@ export const useFindInTopicHotkey = (enabled: boolean) => {
 // Note: useDeleteAndRegenerateMessageHotkey has been moved to ConversationStore
 // Note: useDeleteLastMessageHotkey has been moved to ConversationStore
 
+/**
+ * Enables its own scope once while mounted, so the shortcut also works on hosts
+ * without the `chat` scope (the project topic page). It must not toggle on input
+ * focus/blur: every scope change re-binds all registered hotkeys and re-renders
+ * every hotkeys-context consumer, which ran on each topic switch.
+ */
 export const useAddUserMessageHotkey = (send: () => void) => {
+  const { enableScope, disableScope } = useHotkeysContext();
+
+  useEffect(() => {
+    enableScope(HotkeyEnum.AddUserMessage);
+    return () => disableScope(HotkeyEnum.AddUserMessage);
+  }, []);
+
   return useHotkeyById(
     HotkeyEnum.AddUserMessage,
     () => {

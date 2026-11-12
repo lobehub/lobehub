@@ -25,7 +25,7 @@ export const parseAgentPathname = (pathname: string): AgentPathnameInfo | undefi
 
 export const buildPrefixedAgentRoutePath = (
   targetPath: string,
-  route: AgentPathnameInfo | undefined,
+  route: Pick<AgentPathnameInfo, 'prefix'> | undefined,
   activeWorkspaceSlug: string | null,
 ) => {
   if (!route?.prefix || activeWorkspaceSlug) return targetPath;

@@ -143,11 +143,13 @@ vi.mock('fuse.js', () => ({
   },
 }));
 vi.mock('lexical', () => ({ KEY_ESCAPE_COMMAND: 'escape' }));
+const hotkeysContext = vi.hoisted(() => ({
+  disableScope: vi.fn(),
+  enableScope: vi.fn(),
+}));
+
 vi.mock('react-hotkeys-hook', () => ({
-  useHotkeysContext: () => ({
-    disableScope: vi.fn(),
-    enableScope: vi.fn(),
-  }),
+  useHotkeysContext: () => hotkeysContext,
 }));
 
 vi.mock('@/components/DragUploadZone', () => ({
@@ -187,7 +189,10 @@ vi.mock('@/store/serverConfig', () => ({
     selector({ isMobile: platform.isMobile }),
 }));
 vi.mock('../hooks/useChatInputDraft', () => ({
-  useChatInputDraft: () => ({ restoreDraft: vi.fn(), saveDraftDebounced: vi.fn() }),
+  useChatInputDraft: () => ({
+    restoreDraft: vi.fn(),
+    saveDraftDebounced: Object.assign(vi.fn(), { flush: vi.fn() }),
+  }),
 }));
 vi.mock('../hooks/useChatInputResourceAccess', () => ({
   useChatInputResourceAccess: () => ({ canUseResource: true, isGroupContext: false }),
@@ -326,6 +331,20 @@ describe('ChatInput InputEditor', () => {
       'data-content',
       'typed before the editor loaded',
     );
+  });
+
+  // Every scope change makes react-hotkeys-hook rebind all registered hotkeys
+  // and re-render each consumer; the editor blurs and refocuses on every topic
+  // switch, so focus must not toggle hotkey scopes.
+  it('does not toggle hotkey scopes when the editor focuses or blurs', async () => {
+    render(<InputEditor />);
+
+    const props = await getEditorProps();
+    props.onFocus?.({});
+    props.onBlur?.({});
+
+    expect(hotkeysContext.enableScope).not.toHaveBeenCalled();
+    expect(hotkeysContext.disableScope).not.toHaveBeenCalled();
   });
 
   it('always mounts the rich text plugins with markdown shortcuts', async () => {
