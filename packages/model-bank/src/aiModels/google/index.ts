@@ -1127,6 +1127,45 @@ const googleVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'Our most cost-effective video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.1 Lite Generate Preview',
+    enabled: true,
+    id: 'veo-3.1-lite-generate-preview',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [4, 6, 8] },
+      endImageUrl: {
+        default: null,
+        requiresImageUrl: true,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [
+        {
+          lookup: { prices: { '1080p': 0.08, '720p': 0.05 }, pricingParams: ['resolution'] },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    },
+    releasedAt: '2026-03-31',
+    type: 'video',
+  },
+  {
+    description:
       "Google's video generation and editing model with native audio: text, image and reference-guided video, first/last frame interpolation, and conversational editing.",
     displayName: 'Gemini Omni 1.1 Flash',
     enabled: true,
