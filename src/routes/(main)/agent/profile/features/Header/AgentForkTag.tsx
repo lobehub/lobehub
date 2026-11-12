@@ -2,14 +2,14 @@
 
 import { Icon, Tag } from '@lobehub/ui';
 import { GitFork } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { type AgentForkSourceResponse } from '@/types/discover';
+import { useDiscoverStore } from '@/store/discover';
+import { marketSelectors } from '@/store/discover/selectors';
 
 /**
  * Agent Fork Tag Component
@@ -18,45 +18,19 @@ import { type AgentForkSourceResponse } from '@/types/discover';
 const AgentForkTag = memo(() => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
-  const [forkSource, setForkSource] = useState<AgentForkSourceResponse['source']>(null);
-  const [loading, setLoading] = useState(false);
-
   const meta = useAgentStore(agentSelectors.currentAgentMeta);
   const marketIdentifier = meta?.marketIdentifier;
 
-  useEffect(() => {
-    if (!marketIdentifier) {
-      setForkSource(null);
-      return;
-    }
+  // The fork marker comes from the header's shared Market status read; the
+  // fork source is only asked for once the agent is known to be a fork.
+  const useMarketAgentStatus = useDiscoverStore((s) => s.useMarketAgentStatus);
+  const { queryKey: statusKey } = useMarketAgentStatus(marketIdentifier);
+  const isFork = !!useDiscoverStore(marketSelectors.agentStatus(statusKey))?.forkedFromAgentId;
+  const useAgentForkSource = useDiscoverStore((s) => s.useAgentForkSource);
+  const { queryKey } = useAgentForkSource(marketIdentifier, isFork);
+  const forkSource = useDiscoverStore(marketSelectors.agentForkSource(queryKey));
 
-    const fetchAgentAndForkInfo = async () => {
-      try {
-        setLoading(true);
-
-        // Get agent detail to check if it's a fork
-        const agentDetail = await marketApiService.getAgentDetail(marketIdentifier);
-
-        // If forkedFromAgentId exists, get fork source info
-        if (agentDetail.forkedFromAgentId) {
-          const forkSourceResponse = await marketApiService.getAgentForkSource(marketIdentifier);
-
-          setForkSource(forkSourceResponse.source);
-        } else {
-          setForkSource(null);
-        }
-      } catch (error) {
-        console.error('Failed to fetch agent fork info:', error);
-        setForkSource(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAgentAndForkInfo();
-  }, [marketIdentifier]);
-
-  if (loading || !forkSource) return null;
+  if (!forkSource) return null;
 
   const handleClick = () => {
     if (forkSource?.identifier) {

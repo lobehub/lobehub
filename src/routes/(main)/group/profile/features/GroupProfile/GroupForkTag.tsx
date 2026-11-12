@@ -2,15 +2,15 @@
 
 import { Icon, Tag } from '@lobehub/ui';
 import { GitFork } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { marketApiService } from '@/services/marketApi';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
-import { type AgentGroupForkSourceResponse } from '@/types/discover';
+import { useDiscoverStore } from '@/store/discover';
+import { marketSelectors } from '@/store/discover/selectors';
 
 /**
  * Group Fork Tag Component
@@ -19,39 +19,13 @@ import { type AgentGroupForkSourceResponse } from '@/types/discover';
 const GroupForkTag = memo(() => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
-  const [forkSource, setForkSource] = useState<AgentGroupForkSourceResponse['source']>(null);
-  const [loading, setLoading] = useState(false);
-
   const { gid } = useParams<{ gid: string }>();
   const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
-  const marketIdentifier = groupMeta?.marketIdentifier;
+  const useAgentGroupForkSource = useDiscoverStore((s) => s.useAgentGroupForkSource);
+  const { queryKey } = useAgentGroupForkSource(groupMeta?.marketIdentifier);
+  const forkSource = useDiscoverStore(marketSelectors.agentGroupForkSource(queryKey));
 
-  useEffect(() => {
-    if (!marketIdentifier) {
-      setForkSource(null);
-      return;
-    }
-
-    const fetchGroupForkInfo = async () => {
-      try {
-        setLoading(true);
-
-        // Get fork source info from market using the marketIdentifier
-        const forkSourceResponse = await marketApiService.getAgentGroupForkSource(marketIdentifier);
-
-        setForkSource(forkSourceResponse.source);
-      } catch (error) {
-        console.error('Failed to fetch group fork info:', error);
-        setForkSource(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchGroupForkInfo();
-  }, [marketIdentifier]);
-
-  if (loading || !forkSource) return null;
+  if (!forkSource) return null;
 
   const handleClick = () => {
     if (forkSource?.identifier) {
