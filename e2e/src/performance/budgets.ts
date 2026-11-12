@@ -22,7 +22,9 @@
  * 0-2.2%), so their ceilings only catch a list that got far slower than any
  * baseline.
  * CI runs on GitHub-hosted `ubuntu-latest` (selected by `CI`) and gets its own
- * timing ceilings, calibrated from that runner's receipts.
+ * timing ceilings. Its first receipts (2026-11-13, PR #22937) measured first
+ * readable 1.9-2.1 s, worst gap 33-100 ms and long-frame share 0-2.5%; the
+ * ceilings leave room for a slower shared runner, not for a lost virtualizer.
  */
 export interface LongListTimingBudget {
   firstReadableMs: number;
@@ -45,8 +47,8 @@ const localTimingBudget: Record<LongListSize, LongListTimingBudget> = {
 };
 
 const ciTimingBudget: Record<LongListSize, LongListTimingBudget> = {
-  500: { firstReadableMs: 10_000, scroll: { longFrameShare: 0.1, maxGapMs: 800 } },
-  1000: { firstReadableMs: 10_000, scroll: { longFrameShare: 0.1, maxGapMs: 800 } },
+  500: { firstReadableMs: 5000, scroll: { longFrameShare: 0.08, maxGapMs: 400 } },
+  1000: { firstReadableMs: 5000, scroll: { longFrameShare: 0.08, maxGapMs: 400 } },
 };
 
 export const getLongListBudget = (size: LongListSize) => ({
