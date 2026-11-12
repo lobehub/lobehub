@@ -1,6 +1,10 @@
 export const LOCAL_FILE_PROTOCOL_SCHEME = 'localfile';
 export const LOCAL_FILE_PROTOCOL_HOST = 'file';
 
+/** Where the renderer is served from (`app://renderer`), in dev and prod alike. */
+export const RENDERER_PROTOCOL_SCHEME = 'app';
+export const RENDERER_PROTOCOL_HOST = 'renderer';
+
 /**
  * Renderer pathnames that must be proxied to the remote LobeHub backend
  * instead of being served as static assets. Covers tRPC, webapi, NextAuth,

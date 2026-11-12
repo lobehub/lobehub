@@ -4,6 +4,7 @@ import path from 'node:path';
 import { tryGetMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
 
+import { RENDERER_PROTOCOL_HOST, RENDERER_PROTOCOL_SCHEME } from '@/const/protocol';
 import { createLogger } from '@/utils/logger';
 
 export type RendererFile = { filePath: string; name: string };
@@ -41,8 +42,6 @@ interface RendererProtocolManagerOptions {
   scheme?: string;
 }
 
-const RENDERER_DIR = 'renderer';
-
 export class RendererProtocolManager {
   private readonly scheme: string;
   private readonly host: string;
@@ -51,8 +50,8 @@ export class RendererProtocolManager {
   private handlerRegistered = false;
 
   constructor(options: RendererProtocolManagerOptions) {
-    this.scheme = options.scheme ?? 'app';
-    this.host = options.host ?? RENDERER_DIR;
+    this.scheme = options.scheme ?? RENDERER_PROTOCOL_SCHEME;
+    this.host = options.host ?? RENDERER_PROTOCOL_HOST;
     this.fallback = options.fallback;
   }
 
