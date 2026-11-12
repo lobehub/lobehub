@@ -9,8 +9,6 @@ import { memo } from 'react';
  * Nothing in the open-source build. Downstream builds override this module
  * through their own `@/business/...` mapping.
  */
-const SubscriptionAccountsPurchase = memo(() => null);
+export const SubscriptionAccountsPurchase = memo(() => null);
 
 SubscriptionAccountsPurchase.displayName = 'SubscriptionAccountsPurchase';
-
-export default SubscriptionAccountsPurchase;
