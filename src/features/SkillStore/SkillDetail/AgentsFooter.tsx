@@ -26,9 +26,7 @@ const AgentsFooter = ({ context }: { context?: AgentsFooterContext }) => {
     return (
       <Flexbox horizontal align={'center'} gap={8} justify={'center'} padding={16}>
         <Text type={'secondary'}>{context.message}</Text>
-        <Button size={'small'} onClick={context.onRetry}>
-          {t('retry')}
-        </Button>
+        <Button onClick={context.onRetry}>{t('retry')}</Button>
       </Flexbox>
     );
   return <div style={{ height: 16 }} />;
