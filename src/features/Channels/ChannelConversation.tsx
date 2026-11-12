@@ -63,7 +63,7 @@ const Timeline = ({
   const reply = useReplyTarget(channelDraftKey(channelId, threadId));
   const [jumpTarget, setJumpTarget] = useState<ChannelReplyTarget | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const followSent = useFollowSent(threadId, onOpenThread);
+  const followSent = useFollowSent(threadId, onOpenThread, !!hidden);
   useEffect(() => {
     if (!highlighted) return;
     const timer = setTimeout(() => setHighlighted(null), 1600);

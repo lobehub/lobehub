@@ -1,81 +1,51 @@
-import { act, renderHook } from '@testing-library/react';
-import { createElement, type ReactNode } from 'react';
-import { MemoryRouter, useNavigate } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { cacheScope } from '@/libs/replica';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useFollowSent } from './useFollowSent';
 
-const wrapper = ({ children }: { children: ReactNode }) =>
-  createElement(MemoryRouter, { initialEntries: ['/channels/chn_1'] }, children);
+vi.mock('@/hooks/useActiveLocation', () => ({
+  useActiveLocation: () => ({ pathname: '/agent/ch-1', search: '' }),
+}));
+vi.mock('@/libs/replica', () => ({
+  cacheScope: { get: () => 'scope-1', use: () => 'scope-1' },
+}));
 
-const render = (threadId: string | null, onOpenThread = vi.fn()) => {
-  const hook = renderHook(
-    () => ({ follow: useFollowSent(threadId, onOpenThread), navigate: useNavigate() }),
-    { wrapper },
-  );
-  return { ...hook, onOpenThread };
-};
+/** A reply to an Agent is stored in a thread, so the send resolves to the thread it went to. */
+const storedIn = (threadId: string) => Promise.resolve({ threadId });
 
 describe('useFollowSent', () => {
-  let scope: string;
-  beforeEach(() => {
-    scope = 'scope';
-    vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
-  });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => cleanup());
 
-  it('opens the thread a main-conversation reply landed in, including after a retry', async () => {
-    const { result, onOpenThread } = render(null);
+  it('opens the thread a reply was stored in', async () => {
+    const open = vi.fn();
+    const { result } = renderHook(() => useFollowSent(null, open));
 
-    await act(async () => result.current.follow(Promise.resolve({ threadId: 'thread' })));
+    await act(async () => {
+      result.current(storedIn('thread-1'));
+    });
 
-    expect(onOpenThread).toHaveBeenCalledWith('thread', false);
+    expect(open).toHaveBeenCalledWith('thread-1', false);
   });
 
-  it.each([
-    ['stays in the main conversation', null, { threadId: null }],
-    ['did not send', null, undefined],
-    ['was sent inside a thread already', 'thread', { threadId: 'thread' }],
-  ])('does nothing when the message %s', async (_, threadId, stored) => {
-    const { result, onOpenThread } = render(threadId);
+  it('stays where the user is while the Channel is covered by a thread page', async () => {
+    const open = vi.fn();
+    const { result } = renderHook(() => useFollowSent(null, open, true));
 
-    await act(async () => result.current.follow(Promise.resolve(stored)));
+    await act(async () => {
+      result.current(storedIn('thread-1'));
+    });
 
-    expect(onOpenThread).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 
-  it('does not pull the user back after they left the conversation', async () => {
-    const { result, onOpenThread } = render(null);
-    const gate = Promise.withResolvers<{ threadId: string }>();
-    act(() => result.current.follow(gate.promise));
+  it('leaves the thread already being read in place', async () => {
+    const open = vi.fn();
+    const { result } = renderHook(() => useFollowSent('thread-9', open));
 
-    act(() => result.current.navigate('/channels/chn_2'));
-    await act(async () => gate.resolve({ threadId: 'thread' }));
+    await act(async () => {
+      result.current(storedIn('thread-1'));
+    });
 
-    expect(onOpenThread).not.toHaveBeenCalled();
-  });
-
-  it('does not open a thread under an identity that replaced the sender', async () => {
-    const { result, onOpenThread } = render(null);
-    const gate = Promise.withResolvers<{ threadId: string }>();
-    act(() => result.current.follow(gate.promise));
-
-    scope = 'other';
-    await act(async () => gate.resolve({ threadId: 'thread' }));
-
-    expect(onOpenThread).not.toHaveBeenCalled();
-  });
-
-  it('does nothing once the conversation unmounted', async () => {
-    const { result, onOpenThread, unmount } = render(null);
-    const gate = Promise.withResolvers<{ threadId: string }>();
-    act(() => result.current.follow(gate.promise));
-
-    unmount();
-    await act(async () => gate.resolve({ threadId: 'thread' }));
-
-    expect(onOpenThread).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 });
