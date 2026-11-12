@@ -29,6 +29,13 @@ import { log } from '../utils/logger';
  *
  * Reads with an operation-authenticated route need neither: `lh topic view`
  * tries `topic.getTopicTranscriptOperation` first (`commands/topic/readTranscript`).
+ *
+ * A server that mints the run's token with `caller:act` accepts it on these
+ * routes as the user who started the run, so the refusal, and with it this
+ * fallback, only reaches tokens minted without it: an older server, or a run
+ * already in flight when the server was updated. A caller token's own refusals
+ * (outside the run's workspace, after the run ended) carry other messages and
+ * are never retried with the machine's login.
  */
 
 /** `oidcAuth`'s message when an operation token reaches a user-scoped route. */
