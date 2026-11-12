@@ -1,4 +1,4 @@
-export type { ProjectDetail, ProjectListItem } from './store';
+export type { ProjectDetail, ProjectListItem, ProjectOverview } from './store';
 export {
   projectByRefSelector,
   projectListItemSelector,
@@ -7,5 +7,7 @@ export {
   useLoadedProjectList,
   useProjectByRef,
   useProjectIdByRef,
+  useProjectOverview,
+  useProjectOverviewsLoaded,
   useProjectStore,
 } from './store';

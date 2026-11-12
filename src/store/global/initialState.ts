@@ -197,6 +197,9 @@ export interface ChannelListSort {
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
 
+/** How the projects page lays out projects: folder cards or compact rows. */
+export type ProjectListViewMode = 'folder' | 'list';
+
 export interface SystemStatus {
   /**
    * Agent Builder panel width
@@ -384,6 +387,8 @@ export interface SystemStatus {
    * order itself is shared and lives on `projects.sort_order`.
    */
   projectListSortBy?: ProjectListSortBy;
+  /** Layout of the projects page. Device-local view setting. */
+  projectListViewMode?: ProjectListViewMode;
   /**
    * Per byProject group (keyed by the group id, e.g. `project-id:<id>`): how its
    * topics are sectioned. Absent means `none`.
