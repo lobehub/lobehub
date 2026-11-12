@@ -1,5 +1,9 @@
-import type { QQPassiveSlot, QQPassiveStore } from '@lobechat/chat-adapter-qq';
-import { createMemoryQQPassiveStore } from '@lobechat/chat-adapter-qq';
+import type {
+  QQPassiveLimits,
+  QQPassiveSlot,
+  QQPassiveStore,
+  QQPassiveToken,
+} from '@lobechat/chat-adapter-qq';
 
 import { RedisKeys } from '@/server/modules/Redis';
 
@@ -34,11 +38,58 @@ return {
 }
 `;
 
+interface LocalWindow {
+  at: number;
+  eventId?: string;
+  msgId?: string;
+  seq: number;
+}
+
 /**
  * In-process stand-in for when Redis is unavailable or switched off. It only sees what this
  * instance handled, so it is a best-effort degradation, not a second source of truth.
+ *
+ * Written out here rather than imported from the adapter package: this module sits in the Redis
+ * barrel every service imports, and a runtime import of `@lobechat/chat-adapter-qq` would drag the
+ * adapter (and `chat` itself) into callers that never touch QQ.
  */
-const local = createMemoryQQPassiveStore();
+const createLocalStore = (): QQPassiveStore => {
+  const windows = new Map<string, LocalWindow>();
+  const pending = new Map<string, string>();
+
+  return {
+    open: async (key: string, token: QQPassiveToken) => {
+      windows.set(key, { at: token.at, eventId: token.eventId, msgId: token.msgId, seq: 0 });
+    },
+
+    reserve: async (key: string, limits: QQPassiveLimits, now = Date.now()) => {
+      const window = windows.get(key);
+      if (!window) return null;
+      if (now - window.at > limits.windowMs) {
+        windows.delete(key);
+        return null;
+      }
+      if (window.seq >= limits.maxReplies) return null;
+
+      window.seq += 1;
+
+      return { at: window.at, eventId: window.eventId, msgId: window.msgId, seq: window.seq };
+    },
+
+    savePending: async (key: string, text: string) => {
+      pending.set(key, text);
+    },
+
+    takePending: async (key: string) => {
+      const text = pending.get(key);
+      pending.delete(key);
+
+      return text;
+    },
+  };
+};
+
+const local = createLocalStore();
 
 const parseSlot = (raw: unknown, now: number): QQPassiveSlot | null => {
   if (!Array.isArray(raw) || raw.length < 3) return null;
