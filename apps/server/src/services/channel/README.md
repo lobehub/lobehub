@@ -216,7 +216,10 @@ chosen Agents (`ChannelMessagingService`).
   returns the message already posted.
 - **Where the answer goes.** The addressed Agent answers in its own Channel. The tool returns a
   link to that Channel for the relaying run's final answer; nothing reports back automatically yet.
-  External runtimes have no `lh channel` equivalent yet.
+- **External runtimes.** `lh channel list` and `lh channel send` call the same service through
+  `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
+  the `channel:message` capability that every Channel dispatch is minted alongside
+  `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
 
 ### Why history reads stay on `lobe-channel`
 

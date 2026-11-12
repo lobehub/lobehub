@@ -74,10 +74,13 @@ export class ChannelMessagingService {
     };
   };
 
-  /** `toolCallId` makes a retried call return the message it already posted. */
+  /**
+   * `requestId` (the tool call id, or the CLI's request key) makes a retried call return the
+   * message it already posted.
+   */
   sendMessage = async (
     params: ChannelSendMessageParams,
-    toolCallId: string,
+    requestId: string,
   ): Promise<ChannelSentMessage> => {
     await assertChannelEnabled(this.userId);
     const run = await this.history.currentRun(this.operationId);
@@ -140,7 +143,7 @@ export class ChannelMessagingService {
             operationId: this.operationId,
           },
         },
-        requestKey: `agent-relay:${this.operationId}:${toolCallId}`,
+        requestKey: `agent-relay:${this.operationId}:${requestId}`,
       },
     );
 
