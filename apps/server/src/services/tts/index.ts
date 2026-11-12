@@ -1,4 +1,5 @@
 import type { ModelRuntime } from '@lobechat/model-runtime';
+import { countTextToSpeechCharacters } from '@lobechat/model-runtime';
 import type { ModelUsage } from '@lobechat/types';
 import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import type { AITTSModelCard, TTSAudioFormat } from 'model-bank';
@@ -181,12 +182,13 @@ export class TTSService {
   async synthesize(request: TTSSynthesizeRequest): Promise<TTSSynthesizeResult> {
     const { input, model, provider } = request;
 
-    if (
-      INLINE_INPUT_CAPPED_PROVIDERS.has(provider) &&
-      input.length > INLINE_TTS_MAX_INPUT_CHARACTERS
-    ) {
+    // Count Unicode characters, as billing does: an emoji is one character, not two.
+    const inputCharacters = INLINE_INPUT_CAPPED_PROVIDERS.has(provider)
+      ? countTextToSpeechCharacters(input)
+      : 0;
+    if (inputCharacters > INLINE_TTS_MAX_INPUT_CHARACTERS) {
       throw new TTSRequestError(
-        `input is ${input.length} characters; ${provider} speech is limited to ${INLINE_TTS_MAX_INPUT_CHARACTERS} characters per request. Split the text into shorter requests.`,
+        `input is ${inputCharacters} characters; ${provider} speech is limited to ${INLINE_TTS_MAX_INPUT_CHARACTERS} characters per request. Split the text into shorter requests.`,
         'invalid_params',
       );
     }

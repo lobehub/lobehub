@@ -194,6 +194,25 @@ describe('TTSService with provider elevenlabs', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('counts the inline cap in Unicode characters, so emoji at the limit pass', async () => {
+    // Each emoji is two UTF-16 units but one billed character.
+    await service.synthesize({
+      input: '🎙'.repeat(INLINE_TTS_MAX_INPUT_CHARACTERS),
+      model: 'eleven_flash_v2_5',
+      provider: 'elevenlabs',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await expect(
+      service.synthesize({
+        input: '🎙'.repeat(INLINE_TTS_MAX_INPUT_CHARACTERS + 1),
+        model: 'eleven_flash_v2_5',
+        provider: 'elevenlabs',
+      }),
+    ).rejects.toMatchObject({ reason: 'invalid_params' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects input over the inline cap before calling the API', async () => {
     await expect(
       service.synthesize({
