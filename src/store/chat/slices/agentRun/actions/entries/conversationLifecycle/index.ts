@@ -1868,10 +1868,10 @@ export class ConversationLifecycleActionImpl {
           userMessageId: result.userMessageId,
         };
       } catch (e) {
-        // A Stop keeps 'cancelled'; only a turn the server refused gets its text back.
+        // A Stop keeps 'cancelled'; a refused turn gets its text back unless typed over.
         const op = this.#get().operations[operationId];
         if (op?.status === 'cancelled') {
-          restoreComposerAfterFailedSend(e);
+          if (!targetInputEditor?.getMarkdownContent?.().trim()) restoreComposerAfterFailedSend(e);
           cleanupTempMessages({
             preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
           });

@@ -44,9 +44,12 @@ afterEach(() => {
  * `stopGenerating` sequence), then lets the transport `finish`.
  */
 const sendAndStop = async ({
+  draftAfterStop = '',
   finish,
   sendRequest,
 }: {
+  /** What the user typed into the composer after pressing Stop. */
+  draftAfterStop?: string;
   finish: () => Promise<unknown>;
   sendRequest: boolean;
 }) => {
@@ -54,7 +57,7 @@ const sendAndStop = async ({
   const editor = {
     clearContent: vi.fn(),
     getJSONState: vi.fn(() => typedDraft),
-    getMarkdownContent: vi.fn(() => 'hello'),
+    getMarkdownContent: vi.fn(() => ''),
     setDocument: vi.fn(),
     setJSONState: vi.fn(),
   };
@@ -100,6 +103,7 @@ const sendAndStop = async ({
     );
     store.cancelSendMessageInServer(context, editor as any);
   });
+  editor.getMarkdownContent.mockReturnValue(draftAfterStop);
 
   await act(async () => {
     release();
@@ -144,5 +148,22 @@ describe('Stop while a gateway send is starting', () => {
     });
 
     expect(editor.setDocument).toHaveBeenCalledWith('markdown', 'hello');
+  });
+
+  // ROOT CAUSE:
+  //
+  // The refusal now arrives after Stop, so the user may already be typing the
+  // next message. The restore wrote the refused text over that new draft.
+  //
+  // Before: the new draft was replaced. After: it is kept.
+  it('keeps a draft typed after Stop when the server later refuses the turn', async () => {
+    const editor = await sendAndStop({
+      draftAfterStop: 'a new draft',
+      finish: () => Promise.reject(new Error('AgentConcurrencyLimitExceeded')),
+      sendRequest: true,
+    });
+
+    expect(editor.setDocument).not.toHaveBeenCalled();
+    expect(editor.setJSONState).not.toHaveBeenCalled();
   });
 });
