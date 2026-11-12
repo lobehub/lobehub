@@ -11,6 +11,7 @@ import {
   tasks,
   taskTopics,
   topics,
+  users,
   verifyCheckResults,
   verifyRuns,
 } from '@lobechat/database/schemas';
@@ -19,6 +20,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
+import { ProjectSiteModel } from '@/database/models/projectReview';
 import {
   cleanupTestUser,
   createTestUser,
@@ -45,17 +47,22 @@ describe('submitReviewRound', () => {
 
   const geometry = {
     kind: 'region' as const,
-    pageUrl: 'https://website.example/notebook',
+    pageMeta: { title: 'Fieldnotes' },
     rectDocument: { height: 160, width: 384, x: 448, y: 1294 },
     rectViewport: { height: 160, width: 384, x: 448, y: 494 },
-    route: '/notebook',
+    routeKey: '/notebook',
     scroll: { x: 0, y: 800 },
+    url: 'https://website.example/notebook',
     viewport: { dpr: 2, height: 800, width: 1280 },
   };
+
+  const deliveryOf = (taskId: string) =>
+    serverDB.query.acceptances.findFirst({ where: eq(acceptances.subjectId, taskId) });
 
   beforeEach(async () => {
     serverDB = await getTestDB();
     userId = await createTestUser(serverDB);
+    await serverDB.update(users).set({ fullName: 'Alex' }).where(eq(users.id, userId));
     const [agent] = await serverDB
       .insert(agents)
       .values({ title: 'Project Agent', userId })
@@ -66,20 +73,14 @@ describe('submitReviewRound', () => {
       .values({ coordinatorAgentId: agentId, name: 'Website', userId })
       .returning();
     projectId = project.id;
-    const [site] = await serverDB
-      .insert(acceptances)
-      .values({ projectId, subjectId: randomUUID(), subjectType: 'site', userId })
-      .returning();
+    const site = await new ProjectSiteModel(serverDB).create({
+      name: 'Website',
+      origins: ['https://website.example'],
+      projectId,
+    });
     siteId = site.id;
     const model = new AcceptanceReviewModel(serverDB);
-    const review = await model.createDraft({
-      acceptanceId: siteId,
-      authorUserId: userId,
-      pageTitle: 'Fieldnotes',
-      pageUrl: 'https://website.example/notebook',
-      projectId,
-      route: '/notebook',
-    });
+    const review = await model.createDraft({ projectId, siteId, userId });
     reviewId = review.id;
     await model.addMark(reviewId, { ...geometry, clientId: 'a', content: 'Cards are too tight' });
     await model.addMark(reviewId, { ...geometry, clientId: 'b', content: 'Button looks disabled' });
@@ -105,43 +106,67 @@ describe('submitReviewRound', () => {
 
   const submit = () =>
     submitReviewRound(serverDB, { userId, workspaceId: null }, reviewId, {
-      summary: 'Spacing feels tight overall',
-      title: 'Fieldnotes · 2 marks',
+      feedback: 'Spacing feels tight overall',
     });
 
-  it('turns the round into one running project Task with a private delivery', async () => {
+  it('turns the round into one running project Task named after who raised it', async () => {
     const result = await submit();
 
     const [task] = await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId));
     expect(result).toMatchObject({ taskId: task.id });
     expect(task).toMatchObject({
       assigneeAgentId: agentId,
-      name: 'Fieldnotes · 2 marks',
+      name: 'Alex · Round 1: Cards are too tight (+1 more)',
       status: 'running',
       visibility: 'private',
     });
     expect(task.config).toMatchObject({ acceptanceReview: { reviewId } });
-    expect(task.instruction).toContain('Cards are too tight');
-    expect(task.instruction).toContain('Button looks disabled');
-    expect(task.instruction).toContain('Spacing feels tight overall');
-
-    const delivery = await serverDB.query.acceptances.findFirst({
-      where: eq(acceptances.subjectId, task.id),
-    });
-    expect(delivery).toMatchObject({ subjectType: 'task', visibility: 'private' });
-    expect(delivery?.metadata?.reviewSource).toEqual({ reviewId });
 
     const stored = await serverDB.query.acceptanceReviews.findFirst({
       where: eq(acceptanceReviews.id, reviewId),
     });
-    expect(stored).toMatchObject({
-      deliveryAcceptanceId: delivery!.id,
-      status: 'submitted',
-      summary: 'Spacing feels tight overall',
-      taskId: task.id,
-      title: 'Fieldnotes · 2 marks',
-    });
+    expect(stored).toMatchObject({ status: 'submitted', taskId: task.id });
     expect(execAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes a readable Task body with the overall feedback and no raw mark data', async () => {
+    await submit();
+
+    const [task] = await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId));
+    expect(task.instruction).toContain('1. Cards are too tight (/notebook)');
+    expect(task.instruction).toContain('2. Button looks disabled (/notebook)');
+    expect(task.instruction).toContain('Spacing feels tight overall');
+    expect(task.instruction).not.toContain('rectDocument');
+  });
+
+  it('hands the Agent every mark with its page and geometry when the run starts', async () => {
+    await submit();
+
+    const handoff = JSON.stringify(execAgent.mock.calls[0]?.[0]);
+    const marks = await new AcceptanceReviewModel(serverDB).listMarks(reviewId);
+    for (const mark of marks) expect(handoff).toContain(mark.id);
+    expect(handoff).toContain('rectDocument');
+    expect(handoff).toContain('https://website.example/notebook');
+  });
+
+  it('counts rounds per person on the site', async () => {
+    await submit();
+    const model = new AcceptanceReviewModel(serverDB);
+    const next = await model.createDraft({ projectId, siteId, userId });
+    await model.addMark(next.id, { ...geometry, clientId: 'c', content: 'Footer overlaps' });
+
+    await submitReviewRound(serverDB, { userId, workspaceId: null }, next.id, {});
+
+    const names = (await serverDB.select().from(tasks).where(eq(tasks.projectId, projectId))).map(
+      (task) => task.name,
+    );
+    expect(names).toContain('Alex · Round 2: Footer overlaps');
+  });
+
+  it('leaves the delivery acceptance to the task, keyed by the task id', async () => {
+    const { taskId } = await submit();
+
+    expect(await deliveryOf(taskId)).toMatchObject({ subjectType: 'task' });
   });
 
   it('creates a single Task when the same round is submitted twice at once', async () => {
@@ -186,14 +211,12 @@ describe('submitReviewRound', () => {
     const marks = await new AcceptanceReviewModel(serverDB).listMarks(reviewId);
     expect(run.plan?.map((item) => item.id)).toEqual(marks.map((mark) => mark.id));
     expect(run.planConfirmedAt).not.toBeNull();
-    const delivery = await serverDB.query.acceptances.findFirst({
-      where: eq(acceptances.subjectId, taskId),
-    });
-    expect(run.acceptanceId).toBe(delivery!.id);
+    expect(run.acceptanceId).toBe((await deliveryOf(taskId))!.id);
   });
 
   it('re-plans only the marks that still need work', async () => {
-    const { deliveryAcceptanceId, operationId, taskId } = await submit();
+    const { operationId, taskId } = await submit();
+    const deliveryAcceptanceId = (await deliveryOf(taskId))!.id;
     await instantiateVerifyPlanOnStart(serverDB, userId, { operationId, taskId });
     const [first] = await serverDB
       .select()
@@ -240,7 +263,8 @@ describe('submitReviewRound', () => {
   });
 
   it('sends a delivered round back by re-running the same Task on the marks still not fixed', async () => {
-    const { deliveryAcceptanceId, operationId, taskId } = await submit();
+    const { operationId, taskId } = await submit();
+    const deliveryAcceptanceId = (await deliveryOf(taskId))!.id;
     await instantiateVerifyPlanOnStart(serverDB, userId, { operationId, taskId });
     const [first] = await serverDB
       .select()

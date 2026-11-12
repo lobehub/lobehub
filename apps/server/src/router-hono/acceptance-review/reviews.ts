@@ -4,7 +4,6 @@ import {
   createAcceptanceReviewMarkSchema,
   createAcceptanceReviewReplySchema,
   FileSource,
-  startAcceptanceReviewSchema,
   submitAcceptanceReviewSchema,
   updateAcceptanceReviewMarkSchema,
 } from '@lobechat/types';
@@ -12,6 +11,7 @@ import type { Context } from 'hono';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import { ProjectModel } from '@/database/models/project';
+import { ProjectSiteModel } from '@/database/models/projectReview';
 import type { AcceptanceReviewRow } from '@/database/schemas';
 import { acceptanceRouter } from '@/server/routers/lambda/acceptance';
 import { projectReview } from '@/server/services/acceptanceReview/projection';
@@ -46,29 +46,34 @@ export const reviewScope = (c: ReviewContext): ReviewScope | undefined => {
   const { acceptance } = c.get('access');
   const visible = (row: AcceptanceReviewRow | undefined) => {
     if (!row || row.status === 'discarded') return undefined;
-    if (row.status === 'draft' && row.authorUserId !== c.get('userId')) return undefined;
+    if (row.status === 'draft' && row.userId !== c.get('userId')) return undefined;
     return row;
   };
-  if (acceptance.subjectType === 'site')
+  const siteId = c.get('site')?.id;
+  if (acceptance.subjectType === 'site' && siteId)
     return {
       load: async (reviewId) => {
         const row = await reviews(c).findById(reviewId);
-        return row?.acceptanceId === acceptance.id ? visible(row) : undefined;
+        return row?.siteId === siteId ? visible(row) : undefined;
       },
       ownerUserId: acceptance.userId,
       workspaceId: acceptance.workspaceId,
     };
-  const linked = acceptance.metadata?.reviewSource?.reviewId;
-  if (!linked) return undefined;
+  if (acceptance.subjectType !== 'task') return undefined;
   return {
     load: async (reviewId) => {
-      if (reviewId !== linked) return undefined;
       const row = await reviews(c).findById(reviewId);
-      return row?.deliveryAcceptanceId === acceptance.id ? visible(row) : undefined;
+      return row?.taskId === acceptance.subjectId ? visible(row) : undefined;
     },
     ownerUserId: acceptance.userId,
     workspaceId: acceptance.workspaceId,
   };
+};
+
+const repliesAcceptanceId = async (c: ReviewContext, row: AcceptanceReviewRow) => {
+  const site = siteAcceptance(c);
+  if (site) return site.id;
+  return (await new ProjectSiteModel(c.get('db')).findById(row.siteId))?.acceptanceId ?? undefined;
 };
 
 export const describeReview = async (
@@ -80,7 +85,7 @@ export const describeReview = async (
   const db = c.get('db');
   const model = reviews(c);
   const [authors, marks] = await Promise.all([
-    loadAuthors(db, [row.authorUserId]),
+    loadAuthors(db, [row.userId]),
     model.listMarks(row.id),
   ]);
   const projection = await projectReview(db, row, marks);
@@ -89,7 +94,6 @@ export const describeReview = async (
     : undefined;
   const screenshot = screenshotResolver(db, scope.ownerUserId, scope.workspaceId);
   return toReviewDto(row, {
-    author: row.authorUserId ? authors.get(row.authorUserId) : undefined,
     markCount: marks.length,
     marks: options.withMarks
       ? await Promise.all(
@@ -103,6 +107,7 @@ export const describeReview = async (
         )
       : undefined,
     projection,
+    user: row.userId ? authors.get(row.userId) : undefined,
     viewerId: c.get('userId'),
   });
 };
@@ -112,7 +117,7 @@ const notFound = (c: ReviewContext) => reviewError(c, 404, 'NOT_FOUND', 'Review 
 const ownDraft = async (c: ReviewContext) => {
   const scope = reviewScope(c);
   const row = scope ? await scope.load(c.req.param('id') ?? '') : undefined;
-  if (!scope || !row || row.authorUserId !== c.get('userId')) return { error: notFound(c) };
+  if (!scope || !row || row.userId !== c.get('userId')) return { error: notFound(c) };
   if (row.status !== 'draft')
     return { error: reviewError(c, 409, 'INVALID_STATE', 'The review is already submitted') };
   return { row, scope };
@@ -129,17 +134,17 @@ const removeScreenshot = async (c: ReviewContext, fileId: string | null) => {
 export const listReviews = async (c: ReviewContext) => {
   const scope = reviewScope(c);
   if (!scope) return notFound(c);
-  const site = siteAcceptance(c);
-  if (!site) {
-    const linked = c.get('access').acceptance.metadata?.reviewSource?.reviewId;
-    const row = linked ? await scope.load(linked) : undefined;
+  const siteId = c.get('site')?.id;
+  if (!siteAcceptance(c) || !siteId) {
+    const linked = await reviews(c).findByTask(c.get('access').acceptance.subjectId);
+    const row = linked ? await scope.load(linked.id) : undefined;
     return c.json({ draft: null, items: row ? [await describeReview(c, scope, row)] : [] });
   }
   const route = c.req.query('route');
   const model = reviews(c);
   const [submitted, draft] = await Promise.all([
-    model.listSubmitted(site.id, route || undefined),
-    model.findDraft(site.id, c.get('userId')),
+    model.listSubmitted(siteId, route || undefined),
+    model.findDraft(siteId, c.get('userId')),
   ]);
   return c.json({
     draft: draft ? await describeReview(c, scope, draft) : null,
@@ -148,16 +153,15 @@ export const listReviews = async (c: ReviewContext) => {
 };
 
 export const startReview = async (c: ReviewContext) => {
-  const body = await parseBody(c, startAcceptanceReviewSchema);
-  if (body.error) return body.error;
   const scope = reviewScope(c);
   const site = siteAcceptance(c);
-  if (!scope || !site) return notFound(c);
+  const siteId = c.get('site')?.id;
+  if (!scope || !site || !siteId) return notFound(c);
   const model = reviews(c);
   const userId = c.get('userId');
 
   const conflict = async () => {
-    const existing = await model.findDraft(site.id, userId);
+    const existing = await model.findDraft(siteId, userId);
     if (!existing) return undefined;
     return c.json(
       {
@@ -172,12 +176,9 @@ export const startReview = async (c: ReviewContext) => {
   if (early) return early;
   try {
     const row = await model.createDraft({
-      acceptanceId: site.id,
-      authorUserId: userId,
-      pageTitle: body.data.pageTitle,
-      pageUrl: body.data.pageUrl,
       projectId: site.projectId,
-      route: body.data.route,
+      siteId,
+      userId,
       workspaceId: site.workspaceId,
     });
     return c.json(await describeReview(c, scope, row), 201);
@@ -234,6 +235,7 @@ export const addMark = async (c: ReviewContext) => {
           return undefined;
         });
   const row = await model.addMark(draft.row.id, { ...input, screenshotFileId });
+  if (!row) return reviewError(c, 409, 'INVALID_STATE', 'The review is already submitted');
   const resolve = screenshotResolver(db, draft.scope.ownerUserId, draft.scope.workspaceId);
   return c.json(toMarkDto(row, { screenshot: await resolve(row.screenshotFileId) }), 201);
 };
@@ -310,18 +312,17 @@ export const setMarkVerdict = async (c: ReviewContext) => {
   const body = await parseBody(c, acceptanceReviewMarkVerdictSchema);
   if (body.error) return body.error;
   const found = await submittedReview(c);
-  if (!found || found.row.status !== 'submitted' || !found.row.deliveryAcceptanceId)
-    return notFound(c);
+  if (!found || found.row.status !== 'submitted' || !found.row.taskId) return notFound(c);
   const db = c.get('db');
   const marks = await reviews(c).listMarks(found.row.id);
   const markId = c.req.param('markId') ?? '';
   const projection = await projectReview(db, found.row, marks);
   const check = projection.checks.get(markId);
   if (!check) return reviewError(c, 409, 'INVALID_STATE', 'This mark has no result to judge yet');
-  if (projection.deliveryStatus !== 'delivered')
+  const deliveryId = projection.deliveryId;
+  if (!deliveryId || projection.deliveryStatus !== 'delivered')
     return reviewError(c, 409, 'INVALID_STATE', 'The delivery is not waiting for review');
 
-  const deliveryId = found.row.deliveryAcceptanceId;
   await acceptanceCaller(c).reviewChecks({
     action: body.data.verdict === 'pass' ? 'accept' : 'reject',
     checkItemIds: [check.checkId],
@@ -387,7 +388,9 @@ export const addMarkReply = async (c: ReviewContext) => {
   const found = await replyMark(c);
   if (!found) return notFound(c);
   if (!c.get('access').can.comment) return reviewError(c, 403, 'FORBIDDEN', 'Read-only access');
-  const row = await reviews(c).addReply(found.row.acceptanceId, found.mark.id, {
+  const acceptanceId = await repliesAcceptanceId(c, found.row);
+  if (!acceptanceId) return notFound(c);
+  const row = await reviews(c).addReply(acceptanceId, found.mark.id, {
     authorUserId: c.get('userId'),
     clientId: body.data.clientId,
     content: body.data.content,

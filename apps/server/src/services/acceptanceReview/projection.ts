@@ -3,7 +3,7 @@ import type {
   AcceptanceReviewMarkVerdict,
   AcceptanceReviewPhase,
 } from '@lobechat/types';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '@/database/schemas';
 import { acceptances, tasks, verifyEvidence } from '@/database/schemas';
@@ -20,11 +20,12 @@ export interface MarkCheck {
 export interface ReviewProjectionResult {
   checks: Map<string, MarkCheck>;
   counts: { agentPassed: number; humanPassed: number };
+  deliveryId: string | null;
   deliveryStatus: string | null;
   phase: AcceptanceReviewPhase;
   reportUrl: string | null;
   results: Map<string, AcceptanceReviewMarkResult>;
-  task: { id: string; identifier: string | null } | null;
+  task: { id: string; identifier: string | null; name: string | null } | null;
 }
 
 const phaseOf = (status: string | undefined): AcceptanceReviewPhase => {
@@ -47,6 +48,7 @@ const humanVerdict = (decision: string | null | undefined): AcceptanceReviewMark
 const emptyProjection = (phase: AcceptanceReviewPhase): ReviewProjectionResult => ({
   checks: new Map(),
   counts: { agentPassed: 0, humanPassed: 0 },
+  deliveryId: null,
   deliveryStatus: null,
   phase,
   reportUrl: null,
@@ -62,14 +64,14 @@ export const projectReview = async (
   if (review.status === 'draft') return emptyProjection('draft');
   const [task] = review.taskId
     ? await db
-        .select({ id: tasks.id, identifier: tasks.identifier })
+        .select({ id: tasks.id, identifier: tasks.identifier, name: tasks.name })
         .from(tasks)
         .where(eq(tasks.id, review.taskId))
         .limit(1)
     : [];
-  const delivery = review.deliveryAcceptanceId
+  const delivery = task
     ? await db.query.acceptances.findFirst({
-        where: eq(acceptances.id, review.deliveryAcceptanceId),
+        where: and(eq(acceptances.subjectType, 'task'), eq(acceptances.subjectId, task.id)),
       })
     : undefined;
   if (!delivery) return { ...emptyProjection('running'), task: task ?? null };
@@ -138,6 +140,7 @@ export const projectReview = async (
   return {
     checks,
     counts: { agentPassed, humanPassed },
+    deliveryId: delivery.id,
     deliveryStatus: delivery.status,
     phase: phaseOf(delivery.status),
     reportUrl: `${(appEnv.APP_URL ?? '').replace(/\/$/, '')}/acceptance/${delivery.id}`,

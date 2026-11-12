@@ -5,7 +5,7 @@ import { buildReviewPlanItems } from './reviewPlan';
 const mark = (id: string, seq: number, content: string) => ({
   content,
   id,
-  pageUrl: 'https://website.example/notebook',
+  url: 'https://website.example/notebook',
   seq,
 });
 

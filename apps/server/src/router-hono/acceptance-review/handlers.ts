@@ -28,9 +28,12 @@ export const getSession = async (c: ReviewContext) => {
   const { acceptance, can } = c.get('access');
   const db = c.get('db');
   const userId = c.get('userId');
-  const [round, profile] = await Promise.all([
+  const [round, profile, linkedReview] = await Promise.all([
     latestRound(db, acceptance.id),
     findProfile(db, userId),
+    acceptance.subjectType === 'task'
+      ? new AcceptanceReviewModel(db).findByTask(acceptance.subjectId)
+      : undefined,
   ]);
   return c.json({
     acceptance: {
@@ -44,13 +47,8 @@ export const getSession = async (c: ReviewContext) => {
     },
     can,
     expiresAt: new Date(c.get('expiresAt') * 1000).toISOString(),
-    features:
-      acceptance.subjectType === 'site' || acceptance.metadata?.reviewSource
-        ? ['review-rounds']
-        : [],
-    review: acceptance.metadata?.reviewSource
-      ? { id: acceptance.metadata.reviewSource.reviewId }
-      : undefined,
+    features: acceptance.subjectType === 'site' || linkedReview ? ['review-rounds'] : [],
+    review: linkedReview ? { id: linkedReview.id } : undefined,
     project: c.get('project'),
     role: c.get('role') ?? undefined,
     site: c.get('site'),

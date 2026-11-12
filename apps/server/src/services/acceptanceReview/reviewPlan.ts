@@ -4,8 +4,8 @@ import type { VerifyCheckItem } from '@lobechat/types';
 export interface ReviewPlanMark {
   content: string;
   id: string;
-  pageUrl: string;
   seq: number;
+  url: string;
 }
 
 export interface ReviewMarkOutcome {
@@ -39,7 +39,7 @@ export const buildReviewPlanItems = (
   previous: Map<string, ReviewMarkOutcome>,
 ): VerifyCheckItem[] =>
   pick(marks, previous).map((mark, index) => ({
-    description: `Review mark #${mark.seq} on ${mark.pageUrl}: ${mark.content}`,
+    description: `Review mark #${mark.seq} on ${mark.url}: ${mark.content}`,
     id: mark.id,
     index,
     onFail: 'manual',

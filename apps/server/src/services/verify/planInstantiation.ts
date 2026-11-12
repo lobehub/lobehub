@@ -6,6 +6,7 @@ import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { buildReviewPlanItems } from '@/server/services/acceptanceReview/reviewPlan';
+import { reviewIdOfTask } from '@/server/services/acceptanceReview/roundContext';
 
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
 import { VerifyPlanGeneratorService } from './planGenerator';
@@ -110,7 +111,7 @@ const instantiatePlan = async (
       return;
     }
 
-    const reviewId = acceptance.metadata?.reviewSource?.reviewId;
+    const reviewId = reviewIdOfTask(task?.config);
     if (reviewId) {
       const marks = await new AcceptanceReviewModel(db).listMarks(reviewId);
       const service = new AcceptanceService(db, userId, workspaceId);

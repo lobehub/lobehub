@@ -66,6 +66,7 @@ let memberId: string;
 let site: { acceptanceId: string | null; id: string };
 let reviewId: string;
 let deliveryId: string;
+let taskId: string;
 let runId: string;
 let marks: { id: string }[];
 
@@ -98,11 +99,11 @@ const geometry = (clientId: string, content: string) => ({
   clientId,
   content,
   kind: 'region' as const,
-  pageUrl: `${ORIGIN}/notebook`,
   rectDocument: { height: 160, width: 384, x: 448, y: 1294 },
   rectViewport: { height: 160, width: 384, x: 448, y: 494 },
-  route: '/notebook',
+  routeKey: '/notebook',
   scroll: { x: 0, y: 800 },
+  url: `${ORIGIN}/notebook`,
   viewport: { dpr: 2, height: 800, width: 1280 },
 });
 
@@ -132,34 +133,40 @@ beforeEach(async () => {
 
   const model = new AcceptanceReviewModel(serverDB);
   const review = await model.createDraft({
-    acceptanceId: site.acceptanceId!,
-    authorUserId: memberId,
-    pageUrl: `${ORIGIN}/notebook`,
     projectId,
-    route: '/notebook',
+    siteId: site.id,
+    userId: memberId,
     workspaceId: workspace.id,
   });
   reviewId = review.id;
   marks = [
-    await model.addMark(reviewId, geometry('a', 'Title is too small')),
-    await model.addMark(reviewId, geometry('b', 'Button looks disabled')),
+    (await model.addMark(reviewId, geometry('a', 'Title is too small')))!,
+    (await model.addMark(reviewId, geometry('b', 'Button looks disabled')))!,
   ];
-  await model.markSubmitted(reviewId, { title: 'Fieldnotes · 2 marks' });
+  await model.markSubmitted(reviewId);
+  taskId = randomUUID();
+  await serverDB.insert(tasks).values({
+    createdByUserId: memberId,
+    id: taskId,
+    identifier: 'T-REVIEW',
+    instruction: 'review round',
+    seq: 1,
+    status: 'completed',
+  });
+  await model.linkTask(reviewId, taskId);
   const [delivery] = await serverDB
     .insert(acceptances)
     .values({
-      metadata: { reviewSource: { reviewId } },
       projectId,
       status: 'delivered',
-      subjectId: randomUUID(),
-      subjectType: 'standalone',
+      subjectId: taskId,
+      subjectType: 'task',
       userId: memberId,
       visibility: 'private',
       workspaceId: workspace.id,
     })
     .returning();
   deliveryId = delivery.id;
-  await model.linkDelivery(reviewId, { deliveryAcceptanceId: deliveryId });
 
   const plan = marks.map((mark, index) => ({
     description: 'check',
@@ -313,10 +320,8 @@ describe('a submitted review with a delivery', () => {
 
   it('does not open an unrelated review from a delivery acceptance', async () => {
     const other = await new AcceptanceReviewModel(serverDB).createDraft({
-      acceptanceId: site.acceptanceId!,
-      authorUserId: ownerId,
-      pageUrl: `${ORIGIN}/settings`,
-      route: '/settings',
+      siteId: site.id,
+      userId: ownerId,
     });
     expect((await deliveryCall(memberId, `/reviews/${other.id}`)).status).toBe(404);
   });
@@ -340,16 +345,7 @@ describe('a submitted review with a delivery', () => {
   });
 
   it('refuses to send back a round the Agent is still working on', async () => {
-    const taskId = randomUUID();
-    await serverDB.insert(tasks).values({
-      createdByUserId: memberId,
-      id: taskId,
-      identifier: 'T-REVIEW',
-      instruction: 'review round',
-      seq: 1,
-      status: 'running',
-    });
-    await new AcceptanceReviewModel(serverDB).linkDelivery(reviewId, { taskId });
+    await serverDB.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId));
     await serverDB
       .update(acceptances)
       .set({ status: 'verifying' })

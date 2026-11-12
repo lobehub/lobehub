@@ -74,17 +74,15 @@ const call = (userId: string, path: string, init: { json?: unknown; method?: str
     method: init.method ?? 'GET',
   });
 
-const page = { pageTitle: 'Fieldnotes', pageUrl: `${ORIGIN}/notebook`, route: '/notebook' };
-
 const mark = (clientId = randomUUID()) => ({
   clientId,
   content: '卡片标题和正文之间太挤了',
   kind: 'region',
-  pageUrl: `${ORIGIN}/notebook`,
+  pageMeta: { title: 'Fieldnotes' },
   rectDocument: { height: 160, width: 384, x: 448, y: 1294 },
   rectViewport: { height: 160, width: 384, x: 448, y: 494 },
   regionRefs: [{ box: { height: 0.5, width: 1, x: 0, y: 0.25 }, selector: 'article:nth-child(2)' }],
-  route: '/notebook',
+  routeKey: '/notebook',
   scroll: { x: 0, y: 800 },
   targets: [
     {
@@ -93,14 +91,12 @@ const mark = (clientId = randomUUID()) => ({
       selector: 'article:nth-child(2)',
     },
   ],
+  url: `${ORIGIN}/notebook`,
   viewport: { dpr: 2, height: 800, width: 1280 },
 });
 
-const start = async (userId: string, route = '/notebook') => {
-  const response = await call(userId, '/reviews', {
-    json: { ...page, route },
-    method: 'POST',
-  });
+const start = async (userId: string) => {
+  const response = await call(userId, '/reviews', { json: {}, method: 'POST' });
   return { body: await response.json(), status: response.status };
 };
 
@@ -161,17 +157,16 @@ describe('review rounds on a site', () => {
     expect(first.body).toMatchObject({
       counts: { marks: 0 },
       mine: true,
-      pageUrl: `${ORIGIN}/notebook`,
       phase: 'draft',
-      route: '/notebook',
       status: 'draft',
+      user: { id: memberId },
     });
 
-    const second = await start(memberId, '/settings');
+    const second = await start(memberId);
     expect(second.status).toBe(409);
     expect(second.body).toMatchObject({
       error: { code: 'INVALID_STATE' },
-      review: { id: first.body.id, route: '/notebook' },
+      review: { id: first.body.id },
     });
   });
 
@@ -183,7 +178,7 @@ describe('review rounds on a site', () => {
     expect(list).toEqual({ draft: null, items: [] });
 
     const mine = await (await call(memberId, '/reviews?route=/settings')).json();
-    expect(mine.draft).toMatchObject({ id: draft.id, route: '/notebook' });
+    expect(mine.draft).toMatchObject({ id: draft.id });
   });
 
   it('saves a mark with its geometry and screenshot', async () => {
@@ -197,6 +192,9 @@ describe('review rounds on a site', () => {
     const saved = await response.json();
     expect(saved).toMatchObject({
       content: '卡片标题和正文之间太挤了',
+      pageMeta: { title: 'Fieldnotes' },
+      routeKey: '/notebook',
+      url: `${ORIGIN}/notebook`,
       rectDocument: { height: 160, width: 384, x: 448, y: 1294 },
       regionRefs: [{ selector: 'article:nth-child(2)' }],
       screenshot: { url: expect.stringMatching(/^https:\/\/cdn\.example\.com\//) },
@@ -266,14 +264,14 @@ describe('review rounds on a site', () => {
 
   it('submits the round as the signed-in reviewer and returns it submitted', async () => {
     const { body: draft } = await start(memberId);
-    mocks.submit.mockImplementationOnce(async (db: LobeChatDatabase, actor, reviewId, input) => {
+    mocks.submit.mockImplementationOnce(async (db: LobeChatDatabase, _actor, reviewId) => {
       const { AcceptanceReviewModel } = await import('@/database/models/acceptanceReview');
-      await new AcceptanceReviewModel(db).markSubmitted(reviewId, input);
-      return { deliveryAcceptanceId: null, operationId: 'op', taskId: 'task' };
+      await new AcceptanceReviewModel(db).markSubmitted(reviewId);
+      return { operationId: 'op', taskId: 'task' };
     });
 
     const response = await call(memberId, `/reviews/${draft.id}/submit`, {
-      json: { summary: '整体偏挤', title: 'Fieldnotes · 1 个框选' },
+      json: { feedback: '整体偏挤' },
       method: 'POST',
     });
 
@@ -282,19 +280,15 @@ describe('review rounds on a site', () => {
       expect.anything(),
       { userId: memberId, workspaceId: expect.any(String) },
       draft.id,
-      { summary: '整体偏挤', title: 'Fieldnotes · 1 个框选' },
+      { feedback: '整体偏挤' },
     );
-    expect(await response.json()).toMatchObject({
-      id: draft.id,
-      status: 'submitted',
-      title: 'Fieldnotes · 1 个框选',
-    });
+    expect(await response.json()).toMatchObject({ id: draft.id, status: 'submitted' });
   });
 
   it('does not submit somebody else’s draft', async () => {
     const { body: draft } = await start(memberId);
     const response = await call(ownerId, `/reviews/${draft.id}/submit`, {
-      json: { title: 'x' },
+      json: {},
       method: 'POST',
     });
     expect(response.status).toBe(404);

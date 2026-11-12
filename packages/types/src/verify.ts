@@ -187,8 +187,6 @@ export interface AcceptanceMetadata {
   repair?: AcceptanceRepairRequest;
   /** Task delivery's link back to the feedback handoff it addresses. */
   repairSource?: { acceptanceId: string; commentIds?: string[]; requestId: string };
-  /** Task delivery's link back to the review round it was submitted from. */
-  reviewSource?: { reviewId: string };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
 }
