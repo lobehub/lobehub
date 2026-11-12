@@ -4,12 +4,8 @@ import { Tag } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useDiscoverStore } from '@/store/discover';
-import { marketSelectors } from '@/store/discover/selectors';
-
 import AgentStatusTag from './AgentStatusTag';
+import { useAgentMarketTags } from './useAgentMarketTags';
 
 /**
  * Agent Version Review Tag Component
@@ -17,11 +13,7 @@ import AgentStatusTag from './AgentStatusTag';
  */
 const AgentVersionReviewTag = memo(({ submitted = false }: { submitted?: boolean }) => {
   const { t } = useTranslation('setting');
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
-  const useMarketAgentStatus = useDiscoverStore((s) => s.useMarketAgentStatus);
-  const { queryKey } = useMarketAgentStatus(meta?.marketIdentifier);
-  const showReviewTag = !!useDiscoverStore(marketSelectors.agentStatus(queryKey))
-    ?.latestVersionUnderReview;
+  const { isUnderReview: showReviewTag } = useAgentMarketTags();
 
   // A successful submission is authoritative even when the detail endpoint
   // omits pending versions. Do not infer review status from "unpublished" alone.

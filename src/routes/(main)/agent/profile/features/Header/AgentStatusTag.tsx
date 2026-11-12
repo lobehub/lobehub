@@ -4,10 +4,7 @@ import { Tag } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useDiscoverStore } from '@/store/discover';
-import { marketSelectors } from '@/store/discover/selectors';
+import { useAgentMarketTags } from './useAgentMarketTags';
 
 /**
  * Agent Status Tag Component
@@ -16,10 +13,7 @@ import { marketSelectors } from '@/store/discover/selectors';
  */
 const AgentStatusTag = memo(() => {
   const { t } = useTranslation('setting');
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
-  const useMarketAgentStatus = useDiscoverStore((s) => s.useMarketAgentStatus);
-  const { queryKey } = useMarketAgentStatus(meta?.marketIdentifier);
-  const status = useDiscoverStore(marketSelectors.agentStatus(queryKey))?.status ?? null;
+  const { status } = useAgentMarketTags();
 
   const statusConfig = useMemo(() => {
     if (!status) return null;

@@ -6,10 +6,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useDiscoverStore } from '@/store/discover';
-import { marketSelectors } from '@/store/discover/selectors';
+
+import { useAgentMarketTags } from './useAgentMarketTags';
 
 /**
  * Agent Fork Tag Component
@@ -18,17 +16,7 @@ import { marketSelectors } from '@/store/discover/selectors';
 const AgentForkTag = memo(() => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
-  const marketIdentifier = meta?.marketIdentifier;
-
-  // The fork marker comes from the header's shared Market status read; the
-  // fork source is only asked for once the agent is known to be a fork.
-  const useMarketAgentStatus = useDiscoverStore((s) => s.useMarketAgentStatus);
-  const { queryKey: statusKey } = useMarketAgentStatus(marketIdentifier);
-  const isFork = !!useDiscoverStore(marketSelectors.agentStatus(statusKey))?.forkedFromAgentId;
-  const useAgentForkSource = useDiscoverStore((s) => s.useAgentForkSource);
-  const { queryKey } = useAgentForkSource(marketIdentifier, isFork);
-  const forkSource = useDiscoverStore(marketSelectors.agentForkSource(queryKey));
+  const { forkSource } = useAgentMarketTags();
 
   if (!forkSource) return null;
 
