@@ -1,5 +1,6 @@
 import type { ExternalWorkSummaryItem, WorkSummaryItem } from '@lobechat/types';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { WorkModel } from '../../models/work';
 import { channelJobs, channelMembers, channels } from '../../schemas';
@@ -72,8 +73,9 @@ export const externalWorksByMessage = async (
   const byRequester = new Map<string, typeof jobs>();
   for (const job of jobs)
     byRequester.set(job.requesterUserId!, [...(byRequester.get(job.requesterUserId!) ?? []), job]);
-  await Promise.all(
-    [...byRequester].map(async ([userId, requesterJobs]) => {
+  await pMap(
+    [...byRequester],
+    async ([userId, requesterJobs]) => {
       const summaries = await new WorkModel(
         tx,
         userId,
@@ -87,7 +89,8 @@ export const externalWorksByMessage = async (
           .map(publicSummary);
         if (cards.length) result.set(job.messageId!, cards);
       }
-    }),
+    },
+    { concurrency: 5 },
   );
   return result;
 };
