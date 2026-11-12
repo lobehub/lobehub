@@ -159,6 +159,19 @@ export const isGraphAgentIntermediateResult = (state: Readonly<AgentState>): boo
 };
 
 /**
+ * Whether this run's latest LLM result is a `GraphAgent` node's output
+ * extraction (`<node>:extract`) rather than the node's own work. The graph
+ * parses that reply as the node's structured output and accepts it only as an
+ * `llm_result`, so nothing may join the conversation at it. `false` for a run
+ * no graph drives.
+ */
+export const isGraphAgentOutputExtraction = (state: Readonly<AgentState>): boolean => {
+  const runtime = state.metadata?.[GRAPH_RUNTIME_STATE_KEY] as GraphRuntimeState | undefined;
+
+  return runtime?.graphState.phase === 'node_out';
+};
+
+/**
  * GraphAgent is a graph-level orchestrator over the normal AgentRuntime loop.
  *
  * The runtime still executes concrete instructions.

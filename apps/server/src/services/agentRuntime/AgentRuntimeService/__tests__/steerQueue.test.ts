@@ -363,14 +363,19 @@ describe('server-side steer queue in the step loop', () => {
         expect(currentState.messages).toEqual(refreshed);
       });
 
-      const prepareGraphChild = (deps: any, currentNode: string, terminalNode?: string) =>
+      const prepareGraphChild = (
+        deps: any,
+        currentNode: string,
+        terminalNode?: string,
+        phase: 'node_in' | 'node_out' = 'node_in',
+      ) =>
         prepareStepInput(deps, {
           agentState: stateOf({
             messages: toolMessages,
             metadata: {
               __graphRuntimeState: {
                 graphContext: { edgeTraversalCounts: {}, store: {} },
-                graphState: { active: true, currentNode, phase: 'node_in' },
+                graphState: { active: true, attempts: 1, currentNode, phase },
                 instructionCount: 2,
                 terminalNode,
               },
@@ -406,6 +411,20 @@ describe('server-side steer queue in the step loop', () => {
           payload: { parentMessageId: 'msg-steer' },
           phase: 'user_input',
         });
+      });
+
+      it.each([
+        ['an intermediate node', 'draft'],
+        ['the terminal node', 'review'],
+      ])('leaves a graph’s output extraction at %s alone', async (_case, node) => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext } = await prepareGraphChild(deps, node, 'review', 'node_out');
+
+        // The graph takes the extraction reply only as an llm_result; the
+        // node's own answer before it was the read.
+        expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+        expect(currentContext).toMatchObject({ phase: 'llm_result' });
       });
 
       it('makes its last read at the graph’s terminal node', async () => {

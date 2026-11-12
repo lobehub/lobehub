@@ -2,7 +2,11 @@ import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types/agent/graph';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentRuntimeContext, AgentState } from '../../../types';
-import { GraphAgent, isGraphAgentIntermediateResult } from '../GraphAgent';
+import {
+  GraphAgent,
+  isGraphAgentIntermediateResult,
+  isGraphAgentOutputExtraction,
+} from '../GraphAgent';
 
 const llmResult: AgentRuntimeContext = {
   payload: {
@@ -96,5 +100,58 @@ describe('isGraphAgentIntermediateResult', () => {
 
   it('is false for a run no graph drives', () => {
     expect(isGraphAgentIntermediateResult(createState())).toBe(false);
+  });
+});
+
+describe('isGraphAgentOutputExtraction', () => {
+  it('tells a node’s output extraction from the node’s own work', async () => {
+    const agent = new GraphAgent({
+      agentConfig: { maxSteps: 100 },
+      graph: {
+        edges: [
+          {
+            from: AGENT_GRAPH_ROOT_NODE_ID,
+            instruction: 'Write a draft.',
+            output: { fields: [{ field: 'draft' }] },
+            to: 'draft',
+          },
+          { from: 'draft', instruction: 'Review the draft.', to: 'review' },
+        ],
+        fields: { draft: { desc: 'The draft.', schema: { type: 'string' } } },
+        name: 'draft-review',
+        nodes: { draft: { type: 'llm' }, review: { type: 'llm' } },
+        terminal: 'review',
+      },
+      operationId: 'test-operation',
+    });
+    const state = createState();
+
+    await agent.runner({ phase: 'init' } as AgentRuntimeContext, state);
+    // The draft node is doing its own work.
+    expect(isGraphAgentOutputExtraction(state)).toBe(false);
+
+    // A reply without the output JSON makes the graph ask for it.
+    await expect(agent.runner(llmResult, state)).resolves.toMatchObject({
+      stepLabel: 'draft:extract',
+      type: 'call_llm',
+    });
+    expect(isGraphAgentOutputExtraction(state)).toBe(true);
+
+    await agent.runner(
+      {
+        ...llmResult,
+        payload: {
+          ...(llmResult.payload as object),
+          result: { content: '```json\n{"draft":"d"}\n```' },
+        },
+      } as AgentRuntimeContext,
+      state,
+    );
+    // The extracted output moved the graph on to the review node's own work.
+    expect(isGraphAgentOutputExtraction(state)).toBe(false);
+  });
+
+  it('is false for a run no graph drives', () => {
+    expect(isGraphAgentOutputExtraction(createState())).toBe(false);
   });
 });

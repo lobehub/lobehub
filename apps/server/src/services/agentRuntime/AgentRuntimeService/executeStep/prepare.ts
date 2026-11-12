@@ -4,6 +4,7 @@ import {
   type AgentState,
   findCurrentTurnPendingToolMessages,
   isGraphAgentIntermediateResult,
+  isGraphAgentOutputExtraction,
 } from '@lobechat/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
@@ -38,6 +39,9 @@ const LLM_NEXT_PHASES = new Set([
  */
 const isSubAgentAnswer = (context: AgentRuntimeContext, state: AgentState): boolean => {
   if (!state.origin?.lineage?.isSubAgent || context.phase !== 'llm_result') return false;
+  // A graph node's output extraction is no answer: the graph needs that reply
+  // back as an `llm_result`, and the node's own answer before it was the read.
+  if (isGraphAgentOutputExtraction(state)) return false;
   const payload = context.payload as
     { hasToolsCalling?: boolean; result?: { tool_calls?: unknown[] } } | undefined;
 
