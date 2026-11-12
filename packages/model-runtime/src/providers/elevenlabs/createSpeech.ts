@@ -390,8 +390,10 @@ export async function createElevenLabsSpeech(
       });
     };
 
+    // Only a voice the service filled in from the card may be swapped; a caller that asked
+    // for the default voice by id gets that voice or its error.
     const fallbackKey =
-      payload.voice === ELEVENLABS_DEFAULT_VOICE_ID
+      payload.voiceIsDefault && payload.voice === ELEVENLABS_DEFAULT_VOICE_ID
         ? await fallbackCacheKey(baseURL, apiKey)
         : undefined;
     const cachedVoice = fallbackKey ? readFallbackVoice(fallbackKey) : undefined;

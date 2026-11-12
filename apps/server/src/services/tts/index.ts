@@ -228,7 +228,7 @@ export class TTSService {
     let result: Awaited<ReturnType<typeof runtime.textToSpeech>>;
     try {
       result = await runtime.textToSpeech(
-        { input, model, params, voice },
+        { input, model, params, voice, voiceIsDefault: request.voice === undefined },
         { metadata: { trigger: RequestTrigger.Tts }, user: this.userId },
       );
     } catch (error) {

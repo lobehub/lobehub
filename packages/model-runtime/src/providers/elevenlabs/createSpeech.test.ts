@@ -231,7 +231,12 @@ describe('createElevenLabsSpeech', () => {
   describe('default voice fallback', () => {
     const callDefault = () =>
       createElevenLabsSpeech(
-        { input: 'Hello', model: 'eleven_flash_v2_5', voice: ELEVENLABS_DEFAULT_VOICE_ID },
+        {
+          input: 'Hello',
+          model: 'eleven_flash_v2_5',
+          voice: ELEVENLABS_DEFAULT_VOICE_ID,
+          voiceIsDefault: true,
+        },
         options,
       );
     const paymentRequired = () =>
@@ -335,7 +340,12 @@ describe('createElevenLabsSpeech', () => {
       fetchMock.mockClear();
       fetchMock.mockResolvedValueOnce(audioResponse());
       await createElevenLabsSpeech(
-        { input: 'Hello', model: 'eleven_flash_v2_5', voice: ELEVENLABS_DEFAULT_VOICE_ID },
+        {
+          input: 'Hello',
+          model: 'eleven_flash_v2_5',
+          voice: ELEVENLABS_DEFAULT_VOICE_ID,
+          voiceIsDefault: true,
+        },
         { ...options, apiKey: 'other-key' },
       );
       expect(fetchMock.mock.calls[0][0]).toContain(
@@ -380,6 +390,26 @@ describe('createElevenLabsSpeech', () => {
 
       const now = Date.now();
       vi.spyOn(Date, 'now').mockReturnValue(now + FALLBACK_VOICE_TTL_MS + 1);
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await callDefault();
+      expect(fetchMock.mock.calls[0][0]).toContain(
+        `/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?`,
+      );
+    });
+
+    it('keeps an explicitly requested default voice instead of substituting one', async () => {
+      fetchMock.mockResolvedValueOnce(paymentRequired());
+
+      await expect(
+        createElevenLabsSpeech(
+          { input: 'Hello', model: 'eleven_flash_v2_5', voice: ELEVENLABS_DEFAULT_VOICE_ID },
+          options,
+        ),
+      ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.InsufficientQuota });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      // Nothing was cached either: an omitted voice still starts from the default.
       fetchMock.mockClear();
       fetchMock.mockResolvedValueOnce(audioResponse());
       await callDefault();

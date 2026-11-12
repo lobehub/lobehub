@@ -49,7 +49,13 @@ describe('ttsRouter.synthesize', () => {
       undefined,
     );
     expect(textToSpeechMock).toHaveBeenCalledWith(
-      { input: 'hello', model: 'tts-1', params: { format: 'opus', speed: 1.5 }, voice: 'nova' },
+      {
+        input: 'hello',
+        model: 'tts-1',
+        params: { format: 'opus', speed: 1.5 },
+        voice: 'nova',
+        voiceIsDefault: false,
+      },
       { metadata: { trigger: 'tts' }, user: 'u1' },
     );
     expect(res).toEqual({
@@ -199,6 +205,7 @@ describe('ttsRouter.synthesize', () => {
           model: 'eleven_multilingual_v2',
           params: { speed: 1.1 },
           voice: 'CwhRBWXzGAHq8TQ4Fs17',
+          voiceIsDefault: true,
         },
         { metadata: { trigger: 'tts' }, user: 'u1' },
       );
