@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicMessage, ExternalWorkSummaryItem } from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { act, createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -183,18 +183,24 @@ describe('ChannelMessage collapse', () => {
 });
 
 describe('ChannelMessage works', () => {
+  const url = 'https://github.com/lobehub/lobehub/pull/1';
   const work = {
-    baseBranch: 'canary',
     description: 'Adds the cards',
-    headBranch: 'feat/cards',
+    event: {
+      cumulativeCost: 0.42,
+      cumulativeUsage: null,
+      metadata: { baseBranch: 'canary', headBranch: 'feat/cards' },
+    },
+    id: url,
     identifier: 'lobehub/lobehub#1',
+    resourceDeleted: false,
     resourceType: 'github_pull_request',
     status: 'open',
     title: 'Show works in channels',
     totalCost: 0.42,
-    totalTokens: null,
-    url: 'https://github.com/lobehub/lobehub/pull/1',
-  } as const;
+    type: 'external',
+    url,
+  } as unknown as ExternalWorkSummaryItem;
 
   it('shows a reply’s external Works as cards that open their link', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
@@ -215,7 +221,7 @@ describe('ChannelMessage works', () => {
     expect(screen.getByText('0.42')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Show works in channels'));
-    expect(open).toHaveBeenCalledWith(work.url, '_blank', 'noopener,noreferrer');
+    expect(open).toHaveBeenCalledWith(url, '_blank', 'noopener,noreferrer');
     open.mockRestore();
   });
 

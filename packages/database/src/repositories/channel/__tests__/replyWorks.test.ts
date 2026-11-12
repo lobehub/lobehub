@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { WorkModel } from '../../../models/work';
 import { works, workVersions } from '../../../schemas';
 import { ChannelExecutionRepository } from '..';
 import { createChannelFixture, jobById, jobsOf, lease } from './testUtils';
@@ -48,6 +49,7 @@ interface WorkFixture {
   rootOperationId: string;
   share?: boolean;
   tokens?: number;
+  trashed?: boolean;
   type?: 'document' | 'external';
   url?: string | null;
 }
@@ -60,6 +62,7 @@ const addWork = async ({
   resourceType = 'github_pull_request',
   rootOperationId,
   share = false,
+  trashed = false,
   tokens,
   type = 'external',
   url = 'https://github.com/lobehub/lobehub/pull/1',
@@ -69,6 +72,8 @@ const addWork = async ({
     .values({
       description: 'Adds the cards',
       identifier: 'lobehub/lobehub#1',
+      isDeleted: trashed,
+      updatedAt: at,
       metadata: share
         ? ({
             agentShare: { shareId: 's', topicId: 't', visitorUserId: 'v' },
@@ -111,35 +116,67 @@ const addWork = async ({
 };
 
 describe('Channel reply works', () => {
-  it('shows the external Works of the reply run to every member, as bare cards', async () => {
+  it('shows every member the conversation summaries of the reply run, without its ids', async () => {
     const state = await publishedReply();
-    await addWork({
+    const work = await addWork({
       cost: 0.42,
       metadata: { baseBranch: 'canary', headBranch: 'feat/cards' },
       rootOperationId: state.operationId,
       tokens: 1200,
     });
+    // A later run of the requester's on the same PR: the card totals it, as the conversation does.
+    await db.insert(workVersions).values({
+      changeType: 'updated',
+      cumulativeCost: 0.1,
+      rootOperationId: 'op_later_run',
+      toolIdentifier: 'github',
+      toolName: 'updatePullRequest',
+      version: 2,
+      workId: work.id,
+    });
+    const [conversation] = (
+      await new WorkModel(db, fixture.memberId, fixture.workspaceId).listSummariesByRootOperations({
+        rootOperationIds: [state.operationId],
+      })
+    )[state.operationId];
 
-    const expected = [
-      {
-        baseBranch: 'canary',
-        description: 'Adds the cards',
-        headBranch: 'feat/cards',
+    for (const repo of [state.asMember, state.asOwner]) {
+      const [card] = (await state.reply(repo)).works!;
+      expect(card).toEqual({
+        ...conversation,
+        currentVersionId: null,
+        event: {
+          ...conversation.event,
+          id: '',
+          messageId: null,
+          rootOperationId: null,
+          toolCallId: null,
+        },
+        id: 'https://github.com/lobehub/lobehub/pull/1',
+        originAgentId: null,
+        originThreadId: null,
+        originTopicId: null,
+        userId: '',
+        version: null,
+        workspaceId: null,
+      });
+      expect(card).toMatchObject({
+        event: {
+          cumulativeUsage: { usage: { llm: { tokens: { total: 1200 } } } },
+          metadata: { baseBranch: 'canary', headBranch: 'feat/cards' },
+        },
         identifier: 'lobehub/lobehub#1',
-        resourceType: 'github_pull_request',
-        status: 'open',
         title: 'Show works in channels',
-        totalCost: 0.42,
-        totalTokens: 1200,
-        url: 'https://github.com/lobehub/lobehub/pull/1',
-      },
-    ];
-    // Exact equality: no Work, version, topic or operation id rides along.
-    expect((await state.reply(state.asMember)).works).toEqual(expected);
-    expect((await state.reply(state.asOwner)).works).toEqual(expected);
+        totalCost: 0.52,
+      });
+      const payload = JSON.stringify(card);
+      expect(payload).not.toContain(work.id);
+      expect(payload).not.toContain(state.operationId);
+      expect(payload).not.toContain(fixture.memberId);
+    }
   });
 
-  it('keeps internal, unlinked, shared and foreign Works out', async () => {
+  it('keeps internal, unlinked, shared, trashed and foreign Works out', async () => {
     const state = await publishedReply();
     await addWork({
       resourceType: 'document',
@@ -148,6 +185,7 @@ describe('Channel reply works', () => {
     });
     await addWork({ rootOperationId: state.operationId, url: null });
     await addWork({ rootOperationId: state.operationId, share: true });
+    await addWork({ rootOperationId: state.operationId, trashed: true });
     await addWork({ ownerId: fixture.ownerId, rootOperationId: state.operationId });
     await addWork({ rootOperationId: 'op_another_run' });
 
@@ -169,11 +207,11 @@ describe('Channel reply works', () => {
     });
 
     const reply = await state.reply(state.asOwner);
-    expect(reply.works?.map((work) => work.url)).toEqual([
+    expect(reply.works?.map((card) => card.url)).toEqual([
       'https://linear.app/x/issue/ENG-1',
       'https://github.com/a/b/pull/1',
     ]);
-    expect(reply.works?.[0]).toMatchObject({ totalCost: null, totalTokens: null });
+    expect(reply.works?.[0]).toMatchObject({ event: { cumulativeUsage: null }, totalCost: null });
     const request = (await state.asOwner.detail(state.channel.id)).messages.find(
       (message) => message.id === state.request.id,
     )!;

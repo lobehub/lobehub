@@ -1,56 +1,56 @@
-import type { ChannelPublicWork, ExternalWorkResourceType } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import type { ExternalWorkSummaryItem, WorkSummaryItem } from '@lobechat/types';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 
-import { channelJobs, channelMembers, works, workVersions } from '../../schemas';
+import { WorkModel } from '../../models/work';
+import { channelJobs, channelMembers, channels } from '../../schemas';
 import type { Transaction } from '../../type';
-import { notTrashed } from '../../utils/softDelete';
-import { notAgentShareWork } from '../../utils/workVisibility';
 
-/** Cards per reply; one run rarely touches more external resources than this. */
-const WORKS_PER_MESSAGE = 20;
-
-const currentVersions = alias(workVersions, 'channel_current_work_versions');
-
-const tokensTotal = sql`${workVersions.cumulativeUsage} #> '{usage,llm,tokens,total}'`;
+const isLinkedExternalWork = (item: WorkSummaryItem): item is ExternalWorkSummaryItem =>
+  item.type === 'external' && !!item.url;
 
 /**
- * The external Works (GitHub, Linear, ...) each published reply's run touched, as public cards.
+ * A summary as other members see it: what the card draws, without the ids that tie it to the
+ * requester's Work, conversation and run. The URL keys the card in place of the Work id.
+ */
+const publicSummary = (item: ExternalWorkSummaryItem): ExternalWorkSummaryItem => ({
+  ...item,
+  currentVersionId: null,
+  event: { ...item.event, id: '', messageId: null, rootOperationId: null, toolCallId: null },
+  id: item.url!,
+  originAgentId: null,
+  originThreadId: null,
+  originTopicId: null,
+  userId: '',
+  version: null,
+  workspaceId: null,
+});
+
+/**
+ * The external Works (GitHub, Linear, ...) each published reply's run touched, as the work cards
+ * the requester's own conversation shows under that run: the same
+ * `WorkModel.listSummariesByRootOperations` read, as the requester, keyed by the job's operation.
  *
- * Every member sees them, although the Works belong to the requester: a reply already shows what
- * it did, and these resources live outside LobeHub behind their own URL. Internal Works (documents,
- * canvases, files, tasks) stay with the requester. So the read is not scoped to the viewer; it is
- * scoped to `external` Works the requester registered during the job's own operation, and it
- * projects only the fields a card draws. No Work, version, topic or operation id leaves here.
- *
- * Cost and tokens are this run's: version snapshots are cumulative per operation, so the latest
- * one in the reply's operation holds them.
+ * Every member sees them: a reply already shows what it did, and these resources live outside
+ * LobeHub behind their own URL. Internal Works (documents, canvases, files, tasks) stay with the
+ * requester, as do the ids that link a card to the requester's Work, topic and run.
  */
 export const externalWorksByMessage = async (
   tx: Transaction,
   channelId: string,
   messageIds: string[],
-): Promise<Map<string, ChannelPublicWork[]>> => {
-  const result = new Map<string, ChannelPublicWork[]>();
+): Promise<Map<string, ExternalWorkSummaryItem[]>> => {
+  const result = new Map<string, ExternalWorkSummaryItem[]>();
   if (!messageIds.length) return result;
 
-  const rows = await tx
+  const jobs = await tx
     .select({
-      baseBranch: sql<string | null>`${currentVersions.metadata}->>'baseBranch'`,
-      cost: sql<string | null>`max(${workVersions.cumulativeCost})`,
-      description: works.description,
-      headBranch: sql<string | null>`${currentVersions.metadata}->>'headBranch'`,
-      identifier: works.identifier,
-      lastActiveAt: sql<string>`max(${workVersions.createdAt})`,
       messageId: channelJobs.publishedMessageId,
-      resourceType: works.resourceType,
-      status: works.status,
-      title: works.title,
-      tokens: sql<string | null>`max(CASE WHEN jsonb_typeof(${tokensTotal}) = 'number'
-        THEN (${tokensTotal})::text::numeric END)`,
-      url: works.url,
+      operationId: channelJobs.operationId,
+      requesterUserId: channelMembers.userId,
+      workspaceId: channels.workspaceId,
     })
     .from(channelJobs)
+    .innerJoin(channels, eq(channels.id, channelJobs.channelId))
     .innerJoin(
       channelMembers,
       and(
@@ -58,48 +58,36 @@ export const externalWorksByMessage = async (
         eq(channelMembers.id, channelJobs.requesterMemberId),
       ),
     )
-    .innerJoin(workVersions, eq(workVersions.rootOperationId, channelJobs.operationId))
-    .innerJoin(
-      works,
-      and(
-        eq(works.id, workVersions.workId),
-        // The run is the requester's: a Work anyone else owns never rides this reply.
-        eq(works.userId, channelMembers.userId),
-      ),
-    )
-    .leftJoin(currentVersions, eq(currentVersions.id, works.currentVersionId))
     .where(
       and(
         eq(channelJobs.channelId, channelId),
         inArray(channelJobs.publishedMessageId, messageIds),
-        eq(works.type, 'external'),
-        // A card without a link has nothing to open outside LobeHub.
-        isNotNull(works.url),
-        notTrashed(works.isDeleted),
-        notAgentShareWork(works.metadata),
+        isNotNull(channelJobs.operationId),
+        isNotNull(channelMembers.userId),
       ),
-    )
-    .groupBy(channelJobs.publishedMessageId, works.id, currentVersions.id)
-    .orderBy(desc(sql`max(${workVersions.createdAt})`), desc(works.id));
+    );
+  if (!jobs.length) return result;
 
-  for (const row of rows) {
-    const messageId = row.messageId!;
-    const cards = result.get(messageId) ?? [];
-    if (cards.length >= WORKS_PER_MESSAGE) continue;
-    const tokens = row.tokens === null ? null : Number(row.tokens);
-    cards.push({
-      baseBranch: row.baseBranch,
-      description: row.description,
-      headBranch: row.headBranch,
-      identifier: row.identifier,
-      resourceType: row.resourceType as ExternalWorkResourceType,
-      status: row.status,
-      title: row.title,
-      totalCost: row.cost === null ? null : Number(row.cost),
-      totalTokens: tokens && Number.isFinite(tokens) && tokens > 0 ? tokens : null,
-      url: row.url!,
-    });
-    result.set(messageId, cards);
-  }
+  // The run is the requester's, so its Works are read the way their own conversation reads them.
+  const byRequester = new Map<string, typeof jobs>();
+  for (const job of jobs)
+    byRequester.set(job.requesterUserId!, [...(byRequester.get(job.requesterUserId!) ?? []), job]);
+  await Promise.all(
+    [...byRequester].map(async ([userId, requesterJobs]) => {
+      const summaries = await new WorkModel(
+        tx,
+        userId,
+        requesterJobs[0].workspaceId ?? undefined,
+      ).listSummariesByRootOperations({
+        rootOperationIds: requesterJobs.map((job) => job.operationId!),
+      });
+      for (const job of requesterJobs) {
+        const cards = (summaries[job.operationId!] ?? [])
+          .filter(isLinkedExternalWork)
+          .map(publicSummary);
+        if (cards.length) result.set(job.messageId!, cards);
+      }
+    }),
+  );
   return result;
 };
