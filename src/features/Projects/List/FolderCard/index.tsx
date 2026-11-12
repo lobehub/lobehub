@@ -5,7 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { StarIcon } from 'lucide-react';
-import { Fragment, memo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFavoriteToggle } from '@/features/Favorites';
@@ -168,16 +168,11 @@ const styles = stylex.create({
     height: 300,
     position: 'relative',
   },
-  sep: {
-    backgroundColor: cssVar.colorTextQuaternary,
-    borderRadius: '50%',
-    flexShrink: 0,
-    height: 2,
-    width: 2,
-  },
   star: {
+    alignSelf: 'center',
+    display: 'inline-flex',
     flexShrink: 0,
-    marginInlineStart: 'auto',
+    marginInlineEnd: -4,
   },
   tab: {
     backgroundColor: FOLDER_COLOR,
@@ -216,18 +211,12 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
   const rich = isRichFolder(overview);
   const running = project.status === 'active';
   const showCounts = overviewStatus === 'loaded';
-  const topicCount = overview?.topicCount ?? 0;
   const taskCount = overview?.taskCount ?? 0;
-
-  const metaItems = [
-    showCounts &&
-      (topicCount > 0
-        ? t('list.folder.topicCount', { count: topicCount })
-        : t('list.folder.noTopics')),
-    showCounts &&
-      taskCount > 0 &&
-      t('list.folder.taskProgress', { done: overview?.taskDoneCount ?? 0, total: taskCount }),
-  ].filter((item): item is string => !!item);
+  const taskSummary = showCounts
+    ? taskCount > 0
+      ? t('list.folder.taskProgress', { done: overview?.taskDoneCount ?? 0, total: taskCount })
+      : t('list.folder.noTasks')
+    : undefined;
 
   return (
     <ContextMenuTrigger items={menuItems}>
@@ -254,8 +243,6 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
         >
           <div {...stylex.props(styles.pocket, isDark && styles.pocketDark)}>
             <div {...stylex.props(styles.nameRow)}>
-              <span {...stylex.props(styles.name)}>{project.name}</span>
-              <span {...stylex.props(styles.identifier)}>{project.identifier}</span>
               {isFavorite && (
                 <span {...stylex.props(styles.star)}>
                   <Icon
@@ -266,6 +253,8 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
                   />
                 </span>
               )}
+              <span {...stylex.props(styles.name)}>{project.name}</span>
+              <span {...stylex.props(styles.identifier)}>{project.identifier}</span>
             </div>
             <div {...stylex.props(styles.meta)}>
               {running && (
@@ -273,12 +262,7 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
                   <span aria-label={t('list.folder.running')} {...stylex.props(styles.dot)} />
                 </Tooltip>
               )}
-              {metaItems.map((item, index) => (
-                <Fragment key={index}>
-                  {index > 0 && <span {...stylex.props(styles.sep)} />}
-                  <span>{item}</span>
-                </Fragment>
-              ))}
+              {taskSummary && <span>{taskSummary}</span>}
               <span {...stylex.props(styles.metaFill)} />
               <AgentStack agents={overview?.agents} project={project} />
               <span title={dayjs(project.updatedAt).format('YYYY-MM-DD HH:mm')}>

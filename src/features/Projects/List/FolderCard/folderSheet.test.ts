@@ -4,10 +4,12 @@ import type { ProjectOverview } from '@/store/project';
 
 import { isRichFolder, resolveFolderSheet, resolveOverviewStatus } from './folderSheet';
 
-const topic = (title: string, day: number) => ({
-  id: `tpc_${title}`,
+const task = (name: string, day: number) => ({
+  id: `task_${name}`,
+  identifier: `T-${day}`,
+  name,
+  status: 'backlog',
   summary: null,
-  title,
   updatedAt: new Date(2026, 0, day),
 });
 
@@ -15,15 +17,14 @@ const overview = (patch: Partial<ProjectOverview> = {}): ProjectOverview => ({
   agentCount: 1,
   agents: [],
   projectId: 'prj_1',
-  recentTopics: [],
+  recentTasks: [],
   taskCount: 0,
   taskDoneCount: 0,
-  topicCount: 0,
   ...patch,
 });
 
 describe('resolveFolderSheet', () => {
-  it('waits for the overview batch before claiming there are no conversations', () => {
+  it('waits for the overview batch before claiming there are no tasks', () => {
     expect(resolveFolderSheet(undefined, 'loading')).toEqual({ kind: 'pending' });
   });
 
@@ -31,27 +32,25 @@ describe('resolveFolderSheet', () => {
     expect(resolveFolderSheet(undefined, 'loaded')).toEqual({ kind: 'intro' });
   });
 
-  it('shows the brief when the project has no conversations', () => {
+  it('shows the brief when the project has no tasks', () => {
     expect(resolveFolderSheet(overview(), 'loaded')).toEqual({ kind: 'intro' });
   });
 
-  it('heads the paper with the latest conversation and lists up to three others', () => {
-    const topics = [topic('e', 5), topic('d', 4), topic('c', 3), topic('b', 2), topic('a', 1)];
-    const sheet = resolveFolderSheet(overview({ recentTopics: topics, topicCount: 5 }), 'loaded');
+  it('heads the paper with the latest task and lists up to three others', () => {
+    const tasks = [task('e', 5), task('d', 4), task('c', 3), task('b', 2), task('a', 1)];
+    const sheet = resolveFolderSheet(overview({ recentTasks: tasks, taskCount: 5 }), 'loaded');
 
-    expect(sheet).toEqual({ kind: 'topics', latest: topics[0], others: topics.slice(1, 4) });
+    expect(sheet).toEqual({ kind: 'tasks', latest: tasks[0], others: tasks.slice(1, 4) });
   });
 
-  it('lists no rows when the project has a single conversation', () => {
-    const only = topic('only', 1);
+  it('lists no rows when the project has a single task', () => {
+    const only = task('only', 1);
 
-    expect(resolveFolderSheet(overview({ recentTopics: [only], topicCount: 1 }), 'loaded')).toEqual(
-      {
-        kind: 'topics',
-        latest: only,
-        others: [],
-      },
-    );
+    expect(resolveFolderSheet(overview({ recentTasks: [only], taskCount: 1 }), 'loaded')).toEqual({
+      kind: 'tasks',
+      latest: only,
+      others: [],
+    });
   });
 });
 
@@ -75,11 +74,13 @@ describe('resolveFolderSheet after a failed overview', () => {
   });
 
   it('still shows a project row that is already loaded', () => {
-    const only = topic('only', 1);
+    const only = task('only', 1);
 
-    expect(resolveFolderSheet(overview({ recentTopics: [only], topicCount: 1 }), 'failed')).toEqual(
-      { kind: 'topics', latest: only, others: [] },
-    );
+    expect(resolveFolderSheet(overview({ recentTasks: [only], taskCount: 1 }), 'failed')).toEqual({
+      kind: 'tasks',
+      latest: only,
+      others: [],
+    });
   });
 });
 
@@ -88,15 +89,11 @@ describe('isRichFolder', () => {
     expect(isRichFolder(undefined)).toBe(false);
   });
 
-  it('is plain with up to three conversations and no tasks', () => {
-    expect(isRichFolder(overview({ topicCount: 3 }))).toBe(false);
+  it('is plain while the front paper lists every task', () => {
+    expect(isRichFolder(overview({ taskCount: 4 }))).toBe(false);
   });
 
-  it('is rich past three conversations', () => {
-    expect(isRichFolder(overview({ topicCount: 4 }))).toBe(true);
-  });
-
-  it('is rich with any task', () => {
-    expect(isRichFolder(overview({ taskCount: 1 }))).toBe(true);
+  it('is rich past what the front paper lists', () => {
+    expect(isRichFolder(overview({ taskCount: 5 }))).toBe(true);
   });
 });

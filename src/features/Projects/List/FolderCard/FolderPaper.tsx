@@ -1,9 +1,12 @@
+import type { TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
+import { Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
+import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import type { ProjectListItem } from '@/store/project';
 import { sx } from '@/styles/sx';
 
@@ -63,12 +66,10 @@ const styles = stylex.create({
     lineHeight: 1,
     paddingBlock: 5,
   },
-  rowBullet: {
-    backgroundColor: cssVar.colorTextQuaternary,
-    borderRadius: '50%',
-    flexShrink: 0,
-    height: 4,
-    width: 4,
+  headlineStatus: {
+    alignItems: 'center',
+    display: 'inline-flex',
+    gap: 4,
   },
   rowTime: {
     color: cssVar.colorTextQuaternary,
@@ -100,7 +101,7 @@ const styles = stylex.create({
   },
 });
 
-/** Faint lines where a project's conversations will appear. */
+/** Faint lines where a project's tasks will appear. */
 const PLACEHOLDER_WIDTHS = ['84%', '66%', '74%'];
 
 interface FolderPaperProps {
@@ -108,36 +109,45 @@ interface FolderPaperProps {
   sheet: FolderSheet;
 }
 
-/** The front paper: the project's latest conversations, or its brief before it has any. */
+const statusVisual = (status: string) =>
+  TASK_STATUS_VISUALS[status as TaskStatus] ?? TASK_STATUS_VISUALS.backlog;
+
+/** The front paper: the project's latest tasks, or its brief before it has any. */
 export const FolderPaper = ({ project, sheet }: FolderPaperProps) => {
   const { t } = useTranslation('project');
+  const { t: tChat } = useTranslation('chat');
 
-  if (sheet.kind === 'topics') {
+  if (sheet.kind === 'tasks') {
     const { latest, others } = sheet;
+    const latestVisual = statusVisual(latest.status);
     return (
       <div {...stylex.props(styles.root)}>
         <div {...stylex.props(styles.eyebrow)}>
-          <span>{t('list.folder.recentTopic')}</span>
-          <span>{dayjs(latest.updatedAt).fromNow()}</span>
+          <span>{t('list.folder.recentTask')}</span>
+          <span {...stylex.props(styles.headlineStatus)}>
+            <Icon color={latestVisual.color} icon={latestVisual.icon} size={10} />
+            {tChat(`taskDetail.status.${latest.status}` as 'taskDetail.status.backlog', {
+              defaultValue: latest.status,
+            })}
+          </span>
         </div>
-        <div {...stylex.props(styles.headline)}>
-          {latest.title || t('defaultTitle', { ns: 'topic' })}
-        </div>
+        <div {...stylex.props(styles.headline)}>{latest.name || latest.identifier}</div>
         {latest.summary && <p {...stylex.props(styles.summary)}>{latest.summary}</p>}
         {others.length > 0 && (
           <>
             <div {...stylex.props(styles.rule)} />
-            {others.map((topic) => (
-              <div key={topic.id} {...stylex.props(styles.row)}>
-                <i {...stylex.props(styles.rowBullet)} />
-                <span {...stylex.props(styles.rowTitle)}>
-                  {topic.title || t('defaultTitle', { ns: 'topic' })}
-                </span>
-                <span {...stylex.props(styles.rowTime)}>
-                  {dayjs(topic.updatedAt).fromNow(true)}
-                </span>
-              </div>
-            ))}
+            {others.map((task) => {
+              const visual = statusVisual(task.status);
+              return (
+                <div key={task.id} {...stylex.props(styles.row)}>
+                  <Icon color={visual.color} icon={visual.icon} size={12} />
+                  <span {...stylex.props(styles.rowTitle)}>{task.name || task.identifier}</span>
+                  <span {...stylex.props(styles.rowTime)}>
+                    {dayjs(task.updatedAt).fromNow(true)}
+                  </span>
+                </div>
+              );
+            })}
           </>
         )}
       </div>
@@ -157,7 +167,7 @@ export const FolderPaper = ({ project, sheet }: FolderPaperProps) => {
       </div>
       <div {...stylex.props(styles.headline)}>{lead}</div>
       {sheet.kind === 'intro' && (
-        <p {...stylex.props(styles.hint)}>{t('list.folder.noTopicsHint')}</p>
+        <p {...stylex.props(styles.hint)}>{t('list.folder.noTasksHint')}</p>
       )}
       {sheet.kind !== 'unavailable' && (
         <div aria-hidden {...stylex.props(styles.placeholders)}>
