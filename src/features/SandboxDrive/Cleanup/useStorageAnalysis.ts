@@ -17,6 +17,9 @@ export const ANALYSIS_TOP = 50;
 /** Pause before asking again while another call is advancing the same scan. */
 const RUNNING_RETRY_MS = 2000;
 
+/** Most paths one delete call takes: the server's own ceiling. */
+export const DELETE_BATCH_SIZE = 100;
+
 /** A delete that keeps running out of time this often is reported, not retried forever. */
 const MAX_DELETE_ROUNDS = 20;
 
@@ -92,18 +95,22 @@ export const useStorageAnalysis = (drive: SandboxDrive) => {
 
   const remove = useCallback(
     async (items: StorageAnalysisItem[], options: { regenerableOnly?: boolean } = {}) => {
+      // Sent in batches the server accepts; what a batch could not finish in
+      // time goes back to the front of the queue.
       let pending = [...new Set(items.map((item) => item.path))];
       let freedBytes = 0;
       const failed: string[] = [];
-      for (let round = 0; round < MAX_DELETE_ROUNDS && pending.length > 0; round++) {
+      const rounds = MAX_DELETE_ROUNDS + Math.ceil(pending.length / DELETE_BATCH_SIZE);
+      for (let round = 0; round < rounds && pending.length > 0; round++) {
+        const batch = pending.slice(0, DELETE_BATCH_SIZE);
         const result = await sandboxStorageService.deleteFiles({
           drive,
-          paths: pending,
+          paths: batch,
           regenerableOnly: options.regenerableOnly,
         });
         freedBytes += result.freedBytes;
         failed.push(...(result.failed ?? []).map((entry) => entry.path));
-        pending = result.done ? [] : result.pending;
+        pending = [...(result.done ? [] : result.pending), ...pending.slice(batch.length)];
       }
 
       const removed = items.filter(

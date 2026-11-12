@@ -179,3 +179,40 @@ describe('useStorageAnalysis failures', () => {
     await waitFor(() => expect(result.current.scanning).toBe(false), { timeout: 5000 });
   });
 });
+
+describe('useStorageAnalysis large selections', () => {
+  it('should send a selection over the server ceiling in batches of 100', async () => {
+    const many = Array.from({ length: 230 }, (_, index) => ({
+      bytes: 1,
+      category: 'other' as const,
+      isDirectory: false,
+      path: `f/${index}.bin`,
+      regenerable: false,
+    }));
+    service.analyzeStorage.mockResolvedValue({
+      ...done,
+      result: { ...done.result, items: many, totalBytes: 230 },
+    });
+    service.deleteFiles.mockImplementation(async ({ paths }: { paths: string[] }) => ({
+      deleted: paths,
+      done: true,
+      failed: [],
+      freedBytes: paths.length,
+      missing: [],
+      pending: [],
+    }));
+    const { result } = renderHook(() => useStorageAnalysis('personal'));
+    await waitFor(() => expect(result.current.scanning).toBe(false));
+
+    let outcome: Awaited<ReturnType<typeof result.current.remove>> | undefined;
+    await act(async () => {
+      outcome = await result.current.remove(many);
+    });
+
+    expect(service.deleteFiles.mock.calls.map((call) => call[0].paths.length)).toEqual([
+      100, 100, 30,
+    ]);
+    expect(outcome).toEqual({ failed: [], freedBytes: 230, pending: [] });
+    expect(result.current.analysis?.result?.items).toEqual([]);
+  });
+});
