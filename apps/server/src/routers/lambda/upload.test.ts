@@ -339,8 +339,16 @@ describe("uploadRouter with a run's operation token", () => {
     expect(routerMocks.createPreSignedUrl).toHaveBeenCalledWith(evidencePath, 100);
   });
 
+  it('rejects an unsized PUT before reserving or signing an upload', async () => {
+    await expect(
+      caller.createS3PreSignedUrl({ pathname: evidencePath } as any),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(routerMocks.model.create).not.toHaveBeenCalled();
+    expect(routerMocks.createPreSignedUrl).not.toHaveBeenCalled();
+  });
+
   it.each([
-    ['an unsized PUT', { pathname: evidencePath }],
     ['a pathname of its choosing', { pathname: 'files/avatars/owner.png', size: 100 }],
     ['a traversal out of the files tree', { pathname: `files/../${'a'.repeat(64)}`, size: 100 }],
   ])('refuses %s', async (_label, input) => {

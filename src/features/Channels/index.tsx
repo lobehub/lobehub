@@ -4,7 +4,7 @@ import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
@@ -70,6 +70,7 @@ function EnabledChannelPage() {
     thread: !!(threadId || threadDraft),
   });
   if (!channelId) return null;
+  if (panel.legacyPageUrl) return <Navigate replace to={panel.legacyPageUrl} />;
 
   // The run topic behind a reply, wherever that reply is read: the feed, a thread beside it,
   // or the thread page. A side thread gives up its slot to the topic — the Channel is what you
