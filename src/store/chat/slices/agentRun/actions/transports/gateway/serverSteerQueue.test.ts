@@ -554,6 +554,67 @@ describe('server queue watch after the run ended without taking them', () => {
   });
 });
 
+describe('server queue watch behind a hetero run this tab no longer follows', () => {
+  const marker = {
+    assistantMessageId: 'msg-1',
+    heteroType: 'claude-code',
+    operationId: 'op-hetero',
+  };
+
+  beforeEach(() => {
+    useChatStore.setState({ reconnectToGatewayOperation: vi.fn().mockResolvedValue(undefined) });
+    get().internal_dispatchTopic({
+      type: 'addTopic',
+      value: { id: 'tpc-1', metadata: { runningOperation: marker }, title: 't' } as any,
+    });
+    vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
+      id: 'q1',
+      length: 1,
+      queued: true,
+    });
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps').mockResolvedValue([
+      pending('q1', { createdAt: 1, prompt: 'q1' }),
+    ]);
+  });
+
+  // The run failed or its CLI was killed: no stream tells this tab, and a failed
+  // run leaves its queue to the user.
+  it('takes them back once the server no longer names the run', async () => {
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: 'tpc-1',
+      metadata: { runningOperation: null },
+    } as any);
+    const remove = vi
+      .spyOn(aiAgentService, 'removeQueuedFollowUp')
+      .mockResolvedValue({ removed: true, state: 'removed' });
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS * 45);
+
+    expect(remove).toHaveBeenCalledWith({ id: 'q1', threadId: null, topicId: 'tpc-1' });
+    expect(queue()[0].serverDelivery).toBeUndefined();
+  });
+
+  it('keeps holding them while the server still names the run', async () => {
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: 'tpc-1',
+      metadata: { runningOperation: marker },
+    } as any);
+    const remove = vi.spyOn(aiAgentService, 'removeQueuedFollowUp');
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS * 45);
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(queue()[0].serverDelivery).toBe('server');
+    expect(get().reconnectToGatewayOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-hetero', topicId: 'tpc-1' }),
+    );
+  });
+});
+
 describe('restoreServerQueuedMessages', () => {
   // ROOT CAUSE:
   //

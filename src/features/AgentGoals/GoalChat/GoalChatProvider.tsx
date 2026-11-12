@@ -4,9 +4,12 @@ import { memo, useEffect, useMemo, useState } from 'react';
 
 import { PinnedTopicContext } from '@/features/ChatInput/InputEditor/ReferTopic/pinnedTopic';
 import { ConversationProvider } from '@/features/Conversation';
+import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useTopicRunEvents } from '@/hooks/useTopicRunEvents';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 
 interface GoalChatProviderProps {
   /** The goal's responsible agent — the one the user asks about progress. */
@@ -66,6 +69,18 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
     );
 
     const operationState = useOperationState(context);
+
+    // Follow a run still going on this topic, as the agent page does: a page
+    // that opens here after a reload or in a new window has no local operation
+    // for it, so without this the composer reads idle and the next message
+    // starts a second run that discards the live one (and kills its CLI).
+    const runningOperation = useChatStore((s) =>
+      activeTopicId
+        ? topicSelectors.getTopicById(activeTopicId)(s)?.metadata?.runningOperation
+        : undefined,
+    );
+    useGatewayReconnect(activeTopicId, runningOperation, agentId);
+    useTopicRunEvents(activeTopicId, agentId);
 
     if (!initialized) return null;
 

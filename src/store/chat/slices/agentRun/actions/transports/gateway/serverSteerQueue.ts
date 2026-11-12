@@ -15,6 +15,12 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { scheduleQueuedFollowUp } from '../../lifecycle/queuedFollowUp';
+import {
+  findUntrackedHeteroMarker,
+  noteServerIdleMarker,
+  reattachUntrackedHeteroRun,
+  refreshUntrackedHeteroMarker,
+} from './untrackedHeteroRun';
 
 const log = debug('lobe-store:server-steer-queue');
 
@@ -192,7 +198,10 @@ export const handOffQueuedMessage = (
     let queued = false;
     let unconfirmed = false;
     try {
-      queued = (await appendWithRetry(id, request, findQueued(get, contextKey, id))).queued;
+      const result = await appendWithRetry(id, request, findQueued(get, contextKey, id));
+      queued = result.queued;
+      if (!result.queued && result.reason === 'idle')
+        noteServerIdleMarker(get, request.appContext?.topicId);
     } catch (error) {
       console.error('[serverSteerQueue] queueing on the server failed:', error);
       // Unless refused outright it may have been stored, and sending it from
@@ -215,6 +224,7 @@ export const handOffQueuedMessage = (
       serverUnconfirmed: unconfirmed || undefined,
     });
     watchServerQueue(get, contextKey, context);
+    reattachUntrackedHeteroRun(get, context);
   };
 
   const previous = handOffChains.get(contextKey) ?? Promise.resolve();
@@ -273,6 +283,8 @@ const onServerQueueDelivered = async (
   while (hasLocalRun(get, context) && Date.now() < settleBy)
     await new Promise((resolve) => setTimeout(resolve, SERVER_QUEUE_POLL_MS));
   if (!hasLocalRun(get, context)) await syncQueuedSuccessorRun(get, context);
+  // Typed into a live hetero run this tab no longer follows: follow its reply.
+  if (!hasLocalRun(get, context)) reattachUntrackedHeteroRun(get, context);
 
   // Queued here behind the delivered ones: the server can take them now.
   const left = queueOf(get, contextKey).filter(
@@ -330,6 +342,7 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
   if (watchers.has(contextKey)) return;
   watchers.add(contextKey);
   let ticksWithoutRun = 0;
+  let markerOnlyTicks = 0;
   let failures = 0;
 
   const tick = async () => {
@@ -392,7 +405,13 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
       console.error('[serverSteerQueue] reading the server queue failed:', error);
     }
 
-    ticksWithoutRun = hasLocalRun(get, context) ? 0 : ticksWithoutRun + 1;
+    // A live hetero run this tab lost track of still takes them (see `findUntrackedHeteroMarker`);
+    // confirm it with the server now and then, since no stream tells this tab it ended.
+    const markerHolds = !hasLocalRun(get, context) && !!findUntrackedHeteroMarker(get, context);
+    if (markerHolds && ++markerOnlyTicks % ORPHANED_QUEUE_TICKS === 0)
+      await refreshUntrackedHeteroMarker(get, context.topicId!);
+    const runHolds = hasLocalRun(get, context) || !!findUntrackedHeteroMarker(get, context);
+    ticksWithoutRun = runHolds ? 0 : ticksWithoutRun + 1;
     // Stopped elsewhere: that run starts nothing next, take them back now.
     const stopped =
       operationSelectors.getIdleQueueHost(context)(get())?.metadata.endedWithoutCompletion;
