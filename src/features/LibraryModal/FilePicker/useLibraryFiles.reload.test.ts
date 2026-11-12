@@ -134,6 +134,23 @@ describe('useLibraryFiles across a reload', { timeout: 60_000 }, () => {
     );
   });
 
+  it('paints a file found past folder-only pages after a reload', async () => {
+    const first = await reload();
+    queryResources
+      .mockResolvedValueOnce(page([folder('d1')], true, 51))
+      .mockResolvedValueOnce(page([file('f4')], false, 51));
+    const visit = first();
+    await waitFor(() => expect(ids(visit.result.current.files)).toEqual(['f4']));
+    await settle();
+
+    const render = await reload();
+    queryResources.mockImplementation(pending);
+    const { result } = render();
+
+    await waitFor(() => expect(ids(result.current.files)).toEqual(['f4']));
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it('keeps the last files, without an error, when the refresh fails', async () => {
     await visitOnce();
 
