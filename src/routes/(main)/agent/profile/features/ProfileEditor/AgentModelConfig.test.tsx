@@ -8,9 +8,6 @@ const testState = vi.hoisted(() => ({
   agent: {
     agentMap: {
       'agent-1': {
-        agencyConfig: {
-          modelSelectionPolicy: 'member' as const,
-        },
         model: 'gpt-4',
         provider: 'openai',
         visibility: 'public' as 'private' | 'public',
@@ -46,7 +43,6 @@ vi.mock('@/store/agent', () => ({
 describe('AgentModelConfig', () => {
   beforeEach(() => {
     testState.agent.agentMap['agent-1'] = {
-      agencyConfig: { modelSelectionPolicy: 'member' },
       model: 'gpt-4',
       provider: 'openai',
       visibility: 'public',
@@ -74,20 +70,6 @@ describe('AgentModelConfig', () => {
     expect(screen.getByText('settingAgent.modelPolicy.title')).toBeTruthy();
     expect(screen.getByTestId('model-select')).toBeTruthy();
     expect(screen.getByTestId('reasoning-effort-select')).toBeTruthy();
-  });
-
-  it('renders the model picker without a member-switch control — that moved to the Permission page', () => {
-    testState.agent.agentMap['agent-1'] = {
-      agencyConfig: { modelSelectionPolicy: 'fixed' },
-      model: 'gpt-4',
-      visibility: 'public',
-      workspaceId: 'workspace-1',
-    };
-
-    render(<AgentModelConfig agentId="agent-1" />);
-
-    expect(screen.getByTestId('model-select')).toBeTruthy();
-    expect(screen.queryByTestId('policy-menu')).toBeNull();
   });
 
   it('renders nothing instead of crashing while the agent config is not loaded yet', () => {
