@@ -5,6 +5,7 @@ import type { AgentRuntimeContext, AgentState } from '../../../types';
 import {
   GraphAgent,
   isGraphAgentIntermediateResult,
+  isGraphAgentNodeWork,
   isGraphAgentOutputExtraction,
 } from '../GraphAgent';
 
@@ -153,5 +154,90 @@ describe('isGraphAgentOutputExtraction', () => {
 
   it('is false for a run no graph drives', () => {
     expect(isGraphAgentOutputExtraction(createState())).toBe(false);
+  });
+});
+
+describe('isGraphAgentNodeWork', () => {
+  // The terminal review node can send the work back to the draft node.
+  const createLoopingAgent = () =>
+    new GraphAgent({
+      agentConfig: { maxSteps: 100 },
+      graph: {
+        edges: [
+          { from: AGENT_GRAPH_ROOT_NODE_ID, instruction: 'Write a draft.', to: 'draft' },
+          {
+            from: 'draft',
+            instruction: 'Review the draft.',
+            output: { fields: [{ field: 'verdict' }] },
+            to: 'review',
+          },
+          {
+            condition: {
+              properties: { verdict: { const: 'revise' } },
+              required: ['verdict'],
+              type: 'object',
+            },
+            from: 'review',
+            instruction: 'Revise the draft.',
+            to: 'draft',
+          },
+        ],
+        fields: { verdict: { desc: 'Review verdict.', schema: { type: 'string' } } },
+        name: 'draft-review-loop',
+        nodes: { draft: { type: 'llm' }, review: { type: 'llm' } },
+        terminal: 'review',
+      },
+      operationId: 'test-operation',
+    });
+  const answer = (content: string) =>
+    ({
+      ...llmResult,
+      payload: { ...(llmResult.payload as object), result: { content } },
+    }) as AgentRuntimeContext;
+
+  it('is true again when the terminal node routes back to another node', async () => {
+    const agent = createLoopingAgent();
+    const state = createState();
+
+    await agent.runner({ phase: 'init' } as AgentRuntimeContext, state);
+    await agent.runner(answer('first draft'), state);
+    // The terminal review node is working: its answer is the run's last read.
+    expect(isGraphAgentNodeWork(state)).toBe(true);
+    expect(isGraphAgentIntermediateResult(state)).toBe(false);
+
+    await expect(
+      agent.runner(answer('```json\n{"verdict":"revise"}\n```'), state),
+    ).resolves.toMatchObject({ type: 'call_llm' });
+    // The review sent the work back: the draft node's work starts in this step.
+    expect(isGraphAgentNodeWork(state)).toBe(true);
+    expect(isGraphAgentIntermediateResult(state)).toBe(true);
+  });
+
+  it('is false once the terminal node finishes the graph', async () => {
+    const agent = createLoopingAgent();
+    const state = createState();
+
+    await agent.runner({ phase: 'init' } as AgentRuntimeContext, state);
+    await agent.runner(answer('first draft'), state);
+    await expect(
+      agent.runner(answer('```json\n{"verdict":"ok"}\n```'), state),
+    ).resolves.toMatchObject({ type: 'finish' });
+
+    expect(isGraphAgentNodeWork(state)).toBe(false);
+  });
+
+  it('is false during a node’s output extraction and for a run no graph drives', async () => {
+    const agent = createLoopingAgent();
+    const state = createState();
+
+    await agent.runner({ phase: 'init' } as AgentRuntimeContext, state);
+    await agent.runner(answer('first draft'), state);
+    // A review answer without the verdict JSON makes the graph ask for it.
+    await expect(agent.runner(answer('looks fine'), state)).resolves.toMatchObject({
+      stepLabel: 'review:extract',
+    });
+
+    expect(isGraphAgentNodeWork(state)).toBe(false);
+    expect(isGraphAgentNodeWork(createState())).toBe(false);
   });
 });

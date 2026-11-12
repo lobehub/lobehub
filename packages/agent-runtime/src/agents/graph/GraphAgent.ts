@@ -172,6 +172,18 @@ export const isGraphAgentOutputExtraction = (state: Readonly<AgentState>): boole
 };
 
 /**
+ * Whether this run's graph is at a node's own work (`node_in`): the LLM call it
+ * is about to make ends in a tool result or an answer, never in the graph's
+ * finish. A graph whose terminal node routes back to another node reaches this
+ * again after its terminal answer. `false` for a run no graph drives.
+ */
+export const isGraphAgentNodeWork = (state: Readonly<AgentState>): boolean => {
+  const runtime = state.metadata?.[GRAPH_RUNTIME_STATE_KEY] as GraphRuntimeState | undefined;
+
+  return runtime?.graphState.phase === 'node_in';
+};
+
+/**
  * GraphAgent is a graph-level orchestrator over the normal AgentRuntime loop.
  *
  * The runtime still executes concrete instructions.
