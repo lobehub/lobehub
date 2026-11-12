@@ -110,6 +110,10 @@ test('exempts drafts, bots, team members, and release PRs', () => {
     isExempt({ ...base, author_association: 'CONTRIBUTOR', user: { login: 'TJX666' } }),
     true,
   );
+  assert.equal(
+    isExempt({ ...base, author_association: 'CONTRIBUTOR', user: { login: 'lobehub-coder' } }),
+    true,
+  );
   assert.equal(isExempt({ ...base, title: '🚀 release: 20261007' }), true);
   assert.equal(isExempt({ ...base, title: '🚀 release: sync main branch to canary' }), true);
   assert.equal(isExempt({ ...base, head: { ref: 'release/db-migration-0152-forward' } }), true);
