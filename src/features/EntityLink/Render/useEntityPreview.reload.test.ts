@@ -49,9 +49,10 @@ const pending = () => new Promise<never>(() => {});
 const reload = async () => {
   cleanup();
   vi.resetModules();
-  const [{ useEntityPreview }, { goalService }] = await Promise.all([
+  const [{ useEntityPreview }, { goalService }, { useGoalStore }] = await Promise.all([
     import('./useEntityPreview'),
     import('@/services/goal'),
+    import('@/store/goal'),
   ]);
   const getGraph = vi.spyOn(goalService, 'getGraph');
   const renderPreview = () => renderHook(() => useEntityPreview(GOAL, true), { wrapper });
@@ -64,7 +65,7 @@ const reload = async () => {
       },
       { wrapper },
     );
-  return { getGraph, renderPreview, renderTwo };
+  return { getGraph, renderPreview, renderTwo, useGoalStore };
 };
 
 /** Let the server answer reach the persisted copy before the next reload. */
@@ -157,6 +158,22 @@ describe('useEntityPreview across a reload', { timeout: 60_000 }, () => {
 
     expect(reloaded.result.current.preview).toBeUndefined();
     expect(reloaded.result.current.title).toBeUndefined();
+  });
+
+  it('drops the title another surface loaded once the server says the entity is gone', async () => {
+    const first = await reload();
+    // The goal was opened earlier in the session, so its graph is still in the goal store.
+    first.useGoalStore.setState({
+      goalGraphById: { goal_1: { goal: { title: 'Stale goal title' } } as never },
+    });
+    first.getGraph.mockRejectedValue(
+      Object.assign(new Error('Goal not found'), { data: { code: 'NOT_FOUND' } }),
+    );
+    const { result } = first.renderPreview();
+    await waitFor(() => expect(first.getGraph).toHaveBeenCalled());
+    await settle();
+
+    expect(result.current.title).toBeUndefined();
   });
 
   it('shows another identity nothing of the previous one', async () => {

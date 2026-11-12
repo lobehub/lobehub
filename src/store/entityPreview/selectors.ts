@@ -17,7 +17,14 @@ const isPreviewConfirmed =
   (s: EntityPreviewState): boolean =>
     !!params && s.entityPreviewReplica.entries[entityPreviewKey(params)]?.source === 'server';
 
+/** Whether the server answered, in this scope, that the entity is gone or not visible. */
+const isPreviewMissing =
+  (params: EntityPreviewParams | null | undefined, scope: string) =>
+  (s: EntityPreviewState): boolean =>
+    !!params && s.entityPreviewMissing[entityPreviewKey(params)] === scope;
+
 export const entityPreviewSelectors = {
   getPreview,
   isPreviewConfirmed,
+  isPreviewMissing,
 };

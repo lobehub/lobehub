@@ -1,3 +1,4 @@
+import { cacheScope } from '@/libs/replica';
 import { useAgentStore } from '@/store/agent';
 import { useDocumentStore } from '@/store/document';
 import {
@@ -85,6 +86,9 @@ export const useEntityPreview = (reference: InternalLinkReference, enabled: bool
   const sync = entityPreviewActions.useFetchEntityPreview(params, { enabled });
   const preview = useEntityPreviewStore(entityPreviewSelectors.getPreview(params));
   const isConfirmed = useEntityPreviewStore(entityPreviewSelectors.isPreviewConfirmed(params));
+  const isMissing = useEntityPreviewStore(
+    entityPreviewSelectors.isPreviewMissing(params, cacheScope.use()),
+  );
   const loadedTitle = useLoadedDetailTitle(enabled ? params : null);
 
   return {
@@ -92,7 +96,10 @@ export const useEntityPreview = (reference: InternalLinkReference, enabled: bool
     isConfirmed,
     preview,
     // A preview the server answered this session is the freshest title; a
-    // restored one yields to a detail another surface already loaded.
-    title: (isConfirmed ? preview?.title : undefined) || loadedTitle || preview?.title || undefined,
+    // restored one yields to a detail another surface already loaded. Once the
+    // server said the entity is gone, no remembered title stands in for it.
+    title: isMissing
+      ? undefined
+      : (isConfirmed ? preview?.title : undefined) || loadedTitle || preview?.title || undefined,
   };
 };
