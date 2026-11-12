@@ -1,10 +1,10 @@
 'use client';
 
-import { ActionIcon, ContextMenuTrigger, DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
+import { ContextMenuTrigger, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import { MoreHorizontalIcon, StarIcon } from 'lucide-react';
+import { StarIcon } from 'lucide-react';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +16,7 @@ import { useProjectOverview } from '@/store/project';
 
 import { projectFavoriteTarget } from '../../projectFavorite';
 import { useProjectMenuItems } from '../useProjectMenuItems';
+import { FolderCardActions } from './Actions';
 import { AgentStack } from './AgentStack';
 import { FolderPaper } from './FolderPaper';
 import { isRichFolder, type OverviewStatus, resolveFolderSheet } from './folderSheet';
@@ -30,21 +31,6 @@ const FOLDER_COLOR = `color-mix(in srgb, ${cssVar.colorText} 6%, ${cssVar.colorB
 const FOLDER_COLOR_DARK = `color-mix(in srgb, ${cssVar.colorBgLayout} 50%, ${cssVar.colorBgContainer})`;
 
 const styles = stylex.create({
-  actions: {
-    // Over the pocket's top-right corner, beside the project name.
-    insetBlockStart: 207,
-    insetInlineEnd: 12,
-    opacity: {
-      'default': 0,
-      '@media (hover: none)': 1,
-      [stylex.when.ancestor(':hover', folderCardMarker)]: 1,
-      [stylex.when.ancestor(':focus-within', folderCardMarker)]: 1,
-    },
-    position: 'absolute',
-    transitionDuration: cssVar.motionDurationFast,
-    transitionProperty: 'opacity',
-    zIndex: 2,
-  },
   back: {
     backgroundColor: FOLDER_COLOR,
     borderColor: cssVar.colorBorderSecondary,
@@ -301,16 +287,7 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
             </div>
           </div>
         </WorkspaceLink>
-        <span {...stylex.props(styles.actions)}>
-          <DropdownMenu items={menuItems} placement={'bottomRight'}>
-            <ActionIcon
-              icon={MoreHorizontalIcon}
-              loading={deleting}
-              size={'small'}
-              title={t('list.moreActions')}
-            />
-          </DropdownMenu>
-        </span>
+        <FolderCardActions deleting={deleting} menuItems={menuItems} />
       </div>
     </ContextMenuTrigger>
   );
