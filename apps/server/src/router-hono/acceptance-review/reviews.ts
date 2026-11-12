@@ -1,3 +1,4 @@
+import type { AcceptanceReview } from '@lobechat/types';
 import {
   acceptanceReviewDecisionSchema,
   acceptanceReviewMarkVerdictSchema,
@@ -12,7 +13,6 @@ import type { Context } from 'hono';
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import { ProjectModel } from '@/database/models/project';
 import { ProjectSiteModel } from '@/database/models/projectReview';
-import type { AcceptanceReviewRow } from '@/database/schemas';
 import { acceptanceRouter } from '@/server/routers/lambda/acceptance';
 import { projectReview } from '@/server/services/acceptanceReview/projection';
 import {
@@ -37,14 +37,14 @@ const siteAcceptance = (c: ReviewContext) => {
 };
 
 export interface ReviewScope {
-  load: (reviewId: string) => Promise<AcceptanceReviewRow | undefined>;
+  load: (reviewId: string) => Promise<AcceptanceReview | undefined>;
   ownerUserId: string;
   workspaceId: string | null;
 }
 
 export const reviewScope = (c: ReviewContext): ReviewScope | undefined => {
   const { acceptance } = c.get('access');
-  const visible = (row: AcceptanceReviewRow | undefined) => {
+  const visible = (row: AcceptanceReview | undefined) => {
     if (!row || row.status === 'discarded') return undefined;
     if (row.status === 'draft' && row.userId !== c.get('userId')) return undefined;
     return row;
@@ -70,7 +70,7 @@ export const reviewScope = (c: ReviewContext): ReviewScope | undefined => {
   };
 };
 
-const repliesAcceptanceId = async (c: ReviewContext, row: AcceptanceReviewRow) => {
+const repliesAcceptanceId = async (c: ReviewContext, row: AcceptanceReview) => {
   const site = siteAcceptance(c);
   if (site) return site.id;
   return (await new ProjectSiteModel(c.get('db')).findById(row.siteId))?.acceptanceId ?? undefined;
@@ -79,7 +79,7 @@ const repliesAcceptanceId = async (c: ReviewContext, row: AcceptanceReviewRow) =
 export const describeReview = async (
   c: ReviewContext,
   scope: ReviewScope,
-  row: AcceptanceReviewRow,
+  row: AcceptanceReview,
   options: { withMarks?: boolean } = {},
 ) => {
   const db = c.get('db');

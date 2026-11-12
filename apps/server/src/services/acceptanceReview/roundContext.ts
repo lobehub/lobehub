@@ -1,14 +1,14 @@
+import type { AcceptanceReview, AcceptanceReviewMark } from '@lobechat/types';
 import { and, count, eq, sql } from 'drizzle-orm';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
-import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '@/database/schemas';
 import { acceptanceReviews, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { createEvidenceFileResolver } from '@/server/services/verify/evidenceFiles';
 
 const NAME_EXCERPT = 30;
 
-type RoundMark = Pick<AcceptanceReviewMarkRow, 'content' | 'routeKey'>;
+type RoundMark = Pick<AcceptanceReviewMark, 'content' | 'routeKey'>;
 
 export const reviewIdOfTask = (config: unknown): string | undefined => {
   const reviewId = (config as { acceptanceReview?: { reviewId?: unknown } } | null)
@@ -28,7 +28,7 @@ export const loadReviewerName = async (db: LobeChatDatabase, userId: string | nu
 
 export const countRound = async (
   db: LobeChatDatabase,
-  review: Pick<AcceptanceReviewRow, 'id' | 'siteId' | 'submittedAt' | 'userId'>,
+  review: Pick<AcceptanceReview, 'id' | 'siteId' | 'submittedAt' | 'userId'>,
 ) => {
   if (!review.userId || !review.submittedAt) return 1;
   const own = sql`(select ${acceptanceReviews.submittedAt} from ${acceptanceReviews} where ${acceptanceReviews.id} = ${review.id})`;

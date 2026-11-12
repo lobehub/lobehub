@@ -1,10 +1,9 @@
-import type { SubmitAcceptanceReviewInput } from '@lobechat/types';
+import type { AcceptanceReviewMark, SubmitAcceptanceReviewInput } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
-import type { AcceptanceReviewMarkRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { taskRouter } from '@/server/routers/lambda/task';
@@ -110,7 +109,7 @@ const runTask = async (actor: ReviewActor, taskId: string, prompt?: string) => {
 };
 
 export const buildSendBackPrompt = (
-  marks: Pick<AcceptanceReviewMarkRow, 'content' | 'id' | 'seq'>[],
+  marks: Pick<AcceptanceReviewMark, 'content' | 'id' | 'seq'>[],
   note?: string,
 ) =>
   [

@@ -1,5 +1,7 @@
 import type {
+  AcceptanceReview,
   AcceptanceReviewDto,
+  AcceptanceReviewMark,
   AcceptanceReviewMarkDto,
   AcceptanceReviewMarkResult,
   AcceptanceReviewPhase,
@@ -7,7 +9,6 @@ import type {
 } from '@lobechat/types';
 import { inArray } from 'drizzle-orm';
 
-import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '@/database/schemas';
 import { users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { createEvidenceFileResolver } from '@/server/services/verify/evidenceFiles';
@@ -55,7 +56,7 @@ export const screenshotResolver = (
 };
 
 export const toMarkDto = (
-  row: AcceptanceReviewMarkRow,
+  row: AcceptanceReviewMark,
   extra: {
     replyCount?: number;
     result?: AcceptanceReviewMarkResult;
@@ -86,7 +87,7 @@ export const toMarkDto = (
 });
 
 export const toReviewDto = (
-  row: AcceptanceReviewRow,
+  row: AcceptanceReview,
   extra: {
     markCount: number;
     marks?: AcceptanceReviewMarkDto[];

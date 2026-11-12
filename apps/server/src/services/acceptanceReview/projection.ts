@@ -1,11 +1,12 @@
 import type {
+  AcceptanceReview,
+  AcceptanceReviewMark,
   AcceptanceReviewMarkResult,
   AcceptanceReviewMarkVerdict,
   AcceptanceReviewPhase,
 } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '@/database/schemas';
 import { acceptances, tasks, verifyEvidence } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
@@ -58,8 +59,8 @@ const emptyProjection = (phase: AcceptanceReviewPhase): ReviewProjectionResult =
 
 export const projectReview = async (
   db: LobeChatDatabase,
-  review: AcceptanceReviewRow,
-  marks: Pick<AcceptanceReviewMarkRow, 'id'>[],
+  review: AcceptanceReview,
+  marks: Pick<AcceptanceReviewMark, 'id'>[],
 ): Promise<ReviewProjectionResult> => {
   if (review.status === 'draft') return emptyProjection('draft');
   const [task] = review.taskId
