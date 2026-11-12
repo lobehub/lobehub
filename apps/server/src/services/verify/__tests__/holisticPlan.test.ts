@@ -289,3 +289,57 @@ describe('verify plan generation billing scope', () => {
     expect(AiGenerationService).toHaveBeenCalledWith(db, 'user-1', 'ws-1');
   });
 });
+
+/**
+ * Regression: the plan model marked all three criteria of a Goal Task
+ * `required: false`. The Goal review gates on required checks, found none, and
+ * errored on every attempt while each retry carried the same plan forward.
+ */
+describe('generateDraftPlan — AI criteria blocking', () => {
+  const criterion = (title: string, required: boolean) => ({
+    description: `${title} is delivered`,
+    instruction: '',
+    onFail: 'manual',
+    required,
+    requiredEvidence: [],
+    title,
+    verifierType: 'agent',
+  });
+
+  beforeEach(() => {
+    generateObjectMock.mockReset();
+    setPlanMock.mockClear();
+    getCriteriaMock.mockResolvedValue([]);
+    findByIdsMock.mockResolvedValue([]);
+  });
+
+  it('makes every generated criterion blocking when the model marked them all optional', async () => {
+    generateObjectMock.mockResolvedValue({
+      criteria: [criterion('Data model', false), criterion('Interfaces', false)],
+    });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateDraftPlan({
+      enableAiGeneration: true,
+      goal: 'Ship the feature',
+      holisticFallback: true,
+      operationId: 'op-1',
+    });
+
+    expect(lastPlan().map((item) => item.required)).toEqual([true, true]);
+  });
+
+  it('keeps the soft criteria when the model marked at least one blocking', async () => {
+    generateObjectMock.mockResolvedValue({
+      criteria: [criterion('Data model', true), criterion('Nice copy', false)],
+    });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateDraftPlan({
+      enableAiGeneration: true,
+      goal: 'Ship the feature',
+      holisticFallback: true,
+      operationId: 'op-1',
+    });
+
+    expect(lastPlan().map((item) => item.required)).toEqual([true, false]);
+  });
+});

@@ -136,6 +136,40 @@ describe('Verify acceptance lifecycle', () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
   });
 
+  // Regression: a Goal Task whose derived checklist was all optional errored in
+  // the Goal review on every attempt, because each retry carried the same
+  // optional plan forward.
+  it('makes a carried-forward checklist blocking when none of its checks is required', async () => {
+    mocks.goalFind.mockResolvedValue({ id: 'goal-1' });
+    mocks.taskAcceptanceResolve.mockResolvedValue({
+      acceptance: { id: 'a1' },
+      config: { enabled: true },
+      requirement: 'Deliver the report',
+    });
+    mocks.taskFindById.mockResolvedValue({ name: 'Report' });
+    mocks.loadRounds.mockResolvedValue({
+      runs: [
+        {
+          id: 'r1',
+          roundIndex: 1,
+          plan: [
+            { id: 'model', title: 'Data model', required: false },
+            { id: 'api', title: 'Interfaces', required: false },
+          ],
+        },
+      ],
+      results: [],
+    });
+    mocks.ensureForOperation.mockResolvedValue({ id: 'retry' });
+
+    await instantiateVerifyPlanOnStart(db, 'u1', { operationId: 'op2', taskId: 't1' });
+
+    expect(mocks.setPlan).toHaveBeenCalledWith('retry', [
+      expect.objectContaining({ id: 'model', required: true }),
+      expect.objectContaining({ id: 'api', required: true }),
+    ]);
+  });
+
   it('attaches the verify run to the task acceptance that owns its policy', async () => {
     mocks.taskAcceptanceResolve.mockResolvedValue({
       acceptance: { id: 'acceptance-1' },

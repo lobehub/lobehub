@@ -6,6 +6,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
+import { requireAllWhenNoneBlocks } from './blockingChecks';
 import { VerifyPlanGeneratorService } from './planGenerator';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 import { releaseUndeliveredRound } from './undeliveredRound';
@@ -116,12 +117,14 @@ const instantiatePlan = async (
     if (holistic && (await new GoalModel(db, userId, workspaceId).findByGraphTask(params.taskId))) {
       const service = new AcceptanceService(db, userId, workspaceId);
       const { results, runs } = await service.loadRounds(acceptance.id);
-      const previousPlan = buildAcceptanceCheckUnion(
-        runs.map((run) => ({
-          results: results.filter((result) => result.verifyRunId === run.id),
-          run,
-        })),
-      ).flatMap((check) => (check.planItem ? [{ ...check.planItem, id: check.id }] : []));
+      const previousPlan = requireAllWhenNoneBlocks(
+        buildAcceptanceCheckUnion(
+          runs.map((run) => ({
+            results: results.filter((result) => result.verifyRunId === run.id),
+            run,
+          })),
+        ).flatMap((check) => (check.planItem ? [{ ...check.planItem, id: check.id }] : [])),
+      );
       if (previousPlan.length) {
         const retry = await runModel.ensureForOperation(params.operationId);
         await runModel.setPlan(retry.id, previousPlan);

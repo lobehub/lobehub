@@ -20,6 +20,7 @@ import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
+import { requireAllWhenNoneBlocks } from './blockingChecks';
 import { VERIFY_PLAN_MODEL_CONFIG } from './modelConfig';
 import { resolveVerifyResponseLanguage } from './responseLanguage';
 import { RawGeneratedCriteriaSchema } from './schema';
@@ -300,7 +301,13 @@ export class VerifyPlanGeneratorService {
           maxCriteria: params.maxAiCriteria ?? DEFAULT_MAX_AI_CRITERIA,
           operationId: params.operationId,
         });
-        for (const item of generated) {
+        // The model sometimes marks every criterion of its split optional. Only
+        // when the configured criteria have no blocking check either does that
+        // leave the plan gating nothing.
+        const split = items.some((item) => item.required)
+          ? generated
+          : requireAllWhenNoneBlocks(generated);
+        for (const item of split) {
           items.push({ ...item, index: items.length });
         }
       } catch (error) {
