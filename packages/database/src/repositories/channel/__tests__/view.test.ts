@@ -241,6 +241,32 @@ describe('Channel public view', () => {
     ).toEqual([]);
   });
 
+  it('counts unread @mentions of the caller, Threads included, until they are read', async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    const send = (content: string, mentions: string[] = [], threadId?: string) =>
+      asOwner.send(channel.id, {
+        content,
+        mentions,
+        requestKey: content,
+        routing: 'fallback',
+        threadId,
+      });
+    await send('Hi all');
+    const first = await send('Ping', [member.id]);
+    const root = await send('Ping again', [member.id]);
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const reply = await send('In a thread', [member.id], thread.id);
+
+    const listed = async () => (await asMember.list()).find((item) => item.id === channel.id);
+    expect(await listed()).toMatchObject({ mentionCount: 3, unreadCount: 4 });
+    expect((await asOwner.list()).find((item) => item.id === channel.id)?.mentionCount).toBe(0);
+
+    await asMember.markRead(channel.id, first.sequence);
+    expect(await listed()).toMatchObject({ mentionCount: 2, unreadCount: 2 });
+    await asMember.markRead(channel.id, reply.sequence);
+    expect(await listed()).toMatchObject({ mentionCount: 0, unreadCount: 0 });
+  });
+
   it('preserves the actual reply author when a member is rebound', async () => {
     const { asOwner, channel } = await fixture.createTeamChannel();
     const original = await fixture.addAgent(channel.id, 'Original');

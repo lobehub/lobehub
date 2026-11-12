@@ -187,6 +187,13 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
 /** How the Contacts list is ordered: by name, or most recently updated first. */
 export type ContactListSortBy = 'title' | 'updatedAt';
 
+/** How a sidebar Channel section orders its Channels. */
+export interface ChannelListSort {
+  /** `updatedAt` follows the latest message, so it orders by activity. */
+  by: 'createdAt' | 'title' | 'updatedAt';
+  order: 'asc' | 'desc';
+}
+
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
 
@@ -233,6 +240,10 @@ export interface SystemStatus {
    * scalars instead of index-merging arrays.
    */
   assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
+  /**
+   * Order of the sidebar Channel sections. Device-local view setting.
+   */
+  channelListSort?: ChannelListSort;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
