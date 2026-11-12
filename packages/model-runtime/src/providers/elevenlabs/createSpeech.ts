@@ -1,9 +1,16 @@
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import createDebug from 'debug';
 import type { TTSAudioFormat } from 'model-bank';
-import { DEFAULT_TTS_AUDIO_FORMAT, ELEVENLABS_DEFAULT_VOICE_ID } from 'model-bank';
+import {
+  DEFAULT_TTS_AUDIO_FORMAT,
+  ELEVENLABS_DEFAULT_VOICE_ID,
+  ELEVENLABS_VOICE_IDS,
+} from 'model-bank';
 
-import { convertTextToSpeechUsage } from '../../core/usageConverters/tts';
+import {
+  convertTextToSpeechUsage,
+  countTextToSpeechCharacters,
+} from '../../core/usageConverters/tts';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import type {
   TextToSpeechOptions,
@@ -20,6 +27,13 @@ import { resolveMappedModelId } from '../../utils/modelIdMapping';
 const log = createDebug('lobe-tts:elevenlabs');
 
 export const DEFAULT_ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io';
+
+/**
+ * Characters per request. The audio comes back in one inline response, and a longer
+ * request would exceed the serverless response limit only after the synthesis was billed.
+ * Enforced here as well as in the TTS service, so routed aliases are capped too.
+ */
+export const ELEVENLABS_MAX_INPUT_CHARACTERS = 4096;
 
 export interface ElevenLabsSpeechOptions extends ModelIdMappingOptions, TextToSpeechOptions {
   apiKey: string;
@@ -383,15 +397,30 @@ export const clearElevenLabsFallbackVoices = () => fallbackVoices.clear();
  * @see https://elevenlabs.io/docs/api-reference/text-to-speech/convert
  */
 export async function createElevenLabsSpeech(
-  payload: TextToSpeechPayload,
+  request: TextToSpeechPayload,
   options: ElevenLabsSpeechOptions,
 ): Promise<TextToSpeechResponse> {
   const { apiKey, provider } = options;
   const baseURL = normalizeElevenLabsBaseURL(options.baseURL);
+
+  // A caller-omitted voice may have been filled from another vendor's default (e.g. a routed
+  // alias without a static card gets `alloy`); use the ElevenLabs default instead.
+  const payload: TextToSpeechPayload =
+    request.voiceIsDefault && !ELEVENLABS_VOICE_IDS.has(request.voice)
+      ? { ...request, voice: ELEVENLABS_DEFAULT_VOICE_ID }
+      : request;
   const requestModel = resolveMappedModelId(payload.model, options);
 
   let result: TextToSpeechResponse;
   try {
+    const inputCharacters = countTextToSpeechCharacters(payload.input);
+    if (inputCharacters > ELEVENLABS_MAX_INPUT_CHARACTERS) {
+      throw new ElevenLabsSpeechError(
+        `ElevenLabs speech input is ${inputCharacters} characters; the limit is ${ELEVENLABS_MAX_INPUT_CHARACTERS} per request. Split the text into shorter requests.`,
+        AgentRuntimeErrorType.ProviderBizError,
+      );
+    }
+
     const { body, format, outputFormat } = buildElevenLabsSpeechRequest(payload, requestModel);
     const pricing = await getModelPricing(payload.model, provider, options.pricingContext);
 

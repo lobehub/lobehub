@@ -9,6 +9,7 @@ import {
   buildElevenLabsSpeechRequest,
   clearElevenLabsFallbackVoices,
   createElevenLabsSpeech,
+  ELEVENLABS_MAX_INPUT_CHARACTERS,
   ELEVENLABS_NO_ACCOUNT_VOICE_HINT,
   ELEVENLABS_PAID_VOICE_HINT,
   type ElevenLabsSpeechOptions,
@@ -226,6 +227,44 @@ describe('createElevenLabsSpeech', () => {
       );
 
       expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+    });
+  });
+
+  describe('routed aliases', () => {
+    it('replaces a non-ElevenLabs default voice filled in by the service', async () => {
+      fetchMock.mockResolvedValueOnce(audioResponse());
+
+      await createElevenLabsSpeech(
+        { input: 'Hi', model: 'my-speech', voice: 'alloy', voiceIsDefault: true },
+        {
+          ...options,
+          modelIdMapping: { 'my-speech': 'eleven_flash_v2_5' },
+        } as ElevenLabsSpeechOptions,
+      );
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain(`/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?`);
+      expect(JSON.parse(init.body).model_id).toBe('eleven_flash_v2_5');
+    });
+
+    it('keeps an explicit voice even when it is not in the catalog', async () => {
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await createElevenLabsSpeech({ input: 'Hi', model: 'm', voice: 'my-clone' }, options);
+      expect(fetchMock.mock.calls[0][0]).toContain('/v1/text-to-speech/my-clone?');
+    });
+
+    it('rejects input over the per-request cap before calling ElevenLabs', async () => {
+      await expect(
+        createElevenLabsSpeech(
+          {
+            input: '字'.repeat(ELEVENLABS_MAX_INPUT_CHARACTERS + 1),
+            model: 'my-speech',
+            voice: VOICE,
+          },
+          options,
+        ),
+      ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.ProviderBizError });
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

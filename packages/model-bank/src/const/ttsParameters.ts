@@ -344,6 +344,11 @@ const ELEVENLABS_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
  * back to a voice from the account when this one is unavailable.
  */
 export const ELEVENLABS_DEFAULT_VOICE_ID = 'CwhRBWXzGAHq8TQ4Fs17';
+
+/** Voice ids in the built-in ElevenLabs catalog. */
+export const ELEVENLABS_VOICE_IDS: ReadonlySet<string> = new Set(
+  elevenlabsTTSVoices.map((voice) => voice.id),
+);
 const ELEVENLABS_DEFAULT_VOICE = ELEVENLABS_DEFAULT_VOICE_ID;
 
 /** Multilingual v2 and the Flash / Turbo family take `voice_settings.speed` from 0.7 to 1.2. */
