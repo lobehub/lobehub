@@ -119,6 +119,7 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
       let dropTarget = event.target as HTMLElement;
       let targetId: string | undefined;
       let targetParentKey: string | undefined;
+      let allowReorder = true;
       let isDropItem = false;
       let isFolder = false;
       let isRootDrop = false;
@@ -128,6 +129,7 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         if (dataset.dropTargetId) {
           targetId = dataset.dropTargetId;
           targetParentKey = dataset.parentKey;
+          allowReorder = dataset.allowReorder !== 'false';
           isDropItem = dataset.dropItem === 'true';
           isFolder = dataset.isFolder === 'true';
           isRootDrop = dataset.rootDrop === 'true';
@@ -143,6 +145,7 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
       const dropPosition =
         isDropItem && targetId && dropTarget
           ? resolveDropPosition({
+              allowReorder,
               drag,
               libraryId: useResourceManagerStore.getState().libraryId,
               relY: getRelativeY(event.clientY, dropTarget.getBoundingClientRect()),

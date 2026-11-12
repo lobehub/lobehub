@@ -15,18 +15,22 @@ import {
 import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
 
 interface UseFileListItemDragOptions {
+  allowReorder?: boolean;
   fileType?: string | null;
   id: string;
   isFolder: boolean;
+  itemParentId?: string | null;
   libraryId?: string;
   name?: string | null;
   sourceType?: string | null;
 }
 
 export const useFileListItemDrag = ({
+  allowReorder = true,
   fileType,
   id,
   isFolder,
+  itemParentId,
   libraryId,
   name,
   sourceType,
@@ -34,9 +38,10 @@ export const useFileListItemDrag = ({
   const isDragActive = useDragActive();
   const currentDrag = useCurrentDrag();
   const setCurrentDrag = useSetCurrentDrag();
-  // The hierarchy and the explorer must agree on the parent key for sibling
-  // reordering: both use the folder id, with '' as the library root.
-  const parentKey = useCurrentFolderId() ?? '';
+  // Prefer the item's own parent for cross-folder search hits; explicit null
+  // means root, while rows without parent metadata use the open folder.
+  const currentFolderId = useCurrentFolderId();
+  const parentKey = itemParentId !== undefined ? (itemParentId ?? '') : (currentFolderId ?? '');
 
   const [isDragging, setIsDragging] = useState(false);
   const [dropPosition, setDropPosition] = useState<DropPosition>(null);
@@ -88,6 +93,7 @@ export const useFileListItemDrag = ({
       }
 
       const position = resolveDropPosition({
+        allowReorder,
         drag: currentDrag,
         libraryId,
         relY: getRelativeY(e.clientY, e.currentTarget.getBoundingClientRect()),
@@ -100,7 +106,7 @@ export const useFileListItemDrag = ({
       e.preventDefault();
       e.stopPropagation();
     },
-    [currentDrag, id, isDragActive, isFolder, libraryId, parentKey],
+    [allowReorder, currentDrag, id, isDragActive, isFolder, libraryId, parentKey],
   );
 
   const handleDragLeave = useCallback((e: DragEvent) => {

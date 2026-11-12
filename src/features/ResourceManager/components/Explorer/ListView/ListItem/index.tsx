@@ -153,6 +153,7 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface FileListItemProps extends FileListItemType {
+  allowReorder?: boolean;
   columnWidths: {
     date: number;
     name: number;
@@ -168,6 +169,7 @@ interface FileListItemProps extends FileListItemType {
 }
 
 const FileListItem = ({
+  allowReorder = true,
   chunkCount,
   chunkingError,
   chunkingStatus,
@@ -184,6 +186,7 @@ const FileListItem = ({
   metadata,
   name,
   onSelectedChange,
+  parentId,
   selectable = true,
   selected,
   showUploader = true,
@@ -244,9 +247,11 @@ const FileListItem = ({
     isDragging,
     parentKey,
   } = useFileListItemDrag({
+    allowReorder,
     fileType,
     id,
     isFolder,
+    itemParentId: parentId,
     libraryId: resourceManagerState.libraryId,
     name,
     sourceType,
@@ -350,6 +355,7 @@ const FileListItem = ({
       <Flexbox
         horizontal
         align={'center'}
+        data-allow-reorder={allowReorder ? undefined : 'false'}
         data-drop-item="true"
         data-drop-target-id={id}
         data-is-folder={String(isFolder)}

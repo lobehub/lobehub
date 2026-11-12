@@ -34,6 +34,8 @@ export const getRelativeY = (clientY: number, rect: Pick<DOMRect, 'top' | 'heigh
 };
 
 interface ResolveDropPositionParams {
+  /** Flat search results accept folder moves, never sibling insertion. */
+  allowReorder?: boolean;
   drag: DragItem;
   /** Sibling reordering only exists inside a library. */
   libraryId?: string | null;
@@ -51,6 +53,7 @@ interface ResolveDropPositionParams {
  * whole row (`'inside'`), and a file/page rejects it.
  */
 export const resolveDropPosition = ({
+  allowReorder = true,
   drag,
   target,
   relY,
@@ -59,7 +62,7 @@ export const resolveDropPosition = ({
   if (target.id === drag.id) return null;
 
   const sameParent = normalizeParentKey(drag.parentKey) === normalizeParentKey(target.parentKey);
-  const canReorder = Boolean(libraryId) && sameParent;
+  const canReorder = allowReorder && Boolean(libraryId) && sameParent;
 
   if (target.isFolder) {
     // A folder dragged over a sibling folder splits into before / inside /

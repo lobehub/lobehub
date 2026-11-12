@@ -58,6 +58,38 @@ describe('resolveDropPosition', () => {
     ).toBeNull();
   });
 
+  describe('flat search targets', () => {
+    it.each([0, 0.1, 0.25, 0.5, 0.75, 0.9, 1])(
+      'keeps folders as inside targets at relative height %s when reordering is disabled',
+      (relY) => {
+        expect(
+          resolveDropPosition({
+            allowReorder: false,
+            drag: drag(),
+            libraryId: 'kb-1',
+            relY,
+            target: target(),
+          }),
+        ).toBe('inside');
+      },
+    );
+
+    it.each([0, 0.1, 0.5, 0.9, 1])(
+      'rejects files at relative height %s when reordering is disabled',
+      (relY) => {
+        expect(
+          resolveDropPosition({
+            allowReorder: false,
+            drag: drag({ type: 'file' }),
+            libraryId: 'kb-1',
+            relY,
+            target: target({ isFolder: false }),
+          }),
+        ).toBeNull();
+      },
+    );
+  });
+
   describe('folder targets', () => {
     it('splits a sibling folder drag into before / inside / after', () => {
       expect(resolve(drag({ parentKey: 'p' }), target({ parentKey: 'p' }), 0.1)).toBe('before');
