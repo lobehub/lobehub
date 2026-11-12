@@ -74,7 +74,31 @@ export const isOptimisticRowInRequestedPool = (
 
 // ---- move reconciliation into cached folder lists ------------------------
 
-const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const formatNumericToken = (digits: string): string => {
+  const trimmed = digits.replace(/^0+/, '') || '0';
+  return trimmed.length <= 20
+    ? trimmed.padStart(20, '0')
+    : `99999999999999999999:${String(trimmed.length).padStart(10, '0')}:${trimmed}`;
+};
+
+export const toNaturalSortKey = (value: string): string => {
+  const lower = value.toLowerCase();
+  return `${lower.replaceAll(/\d+/g, formatNumericToken)}\u0001${lower}`;
+};
+
+// PostgreSQL's UTF-8 COLLATE "C" compares code points, not UTF-16 code units.
+const compareCodePoints = (a: string, b: string): number => {
+  let aIndex = 0;
+  let bIndex = 0;
+  while (aIndex < a.length && bIndex < b.length) {
+    const aPoint = a.codePointAt(aIndex)!;
+    const bPoint = b.codePointAt(bIndex)!;
+    if (aPoint !== bPoint) return aPoint - bPoint;
+    aIndex += aPoint > 0xffff ? 2 : 1;
+    bIndex += bPoint > 0xffff ? 2 : 1;
+  }
+  return Number(aIndex < a.length) - Number(bIndex < b.length);
+};
 
 type SortableResource = {
   createdAt?: Date | string | null;
@@ -116,8 +140,10 @@ export const compareResourceItems = (
   } else if (sorter === 'createdAt') {
     cmp = toTime(a.createdAt) - toTime(b.createdAt);
   }
-  const ordered = (cmp || naturalCollator.compare(a.name ?? '', b.name ?? '')) * direction;
-  return ordered || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const ordered =
+    (cmp || compareCodePoints(toNaturalSortKey(a.name ?? ''), toNaturalSortKey(b.name ?? ''))) *
+    direction;
+  return ordered || compareCodePoints(a.id, b.id);
 };
 
 const compareResourcesForList =

@@ -162,6 +162,8 @@ export const knowledgeBaseRouter = router({
         knowledgeBaseId: z.string(),
         orderedIds: z.array(z.string()).min(1).max(1000),
         parentId: z.string().nullable().optional(),
+        sorter: z.enum(['custom', 'name', 'createdAt', 'size', 'updatedAt']).optional(),
+        sortType: z.enum(['desc', 'asc']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -173,7 +175,11 @@ export const knowledgeBaseRouter = router({
         workspaceId: kb.workspaceId ?? null,
       });
       await assertKnowledgeItemsAccessible(ctx, input.orderedIds);
-      return ctx.knowledgeRepo.reorderItems(input.knowledgeBaseId, input.orderedIds);
+      return ctx.knowledgeRepo.reorderItems(input.knowledgeBaseId, input.orderedIds, {
+        parentId: input.parentId,
+        sorter: input.sorter,
+        sortType: input.sortType,
+      });
     }),
 
   createKnowledgeBase: knowledgeBaseProcedure

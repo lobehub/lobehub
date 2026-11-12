@@ -167,6 +167,8 @@ describe('knowledgeBaseRouter', () => {
       knowledgeBaseId: 'kb-1',
       orderedIds: ['docs_page', 'file_raw'],
       parentId: null,
+      sorter: 'custom' as const,
+      sortType: 'desc' as const,
     };
 
     beforeEach(() => {
@@ -191,7 +193,11 @@ describe('knowledgeBaseRouter', () => {
         expect.anything(),
         input.orderedIds,
       );
-      expect(mockKnowledgeRepoReorderItems).toHaveBeenCalledWith('kb-1', input.orderedIds);
+      expect(mockKnowledgeRepoReorderItems).toHaveBeenCalledWith('kb-1', input.orderedIds, {
+        parentId: null,
+        sorter: 'custom',
+        sortType: 'desc',
+      });
     });
 
     it('rejects a missing KB before writing', async () => {

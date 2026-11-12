@@ -171,6 +171,40 @@ describe('resource ordering', () => {
     },
   );
 
+  it('orders multiple numeric runs, leading zeros, long numbers and Unicode deterministically', () => {
+    const names = [
+      '01',
+      '1',
+      '250509-1.2',
+      '250509-1.10',
+      '99999999999999999999',
+      '100000000000000000000',
+      '999999999999999999999',
+      '1000000000000000000000',
+      'apple',
+      'chapter 1 part 2',
+      'chapter 1 part 10',
+      'Zebra',
+      '第2章',
+      '第10章',
+      '\uE000',
+      '😀',
+    ];
+    const rows = names.toReversed().map((name) => row(name));
+    expect(sortFileList(rows, 'name', SortType.Asc)?.map((item) => item.name)).toEqual(names);
+    expect(sortFileList(rows, 'name', SortType.Desc)?.map((item) => item.name)).toEqual(
+      names.toReversed(),
+    );
+    expect(
+      compareResourceItems(
+        { ...row('same'), id: '\uE000' },
+        { ...row('same'), id: '😀' },
+        'name',
+        SortType.Desc,
+      ),
+    ).toBeLessThan(0);
+  });
+
   it('includes the displayed sort in search query identity', () => {
     expect(
       getExplorerSearchParams(

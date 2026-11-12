@@ -891,6 +891,7 @@ describe('TreeActionImpl sorting and reorder', () => {
     async (fails) => {
       const state = createState();
       state.sorter = 'name';
+      state.sortType = SortType.Desc;
       state.children = { '': [row('folder', true), row('a'), row('b')] };
       const actions = new TreeActionImpl(
         createSetter(() => state),
@@ -919,6 +920,8 @@ describe('TreeActionImpl sorting and reorder', () => {
         knowledgeBaseId: 'kb-1',
         parentId: null,
         orderedIds: ['folder', 'b', 'a'],
+        sorter: 'name',
+        sortType: SortType.Desc,
       });
       const overlay = fileStoreState.reorderCurrentResources.mock.results.at(-1)!.value;
       if (fails) {

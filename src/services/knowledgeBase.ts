@@ -68,6 +68,8 @@ class KnowledgeBaseService {
     knowledgeBaseId: string;
     orderedIds: string[];
     parentId?: string | null;
+    sorter?: 'custom' | 'name' | 'createdAt' | 'size' | 'updatedAt';
+    sortType?: 'asc' | 'desc';
   }) => {
     return lambdaClient.knowledgeBase.reorderKnowledgeItems.mutate(params);
   };

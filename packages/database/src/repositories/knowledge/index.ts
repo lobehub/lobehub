@@ -48,6 +48,7 @@ import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
 import { notAgentShareFile, ownChatAttachment } from '../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { naturalNameKey } from './naturalSort';
 
 /**
  * Both UNION arms reach the same two tables, and the file arm joins `documents`
@@ -74,16 +75,6 @@ const documentNeedsContentPreview = or(
   ilike(d.filename, '%.md'),
   ilike(d.filename, '%.markdown'),
 );
-
-// Pad the first numeric run after extracting it: regexp replacement strings
-// cannot evaluate LPAD separately for each match in PostgreSQL.
-const naturalNameKey = (name: SQL | AnyPgColumn) =>
-  sql<string>`
-  CASE WHEN ${name} ~ '^[^0-9]*[0-9]+'
-    THEN LOWER(SUBSTRING(${name} FROM '^([^0-9]*)'))
-      || LPAD(SUBSTRING(${name} FROM '^[^0-9]*([0-9]+)'), 20, '0')
-      || LOWER(SUBSTRING(${name} FROM '^[^0-9]*[0-9]+(.*)$'))
-    ELSE LOWER(${name}) END`.as('natural_name_key');
 
 /**
  * The two arms of the resource UNION.
@@ -645,7 +636,10 @@ export class KnowledgeRepo {
       Boolean(knowledgeBaseId),
     );
 
-    const rows = await unionAll(fileArm, documentArm)
+    // COLLATE is an ORDER BY expression, so sort outside the UNION.
+    const rows = await this.db
+      .select()
+      .from(unionAll(fileArm, documentArm).as('resources'))
       .orderBy(...this.resourceOrderBy(sortType, sorter, Boolean(knowledgeBaseId)))
       .limit(limit)
       .offset(offset);
@@ -905,6 +899,7 @@ export class KnowledgeRepo {
   reorderItems = async (
     knowledgeBaseId: string,
     orderedIds: string[],
+    options?: { parentId?: string | null; sorter?: string; sortType?: string },
   ): Promise<{ success: boolean }> => {
     return this.db.transaction(async (trx) => {
       const scope = { userId: this.userId, workspaceId: this.workspaceId };
@@ -934,7 +929,43 @@ export class KnowledgeRepo {
           )
         : eq(documents.knowledgeBaseId, knowledgeBaseId);
 
-      for (const [index, id] of [...new Set(orderedIds)].entries()) {
+      let siblingIds = [...new Set(orderedIds)];
+      if (options?.parentId !== undefined) {
+        const siblings = await new KnowledgeRepo(
+          trx as unknown as LobeChatDatabase,
+          this.userId,
+          this.workspaceId,
+        ).query({
+          includeContent: false,
+          knowledgeBaseId: kb.id,
+          limit: 100_000,
+          parentId: options.parentId,
+          sorter: options.sorter ?? 'custom',
+          sortType: options.sortType ?? SortType.Asc,
+        });
+        // The query may expose a file-backed page under its document ID.
+        const byId = new Map<string, KnowledgeItem>();
+        for (const sibling of siblings) {
+          byId.set(sibling.id, sibling);
+          if (sibling.fileId) byId.set(sibling.fileId, sibling);
+        }
+        const submitted = new Set(
+          orderedIds.flatMap((id) => {
+            const sibling = byId.get(id);
+            return sibling ? [sibling.id] : [];
+          }),
+        );
+        const reordered = [
+          ...[...submitted].map((id) => byId.get(id)!),
+          ...siblings.filter((item) => !submitted.has(item.id)),
+        ];
+        siblingIds = [
+          ...reordered.filter((item) => item.fileType === CUSTOM_FOLDER_FILE_TYPE),
+          ...reordered.filter((item) => item.fileType !== CUSTOM_FOLDER_FILE_TYPE),
+        ].map((item) => item.id);
+      }
+
+      for (const [index, id] of siblingIds.entries()) {
         const sortOrder = (index + 1) * 1000;
         const documentUpdate = {
           metadata: sql`jsonb_set(COALESCE(${documents.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
@@ -988,7 +1019,7 @@ export class KnowledgeRepo {
         ? asc
         : desc;
     const foldersFirst = asc(sql.raw('folder_rank'));
-    const stableId = asc(sql.raw('id'));
+    const stableId = asc(sql.raw('id COLLATE "C"'));
     if (sorter === 'custom') {
       return [
         foldersFirst,
@@ -1012,9 +1043,8 @@ export class KnowledgeRepo {
    * Both halves of the sort have to be supplied to take effect — a `sorter`
    * without a `sortType` falls back to newest-first, as it always has.
    *
-   * `sql.raw` is required rather than a column reference: after a set operation
-   * `ORDER BY` may only name an output column, and `"f"."name"` is not one. The
-   * value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
+   * Use the query output names rather than source-table column references.
+   * The value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
    */
   private orderBy = (sortType?: string, sorter?: string): SQL => {
     if (!sorter || !sortType || !(sorter in SORTABLE_COLUMNS)) return desc(sql.raw('created_at'));

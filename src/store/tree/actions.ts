@@ -453,8 +453,7 @@ export class TreeActionImpl {
    */
   revalidateLoaded = async (fallbackKey = ''): Promise<void> => {
     void revalidateHierarchySearch();
-    const targets = new Set(this.#loadedVisibleFolders());
-    targets.add(this.#resolveFolderKey(fallbackKey));
+    const targets = new Set([...this.#loadedVisibleFolders(), this.#resolveFolderKey(fallbackKey)]);
 
     this.#pendingBatch += 1;
     try {
@@ -729,6 +728,8 @@ export class TreeActionImpl {
       metadata: { ...item.metadata, sortOrder: (index + 1) * 1000 },
     }));
     const orderedIds = nextItems.map((item) => item.id);
+    const previousSorter = this.#get().sorter;
+    const previousSortType = this.#get().sortType;
     // Avoid a sort-triggered background fetch racing the pending mutation.
     this.#set(
       {
@@ -754,6 +755,8 @@ export class TreeActionImpl {
         knowledgeBaseId,
         orderedIds,
         parentId: folderId || null,
+        sorter: previousSorter,
+        sortType: previousSortType,
       });
     };
     const overlay = viewingFolder ? explorer.reorderCurrentResources(orderedIds) : undefined;

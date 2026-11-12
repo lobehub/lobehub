@@ -3,6 +3,7 @@ import { SortType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { compareResourceItems } from '../../../../../../src/store/file/slices/resource/utils';
 import { getTestDB } from '../../../core/getTestDB';
 import { documents, files, knowledgeBaseFiles, knowledgeBases, users } from '../../../schemas';
 import { KnowledgeRepo } from '../index';
@@ -95,6 +96,119 @@ describe('knowledge resource sorting', () => {
     await addDocument('docs_02_b', '第2章');
     await addDocument('docs_02_a', '第2章');
     expect(await listIds('name')).toEqual(['docs_02_a', 'docs_02_b', 'docs_10']);
+  });
+
+  it('matches client ordering for every numeric run, leading zeros and code points', async () => {
+    const names = [
+      'chapter 1 part 10',
+      'chapter 1 part 2',
+      '250509-1.10',
+      '250509-1.2',
+      '1',
+      '01',
+      '000',
+      '0',
+      '99999999999999999999',
+      '100000000000000000000',
+      '999999999999999999999',
+      '1000000000000000000000',
+      '第10章',
+      '第2章',
+      'Zebra',
+      'apple',
+      '\uE000',
+      '😀',
+    ];
+    for (const [index, name] of names.entries()) await addDocument(`docs_${index}`, name);
+    await addFile('file_pair', 'chapter 1 part 2');
+    await addDocument('docs_\uE000', 'same');
+    await addDocument('docs_😀', 'same');
+    const rows = await repo.query({ knowledgeBaseId, limit: 100 });
+    for (const sortType of [SortType.Asc, SortType.Desc]) {
+      const expected = [...rows].sort((a, b) => compareResourceItems(a, b, 'name', sortType));
+      expect(await listIds('name', sortType)).toEqual(expected.map((row) => row.id));
+    }
+    const ascending = await listIds('name');
+    for (const [before, after] of [
+      [1, 0],
+      [3, 2],
+      [5, 4],
+      [8, 9],
+      [10, 11],
+      [13, 12],
+    ]) {
+      expect(ascending.indexOf(`docs_${before}`)).toBeLessThan(ascending.indexOf(`docs_${after}`));
+    }
+  });
+
+  it('renumbers unloaded siblings after a reordered descending first page', async () => {
+    for (let n = 1; n <= 60; n++) {
+      await addDocument(`docs_${n}`, `Item ${n}`, { metadata: { sortOrder: n * 1000 } });
+    }
+    const page = await repo.query({
+      knowledgeBaseId,
+      parentId: null,
+      sorter: 'custom',
+      sortType: SortType.Desc,
+    });
+    const orderedIds = page.map((item) => item.id);
+    orderedIds.splice(1, 0, orderedIds.pop()!);
+    await repo.reorderItems(knowledgeBaseId, orderedIds, {
+      parentId: null,
+      sorter: 'custom',
+      sortType: SortType.Desc,
+    });
+    const all = await repo.query({
+      knowledgeBaseId,
+      parentId: null,
+      sorter: 'custom',
+      sortType: SortType.Asc,
+      limit: 100,
+    });
+    expect(all.map((item) => item.id)).toEqual([
+      ...orderedIds,
+      ...Array.from({ length: 10 }, (_, i) => `docs_${10 - i}`),
+    ]);
+    expect(all.map((item) => item.metadata?.sortOrder)).toEqual(
+      Array.from({ length: 60 }, (_, i) => (i + 1) * 1000),
+    );
+  });
+
+  it('normalizes paired IDs and keeps complete folder and file groups', async () => {
+    await addDocument('docs_folder_a', 'Folder A', { fileType: 'custom/folder' });
+    await addDocument('docs_folder_b', 'Folder B', { fileType: 'custom/folder' });
+    await addFile('file_pair', 'Pair');
+    await addDocument('docs_pair', 'Pair page', { fileId: 'file_pair' });
+    await addFile('file_unloaded', 'Unloaded');
+    await addDocument('docs_outside', 'Outside');
+    await db
+      .update(documents)
+      .set({ parentId: 'docs_folder_a' })
+      .where(eq(documents.id, 'docs_outside'));
+    await repo.reorderItems(
+      knowledgeBaseId,
+      ['docs_pair', 'file_pair', 'docs_folder_b', 'docs_outside'],
+      {
+        parentId: null,
+        sorter: 'name',
+        sortType: SortType.Asc,
+      },
+    );
+    const rows = await repo.query({
+      knowledgeBaseId,
+      parentId: null,
+      sorter: 'custom',
+      sortType: SortType.Asc,
+    });
+    expect(rows.map((item) => item.id)).toEqual([
+      'docs_folder_b',
+      'docs_folder_a',
+      'docs_pair',
+      'file_unloaded',
+    ]);
+    expect(rows.map((item) => item.metadata?.sortOrder)).toEqual([1000, 2000, 3000, 4000]);
+    const [outside] = await db.select().from(documents).where(eq(documents.id, 'docs_outside'));
+    expect(outside.metadata?.sortOrder).toBeUndefined();
   });
 
   it('uses numeric metadata weights and natural fallback, always keeping folders first', async () => {
