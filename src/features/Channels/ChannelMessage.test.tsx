@@ -300,6 +300,17 @@ describe('ChannelMessage thread card', () => {
     expect(screen.getByText('me')).toBeTruthy();
   });
 
+  it('names the card after the title an Agent gave the thread', () => {
+    render(
+      <ChannelMessage
+        detail={withThread({ replyCount: 1, title: 'Header click fix' })}
+        message={{ ...root, content: 'Topic header is unclickable' }}
+      />,
+    );
+
+    expect(screen.getByText('Header click fix')).toBeTruthy();
+  });
+
   it('still offers the thread when a cached view has no summary', () => {
     render(<ChannelMessage detail={withThread({})} message={root} />);
 

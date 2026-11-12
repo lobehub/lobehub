@@ -129,7 +129,7 @@ export const ThreadPreviewCard = ({
         <span {...stylex.props(styles.threadIcon)}>
           <Icon icon={CornerDownRight} size={14} />
         </span>
-        <span {...stylex.props(styles.title)}>{threadTitle(root) ?? t('thread')}</span>
+        <span {...stylex.props(styles.title)}>{threadTitle(root, thread) ?? t('thread')}</span>
         <span {...stylex.props(styles.count)}>
           {/* Views cached before thread summaries existed only know that the thread exists. */}
           {replyCount ? t('threadCard.messages', { count: replyCount }) : t('openThread')}
