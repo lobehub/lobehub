@@ -18,6 +18,37 @@ const WINDOW_TTL_SECONDS = 65 * 60;
 const PENDING_TTL_SECONDS = 24 * 60 * 60;
 
 /**
+ * Opens a window, unless the same inbound message already has one.
+ * KEYS[1] = window hash; ARGV = msgId, now (ms), eventId, ttl (s).
+ *
+ * QQ redelivers webhooks, and a redelivery must keep the replies already spent: restarting the
+ * counter would reuse `(msg_id, msg_seq)` pairs that QQ rejects as duplicates, which the send path
+ * reads as "already delivered" and drops.
+ * Returns 1 when a window was written, 0 when the existing one was kept.
+ */
+const OPEN_SCRIPT = `
+local current = redis.call('HGET', KEYS[1], 'msgId')
+if current and ARGV[1] ~= '' and current == ARGV[1] then return 0 end
+redis.call('DEL', KEYS[1])
+redis.call('HSET', KEYS[1], 'at', ARGV[2], 'eventId', ARGV[3], 'msgId', ARGV[1], 'seq', '0')
+redis.call('EXPIRE', KEYS[1], ARGV[4])
+return 1
+`;
+
+/**
+ * Claims a parked reply. Reading and deleting must be one step: two instances flushing the same
+ * conversation would otherwise both read the text and send it twice, and a `savePending()` landing
+ * between a GET and a DEL would be lost.
+ * KEYS[1] = pending key. Returns the text, or nil.
+ */
+const PENDING_TAKE_SCRIPT = `
+local text = redis.call('GET', KEYS[1])
+if not text then return nil end
+redis.call('DEL', KEYS[1])
+return text
+`;
+
+/**
  * Takes the next reply slot of a window.
  * KEYS[1] = window hash; ARGV = now (ms), windowMs, maxReplies.
  * Returns `{eventId, msgId, seq}` or nil when the window is closed or out of replies.
@@ -116,16 +147,15 @@ export const qqPassive: QQPassiveStore = {
     }
 
     try {
-      const windowKey = RedisKeys.qqPassive.window(key);
-      const pipeline = redis.pipeline();
-      pipeline.del(windowKey);
-      // Field by field: the client's `hset` signature takes one field, not an object.
-      pipeline.hset(windowKey, 'at', String(token.at));
-      pipeline.hset(windowKey, 'eventId', token.eventId ?? '');
-      pipeline.hset(windowKey, 'msgId', token.msgId ?? '');
-      pipeline.hset(windowKey, 'seq', '0');
-      pipeline.expire(windowKey, WINDOW_TTL_SECONDS);
-      await pipeline.exec();
+      await redis.eval(
+        OPEN_SCRIPT,
+        1,
+        RedisKeys.qqPassive.window(key),
+        token.msgId ?? '',
+        String(token.at),
+        token.eventId ?? '',
+        String(WINDOW_TTL_SECONDS),
+      );
     } catch {
       // A lost window costs the reply, not the message: fall back to what this instance knows.
       await local.open(key, token);
@@ -171,8 +201,7 @@ export const qqPassive: QQPassiveStore = {
     if (!redis) return local.takePending(key);
 
     try {
-      const pendingKey = RedisKeys.qqPassive.pending(key);
-      const [text] = await Promise.all([redis.get(pendingKey), redis.del(pendingKey)]);
+      const text = await redis.eval(PENDING_TAKE_SCRIPT, 1, RedisKeys.qqPassive.pending(key));
 
       return typeof text === 'string' && text ? text : undefined;
     } catch {

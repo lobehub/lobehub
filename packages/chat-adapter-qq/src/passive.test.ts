@@ -49,6 +49,18 @@ describe('QQ passive window', () => {
     expect(slot).toMatchObject({ msgId: 'msg_2', seq: 1 });
   });
 
+  it('keeps the replies already spent when the same message is redelivered', async () => {
+    const store = createMemoryQQPassiveStore();
+    await store.open('app:thread', { at: AT, msgId: 'msg_1' });
+    await store.reserve('app:thread', LIMITS, AT + 1000);
+
+    // QQ redelivers the webhook: its own window must survive.
+    await store.open('app:thread', { at: AT + 2000, msgId: 'msg_1' });
+    const slot = await store.reserve('app:thread', LIMITS, AT + 3000);
+
+    expect(slot).toMatchObject({ msgId: 'msg_1', seq: 2 });
+  });
+
   it('never hands out a slot for an unknown thread', async () => {
     const store = createMemoryQQPassiveStore();
 

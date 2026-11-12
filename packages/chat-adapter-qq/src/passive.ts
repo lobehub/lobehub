@@ -73,6 +73,11 @@ export const createMemoryQQPassiveStore = (): QQPassiveStore => {
 
   return {
     open: async (key, token) => {
+      const window = windows.get(key);
+      // A redelivered inbound message must not restart its own budget: its first replies already
+      // carry (msg_id, msg_seq 1..n), and reusing a sequence is rejected as a duplicate.
+      if (window && token.msgId && window.msgId === token.msgId) return;
+
       // A new inbound message restarts the window (and its reply budget).
       windows.set(key, { at: token.at, eventId: token.eventId, msgId: token.msgId, seq: 0 });
     },
