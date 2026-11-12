@@ -27,3 +27,31 @@ export const useDriveTab = (drives: SandboxDrive[]) => {
 
   return [active, setActive] as const;
 };
+
+export type DriveView = 'cleanup' | 'files';
+
+/**
+ * Which view of the drive is open — its files, or the space analysis and
+ * cleanup — kept in `?view=cleanup` so a quota refusal elsewhere can link
+ * straight to it.
+ */
+export const useDriveView = () => {
+  const [params, setParams] = useSearchParams();
+  const view: DriveView = params.get('view') === 'cleanup' ? 'cleanup' : 'files';
+
+  const setView = useCallback(
+    (next: DriveView) =>
+      setParams(
+        (prev) => {
+          const updated = new URLSearchParams(prev);
+          if (next === 'cleanup') updated.set('view', 'cleanup');
+          else updated.delete('view');
+          return updated;
+        },
+        { replace: true },
+      ),
+    [setParams],
+  );
+
+  return [view, setView] as const;
+};

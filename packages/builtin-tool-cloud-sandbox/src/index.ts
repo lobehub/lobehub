@@ -1,3 +1,4 @@
+export * from './interventionAudit';
 export * from './manifest';
 export * from './projectCheckout';
 export * from './systemRole';

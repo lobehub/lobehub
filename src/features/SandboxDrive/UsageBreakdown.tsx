@@ -15,6 +15,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import UserAvatar from '@/components/UserAvatar';
 import { formatSize } from '@/utils/format';
 
+import CleanupEntryButton from './Cleanup/CleanupEntryButton';
 import type { DriveUsageRefreshResult, useDriveUsage } from './useDriveData';
 
 /** The market's code for a usage refresh whose walk did not finish. */
@@ -479,8 +480,14 @@ export const UsageBreakdown = memo<{
           {t(refused ? 'drive.usage.over' : 'drive.usage.overBilled')}
         </Text>
       )}
-      {/* While writes are refused, the way to keep saving — not only the fact. */}
-      {refused && <SandboxStorageOverQuotaAction />}
+      {/* While writes are refused, the ways to keep saving — not only the fact:
+          free up space, or let the plan take more. */}
+      {refused && (
+        <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+          <CleanupEntryButton />
+          <SandboxStorageOverQuotaAction />
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });
