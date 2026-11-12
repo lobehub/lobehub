@@ -1567,9 +1567,8 @@ export class GatewayActionImpl {
           topicId: result.topicId,
         }),
       onSessionComplete: ({ authFailed, completion, succeeded, terminalReceived }) => {
-        // The gateway event handler already completed the op via the shared run
-        // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
-        // terminal-missing fallback so the op never sticks `running`.
+        // The shared run lifecycle completes the op on `agent_runtime_end` / `error`;
+        // this is the terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
         // An external hetero producer does not run on this socket: the CLI
@@ -1952,8 +1951,7 @@ export class GatewayActionImpl {
         // the preserved external producer case below) must close it here.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
-        // An external producer never streamed over this socket: no transport
-        // signal proves it ended — see the same guard in `executeGatewayAgent`.
+        // External producer: no transport signal proves it ended (see `executeGatewayAgent`).
         if (!terminalReceived && heteroType !== null) {
           const { agentId } = context;
           if (!agentShareId) this.#retireExternalRow({ agentId, operationId, topicId });
@@ -2519,18 +2517,20 @@ export class GatewayActionImpl {
       .catch(console.error);
   };
 
-  /** See {@link retireLocalRowIfServerSettled}. */
+  /** See {@link retireLocalRowIfServerSettled}; what waited here behind the run goes next. */
   #retireExternalRow = (params: {
     agentId?: string;
     groupId?: string;
     operationId: string;
     topicId: string;
-  }) =>
+  }) => {
     void retireLocalRowIfServerSettled({
       clear: (status) => this.clearLocalRunningOperation({ ...params, status }),
       isViewing: () => this.#get().activeTopicId === params.topicId,
       readTopic: () => topicService.getTopicDetail(params.topicId),
     });
+    if (!params.groupId) serverSteerQueue.resumeClientHeldQueue(this.#get, params);
+  };
 
   /**
    * @returns Whether a terminal status was written without a local marker — the

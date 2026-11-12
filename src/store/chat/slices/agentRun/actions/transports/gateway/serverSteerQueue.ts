@@ -306,6 +306,29 @@ const onServerQueueDelivered = async (
 };
 
 /**
+ * Send what waits here behind a heterogeneous run whose stream ended without
+ * its terminal frame. That path completes the local operation without the
+ * run lifecycle's queue drain, and the watch stops once nothing is held on
+ * the server, so follow-ups handed back to this client would otherwise wait
+ * for the next send. Ones that were queueable go to the server again — still
+ * steered into a live run, or handed back when it is over — the rest are sent
+ * once nothing runs here.
+ */
+export const resumeClientHeldQueue = (
+  get: Get,
+  surface: { agentId?: string; topicId: string },
+): void => {
+  if (!surface.agentId) return;
+  const context: ConversationContext = { agentId: surface.agentId, topicId: surface.topicId };
+  const contextKey = messageMapKey(context);
+  const left = queueOf(get, contextKey).filter(
+    (message) => isClientHeldQueuedMessage(message) && message.serverRequest,
+  );
+  if (left.length === 0) return sendIfIdle(get, contextKey, context);
+  for (const message of left) void handOffQueuedMessage(get, contextKey, context, message.id);
+};
+
+/**
  * An append whose answer was lost and that the server does not list: append
  * the same id again, which never stores it twice, and let the answer say where
  * it is — waiting, delivered, or never stored (then this client sends it).

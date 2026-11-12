@@ -12,6 +12,7 @@ import {
   handOffQueuedMessage,
   reclaimServerQueuedMessages,
   restoreServerQueuedMessages,
+  resumeClientHeldQueue,
   SERVER_QUEUE_POLL_MS,
   watchServerQueue,
   withdrawQueuedMessage,
@@ -654,6 +655,44 @@ describe('server queue watch behind a hetero run this tab no longer follows', ()
     expect(get().reconnectToGatewayOperation).toHaveBeenCalledWith(
       expect.objectContaining({ operationId: 'op-hetero', topicId: 'tpc-1' }),
     );
+  });
+});
+
+describe('resumeClientHeldQueue', () => {
+  it('hands a queueable follow-up back to the server', async () => {
+    const append = vi
+      .spyOn(aiAgentService, 'appendQueuedFollowUp')
+      .mockResolvedValue({ id: 'q1', length: 1, queued: true });
+    get().enqueueMessage(key, queued('q1', { serverRequest: request }));
+
+    resumeClientHeldQueue(get, context);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(append).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1', request }));
+    expect(queue()[0].serverDelivery).toBe('server');
+  });
+
+  it('sends the rest once nothing runs here', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({ sendMessage });
+    get().enqueueMessage(key, queued('q1'));
+
+    resumeClientHeldQueue(get, context);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ message: 'q1' }));
+  });
+
+  it('leaves them to a run still going here', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({ sendMessage });
+    startRun();
+    get().enqueueMessage(key, queued('q1'));
+
+    resumeClientHeldQueue(get, context);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });
 
