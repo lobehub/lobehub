@@ -80,6 +80,50 @@ describe('resolveCompressionModelFacts', () => {
     expect(facts.maxWindowToken).toBe(200_000);
   });
 
+  describe("with the operation's frozen model facts", () => {
+    const frozen = (compression?: Record<string, number>) => ({
+      cards: [],
+      compression,
+      model: 'my-model',
+      provider: 'custom',
+    });
+
+    it('reuses the frozen facts for the same model without reading the row', async () => {
+      mocks.bank = { contextWindowTokens: 128_000 };
+
+      await expect(
+        resolveCompressionModelFacts(
+          deps,
+          'my-model',
+          'custom',
+          frozen({ maxWindowToken: 400_000, modelThresholdRatio: 0.8 }),
+        ),
+      ).resolves.toEqual({ maxWindowToken: 400_000, modelThresholdRatio: 0.8 });
+      expect(mocks.findByIdAndProvider).not.toHaveBeenCalled();
+    });
+
+    it('resolves live when the snapshot was frozen for another model', async () => {
+      mocks.findByIdAndProvider.mockResolvedValue({ contextWindowTokens: 200_000 });
+
+      const facts = await resolveCompressionModelFacts(
+        deps,
+        'compression-model',
+        'custom',
+        frozen({ maxWindowToken: 400_000 }),
+      );
+      expect(facts.maxWindowToken).toBe(200_000);
+      expect(mocks.findByIdAndProvider).toHaveBeenCalledWith('compression-model', 'custom');
+    });
+
+    it('resolves live when the snapshot carries no compression facts', async () => {
+      mocks.findByIdAndProvider.mockResolvedValue({ contextWindowTokens: 400_000 });
+
+      const facts = await resolveCompressionModelFacts(deps, 'my-model', 'custom', frozen());
+      expect(facts.maxWindowToken).toBe(400_000);
+      expect(mocks.findByIdAndProvider).toHaveBeenCalledOnce();
+    });
+  });
+
   it('leaves the window unknown when neither source has it', async () => {
     await expect(resolveCompressionModelFacts(deps, 'unknown', 'custom')).resolves.toEqual({
       maxWindowToken: undefined,

@@ -1,8 +1,9 @@
-import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import type { CompressionModelFacts, FrozenModelFacts } from '@lobechat/types';
 import debug from 'debug';
 
 import { AiModelModel } from '@/database/models/aiModel';
 import type { LobeChatDatabase } from '@/database/type';
+import { buildCompressionModelFacts } from '@/server/modules/AgentRuntime/compressionModelFacts';
 
 const log = debug('lobe-server:agent-runtime-service');
 
@@ -30,34 +31,22 @@ const readUserModelRow = async (
   }
 };
 
-export interface CompressionModelFacts {
-  /** The window the compression threshold is computed from. */
-  maxWindowToken?: number;
-  /** The model card's own share of the window that triggers compression. */
-  modelThresholdRatio?: number;
-}
-
 /**
- * The window and ratio automatic compression measures against. A window the
- * user set on their own model row (a custom model, or a builtin they edited)
- * wins over the catalog, so such models no longer fall back to the 128k
- * default. The ratio only comes from the model-bank card.
+ * The compression facts for one step. The operation froze them with the rest
+ * of its model facts when it was created, so every step and retry reuses that
+ * snapshot instead of querying the user's model row again. Another model (a
+ * compression model), or an operation whose snapshot lacks them, resolves live.
  */
 export const resolveCompressionModelFacts = async (
   deps: CompressionModelFactsDeps,
   model: string,
   provider: string,
+  frozen?: FrozenModelFacts,
 ): Promise<CompressionModelFacts> => {
-  const [bankWindow, bankRatio, userModel] = await Promise.all([
-    getModelPropertyWithFallback<number | undefined>(model, 'contextWindowTokens', provider),
-    getModelPropertyWithFallback<number | undefined>(model, 'compressionThresholdRatio', provider),
-    readUserModelRow(deps, model, provider),
-  ]);
+  if (frozen?.compression && frozen.model === model && frozen.provider === provider) {
+    return frozen.compression;
+  }
 
-  const userWindow = userModel?.contextWindowTokens;
-
-  return {
-    maxWindowToken: typeof userWindow === 'number' && userWindow > 0 ? userWindow : bankWindow,
-    modelThresholdRatio: bankRatio,
-  };
+  const userModel = await readUserModelRow(deps, model, provider);
+  return buildCompressionModelFacts(model, provider, userModel?.contextWindowTokens);
 };
