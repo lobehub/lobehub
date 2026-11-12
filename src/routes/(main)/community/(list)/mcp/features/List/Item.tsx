@@ -193,10 +193,7 @@ const McpItem = memo<DiscoverMcpItem>(
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime
-                className={stylex.props(styles.secondaryDesc).className}
-                date={updatedAt}
-              />
+              <PublishedTime date={updatedAt} xstyle={styles.secondaryDesc} />
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={8}>
               {t(`mcp.categories.${category}.name` as any)}

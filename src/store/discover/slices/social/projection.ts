@@ -2,10 +2,12 @@ import { defineReplica, stableQueryKey } from '@/libs/replica';
 import {
   type FavoriteAgentItem,
   type FavoritePluginItem,
+  type FavoriteStatus,
   type FollowCounts,
   type FollowStatus,
   type FollowUserItem,
   type PaginatedResponse,
+  type SocialTargetType,
 } from '@/services/social';
 import { socialService } from '@/services/social';
 
@@ -100,6 +102,29 @@ export const favoritePluginsResource = defineReplica<
     socialService.getUserFavoritePlugins(userId, { page, pageSize }),
   key: socialListKey,
   name: 'discoverFavoritePlugins',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** Whether the viewer has favorited one Market target (an MCP plugin, agent or group). */
+export interface FavoriteStatusParams {
+  identifier: string;
+  targetType: SocialTargetType;
+}
+
+/**
+ * Entry key of one favorite status. The target type is part of it: an agent
+ * and a group can share an identifier.
+ */
+export const favoriteStatusKey = (params: FavoriteStatusParams): string => stableQueryKey(params);
+
+/** The viewer's favorite status of one target (`favoriteStatusMap[key]`). */
+export const favoriteStatusResource = defineReplica<FavoriteStatusParams, FavoriteStatus>({
+  fetcher: ({ identifier, targetType }) =>
+    socialService.checkFavoriteStatus(targetType, identifier),
+  key: favoriteStatusKey,
+  name: 'discoverFavoriteStatus',
+  persist: { maxEntries: 100 },
   storage: 'indexedDB',
   version: 1,
 });

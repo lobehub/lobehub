@@ -85,6 +85,20 @@ export const GROUP_CHAT_URL = (groupId: string) => `/group/${groupId}`;
 export const GROUP_CHAT_TOPIC_URL = (groupId: string, topicId: string) =>
   urlJoin('/group', groupId, topicId);
 
+/**
+ * A Channel page. A thread link opens the thread as the page (`view=page`); opening one from
+ * a message instead shows it beside the Channel (`?thread=` alone). A project's Channel opens
+ * inside the project so its sidebar stays in place.
+ */
+export const CHANNEL_URL = (
+  channelId: string,
+  threadId?: string | null,
+  projectId?: string | null,
+) => {
+  const path = projectId ? `/project/${projectId}/channels/${channelId}` : `/channels/${channelId}`;
+  return threadId ? `${path}?thread=${encodeURIComponent(threadId)}&view=page` : path;
+};
+
 export const LIBRARY_URL = (id: string) => urlJoin('/resource/library', id);
 
 // Fixed product imagery is mirrored to the static origin; /app-images belongs to the App.

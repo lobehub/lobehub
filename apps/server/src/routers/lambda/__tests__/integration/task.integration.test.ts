@@ -4,9 +4,9 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
-import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { ProjectRepository } from '@/database/repositories/project';
 import { TaskService } from '@/server/services/task';
 
 import { taskRouter } from '../../task';
@@ -17,6 +17,32 @@ import {
   createTestTopic,
   createTestUser,
 } from './setup';
+
+const taskInput = (
+  agentId: string,
+): Parameters<ReturnType<typeof taskRouter.createCaller>['create']>[0] => ({
+  assigneeAgentId: agentId,
+  instruction: 'Test',
+});
+
+const chapterInput = (
+  agentId: string,
+  instruction: string,
+  parentTaskId: string,
+): Parameters<ReturnType<typeof taskRouter.createCaller>['create']>[0] => ({
+  assigneeAgentId: agentId,
+  instruction,
+  parentTaskId,
+});
+
+const workspaceRoster = (
+  userId: string,
+  workspaceId: string,
+  memberId: string,
+): Array<{ role: 'owner' | 'member'; userId: string; workspaceId: string }> => [
+  { role: 'owner', userId, workspaceId },
+  { role: 'member', userId: memberId, workspaceId },
+];
 
 // Mock getServerDB
 let testDB: LobeChatDatabase;
@@ -136,7 +162,7 @@ describe('Task Router Integration', () => {
         }
         const scopedCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
         const model = new TaskModel(serverDB, userId, workspaceId);
-        const project = await new ProjectModel(serverDB, userId, workspaceId).create({
+        const project = await new ProjectRepository(serverDB, userId, workspaceId).create({
           identifier: 'PROJ',
           name: 'Prefix project',
         });
@@ -302,10 +328,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsAgentId = 'agt_assignee_coexist_ws';
       await serverDB
         .insert(agents)
@@ -789,10 +814,7 @@ describe('Task Router Integration', () => {
 
   describe('run idempotency', () => {
     it('resolves a task identifier to its row when starting a run', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.identifier });
 
@@ -801,10 +823,7 @@ describe('Task Router Integration', () => {
     });
 
     it('should reject run when a topic is already running', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       // First run succeeds
       await caller.run({ id: task.data.id });
@@ -814,10 +833,7 @@ describe('Task Router Integration', () => {
     });
 
     it('should reject continue on already running topic', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.id });
 
@@ -864,10 +880,7 @@ describe('Task Router Integration', () => {
     it('should rollback task status to paused on run failure', async () => {
       mockExecAgent.mockRejectedValueOnce(new Error('LLM failed'));
 
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await expect(caller.run({ id: task.data.id })).rejects.toThrow();
 
@@ -892,10 +905,7 @@ describe('Task Router Integration', () => {
         topicId: testTopicId,
       });
 
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await expect(caller.run({ id: task.data.id })).rejects.toThrow();
 
@@ -930,10 +940,7 @@ describe('Task Router Integration', () => {
 
   describe('cancelTopic', () => {
     it('should cancel a running topic and pause task', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.id });
 
@@ -946,10 +953,7 @@ describe('Task Router Integration', () => {
     });
 
     it('should reject cancel on non-running topic', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       await caller.run({ id: task.data.id });
       await caller.cancelTopic({ topicId: 'tpc_test' });
@@ -1223,10 +1227,7 @@ describe('Task Router Integration', () => {
 
   describe('heartbeat timeout detection', () => {
     it('should auto-detect timeout on detail and pause task', async () => {
-      const task = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Test',
-      });
+      const task = await caller.create(taskInput(testAgentId));
 
       // Start running with very short timeout
       await caller.update({
@@ -1251,21 +1252,9 @@ describe('Task Router Integration', () => {
   describe('subtask layers + batch run', () => {
     it('previewSubtaskLayers groups subtasks by dependency level', async () => {
       const parent = await caller.create({ instruction: 'Book' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
-      const ch3 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 3',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
+      const ch3 = await caller.create(chapterInput(testAgentId, 'Chapter 3', parent.data.id));
       // ch3 depends on ch1 and ch2
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch3.data.id });
       await caller.addDependency({ dependsOnId: ch2.data.id, taskId: ch3.data.id });
@@ -1298,21 +1287,9 @@ describe('Task Router Integration', () => {
 
     it('runReadySubtasks kicks off the first layer only', async () => {
       const parent = await caller.create({ instruction: 'Book' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
-      const ch3 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 3',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
+      const ch3 = await caller.create(chapterInput(testAgentId, 'Chapter 3', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch3.data.id });
       await caller.addDependency({ dependsOnId: ch2.data.id, taskId: ch3.data.id });
 
@@ -1337,16 +1314,8 @@ describe('Task Router Integration', () => {
 
     it('previewSubtaskLayers holds back dependents of in-flight subtasks (does not free them)', async () => {
       const parent = await caller.create({ instruction: 'Inflight blocker' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
 
       // Kick ch1 off — now in `running` state
@@ -1362,16 +1331,8 @@ describe('Task Router Integration', () => {
 
     it('runReadySubtasks does not start a subtask whose blocker is still running', async () => {
       const parent = await caller.create({ instruction: 'Inflight runReady' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
 
       await caller.run({ id: ch1.data.id });
@@ -1392,11 +1353,7 @@ describe('Task Router Integration', () => {
         instruction: 'External blocker',
       });
       const parent = await caller.create({ instruction: 'Cross-scope' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
       // ch1 depends on a task that is NOT a descendant of parent
       await caller.addDependency({ dependsOnId: externalBlocker.data.id, taskId: ch1.data.id });
 
@@ -1415,16 +1372,8 @@ describe('Task Router Integration', () => {
 
     it('updateStatus(completed) triggers cascade kickoff for unlocked downstream', async () => {
       const parent = await caller.create({ instruction: 'Cascade' });
-      const ch1 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 1',
-        parentTaskId: parent.data.id,
-      });
-      const ch2 = await caller.create({
-        assigneeAgentId: testAgentId,
-        instruction: 'Chapter 2',
-        parentTaskId: parent.data.id,
-      });
+      const ch1 = await caller.create(chapterInput(testAgentId, 'Chapter 1', parent.data.id));
+      const ch2 = await caller.create(chapterInput(testAgentId, 'Chapter 2', parent.data.id));
       await caller.addDependency({ dependsOnId: ch1.data.id, taskId: ch2.data.id });
 
       // Kick off layer 1 (just ch1)
@@ -1534,10 +1483,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const wsOtherCaller = taskRouter.createCaller({
         ...createTestContext(otherUserId),
@@ -1578,10 +1526,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const wsOtherCaller = taskRouter.createCaller({
         ...createTestContext(otherUserId),
@@ -1656,10 +1603,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 
       // Create without assignee, then assign another member → notifies once.
@@ -1881,10 +1827,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const memberCaller = taskRouter.createCaller({
         ...createTestContext(otherUserId!),
@@ -1942,10 +1887,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
       const memberCaller = taskRouter.createCaller({
         ...createTestContext(otherUserId!),
@@ -1983,10 +1927,9 @@ describe('Task Router Integration', () => {
         primaryOwnerId: userId,
         slug: workspaceId,
       });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
+      await serverDB
+        .insert(workspaceMembers)
+        .values(workspaceRoster(userId, workspaceId, otherUserId!));
       const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
 
       // Creating a private task assigned to another member is rejected.

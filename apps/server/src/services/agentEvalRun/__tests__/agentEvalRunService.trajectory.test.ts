@@ -17,6 +17,13 @@ vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
 
 beforeEach(cleanupDB);
 
+const contains42CaseInput = (): Parameters<typeof setupEvalChain>[0] => ({
+  assistantOutput: '42',
+  datasetEvalMode: 'contains',
+  expected: '42',
+  totalCases: 1,
+});
+
 describe('AgentEvalRunService', () => {
   describe('recordTrajectoryCompletion', () => {
     it('should write telemetry and update real-time metrics', async () => {
@@ -90,12 +97,7 @@ describe('AgentEvalRunService', () => {
     });
 
     it('should persist toolCalls and llmCalls in evalResult', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       const service = new AgentEvalRunService(serverDB, userId);
       await service.recordTrajectoryCompletion({
@@ -191,12 +193,7 @@ describe('AgentEvalRunService', () => {
     });
 
     it('should short-circuit on error status and skip evaluation', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       const service = new AgentEvalRunService(serverDB, userId);
       await service.recordTrajectoryCompletion({
@@ -247,6 +244,32 @@ describe('AgentEvalRunService', () => {
       expect(runTopic?.passed).toBe(false);
       expect(runTopic?.score).toBe(0);
       expect(runTopic?.evalResult?.error).toBe('No assistant output');
+    });
+
+    it('grades an attempt that hit its step cap without answering as failed, not error', async () => {
+      const { run, testCase } = await setupEvalChain({
+        assistantOutput: null,
+        benchmarkRubrics: [{ config: {}, id: 'r1', name: 'contains', type: 'contains', weight: 1 }],
+        expected: '42',
+        totalCases: 1,
+      });
+      await new AgentEvalRunModel(serverDB, userId).update(run.id, { config: { maxSteps: 20 } });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await service.recordTrajectoryCompletion({
+        runId: run.id,
+        telemetry: { completionReason: 'done', duration: 100, steps: 21 },
+        testCaseId: testCase.id,
+      });
+
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+
+      expect(runTopic?.status).toBe('failed');
+      expect(runTopic?.score).toBe(0);
+      expect(runTopic?.evalResult?.error).toBe(
+        'Reached the step limit (20) without a final answer',
+      );
     });
 
     it('should write status=failed when evaluation does not pass', async () => {
@@ -405,12 +428,7 @@ describe('AgentEvalRunService', () => {
 
   describe('recordTrajectoryCompletion - re-entry guard', () => {
     it('should skip telemetry and evaluation when topic is already in timeout state', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       // Manually mark the topic as timeout (simulating what checkAndHandleRunTimeout does)
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
@@ -482,12 +500,7 @@ describe('AgentEvalRunService', () => {
     });
 
     it('should skip telemetry when topic is already in passed state', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       // Complete normally first
       const service = new AgentEvalRunService(serverDB, userId);

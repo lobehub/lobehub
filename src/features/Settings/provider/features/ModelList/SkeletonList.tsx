@@ -1,47 +1,30 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    gap: 24px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  leftContent: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  rightContent: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  `,
-  textContent: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 4px;
-
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    gap: '24px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  leftContent: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: '0' },
+  rightContent: { display: 'flex', gap: '4px', alignItems: 'center' },
+  textContent: { display: 'flex', flex: '1', flexDirection: 'column', gap: '4px', minWidth: '0' },
+});
 
 export const Placeholder = memo(() => {
   return (
-    <Flexbox horizontal className={styles.container}>
-      <Flexbox horizontal className={styles.leftContent}>
+    <Flexbox horizontal className={stylex.props(styles.container).className}>
+      <Flexbox horizontal className={stylex.props(styles.leftContent).className}>
         <Skeleton.Avatar shape="square" size={32} style={{ flex: 'none' }} />
-        <Flexbox className={styles.textContent}>
+        <Flexbox className={stylex.props(styles.textContent).className}>
           <Skeleton height={18} width={160} />
           <Flexbox horizontal gap={4}>
             <Skeleton height={16} width={60} />
@@ -49,7 +32,7 @@ export const Placeholder = memo(() => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-      <Flexbox horizontal className={styles.rightContent}>
+      <Flexbox horizontal className={stylex.props(styles.rightContent).className}>
         <Skeleton
           style={{
             borderRadius: 12,

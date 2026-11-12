@@ -100,6 +100,7 @@ export class HomeRepository {
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
+        forkedFromIdentifier: sql<string | null>`${agents.params}->>'forkedFromIdentifier'`,
         id: agents.id,
         name: agents.name,
         model: agents.model,
@@ -245,6 +246,8 @@ export class HomeRepository {
     groupUnread: Map<string, number>;
   }> {
     const isUnread = eq(topics.status, 'unread');
+    // A workspace scope matches every member's topics; the badge is the caller's own unread.
+    const isMine = eq(topics.userId, this.userId);
     const isMainSidebarTopic = or(
       isNull(topics.trigger),
       not(inArray(topics.trigger, HOME_UNREAD_EXCLUDE_TRIGGERS)),
@@ -260,6 +263,7 @@ export class HomeRepository {
             // Agent-share visitor topics keep the creator's userId — never bump
             // the creator's own unread badge for a visitor's conversation.
             notShareVisitorTopic(),
+            isMine,
             isUnread,
             isMainSidebarTopic,
             sql`${topics.agentId} is not null`,
@@ -273,6 +277,7 @@ export class HomeRepository {
           and(
             buildWorkspaceWhere(this.scope, topics),
             notShareVisitorTopic(),
+            isMine,
             isUnread,
             isMainSidebarTopic,
             sql`${topics.groupId} is not null`,
@@ -297,6 +302,7 @@ export class HomeRepository {
       avatar: string | null;
       backgroundColor: string | null;
       description: string | null;
+      forkedFromIdentifier: string | null;
       id: string;
       name: string | null;
       model: string | null;
@@ -354,6 +360,7 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
+          forkedFromIdentifier: a.forkedFromIdentifier,
           groupId: a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,

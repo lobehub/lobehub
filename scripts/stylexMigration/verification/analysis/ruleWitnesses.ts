@@ -1,9 +1,10 @@
 import type { Page } from '@playwright/test';
 import { z } from 'zod';
 
+import { parseWidthCondition } from '../../../../packages/style-equivalence/src/capture/conditionPartitions';
 import type { collectRulesInPage } from '../browser/ruleInventory';
 import type { RuntimeCompositions } from '../browser/runtimeCompositions';
-import { parseWidthCondition } from './conditionPartitions';
+import type { CaptureRoot } from '../browser/surfaces';
 import { analyzeSelector } from './selectorAnalysis';
 import type { StyleBindingPlan } from './styleBindings';
 
@@ -153,11 +154,10 @@ export type RuleWitnessPlan = ReturnType<typeof planRuleWitnesses>;
 export const collectRuleWitnessesInPage = (input: {
   nonce: string;
   rules: RuleWitnessPlan['rules'];
+  roots?: CaptureRoot[];
 }) => {
   if (!/^[a-f\d]{16}$/.test(input.nonce)) throw new Error('INVALID_WITNESS_NAMESPACE');
   if (input.rules.length > 1000) throw new Error('RULE_WITNESS_BUDGET_EXCEEDED');
-  const root = document.querySelector('[data-case-root]');
-  if (!root) throw new Error('RULE_WITNESS_ROOT_MISSING');
   const keys = new Map<Element, string>();
   const walk = (element: Element, key: string) => {
     keys.set(element, key);
@@ -165,7 +165,11 @@ export const collectRuleWitnessesInPage = (input: {
       .filter((child) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(child.tagName))
       .forEach((child, index) => walk(child, `${key}.${index}`));
   };
-  walk(root, 'root');
+  for (const surface of input.roots ?? [{ selector: '[data-case-root]', keyPrefix: '' }]) {
+    const root = document.querySelector(surface.selector);
+    if (!root) throw new Error('RULE_WITNESS_ROOT_MISSING');
+    walk(root, `${surface.keyPrefix}root`);
+  }
   const absoluteSelector = (element: Element) => {
     const segments: string[] = [];
     for (
@@ -214,12 +218,12 @@ export const collectRuleWitnessesInPage = (input: {
       const triggers =
         rule.states.length === 1
           ? [...document.querySelectorAll(rule.states[0].selector)].filter((element) =>
-              root.contains(element),
+              keys.has(element),
             )
           : [];
       if (triggers.length > 512) throw new Error('RULE_TRIGGER_BUDGET_EXCEEDED');
       const targets = [...document.querySelectorAll(rule.targetSelector)]
-        .filter((element) => root.contains(element))
+        .filter((element) => keys.has(element))
         .map((element) => {
           const computed = getComputedStyle(element, rule.pseudo);
           const containers: Array<{

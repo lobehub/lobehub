@@ -4,9 +4,11 @@ import { useClientDataSWR } from '@/libs/swr';
 import { projectReviewKeys } from '@/libs/swr/projectReviewKeys';
 import { projectReviewService } from '@/services/projectReview';
 
-export const useProjectSites = (projectId: string) =>
-  useClientDataSWR(projectReviewKeys.sites(projectId), () =>
-    projectReviewService.listSites(projectId),
+export const useProjectSites = (projectId: string | null, config?: { refreshInterval?: number }) =>
+  useClientDataSWR(
+    projectId ? projectReviewKeys.sites(projectId) : null,
+    () => projectReviewService.listSites(projectId!),
+    config,
   );
 
 export const useProjectMembers = (projectId: string) =>

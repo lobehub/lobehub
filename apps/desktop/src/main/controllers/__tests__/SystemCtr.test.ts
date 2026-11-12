@@ -1,5 +1,5 @@
 import type { ThemeMode } from '@lobechat/electron-client-ipc';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 import type { IpcContext } from '@/utils/ipc';
@@ -57,6 +57,7 @@ vi.mock('electron', () => ({
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
     getPreferredSystemLanguages: vi.fn(() => ['en-US']),
+    isPackaged: false,
   },
   desktopCapturer: {
     getSources: vi.fn(async () => []),
@@ -74,6 +75,7 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
+    openPath: vi.fn().mockResolvedValue(''),
   },
   systemPreferences: {
     askForMediaAccess: vi.fn(async () => true),
@@ -81,6 +83,18 @@ vi.mock('electron', () => ({
     isTrustedAccessibilityClient: vi.fn(() => true),
   },
 }));
+
+const structuredLogMock = vi.hoisted(() => ({
+  applyDebugLogging: vi.fn(),
+  getStructuredLogDirectory: vi.fn(() => '/mock/path/userData/logs'),
+}));
+vi.mock('@/utils/structuredLog', () => structuredLogMock);
+
+const remoteDebuggingMock = vi.hoisted(() => ({
+  REMOTE_DEBUGGING_PORT: 9222,
+  getRemoteDebuggingLaunchState: vi.fn(() => ({ active: false, openedByLaunchOption: false })),
+}));
+vi.mock('@/modules/remoteDebugging', () => remoteDebuggingMock);
 
 // Mock platform detection
 vi.mock('@/utils/platform', () => ({
@@ -207,6 +221,66 @@ describe('SystemController', () => {
       await invokeIpc('system.setDesktopOnboardingCompleted', true);
 
       expect(mockStoreManager.set).toHaveBeenCalledWith('desktopOnboardingCompleted', true);
+    });
+  });
+
+  describe('debug logging', () => {
+    // `const/dir` reads `isPackaged` at import, so flip it only around these cases.
+    beforeEach(async () => {
+      const { app } = await import('electron');
+      Object.assign(app, { isPackaged: true });
+    });
+    afterEach(async () => {
+      const { app } = await import('electron');
+      Object.assign(app, { isPackaged: false });
+    });
+
+    it('reports the persisted setting for a packaged build', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true);
+
+      expect(await invokeIpc('system.getDebugLoggingSettings')).toEqual({
+        alwaysOn: false,
+        enabled: true,
+      });
+    });
+
+    it('persists the switch and applies it to the running log sink', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true);
+
+      const result = await invokeIpc('system.setDebugLoggingEnabled', true);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('debugLoggingEnabled', true);
+      expect(structuredLogMock.applyDebugLogging).toHaveBeenCalledWith(true);
+      expect(result).toEqual({ alwaysOn: false, enabled: true });
+    });
+
+    it('opens the structured log directory', async () => {
+      const { shell } = await import('electron');
+      await invokeIpc('system.openLogDirectory');
+
+      expect(shell.openPath).toHaveBeenCalledWith('/mock/path/userData/logs');
+    });
+  });
+
+  describe('remote debugging', () => {
+    it('reports the persisted toggle with the current launch state', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true);
+
+      expect(await invokeIpc('system.getRemoteDebuggingSettings')).toEqual({
+        active: false,
+        enabled: true,
+        openedByLaunchOption: false,
+        port: 9222,
+      });
+    });
+
+    it('persists the toggle for the next launch without opening CDP now', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true);
+
+      const result = await invokeIpc('system.setRemoteDebuggingEnabled', true);
+
+      expect(mockStoreManager.set).toHaveBeenCalledWith('remoteDebuggingEnabled', true);
+      expect(result).toMatchObject({ active: false, enabled: true });
     });
   });
 

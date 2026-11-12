@@ -1,13 +1,21 @@
-import { CHANNEL_LIMITS } from '@lobechat/types';
+import type { BotWakeDecisionPage } from '@lobechat/types';
+import { CHANNEL_LIMITS, SIGNAL_DECISION_OUTCOMES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { SCOPE_READ_MAX_LIMIT, SignalDecisionModel } from '@/database/models/signalDecision';
 import { ChannelError } from '@/database/repositories/channel';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { ChannelService } from '@/server/services/channel/ChannelService';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
+import {
+  CHANNEL_WAKE_FOLLOWUP_REASONS,
+  channelWakeScopeKey,
+} from '@/server/services/channel/wakeRecords';
+import { WakeConfigInputSchema } from '@/server/services/conversationWake/config';
+import { pickWakeJudgeScore } from '@/server/services/conversationWake/judgeScore';
 
 import { channelHistoryProcedures } from './channelHistory';
 
@@ -40,10 +48,13 @@ const channelProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx,
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
+  /** Without a Channel, the people a new Channel in this workspace can start with. */
   userCandidates: channelProcedure
-    .input(z.object({ channelId, search: z.string().max(100).optional() }))
+    .input(z.object({ channelId: channelId.optional(), search: z.string().max(100).optional() }))
     .query(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.userCandidates(input.channelId, input.search),
+      data: input.channelId
+        ? await ctx.channelService.repository.userCandidates(input.channelId, input.search)
+        : await ctx.channelService.repository.newChannelUserCandidates(input.search),
       success: true,
     })),
   archive: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
@@ -84,6 +95,85 @@ export const channelRouter = router({
       ),
       success: true,
     })),
+  /** The channel's reply strategy and each Agent member's own, as stored; admins only. */
+  wakeConfig: channelProcedure.input(z.object({ channelId })).query(async ({ ctx, input }) => ({
+    data: await ctx.channelService.repository.wakeConfig(input.channelId),
+    success: true,
+  })),
+  /**
+   * Replaces the channel's reply strategy, or with `memberId` that Agent member's own over it.
+   * `null` returns it to the defaults. Validated by the same schema IM bots' rules are parsed with.
+   */
+  updateWakeConfig: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        memberId: z.uuid().optional(),
+        wake: WakeConfigInputSchema.nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: input.memberId
+        ? await ctx.channelService.repository.updateMemberWakeConfig(
+            input.channelId,
+            input.memberId,
+            input.wake,
+          )
+        : await ctx.channelService.repository.updateChannelWakeConfig(input.channelId, input.wake),
+      success: true,
+    })),
+  /**
+   * One Agent member's wake decisions in this channel, newest first, from the default read window
+   * of `SignalDecisionModel.listByScope`: the same page an IM bot's wake records render.
+   */
+  listWakeDecisions: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        cursor: z.object({ createdAt: z.string().datetime(), id: z.uuid() }).optional(),
+        followupOnly: z.boolean().optional(),
+        limit: z.number().int().min(1).max(SCOPE_READ_MAX_LIMIT).optional(),
+        memberId: z.uuid(),
+        offset: z.number().int().min(0).optional(),
+        outcome: z.enum(SIGNAL_DECISION_OUTCOMES).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }): Promise<{ data: BotWakeDecisionPage; success: true }> => {
+      const scope = await ctx.channelService.repository.memberWakeRecordScope(
+        input.channelId,
+        input.memberId,
+      );
+      if (!scope) return { data: { items: [], total: 0 }, success: true };
+
+      const followups = new Set<string>(CHANNEL_WAKE_FOLLOWUP_REASONS);
+      const page = await new SignalDecisionModel(
+        ctx.serverDB,
+        scope.userId,
+        scope.workspaceId ?? undefined,
+      ).listByScope({
+        cursor: input.cursor,
+        finalReasons: input.followupOnly ? [...CHANNEL_WAKE_FOLLOWUP_REASONS] : undefined,
+        limit: input.limit,
+        offset: input.offset,
+        outcome: input.outcome,
+        scopeKey: channelWakeScopeKey(input.channelId, input.memberId),
+      });
+
+      return {
+        data: {
+          items: page.items.map(({ labels: _labels, verdicts, ...item }) => ({
+            ...item,
+            agentLabel: null,
+            followup: !!item.finalReason && followups.has(item.finalReason),
+            judge: pickWakeJudgeScore(verdicts, item.finalReason) ?? null,
+            userLabel: null,
+          })),
+          nextCursor: page.nextCursor,
+          total: page.total,
+        },
+        success: true,
+      };
+    }),
   addUser: channelProcedure
     .input(z.object({ channelId, userId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => ({
@@ -93,9 +183,10 @@ export const channelRouter = router({
   create: channelProcedure
     .input(
       z.object({
-        agents: z.array(agentSelection).min(1).max(20),
+        agents: z.array(agentSelection).max(20).default([]),
         projectId: z.string().min(1).optional(),
         title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
+        userIds: z.array(z.string().min(1)).max(100).default([]),
       }),
     )
     .mutation(async ({ ctx, input }) => ({
@@ -128,6 +219,18 @@ export const channelRouter = router({
       data: await ctx.channelService.detail(input.channelId, input),
       success: true,
     })),
+  /**
+   * The caller's direct conversation with an Agent, opened on first use for Agents that predate
+   * direct Channels. Null when the Agent cannot answer in a Channel (no reachable device).
+   */
+  openDirect: channelProcedure
+    .input(z.object({ agentId: z.string().min(1), localDeviceId: z.string().min(1).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openDirect(input.agentId, {
+        localDeviceId: input.localDeviceId,
+      });
+      return { data: access?.channel.id ?? null, success: true };
+    }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,

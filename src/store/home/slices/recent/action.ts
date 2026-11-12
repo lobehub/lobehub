@@ -9,7 +9,7 @@ import {
 } from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { fileService } from '@/services/file';
-import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
+import { RECENT_CONVERSATION_TYPES, RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import type { HomeStore } from '@/store/home/store';
@@ -18,10 +18,12 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type RecentEntityRef, toRecentEntityRef } from './initialState';
 import {
+  conversationRecentResource,
   DOCS_HOME_LIMIT,
   docsHomeListResource,
   type DocsHomeRow,
   type DocsHomeTab,
+  type RecentListParams,
   recentListResource,
   toDocsHomeRow,
 } from './projection';
@@ -30,6 +32,51 @@ const n = setNamespace('recent');
 
 /** Rows in the "all recents" drawer. */
 export const ALL_RECENTS_LIMIT = 50;
+
+/** Topics the Home chat-mode recents block fetches (the customize slider's max). */
+export const HOME_TOPIC_RECENT_LIMIT = 15;
+
+/** Rows the desktop tray menu fetches. */
+export const TRAY_RECENT_LIMIT = 10;
+
+/** The Home chat-mode recents block: the viewer's own topics, with previews. */
+export const HOME_TOPIC_RECENTS_PARAMS = {
+  limit: HOME_TOPIC_RECENT_LIMIT,
+  types: 'topic',
+  view: 'mine',
+} as const satisfies RecentListParams;
+
+/** The tray menu: the viewer's own recents of every type. */
+export const TRAY_RECENTS_PARAMS = {
+  limit: TRAY_RECENT_LIMIT,
+  types: 'all',
+  view: 'mine',
+} as const satisfies RecentListParams;
+
+/**
+ * Several surfaces mount the same query (Home, the tray hook, the sidebar), so
+ * identical mount requests within this window collapse into one. Manual,
+ * post-write and active-topic refreshes still go through `revalidate`.
+ */
+const RECENT_SYNC_DEDUPE_MS = 10_000;
+
+const fetchRecentList = ({ limit, types = 'sidebar', view }: RecentListParams) => {
+  const mineOnly = view === undefined ? undefined : view === 'mine';
+  const sharedOnly = view === undefined ? undefined : view === 'team';
+  switch (types) {
+    case 'all': {
+      return recentService.getAll(limit, undefined, false, mineOnly, sharedOnly);
+    }
+    case 'topic': {
+      return recentService.getAll(limit, ['topic'], true, mineOnly, sharedOnly);
+    }
+    default: {
+      return view
+        ? recentService.getAll(limit, RECENT_SIDEBAR_TYPES, undefined, mineOnly, sharedOnly)
+        : recentService.getAll(limit, RECENT_SIDEBAR_TYPES);
+    }
+  }
+};
 
 interface RenameRecentParams {
   id: string;
@@ -69,9 +116,10 @@ export class RecentActionImpl {
   readonly #set: Setter;
   /** Server writes per entity run in order; the newest optimistic title stays on top. */
   readonly #renameQueues = new Map<RecentEntityRef, Promise<unknown>>();
+  readonly #conversationRecents;
+  readonly #docsHome;
   readonly #recentList;
   readonly #recents;
-  readonly #docsHome;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -79,13 +127,23 @@ export class RecentActionImpl {
     this.#recentList = createReplicaSlice(recentListResource, {
       actionPrefix: n('recentList'),
       entity: recentEntity,
-      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_SIDEBAR_TYPES),
+      fetcher: fetchRecentList,
       get,
       set,
       stateKey: 'recentListReplica',
       view: recordLens<HomeStore, RecentItem[]>('recentListMap'),
     });
-    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList]);
+    this.#conversationRecents = createReplicaSlice(conversationRecentResource, {
+      actionPrefix: n('conversationRecents'),
+      entity: recentEntity,
+      // Topics only, with previews: the IM list shows the latest reply per row.
+      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_CONVERSATION_TYPES, true),
+      get,
+      set,
+      stateKey: 'conversationRecentReplica',
+      view: recordLens<HomeStore, RecentItem[]>('conversationRecentMap'),
+    });
+    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList, this.#conversationRecents]);
     this.#docsHome = createReplicaSlice(docsHomeListResource, {
       actionPrefix: n('docsHome'),
       fetcher: async ({ tab }) =>
@@ -124,7 +182,7 @@ export class RecentActionImpl {
 
   /** Revalidate every recents query of the active identity. */
   refreshRecents = async (): Promise<void> => {
-    await this.#recentList.revalidate();
+    await Promise.all([this.#recentList.revalidate(), this.#conversationRecents.revalidate()]);
   };
 
   /**
@@ -151,6 +209,31 @@ export class RecentActionImpl {
   /** "All recents" drawer. Read the rows with `homeRecentSelectors.query`. */
   useFetchAllRecents = (open: boolean): ReplicaSyncResult =>
     this.#recentList.useSync({ limit: ALL_RECENTS_LIMIT }, { enabled: open });
+
+  /**
+   * Latest topic per owner for the IM conversation list. Read the rows with
+   * `homeRecentSelectors.conversationRecents`.
+   */
+  useFetchConversationRecents = (limit: number = ALL_RECENTS_LIMIT): ReplicaSyncResult =>
+    this.#conversationRecents.useSync({ limit }, { enabled: true });
+
+  /**
+   * Home chat-mode recent topics (the viewer's own, server-narrowed). Read them
+   * with `homeRecentSelectors.query(createRecentQueryKey(...HOME_TOPIC_RECENTS_PARAMS))`.
+   */
+  useFetchHomeTopicRecents = (enabled: boolean): ReplicaSyncResult =>
+    this.#recentList.useSync(HOME_TOPIC_RECENTS_PARAMS, {
+      dedupingInterval: RECENT_SYNC_DEDUPE_MS,
+      enabled,
+      revalidateOnFocus: false,
+    });
+
+  /** Desktop tray recents; `revalidate` refetches them when active topics change. */
+  useFetchTrayRecents = (enabled: boolean): ReplicaSyncResult =>
+    this.#recentList.useSync(TRAY_RECENTS_PARAMS, {
+      dedupingInterval: RECENT_SYNC_DEDUPE_MS,
+      enabled,
+    });
 
   /** Refetch every loaded Docs home tab, e.g. after a page or file was added. */
   refreshDocsHome = async (): Promise<void> => {

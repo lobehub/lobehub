@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { usePermission } from '@/hooks/usePermission';
 import { messengerService } from '@/services/messenger';
+import { messengerActions } from '@/store/messenger';
 
 import { getMessengerErrorMessage } from '../i18n';
 import { MessengerPushSection } from './MessengerPush';
@@ -282,20 +283,19 @@ const LinqDetail = memo<LinqDetailProps>(({ name, onBack }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const data = useMessengerData('linq');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'linq',
   });
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant="block" onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'linq'} />;
 
   const link = data.links[0];
 
   const handleLinked = async () => {
-    await data.linksMutate();
+    await messengerActions.refreshAfterConnect();
     toast.success(t('messenger.linq.connected'));
   };
 

@@ -9,6 +9,7 @@ const mockElectronIpc = {
     callTool: vi.fn(),
     getStreamableMcpServerManifest: vi.fn(),
     getStdioMcpServerManifest: vi.fn(),
+    listTools: vi.fn(),
     validMcpServerInstallable: vi.fn(),
   },
 };
@@ -20,6 +21,7 @@ const environment = vi.hoisted(() => ({
 
 vi.mock('@/store/serverConfig/store', () => ({
   getServerConfigStoreState: () => ({
+    featureFlags: { enableMcpApps: false },
     serverConfig: { deviceGatewayConfigured: environment.deviceGatewayConfigured },
   }),
 }));
@@ -105,6 +107,9 @@ describe('MCPService', () => {
     environment.isDesktop = false;
     environment.deviceGatewayConfigured = undefined;
     mockGetToolStoreState.mockReturnValue({});
+    // Like the real selectors: a lookup function that finds no plugin by default
+    mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => undefined);
+    mockPluginSelectors.getCustomPluginById.mockReturnValue(() => undefined);
   });
 
   describe('invokeMcpToolCall', () => {
@@ -198,6 +203,8 @@ describe('MCPService', () => {
         expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toEqual({
           args: { path: 'test.txt' },
           env: detail.mcpStdioConfig.env,
+          // MCP Apps off for this user: the desktop session doesn't announce them
+          mcpApps: false,
           params: { command: 'node', args: ['mcp.js'], name: payload.identifier, type: 'stdio' },
           toolName: 'read_file',
         });
@@ -231,6 +238,11 @@ describe('MCPService', () => {
         { ...detail, isEnabled: false },
         { ...detail, tools: [] },
         { ...detail, tools: [{ toolName: 'read_file', permission: 'disabled' }] },
+        // Only its view may call it, and this call came from the model
+        {
+          ...detail,
+          tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'read_file' }],
+        },
       ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
         const { lambdaClient } = await import('@/libs/trpc/client');
         vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
@@ -316,6 +328,41 @@ describe('MCPService', () => {
       expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
     });
 
+    it('fills config placeholders in an HTTP plugin URL instead of sending them as headers', async () => {
+      const { toolsClient } = await import('@/libs/trpc/client');
+
+      mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => ({
+        customParams: {
+          mcp: {
+            headers: { 'X-Client': 'lobehub' },
+            type: 'http',
+            url: 'https://quotes.example.com/mcp?apikey={{API_KEY}}',
+          },
+        },
+        manifest: { meta: { title: 'Quote MCP' }, version: '1.0.0' },
+        settings: { API_KEY: 'rotated key', X_REGION: 'eu' },
+      }));
+      vi.mocked(toolsClient.mcp.callTool.mutate).mockResolvedValue('ok' as never);
+
+      await mcpService.invokeMcpToolCall(
+        {
+          apiName: 'quote',
+          arguments: '{}',
+          id: 'c1',
+          identifier: 'quote-mcp',
+          type: 'standalone',
+        },
+        {},
+      );
+
+      expect(vi.mocked(toolsClient.mcp.callTool.mutate).mock.calls[0][0].params).toEqual({
+        headers: { 'X-Client': 'lobehub', 'X_REGION': 'eu' },
+        name: 'quote-mcp',
+        type: 'http',
+        url: 'https://quotes.example.com/mcp?apikey=rotated%20key',
+      });
+    });
+
     it('should invoke tool call with custom plugin', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');
 
@@ -392,6 +439,38 @@ describe('MCPService', () => {
 
       expect(result).toEqual(mockResult);
       expect(toolsClient.mcp.callTool.mutate).toHaveBeenCalled();
+    });
+
+    it('fills config placeholders in stdio args from the current settings', async () => {
+      const { toolsClient } = await import('@/libs/trpc/client');
+
+      mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => ({
+        customParams: {
+          mcp: { args: ['-y', 'pkg', 'API_KEY={{config.API_KEY}}'], command: 'npx', type: 'stdio' },
+        },
+        manifest: { meta: { title: 'Stdio Plugin' }, version: '1.0.0' },
+        settings: { API_KEY: 'rotated' },
+      }));
+      vi.mocked(toolsClient.mcp.callTool.mutate).mockResolvedValue('ok' as never);
+
+      await mcpService.invokeMcpToolCall(
+        {
+          apiName: 'run',
+          arguments: '{}',
+          id: 'c2',
+          identifier: 'stdio-plugin',
+          type: 'standalone',
+        },
+        {},
+      );
+
+      expect(vi.mocked(toolsClient.mcp.callTool.mutate).mock.calls[0][0].params).toEqual({
+        args: ['-y', 'pkg', 'API_KEY=rotated'],
+        command: 'npx',
+        env: { API_KEY: 'rotated' },
+        name: 'stdio-plugin',
+        type: 'stdio',
+      });
     });
 
     it('should return undefined when plugin is not found', async () => {
@@ -743,6 +822,21 @@ describe('MCPService', () => {
     });
   });
 
+  describe('listLocalMcpTools', () => {
+    it('returns every tool the desktop main process lists, with its visibility', async () => {
+      const tools = [{ inputSchema: { type: 'object' }, name: 'load_page', visibility: ['app'] }];
+      mockElectronIpc.mcp.listTools.mockResolvedValue(superjson.serialize(tools));
+      const input = { stdio: { command: 'dash-mcp', name: 'dash' } };
+
+      await expect(mcpService.listLocalMcpTools(input)).resolves.toEqual(tools);
+      expect(superjson.deserialize(mockElectronIpc.mcp.listTools.mock.calls[0][0])).toEqual({
+        ...input,
+        // MCP Apps off for this user: listed on a session that doesn't announce them
+        mcpApps: false,
+      });
+    });
+  });
+
   describe('getStdioMcpServerManifest', () => {
     it('should call ipc mcp.getStdioMcpServerManifest with stdio parameters', async () => {
       const mockManifest: ToolManifest = {
@@ -778,7 +872,11 @@ describe('MCPService', () => {
 
       expect(result).toEqual(mockManifest);
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
-      expect(superjson.deserialize(callArg as any)).toEqual({ ...stdioParams, metadata });
+      expect(superjson.deserialize(callArg as any)).toEqual({
+        ...stdioParams,
+        mcpApps: false,
+        metadata,
+      });
     });
 
     it('should handle abort signal for stdio manifest', async () => {
@@ -811,6 +909,7 @@ describe('MCPService', () => {
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
       expect(superjson.deserialize(callArg as any)).toEqual({
         ...stdioParams,
+        mcpApps: false,
         metadata: undefined,
       });
     });
@@ -843,6 +942,7 @@ describe('MCPService', () => {
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
       expect(superjson.deserialize(callArg as any)).toEqual({
         ...stdioParams,
+        mcpApps: false,
         metadata: undefined,
       });
     });

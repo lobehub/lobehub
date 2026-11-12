@@ -26,9 +26,13 @@ const LinearSyncEntry = memo<LinearSyncEntryProps>(({ projectId }) => {
   const syncRules = useLinearSyncRules(shown ? projectId : null);
   const syncJobs = useLinearSyncJobs(shown ? projectId : null);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
+  const refreshTaskLabels = useTaskStore((s) => s.refreshTaskLabels);
   // A sync started here may end after its dialog was closed; its tasks then
-  // appear in the list below.
-  useLinearSyncJobNotifier(syncJobs.data, refreshTaskList);
+  // appear in the list below, along with any labels it created.
+  useLinearSyncJobNotifier(syncJobs.data, () => {
+    void refreshTaskList();
+    void refreshTaskLabels();
+  });
 
   if (!shown) return null;
 

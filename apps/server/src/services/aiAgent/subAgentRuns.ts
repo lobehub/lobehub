@@ -9,7 +9,12 @@ import type {
   ThreadMetadata,
   UserInterventionConfig,
 } from '@lobechat/types';
-import { isAgentOperationInFlight, ThreadStatus, ThreadType } from '@lobechat/types';
+import {
+  isAgentOperationInFlight,
+  RequestTrigger,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
@@ -314,10 +319,20 @@ export const execAgentThreadRun = async (
   // original entry point (chat / bot / cli / eval / …). Lookup is best-effort
   // — a missing parent row falls back to undefined and the column stays null.
   let inheritedTrigger: string | undefined;
+  // A tab that dispatches a direct @mention passes its own client-local
+  // operation id, which has no server row. The child must not record it as its
+  // parent: gateway authorization only admits a child whose recorded parent is
+  // a live server run, so the child would fail with UNAUTHORIZED.
+  let recordedParentOperationId = parentOperationId;
   if (parentOperationId) {
     try {
       const parentOp = await deps.agentOperationModel.findById(parentOperationId);
       inheritedTrigger = parentOp?.trigger ?? undefined;
+      if (!parentOp) {
+        recordedParentOperationId = undefined;
+        // Only the chat UI dispatches from a tab-local operation.
+        inheritedTrigger = RequestTrigger.Chat;
+      }
     } catch (error) {
       log('%s: failed to read parent operation trigger: %O', options.logScope, error);
     }
@@ -335,6 +350,11 @@ export const execAgentThreadRun = async (
       ? { parentOperationId, toolMessageId: parentMessageId }
       : undefined;
 
+  // Eval inheritance (see `ExecVirtualSubAgentParams.eval`): the child keeps
+  // the attempt's prompt context, runtime and step cap, and its dialogue stays
+  // out of Agent Signal like the parent's.
+  const inheritedEval = 'eval' in params ? params.eval : undefined;
+
   const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
     groupId,
     // Every run spawned here executes in an isolation thread on the SPAWNER's
@@ -344,6 +364,7 @@ export const execAgentThreadRun = async (
     isSubAgent: options.isSubAgent,
     orchestrationRole: options.orchestrationRole,
     subAgentProgress,
+    ...(inheritedEval && { suppressSignal: true }),
     threadId: thread.id,
     topicId,
   };
@@ -360,12 +381,15 @@ export const execAgentThreadRun = async (
       autoStart: true,
       chatConfigOverride: options.chatConfig,
       deviceId: options.deviceId,
+      ...(inheritedEval?.context && { evalContext: inheritedEval.context }),
+      ...(inheritedEval?.runtime && { evalRuntime: inheritedEval.runtime }),
       hooks,
       ...(options.llmExecutor && { llmExecutor: options.llmExecutor }),
       localDeviceId: options.localDeviceId,
+      ...(inheritedEval?.maxSteps && { maxSteps: inheritedEval.maxSteps }),
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,
-      parentOperationId,
+      parentOperationId: recordedParentOperationId,
       prompt: instruction,
       provider: options.provider,
       trigger: inheritedTrigger,
@@ -403,8 +427,10 @@ export const execAgentThreadRun = async (
   );
 
   // 5. Store operationId in Thread metadata
-  await deps.threadModel.update(thread.id, {
-    metadata: { ...carryOver, operationId: result.operationId, startedAt },
+  await deps.threadModel.attachRunOperation(thread.id, {
+    ...carryOver,
+    operationId: result.operationId,
+    startedAt,
   });
 
   // 6. If operation failed to start, update thread status
@@ -453,6 +479,9 @@ export const execAgentThreadRun = async (
     operationId: result.operationId,
     success: result.success ?? false,
     threadId: thread.id,
+    // The child's own gateway ticket: a tab that dispatched it has no server
+    // run whose channel would carry the child's progress, so it subscribes here.
+    ...(result.token && { token: result.token }),
   };
 };
 

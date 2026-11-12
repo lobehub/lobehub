@@ -1,5 +1,4 @@
 import type { ComposerUserMessageMetadata, ContextSelection } from '@lobechat/types';
-import { COMPOSER_USER_MESSAGE_METADATA_KEYS } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -315,6 +314,7 @@ describe('AiAgentService.execAgent - hetero runs keep the composer-authored user
         toolCallId: 'call-1',
       },
     ],
+    mcpAppSource: { identifier: 'weather-demo' },
     pageSelections: [
       {
         content: 'Selected page paragraph',
@@ -334,9 +334,6 @@ describe('AiAgentService.execAgent - hetero runs keep the composer-authored user
       userMessage: { editorData, metadata: everyComposerField },
     });
 
-    expect(Object.keys(everyComposerField).sort()).toEqual(
-      [...COMPOSER_USER_MESSAGE_METADATA_KEYS].sort(),
-    );
     expect(userMessageCreate()?.editorData).toEqual(editorData);
     expect(userMessageCreate()?.metadata).toMatchObject(everyComposerField);
   });

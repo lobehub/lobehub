@@ -41,6 +41,11 @@ export async function finalizeAbandoned(c: Context): Promise<Response> {
     // as handled while it stays parked forever.
     if (result.subAgentResume) {
       await resumeAbandonedParent(serverDB, operationId, result.subAgentResume);
+      // Only now is the abandonment actually complete: until the hand-off lands
+      // the durable mark stays `handoff_pending`, so a retry replays the parent
+      // resume instead of reading the child as finalized and stranding the
+      // parent in `waiting_for_async_tool`.
+      await service.completeAbandonmentHandoff(operationId);
     }
 
     const executionTime = Date.now() - startTime;

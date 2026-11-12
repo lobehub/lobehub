@@ -66,4 +66,56 @@ describe('TrashModel coverage', () => {
       expect(await model.findPrivateIds([root.id])).toEqual(new Set());
     });
   });
+
+  describe('findRootsByResources', () => {
+    it('returns only the registered roots of one kind for the given resource ids', async () => {
+      const model = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB
+        .insert(agents)
+        .values({ id: 'trc-roots-agent', userId, visibility: 'public', workspaceId });
+
+      const root = await model.register({
+        children: [
+          { meta: {}, projectId: null, resourceId: 'trc-roots-topic', resourceType: 'topic' },
+        ],
+        deletedAt: new Date('2026-08-01T00:00:00Z'),
+        root: {
+          meta: {},
+          projectId: null,
+          resourceId: 'trc-roots-agent',
+          resourceType: 'agent',
+        },
+      });
+
+      // The cascaded child carries a `rootId`, so it never matches as a root.
+      expect(
+        (await model.findRootsByResources('agent', ['trc-roots-agent', 'trc-roots-topic'])).map(
+          (row) => row.id,
+        ),
+      ).toEqual([root.id]);
+      // Another kind with the same ids resolves to nothing.
+      expect(await model.findRootsByResources('topic', ['trc-roots-agent'])).toEqual([]);
+      expect(await model.findRootsByResources('agent', [])).toEqual([]);
+    });
+
+    it('stays inside the bin scope it was opened on', async () => {
+      const otherWorkspace = 'trash-coverage-ws-2';
+      await serverDB.insert(workspaces).values({
+        id: otherWorkspace,
+        name: 'Trash coverage 2',
+        primaryOwnerId: userId,
+        slug: otherWorkspace,
+      });
+      const mine = new TrashModel(serverDB, userId, workspaceId);
+      const theirs = new TrashModel(serverDB, userId, otherWorkspace);
+
+      await mine.register({
+        deletedAt: new Date('2026-08-01T00:00:00Z'),
+        root: { meta: {}, projectId: null, resourceId: 'trc-scope-task', resourceType: 'task' },
+      });
+
+      expect(await theirs.findRootsByResources('task', ['trc-scope-task'])).toEqual([]);
+      expect(await mine.findRootsByResources('task', ['trc-scope-task'])).toHaveLength(1);
+    });
+  });
 });

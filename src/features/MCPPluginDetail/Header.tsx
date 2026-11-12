@@ -16,6 +16,8 @@ import {
   Tooltip,
   useResponsive,
 } from '@lobehub/ui';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookmarkIcon,
   BookmarkMinusIcon,
@@ -29,28 +31,28 @@ import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import useSWR from 'swr';
 
 import OfficialIcon from '@/components/OfficialIcon';
 import Scores from '@/features/MCP/Scores';
 import { getLanguageColor, getRecommendedDeployment } from '@/features/MCP/utils';
 import { useCategory } from '@/hooks/useMCPCategory';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
+import { useDiscoverStore } from '@/store/discover';
+import { socialSelectors } from '@/store/discover/selectors';
 
 import InstallationIcon from '../../components/MCPDepsIcon';
 import PublishedTime from '../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
+const timeStyles = stylex.create({
+  time: { fontSize: '12px', color: vars.colorTextDescription },
+});
+
 const styles = createStaticStyles(({ css }) => {
   return {
     desc: css`
       color: ${cssVar.colorTextSecondary};
-    `,
-    time: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
     `,
     version: css`
       font-family: ${cssVar.fontFamilyCode};
@@ -91,12 +93,10 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
     socialService.setAccessToken(session.accessToken);
   }
 
-  // Fetch favorite status
-  const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? favoriteKeys.status('plugin', identifier) : null,
-    () => socialService.checkFavoriteStatus('plugin', identifier!),
-    { revalidateOnFocus: false },
-  );
+  const useFavoriteStatus = useDiscoverStore((s) => s.useFavoriteStatus);
+  const { queryKey: favoriteKey } = useFavoriteStatus('plugin', identifier, isAuthenticated);
+  const favoriteStatus = useDiscoverStore(socialSelectors.favoriteStatus(favoriteKey));
+  const setFavorite = useDiscoverStore((s) => s.setFavorite);
 
   const isFavorited = favoriteStatus?.isFavorited ?? false;
 
@@ -110,14 +110,8 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
 
     setFavoriteLoading(true);
     try {
-      if (isFavorited) {
-        await socialService.removeFavorite('plugin', identifier);
-        toast.success(t('assistant.unfavoriteSuccess'));
-      } else {
-        await socialService.addFavorite('plugin', identifier);
-        toast.success(t('assistant.favoriteSuccess'));
-      }
-      await mutateFavorite();
+      await setFavorite('plugin', identifier, !isFavorited);
+      toast.success(t(isFavorited ? 'assistant.unfavoriteSuccess' : 'assistant.favoriteSuccess'));
     } catch (error) {
       console.error('Favorite action failed:', error);
       toast.error(t('assistant.favoriteFailed'));
@@ -234,7 +228,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             )}
             {isClaimed && <Tag size={'small'}>{t('isClaimed')}</Tag>}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={(updatedAt || createdAt) as string} />
+            <PublishedTime date={(updatedAt || createdAt) as string} xstyle={timeStyles.time} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

@@ -303,6 +303,13 @@ export interface PlatformClient {
   createAdapter: () => Record<string, any>;
 
   /**
+   * Whether the bot decides how it opens a reply (an acknowledgement before the run) on a platform
+   * that offers no reply threads (no `getReplyTargets`): the reply always stays in
+   * `platformThreadId`. A platform with `getReplyTargets` lets the bot decide without it.
+   */
+  readonly decidesReplyOpening?: boolean;
+
+  /**
    * Ensure the triggering user is a member of the platform thread the bot
    * replies in, so the platform pushes them a notification and surfaces the
    * thread in their client.
@@ -396,6 +403,8 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
+  // --- Runtime Operations ---
+
   /**
    * What people call the bot on this platform (display name, username), so a message that says the
    * name is read as addressed to it. Optional: without it the bot is recognised by @mention only.
@@ -405,8 +414,6 @@ export interface PlatformClient {
    */
   getBotNames?: (platformThreadId?: string) => Promise<string[]>;
 
-  // --- Runtime Operations ---
-
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
 
@@ -414,7 +421,8 @@ export interface PlatformClient {
    * Where the reply to `message` can go, when it sits at the top level of a channel that has
    * threads (see `ReplyTargets`). `undefined` when there is no choice: a DM, a message already
    * inside a thread, or a threadless platform (Telegram, WeChat, QQ). Omit when the platform never
-   * offers one; the reply then stays in `platformThreadId`.
+   * offers one; the reply then stays in `platformThreadId`. Implementing it lets the bot decide how
+   * it opens a reply (see `decidesReplyOpening`).
    */
   getReplyTargets?: (
     platformThreadId: string,
@@ -561,8 +569,11 @@ export interface BotPlatformRuntimeContext {
  * `agent` locale namespace, shared with the runtime-status error codes.
  */
 export type BotCredentialErrorCode =
+  | 'application_mismatch'
   | 'application_not_found'
+  | 'bot_not_installed'
   | 'invalid_credentials'
+  | 'message_content_intent_disabled'
   | 'missing_credentials'
   | 'permission_denied'
   | 'rate_limited'

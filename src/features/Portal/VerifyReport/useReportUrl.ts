@@ -1,6 +1,6 @@
 import { useVerifyReportBundle } from '@/features/Acceptance/hooks';
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { buildAcceptanceRoundPath } from '@/features/Acceptance/roundLink';
-import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -10,9 +10,9 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
  * once it turns out to be `standalone` (no acceptance, so nothing to open).
  */
 export const useVerifyReportUrl = () => {
-  const appOrigin = useAppOrigin();
+  const appOrigin = useAcceptanceOrigin();
   const runId = useChatStore(chatPortalSelectors.verifyReportRunId);
-  // Same SWR key as the portal's title and body, so this shares their request.
+  // Same replica entry as the portal's title and body, so this shares their request.
   const { data } = useVerifyReportBundle(runId ?? null);
   const roundPath = buildAcceptanceRoundPath(data?.run);
   // Copied and opened outside the app, so it stays on the public route: the

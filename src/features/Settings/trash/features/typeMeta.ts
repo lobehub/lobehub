@@ -5,6 +5,7 @@ import {
   GitBranchIcon,
   HashIcon,
   LayoutDashboardIcon,
+  ListTodoIcon,
   MessageSquareIcon,
 } from 'lucide-react';
 
@@ -15,6 +16,7 @@ export const TRASH_TYPE_ICON: Record<TrashResourceType, typeof HashIcon> = {
   channelThread: GitBranchIcon,
   dashboard: LayoutDashboardIcon,
   message: MessageSquareIcon,
+  task: ListTodoIcon,
   topic: HashIcon,
   widget: ChartNoAxesColumnIcon,
 };
@@ -23,6 +25,7 @@ export const TRASH_TYPE_ICON: Record<TrashResourceType, typeof HashIcon> = {
 export const TRASH_TYPE_ORDER: TrashResourceType[] = [
   'topic',
   'agent',
+  'task',
   'message',
   'widget',
   'dashboard',

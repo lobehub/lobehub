@@ -25,6 +25,30 @@ const createUniqueViolation = (constraint: string) => {
 };
 
 describe('ServerMessageTransport', () => {
+  it('persists the server origin alongside the shared intervention identity', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'tool-1' });
+    const transport = new ServerMessageTransport({ create } as unknown as MessageModel);
+    await transport.createToolMessage({
+      ...params,
+      role: 'tool',
+      pluginIntervention: {
+        batchId: 'op:1:assistant',
+        operationId: 'op',
+        status: 'pending',
+      },
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pluginIntervention: {
+          batchId: 'op:1:assistant',
+          operationId: 'op',
+          runtimeType: 'server',
+          status: 'pending',
+        },
+      }),
+    );
+  });
+
   it('keeps the complete Work intent readable while excluding it from runtime message queries', async () => {
     const intent = {
       type: 'skill' as const,

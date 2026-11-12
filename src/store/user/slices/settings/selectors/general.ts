@@ -40,6 +40,9 @@ const currentTimezone = (s: UserStore): string | undefined =>
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
 const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;
+// Users who switched off the retired `enableInputMarkdown` lab did so to keep pasted text verbatim.
+const enablePasteAutoConvert = (s: UserStore) =>
+  generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
 /** The setting is a boolean: either the live tool list is open or it is a
  *  summary row. "Open" means the full list — the height-capped middle level
@@ -53,6 +56,7 @@ export const userGeneralSettingsSelectors = {
   contextMenuMode,
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
+  enablePasteAutoConvert,
   fontAntialiasing,
   fontSize,
   highlighterTheme,

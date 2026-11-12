@@ -6,8 +6,10 @@ import type {
 } from '@lobechat/types';
 import type OpenAI from 'openai';
 
+import type { ComputeChatCostOptions } from '../core/usageConverters/utils/computeChatCost';
 import type { ModelPricingContext } from './pricing';
 import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
+import type { RouteAttemptIdentity } from './routeAttempt';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -280,12 +282,17 @@ export interface OnFinishData {
    */
   finishReason?: string;
   grounding?: any;
+  /** Options used to price `usage.cost` (e.g. cache TTL lookups), so hooks can reprice the same usage. */
+  pricingOptions?: ComputeChatCostOptions;
+  /**
+   * USD charge reported by the upstream provider (OpenRouter, Vercel AI Gateway). Server-side
+   * only: unlike `usage`, it is never streamed to clients or persisted on messages.
+   */
+  providerReportedCost?: number;
   reasoning?: ModelReasoning;
   /** Stable identities and terminal outcome for the provider attempt producing this result. */
-  routeAttempt?: {
-    attemptId: string;
+  routeAttempt?: RouteAttemptIdentity & {
     outcome?: 'completed' | 'empty' | 'interrupted' | 'cancelled' | 'failed';
-    requestId: string;
   };
   speed?: ModelPerformance;
   text: string;

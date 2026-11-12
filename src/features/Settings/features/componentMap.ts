@@ -1,11 +1,10 @@
 import { createElement } from 'react';
 
-import { SettingsBodySkeleton } from '@/components/Skeleton/Settings/Page';
-import SettingsProfileSkeleton from '@/components/Skeleton/Settings/Profile';
+import { SettingsChunkSkeleton } from '@/components/Skeleton/Settings/Page';
 import dynamic from '@/libs/next/dynamic';
 import { SettingsTabs } from '@/store/global/initialState';
 
-const loading = (_debugId: string) => () => createElement(SettingsBodySkeleton);
+const loading = (_debugId: string) => () => createElement(SettingsChunkSkeleton);
 
 export const componentMap = {
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
@@ -59,9 +58,6 @@ export const componentMap = {
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
   }),
-  [SettingsTabs.Drive]: dynamic(() => import('../drive'), {
-    loading: loading('Settings > Drive'),
-  }),
   [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
     loading: loading('Settings > Environments'),
   }),
@@ -70,7 +66,7 @@ export const componentMap = {
   }),
   // Profile related tabs
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
-    loading: () => createElement(SettingsProfileSkeleton),
+    loading: loading('Settings > Profile'),
   }),
   [SettingsTabs.Stats]: dynamic(() => import('../stats'), {
     loading: loading('Settings > Stats'),

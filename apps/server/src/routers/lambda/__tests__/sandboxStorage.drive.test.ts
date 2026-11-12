@@ -41,6 +41,7 @@ const plane = vi.hoisted(() => ({
   createDirectory: vi.fn(),
   deleteFile: vi.fn(),
   deleteInstance: vi.fn(),
+  exportFile: vi.fn(),
   getStorage: vi.fn(),
   listFiles: vi.fn(),
   readOccupancy: vi.fn(),
@@ -49,6 +50,9 @@ const plane = vi.hoisted(() => ({
 }));
 
 const entitlement = vi.hoisted(() => ({ claim: vi.fn() }));
+
+/** The sandbox a download runs its packing command in, and how it was addressed. */
+const downloads = vi.hoisted(() => ({ callTool: vi.fn(), createSandboxService: vi.fn() }));
 
 /** The storage key of every client the router made, in order: whose drive each call reached. */
 const reached = vi.hoisted(() => [] as (string | undefined)[]);
@@ -72,6 +76,7 @@ vi.mock('@/server/services/sandbox', async () => {
     ...binding,
     ...(await vi.importActual<object>('@/server/services/sandbox/driveAccess')),
     ...(await vi.importActual<object>('@/server/services/sandbox/driveUsage')),
+    createSandboxService: downloads.createSandboxService,
     forgetDriveFolders: vi.fn(),
     resolveSandboxSessionConfig: vi.fn(),
     resolveSandboxStorageClaim: entitlement.claim,
@@ -85,6 +90,19 @@ vi.mock('@/server/services/market', () => ({
         reached.push(options?.userInfo?.sandboxStorage?.key);
         return plane;
       },
+    };
+  }),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function () {
+    return {
+      createDownloadUrl: async (key: string, name: string) => `https://files/${key}?as=${name}`,
+      createPreSignedUrlForPreview: async (key: string) => `https://files/${key}?inline`,
+      createPreSignedUpload: async (key: string) => ({ url: `https://upload/${key}` }),
+      deleteFile: async () => undefined,
+      deleteFiles: async () => undefined,
+      listFileKeys: async () => [],
     };
   }),
 }));
@@ -133,10 +151,20 @@ beforeEach(async () => {
   plane.createDirectory.mockReset().mockImplementation(async ({ path }) => ({ path }));
   plane.deleteFile.mockReset().mockImplementation(async ({ path }) => ({ path }));
   plane.deleteInstance.mockReset().mockResolvedValue(undefined);
+  // A storage service that cannot export, so a download packs in a sandbox
+  // unless a case says otherwise.
+  plane.exportFile
+    .mockReset()
+    .mockRejectedValue(new SandboxStorageFilesError('no', 501, 'EXPORT_UNAVAILABLE'));
   plane.listFiles.mockReset().mockRejectedValue(notFound());
   plane.readOccupancy.mockReset().mockResolvedValue({ held: [], unavailable: false });
   plane.renameFile.mockReset().mockImplementation(async ({ newPath }) => ({ path: newPath }));
   plane.writeFile.mockReset().mockImplementation(async ({ path }) => ({ path }));
+  downloads.callTool.mockReset();
+  downloads.createSandboxService.mockReset().mockImplementation(() => ({
+    callTool: downloads.callTool,
+    capabilities: { shell: true },
+  }));
 });
 
 afterEach(reset);
@@ -577,5 +605,133 @@ describe('drive usage', () => {
     expect(asMemberView.members).toBeNull();
     // The usage read is the only call made with the member's key.
     expect(plane.listFiles).not.toHaveBeenCalled();
+  });
+});
+
+describe('downloading from the drive', () => {
+  const answer = (result: object) =>
+    downloads.callTool.mockResolvedValue({
+      result: { exitCode: 0, stdout: `LOBE_DRIVE_DOWNLOAD_RESULT ${JSON.stringify(result)}\n` },
+      success: true,
+    });
+
+  /** What the packing command was told to read, decoded from the command. */
+  const packed = () => {
+    const [, params] = downloads.callTool.mock.calls[0] as [string, { command: string }];
+    const payload = /LOBE_DRIVE_DOWNLOAD='([^']+)'/.exec(params.command)![1];
+    return JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+  };
+
+  it('zips a folder on the drive it names, leaving a hidden directory inside it out', async () => {
+    await legacyPrivateFolder(ownerId, 'projects/secret');
+    answer({ contentType: 'application/zip', kind: 'directory', ok: true, size: 7 });
+
+    const result = await drive(memberId).prepareDownload({ drive: 'public', path: 'projects' });
+
+    expect(result).toMatchObject({ fileName: 'projects.zip', kind: 'directory', size: 7 });
+    expect(result.url).toMatch(/^https:\/\/files\/sandbox-drive-downloads\/.+\?as=projects\.zip$/);
+    expect(downloads.createSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sandboxMode: 'drive',
+        topicId: `sandbox-drive-download:${STORAGE_KEY}`,
+        userId: memberId,
+      }),
+    );
+    expect(packed()).toMatchObject({ hidden: ['projects/secret'], path: 'projects' });
+  });
+
+  it('exports a public folder through the storage service, without a sandbox', async () => {
+    await legacyPrivateFolder(ownerId, 'projects/secret');
+    plane.exportFile.mockResolvedValue({
+      contentType: 'application/zip',
+      kind: 'directory',
+      size: 7,
+    });
+
+    const result = await drive(memberId).prepareDownload({ drive: 'public', path: 'projects' });
+
+    expect(result).toMatchObject({ fileName: 'projects.zip', kind: 'directory', size: 7 });
+    expect(plane.exportFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hidden: ['projects/secret'],
+        path: 'projects',
+        uploadUrl: expect.stringContaining('sandbox-drive-downloads/'),
+      }),
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(reached.at(-1)).toBe(STORAGE_KEY);
+    expect(downloads.callTool).not.toHaveBeenCalled();
+  });
+
+  it('says what an export refused in codes the client translates', async () => {
+    plane.exportFile.mockRejectedValue(
+      new SandboxStorageFilesError('gone', 404, 'EXPORT_NOT_FOUND'),
+    );
+    await expect(
+      drive(memberId).prepareDownload({ drive: 'public', path: 'gone' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+
+    plane.exportFile.mockRejectedValue(
+      new SandboxStorageFilesError('upload', 500, 'EXPORT_UPLOAD_FAILED'),
+    );
+    // A 500, never a 502: the edge replaces a 502's body and the code is lost.
+    await expect(
+      drive(memberId).prepareDownload({ drive: 'public', path: 'projects' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: 'DOWNLOAD_FAILED' });
+    expect(downloads.callTool).not.toHaveBeenCalled();
+  });
+
+  it("downloads from the caller's own personal drive", async () => {
+    answer({ contentType: 'text/plain', kind: 'file', ok: true, size: 3 });
+
+    await drive(memberId).prepareDownload({ drive: 'personal', path: 'notes.txt' });
+
+    expect(downloads.createSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: `sandbox-drive-download:${personalKey(memberId)}` }),
+    );
+    expect(packed()).toMatchObject({ hidden: [], path: 'notes.txt' });
+  });
+
+  it('answers a hidden directory as if it were not there, without starting a sandbox', async () => {
+    await legacyPrivateFolder(ownerId, 'secret');
+
+    await expect(
+      drive(ownerId).prepareDownload({ drive: 'public', path: 'secret/.env' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+    expect(downloads.callTool).not.toHaveBeenCalled();
+  });
+
+  it('says a folder is too large in a code the client translates', async () => {
+    answer({ code: 'TOO_LARGE', ok: false });
+
+    await expect(drive(ownerId).prepareDownload({ path: 'big' })).rejects.toMatchObject({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'DOWNLOAD_TOO_LARGE',
+    });
+  });
+
+  it('previews a file inline, through the same read rules as a download', async () => {
+    answer({ contentType: 'image/png', kind: 'file', ok: true, size: 5 });
+
+    const result = await drive(memberId).preparePreview({ drive: 'public', path: 'shots/a.png' });
+
+    expect(result).toMatchObject({ contentType: 'image/png', fileName: 'a.png', kind: 'file' });
+    expect(result.url).toMatch(/^https:\/\/files\/sandbox-drive-downloads\/.+\?inline$/);
+    expect(packed()).toMatchObject({ fileOnly: true, path: 'shots/a.png' });
+  });
+
+  it('refuses to preview a hidden directory, and a folder in a code the client translates', async () => {
+    await legacyPrivateFolder(ownerId, 'secret');
+
+    await expect(
+      drive(ownerId).preparePreview({ drive: 'public', path: 'secret/a.txt' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+    expect(downloads.callTool).not.toHaveBeenCalled();
+
+    answer({ code: 'NOT_A_FILE', ok: false });
+    await expect(drive(ownerId).preparePreview({ path: 'projects' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'PREVIEW_NOT_A_FILE',
+    });
   });
 });

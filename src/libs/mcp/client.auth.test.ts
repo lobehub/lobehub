@@ -8,6 +8,7 @@ vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Client: class {
     connect = connect;
+    setNotificationHandler = vi.fn();
   },
 }));
 

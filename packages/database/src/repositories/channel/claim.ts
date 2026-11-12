@@ -15,11 +15,13 @@ import {
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { notTrashed } from '../../utils/softDelete';
+import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
-import { findThread } from './delivery';
+import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
 import { resolveTopic } from './topic';
 import { audit } from './transaction';
+import { assignedWorktree } from './worktree';
 
 export interface ChannelClaimOptions {
   /** How long the claimer may go without a heartbeat before reconcile takes over. */
@@ -41,16 +43,6 @@ export interface ChannelClaim {
 }
 
 const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
-
-const uniqueViolation = (error: unknown): string | undefined => {
-  const pgError = error as {
-    cause?: { code?: string; constraint?: string };
-    code?: string;
-    constraint?: string;
-  };
-  const code = pgError.cause?.code ?? pgError.code;
-  return code === '23505' ? (pgError.cause?.constraint ?? pgError.constraint ?? '') : undefined;
-};
 
 /** Records why a queued job cannot start; clients read the code, never the text. */
 const block = async (
@@ -135,12 +127,12 @@ const deviceBlock = async (
     return { code: 'unavailable', reason: 'The device owner did not allow this environment' };
 };
 
-/** Another channel's live writer in the same device directory. */
+/** Another live writer in the same device directory, from any channel or member. */
 const directoryBlock = async (
   tx: Transaction,
-  member: ChannelMemberItem,
+  deviceId: string | undefined,
+  workingDirectory: string | undefined,
 ): Promise<Block | undefined> => {
-  const { deviceId, workingDirectory } = member.config ?? {};
   if (!deviceId || !workingDirectory) return;
 
   const [busy] = await tx
@@ -156,6 +148,47 @@ const directoryBlock = async (
     .limit(1);
   if (busy) return { code: 'directory_locked', reason: 'Another run is using this directory' };
 };
+
+/**
+ * Blocks that wait on a device or a person, not on work that will finish by itself. A primary
+ * responder stuck on one of these no longer holds back the follow-ups deferred behind it: they
+ * run without its reply rather than wait indefinitely.
+ */
+const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
+  'device_approval_pending',
+  'device_offline',
+  'device_required',
+  'unavailable',
+  'workspace_changed',
+]);
+
+/** The job of the member a deferred follow-up waits for, on the same message. */
+const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string) => {
+  const [primary] = await tx
+    .select({
+      blockedCode: channelJobs.blockedCode,
+      publishedMessageId: channelJobs.publishedMessageId,
+      status: channelJobs.status,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, job.channelId),
+        eq(channelJobs.messageId, job.messageId),
+        eq(channelJobs.memberId, memberId),
+      ),
+    );
+  return primary;
+};
+
+/**
+ * Whether the primary responder may still answer: running, or queued behind work that will
+ * finish. Completed, silent, failed and cancelled jobs have settled; a missing job (the primary
+ * was not delivered) never holds anyone back.
+ */
+const awaitsPrimary = (primary: { blockedCode: ChannelJobBlockCode | null; status: string }) =>
+  primary.status === 'running' ||
+  (primary.status === 'queued' && !(primary.blockedCode && STUCK_BLOCKS.has(primary.blockedCode)));
 
 /**
  * Starts the job if it is at the head of its member's queue and nothing holds the member,
@@ -190,6 +223,15 @@ export const claimJob = async (
   const thread = await findThread(tx, channel.id, job.threadId);
   if (thread?.status === 'archived') {
     await cancel(tx, job, 'thread_archived');
+    return null;
+  }
+
+  // A deferred follow-up waits for the message's primary responder, then sees its reply.
+  const primary = job.wake?.afterMemberId
+    ? await primaryJob(tx, job, job.wake.afterMemberId)
+    : undefined;
+  if (primary && awaitsPrimary(primary)) {
+    await block(tx, job, 'awaiting_primary', AWAITING_PRIMARY_REASON);
     return null;
   }
 
@@ -275,19 +317,34 @@ export const claimJob = async (
     return null;
   }
 
-  const executionConfig = await resolveExecutionConfig(
+  const resolved = await resolveExecutionConfig(
     tx,
     channel,
     member,
     requester.userId,
     options.serverDefaultAgentConfig,
   );
+  // A branch that moved into its own worktree runs there; the grant still covers the
+  // configured directory it was cut from.
+  const worktree = assignedWorktree(member, job.threadId);
+  const executionConfig =
+    resolved && worktree
+      ? { ...resolved, workingDirectory: worktree.path, worktreeBranch: worktree.branch }
+      : resolved;
   if (!executionConfig) {
     await block(tx, job, 'unavailable', 'The Agent is unavailable');
     return null;
   }
 
-  const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
+  // An external Agent runs on a device; its direct conversation can open before one is chosen.
+  if (executionConfig.runtime !== 'native' && !member.config?.deviceId) {
+    await block(tx, job, 'device_required', 'Choose a device for this Agent to run on');
+    return null;
+  }
+
+  const blocked =
+    (await deviceBlock(tx, channel, member)) ??
+    (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
     return null;
@@ -317,7 +374,13 @@ export const claimJob = async (
         request.sequence,
         executionConfig,
       );
-      const manifest = buildManifest({ job, member, request, thread });
+      const manifest = buildManifest({
+        job,
+        member,
+        primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
+        request,
+        thread,
+      });
       // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
       // derives the Agent and topic from the operation ID.
       const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
@@ -346,7 +409,7 @@ export const claimJob = async (
           operationId,
           topicId: topic.id,
           status: 'running',
-          workingDirectory: member.config!.workingDirectory,
+          workingDirectory: executionConfig.workingDirectory,
           writerHeld: true,
         })
         .where(eq(channelJobs.id, job.id))
@@ -354,7 +417,7 @@ export const claimJob = async (
       return { job: updated, topic };
     });
   } catch (error) {
-    const constraint = uniqueViolation(error);
+    const constraint = uniqueViolationConstraint(error);
     if (constraint === undefined) throw error;
     if (constraint === DIRECTORY_LOCK)
       await block(tx, job, 'directory_locked', 'Another run is using this directory');

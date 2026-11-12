@@ -9,6 +9,7 @@ import type { ProjectDetail } from '@/store/project';
 
 import {
   AttachmentsNotReadyError,
+  DirectoryUnavailableError,
   toConversationTitle,
   useProjectComposer,
 } from './useProjectComposer';
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   agentMap: {} as Record<string, unknown>,
   clearChatUploadFileList: vi.fn(),
   createProjectTopic: vi.fn(),
+  startTopic: vi.fn(),
   createTask: vi.fn(),
   fileList: [] as unknown[],
   getAgentConfigById: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectoryStore: (selector: (state: unknown) => unknown) =>
     selector({
       createProjectTopic: mocks.createProjectTopic,
+      startTopic: mocks.startTopic,
     }),
 }));
 
@@ -92,7 +95,8 @@ vi.mock('@/store/file', () => {
   });
   return {
     fileChatSelectors: {
-      chatUploadFileList: (s: { chatUploadFileList: unknown[] }) => s.chatUploadFileList,
+      chatUploadFileList: (contextKey: string) => (s: { chatUploadFileList: unknown[] }) =>
+        contextKey.startsWith('project-home:') ? s.chatUploadFileList : [],
     },
     useFileStore,
   };
@@ -201,6 +205,56 @@ describe('useProjectComposer', () => {
     );
   });
 
+  // The topic exists before the send, so the repository has to go with it.
+  it('starts the conversation in the repository picked in the context bar', async () => {
+    mocks.createProjectTopic.mockResolvedValue({ id: 'tpc_1' });
+    const { result } = renderHook(() =>
+      useProjectComposer(project, 'chat', 'coordinator', { environmentId: 'env-repo' }),
+    );
+
+    await act(async () => {
+      await result.current.send(composer('Fix the flaky test'));
+    });
+
+    expect(mocks.createProjectTopic).toHaveBeenCalledWith(
+      expect.objectContaining({ environmentId: 'env-repo', projectId: 'prj_1' }),
+    );
+  });
+
+  // On a device the conversation is bound to the project folder picked there,
+  // not to the device's default directory.
+  it('starts the conversation in the project folder picked on a device', async () => {
+    mocks.startTopic.mockResolvedValue({ id: 'tpc_dir' });
+    const { result } = renderHook(() =>
+      useProjectComposer(project, 'chat', 'coordinator', { directoryId: 'dir_mail' }),
+    );
+
+    await act(async () => {
+      await result.current.send(composer('Run the tests'));
+    });
+
+    expect(mocks.startTopic).toHaveBeenCalledWith('dir_mail', 'coordinator', 'Run the tests');
+    expect(mocks.createProjectTopic).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ context: { agentId: 'coordinator', topicId: 'tpc_dir' } }),
+    );
+  });
+
+  it('keeps the draft and says why when the picked folder cannot be reached', async () => {
+    mocks.startTopic.mockRejectedValue(new Error('Device is offline'));
+    const send = composer('Run the tests');
+    const { result } = renderHook(() =>
+      useProjectComposer(project, 'chat', 'coordinator', { directoryId: 'dir_mail' }),
+    );
+
+    await act(async () => {
+      await expect(result.current.send(send)).rejects.toBeInstanceOf(DirectoryUnavailableError);
+    });
+
+    expect(send.clearContent).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('assigns a task to the picked project agent', async () => {
     mocks.createTask.mockResolvedValue({ id: 'task_1', identifier: 'T-1', name: 'Ship it' });
     const { result } = renderHook(() => useProjectComposer(project, 'task', 'reviewer'));
@@ -250,7 +304,7 @@ describe('useProjectComposer', () => {
     });
 
     expect(editor.setJSONState).toHaveBeenCalledWith(editorData);
-    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledWith([image]);
+    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledWith('main_coordinator_tpc_1', [image]);
     expect(mocks.toastError).toHaveBeenCalledWith('overview.messageNotSent');
   });
 
@@ -397,7 +451,7 @@ describe('useProjectComposer', () => {
         projectId: 'prj_1',
       }),
     );
-    expect(mocks.clearChatUploadFileList).toHaveBeenCalledWith(['file_1']);
+    expect(mocks.clearChatUploadFileList).toHaveBeenCalledWith('project-home:prj_1', ['file_1']);
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1/ship-it');
     expect(mocks.createProjectTopic).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();

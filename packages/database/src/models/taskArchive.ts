@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, type SQL, sql } from 'drizzle-orm';
 
 import { tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
@@ -43,12 +43,32 @@ export class TaskArchiveModel {
    * task is finished") can't archive a task that was reopened since.
    */
   async archive(id: string, options: { onlyStatuses?: string[] } = {}) {
-    const [task] = await this.db
+    const [task] = await this.archiveMany([id], options);
+    return task ?? null;
+  }
+
+  /**
+   * {@link archive} for many tasks in one guarded statement. Returns only the
+   * rows that were archived; a missing or blocked task is simply absent.
+   */
+  async archiveMany(
+    ids: string[],
+    options: {
+      /** The archive time to stamp instead of now — a goal archiving its Tasks shares its own. */
+      at?: SQL;
+      onlyStatuses?: string[];
+    } = {},
+  ) {
+    if (ids.length === 0) return [];
+    return this.db
       .update(tasks)
-      .set({ archivedAt: sql`COALESCE(${tasks.archivedAt}, now())`, updatedAt: new Date() })
+      .set({
+        archivedAt: sql`COALESCE(${tasks.archivedAt}, ${options.at ?? sql`now()`})`,
+        updatedAt: new Date(),
+      })
       .where(
         and(
-          eq(tasks.id, id),
+          inArray(tasks.id, ids),
           this.ownership(),
           ne(tasks.status, 'running'),
           options.onlyStatuses ? inArray(tasks.status, options.onlyStatuses) : undefined,
@@ -58,16 +78,31 @@ export class TaskArchiveModel {
         ),
       )
       .returning();
-    return task ?? null;
   }
 
   /** Restore an archived task. Always allowed: it never hides work. */
   async unarchive(id: string) {
-    const [task] = await this.db
+    const [task] = await this.unarchiveMany([id]);
+    return task ?? null;
+  }
+
+  /**
+   * {@link unarchive} for many tasks in one statement. `onlyArchivedAt` restores
+   * only the Tasks stamped with that archive time — the ones a goal archived
+   * with itself — and leaves any archived on their own alone.
+   */
+  async unarchiveMany(ids: string[], options: { onlyArchivedAt?: SQL } = {}) {
+    if (ids.length === 0) return [];
+    return this.db
       .update(tasks)
       .set({ archivedAt: null, updatedAt: new Date() })
-      .where(and(eq(tasks.id, id), this.ownership()))
+      .where(
+        and(
+          inArray(tasks.id, ids),
+          this.ownership(),
+          options.onlyArchivedAt ? eq(tasks.archivedAt, options.onlyArchivedAt) : undefined,
+        ),
+      )
       .returning();
-    return task ?? null;
   }
 }

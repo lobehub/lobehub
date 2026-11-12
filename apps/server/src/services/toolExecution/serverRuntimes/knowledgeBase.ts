@@ -31,6 +31,8 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       userId,
       workspaceId,
       agentVisibility,
+      // A share visitor runs under the agent owner's scope but is not that owner.
+      context.agentShareVisitor ? null : userId,
     );
     const agentModel = agentId ? new AgentModel(serverDB, userId, workspaceId) : null;
 
@@ -166,6 +168,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
             knowledgeBaseId,
             parentId,
             title,
+            writeSource: 'agent',
             // Inherit caller-agent visibility: private-agent output stays in
             // the owner's private bucket; public-agent output is visible to
             // the workspace. When null (no agent / cannot resolve), fall

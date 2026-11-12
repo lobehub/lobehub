@@ -1,5 +1,8 @@
 declare module 'verification:component' {
+  import type { AskUserQuestionViewProps } from '@lobechat/shared-tool-ui/ask-user';
+  import type { WorkSummaryItem } from '@lobechat/types';
   import type { ListProps } from '@lobehub/ui';
+  import type { LucideIcon } from 'lucide-react';
   import type { ComponentType, CSSProperties, ReactNode } from 'react';
 
   interface Row {
@@ -23,6 +26,24 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const WorkPreview: ComponentType<{
+    item: WorkSummaryItem;
+    title: string;
+  }>;
+  export const WorkPreviewStatus: typeof WorkPreview;
+  export const PreviewToolbar: ComponentType<{
+    actions?: ReactNode;
+    path: string;
+    rootPath?: string;
+  }>;
+  export const ToolbarActionButton: ComponentType<{
+    active?: boolean;
+    disabled?: boolean;
+    icon: LucideIcon;
+    label?: ReactNode;
+    loading?: boolean;
+  }>;
+  export const SidebarGroupItem: ComponentType<{ disabled: boolean; id: string; name: string }>;
   export const Menu: ComponentType<ListProps>;
   export const SpendType: ComponentType<{
     children: ReactNode;
@@ -67,6 +88,7 @@ declare module 'verification:component' {
     onLineWrappingChange: () => void;
   }>;
   export const FilePathDisplay: ComponentType<{ filePath: string; isDirectory: boolean }>;
+  export const AskUserQuestionView: ComponentType<AskUserQuestionViewProps>;
   export const OptionCard: ComponentType<{
     description: string;
     disabled: boolean;
@@ -76,6 +98,23 @@ declare module 'verification:component' {
     recommendedText: string;
     selected: boolean;
     onToggle: () => void;
+  }>;
+  export const VoiceMessageControl: ComponentType<{
+    actionLabel: string;
+    actionText?: string;
+    cancelLabel: string;
+    durationLabel: string;
+    errorText?: string;
+    expanded?: boolean;
+    groupLabel: string;
+    isRetry?: boolean;
+    onAction: () => void;
+    onCancel: () => void;
+    progress?: number;
+    sendDisabled?: boolean;
+    statusAnnouncement: string;
+    tooltip?: string;
+    waveform: number[];
   }>;
   export const OptionRow: ComponentType<{
     active: boolean;
@@ -87,6 +126,8 @@ declare module 'verification:component' {
     tag: string;
     onClick: () => void;
   }>;
+  export const AcceptanceReport: ComponentType<{ runId?: string }>;
+  export const AcceptanceEvidenceList: ComponentType<{ evidence: unknown[] }>;
 }
 
 declare module 'verification:locale/chat' {

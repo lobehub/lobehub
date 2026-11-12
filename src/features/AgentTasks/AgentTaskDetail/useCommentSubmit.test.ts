@@ -22,6 +22,8 @@ vi.mock('@/features/EditorCanvas/editorAttachments', () => ({
     hasCompletedAttachments: false,
     hasIncompleteAttachments: JSON.stringify(json ?? null).includes('"pending"'),
   }),
+  hasIncompleteEditorAttachments: (editor: IEditor | undefined) =>
+    JSON.stringify(editor?.getDocument?.('json') ?? null).includes('"pending"'),
 }));
 
 const JSON_DOC = { root: { type: 'root' } };
@@ -170,6 +172,25 @@ describe('useCommentSubmit', () => {
 
     expect(editor.setDocument).not.toHaveBeenCalled();
     expect(doc.json).toBe(uploading);
+  });
+
+  it('holds the send while an inline image is still uploading', async () => {
+    const { doc, editor } = createEditor();
+    doc.json = {
+      root: {
+        children: [{ src: 'blob:app://renderer/1', status: 'pending', type: 'block-image' }],
+        type: 'root',
+      },
+    };
+    const { hook } = setup(editor);
+
+    await act(async () => {
+      await hook.result.current.submit();
+    });
+
+    expect(mocks.addComment).not.toHaveBeenCalled();
+    expect(editor.cleanDocument).not.toHaveBeenCalled();
+    expect(doc.markdown).toBe('looks good');
   });
 
   it('does nothing without permission or content', async () => {

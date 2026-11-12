@@ -3,9 +3,10 @@ import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { countOf } from '../utils/rows';
 import { seqOwnership, type TaskModelContext, taskOwnership } from './context';
-import { isTaskIdentifierUniqueViolation, normalizeTaskRefs } from './utils';
+import { normalizeTaskRefs } from './utils';
 
 /**
  * Insert a task under the next free `seq` in scope, retrying when a concurrent
@@ -52,8 +53,7 @@ export const insertWithNextSeq = async (
       return task;
     } catch (error: any) {
       // Retry on unique constraint violation (concurrent seq conflict)
-      // Check error itself, cause, and stringified message for PG error code 23505
-      if (isTaskIdentifierUniqueViolation(error) && attempt < maxRetries - 1) {
+      if (isUniqueViolation(error) && attempt < maxRetries - 1) {
         continue;
       }
       throw error;
@@ -223,6 +223,24 @@ export const deleteIfStatus = async (
   return deleted.length > 0;
 };
 
+/**
+ * Bulk counterpart of {@link deleteIfStatus}: delete each task only while it
+ * still has the status the caller locked and decided on. Returns the ids that
+ * were actually removed.
+ */
+export const deleteIfStatusForIds = async (
+  ctx: TaskModelContext,
+  expected: { id: string; status: string }[],
+): Promise<string[]> => {
+  if (expected.length === 0) return [];
+  const matches = expected.map(({ id, status }) => and(eq(tasks.id, id), eq(tasks.status, status)));
+  const deleted = await ctx.db
+    .delete(tasks)
+    .where(and(or(...matches), taskOwnership(ctx)))
+    .returning({ id: tasks.id });
+  return deleted.map(({ id }) => id);
+};
+
 /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
 export const deleteAll = async (
   ctx: TaskModelContext,
@@ -269,6 +287,28 @@ export const updateStatusIfCurrent = async (
     .returning();
 
   return task ?? null;
+};
+
+/**
+ * Bulk {@link updateStatusIfCurrent}: move each task to `status` only while it
+ * still has the status the caller inspected, in one statement. Returns the ids
+ * that were actually updated.
+ */
+export const updateStatusIfCurrentForIds = async (
+  ctx: TaskModelContext,
+  expected: { id: string; status: string }[],
+  status: string,
+): Promise<string[]> => {
+  if (expected.length === 0) return [];
+  const matches = expected.map(({ id, status: current }) =>
+    and(eq(tasks.id, id), eq(tasks.status, current)),
+  );
+  const updated = await ctx.db
+    .update(tasks)
+    .set({ status, updatedAt: new Date() })
+    .where(and(or(...matches), taskOwnership(ctx)))
+    .returning({ id: tasks.id });
+  return updated.map(({ id }) => id);
 };
 
 /** `context.completion.requestedByOperationId` — the run a deferred completion waits for. */
@@ -362,6 +402,67 @@ export const updateStatusForIds = async (
   return ctx.db
     .update(tasks)
     .set({ status, updatedAt: new Date(), ...extra })
+    .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
+    .returning();
+};
+
+/**
+ * Lock a set of tasks for a bulk field edit and return what the edit needs to
+ * decide and describe each row: the values it is about to replace (for the
+ * activity diff and the stale-repo rule) and the visibility its activity row
+ * inherits.
+ */
+export const lockForBulkEdit = async (ctx: TaskModelContext, ids: string[]) => {
+  if (ids.length === 0) return [];
+  return ctx.db
+    .select({
+      archivedAt: tasks.archivedAt,
+      assigneeAgentId: tasks.assigneeAgentId,
+      assigneeUserId: tasks.assigneeUserId,
+      automationMode: tasks.automationMode,
+      config: tasks.config,
+      createdByUserId: tasks.createdByUserId,
+      heartbeatInterval: tasks.heartbeatInterval,
+      id: tasks.id,
+      priority: tasks.priority,
+      schedulePattern: tasks.schedulePattern,
+      status: tasks.status,
+      visibility: tasks.visibility,
+    })
+    .from(tasks)
+    .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
+    .for('update');
+};
+
+/**
+ * Write the same plain-column patch to many tasks in one statement. Callers
+ * own the invariants (and the assignee repo-selection rule, see
+ * `withStaleReposCleared`) — this is only the set-based write.
+ *
+ * `configById` replaces the `config` column of just those rows, in the same
+ * statement (a `CASE` on the id), for rows whose patch has to rewrite their
+ * own config; every other row keeps its config untouched.
+ */
+export const updateFieldsForIds = async (
+  ctx: TaskModelContext,
+  ids: string[],
+  data: Partial<Pick<NewTask, 'assigneeAgentId' | 'assigneeUserId' | 'priority'>>,
+  configById?: ReadonlyMap<string, unknown>,
+): Promise<TaskItem[]> => {
+  if (ids.length === 0) return [];
+  const configCases = configById ? [...configById].filter(([id]) => ids.includes(id)) : [];
+  const config =
+    configCases.length > 0
+      ? sql`CASE ${tasks.id} ${sql.join(
+          configCases.map(
+            ([id, value]) => sql`WHEN ${id} THEN ${JSON.stringify(value ?? null)}::jsonb`,
+          ),
+          sql` `,
+        )} ELSE ${tasks.config} END`
+      : undefined;
+  return ctx.db
+    .update(tasks)
+    .set({ ...data, ...(config && { config }), updatedAt: new Date() })
     .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
     .returning();
 };

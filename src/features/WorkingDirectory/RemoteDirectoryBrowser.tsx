@@ -9,11 +9,11 @@ interface RemoteDirectoryBrowserProps {
   defaultPath?: string;
   deviceId: string;
   error?: string;
-  footerExtra?: ReactNode;
   loading: boolean;
   onCancel: () => void;
   onManual: (path: string) => void;
   onSelect: (path: string) => void;
+  pickExtra?: ReactNode;
 }
 
 /** {@link DirectoryBrowser} over a connected device's folders. */

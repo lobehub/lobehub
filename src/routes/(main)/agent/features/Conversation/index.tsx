@@ -9,6 +9,7 @@ import { useLocalPathReference } from '@/features/Conversation/useLocalPathRefer
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ConversationArea from './ConversationArea';
 
@@ -20,7 +21,8 @@ const wrapperStyle: React.CSSProperties = {
 };
 
 const ChatConversation = memo(() => {
-  const { agentId, topicId } = useAgentContext();
+  const context = useAgentContext();
+  const { agentId, topicId } = context;
   const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
 
@@ -35,7 +37,12 @@ const ChatConversation = memo(() => {
     agentId && agentId !== inboxAgentId && agentVisibility !== 'private' ? agentId : undefined;
   const { canUseResource } = useResourceAccess('agent', gatedResourceId);
 
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const { handleUploadFiles } = useUploadFiles({
+    agentId,
+    contextKey: messageMapKey(context),
+    model,
+    provider,
+  });
   const { enableLocalPathReference, handleLocalPaths } = useLocalPathReference(agentId, topicId);
 
   const content = (

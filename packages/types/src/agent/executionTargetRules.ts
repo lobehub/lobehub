@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 import type { DeviceExecutionTarget, ExecutionPlan } from './agencyConfig';
 import type { RuntimeEnvMode } from './agentConfig';
 import type { LobeAgentChatConfig } from './chatConfig';
@@ -29,19 +31,21 @@ export const executionTargetToRuntimeMode = (target: DeviceExecutionTarget): Run
 };
 
 export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
-  plan.kind === 'device' || plan.kind === 'device-unrouted';
+  plan.kind === 'device' || plan.kind === 'device-unrouted' || plan.kind === 'device-wakeable';
 
 /**
  * The run is committed to ONE device: either already routed (`device`, which
- * includes the opt-in `auto` single-online activation) or locked to an
- * explicit binding that is currently offline (`bound-device-offline` waits for
- * that machine rather than hopping elsewhere). A locked run has no device
+ * includes the opt-in `auto` single-online activation), bound to a managed
+ * cloud device that is starting (`device-wakeable`), or locked to an explicit
+ * binding that is currently offline (`bound-device-offline` waits for that
+ * machine rather than hopping elsewhere). A locked run has no device
  * decision left, so the remote-device picker must not exist for it — not even
  * as an activator-discoverable manifest, since explicit activation bypasses
  * the rule-layer gates.
  */
 export const isDeviceLockedPlan = (plan: ExecutionPlan): boolean =>
   plan.kind === 'device' ||
+  plan.kind === 'device-wakeable' ||
   (plan.kind === 'device-unrouted' && plan.reason === 'bound-device-offline');
 
 /**
@@ -57,7 +61,15 @@ export const describeLockedDevicePicker = (plan: ExecutionPlan): string | undefi
   const switchHint =
     'You cannot activate another device from here. If the user wants a different device, tell them to pick it in the device selector of the chat input and send the message again.';
 
-  return plan.kind === 'device'
-    ? `Device switching is off for this run: it is locked to device "${plan.deviceId}", where the Local System tools already run. ${switchHint}`
-    : `Device switching is off for this run: it is locked to the user's bound device, which is offline. Tell the user to reconnect it (LobeHub desktop app or \`lh connect\`). ${switchHint}`;
+  switch (plan.kind) {
+    case 'device': {
+      return `Device switching is off for this run: it is locked to device "${plan.deviceId}", where the Local System tools already run. ${switchHint}`;
+    }
+    case 'device-wakeable': {
+      return `Device switching is off for this run: it is locked to the managed cloud device "${plan.deviceId}", which is starting. Its tools answer DEVICE_WAKING until it is online; wait and retry them. ${switchHint}`;
+    }
+    default: {
+      return `Device switching is off for this run: it is locked to the user's bound device, which is offline. Tell the user to reconnect it (${BRANDING_NAME} desktop app or \`lh connect\`). ${switchHint}`;
+    }
+  }
 };

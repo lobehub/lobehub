@@ -138,7 +138,11 @@ export const BOT_WAKE_USER_LABELS_BY_OUTCOME: Record<
 };
 
 /** Which model scored a wake decision: is the message for the bot, or within its duties. */
-export type BotWakeJudgeKind = 'addressed' | 'duty';
+/**
+ * Which model scored a wake: the addressed classifier, the duty judge, or (Channel) the routing
+ * decision model choosing among members.
+ */
+export type BotWakeJudgeKind = 'addressed' | 'duty' | 'routing';
 
 /** The model score behind a wake decision, as the owner sees it next to the decision. */
 export interface BotWakeJudgeScore {
@@ -174,6 +178,8 @@ export interface BotWakeDecisionPage {
   items: BotWakeDecisionItem[];
   /** Keyset position of the next page; absent on the last one. */
   nextCursor?: { createdAt: string; id: string };
+  /** Decisions matching the filters in the window, across all pages. */
+  total: number;
 }
 
 /** Counts of one bot's wake decisions over the last `days` days. */

@@ -4,6 +4,7 @@ import type {
   MessageMetadata,
   UploadFileItem,
 } from '@lobechat/types';
+import { mergeMcpAppSource } from '@lobechat/types';
 
 import type { QueuedFollowUpRequest } from '@/services/aiAgent';
 
@@ -170,6 +171,11 @@ export interface OperationMetadata {
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
   inputSendErrorMsg?: string; // Error message to display in UI
   /**
+   * A heterogeneous CLI run (Claude Code) whose producer types queued follow-ups
+   * into its live session, so its queue drains at the next step, not the run end.
+   */
+  liveSteer?: boolean;
+  /**
    * User-facing LLM-call total for the running operation.
    *
    * Counts only actual model invocations — tool-only runtime iterations do not
@@ -177,6 +183,7 @@ export interface OperationMetadata {
    * scheduling/execution index.
    */
   llmCalls?: number;
+
   // Progress information
   progress?: {
     current: number;
@@ -332,6 +339,13 @@ export interface QueuedMessage {
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;
   /**
+   * A run already took this follow-up from the server queue and is handing it
+   * to the agent (a live Claude Code session reads it after its current step).
+   * It can no longer be edited, sent now or deleted; it leaves the tray once
+   * the agent confirms it, or turns back into a waiting entry if that fails.
+   */
+  serverDelivering?: boolean;
+  /**
    * Where the server holds this follow-up: `appending` while it is being
    * handed to the server queue behind the running Gateway run, `server` once
    * it is there. The server then joins it into that run or starts it as the
@@ -354,6 +368,14 @@ export interface QueuedMessage {
 /** Whether only this client holds the queued message, so only it can send it. */
 export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
   !message.serverDelivery;
+
+/**
+ * Whether a run already took the queued message from the server and is
+ * handing it to the agent. Only a message the server still holds counts: one
+ * taken back to this client is waiting here again, whatever flag it kept.
+ */
+export const isServerDeliveringQueuedMessage = (message: QueuedMessage): boolean =>
+  message.serverDelivery === 'server' && !!message.serverDelivering;
 
 /**
  * Merged message ready for injection
@@ -471,6 +493,13 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
       ...(pageSelections.length ? { pageSelections } : undefined),
     };
   }, undefined);
+  // The spread above keeps the last view; a merge keeps it only when every
+  // message came from that view.
+  if (metadata) {
+    delete metadata.mcpAppSource;
+    const mcpAppSource = mergeMcpAppSource(sorted.map((m) => m.metadata?.mcpAppSource));
+    if (mcpAppSource) metadata.mcpAppSource = mcpAppSource;
+  }
 
   // If any queued message pins the runtime, propagate it — a "server topic"
   // follow-up must stay on its rails even after merge.

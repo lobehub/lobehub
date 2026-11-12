@@ -49,6 +49,21 @@ describe('agent document headless editor', () => {
     expect(hasNodeType(snapshot.editorData, 'mathBlock')).toBe(true);
   });
 
+  it('should round-trip a heading list item between Markdown and editor data', async () => {
+    const markdown = '1. ## Overview\n2. Details\n';
+
+    const fromMarkdown = await createMarkdownEditorSnapshot(markdown);
+    const [overview, details] = (fromMarkdown.editorData as any).root.children[0].children;
+
+    expect(overview.$.listHeading).toBe('h2');
+    expect(details.$.listHeading).toBeUndefined();
+    expect(hasNodeType(fromMarkdown.editorData, 'heading')).toBe(false);
+
+    const fromEditorData = await exportEditorDataSnapshot({ editorData: fromMarkdown.editorData });
+
+    expect(fromEditorData.content).toBe(markdown);
+  });
+
   it('should safely serialize concurrent headless document lifecycles', async () => {
     const sources = await Promise.all(
       Array.from({ length: 6 }, (_, index) =>

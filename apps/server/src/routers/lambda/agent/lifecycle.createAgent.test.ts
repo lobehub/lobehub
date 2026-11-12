@@ -56,6 +56,16 @@ describe('agent.createAgent direct Channel', () => {
     },
   );
 
+  it('opens no Channel to a hidden (virtual) Agent', async () => {
+    // A Market agent run from an @ mention gets a hidden copy; a direct Channel
+    // to it would surface in the sidebar as an empty conversation.
+    const config = { title: 'OKR 教练', virtual: true };
+    await expect(caller('ws-1').createAgent({ config })).resolves.toEqual({ agentId: 'agt_new' });
+
+    expect(mocks.createAgent).toHaveBeenCalledWith({ config });
+    expect(mocks.createAgentDirectChannel).not.toHaveBeenCalled();
+  });
+
   it('opens nothing when the Agent was not created', async () => {
     mocks.createAgent.mockRejectedValue(new Error('A private agent cannot be created here'));
 

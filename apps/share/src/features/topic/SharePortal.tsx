@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, DraggablePanel } from '@lobehub/ui';
+import { DraggablePanel } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { lazy, memo, Suspense, useState } from 'react';
 
 import { CHAT_PORTAL_TOOL_UI_WIDTH } from '@/const/layoutTokens';
@@ -9,35 +11,33 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import ShareLoading from '../../shell/ShareLoading';
 
-const styles = createStaticStyles(({ cssVar, css }) => ({
-  body: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    height: 0;
-    padding-block-end: 12px;
-  `,
-  content: css`
-    position: relative;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    height: 100%;
-    min-height: 100%;
-    max-height: 100%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  drawer: css`
-    z-index: 10;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    height: '0',
+    paddingBlockEnd: '12px',
+  },
+  content: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: '100%',
+    maxHeight: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  drawer: {
+    zIndex: 10,
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 // Every portal view (artifacts, documents, tasks, goals…) ships with the router,
 // about 1MB gzipped, for a panel that starts collapsed. Loading it on first open
@@ -55,8 +55,8 @@ const SharePortal = memo(() => {
 
   return (
     <DraggablePanel
-      className={styles.drawer}
-      classNames={{ content: styles.content }}
+      className={stylex.props(styles.drawer).className}
+      classNames={{ content: stylex.props(styles.content).className }}
       defaultSize={{ width: CHAT_PORTAL_TOOL_UI_WIDTH }}
       expand={showPortal}
       expandable={false}
@@ -68,7 +68,7 @@ const SharePortal = memo(() => {
     >
       {opened && (
         <Suspense fallback={<ShareLoading />}>
-          <PortalContent renderBody={(body) => <div className={styles.body}>{body}</div>} />
+          <PortalContent renderBody={(body) => <div {...stylex.props(styles.body)}>{body}</div>} />
         </Suspense>
       )}
     </DraggablePanel>

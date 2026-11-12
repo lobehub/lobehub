@@ -3,7 +3,7 @@
 import { memo, useEffect } from 'react';
 
 import { useComposerDraftBus } from './composerDraftBus';
-import { useConversationStore, useConversationStoreApi } from './store';
+import { conversationSelectors, useConversationStore, useConversationStoreApi } from './store';
 
 /**
  * Renders nothing — consumes composerDraftBus drafts into the live composer.
@@ -18,15 +18,19 @@ const ComposerDraftReceiver = memo(() => {
   const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
   const agentId = useConversationStore((s) => s.context.agentId);
   const topicId = useConversationStore((s) => s.context.topicId);
+  const contextKey = useConversationStore(conversationSelectors.composerKey);
   const storeApi = useConversationStoreApi();
   const draft = useComposerDraftBus((s) => s.draft);
 
   useEffect(() => {
-    useComposerDraftBus.setState({ attached: Boolean(editor) });
+    useComposerDraftBus.setState({
+      attached: Boolean(editor),
+      contextKey: editor ? contextKey : undefined,
+    });
     return () => {
-      useComposerDraftBus.setState({ attached: false });
+      useComposerDraftBus.setState({ attached: false, contextKey: undefined });
     };
-  }, [editor]);
+  }, [contextKey, editor]);
 
   useEffect(() => {
     if (!draft || !editor) return;

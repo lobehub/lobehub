@@ -23,18 +23,29 @@ import {
   widgets,
 } from '../../../schemas';
 import { ChannelRepository } from '../../channel';
+import { ProjectRepository } from '../../project';
 import { ProjectCoordinatorRepository } from '../index';
 
 const serverDB = await getTestDB();
 const userId = 'project-coordinator-user';
 const otherUserId = 'project-coordinator-other-user';
 const model = new ProjectModel(serverDB, userId);
+const projectRepo = new ProjectRepository(serverDB, userId);
 const repo = new ProjectCoordinatorRepository(serverDB, userId);
 const otherRepo = new ProjectCoordinatorRepository(serverDB, otherUserId);
 let identifierSequence = 0;
 
-const createProject = (input: { name: string }) =>
-  model.create({ ...input, identifier: `C${String(++identifierSequence).padStart(5, '0')}` });
+const createProject = (input: { coordinatorAgentId?: string; name: string }) =>
+  projectRepo.create({ ...input, identifier: `C${String(++identifierSequence).padStart(5, '0')}` });
+
+/** Projects created before main agents were ordinary agents got a virtual coordinator. */
+const createLegacyProject = async (name: string) => {
+  const coordinator = await new AgentModel(serverDB, userId).create({
+    title: `${name} Coordinator`,
+    virtual: true,
+  });
+  return createProject({ coordinatorAgentId: coordinator.id, name });
+};
 
 describe('ProjectCoordinatorRepository.replaceCoordinator', () => {
   beforeEach(async () => {
@@ -47,7 +58,7 @@ describe('ProjectCoordinatorRepository.replaceCoordinator', () => {
   });
 
   it('hands a dedicated coordinator history to the new main agent, then deletes it', async () => {
-    const project = await createProject({ name: 'Handover' });
+    const project = await createLegacyProject('Handover');
     const coordinatorId = project.coordinatorAgentId;
     const lead = await new AgentModel(serverDB, userId).create({ title: 'Lead' });
     const topic = await new TopicModel(serverDB, userId).create({
@@ -241,10 +252,14 @@ describe('ProjectCoordinatorRepository.replaceCoordinator', () => {
 
     expect(updated?.coordinatorAgentId).toBe(second.id);
     expect(await serverDB.select().from(agents).where(eq(agents.id, first.id))).toHaveLength(1);
+    // The agent the project created is the user's own agent, so it stays too.
     expect(await model.listAgents(project.id)).toEqual([
       expect.objectContaining({
         agent: expect.objectContaining({ id: second.id }),
         binding: expect.objectContaining({ enabled: true, role: 'Reviewer' }),
+      }),
+      expect.objectContaining({
+        agent: expect.objectContaining({ id: project.coordinatorAgentId }),
       }),
       expect.objectContaining({
         agent: expect.objectContaining({ id: first.id }),

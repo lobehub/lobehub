@@ -7,22 +7,36 @@ import type {
   LinearSyncResult,
   LinearSyncSkipReason,
   TaskItem,
+  TaskLabel,
 } from '@lobechat/types';
+import { isLinearNoProject } from '@lobechat/types';
 import debug from 'debug';
+import { sql } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import {
   TaskExternalLinkModel,
   type TaskExternalLinkWithTask,
 } from '@/database/models/taskExternalLink';
+import { TaskLabelModel } from '@/database/models/taskLabel';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
+import { findTasksInOpenGoals } from '../task/archiveGuard';
+import { LinearApiError } from './client';
+import { linearCommentToContent } from './issueComments';
+import { linearIssueLabels, linearLabelKey, type LinearLabelSpec } from './issueLabels';
 import {
+  getArchivedLinearIssuesByIds,
   getLinearIssuesByIds,
+  getLinearProjectTeamIds,
   LINEAR_PAGE_SIZE,
   type LinearIssue,
+  type LinearIssueComment,
   type LinearIssueFilter,
+  listLinearIssueComments,
   listLinearIssues,
 } from './issues';
 
@@ -35,6 +49,11 @@ export const MAX_ISSUES_PER_SYNC = 10_000;
  * the sync again picks up where the previous run stopped.
  */
 export const MAX_TASKS_CREATED_PER_SYNC = 100;
+/**
+ * Closed tasks one sync catches up comments for. Each is marked once synced,
+ * so a long history of legacy links is worked through over the next runs.
+ */
+export const MAX_COMMENT_CATCH_UPS_PER_SYNC = 100;
 /** Tries at creating one task when concurrent creates keep taking its identifier. */
 const MAX_CREATE_ATTEMPTS = 5;
 /** Skipped entries kept in a result, so a stored rule result stays small. */
@@ -52,7 +71,7 @@ interface SyncedFields {
 
 interface SyncOptions {
   /**
-   * Only close tasks whose issue Linear closed; never create or rewrite. Used
+   * Only close or archive tasks like their issue; never create or rewrite. Used
    * for linked issues that a filtered sync no longer matches.
    */
   closeOnly?: boolean;
@@ -98,7 +117,8 @@ const hashTask = (task: TaskItem): string =>
     priority: task.priority ?? 0,
   });
 
-const linkMetadata = (issue: LinearIssue): LinearIssueLinkMetadata => ({
+const linkMetadata = (issue: LinearIssue, appliedArchivedAt?: string): LinearIssueLinkMetadata => ({
+  ...(appliedArchivedAt ? { appliedArchivedAt } : {}),
   assigneeName: issue.assignee?.displayName,
   labels: issue.labels?.nodes.map((label) => label.name),
   projectName: issue.project?.name,
@@ -148,7 +168,9 @@ const parentsFirst = (issues: LinearIssue[]): LinearIssue[] => {
  *   in LobeHub since the last sync, in which case the edit is kept;
  * - a task whose issue Linear completed or canceled is closed the same way,
  *   except a running task, which is never interrupted;
- * - a task is never reopened, deleted or recreated by a sync.
+ * - a task whose issue Linear archived is archived once, unless it is still
+ *   live, which waits for a later run;
+ * - a task is never reopened, restored, deleted or recreated by a sync.
  */
 export class LinearIssueSyncService {
   private readonly db: LobeChatDatabase;
@@ -199,7 +221,11 @@ export class LinearIssueSyncService {
   async importIssues(
     accessToken: string,
     issueIds: string[],
-    options: { targetProjectId?: string | null } = {},
+    options: {
+      syncComments?: boolean;
+      syncLabels?: boolean;
+      targetProjectId?: string | null;
+    } = {},
   ): Promise<LinearSyncResult> {
     const issues = await getLinearIssuesByIds(accessToken, issueIds);
     const result = emptyResult();
@@ -221,24 +247,43 @@ export class LinearIssueSyncService {
       { createClosed: true, targetProjectId: options.targetProjectId },
       result,
     );
+    if (options.syncLabels) await this.syncLabels(issues, result);
+    if (options.syncComments) {
+      await this.syncComments(
+        accessToken,
+        issues.map((issue) => issue.id),
+        result,
+      );
+    }
     return result;
   }
 
   /**
    * Sync every issue matching a filter, then close the tasks of linked issues
-   * in the same team that the filter no longer matches because Linear closed
-   * them.
+   * in the filter's teams (for a project, every team it belongs to) that the
+   * filter no longer matches because Linear closed them, and archive those of
+   * issues Linear archived.
    *
    * With `startAfter`, reading resumes at that cursor (a continuing run), and
    * the closing pass is left to a run that reads from the start, since this
    * one does not see the issues before the cursor. With `noCreate`, every
    * matching issue is read and linked tasks are reconciled, but no task is
    * created; an unimported issue only marks the result `truncated`.
+   *
+   * With `syncComments`, the comments of every issue read are copied onto its
+   * task, so running again also fills in tasks imported without them. With
+   * `syncLabels`, so are its labels.
    */
   async syncByFilter(
     accessToken: string,
     filter: LinearIssueFilter,
-    options: { noCreate?: boolean; startAfter?: string; targetProjectId?: string | null } = {},
+    options: {
+      noCreate?: boolean;
+      startAfter?: string;
+      syncComments?: boolean;
+      syncLabels?: boolean;
+      targetProjectId?: string | null;
+    } = {},
   ): Promise<LinearFilterSyncResult> {
     const result: LinearFilterSyncResult = emptyResult();
     const issues: LinearIssue[] = [];
@@ -279,6 +324,14 @@ export class LinearIssueSyncService {
       },
       result,
     );
+    if (options.syncLabels) await this.syncLabels(issues, result);
+    if (options.syncComments) {
+      await this.syncComments(
+        accessToken,
+        issues.map((issue) => issue.id),
+        result,
+      );
+    }
     if (result.truncated) {
       // Resume where the first issue left for later is, so none is skipped;
       // past every page read when the cap was not what stopped this run.
@@ -288,22 +341,83 @@ export class LinearIssueSyncService {
     if (options.startAfter) return result;
 
     // Linked issues the filter missed: closed since, or moved out of the project.
+    // A link is stored under its issue's own team, which for a project filter
+    // can be any team the project belongs to, not just the filter's team.
     const seen = new Set(issues.map((issue) => issue.id));
-    const unseen = (await this.linkModel.findByContainer('linear', filter.teamId)).filter(
-      (link) => !seen.has(link.externalId),
-    );
+    const teamIds = new Set([filter.teamId, ...issues.map((issue) => issue.team.id)]);
+    if (filter.linearProjectId && !isLinearNoProject(filter.linearProjectId)) {
+      // Let a failed lookup fail the run: skipping the project's other teams
+      // would leave their closed issues' tasks open without any sign of it.
+      for (const id of await getLinearProjectTeamIds(accessToken, filter.linearProjectId)) {
+        teamIds.add(id);
+      }
+    }
+    const unseen = (
+      await pMap([...teamIds], (teamId) => this.linkModel.findByContainer('linear', teamId), {
+        concurrency: 5,
+      })
+    )
+      .flat()
+      .filter((link) => !seen.has(link.externalId));
     if (unseen.length > 0) {
-      const open = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
-      const openTaskIds = new Set(
-        open.filter((task) => !CLOSED_TASK_STATUSES.has(task.status)).map((task) => task.id),
+      const visible = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
+      const closedTaskIds = new Set(
+        visible.filter((task) => CLOSED_TASK_STATUSES.has(task.status)).map((task) => task.id),
       );
-      const toCheck = unseen.filter((link) => openTaskIds.has(link.taskId));
+      const visibleTaskIds = new Set(visible.map((task) => task.id));
+      const toCheck = unseen.filter(
+        (link) => visibleTaskIds.has(link.taskId) && !closedTaskIds.has(link.taskId),
+      );
+      // Issues Linear closed: this run closes their tasks.
+      const closing: string[] = [];
       if (toCheck.length > 0) {
         const fetched = await getLinearIssuesByIds(
           accessToken,
           toCheck.map((link) => link.externalId),
         );
         await this.syncIssues(fetched, { closeOnly: true }, result);
+        for (const issue of fetched) {
+          if (CLOSED_STATE_TYPES.has(issue.state.type)) closing.push(issue.id);
+        }
+        if (options.syncLabels) {
+          // Only those being closed: an open issue the filter misses is left to
+          // the rule that lists it. Unlike comments, tasks already closed get no
+          // catch-up, which would mean reading their issues again on every run.
+          const closingIds = new Set(closing);
+          await this.syncLabels(
+            fetched.filter((issue) => closingIds.has(issue.id)),
+            result,
+          );
+        }
+      }
+      // Issues archived since their task closed, which Linear also does on its
+      // own after a while. A closed task is not reread above, and a run without
+      // archived issues never lists these. Once applied, a link is not asked again.
+      const closedUnarchived = unseen.filter(
+        (link) => closedTaskIds.has(link.taskId) && !link.metadata?.appliedArchivedAt,
+      );
+      if (closedUnarchived.length > 0) {
+        const archived = await getArchivedLinearIssuesByIds(
+          accessToken,
+          closedUnarchived.map((link) => link.externalId),
+        );
+        await this.syncIssues(archived, { closeOnly: true }, result);
+      }
+      if (options.syncComments) {
+        // The filter no longer reaches these issues, so their comments are
+        // read here: those being closed now, and closed tasks whose comments
+        // were never synced (imported before, or a failed read) — once, so a
+        // long tail of closed issues is not reread on every run. An open
+        // issue the filter misses (moved to another rule's project, say) is
+        // left to the rule that lists it.
+        const catchUp = unseen
+          .filter((link) => closedTaskIds.has(link.taskId) && !link.metadata?.commentsSynced)
+          .slice(0, MAX_COMMENT_CATCH_UPS_PER_SYNC);
+        await this.syncComments(
+          accessToken,
+          [...closing, ...catchUp.map((link) => link.externalId)],
+          result,
+        );
       }
     }
 
@@ -393,6 +507,12 @@ export class LinearIssueSyncService {
     let current = task;
     if (closed) current = (await this.close(task, issue.state.type)) ?? task;
     result.created += 1;
+    if (
+      issue.archivedAt &&
+      (await this.archiveOnce(issue, issue.archivedAt, task.id)) === 'archived'
+    ) {
+      result.archived = (result.archived ?? 0) + 1;
+    }
     return { link, task: current };
   }
 
@@ -476,29 +596,59 @@ export class LinearIssueSyncService {
       }
     }
 
+    let skippedRunning = false;
     if (CLOSED_STATE_TYPES.has(issue.state.type) && !CLOSED_TASK_STATUSES.has(task.status)) {
       // Rechecked under the row lock: the task may have started since the batch was read.
       const closed =
         task.status !== 'running' && (await this.close(task, issue.state.type)) !== undefined;
-      if (closed) result.closed += 1;
-      else skip(result, issue.identifier, 'running');
+      if (closed) {
+        result.closed += 1;
+      } else {
+        skip(result, issue.identifier, 'running');
+        skippedRunning = true;
+      }
       counted = true;
+    }
+
+    // Applied at most once per Linear archive, so a task restored in LobeHub
+    // stays restored. Nothing here ever restores a task.
+    let appliedArchivedAt =
+      link.metadata?.appliedArchivedAt === issue.archivedAt
+        ? (issue.archivedAt ?? undefined)
+        : undefined;
+    if (issue.archivedAt && !appliedArchivedAt) {
+      const outcome = await this.archiveOnce(issue, issue.archivedAt, task.id);
+      if (outcome === 'archived' || outcome === 'applied') {
+        appliedArchivedAt = issue.archivedAt;
+        if (outcome === 'archived') {
+          result.archived = (result.archived ?? 0) + 1;
+          counted = true;
+        }
+      } else {
+        // Reported, since the archive is still owed; a later run retries it.
+        if (!skippedRunning) skip(result, issue.identifier, outcome);
+        counted = true;
+      }
     }
 
     if (!counted) result.unchanged += 1;
 
-    // Display facts only. `syncedHash` is written solely by `create` and
-    // `applyLinearFields`, together with the task, so a run working from an
-    // older read can never put a stale hash back.
+    // Display facts and the applied archive. `syncedHash` is written solely by
+    // `create` and `applyLinearFields`, together with the task, so a run working
+    // from an older read can never put a stale hash back.
     const issueUpdatedAt = new Date(issue.updatedAt);
-    if (link.externalUpdatedAt?.getTime() === issueUpdatedAt.getTime()) return;
+    if (
+      link.externalUpdatedAt?.getTime() === issueUpdatedAt.getTime() &&
+      link.metadata?.appliedArchivedAt === appliedArchivedAt
+    )
+      return;
 
     await this.linkModel.update(link.id, {
       externalContainerId: issue.team.id,
       externalIdentifier: issue.identifier,
       externalUpdatedAt: issueUpdatedAt,
       externalUrl: issue.url,
-      metadata: linkMetadata(issue),
+      metadata: linkMetadata(issue, appliedArchivedAt),
     });
   }
 
@@ -544,6 +694,286 @@ export class LinearIssueSyncService {
     return skippedRunning ? undefined : updated;
   }
 
+  /**
+   * Archive the task like its issue, at Linear's time, under the rules of a
+   * manual archive, recording it on the link in one transaction. Rechecked under
+   * the row lock: a run working from an older read must not archive again a task
+   * restored since another run applied this archive.
+   *
+   * - `archived`: done by this call;
+   * - `applied`: nothing to do: already applied, or archived in LobeHub first,
+   *   which stays as it is and is recorded;
+   * - `running` / `live`: left for a later run, since it is running, has a schedule
+   *   or heartbeat that can fire, or is unfinished in an open Goal.
+   */
+  private async archiveOnce(
+    issue: LinearIssue,
+    archivedAt: string,
+    taskId: string,
+  ): Promise<'applied' | 'archived' | 'live' | 'running'> {
+    return this.db.transaction(async (tx) => {
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      await tasks.lockForUpdate(taskId);
+      const links = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const [link] = await links.findByExternalIds('linear', [issue.id]);
+      const task = await tasks.findById(taskId);
+      if (!link || link.taskId !== taskId || !task) return 'live';
+      if (link.metadata?.appliedArchivedAt === archivedAt) return 'applied';
+
+      const record = () => links.update(link.id, { metadata: linkMetadata(issue, archivedAt) });
+      if (task.archivedAt) {
+        await record();
+        return 'applied';
+      }
+
+      const inOpenGoal = await findTasksInOpenGoals(
+        tx,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        [task],
+      );
+      if (inOpenGoal.size > 0) return 'live';
+
+      const [archived] = await new TaskArchiveModel(tx, this.userId, this.workspaceId).archiveMany(
+        [taskId],
+        { at: sql`${archivedAt}::timestamptz` },
+      );
+      if (!archived) return task.status === 'running' ? 'running' : 'live';
+
+      await record();
+      return 'archived';
+    });
+  }
+
+  /**
+   * Copy the Linear comments of these issues onto their tasks, oldest first,
+   * skipping those copied before. Only tasks the caller can see get comments;
+   * an issue never imported (skipped, or left for a later run) gets none yet.
+   * Comments are read a batch of issues at a time. A revoked token fails the
+   * run like reading issues does. Any other read failure (Linear throttling,
+   * say) stops reading for this run, and a failed write skips only its task;
+   * either way the tasks are reported `commentsFailed` and the next run
+   * retries them, while the task writes of this run still count.
+   */
+  private async syncComments(
+    accessToken: string,
+    issueIds: string[],
+    result: LinearSyncResult,
+  ): Promise<void> {
+    if (issueIds.length === 0) return;
+    const links = [...(await this.visibleLinks(issueIds)).values()];
+
+    for (let start = 0; start < links.length; start += LINEAR_PAGE_SIZE) {
+      const batch = links.slice(start, start + LINEAR_PAGE_SIZE);
+      let comments: LinearIssueComment[];
+      try {
+        comments = await listLinearIssueComments(
+          accessToken,
+          batch.map((link) => link.externalId),
+        );
+      } catch (error) {
+        if (error instanceof LinearApiError && error.status === 401) throw error;
+        log('read comments failed: %O', error);
+        // Further reads would most likely fail the same way.
+        for (const link of links.slice(start)) {
+          skip(result, link.externalIdentifier, 'commentsFailed');
+        }
+        return;
+      }
+
+      const byIssue = new Map<string, LinearIssueComment[]>();
+      for (const comment of comments) {
+        if (!comment.issueId) continue;
+        const list = byIssue.get(comment.issueId) ?? [];
+        list.push(comment);
+        byIssue.set(comment.issueId, list);
+      }
+
+      for (const link of batch) {
+        const issueComments = byIssue.get(link.externalId) ?? [];
+        const known = new Set(link.metadata?.syncedCommentIds ?? []);
+        const hasNew = issueComments.some((comment) => !known.has(comment.id));
+        if (!hasNew && link.metadata?.commentsSynced) continue;
+        try {
+          const added = await this.appendComments(link, issueComments);
+          if (added > 0) result.commentsImported = (result.commentsImported ?? 0) + added;
+        } catch (error) {
+          log('sync comments of %s failed: %O', link.externalIdentifier, error);
+          skip(result, link.externalIdentifier, 'commentsFailed');
+        }
+      }
+    }
+  }
+
+  /**
+   * Add the comments not copied yet and record them on the link in one
+   * transaction, under the task's row lock: a run cut off part-way never
+   * leaves a copied comment unrecorded, and two runs never copy the same one.
+   */
+  private async appendComments(
+    link: TaskExternalLinkWithTask,
+    comments: LinearIssueComment[],
+  ): Promise<number> {
+    return this.db.transaction(async (tx) => {
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await tasks.lockForUpdate(link.taskId))) return 0;
+      const linkModel = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const [current] = await linkModel.findByExternalIds('linear', [link.externalId]);
+      if (!current || current.taskId !== link.taskId) return 0;
+
+      const known = new Set(current.metadata?.syncedCommentIds ?? []);
+      const fresh = comments.filter((comment) => !known.has(comment.id));
+      // Straight to the model: a bulk copy of history notifies no one, unlike
+      // a comment posted in LobeHub.
+      await tasks.addComments(
+        link.taskId,
+        fresh.map((comment) => {
+          // Linear's time, so the task's activity reads in the order it happened.
+          const createdAt = new Date(comment.createdAt);
+          return {
+            authorUserId: this.userId,
+            content: linearCommentToContent(comment),
+            createdAt,
+            updatedAt: createdAt,
+            userId: this.userId,
+          };
+        }),
+      );
+      await linkModel.recordSyncedComments(
+        current.id,
+        fresh.map((comment) => comment.id),
+      );
+      return fresh.length;
+    });
+  }
+
+  /**
+   * Bring these issues' labels onto their tasks, creating the labels not in the
+   * registry yet. Only what changed in Linear since the last sync is applied, so
+   * labels a person added or removed on the task stay that way, except that a
+   * grouped label Linear adds replaces its sibling, as attaching one always does.
+   * A label already in the registry is reused as it is, whatever its color or group.
+   * Only tasks the caller can see get labels. A failure skips the labels of the
+   * tasks it reaches, reported `labelsFailed` and retried by the next run, while
+   * the task writes of this run still count.
+   */
+  private async syncLabels(issues: LinearIssue[], result: LinearSyncResult): Promise<void> {
+    if (issues.length === 0) return;
+    const links = await this.visibleLinks(issues.map((issue) => issue.id));
+
+    const changes = issues.flatMap((issue) => {
+      const link = links.get(issue.id);
+      if (!link) return [];
+      const labels = linearIssueLabels(issue);
+      const { added, removed } = labelDelta(labels, link.metadata?.syncedLabels);
+      if (added.length === 0 && removed.length === 0) return [];
+      return [{ added, labels, link }];
+    });
+    if (changes.length === 0) return;
+
+    let registry: Map<string, TaskLabel>;
+    try {
+      registry = await this.ensureLabels(changes.flatMap((change) => change.added));
+    } catch (error) {
+      log('create labels failed: %O', error);
+      for (const { link } of changes) skip(result, link.externalIdentifier, 'labelsFailed');
+      return;
+    }
+
+    for (const { labels, link } of changes) {
+      try {
+        const changed = await this.applyLabelChange(link, labels, registry);
+        if (changed) result.labelsSynced = (result.labelsSynced ?? 0) + 1;
+      } catch (error) {
+        log('sync labels of %s failed: %O', link.externalIdentifier, error);
+        skip(result, link.externalIdentifier, 'labelsFailed');
+      }
+    }
+  }
+
+  /** The registry's label for each of these, created if missing, by {@link linearLabelKey}. */
+  private async ensureLabels(labels: LinearLabelSpec[]): Promise<Map<string, TaskLabel>> {
+    const model = new TaskLabelModel(this.db, this.userId, this.workspaceId);
+    const groups = new Map(
+      (
+        await model.findOrCreateMany(
+          labels.flatMap(({ group }) => (group ? [{ ...group, isGroup: true }] : [])),
+        )
+      )
+        // A label of that name that is not a group cannot hold others: stay ungrouped.
+        .filter((label) => label.isGroup)
+        .map((label) => [linearLabelKey(label.name), label.id]),
+    );
+
+    const rows = await model.findOrCreateMany(
+      labels.map(({ color, group, name }) => ({
+        color,
+        name,
+        parentId: group ? groups.get(linearLabelKey(group.name)) : undefined,
+      })),
+    );
+    return new Map(rows.map((label) => [linearLabelKey(label.name), label]));
+  }
+
+  /**
+   * Apply one issue's label change and record it in one transaction. The change
+   * is worked out again under the task's row lock: another run of a different rule
+   * may have applied labels since the batch was read, and a change based on that
+   * older read would leave its labels on the task, unknown to later syncs. Locks
+   * follow the order of every other writer: labels, then the task, then the link.
+   * False when no label of the task was affected, such as one the registry cannot
+   * attach.
+   */
+  private async applyLabelChange(
+    link: TaskExternalLinkWithTask,
+    labels: LinearLabelSpec[],
+    registry: Map<string, TaskLabel>,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const labelModel = new TaskLabelModel(tx, this.userId, this.workspaceId);
+      await labelModel.lockForShare(
+        labels.flatMap(({ key }) => {
+          const label = registry.get(key);
+          return label ? [label.id] : [];
+        }),
+      );
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await tasks.lockForUpdate(link.taskId))) return false;
+      const linkModel = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const [current] = await linkModel.findByExternalIds('linear', [link.externalId]);
+      if (!current || current.taskId !== link.taskId) return false;
+
+      const { added, removed } = labelDelta(labels, current.metadata?.syncedLabels);
+      if (added.length === 0 && removed.length === 0) return false;
+
+      // A label group's name is not attachable, and the registry's own grouping can
+      // put two labels of one issue in the same group, which a task cannot carry. The
+      // others still count as synced: retrying them would swap siblings on every run.
+      const groupsTaken = new Set<string>();
+      const add: string[] = [];
+      for (const { key } of added) {
+        const label = registry.get(key);
+        // Only a run that raced this one asks for a label the batch did not create.
+        if (!label) throw new Error(`Label not resolved in this run: ${key}`);
+        if (label.isGroup) continue;
+        if (label.parentId) {
+          if (groupsTaken.has(label.parentId)) continue;
+          groupsTaken.add(label.parentId);
+        }
+        add.push(label.id);
+      }
+
+      const remove = (await labelModel.findByNames(removed))
+        .filter((label) => !label.isGroup)
+        .map((label) => label.id);
+      await labelModel.changeTaskLabels(link.taskId, { add, remove });
+      await linkModel.recordSyncedLabels(
+        link.id,
+        labels.map((label) => label.key),
+      );
+      return add.length > 0 || remove.length > 0;
+    });
+  }
+
   /** Links in this scope whose task the caller can still see. */
   private async visibleLinks(externalIds: string[]) {
     const links = await this.linkModel.findByExternalIds('linear', [...new Set(externalIds)]);
@@ -555,6 +985,16 @@ export class LinearIssueSyncService {
     );
   }
 }
+
+/** What changed in Linear since these labels were last applied to the task. */
+const labelDelta = (labels: LinearLabelSpec[], syncedLabels: string[] | undefined) => {
+  const synced = new Set(syncedLabels);
+  const current = new Set(labels.map((label) => label.key));
+  return {
+    added: labels.filter((label) => !synced.has(label.key)),
+    removed: [...synced].filter((key) => !current.has(key)),
+  };
+};
 
 const skip = (result: LinearSyncResult, identifier: string, reason: LinearSyncSkipReason) => {
   result.skippedCount = (result.skippedCount ?? 0) + 1;

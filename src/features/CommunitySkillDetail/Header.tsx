@@ -358,9 +358,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               <>
                 <MetaDivider />
                 <PublishedTime
-                  className={stylex.props(styles.time).className}
                   date={(updatedAt || createdAt) as string}
                   template={'MMM DD, YYYY'}
+                  xstyle={styles.time}
                 />
               </>
             )}

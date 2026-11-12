@@ -20,11 +20,13 @@ import { confirm, outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
 import { registerGoalAccessCommands } from './access';
+import { registerGoalArchiveCommands } from './archive';
 import {
   ensureCreatedGoalTaskModel,
   parseGoalModelConfig,
   registerGoalAssignmentCommands,
 } from './assignment';
+import { registerGoalConfigurationCommands } from './configuration';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import {
   type GoalMetricState,
@@ -495,9 +497,9 @@ export function registerGoalCommand(program: Command) {
         'When the work applies one recipe to many units (migrate N stores to one mechanism, give N resources',
         'the same caching, update N callers), declare a batch instead of listing every unit: add "rollout" with',
         '"recipe" (the procedure every unit follows), "units" (every unit beyond the probes, as a title or',
-        '{"title","description"}) and optional "variants" ([{"axis","values"}]); "tasks" then hold 2-5',
-        'representative probes. The probes run first; once they ran through without a person the owner approves',
-        'the first wave, and each later wave is handed to this agent to release or escalate; a rejected',
+        '{"title","description"}), optional "skillName" (kebab-case, what the recipe does) and "variants"',
+        '([{"axis","values"}]); "tasks" then hold 2-5 representative probes. The probes run first; once they',
+        'ran through without a person the owner approves the first wave, and each later wave is handed to this agent to release or escalate; a rejected',
         'release comes back to this agent to rewrite the plan for review. Units that differ',
         'only in names, files or details are still one mould; work whose steps differ per task is not.',
       ].join('\n'),
@@ -863,6 +865,7 @@ export function registerGoalCommand(program: Command) {
     .option('--agent <id>', 'Filter by responsible agent')
     .option('--project <id>', 'Filter by project')
     .option('--status <status...>', 'Filter by lifecycle status')
+    .option('--archived', 'List only archived goals (hidden otherwise)')
     .option('--limit <n>', 'Maximum rows', '50')
     .option('--json [fields]', 'Output JSON')
     .action(async (options) => {
@@ -870,6 +873,7 @@ export function registerGoalCommand(program: Command) {
         await getTrpcClient()
       ).goal.list.query({
         agentId: options.agent,
+        archived: options.archived || undefined,
         limit: Number.parseInt(options.limit, 10),
         projectId: options.project,
         statuses: options.status,
@@ -1124,68 +1128,10 @@ export function registerGoalCommand(program: Command) {
       log.info(result.message);
     });
 
-  goal
-    .command('set-budget <id>')
-    .description('Update limits; pass "none" to remove a limit')
-    .option('--max-rounds <n>')
-    .option('--max-cost <usd>')
-    .option('--max-experiments <n>', 'Exploration experiment cap (1–200)')
-    .option(
-      '--max-manager-turns <n>',
-      'Main Agent turn cap (1–100); raising it resumes a goal it paused',
-    )
-    .option(
-      '--max-concurrent-tasks <n>',
-      'Tasks allowed to run at once (1–10; "none" restores the default)',
-    )
-    .option('--max-attempts-per-task <n>', 'Attempts per Task before opening a decision gate')
-    .option('--max-steps-per-run <n>', 'Agent step cap per Task run ("none" removes it)')
-    .action(
-      async (
-        id: string,
-        options: {
-          maxAttemptsPerTask?: string;
-          maxConcurrentTasks?: string;
-          maxCost?: string;
-          maxExperiments?: string;
-          maxManagerTurns?: string;
-          maxRounds?: string;
-          maxStepsPerRun?: string;
-        },
-      ) => {
-        const parseLimit = (value: string | undefined, integer = false) =>
-          value === undefined
-            ? undefined
-            : value === 'none'
-              ? null
-              : integer
-                ? Number.parseInt(value, 10)
-                : Number.parseFloat(value);
-        const result = await (
-          await getTrpcClient()
-        ).goal.setBudget.mutate({
-          id,
-          maxAttemptsPerTask:
-            options.maxAttemptsPerTask === undefined
-              ? undefined
-              : Number.parseInt(options.maxAttemptsPerTask, 10),
-          maxConcurrentTasks: parseLimit(options.maxConcurrentTasks, true),
-          maxExperiments:
-            options.maxExperiments === undefined ? undefined : Number(options.maxExperiments),
-          maxManagerTurns:
-            options.maxManagerTurns === undefined
-              ? undefined
-              : Number.parseInt(options.maxManagerTurns, 10),
-          maxRounds: parseLimit(options.maxRounds, true),
-          maxStepsPerRun: parseLimit(options.maxStepsPerRun, true),
-          maxTotalCost: parseLimit(options.maxCost),
-        });
-        log.info(result.message);
-      },
-    );
-
   registerGoalAccessCommands(goal);
+  registerGoalArchiveCommands(goal);
   registerGoalAssignmentCommands(goal);
+  registerGoalConfigurationCommands(goal);
 
   goal
     .command('bind-topic <id>')

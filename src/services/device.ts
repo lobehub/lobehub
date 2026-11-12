@@ -5,7 +5,7 @@ import type {
   DeviceScope,
 } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { type TopicListItem } from '@/services/topic';
 
 type DeviceClient = typeof lambdaClient.device;
@@ -27,7 +27,18 @@ class DeviceService {
 
   /** Update user-editable device fields (defaultCwd / friendlyName / workingDirs). */
   updateDevice(input: Parameters<DeviceClient['updateDevice']['mutate']>[0]) {
-    return lambdaClient.device.updateDevice.mutate(input);
+    // Personal devices remain editable while the UI has an active workspace.
+    return createWorkspaceLambdaClient(null).device.updateDevice.mutate(input);
+  }
+
+  /**
+   * Ask a managed cloud device to start. Resolves when the request is
+   * accepted, not when the device is online. Routed by the device's own
+   * scope, like the other per-device writes.
+   */
+  wakeManagedDevice({ deviceId, scope }: { deviceId: string; scope: DeviceScope }) {
+    const client = scope === 'personal' ? createWorkspaceLambdaClient(null) : lambdaClient;
+    return client.device.wakeManagedDevice.mutate({ deviceId });
   }
 
   /** Update user-editable fields of a workspace-enrolled device (workspace-scoped write). */
@@ -127,6 +138,11 @@ class DeviceService {
   /** Ports the device is listening on; `null` when it can't answer. */
   listListeningPorts(input: Parameters<DeviceClient['listListeningPorts']['query']>[0]) {
     return lambdaClient.device.listListeningPorts.query(input);
+  }
+
+  /** The device's reported paths and runtime info (home, desktop, shell, ...). */
+  getDeviceSystemInfo(input: Parameters<DeviceClient['getDeviceSystemInfo']['query']>[0]) {
+    return lambdaClient.device.getDeviceSystemInfo.query(input);
   }
 
   /** Where the device's desktop app update stands; never starts a check. */

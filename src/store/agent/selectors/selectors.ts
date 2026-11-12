@@ -1,7 +1,6 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_AGENT_CONFIG,
-  DEFAULT_AVATAR,
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
@@ -12,17 +11,15 @@ import {
   agentDisplayName,
   type AgentMode,
   type AgentProfile,
+  getActivePluginIds,
+  getDisabledPluginIds,
+  getWorkingDirEffectivePath,
   type KnowledgeItem,
+  KnowledgeType,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
   type MetaData,
   type RuntimeEnvConfig,
-} from '@lobechat/types';
-import {
-  getActivePluginIds,
-  getDisabledPluginIds,
-  getWorkingDirEffectivePath,
-  KnowledgeType,
 } from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
@@ -50,7 +47,7 @@ const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(current
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
 
-  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
+  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : undefined;
 };
 
 const currentAgentAvatar = (s: AgentStoreState) =>

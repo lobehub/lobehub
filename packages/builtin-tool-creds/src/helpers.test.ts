@@ -86,7 +86,6 @@ describe('resolveAvailableComposioServices', () => {
   it('excludes a disabled app type even though it is not connected', () => {
     const result = resolveAvailableComposioServices(appTypes, new Set(), new Set(['slack']));
 
-    expect(result.map((s) => s.identifier)).not.toContain('slack');
     expect(result.map((s) => s.identifier)).toEqual(['gmail', 'jira']);
   });
 

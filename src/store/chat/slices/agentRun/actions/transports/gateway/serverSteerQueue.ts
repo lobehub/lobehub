@@ -344,11 +344,21 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
     try {
       // Taken by a run but not confirmed (`delivering`) still counts as held:
       // a failed delivery returns it to the queue.
-      const notDelivered = new Set(
-        (await aiAgentService.listQueuedFollowUps(surfaceOf(held[0].serverRequest!))).map(
-          (entry) => entry.id,
-        ),
+      const entries = await aiAgentService.listQueuedFollowUps(surfaceOf(held[0].serverRequest!));
+      const notDelivered = new Set(entries.map((entry) => entry.id));
+      // Mirror which ones a run already took, so the tray stops offering to
+      // edit or withdraw them instead of failing when the user tries.
+      const delivering = new Set(
+        entries.filter((entry) => entry.delivering).map((entry) => entry.id),
       );
+      for (const message of held) {
+        if (!notDelivered.has(message.id)) continue;
+        const isDelivering = delivering.has(message.id);
+        if (!!message.serverDelivering !== isDelivering)
+          get().updateQueuedMessage(contextKey, message.id, {
+            serverDelivering: isDelivering || undefined,
+          });
+      }
       const settledDelivered = new Set<string>();
       for (const message of held) {
         if (!message.serverUnconfirmed) continue;
@@ -452,6 +462,7 @@ export const restoreServerQueuedMessages = async (
       id: entry.id,
       interruptMode: 'soft',
       serverDelivery: 'server',
+      ...(entry.delivering && { serverDelivering: true }),
       serverRequest: {
         agentId,
         appContext: { threadId: null, topicId },
@@ -499,6 +510,7 @@ export const reclaimServerQueuedMessages = (get: Get, contextKey: string): Promi
         // this client holds it now.
         if (ownsWithdrawn(message, state))
           get().updateQueuedMessage(contextKey, message.id, {
+            serverDelivering: undefined,
             serverDelivery: undefined,
             serverUnconfirmed: undefined,
           });
@@ -536,7 +548,10 @@ export const withdrawQueuedMessage = async (
       id,
     });
     // Taken but not settled: it stays shown until it lands or comes back.
-    if (state === 'delivering') return false;
+    if (state === 'delivering') {
+      get().updateQueuedMessage(contextKey, id, { serverDelivering: true });
+      return false;
+    }
     get().removeQueuedMessage(contextKey, id);
     return ownsWithdrawn(message, state);
   }

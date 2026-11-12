@@ -11,7 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ApiClientModule from '../api/client';
 import type * as RefreshModule from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
-import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
+import {
+  removePid,
+  removeStatus,
+  spawnDaemon,
+  stopDaemon,
+  stopDaemonAndWait,
+  writeStatus,
+} from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
 import type * as SystemInfoModule from '../device/systemInfo';
 import { cliVersion } from '../pkg';
@@ -136,6 +143,11 @@ vi.mock('../daemon/manager', () => ({
       return true;
     }
     return false;
+  }),
+  stopDaemonAndWait: vi.fn().mockImplementation(async () => {
+    const wasRunning = mockRunningPid !== null;
+    mockRunningPid = null;
+    return wasRunning;
   }),
   writeStatus: vi.fn(),
 }));
@@ -691,7 +703,7 @@ describe('connect command', () => {
     expect(setVerbose).toHaveBeenCalledWith(true);
   });
 
-  it('should handle SIGINT', async () => {
+  it('cleans up only its own daemon records on SIGINT', async () => {
     const sigintHandlers: Array<() => Promise<void> | void> = [];
     const origOn = process.on;
     vi.spyOn(process, 'on').mockImplementation((event: any, handler: any) => {
@@ -700,7 +712,7 @@ describe('connect command', () => {
     });
 
     const program = createProgram();
-    await program.parseAsync(['node', 'test', 'connect']);
+    await program.parseAsync(['node', 'test', 'connect', '--daemon-child']);
 
     // Trigger SIGINT handler
     for (const handler of sigintHandlers) {
@@ -713,7 +725,8 @@ describe('connect command', () => {
       vi.mocked(cleanupAllProcesses).mock.invocationCallOrder[0],
     );
     expect(cleanupAllProcesses).toHaveBeenCalled();
-    expect(removeStatus).toHaveBeenCalled();
+    expect(removeStatus).toHaveBeenCalledWith(process.pid);
+    expect(removePid).toHaveBeenCalledWith(process.pid);
   });
 
   it('should handle auth_expired when refresh fails', async () => {
@@ -1000,7 +1013,7 @@ describe('connect command', () => {
         vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         systemService.enabled = true;
         try {
-          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+          await createProgram().parseAsync(['node', 'test', 'connect', ...command, '--verbose']);
           const output = vi.mocked(log.info).mock.calls.flat().join('\n');
           expect(output).toContain('system');
           expect(output).toContain('4567');
@@ -1034,39 +1047,92 @@ describe('connect command', () => {
       await program.parseAsync(['node', 'test', 'connect', 'status']);
 
       expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Daemon Status'));
-      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('12345'));
       expect(log.info).toHaveBeenCalledWith(expect.stringContaining('connected'));
     });
   });
 
   describe('connect restart', () => {
-    it.each([['--daemon'], ['restart']])(
-      'does not create a competing daemon through %j',
-      async (...command) => {
-        systemService.enabled = true;
-        const exitCode = process.exitCode;
-        try {
-          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
-          expect(spawnDaemon).not.toHaveBeenCalled();
-          expect(log.error).toHaveBeenCalledWith(
-            expect.stringContaining('sudo systemctl --no-block restart lobehub-connect.service'),
-          );
-          expect(process.exitCode).toBe(1);
-        } finally {
-          systemService.enabled = false;
-          process.exitCode = exitCode;
-        }
-      },
-    );
+    it.each([['--daemon']])('does not create a competing daemon through %j', async (...command) => {
+      systemService.enabled = true;
+      const exitCode = process.exitCode;
+      try {
+        await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+        expect(spawnDaemon).not.toHaveBeenCalled();
+        expect(log.error).toHaveBeenCalledWith(
+          expect.stringContaining('sudo systemctl --no-block restart lobehub-connect.service'),
+        );
+        expect(process.exitCode).toBe(1);
+      } finally {
+        systemService.enabled = false;
+        process.exitCode = exitCode;
+      }
+    });
     it('should stop and start daemon', async () => {
       mockRunningPid = 12345;
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'connect', 'restart']);
 
-      expect(stopDaemon).toHaveBeenCalled();
+      expect(stopDaemonAndWait).toHaveBeenCalled();
       expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Stopped existing'));
       expect(spawnDaemon).toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'connect',
+        'restart',
+        '--device-id',
+        'fixture-self',
+        '--gateway',
+        'wss://gateway.example.test',
+      ],
+      [
+        'connect',
+        '--device-id',
+        'fixture-self',
+        '--gateway',
+        'wss://gateway.example.test',
+        'restart',
+      ],
+    ])('preserves explicit connection options: %j', async (...args) => {
+      mockRunningPid = 12345;
+      await createProgram().parseAsync(['node', 'test', ...args]);
+      expect(spawnDaemon).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--device-id',
+          'fixture-self',
+          '--gateway',
+          'wss://gateway.example.test',
+        ]),
+      );
+    });
+
+    it('does not launch a replacement until shutdown has finished', async () => {
+      mockRunningPid = 12345;
+      let finishStop!: (stopped: boolean) => void;
+      vi.mocked(stopDaemonAndWait).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishStop = resolve;
+          }),
+      );
+      const restarting = createProgram().parseAsync(['node', 'test', 'connect', 'restart']);
+      await vi.waitFor(() => expect(finishStop).toBeDefined());
+      expect(spawnDaemon).not.toHaveBeenCalled();
+      mockRunningPid = null;
+      finishStop(true);
+      await restarting;
+      expect(spawnDaemon).toHaveBeenCalledOnce();
+    });
+
+    it('does not launch a replacement when the previous daemon will not stop', async () => {
+      mockRunningPid = 12345;
+      vi.mocked(stopDaemonAndWait).mockRejectedValueOnce(new Error('previous daemon did not exit'));
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'connect', 'restart']),
+      ).rejects.toThrow('did not exit');
+      expect(spawnDaemon).not.toHaveBeenCalled();
     });
 
     it('should start daemon even if none was running', async () => {

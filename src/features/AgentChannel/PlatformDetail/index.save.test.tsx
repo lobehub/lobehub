@@ -231,14 +231,22 @@ describe('PlatformDetail saving', () => {
     expect(mocks.updateBotProvider.mock.calls[0][2].settings.replyStyle).toBe('Short and casual.');
   });
 
-  it('leaves the bottom bar to Remove and Test connection for a saved bot', () => {
+  it('keeps Remove and Test connection on the Connect tab, off the settings tabs', () => {
     render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
       wrapper: MemoryRouter,
     });
+    const remove = () =>
+      screen.queryByRole('button', { name: new RegExp(en['channel.removeChannel']) });
+    const test = () =>
+      screen.queryByRole('button', { name: new RegExp(en['channel.testConnection']) });
 
-    expect(
-      screen.getByRole('button', { name: new RegExp(en['channel.removeChannel']) }),
-    ).toBeVisible();
+    // A saved bot opens on a settings tab.
+    expect(remove()).toBeNull();
+    expect(test()).toBeNull();
+
+    openTab(en['channel.tab.connect']);
+    expect(remove()).toBeVisible();
+    expect(test()).toBeVisible();
     expect(screen.queryByRole('button', { name: en['channel.save'] })).toBeNull();
     expect(screen.queryByRole('button', { name: en['channel.saveAndConnect'] })).toBeNull();
   });
@@ -280,5 +288,30 @@ describe('PlatformDetail saving', () => {
     // Duties still has its unsaved edit.
     await waitFor(() => expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(1));
     expect(sensitivity).toHaveValue('0.9');
+  });
+});
+
+describe('PlatformDetail status reactions', () => {
+  beforeEach(() => {
+    mocks.heterogeneous = false;
+    vi.clearAllMocks();
+  });
+
+  it('starts a new bot with status reactions off', () => {
+    render(<PlatformDetail agentId="agt" platformDef={platformDef} />, { wrapper: MemoryRouter });
+
+    openTab(en['channel.tab.reply']);
+    expect(screen.getByText(en['channel.reactionModeNoneHint'])).toBeInTheDocument();
+    expect(screen.queryByText(en['channel.reactionModeMinimalHint'])).toBeNull();
+  });
+
+  it('shows a bot saved before the field existed with reactions on, as the runtime reads it', () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.reply']);
+    expect(screen.getByText(en['channel.reactionModeMinimalHint'])).toBeInTheDocument();
+    expect(screen.queryByText(en['channel.reactionModeNoneHint'])).toBeNull();
   });
 });

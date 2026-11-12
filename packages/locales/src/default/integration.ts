@@ -90,10 +90,12 @@ export default {
   'linear.sync.error.reconnect':
     'The Linear connection has expired. Reconnect the workspace, then try again.',
   'linear.sync.filter.allProjects': 'All projects',
+  'linear.sync.filter.noProject': 'No project',
   'linear.sync.filter.project': 'Linear project',
-  'linear.sync.filter.projectHint': 'Keep All projects to include every issue in the team.',
+  'linear.sync.filter.projectHint':
+    'Keep All projects to include every issue in the team, or pick No project for issues not in any project.',
   'linear.sync.filter.states': 'Issue states to sync',
-  'linear.sync.filter.statesHint': 'Completed and canceled issues are left out by default.',
+  'linear.sync.filter.statesHint': 'Canceled issues are left out by default.',
   'linear.sync.filter.statesSummary': '{{count}} states',
   'linear.sync.filter.team': 'Linear team',
   'linear.sync.filter.teamPlaceholder': 'Choose a team',
@@ -119,7 +121,13 @@ export default {
   'linear.sync.job.runningIssues': 'Syncing {{count}} issues…',
   'linear.sync.job.runningRule': 'Syncing everything the rule matches…',
   'linear.sync.job.skipReason.closed': 'Closed in Linear and never imported',
+  'linear.sync.job.skipReason.commentsFailed':
+    'Task synced, but its comments could not be; the next sync retries them',
   'linear.sync.job.skipReason.failed': 'Could not be written; the next sync retries it',
+  'linear.sync.job.skipReason.labelsFailed':
+    'Task synced, but its labels could not be; the next sync retries them',
+  'linear.sync.job.skipReason.live':
+    'Archived in Linear, but the task has a live schedule or an open goal; a later sync archives it',
   'linear.sync.job.skipReason.missing': 'No longer in Linear, or not visible to this connection',
   'linear.sync.job.skipReason.running': 'Task is running, so it was not closed',
   'linear.sync.job.skipReason.unavailable': 'Task is in the trash or not visible to you',
@@ -132,9 +140,11 @@ export default {
   'linear.sync.job.titleRule': 'Rule: {{rule}}',
   'linear.sync.job.titleRuleDeleted': 'Rule (deleted)',
   'linear.sync.list.count': '{{count}} issues',
+  'linear.sync.list.countAtLeast': '{{count}}+ issues',
   'linear.sync.list.empty': 'No issues match these filters.',
   'linear.sync.list.linked': 'Synced · {{task}}',
   'linear.sync.list.loadMore': 'Load more',
+  'linear.sync.list.loaded': '{{count}} loaded',
   'linear.sync.list.openInLinear': 'Open in Linear',
   'linear.sync.list.pickTeam': 'Choose a team to see its issues.',
   'linear.sync.list.selectAll': 'Select all {{count}} loaded',
@@ -146,6 +156,23 @@ export default {
   'linear.sync.modal.saveRuleHint':
     'Sync every issue matching these filters now, and keep the filters to sync again later',
   'linear.sync.modal.title': 'Import issues from {{account}}',
+  'linear.sync.options.importTitle': 'Import options',
+  'linear.sync.options.includeArchived': 'Include archived issues',
+  'linear.sync.options.includeArchivedDesc':
+    'Also list and import issues archived in Linear, and archive their tasks here too',
+  'linear.sync.options.includeArchivedRuleDesc':
+    'Also sync issues archived in Linear that match this rule, and archive their tasks',
+  'linear.sync.options.syncComments': 'Sync comments',
+  'linear.sync.options.syncCommentsDesc':
+    "Copy each issue's Linear comments into the task's activity, keeping the author and time",
+  'linear.sync.options.syncCommentsRuleDesc':
+    'Tasks already synced also get the comments they are missing',
+  'linear.sync.options.syncLabels': 'Sync labels',
+  'linear.sync.options.syncLabelsDesc':
+    "Add each issue's Linear labels to the task, creating any that don't exist yet",
+  'linear.sync.options.syncLabelsRuleDesc':
+    'Synced tasks this rule still matches also pick up label changes made in Linear',
+  'linear.sync.options.syncTitle': 'Sync options',
   'linear.sync.project.connect': 'Connect Linear',
   'linear.sync.project.description':
     'Turn Linear issues into tasks of this project, one by one or through a saved team or project rule. Syncing is one way: nothing in Linear is changed.',
@@ -154,7 +181,10 @@ export default {
   'linear.sync.project.title': 'Sync from Linear',
   'linear.sync.projectHint':
     'To sync issues into a project, open the project and go to Settings → Advanced.',
+  'linear.sync.result.archived': '{{count}} archived',
   'linear.sync.result.closed': '{{count}} closed',
+  'linear.sync.result.commentsImported': '{{count}} comments added',
+  'linear.sync.result.labelsSynced': 'Labels updated on {{count}} tasks',
   'linear.sync.result.created': '{{count}} created',
   'linear.sync.result.keptLocalEdits': '{{count}} kept local edits',
   'linear.sync.result.skipped': '{{count}} skipped',

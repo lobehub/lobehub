@@ -82,7 +82,6 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
-  [SettingsTabs.Drive]: ['storage', 'drive', 'network drive', 'files', 'quota'],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
@@ -362,6 +361,21 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
+    anchor: 'about-debug-logs',
+    descKey: 'settingAbout.debugLogs.desc',
+    keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
+    labelKey: 'settingAbout.debugLogs.title',
+    tab: SettingsTabs.About,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'about-remote-debugging',
+    keywords: ['remote debugging', 'cdp', 'devtools', 'diagnostics', 'debug port'],
+    labelKey: 'settingAbout.remoteDebugging.title',
+    tab: SettingsTabs.About,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
     anchor: 'appearance-font-family',
     descKey: 'settingAppearance.font.fontFamily.desc',
     keywords: ['font', 'font family', 'typeface', 'interface font'],
@@ -614,6 +628,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     anchor: 'hotkey-desktop',
     keywords: ['shortcut', 'keyboard', 'global'],
     labelKey: 'hotkey.group.desktop',
+    tab: SettingsTabs.Hotkey,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'hotkey-app-menu',
+    keywords: ['shortcut', 'keyboard', 'menu', 'new agent', 'new topic', 'zoom'],
+    labelKey: 'hotkey.group.appMenu',
     tab: SettingsTabs.Hotkey,
     visible: (ctx) => ctx.isDesktop,
   },

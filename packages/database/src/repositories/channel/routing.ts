@@ -1,4 +1,8 @@
-import type { ChannelAuditDetails, ChannelMessageRoutingStatus } from '@lobechat/types';
+import type {
+  ChannelAuditDetails,
+  ChannelJobWake,
+  ChannelMessageRoutingStatus,
+} from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -10,7 +14,13 @@ import { ChannelError } from './error';
 import { audit } from './transaction';
 
 export type ChannelRoutingDecision = (
-  | { memberIds: string[]; reason: string; status: 'assigned' }
+  | {
+      memberIds: string[];
+      reason: string;
+      status: 'assigned';
+      /** Why each chosen member is woken; one without an entry owes an answer. */
+      wakes?: Record<string, ChannelJobWake>;
+    }
   | { reason: string; status: Extract<ChannelMessageRoutingStatus, 'skipped' | 'unassigned'> }
 ) & { details?: ChannelAuditDetails };
 
@@ -24,10 +34,19 @@ const findMessage = async (tx: Transaction, channelId: string, messageId: string
   return message;
 };
 
+/** What a routing decision actually applied, after membership was rechecked. */
+export interface AppliedChannelRouting {
+  /** Members the message was delivered to; may be fewer than the decision proposed. */
+  recipients: string[];
+  /** Status the message ended with: `unassigned` when no proposed member could be delivered. */
+  status: ChannelMessageRoutingStatus;
+}
+
 /**
  * Writes back a routing decision. Applies only while the message is still `pending` at the same
  * attempt, so a late answer can never overwrite a retry or a stop. Chosen members that are
- * no longer candidates are dropped. Returns false when the result was stale.
+ * no longer candidates are dropped. Returns null when the result was stale, otherwise what was
+ * actually applied — the decision itself may name members that received nothing.
  */
 export const resolveRouting = async (
   tx: Transaction,
@@ -35,9 +54,9 @@ export const resolveRouting = async (
   messageId: string,
   attempt: number,
   decision: ChannelRoutingDecision,
-): Promise<boolean> => {
+): Promise<AppliedChannelRouting | null> => {
   const message = await findMessage(tx, channelId, messageId);
-  if (message.routingStatus !== 'pending' || message.routingAttempt !== attempt) return false;
+  if (message.routingStatus !== 'pending' || message.routingAttempt !== attempt) return null;
 
   const thread = await findThread(tx, channelId, message.threadId);
   const chosen =
@@ -59,7 +78,15 @@ export const resolveRouting = async (
           ),
         )
     : [];
-  const delivered = requester ? await deliver(tx, message, chosen, requester.id) : [];
+  const delivered = requester
+    ? await deliver(
+        tx,
+        message,
+        chosen,
+        requester.id,
+        decision.status === 'assigned' ? decision.wakes : undefined,
+      )
+    : [];
   const status =
     decision.status === 'assigned' && !delivered.length ? 'unassigned' : decision.status;
 
@@ -104,7 +131,7 @@ export const resolveRouting = async (
     status,
   });
 
-  return true;
+  return { recipients: delivered, status };
 };
 
 /** Sends an `unassigned` message back to the decision model under a new attempt number. */

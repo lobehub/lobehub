@@ -59,14 +59,22 @@ export class ClientMessageTransport implements MessageTransport {
   }
 
   createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
-    return this.createMessage(params);
+    return this.createToolMessageForOperation(params, this.operationId);
   }
 
   createToolMessageForOperation(
     params: CreateMessageParams,
     operationId: string,
   ): Promise<RuntimeMessageRef> {
-    return this.createMessage(params, operationId);
+    return this.createMessage(
+      {
+        ...params,
+        ...(params.pluginIntervention && {
+          pluginIntervention: { ...params.pluginIntervention, runtimeType: 'client' },
+        }),
+      },
+      operationId,
+    );
   }
 
   async deleteMessage(id: string): Promise<void> {

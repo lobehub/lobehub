@@ -147,6 +147,61 @@ describe('gatherContextFacts', () => {
     });
   });
 
+  describe('document references', () => {
+    it('resolves referenced documents against the executing agent', async () => {
+      const findAgentDocument = vi.fn(async (_agentId: string, documentId: string) =>
+        documentId === 'doc-1' ? { content: 'Voice rules', title: 'Voice' } : null,
+      );
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [
+            message(
+              'Use <refer_document name="Voice" id="doc-1" /> and <refer_document name="X" id="doc-2" />',
+            ),
+          ],
+        }),
+        { findAgentDocument },
+      );
+
+      expect(findAgentDocument).toHaveBeenCalledWith('agt_1', 'doc-1');
+      expect(facts.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+        { documentId: 'doc-2', title: 'X' },
+      ]);
+    });
+
+    it('lists earlier-turn references without a lookup only when the documents tool can read them', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'Voice rules' }));
+      const messages = [message('<refer_document name="Voice" id="doc-1" />'), message('Next')];
+
+      const withTool = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-agent-documents'], messages }),
+        { findAgentDocument },
+      );
+      expect(withTool.step.documentReferences).toEqual([
+        { documentId: 'doc-1', earlierTurn: true, title: 'Voice' },
+      ]);
+      expect(findAgentDocument).not.toHaveBeenCalled();
+
+      const withoutTool = await gatherContextFacts(request({ messages }), { findAgentDocument });
+      expect(withoutTool.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+      ]);
+    });
+
+    it('skips the lookup when no message references a document', async () => {
+      const findAgentDocument = vi.fn();
+
+      const facts = await gatherContextFacts(request({ messages: [message('hello')] }), {
+        findAgentDocument,
+      });
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
+    });
+  });
+
   describe('share visitor gates', () => {
     const visitor = { agentId: 'agt_1', visitorUserId: 'visitor_1' };
 
@@ -196,6 +251,21 @@ describe('gatherContextFacts', () => {
       const summaries = facts.step.topicReferences?.map((r) => r.summary) ?? [];
       expect(summaries).toContain('my summary');
       expect(summaries).not.toContain('creator secret');
+    });
+
+    it('never resolves document references for a visitor', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'creator secret', title: 'Doc' }));
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [message('<refer_document name="Doc" id="doc-1" />')],
+          shareVisitor: visitor,
+        }),
+        { findAgentDocument },
+      );
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
     });
 
     it('never enumerates the owner’s agents, providers or plugins for a visitor', async () => {

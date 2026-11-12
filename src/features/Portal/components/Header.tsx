@@ -7,8 +7,7 @@ import {
 } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ArrowLeft, X } from 'lucide-react';
-import { type CSSProperties, Fragment, type ReactNode } from 'react';
-import { memo } from 'react';
+import { type CSSProperties, Fragment, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useParams } from 'react-router';
 

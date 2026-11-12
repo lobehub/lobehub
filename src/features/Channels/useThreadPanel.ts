@@ -18,6 +18,8 @@ interface DraftSelection {
 export const useThreadPanel = (channelId: string) => {
   const [params, setParams] = useSearchParams();
   const threadId = params.get('thread');
+  // A thread link from the sidebar opens the thread as the page instead of beside the Channel.
+  const page = !!threadId && params.get('view') === 'page';
   const location = useActiveLocation();
   const scope = cacheScope.use();
   const [selection, setSelection] = useState<DraftSelection | null>(null);
@@ -40,6 +42,7 @@ export const useThreadPanel = (channelId: string) => {
         const next = new URLSearchParams(current);
         if (id) next.set('thread', id);
         else next.delete('thread');
+        next.delete('view');
         return next;
       },
       { replace },
@@ -65,6 +68,15 @@ export const useThreadPanel = (channelId: string) => {
   const close = () => {
     clearDraft();
     if (threadId) setThread(null);
+  };
+  const openPage = (id: string) => {
+    clearDraft();
+    latest.current.setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('thread', id);
+      next.set('view', 'page');
+      return next;
+    });
   };
   const isCurrent = (draft: DraftSelection) =>
     mounted.current &&
@@ -107,8 +119,11 @@ export const useThreadPanel = (channelId: string) => {
         ? selection.value
         : null,
     openDraft,
+    openPage,
     openThread,
+    /** The thread shown as the page; `threadId` is then null, as no panel is open. */
+    pageThreadId: page ? threadId : null,
     send,
-    threadId,
+    threadId: page ? null : threadId,
   };
 };

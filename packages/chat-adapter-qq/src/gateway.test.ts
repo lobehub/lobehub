@@ -71,6 +71,18 @@ function createMockApi() {
   } as any;
 }
 
+const createReadyPayload = () => ({
+  d: {
+    session_id: 'sess_1',
+    shard: [0, 1],
+    user: { bot: true, id: 'bot_1', username: 'TestBot' },
+    version: 1,
+  },
+  op: QQ_WS_OP_CODES.DISPATCH,
+  s: 1,
+  t: 'READY',
+});
+
 // ---- Tests ----
 
 describe('QQGatewayConnection', () => {
@@ -120,17 +132,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
 
       await connectPromise;
     });
@@ -148,17 +150,7 @@ describe('QQGatewayConnection', () => {
       expect(identifyPayload?.d.shard).toEqual([0, 1]);
 
       // Complete the connection
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
     });
 
@@ -189,17 +181,7 @@ describe('QQGatewayConnection', () => {
       await vi.advanceTimersByTimeAsync(10);
 
       // Complete READY
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       // Advance past jitter + interval to trigger heartbeat
@@ -219,17 +201,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       // Send heartbeat ACK
@@ -245,17 +217,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       // Simulate a message event
@@ -298,17 +260,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       // Server requests reconnect
@@ -324,17 +276,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       // Invalid session, cannot resume
@@ -348,17 +290,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       ws.close(4000, 'network reset');
@@ -375,17 +307,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       conn.close();
@@ -399,17 +321,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       abort.abort();
@@ -424,17 +336,7 @@ describe('QQGatewayConnection', () => {
       ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
       await vi.advanceTimersByTimeAsync(10);
 
-      ws.simulateMessage({
-        d: {
-          session_id: 'sess_1',
-          shard: [0, 1],
-          user: { bot: true, id: 'bot_1', username: 'TestBot' },
-          version: 1,
-        },
-        op: QQ_WS_OP_CODES.DISPATCH,
-        s: 1,
-        t: 'READY',
-      });
+      ws.simulateMessage(createReadyPayload());
       await connectPromise;
 
       // Send another event with s=5

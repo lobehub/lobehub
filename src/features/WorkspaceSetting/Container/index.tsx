@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, type FlexboxProps } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, type FlexboxProps } from '@lobehub/ui';
 import { memo, type PropsWithChildren, type ReactNode } from 'react';
 
 interface WorkspaceSettingsContainerProps extends FlexboxProps {

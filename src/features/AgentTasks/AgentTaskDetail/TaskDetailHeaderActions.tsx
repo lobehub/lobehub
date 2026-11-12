@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   confirmModal,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
   Icon,
@@ -22,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { FavoriteButton, useFavoriteMenuItem } from '@/features/Favorites';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -75,7 +77,12 @@ const TaskDetailHeaderActions = memo(() => {
   }, [canEditTask, taskId, t, deleteTask, navigate]);
 
   const toggleArchive = useCallback(async () => {
-    if (!canArchive || !taskId) return;
+    if (!taskId) return;
+    if (!canArchive) {
+      // Touch users get no hover tooltip, so a blocked click says why.
+      if (archiveDeniedKey) toast.info(t(archiveDeniedKey));
+      return;
+    }
     try {
       await archiveTask(taskId, !isArchived);
     } catch (error) {
@@ -89,7 +96,7 @@ const TaskDetailHeaderActions = memo(() => {
           : 'taskList.contextMenu.archiveSuccess',
       ),
     );
-  }, [archiveTask, canArchive, isArchived, t, taskId]);
+  }, [archiveDeniedKey, archiveTask, canArchive, isArchived, t, taskId]);
 
   const triggerPublish = useCallback(() => {
     if (!canEditTask) return;
@@ -185,15 +192,6 @@ const TaskDetailHeaderActions = memo(() => {
       { type: 'divider' },
       ...(favoriteMenuItem ? [favoriteMenuItem, { type: 'divider' as const }] : []),
       {
-        desc: archiveDeniedKey && t(archiveDeniedKey),
-        disabled: !canArchive,
-        icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
-        key: 'archive',
-        label: t(isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive'),
-        onClick: toggleArchive,
-      },
-      { type: 'divider' },
-      {
         danger: true,
         disabled: !canEditTask,
         icon: <Icon icon={Trash} />,
@@ -264,10 +262,6 @@ const TaskDetailHeaderActions = memo(() => {
     takesOver,
     t,
     triggerDelete,
-    toggleArchive,
-    isArchived,
-    archiveDeniedKey,
-    canArchive,
     triggerPublish,
     triggerMakePrivate,
     canEditTask,
@@ -276,9 +270,29 @@ const TaskDetailHeaderActions = memo(() => {
 
   if (!taskId) return null;
 
+  const archiveLabel = t(
+    isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive',
+  );
+  const archiveDeniedReason = archiveDeniedKey ? t(archiveDeniedKey) : undefined;
+
   return (
     <>
       {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
+      {/* A blocked archive stays enabled so hover and keyboard users can read why;
+          a click only repeats the reason. Never mark it `aria-disabled`: ActionIcon styles that
+          with `pointer-events: none`, which hides the reason and, when the attribute
+          outlives the block, leaves the button dead until a refresh. */}
+      <ActionIcon
+        aria-description={archiveDeniedReason}
+        aria-label={archiveLabel}
+        color={canArchive ? undefined : cssVar.colorTextDisabled}
+        icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        style={canArchive ? undefined : { cursor: 'not-allowed' }}
+        title={archiveDeniedReason ?? archiveLabel}
+        tooltipProps={{ placement: 'bottom' }}
+        onClick={() => void toggleArchive()}
+      />
       <DropdownMenu items={menuItems}>
         <ActionIcon icon={MoreHorizontal} size={'small'} />
       </DropdownMenu>

@@ -1,13 +1,13 @@
 'use client';
 
-import { ContextMenuTrigger, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, cx } from '@lobehub/ui';
+import { ActionIcon, ContextMenuTrigger, cx, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import { type MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import Avatar from '@/components/Avatar';
 import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 import ProjectAvatar from '@/features/Projects/ProjectAvatar';
@@ -278,8 +278,16 @@ const TabItem = memo<TabItemProps>(
 
     const indicator = (
       <span className={styles.avatarWrapper}>
-        {meta.avatarSeed ? (
-          <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+        {meta.avatarKind === 'agent' ? (
+          <AgentAvatar
+            agentId={meta.avatarSeed}
+            avatar={meta.avatar}
+            background={meta.backgroundColor}
+            name={meta.title}
+            size={16}
+          />
+        ) : meta.avatarSeed ? (
+          <ProjectAvatar avatar={meta.avatar} id={meta.avatarSeed} name={meta.title} size={16} />
         ) : meta.avatarKind === 'workspace' ? (
           <WorkspaceAvatar avatar={meta.avatar} name={meta.title} size={16} />
         ) : meta.avatar ? (

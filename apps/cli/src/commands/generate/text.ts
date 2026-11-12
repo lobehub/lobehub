@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 import { getAuthInfo } from '../../api/http';
 import { CLI_PRIMARY_BIN } from '../../constants/identity';
 import { log } from '../../utils/logger';
+import { formatTextGenerationError } from './textError';
 
 export function registerTextCommand(parent: Command) {
   parent
@@ -73,7 +74,11 @@ export function registerTextCommand(parent: Command) {
 
         if (!res.ok) {
           const text = await res.text();
-          log.error(`Text generation failed: ${res.status} ${text}`);
+          log.error(
+            formatTextGenerationError(res.status, text, {
+              maxTokens: payload.max_tokens as number | undefined,
+            }),
+          );
           process.exit(1);
           return;
         }

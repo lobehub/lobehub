@@ -60,6 +60,7 @@ export class ServerMessageTransport implements MessageTransport {
 
       return {
         agentId: existingMessage.agentId,
+        createdAt: existingMessage.createdAt,
         groupId: existingMessage.groupId,
         id: existingMessage.id,
         model: existingMessage.model,
@@ -74,7 +75,12 @@ export class ServerMessageTransport implements MessageTransport {
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     try {
-      return await this.messageModel.create(params);
+      return await this.messageModel.create({
+        ...params,
+        ...(params.pluginIntervention && {
+          pluginIntervention: { ...params.pluginIntervention, runtimeType: 'server' },
+        }),
+      });
     } catch (error) {
       if (typeof params.parentId === 'string' && isMidOperationReferenceMissingError(error)) {
         throw createConversationParentMissingError(params.parentId, error);
@@ -105,8 +111,11 @@ export class ServerMessageTransport implements MessageTransport {
     return message
       ? {
           agentId: message.agentId,
+          content: message.content,
+          createdAt: message.createdAt,
           groupId: message.groupId,
           id: message.id,
+          metadata: message.metadata,
           model: message.model,
           parentId: message.parentId,
           provider: message.provider,

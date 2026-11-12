@@ -111,6 +111,21 @@ const ref = (overrides: Partial<AgentAccountRef> = {}): AgentAccountRef => ({
   ...overrides,
 });
 
+const webhookProviderOptions = (
+  fetchImpl: typeof fetch,
+): Parameters<typeof createAgentMailProvider>[0] => ({
+  ...isolated(),
+  apiKey: 'am_test',
+  fetchImpl,
+  webhookUrl: 'https://app.lobehub.com/hook',
+});
+
+const replyInput = (): Parameters<ReturnType<typeof createAgentMailProvider>['send']>[1] => ({
+  replyToProviderMessageId: 'msg_in_1',
+  text: 'hi back',
+  to: 'human@example.com',
+});
+
 describe('agent-mail provider — declaration', () => {
   it('declares the mail identity it issues and what it can do', () => {
     const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test' });
@@ -136,12 +151,7 @@ describe('agent-mail provider — provisioning', () => {
         return new Response(null, { status: 204 });
       throw new Error(`unexpected ${method} ${pathname}`);
     };
-    const provider = createAgentMailProvider({
-      ...isolated(),
-      apiKey: 'am_test',
-      fetchImpl,
-      webhookUrl: 'https://app.lobehub.com/hook',
-    });
+    const provider = createAgentMailProvider(webhookProviderOptions(fetchImpl));
 
     await expect(provider.provision({ agentId: 'agent_7', userId: 'user_1' })).rejects.toThrow(
       /503/,
@@ -164,12 +174,7 @@ describe('agent-mail provider — provisioning', () => {
         return json({ error: { message: 'upstream unavailable' } }, 503);
       throw new Error(`unexpected ${method} ${pathname}`);
     };
-    const provider = createAgentMailProvider({
-      ...isolated(),
-      apiKey: 'am_test',
-      fetchImpl,
-      webhookUrl: 'https://app.lobehub.com/hook',
-    });
+    const provider = createAgentMailProvider(webhookProviderOptions(fetchImpl));
 
     // Not held when the request starts; the other request commits in between,
     // which is exactly the window this guard covers.
@@ -226,14 +231,21 @@ describe('agent-mail provider — provisioning', () => {
     });
   });
 
+  it('opens a further mailbox for a different prefix instead of returning the first', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
+
+    await provider.provision({ agentId: 'agent_7', prefix: 'sales', userId: 'user_1' });
+
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes')?.body).toMatchObject({
+      clientId: 'agent_7-sales',
+      username: 'sales',
+    });
+  });
+
   it('does not register a second webhook for an inbox a live account already holds', async () => {
     const { calls, fetchImpl } = createMailFetch();
-    const provider = createAgentMailProvider({
-      ...isolated(),
-      apiKey: 'am_test',
-      fetchImpl,
-      webhookUrl: 'https://app.lobehub.com/hook',
-    });
+    const provider = createAgentMailProvider(webhookProviderOptions(fetchImpl));
 
     // The first attempt committed its row and only the response was lost: the
     // row keeps the webhook secret, so a fresh webhook would sign deliveries
@@ -531,7 +543,7 @@ describe('agent-mail provider — inbound', () => {
 
 describe('agent-mail provider — outbound', () => {
   it('sends through the inbox and returns the provider message id', async () => {
-    const { fetchImpl } = createMailFetch();
+    const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
     const result = await provider.send(ref(), {
@@ -541,25 +553,53 @@ describe('agent-mail provider — outbound', () => {
     });
 
     expect(result).toEqual({ providerMessageId: 'msg_out_1' });
+    const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
+    expect(send?.body).toMatchObject({
+      html: '<p>hi back</p>',
+      subject: 'Re: Hello',
+      text: 'hi back',
+      to: ['human@example.com'],
+    });
   });
 
-  it('answers within the thread when the caller names the message it replies to', async () => {
+  it('answers through the reply call so the reply lands in the original thread', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
     const result = await provider.send(ref(), {
       replyToProviderMessageId: 'msg_in_1',
-      text: 'hi back',
+      text: '**thanks**',
+      threadKey: '<root@example.com>',
       to: 'human@example.com',
     });
 
-    // The reply route inherits the recipients and threads the message; going
-    // through `sendMessage` would start a second conversation with the same
-    // subject instead of answering the human in theirs.
-    expect(calls.filter((call) => call.method === 'POST')).toEqual([
-      { body: { text: 'hi back' }, method: 'POST', path: '/v1/messages/msg_in_1/reply' },
-    ]);
     expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
+    expect(calls.some((c) => c.path === '/v1/inboxes/inb_1/messages')).toBe(false);
+    expect(calls).toContainEqual({
+      body: { html: '<p><strong>thanks</strong></p>', text: 'thanks' },
+      method: 'POST',
+      path: '/v1/messages/msg_in_1/reply',
+    });
+  });
+
+  it('renders the agent Markdown into an HTML part plus a plain-text alternative', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    await provider.send(ref(), {
+      subject: 'Brief',
+      text: '**Done.** See [the docs](https://lobehub.com/docs)\n\n1. one\n2. two',
+      to: 'human@example.com',
+    });
+
+    const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
+    const body = send?.body as undefined | { html?: string; text?: string };
+    expect(body?.html).toContain('<strong>Done.</strong>');
+    expect(body?.html).toContain('<a href="https://lobehub.com/docs"');
+    expect(body?.html).toContain('<ol><li>one</li><li>two</li></ol>');
+    expect(body?.html).not.toContain('**');
+    expect(body?.text).toBe('Done. See the docs (https://lobehub.com/docs)\n\n- one\n- two');
+    expect(body?.text).not.toContain('**');
   });
 });
 
@@ -571,13 +611,10 @@ describe('agent-mail provider — reply ownership', () => {
     const { calls, fetchImpl } = createMailFetch({ detail: { inboxId: 'inb_other' } });
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
-    await expect(
-      provider.send(ref(), {
-        replyToProviderMessageId: 'msg_in_1',
-        text: 'hi back',
-        to: 'human@example.com',
-      }),
-    ).rejects.toMatchObject({ code: 'reply_target_not_owned', name: 'AgentAccountError' });
+    await expect(provider.send(ref(), replyInput())).rejects.toMatchObject({
+      code: 'reply_target_not_owned',
+      name: 'AgentAccountError',
+    });
 
     // The refusal happens before the send: nothing was written to the provider.
     expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
@@ -587,15 +624,15 @@ describe('agent-mail provider — reply ownership', () => {
     const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
-    const result = await provider.send(ref(), {
-      replyToProviderMessageId: 'msg_in_1',
-      text: 'hi back',
-      to: 'human@example.com',
-    });
+    const result = await provider.send(ref(), replyInput());
 
     expect(calls).toEqual([
       { body: undefined, method: 'GET', path: '/v1/messages/msg_in_1' },
-      { body: { text: 'hi back' }, method: 'POST', path: '/v1/messages/msg_in_1/reply' },
+      {
+        body: { html: '<p>hi back</p>', text: 'hi back' },
+        method: 'POST',
+        path: '/v1/messages/msg_in_1/reply',
+      },
     ]);
     expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
   });

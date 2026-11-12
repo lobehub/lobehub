@@ -106,6 +106,15 @@ const confirmedRun = {
   status: 'planned',
 };
 
+const createTaskOperation = () => ({
+  agentId: 'builder',
+  id: 'op-1',
+  model: 'm',
+  provider: 'p',
+  taskId: 'task-1',
+  topicId: 'topic-1',
+});
+
 describe('runVerifyOnCompletion — verification claim', () => {
   beforeEach(() => {
     [
@@ -149,14 +158,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
         { id: 'c2', required: true },
       ],
     });
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
     claimEvidenceCollection.mockResolvedValue(true);
 
@@ -176,14 +178,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
         { id: 'repaired', required: true },
       ],
     });
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     resultListByRun.mockResolvedValue([
       {
         checkItemId: 'carried',
@@ -214,14 +209,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
         },
       ],
     });
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
     claimEvidenceCollection.mockResolvedValue(true);
 
@@ -288,14 +276,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
       id: 'folded-run',
       status: 'planned',
     });
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
 
     await runVerifyOnCompletion(db, 'u1', params);
@@ -312,14 +293,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
    */
   it('stops instead of judging with the fallback verifier when resolution fails', async () => {
     resolveTaskAcceptance.mockRejectedValue(new Error('connection terminated'));
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
 
     await runVerifyOnCompletion(db, 'u1', params);
@@ -337,14 +311,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
   it('binds a task-bound round to its Acceptance before judging it', async () => {
     const orphan = { ...confirmedRun, acceptanceId: null };
     findByOperation.mockResolvedValue(orphan);
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'text' }]);
 
     await runVerifyOnCompletion(db, 'u1', params);
@@ -364,14 +331,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
   });
 
   it('judges directly when the builder already submitted evidence inside the Task run', async () => {
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     evidenceListByRun.mockResolvedValue([{ checkItemId: 'c1', type: 'screenshot' }]);
 
     await runVerifyOnCompletion(db, 'u1', params);
@@ -383,14 +343,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
   });
 
   it('starts builder evidence collection before judging a task-bound run', async () => {
-    operationFindById.mockResolvedValue({
-      agentId: 'builder',
-      id: 'op-1',
-      model: 'm',
-      provider: 'p',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-    });
+    operationFindById.mockResolvedValue(createTaskOperation());
     claimEvidenceCollection.mockResolvedValue(true);
 
     await runVerifyOnCompletion(db, 'u1', params);

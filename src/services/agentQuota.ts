@@ -101,8 +101,10 @@ class AgentQuotaService {
     lambdaClient.agentQuota.unbindAccount.mutate({ id: bindingId });
 
   /** Edit account info (display label, enabled flag). */
-  updateAccount = async (id: string, value: { enabled?: boolean; label?: string }) =>
-    lambdaClient.agentQuota.updateAccount.mutate({ id, value });
+  updateAccount = async (
+    id: string,
+    value: { enabled?: boolean; label?: string; visibility?: 'private' | 'public' },
+  ) => lambdaClient.agentQuota.updateAccount.mutate({ id, value });
 
   /** The account an agent uses on one device (gateway id); `null` = Auto there. */
   getDeviceAccount = async (agentId: string, deviceId: string): Promise<QuotaDeviceAccount> =>

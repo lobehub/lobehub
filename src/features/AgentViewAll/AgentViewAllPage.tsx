@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
+import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   Avatar,
@@ -37,6 +37,7 @@ import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvi
 import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import NavHeader from '@/features/NavHeader';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -365,7 +366,7 @@ const AgentViewAllPage = memo(() => {
       const groups = [...buckets.entries()].map(([userId, groupItems]) => ({
         // Same fallback as the row avatars — a member without a profile
         // avatar still gets the default one instead of a bare name.
-        avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_AVATAR,
+        avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_USER_AVATAR_URL,
         color: undefined as string | null | undefined,
         items: groupItems,
         key: `author:${userId || 'unknown'}`,
@@ -450,6 +451,10 @@ const AgentViewAllPage = memo(() => {
     },
     [isSidebarItemVisible, setSidebarItemVisible, t],
   );
+  // The `im_layout` rail has no agent sidebar, so its "in sidebar" curation
+  // (the section and every per-item toggle) does not apply there.
+  const imLayout = useImLayout();
+  const toggleSidebar = imLayout ? undefined : handleToggleSidebar;
 
   const renderCard = useCallback(
     (item: SidebarAgentItem) => (
@@ -458,10 +463,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isSidebarItemVisible(item)}
-        onToggleSidebar={handleToggleSidebar}
+        onToggleSidebar={toggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, toggleSidebar, isSidebarItemVisible],
   );
 
   const renderRow = useCallback(
@@ -472,10 +477,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         showAuthor={showAuthor}
         sidebarHidden={!isSidebarItemVisible(item)}
-        onToggleSidebar={handleToggleSidebar}
+        onToggleSidebar={toggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, toggleSidebar, isSidebarItemVisible],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -540,8 +545,8 @@ const AgentViewAllPage = memo(() => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {!isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
-        {isInit && !keyword.trim() && sidebarItems.length > 0 && (
+        {!imLayout && !isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
+        {!imLayout && isInit && !keyword.trim() && sidebarItems.length > 0 && (
           <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
         )}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>

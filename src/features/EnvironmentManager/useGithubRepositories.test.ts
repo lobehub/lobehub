@@ -60,9 +60,7 @@ describe('GitHub repository loading', () => {
   });
 
   it('does not call a pending request empty', () => {
-    vi.spyOn(environmentService, 'listGithubRepositories').mockReturnValue(
-      new Promise(() => {}),
-    );
+    vi.spyOn(environmentService, 'listGithubRepositories').mockReturnValue(new Promise(() => {}));
     const { result } = setup();
     expect(result.current.state).toBe('loading');
   });
@@ -74,5 +72,16 @@ describe('GitHub repository loading', () => {
     });
     const { result } = setup();
     await waitFor(() => expect(result.current.state).toBe('disconnected'));
+  });
+
+  it('tells a server with no GitHub App apart from a scope that has not connected one', async () => {
+    vi.spyOn(environmentService, 'listGithubRepositories').mockResolvedValue({
+      configured: false,
+      connected: false,
+      repositories: [],
+      truncated: false,
+    });
+    const { result } = setup();
+    await waitFor(() => expect(result.current.state).toBe('unconfigured'));
   });
 });

@@ -7,10 +7,20 @@ const GIT_FETCH_TIMEOUT_MS = 15_000;
 
 const isValidCommitSha = (value) => /^[0-9a-f]{7,64}$/i.test(value);
 
+/** Top-level directories that never reach the deployed app. */
+const NON_RUNTIME_DIRS = ['.agents/', '.claude/', '.github/', '.husky/', 'docs/', 'e2e/'];
+
+/** Test files anywhere: `*.test.*`, `*.spec.*`, `__tests__/` and `__snapshots__/`. */
+const TEST_FILE_REGEX = /(^|\/)(__tests__|__snapshots__)\/|\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/**
+ * Only root-level Markdown is skipped: packages import nested `.md` files at runtime
+ * (for example `packages/builtin-skills` and `packages/agent-templates`).
+ */
 const isNonRuntimePath = (filePath) =>
-  filePath === '.github' ||
-  filePath.startsWith('.github/') ||
-  (!filePath.includes('/') && /\.md$/i.test(filePath));
+  (!filePath.includes('/') && /\.mdx?$/i.test(filePath)) ||
+  NON_RUNTIME_DIRS.some((dir) => filePath.startsWith(dir)) ||
+  TEST_FILE_REGEX.test(filePath);
 
 const runGit = async (args) => {
   try {
@@ -95,10 +105,14 @@ const shouldProceedBuild = async () => {
   }
 };
 
-shouldProceedBuild()
-  .catch(() => buildConservatively('Unable to inspect deployment diff; building conservatively.'))
-  .then((shouldBuild) => {
-    console.log('shouldBuild:', shouldBuild);
-    console.log(shouldBuild ? '✅ - Build can proceed' : '🛑 - Build cancelled');
-    process.exitCode = shouldBuild ? 1 : 0;
-  });
+module.exports = { isNonRuntimePath };
+
+if (require.main === module) {
+  shouldProceedBuild()
+    .catch(() => buildConservatively('Unable to inspect deployment diff; building conservatively.'))
+    .then((shouldBuild) => {
+      console.log('shouldBuild:', shouldBuild);
+      console.log(shouldBuild ? '✅ - Build can proceed' : '🛑 - Build cancelled');
+      process.exitCode = shouldBuild ? 1 : 0;
+    });
+}
