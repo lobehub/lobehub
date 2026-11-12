@@ -1,9 +1,9 @@
 import { useLayoutEffect } from 'react';
 
+import { useTopicDrawerPortalHostViewType } from '@/features/AgentTasks/hooks/useTopicDrawerArtifactPortal';
 import type { InternalLinkReference } from '@/features/EntityLink';
 import { isAcceptancePortalView } from '@/features/Home/acceptancePortalView';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 /**
@@ -29,8 +29,14 @@ export const CHANNEL_ENTITY_PORTAL_SCOPE = [
 /** Each Channel browses in its own retained page, apart from every agent topic's. */
 export const channelBrowserSessionId = (channelId: string) => `channel:${channelId}`;
 
-export const usePortalPanelOpen = () =>
-  useChatStore((s) => isChannelPortalView(chatPortalSelectors.currentViewType(s)));
+/**
+ * The view the panel is hosting. A task's run drawer pushes the artifact it generates
+ * on top of the task, so the top of the stack is that artifact while the task is still
+ * what the Channel opened — resolve it back to the host, the way the agent portal does.
+ */
+export const useChannelPortalViewType = () => useTopicDrawerPortalHostViewType();
+
+export const usePortalPanelOpen = () => isChannelPortalView(useChannelPortalViewType());
 
 /** Whether a portal view is open beside this Channel, and how to close it. */
 export const usePortalPanel = (channelId: string) => {

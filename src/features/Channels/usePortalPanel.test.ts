@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { resolveTopicDrawerPortalHostViewType } from '@/features/AgentTasks/hooks/useTopicDrawerArtifactPortal';
 import { useChatStore } from '@/store/chat';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
@@ -27,6 +28,30 @@ describe('isChannelPortalView', () => {
   it('leaves a detail the Channel has no panel for to its own route', () => {
     expect(isChannelPortalView(PortalViewType.Goal)).toBe(false);
     expect(isChannelPortalView(null)).toBe(false);
+  });
+});
+
+describe('channel portal host view', () => {
+  it('keeps the panel on the task while its drawer hosts the generated artifact', () => {
+    const hostView = resolveTopicDrawerPortalHostViewType({
+      currentViewType: PortalViewType.Artifact,
+      parentViewType: PortalViewType.TaskDetail,
+      showArtifactPortal: true,
+    });
+
+    expect(hostView).toBe(PortalViewType.TaskDetail);
+    expect(isChannelPortalView(hostView)).toBe(true);
+  });
+
+  it('leaves the panel to an artifact no drawer hosts', () => {
+    const hostView = resolveTopicDrawerPortalHostViewType({
+      currentViewType: PortalViewType.Artifact,
+      parentViewType: PortalViewType.TaskDetail,
+      showArtifactPortal: false,
+    });
+
+    expect(hostView).toBe(PortalViewType.Artifact);
+    expect(isChannelPortalView(hostView)).toBe(false);
   });
 });
 

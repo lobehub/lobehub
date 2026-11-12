@@ -8,7 +8,7 @@ import RightPanel from '@/features/RightPanel';
 
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT } from './ThreadPanel';
-import { usePortalPanel } from './usePortalPanel';
+import { useChannelPortalViewType, usePortalPanel } from './usePortalPanel';
 
 /** A report, profile, task or web page opened from a link in the feed, beside the Channel. */
 export function PortalPanel({
@@ -19,6 +19,7 @@ export function PortalPanel({
   channelId: string;
 }): ReactNode {
   const { close, open } = usePortalPanel(channelId);
+  const viewType = useChannelPortalViewType();
   const [preferredWidth, setPreferredWidth] = useState(720);
   const narrow = availableWidth < THREAD_FLOAT_BREAKPOINT;
   const maxWidth = narrow ? availableWidth : availableWidth - 360;
@@ -45,7 +46,7 @@ export function PortalPanel({
     >
       {open && (
         <Flexbox {...stylex.props(styles.body)}>
-          <PortalContent onClose={close} />
+          <PortalContent onClose={close} viewType={viewType} />
         </Flexbox>
       )}
     </RightPanel>
