@@ -2,6 +2,7 @@ import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentTy
 import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
+import type { ExternalWorkResourceType } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -384,6 +385,26 @@ export interface ChannelPublicMember {
   username: string | null;
 }
 
+/**
+ * An external Work (GitHub PR / issue, Linear issue / document) a reply's run touched, as every
+ * member sees it: the card's fields and its link, never the requester's Work or operation ids.
+ */
+export interface ChannelPublicWork {
+  /** GitHub PR only: the branch it merges into. */
+  baseBranch: string | null;
+  description: string | null;
+  /** GitHub PR only: its source branch. */
+  headBranch: string | null;
+  identifier: string | null;
+  resourceType: ExternalWorkResourceType;
+  status: string | null;
+  title: string | null;
+  /** This run's spend when the Work was last touched, in USD. */
+  totalCost: number | null;
+  totalTokens: number | null;
+  url: string;
+}
+
 export interface ChannelPublicMessage {
   agentId: string | null;
   author: {
@@ -411,6 +432,8 @@ export interface ChannelPublicMessage {
   sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
+  /** External Works a reply's run touched, for every member; empty on requests. */
+  works?: ChannelPublicWork[];
 }
 
 export interface ChannelPublicJob {

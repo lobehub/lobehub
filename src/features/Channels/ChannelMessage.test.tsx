@@ -181,3 +181,55 @@ describe('ChannelMessage collapse', () => {
     expect(screen.getByText('message.expand')).toBeTruthy();
   });
 });
+
+describe('ChannelMessage works', () => {
+  const work = {
+    baseBranch: 'canary',
+    description: 'Adds the cards',
+    headBranch: 'feat/cards',
+    identifier: 'lobehub/lobehub#1',
+    resourceType: 'github_pull_request',
+    status: 'open',
+    title: 'Show works in channels',
+    totalCost: 0.42,
+    totalTokens: null,
+    url: 'https://github.com/lobehub/lobehub/pull/1',
+  } as const;
+
+  it('shows a reply’s external Works as cards that open their link', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          content: 'Opened it',
+          works: [work],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Show works in channels')).toBeTruthy();
+    expect(screen.getByText('lobehub/lobehub#1')).toBeTruthy();
+    expect(screen.getByText('feat/cards')).toBeTruthy();
+    expect(screen.getByText('0.42')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Show works in channels'));
+    expect(open).toHaveBeenCalledWith(work.url, '_blank', 'noopener,noreferrer');
+    open.mockRestore();
+  });
+
+  it('renders no cards without Works', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          works: [],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('Show works in channels')).toBeNull();
+  });
+});
