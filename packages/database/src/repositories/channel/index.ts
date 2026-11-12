@@ -396,13 +396,24 @@ export class ChannelRepository {
     );
   };
 
-  /** An open project Channel read by someone who has not joined: read-only, no member actions. */
+  /**
+   * An active open project Channel read by someone who has not joined: read-only, no member
+   * actions.
+   */
   private openDetail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) =>
     this.db.transaction(async (tx) => {
       const [channel] = await tx
         .select()
         .from(channels)
-        .where(and(eq(channels.id, channelId), this.openWhere(tx), notTrashed(channels.isDeleted)))
+        .where(
+          and(
+            eq(channels.id, channelId),
+            this.openWhere(tx),
+            notTrashed(channels.isDeleted),
+            // Archived Channels stay readable to their members only.
+            eq(channels.status, 'active'),
+          ),
+        )
         .limit(1);
       if (!channel) throw new ChannelError('NOT_FOUND', 'Channel not found');
       const view = await readChannelView(tx, channelId, options, this.userId);
