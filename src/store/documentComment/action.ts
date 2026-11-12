@@ -18,6 +18,7 @@ import {
   type DocumentCommentThreadScope,
   documentCommentThreadsKey,
   type DocumentCommentThreadsParams,
+  documentLikeSummaryResource,
 } from './projection';
 import {
   appendReply,
@@ -90,6 +91,13 @@ export interface CreateDocumentCommentReplyParams extends CreateDocumentCommentP
  */
 export class DocumentCommentActionImpl {
   readonly #get: () => DocumentCommentState;
+  /**
+   * Reply creates in flight per root, and whether two of them overlapped. An
+   * overlapping reply reads its counter baseline with the other's `+1` still
+   * applied, so a failure of one leaves the other's floor one too high; the
+   * root's counters are re-read from the server once the last one settles.
+   */
+  readonly #pendingReplies = new Map<string, { overlapped: boolean; pending: number }>();
   readonly #private: DocumentCommentPrivateAction;
   readonly #set: Setter;
 
@@ -190,13 +198,28 @@ export class DocumentCommentActionImpl {
 
   revalidateLikeSummary = (documentId: string) => this.#private.likeSummary.revalidate(documentId);
 
-  /** Re-read the like summary now, whether or not a view is mounted (failure recovery). */
-  refreshLikeSummary = (documentId: string) =>
-    this.#private.likeSummary.fetch(documentId, { fresh: true });
+  /**
+   * Bind a like toggle's server answers to the identity it was sent from. A
+   * toggle that settles after an account / workspace switch belongs to the
+   * previous identity: its summary (with that user's `liked` and likers) must
+   * not land in — or persist into — the new partition. The engine drops a
+   * write or read captured under a scope that is no longer active.
+   */
+  beginLikeSettle = (documentId: string) => {
+    const scope = documentLikeSummaryResource.scope.get();
+    return {
+      /** Confirm the server's summary after the last toggle request. */
+      confirm: (summary: DocumentLikeSummary) => {
+        this.#private.likeSummary.replace(documentId, summary, scope);
+      },
+      /** Re-read the summary after a failed toggle (rejects once the scope moved on). */
+      refresh: () => this.#private.likeSummary.fetch(documentId, { fresh: true, scope }),
+    };
+  };
 
   /**
    * Show a like / unlike right away. Memory only: the server answer replaces
-   * it through {@link confirmLikeSummary}, and a reload repaints the last
+   * it through {@link beginLikeSettle}, and a reload repaints the last
    * confirmed value.
    */
   applyLikeSummary = (
@@ -206,9 +229,6 @@ export class DocumentCommentActionImpl {
     this.#private.likeSummary.update(documentId, (current) => current && apply(current), {
       persist: false,
     });
-
-  confirmLikeSummary = (documentId: string, summary: DocumentLikeSummary) =>
-    this.#private.likeSummary.update(documentId, () => summary);
 
   // ---- writes ------------------------------------------------------------
 
@@ -287,6 +307,7 @@ export class DocumentCommentActionImpl {
     rootCommentId,
   }: CreateDocumentCommentReplyParams): Promise<CreatedComment> => {
     const { documentId } = input;
+    const settleCounts = this.#trackReply(rootCommentId);
     // See createRootComment: a feed with no view drops the optimistic write.
     const repliesUnloaded = !this.#get().replyFeedMap[rootCommentId];
     const replies = this.#private.replies.beginOptimistic(
@@ -332,6 +353,7 @@ export class DocumentCommentActionImpl {
     } catch (error) {
       replies.rollback();
       for (const token of counts) token.rollback();
+      if (settleCounts()) void this.#reconcileReplyCounts(documentId, rootCommentId);
       throw error;
     }
 
@@ -344,10 +366,39 @@ export class DocumentCommentActionImpl {
       void this.revalidateDocument(documentId);
     } else {
       for (const token of counts) token.commit();
+      if (settleCounts()) void this.#reconcileReplyCounts(documentId, rootCommentId);
       // Converge on the server's count (another member may have commented meanwhile).
-      void this.revalidateSummary(documentId);
+      else void this.revalidateSummary(documentId);
     }
     return created;
+  };
+
+  /** Count a reply create in flight; the returned settle says whether a reconcile is due. */
+  #trackReply = (rootCommentId: string) => {
+    const entry = this.#pendingReplies.get(rootCommentId) ?? { overlapped: false, pending: 0 };
+    entry.pending += 1;
+    if (entry.pending > 1) entry.overlapped = true;
+    this.#pendingReplies.set(rootCommentId, entry);
+    let settled = false;
+    return (): boolean => {
+      if (settled) return false;
+      settled = true;
+      entry.pending -= 1;
+      if (entry.pending > 0) return false;
+      this.#pendingReplies.delete(rootCommentId);
+      return entry.overlapped;
+    };
+  };
+
+  /** Re-read a root's reply count (both root feeds, a pinned copy) and the document count. */
+  #reconcileReplyCounts = async (documentId: string, rootCommentId: string) => {
+    await Promise.all([
+      ...ROOT_SCOPES.map((scope) =>
+        this.#private.thread.revalidate(documentCommentThreadsKey({ documentId, scope })),
+      ),
+      this.revalidateDetail(rootCommentId),
+      this.revalidateSummary(documentId),
+    ]);
   };
 
   /**

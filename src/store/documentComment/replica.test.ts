@@ -584,6 +584,71 @@ describe('documentComment replicas', () => {
       expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2);
       expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 });
     });
+
+    it('re-reads the reply counts when an overlapping reply fails', async () => {
+      const listThreads = vi.spyOn(documentCommentService, 'listThreads').mockResolvedValue({
+        items: [thread('root-1', 1)],
+        nextCursor: null,
+      });
+      const summary = vi.spyOn(documentCommentService, 'summary').mockResolvedValue({ total: 2 });
+      renderHook(
+        () => {
+          documentCommentActions.useFetchThreads(LIST);
+          documentCommentActions.useFetchSummary(DOCUMENT_ID);
+        },
+        { wrapper },
+      );
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(1));
+      await waitFor(() => expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 2 }));
+
+      const first = deferred<{ comment: DocumentCommentItem; isDuplicate: boolean }>();
+      const second = deferred<{ comment: DocumentCommentItem; isDuplicate: boolean }>();
+      vi.spyOn(documentCommentService, 'create')
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never);
+      vi.spyOn(documentCommentService, 'listReplies').mockResolvedValue({
+        items: [],
+        nextCursor: null,
+      });
+      const reply = (clientId: string) =>
+        documentCommentActions.createReply({
+          input: {
+            clientId,
+            content: clientId,
+            documentId: DOCUMENT_ID,
+            parentCommentId: 'root-1',
+          },
+          optimisticComment: comment(`optimistic:${clientId}`, {
+            clientId,
+            parentCommentId: 'root-1',
+          }),
+          rootCommentId: 'root-1',
+        });
+
+      let firstDone!: Promise<unknown>;
+      let secondDone!: Promise<unknown>;
+      act(() => {
+        firstDone = reply('r2').catch(() => undefined);
+        secondDone = reply('r3');
+      });
+      expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(3);
+
+      // Only the second reply lands on the server.
+      listThreads.mockResolvedValue({ items: [thread('root-1', 2)], nextCursor: null });
+      summary.mockResolvedValue({ total: 3 });
+      await act(async () => {
+        first.reject(new Error('offline'));
+        await firstDone;
+        second.resolve({
+          comment: comment('reply-3', { clientId: 'r3', parentCommentId: 'root-1' }),
+          isDuplicate: false,
+        });
+        await secondDone;
+      });
+
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2));
+      await waitFor(() => expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 }));
+    });
   });
 
   describe('likes', () => {
@@ -618,7 +683,7 @@ describe('documentComment replicas', () => {
       expect(state().likeSummaryMap[DOCUMENT_ID]).toMatchObject({ liked: true, total: 7 });
 
       act(() => {
-        documentCommentActions.confirmLikeSummary(DOCUMENT_ID, summary);
+        documentCommentActions.beginLikeSettle(DOCUMENT_ID).confirm(summary);
       });
       await waitFor(async () => {
         const row = await documentLikeSummaryResource.storage!.get({
@@ -627,6 +692,25 @@ describe('documentComment replicas', () => {
         });
         expect(row?.data).toEqual(summary);
       });
+    });
+    it('drops a like answer that settles after an account / workspace switch', async () => {
+      const previous = scope;
+      const settle = documentCommentActions.beginLikeSettle(DOCUMENT_ID);
+
+      // The identity changes while the like request is in flight.
+      scope = `doc-comment-user-${randomUUID()}:workspace-2`;
+      scopes.add(scope);
+      const refreshed = vi.spyOn(documentLikeService, 'summary');
+
+      act(() => settle.confirm(summary));
+      await expect(settle.refresh()).rejects.toThrow();
+
+      expect(state().likeSummaryMap[DOCUMENT_ID]).toBeUndefined();
+      expect(refreshed).not.toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const row = await documentLikeSummaryResource.storage!.get({ queryKey: DOCUMENT_ID, scope });
+      expect(row).toBeUndefined();
+      expect(previous).not.toBe(scope);
     });
   });
 });

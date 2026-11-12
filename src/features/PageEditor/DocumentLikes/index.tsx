@@ -139,6 +139,8 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const drain = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    // Answers settle under the identity this drain started in (see beginLikeSettle).
+    const settle = documentCommentActions.beginLikeSettle(documentId);
     let sent: boolean | undefined;
     try {
       let summary: DocumentLikeSummary | undefined;
@@ -149,7 +151,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
           : await documentLikeService.unlike(documentId);
       }
       targetRef.current = null;
-      if (summary) documentCommentActions.confirmLikeSummary(documentId, summary);
+      if (summary) settle.confirm(summary);
     } catch (toggleError) {
       console.error('Failed to toggle document like', toggleError);
       targetRef.current = null;
@@ -159,7 +161,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
       // (e.g. an outage) — swallow it so drain() never rejects out of a void
       // call; the replica revalidates again on the next focus and corrects
       // any stale optimistic state then.
-      await documentCommentActions.refreshLikeSummary(documentId).catch(() => undefined);
+      await settle.refresh().catch(() => undefined);
     } finally {
       inFlightRef.current = false;
     }
