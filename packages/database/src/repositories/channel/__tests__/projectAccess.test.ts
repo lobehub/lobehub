@@ -87,7 +87,15 @@ describe('open project Channels', () => {
     expect(await teammate.list()).toEqual([
       expect.objectContaining({ id: channel.id, joined: true, unreadCount: 1 }),
     ]);
-    expect((await teammate.detail(channel.id)).joined).toBe(true);
+    const joinedView = await teammate.detail(channel.id);
+    expect(joinedView.joined).toBe(true);
+    // The join line credits no inviter: the teammate joined by themselves.
+    expect(joinedView.members.find((member) => member.userId === fixture.memberId)).toMatchObject({
+      selfJoined: true,
+    });
+    expect(joinedView.members.find((member) => member.userId === fixture.ownerId)?.selfJoined).toBe(
+      false,
+    );
     expect((await owner.detail(channel.id)).messages.map((message) => message.content)).toEqual([
       'Kickoff',
       'Hi',

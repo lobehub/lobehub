@@ -383,6 +383,8 @@ export interface ChannelPublicMember {
   joinedAt: Date;
   name: string | null;
   role: ChannelMemberRole | null;
+  /** Joined an open project Channel by themselves; nobody invited them. */
+  selfJoined?: boolean;
   status: ChannelMemberStatus;
   userAvatar: string | null;
   userId: string | null;

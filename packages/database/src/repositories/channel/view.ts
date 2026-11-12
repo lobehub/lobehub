@@ -3,6 +3,7 @@ import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } 
 import {
   agentOperations,
   agents,
+  channelAudit,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -162,6 +163,8 @@ export const readChannelView = async (
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
         joinedAt: channelMembers.createdAt,
+        // Joined an open project Channel on their own, rather than being added by an admin.
+        selfJoined: sql<boolean>`exists (select 1 from ${channelAudit} where ${channelAudit.targetId} = ${channelMembers.id}::text and ${channelAudit.event} = 'member_joined')`,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))

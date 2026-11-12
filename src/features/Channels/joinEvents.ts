@@ -25,9 +25,11 @@ export const channelJoinEvents = (members: ChannelPublicMember[]): ChannelJoinEv
   const events: ChannelJoinEvent[] = [];
   for (const member of joined) {
     const at = time(member.joinedAt);
+    // Someone who joined an open project Channel by themselves had no inviter.
+    const by = member.selfJoined ? undefined : inviter;
     const last = events.at(-1);
-    if (last && at - last.at <= BATCH_MS) last.members.push(member);
-    else events.push({ at, id: `join:${member.id}`, inviter, members: [member] });
+    if (last && last.inviter === by && at - last.at <= BATCH_MS) last.members.push(member);
+    else events.push({ at, id: `join:${member.id}`, inviter: by, members: [member] });
   }
   return events;
 };

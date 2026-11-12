@@ -38,6 +38,18 @@ describe('channelJoinEvents', () => {
     ]);
     expect(event.inviter).toBeUndefined();
   });
+
+  it('credits nobody for a member who joined by themselves, apart from invitees beside them', () => {
+    const events = channelJoinEvents([
+      owner,
+      member('invited', 10),
+      member('self', 20, { actorType: 'user', selfJoined: true }),
+    ]);
+    expect(events.map(({ inviter, members }) => [inviter?.id, members.map((m) => m.id)])).toEqual([
+      ['owner', ['invited']],
+      [undefined, ['self']],
+    ]);
+  });
 });
 
 describe('channelTimeline', () => {
