@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { WORKFLOW_PATHS } from '@/server/workflows/agentEvalRun';
 
@@ -25,5 +25,27 @@ describe('agent-eval-run hono routes', () => {
     );
 
     expect(evalRoutes.sort()).toEqual(Object.values(WORKFLOW_PATHS).slice().sort());
+  });
+});
+
+describe('workflow production authentication boundary', () => {
+  it('rejects unsigned requests across all mounted workflow POST routes without QStash', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', '');
+    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', '');
+    try {
+      const routes = new Set(
+        workflowsApp.routes.filter((route) => route.method === 'POST').map((route) => route.path),
+      );
+      for (const path of routes) {
+        const response = await workflowsApp.request(path.replace(':workflowId', 'process'), {
+          body: '{}',
+          method: 'POST',
+        });
+        expect(response.status, path).toBe(401);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
