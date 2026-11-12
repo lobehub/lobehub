@@ -424,6 +424,39 @@ describe('createElevenLabsSpeech', () => {
       );
     });
 
+    it('treats exhausted credits as a quota error, not an unavailable voice', async () => {
+      fetchMock.mockResolvedValueOnce(
+        errorResponse(402, {
+          detail: {
+            code: 'insufficient_credits',
+            message: 'You have run out of credits.',
+            status: 'payment_required',
+          },
+        }),
+      );
+
+      await expect(callDefault()).rejects.toMatchObject({
+        error: { message: 'ElevenLabs API error (402): You have run out of credits.' },
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+      });
+      // No voice lookup, no retry.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back on a 402 that names the voice even without a known code', async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          errorResponse(402, {
+            detail: { message: 'Free users cannot use library voices via the API.' },
+          }),
+        )
+        .mockResolvedValueOnce(voicesResponse([{ category: 'premade', voice_id: 'premade-1' }]))
+        .mockResolvedValueOnce(audioResponse());
+
+      await callDefault();
+      expect(fetchMock.mock.calls[2][0]).toContain('/v1/text-to-speech/premade-1?');
+    });
+
     it('does not fall back for an explicitly chosen voice or for other errors', async () => {
       fetchMock.mockResolvedValueOnce(paymentRequired());
       await expect(

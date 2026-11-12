@@ -80,6 +80,7 @@ const HTTP_ERROR_TYPES: Record<number, ILobeAgentRuntimeErrorType> = {
  */
 const DETAIL_STATUS_ERROR_TYPES: Record<string, ILobeAgentRuntimeErrorType> = {
   concurrent_limit_exceeded: AgentRuntimeErrorType.RateLimitExceeded,
+  insufficient_credits: AgentRuntimeErrorType.InsufficientQuota,
   invalid_api_key: AgentRuntimeErrorType.InvalidProviderAPIKey,
   missing_permissions: AgentRuntimeErrorType.PermissionDenied,
   payment_required: AgentRuntimeErrorType.InsufficientQuota,
@@ -106,6 +107,8 @@ class ElevenLabsSpeechError extends Error {
     message: string,
     readonly errorType: ILobeAgentRuntimeErrorType,
     readonly detail?: Record<string, unknown>,
+    /** The request failed because of the voice, so another voice might succeed. */
+    readonly voiceUnavailable = false,
   ) {
     super(message);
   }
@@ -192,10 +195,12 @@ const readErrorBody = async (response: Response): Promise<ElevenLabsErrorBody | 
 };
 
 /** Readable message and `detail.status` from the error shapes ElevenLabs returns. */
-const parseErrorDetail = (body?: ElevenLabsErrorBody): { message?: string; status?: string } => {
+const parseErrorDetail = (
+  body?: ElevenLabsErrorBody,
+): { codes: string[]; message?: string; status?: string } => {
   const detail = body?.detail;
-  if (!detail) return {};
-  if (typeof detail === 'string') return { message: detail };
+  if (!detail) return { codes: [] };
+  if (typeof detail === 'string') return { codes: [], message: detail };
 
   // 422 validation errors are FastAPI-style `[{ loc, msg, type }]`
   if (Array.isArray(detail)) {
@@ -207,46 +212,68 @@ const parseErrorDetail = (body?: ElevenLabsErrorBody): { message?: string; statu
       .filter(Boolean)
       .join('; ');
 
-    return { message: message || undefined };
+    return { codes: [], message: message || undefined };
   }
 
-  return { message: detail.message, status: detail.status ?? detail.code };
+  return {
+    codes: [detail.status, detail.code].filter((value): value is string => !!value),
+    message: detail.message,
+    status: detail.status ?? detail.code,
+  };
+};
+
+/** Turn a failed Create speech response into a typed error with a readable message. */
+/** Codes ElevenLabs uses when the account may not use the requested voice. */
+const VOICE_UNAVAILABLE_CODES = new Set([
+  'paid_plan_required',
+  'payment_required',
+  'voice_does_not_exist',
+  'voice_not_found',
+]);
+
+/** Account-level billing failures: no other voice would help. */
+const QUOTA_CODES = new Set(['insufficient_credits', 'quota_exceeded']);
+
+/**
+ * Whether a failed request was about the voice rather than the account: 404 or a
+ * voice/plan code, or a 402 whose message names the voice (free keys calling Voice Library
+ * voices). Credit and quota exhaustion are never voice failures.
+ * @see https://elevenlabs.io/docs/eleven-api/resources/errors
+ */
+const classifyVoiceError = (httpStatus: number, codes: string[], message?: string) => {
+  if (codes.some((code) => QUOTA_CODES.has(code))) return { paidVoice: false, unavailable: false };
+
+  const paidVoice =
+    codes.some((code) => code === 'payment_required' || code === 'paid_plan_required') ||
+    (httpStatus === 402 && /voice/i.test(message ?? ''));
+
+  return {
+    paidVoice,
+    unavailable:
+      paidVoice || httpStatus === 404 || codes.some((code) => VOICE_UNAVAILABLE_CODES.has(code)),
+  };
 };
 
 /** Turn a failed Create speech response into a typed error with a readable message. */
 const toSpeechError = async (response: Response): Promise<ElevenLabsSpeechError> => {
   const errorBody = await readErrorBody(response);
-  const { message, status } = parseErrorDetail(errorBody);
-  const paymentRequired = response.status === 402 || status === 'payment_required';
+  const { codes, message } = parseErrorDetail(errorBody);
+  const { paidVoice, unavailable } = classifyVoiceError(response.status, codes, message);
   const reason = message || response.statusText || 'request failed';
 
   return new ElevenLabsSpeechError(
-    paymentRequired
+    paidVoice
       ? `ElevenLabs API error (${response.status}): ${trimTrailing(reason, '.')}. ${ELEVENLABS_PAID_VOICE_HINT}`
       : `ElevenLabs API error (${response.status}): ${reason}`,
-    (status ? DETAIL_STATUS_ERROR_TYPES[status] : undefined) ??
+    codes.map((code) => DETAIL_STATUS_ERROR_TYPES[code]).find(Boolean) ??
       HTTP_ERROR_TYPES[response.status] ??
       AgentRuntimeErrorType.ProviderBizError,
-    { detail: errorBody?.detail, status: response.status, voiceStatus: status },
+    { detail: errorBody?.detail, status: response.status },
+    unavailable,
   );
 };
 
-/** `detail.status` values ElevenLabs uses when the account cannot use the requested voice. */
-const VOICE_UNAVAILABLE_STATUSES = new Set([
-  'payment_required',
-  'voice_not_found',
-  'voice_does_not_exist',
-]);
-
-const isVoiceUnavailable = (error: ElevenLabsSpeechError) => {
-  const status = error.detail?.status;
-  const voiceStatus = error.detail?.voiceStatus;
-  return (
-    status === 402 ||
-    status === 404 ||
-    (typeof voiceStatus === 'string' && VOICE_UNAVAILABLE_STATUSES.has(voiceStatus))
-  );
-};
+const isVoiceUnavailable = (error: ElevenLabsSpeechError) => error.voiceUnavailable;
 
 /**
  * Queries for a voice the account can always call, best first: voices it created

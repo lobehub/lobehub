@@ -137,11 +137,14 @@ const toProviderError = (error: unknown, provider: string): TTSProviderError => 
  * Built-in card of a TTS model: the provider's own card first, then any provider
  * serving the same model id (aggregators reuse upstream cards).
  */
-export const findTTSModelCard = (provider: string, model: string): AITTSModelCard | undefined => {
+export const findTTSModelCard = (
+  provider: string,
+  model: string,
+): (AITTSModelCard & { providerId?: string }) | undefined => {
   const cards = LOBE_DEFAULT_MODEL_LIST.filter((card) => card.type === 'tts' && card.id === model);
 
   return (cards.find((card) => card.providerId === provider) ?? cards[0]) as
-    AITTSModelCard | undefined;
+    (AITTSModelCard & { providerId?: string }) | undefined;
 };
 
 const KNOWN_PROVIDERS = new Set<string>(Object.values(ModelProvider));
