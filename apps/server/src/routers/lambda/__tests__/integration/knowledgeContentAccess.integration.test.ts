@@ -8,6 +8,8 @@ import { createPGlite, readPGliteSnapshot } from '@/database/core/pgliteSnapshot
 import * as schema from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
+import { attachmentsRuntime } from '@/server/services/toolExecution/serverRuntimes/attachments';
+import { knowledgeBaseRuntime } from '@/server/services/toolExecution/serverRuntimes/knowledgeBase';
 
 import { chunkRouter } from '../../chunk';
 
@@ -262,6 +264,24 @@ describe('knowledge content read boundaries', () => {
       'parsed library A',
       'parsed library A',
     ]);
+  });
+
+  it('server tool runtimes read managed content as the executing user, not as anonymous', async () => {
+    enablePolicy();
+    const context = { serverDB: db, userId: viewer } as any;
+    const knowledge = (await knowledgeBaseRuntime.factory(context)) as any;
+    const attachments = (await attachmentsRuntime.factory(context)) as any;
+    const read = await knowledge.readKnowledge({ fileIds: ['file_content_a'] });
+    expect(read.success).toBe(true);
+    expect(read.content).toContain('parsed library A');
+    const attachment = await attachments.readAttachment({ fileId: 'file_content_a' });
+    expect(attachment.success).toBe(true);
+    expect(attachment.content).toContain('parsed library A');
+    const visitor = (await attachmentsRuntime.factory({
+      ...context,
+      agentShareVisitor: { shareId: 'share' },
+    })) as any;
+    expect((await visitor.readAttachment({ fileId: 'file_content_a' })).success).toBe(false);
   });
 
   it('rejects a whole mixed batch when any enterprise item is denied', async () => {
