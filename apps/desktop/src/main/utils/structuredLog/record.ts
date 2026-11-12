@@ -18,7 +18,12 @@ export const MAX_RECORD_BYTES = 64 * 1024;
 const OPERATION_ID_PATTERN = /(?<![\w-])op_[\w-]+/;
 const TOPIC_ID_PATTERN = /(?<![A-Za-z0-9])tpc_[A-Za-z0-9]+/;
 
-const SECRET_KEY = String.raw`[\w-]*(?:token|secret|password|passwd|authorization|api[-_]?key|apikey|credential)[\w-]*`;
+/**
+ * A secret-named key in text. Plural `tokens` is excluded so usage counters such
+ * as `inputTokens: 532` stay readable; every other secret key is redacted
+ * whatever its value looks like, since a password or token can be all digits.
+ */
+const SECRET_KEY = String.raw`[\w-]*(?:token(?!s(?![a-z]))|secret|password|passwd|authorization|api[-_]?key|apikey|credential)[\w-]*`;
 
 const SECRET_PATTERNS: [RegExp, string][] = [
   // A cookie header carries several `name=value` pairs; drop the whole value.
@@ -26,10 +31,11 @@ const SECRET_PATTERNS: [RegExp, string][] = [
   // `"accessToken":"…"` in stringified JSON (`JSON.stringify(headers)`).
   [new RegExp(String.raw`("${SECRET_KEY}"\s*:\s*")[^"]*`, 'gi'), '$1[REDACTED]'],
   // `password=…`, `api_key: …`, and URL query parameters such as `?access_token=…`.
-  // Numbers and literals stay readable: `inputTokens: 532` is usage, not a secret.
+  // Boolean and null literals stay readable (`tokenExpired: false`); quoted values
+  // are redacted whole.
   [
     new RegExp(
-      String.raw`(\b${SECRET_KEY}\s*[=:]\s*)(?![\d.]+\b|(?:true|false|null|undefined)\b)(?:(?:bearer|basic)\s+)?[^\s&;,"']+`,
+      String.raw`(\b${SECRET_KEY}\s*[=:]\s*)(?!(?:true|false|null|undefined)(?![\w-]))(?:(?:bearer|basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s&;,"']+)`,
       'gi',
     ),
     '$1[REDACTED]',

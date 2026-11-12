@@ -110,6 +110,19 @@ describe('createLogRecord secret redaction in text', () => {
     expect(record.msg).toContain('page=2');
   });
 
+  it('redacts numeric, uuid-like and quoted secret values', () => {
+    const record = createLogRecord({
+      level: 'debug',
+      message:
+        "password=123456 access_token=12345678-abcd-4321-8abc-123456789abc secret='FAKE PASS' token: 987654",
+      now,
+      process: 'main',
+    });
+
+    for (const secret of ['123456', '12345678-abcd', 'FAKE PASS', '987654'])
+      expect(record.msg).not.toContain(secret);
+  });
+
   it('keeps token counts and flags readable', () => {
     const record = createLogRecord({
       level: 'info',
