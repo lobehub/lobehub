@@ -8,6 +8,15 @@ export type AttachableFile = ResourceItem & { sourceType: 'file'; url: string };
 const isAttachableFile = (item: ResourceItem): item is AttachableFile =>
   item.sourceType === 'file' && Boolean(item.url);
 
+const toFiles = (items: ResourceItem[] | undefined): AttachableFile[] => {
+  const uniqueFiles = new Map<string, AttachableFile>();
+  for (const item of items ?? []) {
+    if (!isAttachableFile(item)) continue;
+    uniqueFiles.set(item.fileId || item.id, item);
+  }
+  return [...uniqueFiles.values()];
+};
+
 /**
  * Files the library picker offers, from a replica: a reopened picker paints the
  * persisted head page while the server confirms it.
@@ -17,20 +26,24 @@ export const useLibraryFiles = () => {
     error: fetchError,
     isConfirmed,
     revalidate,
+    snapshotItems,
   } = useLibraryFilePickerStore((s) => s.useFetchFiles)();
   const loadMoreFiles = useLibraryFilePickerStore((s) => s.loadMoreFiles);
   const data = useLibraryFilePickerList();
 
-  const files = useMemo(() => {
-    const uniqueFiles = new Map<string, AttachableFile>();
-    for (const item of data?.items ?? []) {
-      if (!isAttachableFile(item)) continue;
-      uniqueFiles.set(item.fileId || item.id, item);
-    }
-    return [...uniqueFiles.values()];
-  }, [data]);
+  const listedFiles = useMemo(() => toFiles(data?.items), [data]);
+  const snapshotFiles = useMemo(() => toFiles(snapshotItems), [snapshotItems]);
   const hasMore = Boolean(data?.hasMore);
   const isLoadingMore = Boolean(data?.isLoadingMore);
+  // Restored pages past the head were dropped on confirmation; while the
+  // re-listed pages have no file yet, keep the rows the user was looking at on
+  // screen (not attachable) rather than flashing a skeleton.
+  const showsSnapshot =
+    isConfirmed &&
+    listedFiles.length === 0 &&
+    (hasMore || isLoadingMore) &&
+    snapshotFiles.length > 0;
+  const files = showsSnapshot ? snapshotFiles : listedFiles;
   // A failed refresh keeps the painted files; with none painted it is surfaced.
   const error = files.length > 0 ? undefined : (fetchError ?? data?.loadMoreError);
   // The painted files are a restored snapshot the server could not confirm:
@@ -44,10 +57,16 @@ export const useLibraryFiles = () => {
 
   // Pages of folders / documents only: keep paging until a file shows up.
   useEffect(() => {
-    if (isConfirmed && !isLoadingMore && !data?.loadMoreError && files.length === 0 && hasMore) {
+    if (
+      isConfirmed &&
+      !isLoadingMore &&
+      !data?.loadMoreError &&
+      listedFiles.length === 0 &&
+      hasMore
+    ) {
       void loadMoreFiles();
     }
-  }, [data?.loadMoreError, files.length, hasMore, isConfirmed, isLoadingMore, loadMoreFiles]);
+  }, [data?.loadMoreError, hasMore, isConfirmed, isLoadingMore, listedFiles.length, loadMoreFiles]);
 
   const loadMore = useCallback(() => {
     if (hasMore && !isLoadingMore) void loadMoreFiles();
@@ -58,10 +77,11 @@ export const useLibraryFiles = () => {
     files,
     hasMore,
     /**
-     * A restored row's `url` may be a signed link that has since expired, so a
-     * file is attachable only once the server has re-listed it.
+     * A restored row's `url` may be a signed link that has since expired (or
+     * the file may be gone), so a file is attachable only once the server has
+     * re-listed it.
      */
-    isAttachable: isConfirmed,
+    isAttachable: isConfirmed && !showsSnapshot,
     isLoading,
     isLoadingMore,
     loadMore,

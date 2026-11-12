@@ -151,6 +151,55 @@ describe('useLibraryFiles across a reload', { timeout: 60_000 }, () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('never offers a restored file past the head before its page is re-listed', async () => {
+    const first = await reload();
+    queryResources
+      .mockResolvedValueOnce(page([folder('d1')], true, 51))
+      .mockResolvedValueOnce(page([file('f4')], false, 51));
+    const visit = first();
+    await waitFor(() => expect(ids(visit.result.current.files)).toEqual(['f4']));
+    await settle();
+
+    // f4 was deleted since: page 2 now holds f5 instead.
+    const { useLibraryFiles } = await (async () => {
+      cleanup();
+      vi.resetModules();
+      queryResources.mockReset();
+      return import('./useLibraryFiles');
+    })();
+    let answerHead: (value: unknown) => void = () => {};
+    let answerTail: (value: unknown) => void = () => {};
+    queryResources.mockImplementation(({ offset }: { offset: number }) =>
+      offset === 0
+        ? new Promise((resolve) => (answerHead = resolve))
+        : new Promise((resolve) => (answerTail = resolve)),
+    );
+    const attachableIds = new Set<string>();
+    const { result } = renderHook(
+      () => {
+        const value = useLibraryFiles();
+        if (value.isAttachable) for (const item of value.files) attachableIds.add(item.id);
+        return value;
+      },
+      { wrapper },
+    );
+
+    await waitFor(() => expect(ids(result.current.files)).toEqual(['f4']));
+    expect(result.current.isAttachable).toBe(false);
+
+    await act(async () => answerHead(page([folder('d1')], true, 51)));
+    await settle();
+    // The head is confirmed, but f4 sits on a restored page that is not.
+    expect(ids(result.current.files)).toEqual(['f4']);
+    expect(result.current.isAttachable).toBe(false);
+
+    await act(async () => answerTail(page([file('f5')], false, 51)));
+
+    await waitFor(() => expect(ids(result.current.files)).toEqual(['f5']));
+    expect(result.current.isAttachable).toBe(true);
+    expect(attachableIds.has('f4')).toBe(false);
+  });
+
   it('keeps the last files, without an error, when the refresh fails', async () => {
     await visitOnce();
 

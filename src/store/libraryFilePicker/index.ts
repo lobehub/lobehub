@@ -80,6 +80,12 @@ export interface LibraryFilePickerStoreState {
    * for the active one.
    */
   confirmedScope?: string;
+  /**
+   * Rows on screen when the restored pages behind the head were dropped, with
+   * the scope they belong to. The picker keeps showing them (not attachable)
+   * while it pages back through fresh pages, instead of flashing a skeleton.
+   */
+  droppedSnapshot?: { items: ResourceItem[]; scope: string };
   pickerMap: Record<string, LibraryFilePickerValue>;
   pickerReplica: ReplicaState<LibraryFilePickerValue>;
 }
@@ -90,6 +96,8 @@ export interface LibraryFilePickerSyncResult extends ReplicaSyncResult {
    * snapshot: until then an empty one is "loading", never "no files".
    */
   isConfirmed: boolean;
+  /** Rows shown before the restored pages were dropped (this identity only). */
+  snapshotItems?: ResourceItem[];
 }
 
 interface LibraryFilePickerStore extends LibraryFilePickerStoreState {
@@ -101,6 +109,7 @@ interface LibraryFilePickerStore extends LibraryFilePickerStoreState {
 
 export const initialLibraryFilePickerState: LibraryFilePickerStoreState = {
   confirmedScope: undefined,
+  droppedSnapshot: undefined,
   pickerMap: {},
   pickerReplica: createReplicaState(),
 };
@@ -111,7 +120,17 @@ export const useLibraryFilePickerStore: UseBoundStoreWithEqualityFn<
   const files = createReplicaSlice(libraryFilePickerResource, {
     actionPrefix: 'libraryFilePicker/files',
     effects: {
-      onApplied: (_data, _params, { scope }) => set({ confirmedScope: scope }),
+      onApplied: (_data, _params, { key, scope }) => {
+        // The first answer of this identity re-lists only the head: pages
+        // restored behind it are an unconfirmed snapshot (a file there may be
+        // gone), so drop them and let the picker page through fresh ones.
+        // Later head refreshes keep the pages this session loaded itself.
+        if (get().confirmedScope !== scope) {
+          const items = get().pickerMap[key]?.items ?? [];
+          if (files.collapse(key)) set({ droppedSnapshot: { items, scope } });
+        }
+        set({ confirmedScope: scope });
+      },
     },
     fetcher: fetchLibraryFilePage,
     get,
@@ -127,7 +146,10 @@ export const useLibraryFilePickerStore: UseBoundStoreWithEqualityFn<
       const sync = files.useSync(LIBRARY_FILE_PICKER_KEY);
       const scope = cacheScope.use();
       const isConfirmed = useLibraryFilePickerStore((state) => state.confirmedScope === scope);
-      return { ...sync, isConfirmed };
+      const snapshotItems = useLibraryFilePickerStore((state) =>
+        state.droppedSnapshot?.scope === scope ? state.droppedSnapshot.items : undefined,
+      );
+      return { ...sync, isConfirmed, snapshotItems };
     },
   };
 }, shallow);
