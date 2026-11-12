@@ -46,10 +46,16 @@ export const useLibraryFiles = () => {
   const files = showsSnapshot ? snapshotFiles : listedFiles;
   // A failed refresh keeps the painted files; with none painted it is surfaced.
   const error = files.length > 0 ? undefined : (fetchError ?? data?.loadMoreError);
-  // The painted files are a restored snapshot the server could not confirm:
-  // they stay on screen but cannot be attached, so the failure (and a retry)
-  // must still be offered.
-  const refreshError = files.length > 0 && !isConfirmed ? fetchError : undefined;
+  const isAttachable = isConfirmed && !showsSnapshot;
+  // The painted files are a snapshot the server has not re-listed (the head
+  // refresh, or a later page after it, failed): they stay on screen but cannot
+  // be attached, so the failure (and a retry of that request) must be offered.
+  const pendingError = isConfirmed ? data?.loadMoreError : fetchError;
+  const refreshError = files.length > 0 && !isAttachable ? pendingError : undefined;
+  const retry = useCallback(
+    () => (isConfirmed && data?.loadMoreError ? loadMoreFiles() : revalidate()),
+    [data?.loadMoreError, isConfirmed, loadMoreFiles, revalidate],
+  );
   // Nothing to show yet: no page at all, a restored page the server has not
   // confirmed, or later pages still to look through for an attachable file.
   const isLoading =
@@ -81,11 +87,11 @@ export const useLibraryFiles = () => {
      * the file may be gone), so a file is attachable only once the server has
      * re-listed it.
      */
-    isAttachable: isConfirmed && !showsSnapshot,
+    isAttachable,
     isLoading,
     isLoadingMore,
     loadMore,
     refreshError,
-    retry: revalidate,
+    retry,
   };
 };

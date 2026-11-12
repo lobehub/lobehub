@@ -200,6 +200,43 @@ describe('useLibraryFiles across a reload', { timeout: 60_000 }, () => {
     expect(attachableIds.has('f4')).toBe(false);
   });
 
+  it('offers a retry of the later page when it fails after the head confirmed', async () => {
+    const first = await reload();
+    queryResources
+      .mockResolvedValueOnce(page([folder('d1')], true, 51))
+      .mockResolvedValueOnce(page([file('f4')], false, 51));
+    const visit = first();
+    await waitFor(() => expect(ids(visit.result.current.files)).toEqual(['f4']));
+    await settle();
+
+    const render = await reload();
+    let answerHead: (value: unknown) => void = () => {};
+    let tailCalls = 0;
+    queryResources.mockImplementation(({ offset }: { offset: number }) => {
+      if (offset === 0) return new Promise((resolve) => (answerHead = resolve));
+      tailCalls += 1;
+      return tailCalls === 1
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve(page([file('f5')], false, 51));
+    });
+    const { result } = render();
+    await waitFor(() => expect(ids(result.current.files)).toEqual(['f4']));
+
+    await act(async () => answerHead(page([folder('d1')], true, 51)));
+
+    await waitFor(() => expect(result.current.refreshError).toBeInstanceOf(Error));
+    expect(ids(result.current.files)).toEqual(['f4']);
+    expect(result.current.isAttachable).toBe(false);
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    await waitFor(() => expect(ids(result.current.files)).toEqual(['f5']));
+    expect(result.current.isAttachable).toBe(true);
+    expect(result.current.refreshError).toBeUndefined();
+  });
+
   it('keeps the last files, without an error, when the refresh fails', async () => {
     await visitOnce();
 
