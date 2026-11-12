@@ -99,6 +99,7 @@ export default {
   'builtins.lobe-agent.apiName.analyzeMedia.result':
     'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
+  'builtins.lobe-agent.apiName.cancelSubAgent': 'Cancel sub-agent',
   'builtins.lobe-agent.subAgent.backgroundHint':
     'The result will be sent to this conversation when it finishes.',
   'builtins.lobe-agent.subAgent.backgroundRunning': 'Running in background',

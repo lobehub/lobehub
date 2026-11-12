@@ -278,7 +278,12 @@ export const buildServerVirtualSubAgentRunner = (
         }
       : undefined;
 
+  const cancelVirtualSubAgent = ctx.cancelVirtualSubAgent;
+
   return {
+    ...(cancelVirtualSubAgent && {
+      cancel: ({ subAgentId }) => cancelVirtualSubAgent({ agentId, threadId: subAgentId, topicId }),
+    }),
     run: async ({
       agentId: targetAgentId,
       background,

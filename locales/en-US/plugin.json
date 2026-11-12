@@ -219,6 +219,7 @@
   "builtins.lobe-agent.apiName.analyzeMedia.mediaCount": "{{count}} media",
   "builtins.lobe-agent.apiName.analyzeMedia.result": "Analyze media: <question>{{question}}</question>",
   "builtins.lobe-agent.apiName.callSubAgent": "Call sub-agent",
+  "builtins.lobe-agent.apiName.cancelSubAgent": "Cancel sub-agent",
   "builtins.lobe-agent.apiName.clearTodos": "Clear todos",
   "builtins.lobe-agent.apiName.clearTodos.modeAll": "all",
   "builtins.lobe-agent.apiName.clearTodos.modeCompleted": "completed",

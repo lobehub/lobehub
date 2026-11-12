@@ -2,6 +2,7 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentShareVisitorContext,
+  type CancelVirtualSubAgentResult,
   type ChatToolPayload,
   type ChatTopicBotContext,
   type ClientSecretPayload,
@@ -85,6 +86,11 @@ export interface ServerSubAgentRunResult {
  * the completion bridge, which backfills the placeholder and resumes the parent.
  */
 export interface ServerSubAgentRunner {
+  /**
+   * Stop a running `callSubAgent` sub-agent this run's agent dispatched in the
+   * same topic (`cancelSubAgent`). Absent when the runtime cannot cancel.
+   */
+  cancel?: (params: { subAgentId: string }) => Promise<CancelVirtualSubAgentResult>;
   run: (params: ServerSubAgentRunParams) => Promise<ServerSubAgentRunResult>;
 }
 
