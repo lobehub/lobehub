@@ -81,6 +81,8 @@ overrides:
   drizzle-orm: ^0.45.2
   fast-xml-parser: 5.4.2
   lexical: 0.42.0
+  # 2.2 serializes attention by trial and re-render, which takes minutes on a long paragraph.
+  mdast-util-to-markdown: 2.1.2
   # Keep the coupled core/autolink patches applied without a root lockfile.
   micromark: 4.0.3
   micromark-extension-gfm-autolink-literal: 2.1.0

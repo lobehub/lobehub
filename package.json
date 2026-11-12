@@ -190,7 +190,6 @@
     "drizzle-orm": "^0.45.2",
     "fast-xml-parser": "5.4.2",
     "lexical": "0.42.0",
-    "mdast-util-to-markdown": "2.1.2",
     "pdfjs-dist": "5.4.530",
     "stylelint-config-clean-order": "7.0.0"
   },
@@ -424,7 +423,7 @@
     "lucide-react": "^1.31.0",
     "mammoth": "^1.12.1",
     "marked": "^17.0.6",
-    "mdast-util-to-markdown": "2.1.2",
+    "mdast-util-to-markdown": "^2.1.2",
     "mesurer": "^0.1.0",
     "model-bank": "workspace:*",
     "motion": "^14.1.0",
