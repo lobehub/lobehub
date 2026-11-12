@@ -100,6 +100,60 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(create.mock.calls[0][0].model).toBe('openai/tts-1');
   });
 
+  it('bills a gateway MiniMax speech model by MiniMax characters (a Chinese character is 2)', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好, hi', model: 'speech-2.8-hd', voice: 'female-shaonv' },
+      undefined,
+      { ...context, provider: 'lobehub', requestModel: 'minimax/speech-2.8-hd' },
+    );
+
+    // 2 Han × 2 + ", hi" (4) = 8 billed characters
+    expect(result.usage?.inputCharacters).toBe(8);
+  });
+
+  it('recognizes a MiniMax speech model by its gateway id alone', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好', model: 'custom-voice', voice: 'female-shaonv' },
+      undefined,
+      { ...context, requestModel: 'minimax/speech-2.8-turbo' },
+    );
+
+    expect(result.usage?.inputCharacters).toBe(4);
+  });
+
+  it('leaves a token-billed MiniMax speech model without token counts unpriced', async () => {
+    vi.mocked(getModelPricing).mockResolvedValue(tokenPricing);
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好', model: 'speech-2.8-hd', voice: 'female-shaonv' },
+      undefined,
+      { ...context, requestModel: 'minimax/speech-2.8-hd' },
+    );
+
+    expect(result.usage).toEqual({ inputCharacters: 2 });
+  });
+
+  it('keeps counting code points for non-MiniMax models', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好', model: 'tts-1', voice: 'alloy' },
+      undefined,
+      context,
+    );
+
+    expect(result.usage?.inputCharacters).toBe(2);
+  });
+
   it('requests SSE for token-billed models and reads audio and token usage from events', async () => {
     vi.mocked(getModelPricing).mockResolvedValue(tokenPricing);
     create.mockResolvedValue(

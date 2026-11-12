@@ -15,6 +15,8 @@ import { getModelPricing } from '../../utils/getModelPricing';
 import {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countMiniMaxSpeechCharacters,
+  isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
 } from '../usageConverters/tts';
 
@@ -130,7 +132,17 @@ export const createOpenAICompatibleSpeech = async (
 
   log('generated audio with size: %d bytes', result.audio.byteLength);
 
-  const usage = convertTextToSpeechUsage(payload.input, pricing, result.tokenUsage);
+  // Gateways bill MiniMax speech models by MiniMax's own count (a Chinese character is 2).
+  const billedCharacters =
+    !streamUsage &&
+    (isMiniMaxSpeechModel(payload.model) || isMiniMaxSpeechModel(context.requestModel))
+      ? { inputCharacters: countMiniMaxSpeechCharacters(payload.input) }
+      : undefined;
+  const usage = convertTextToSpeechUsage(
+    payload.input,
+    pricing,
+    billedCharacters ? { ...billedCharacters, ...result.tokenUsage } : result.tokenUsage,
+  );
   await options?.onUsage?.(usage);
 
   return { audio: result.audio, format, usage };
