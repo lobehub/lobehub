@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModelPricing } from '../../utils/getModelPricing';
 import {
   buildElevenLabsSpeechRequest,
+  clearElevenLabsFallbackVoices,
   createElevenLabsSpeech,
   ELEVENLABS_NO_ACCOUNT_VOICE_HINT,
   ELEVENLABS_PAID_VOICE_HINT,
   type ElevenLabsSpeechOptions,
+  FALLBACK_VOICE_TTL_MS,
   normalizeElevenLabsBaseURL,
   resolveElevenLabsOutputFormat,
 } from './createSpeech';
@@ -56,6 +58,8 @@ describe('createElevenLabsSpeech', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
+    clearElevenLabsFallbackVoices();
   });
 
   describe('request mapping', () => {
@@ -307,6 +311,81 @@ describe('createElevenLabsSpeech', () => {
         error: { message: 'ElevenLabs API error (429): busy' },
         errorType: AgentRuntimeErrorType.RateLimitExceeded,
       });
+    });
+
+    const warmCache = async () => {
+      fetchMock
+        .mockResolvedValueOnce(paymentRequired())
+        .mockResolvedValueOnce(voicesResponse([{ category: 'cloned', voice_id: 'clone-1' }]))
+        .mockResolvedValueOnce(audioResponse());
+      await callDefault();
+      fetchMock.mockClear();
+    };
+
+    it('reuses the resolved voice for the same key without retrying the default', async () => {
+      await warmCache();
+
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await callDefault();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toContain('/v1/text-to-speech/clone-1?');
+
+      // A different key does not share the entry.
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await createElevenLabsSpeech(
+        { input: 'Hello', model: 'eleven_flash_v2_5', voice: ELEVENLABS_DEFAULT_VOICE_ID },
+        { ...options, apiKey: 'other-key' },
+      );
+      expect(fetchMock.mock.calls[0][0]).toContain(
+        `/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?`,
+      );
+    });
+
+    it('drops a cached voice that stops working and starts over from the default', async () => {
+      await warmCache();
+
+      fetchMock
+        .mockResolvedValueOnce(
+          errorResponse(404, { detail: { message: 'Voice not found', status: 'voice_not_found' } }),
+        )
+        .mockResolvedValueOnce(audioResponse());
+      await callDefault();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][0]).toContain(
+        `/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?`,
+      );
+
+      // The default worked, so nothing is cached any more.
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await callDefault();
+      expect(fetchMock.mock.calls[0][0]).toContain(
+        `/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?`,
+      );
+    });
+
+    it('keeps the cache entry on unrelated errors, and expires it after the TTL', async () => {
+      await warmCache();
+
+      fetchMock.mockResolvedValueOnce(
+        errorResponse(429, { detail: { message: 'busy', status: 'system_busy' } }),
+      );
+      await expect(callDefault()).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now + FALLBACK_VOICE_TTL_MS + 1);
+      fetchMock.mockClear();
+      fetchMock.mockResolvedValueOnce(audioResponse());
+      await callDefault();
+      expect(fetchMock.mock.calls[0][0]).toContain(
+        `/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?`,
+      );
     });
 
     it('does not fall back for an explicitly chosen voice or for other errors', async () => {

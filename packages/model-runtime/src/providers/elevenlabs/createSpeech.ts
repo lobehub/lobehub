@@ -297,6 +297,47 @@ export const resolveAccountVoice = async (
   }
 };
 
+/** How long an account fallback voice is reused before it is looked up again. */
+export const FALLBACK_VOICE_TTL_MS = 60 * 60 * 1000;
+const FALLBACK_VOICE_CACHE_LIMIT = 500;
+
+/**
+ * Account fallback voice per host + key (stored by SHA-256, never the key itself), so an
+ * account that cannot use the default skips the rejected request and the voice lookup.
+ * Per process: each serverless instance warms its own entry.
+ */
+const fallbackVoices = new Map<string, { expiresAt: number; voice: string }>();
+
+const fallbackCacheKey = async (baseURL: string, apiKey: string) => {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`${baseURL}\n${apiKey}`),
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const readFallbackVoice = (key: string) => {
+  const entry = fallbackVoices.get(key);
+  if (!entry) return;
+  if (entry.expiresAt <= Date.now()) {
+    fallbackVoices.delete(key);
+    return;
+  }
+  return entry.voice;
+};
+
+const writeFallbackVoice = (key: string, voice: string) => {
+  fallbackVoices.delete(key);
+  if (fallbackVoices.size >= FALLBACK_VOICE_CACHE_LIMIT) {
+    // Maps iterate in insertion order: drop the oldest entry.
+    fallbackVoices.delete(fallbackVoices.keys().next().value!);
+  }
+  fallbackVoices.set(key, { expiresAt: Date.now() + FALLBACK_VOICE_TTL_MS, voice });
+};
+
+/** Test helper: forget every cached fallback voice. */
+export const clearElevenLabsFallbackVoices = () => fallbackVoices.clear();
+
 /** Billed characters reported by ElevenLabs, if the header is present and numeric. */
 const readCharacterCount = (response: Response): number | undefined => {
   const raw = response.headers.get('x-character-count');
@@ -349,15 +390,30 @@ export async function createElevenLabsSpeech(
       });
     };
 
-    let response = await send(payload.voice);
+    const fallbackKey =
+      payload.voice === ELEVENLABS_DEFAULT_VOICE_ID
+        ? await fallbackCacheKey(baseURL, apiKey)
+        : undefined;
+    const cachedVoice = fallbackKey ? readFallbackVoice(fallbackKey) : undefined;
+
+    let response = await send(cachedVoice ?? payload.voice);
+
+    // A cached fallback voice that stops working (deleted, plan change) is dropped, and
+    // the request starts over from the default voice.
+    if (!response.ok && cachedVoice) {
+      const error = await toSpeechError(response);
+      fallbackVoices.delete(fallbackKey!);
+      if (!isVoiceUnavailable(error)) throw error;
+      response = await send(payload.voice);
+    }
 
     if (!response.ok) {
       const error = await toSpeechError(response);
 
       // The built-in default voice is not callable on every account (free tier, or
       // accounts created after the Default voices were withdrawn): retry once with a
-      // voice the account can use. A rejected request is not billed.
-      if (payload.voice !== ELEVENLABS_DEFAULT_VOICE_ID || !isVoiceUnavailable(error)) throw error;
+      // voice the account can use, and remember it. A rejected request is not billed.
+      if (!fallbackKey || !isVoiceUnavailable(error)) throw error;
 
       const fallback = await resolveAccountVoice(baseURL, apiKey, options);
       if (!fallback) {
@@ -371,6 +427,7 @@ export async function createElevenLabsSpeech(
       log('default voice unavailable, retrying with account voice %s', fallback);
       response = await send(fallback);
       if (!response.ok) throw await toSpeechError(response);
+      writeFallbackVoice(fallbackKey, fallback);
     }
 
     const audio = await response.arrayBuffer();
