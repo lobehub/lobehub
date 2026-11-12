@@ -22,7 +22,7 @@ const line = (index: number) => `${JSON.stringify({ index, msg: 'x'.repeat(40) }
 describe('JsonlLogWriter', () => {
   it('appends queued lines in order', async () => {
     const filePath = path.join(directory, 'main.jsonl');
-    const writer = new JsonlLogWriter({ filePath });
+    const writer = new JsonlLogWriter({ filePath, process: 'main' });
     writer.write(line(1));
     writer.write(line(2));
     await writer.flush();
@@ -36,6 +36,7 @@ describe('JsonlLogWriter', () => {
       filePath,
       maxBytes: line(0).length * 2,
       maxGenerations: 2,
+      process: 'main',
     });
     for (let index = 0; index < 8; index += 1) {
       writer.write(line(index));
@@ -50,7 +51,11 @@ describe('JsonlLogWriter', () => {
 
   it('drops lines past the pending cap and records how many', async () => {
     const filePath = path.join(directory, 'main.jsonl');
-    const writer = new JsonlLogWriter({ filePath, maxPendingBytes: line(0).length * 2 });
+    const writer = new JsonlLogWriter({
+      filePath,
+      maxPendingBytes: line(0).length * 2,
+      process: 'main',
+    });
     for (let index = 0; index < 5; index += 1) writer.write(line(index));
     await writer.flush();
 
@@ -59,12 +64,13 @@ describe('JsonlLogWriter', () => {
     expect(JSON.parse(lines[2])).toMatchObject({
       level: 'warn',
       msg: expect.stringContaining('dropped 3'),
+      process: 'main',
     });
   });
 
   it('flushSync writes what is still queued, for the exit hook', async () => {
     const filePath = path.join(directory, 'main.jsonl');
-    const writer = new JsonlLogWriter({ filePath });
+    const writer = new JsonlLogWriter({ filePath, process: 'main' });
     writer.write(line(1));
     writer.flushSync();
 
@@ -73,7 +79,7 @@ describe('JsonlLogWriter', () => {
 
   it('flushSync keeps a batch whose async append is still pending at exit', async () => {
     const filePath = path.join(directory, 'main.jsonl');
-    const writer = new JsonlLogWriter({ filePath });
+    const writer = new JsonlLogWriter({ filePath, process: 'main' });
     writer.write(line(1));
     const pending = writer.flush();
     writer.flushSync();

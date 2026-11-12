@@ -2,7 +2,9 @@ import { appendFileSync } from 'node:fs';
 import { appendFile, mkdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { LogProcess } from './layout';
 import { MAX_LOG_BYTES, MAX_LOG_GENERATIONS } from './layout';
+import { createLogRecord, serializeLogRecord } from './record';
 
 /**
  * Past this many queued bytes new lines are dropped (and counted) instead of
@@ -18,6 +20,8 @@ export interface JsonlLogWriterOptions {
   maxBytes?: number;
   maxGenerations?: number;
   maxPendingBytes?: number;
+  /** Stamped on the writer's own dropped-lines warning so `desktop:logs` process filters keep it. */
+  process: LogProcess;
 }
 
 /**
@@ -32,6 +36,7 @@ export class JsonlLogWriter {
   private readonly maxBytes: number;
   private readonly maxGenerations: number;
   private readonly maxPendingBytes: number;
+  private readonly process: LogProcess;
 
   private bytesWritten: number | undefined;
   private draining: Promise<void> | undefined;
@@ -48,12 +53,14 @@ export class JsonlLogWriter {
     maxBytes = MAX_LOG_BYTES,
     maxGenerations = MAX_LOG_GENERATIONS,
     maxPendingBytes = MAX_PENDING_BYTES,
+    process,
   }: JsonlLogWriterOptions) {
     this.filePath = filePath;
     this.flushDelayMs = flushDelayMs;
     this.maxBytes = maxBytes;
     this.maxGenerations = maxGenerations;
     this.maxPendingBytes = maxPendingBytes;
+    this.process = process;
   }
 
   /** Queues one complete line (ending in `\n`). `urgent` flushes on the next tick, for errors. */
@@ -120,13 +127,14 @@ export class JsonlLogWriter {
     const lines = this.pending;
     if (this.droppedLines > 0) {
       lines.push(
-        `${JSON.stringify({
-          level: 'warn',
-          msg: `dropped ${this.droppedLines} log lines while the disk was not keeping up`,
-          ns: 'structuredLog',
-          pid: process.pid,
-          ts: new Date().toISOString(),
-        })}\n`,
+        serializeLogRecord(
+          createLogRecord({
+            level: 'warn',
+            message: `dropped ${this.droppedLines} log lines while the disk was not keeping up`,
+            ns: 'structuredLog',
+            process: this.process,
+          }),
+        ),
       );
     }
     this.pending = [];

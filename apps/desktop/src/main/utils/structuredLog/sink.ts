@@ -111,7 +111,7 @@ export const openStructuredLogs = async ({
     writers: Object.fromEntries(
       LOG_PROCESSES.map((process) => [
         process,
-        new JsonlLogWriter({ filePath: path.join(directory, files[process]) }),
+        new JsonlLogWriter({ filePath: path.join(directory, files[process]), process }),
       ]),
     ) as Record<LogProcess, JsonlLogWriter>,
   };
