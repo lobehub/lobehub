@@ -6,7 +6,7 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
-import { callCloudMcpTool } from '@/server/services/mcp/cloudTool';
+import { callCloudMcpTool, type CloudMcpCaller } from '@/server/services/mcp/cloudTool';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -29,6 +29,11 @@ export class ConnectorToolCallError extends Error {
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
   agentModel: Pick<AgentModel, 'existsById'>;
+  /**
+   * Who a market-hosted (`cloud`) connector's tool runs as, resolved only for
+   * such a call. `undefined` (or no resolver): no Market credential to run as.
+   */
+  resolveCloudMcpCaller?: () => Promise<CloudMcpCaller | undefined>;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
@@ -176,12 +181,17 @@ export const callConnectorToolById = async (
   // A market-hosted stdio server: no session to open, the market's cloud
   // gateway runs the tool by identifier.
   if (connector.mcpConnectionType === ConnectorMcpConnectionType.cloud) {
-    return callCloudMcpTool({
-      args: params.args,
-      identifier: connector.identifier,
-      toolName: params.toolName,
-      userId: ctx.userId,
-    });
+    const caller = await ctx.resolveCloudMcpCaller?.();
+    if (!caller) {
+      throw new ConnectorToolCallError(
+        'FORBIDDEN',
+        'User access token not found. Please sign in to Market first.',
+      );
+    }
+    return callCloudMcpTool(
+      { args: params.args, identifier: connector.identifier, toolName: params.toolName },
+      caller,
+    );
   }
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);

@@ -17,7 +17,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { type MCPService } from '../mcp';
-import { callCloudMcpTool } from '../mcp/cloudTool';
+import { callCloudMcpTool, runtimeCloudMcpCaller } from '../mcp/cloudTool';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -572,12 +572,10 @@ export class ToolExecutionService {
     log('Executing Cloud MCP tool: %s:%s via cloud gateway', identifier, apiName);
 
     try {
-      const { content, state, success } = await callCloudMcpTool({
-        args,
-        identifier,
-        toolName: apiName,
-        userId: context.userId,
-      });
+      const { content, state, success } = await callCloudMcpTool(
+        { args, identifier, toolName: apiName },
+        runtimeCloudMcpCaller(context.userId),
+      );
 
       log('Cloud MCP tool execution successful for: %s:%s', identifier, apiName);
 

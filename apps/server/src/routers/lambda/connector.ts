@@ -56,6 +56,7 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { resolveRequestCloudMcpCaller } from './_helpers/cloudMcpCaller';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -836,7 +837,10 @@ export const connectorRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, ctx);
+        return await callConnectorToolById(input, {
+          ...ctx,
+          resolveCloudMcpCaller: () => resolveRequestCloudMcpCaller(ctx),
+        });
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });

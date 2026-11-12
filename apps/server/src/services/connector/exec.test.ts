@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
+import type * as ContentProcessorModule from '@/server/services/mcp/contentProcessor';
 
 import { callConnectorToolById, readConnectorUiResourceById } from './exec';
 import { scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -18,6 +19,11 @@ vi.mock('@/server/services/discover', () => ({
   DiscoverService: vi.fn(function DiscoverService() {
     return { callCloudMcpEndpoint };
   }),
+}));
+const processContentBlocks = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/mcp/contentProcessor', async (importOriginal) => ({
+  ...(await importOriginal<typeof ContentProcessorModule>()),
+  processContentBlocks,
 }));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
@@ -283,29 +289,75 @@ describe('callConnectorToolById', () => {
     });
   });
 
-  it('runs a cloud connector tool through the market cloud gateway', async () => {
-    callCloudMcpEndpoint.mockResolvedValue({ content: [{ text: 'found', type: 'text' }] });
+  describe('cloud connectors', () => {
     const cloud = {
       ...connector,
       credentials: null,
       mcpConnectionType: 'cloud',
       mcpServerUrl: null,
     };
-    const ctx = { ...makeCtx([cloud], [tool()]), userId: 'user-1' };
-
-    const res = await callConnectorToolById(
-      { args: '{"q":"x"}', identifier: 'my-conn', toolName: 'do_thing' },
-      ctx,
-    );
-
-    expect(callCloudMcpEndpoint).toHaveBeenCalledWith({
-      apiParams: { q: 'x' },
-      identifier: 'my-conn',
-      toolName: 'do_thing',
+    const fileService = { name: 'fileService' };
+    const cloudCtx = (caller: unknown) => ({
+      ...makeCtx([cloud], [tool()]),
+      resolveCloudMcpCaller: vi.fn().mockResolvedValue(caller),
+      userId: 'user-1',
     });
-    expect(res).toMatchObject({ content: 'found', success: true });
-    expect(mcpService.callTool).not.toHaveBeenCalled();
-    expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+
+    it('runs the tool through the market cloud gateway with the Market token', async () => {
+      callCloudMcpEndpoint.mockResolvedValue({ content: [{ text: 'found', type: 'text' }] });
+      processContentBlocks.mockImplementation(async (blocks) => blocks);
+      const ctx = cloudCtx({
+        discoverService: { callCloudMcpEndpoint },
+        fileService,
+        userAccessToken: 'market-token',
+      });
+
+      const res = await callConnectorToolById(
+        { args: '{"q":"x"}', identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      );
+
+      expect(callCloudMcpEndpoint).toHaveBeenCalledWith({
+        apiParams: { q: 'x' },
+        identifier: 'my-conn',
+        toolName: 'do_thing',
+        userAccessToken: 'market-token',
+      });
+      expect(res).toMatchObject({ content: 'found', success: true });
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+      expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+    });
+
+    it('stores media blocks before formatting the result', async () => {
+      const image = { data: 'iVBORw0KGgo', mimeType: 'image/png', type: 'image' };
+      const stored = {
+        data: 'https://files.example.com/a.png',
+        mimeType: 'image/png',
+        type: 'image',
+      };
+      callCloudMcpEndpoint.mockResolvedValue({ content: [image] });
+      processContentBlocks.mockResolvedValue([stored]);
+      const ctx = cloudCtx({ discoverService: { callCloudMcpEndpoint }, fileService });
+
+      const res = (await callConnectorToolById(
+        { identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      )) as { content: string; state: { content: unknown[] } };
+
+      expect(processContentBlocks).toHaveBeenCalledWith([image], fileService);
+      expect(res.content).toBe('![](https://files.example.com/a.png)');
+      expect(res.content).not.toContain('iVBOR');
+      expect(res.state.content).toEqual([stored]);
+    });
+
+    it('refuses the call when there is no Market credential to run it as', async () => {
+      const ctx = cloudCtx(undefined);
+
+      await expect(
+        callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(callCloudMcpEndpoint).not.toHaveBeenCalled();
+    });
   });
 
   it('still returns the tool result when the background refresh scheduler throws', async () => {
