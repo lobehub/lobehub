@@ -78,6 +78,8 @@ export const getExplorerSearchParams = (s: State): ExplorerSearchParams | null =
     libraryId: s.libraryId,
     pageSize: DEFAULT_SEARCH_PAGE_SIZE,
     q: s.searchQuery,
+    sorter: s.sorter,
+    sortType: s.sortType,
     sourceFilter: getResourceSourceFilter(s),
     visibility: getResourceQueryVisibility(s.libraryId, s.listVisibility),
   };

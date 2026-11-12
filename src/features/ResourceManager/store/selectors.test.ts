@@ -7,6 +7,7 @@ import {
   canFilterResourceSource,
   compareResourceItems,
   getDefaultLibrarySort,
+  getExplorerSearchParams,
   getExplorerSelectAllUiState,
   getExplorerSelectedCount,
   getResourceQueryVisibility,
@@ -146,6 +147,42 @@ describe('resource ordering', () => {
     expect(sortFileList([row('10'), row('2')], 'name', SortType.Asc)?.[0].name).toBe('2');
   });
 
+  it.each(['custom', 'name', 'createdAt', 'size'] as const)(
+    'matches server natural fallback and ascending id ties for %s',
+    (sorter) => {
+      const rows = [
+        { ...row('same'), id: 'docs_2' },
+        { ...row('same'), id: 'docs_10' },
+        { ...row('10_page'), id: 'docs_number' },
+        { ...row('2_file'), id: 'file_number' },
+      ];
+      expect(sortFileList(rows, sorter, SortType.Asc)?.map((item) => item.id)).toEqual([
+        'file_number',
+        'docs_number',
+        'docs_10',
+        'docs_2',
+      ]);
+      expect(sortFileList(rows, sorter, SortType.Desc)?.map((item) => item.id)).toEqual([
+        'docs_10',
+        'docs_2',
+        'docs_number',
+        'file_number',
+      ]);
+    },
+  );
+
+  it('includes the displayed sort in search query identity', () => {
+    expect(
+      getExplorerSearchParams(
+        stateWith({ searchQuery: 'report', sorter: 'custom', sortType: SortType.Desc }),
+      ),
+    ).toMatchObject({
+      q: 'report',
+      sorter: 'custom',
+      sortType: SortType.Desc,
+    });
+  });
+
   it('groups folders first in every mode and direction', () => {
     for (const sorter of ['custom', 'name', 'createdAt', 'size'] as const) {
       for (const direction of [SortType.Asc, SortType.Desc]) {
@@ -175,6 +212,6 @@ describe('resource ordering', () => {
         'name',
         SortType.Asc,
       ),
-    ).toBeLessThan(0);
+    ).toBeGreaterThan(0);
   });
 });

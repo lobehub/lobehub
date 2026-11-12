@@ -82,6 +82,8 @@ const toExplorerSearchQuery = (params: ExplorerSearchParams): ResourceQueryParam
   filesOnly: !params.libraryId,
   libraryId: params.libraryId,
   q: params.q,
+  sorter: params.sorter,
+  sortType: params.sortType,
   showFilesInKnowledgeBase: !params.libraryId,
   sourceFilter: params.sourceFilter,
   visibility: params.visibility,

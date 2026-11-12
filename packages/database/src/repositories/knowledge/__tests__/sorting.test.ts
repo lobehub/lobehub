@@ -4,7 +4,6 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { KnowledgeBaseModel } from '../../../models/knowledgeBase';
 import { documents, files, knowledgeBaseFiles, knowledgeBases, users } from '../../../schemas';
 import { KnowledgeRepo } from '../index';
 
@@ -13,7 +12,6 @@ const userId = 'sorting-user';
 const knowledgeBaseId = 'sorting-kb';
 const timestamp = new Date('2024-01-01T00:00:00Z');
 const repo = new KnowledgeRepo(db, userId);
-const model = new KnowledgeBaseModel(db, userId);
 
 beforeEach(async () => {
   await db.delete(users);
@@ -116,8 +114,8 @@ describe('knowledge resource sorting', () => {
       'docs_folder',
       'file_weighted',
       'docs_weighted',
-      'file_invalid',
       'docs_missing',
+      'file_invalid',
     ]);
     expect(
       (await repo.query({ knowledgeBaseId, sorter: 'custom' })).map((item) => item.id),
@@ -130,6 +128,50 @@ describe('knowledge resource sorting', () => {
     for (const sorter of ['createdAt', 'size', 'updatedAt']) {
       expect((await listIds(sorter, SortType.Desc))[0]).toBe('docs_folder');
     }
+  });
+
+  it.each(['custom', 'name', 'createdAt', 'size', 'updatedAt'])(
+    'uses directional natural fallback and ascending ids across pages for %s',
+    async (sorter) => {
+      await addDocument('docs_2', 'same');
+      await addDocument('docs_10', 'same');
+      await addDocument('docs_number', '10_page');
+      await addFile('file_number', '2_file');
+      for (const sortType of [SortType.Asc, SortType.Desc]) {
+        const expected =
+          sortType === SortType.Asc
+            ? ['file_number', 'docs_number', 'docs_10', 'docs_2']
+            : ['docs_10', 'docs_2', 'docs_number', 'file_number'];
+        // Size differs between files and pages; give both arms the same size.
+        if (sorter === 'size') await db.update(files).set({ size: 0 });
+        const ids: string[] = [];
+        for (let offset = 0; offset < 4; offset += 2) {
+          const page = await repo.query({ knowledgeBaseId, sorter, sortType, limit: 2, offset });
+          ids.push(...page.map((item) => item.id));
+        }
+        expect(ids).toEqual(expected);
+      }
+    },
+  );
+
+  it('rejects an unowned library without mutating any rows', async () => {
+    await db
+      .insert(knowledgeBases)
+      .values({ id: 'foreign-kb', name: 'Foreign', userId: 'sorting-other' });
+    await addDocument('docs_owned', 'Owned', { metadata: { emoji: '📄' } });
+    await addFile('file_owned', 'Owned', { original: true });
+    await db.update(documents).set({ knowledgeBaseId: 'foreign-kb' });
+    await db.update(knowledgeBaseFiles).set({ knowledgeBaseId: 'foreign-kb' });
+    const beforeDocs = await db.select().from(documents);
+    const beforeFiles = await db.select().from(files);
+    const beforeLinks = await db.select().from(knowledgeBaseFiles);
+
+    expect(await repo.reorderItems('foreign-kb', ['docs_owned', 'file_owned'])).toEqual({
+      success: false,
+    });
+    expect(await db.select().from(documents)).toEqual(beforeDocs);
+    expect(await db.select().from(files)).toEqual(beforeFiles);
+    expect(await db.select().from(knowledgeBaseFiles)).toEqual(beforeLinks);
   });
 
   it('ignores rows outside the target library and foreign-owned file pairs', async () => {
@@ -147,7 +189,7 @@ describe('knowledge resource sorting', () => {
       userId: 'sorting-other',
     });
 
-    await model.reorderItems(knowledgeBaseId, ['docs_unlinked', 'file_unlinked', 'file_foreign']);
+    await repo.reorderItems(knowledgeBaseId, ['docs_unlinked', 'file_unlinked', 'file_foreign']);
 
     expect((await db.select().from(documents)).every((row) => !row.metadata?.sortOrder)).toBe(true);
     const fileRows = await db.select().from(files);
@@ -178,7 +220,7 @@ describe('knowledge resource sorting', () => {
     });
 
     expect(
-      await model.reorderItems(knowledgeBaseId, [
+      await repo.reorderItems(knowledgeBaseId, [
         'docs_folder',
         'docs_page',
         'docs_page',

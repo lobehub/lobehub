@@ -10,6 +10,7 @@ import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { AgentSpaceRepository } from '@/database/repositories/agentSpace';
+import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -100,6 +101,7 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
+      knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -171,7 +173,7 @@ export const knowledgeBaseRouter = router({
         workspaceId: kb.workspaceId ?? null,
       });
       await assertKnowledgeItemsAccessible(ctx, input.orderedIds);
-      return ctx.knowledgeBaseModel.reorderItems(input.knowledgeBaseId, input.orderedIds);
+      return ctx.knowledgeRepo.reorderItems(input.knowledgeBaseId, input.orderedIds);
     }),
 
   createKnowledgeBase: knowledgeBaseProcedure

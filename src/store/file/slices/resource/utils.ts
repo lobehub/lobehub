@@ -116,11 +116,8 @@ export const compareResourceItems = (
   } else if (sorter === 'createdAt') {
     cmp = toTime(a.createdAt) - toTime(b.createdAt);
   }
-  return (
-    (cmp ||
-      naturalCollator.compare(a.name ?? '', b.name ?? '') ||
-      naturalCollator.compare(a.id, b.id)) * direction
-  );
+  const ordered = (cmp || naturalCollator.compare(a.name ?? '', b.name ?? '')) * direction;
+  return ordered || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 };
 
 const compareResourcesForList =

@@ -27,7 +27,7 @@ const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
 const mockKnowledgeBaseModelDeleteWithFiles = vi.fn();
 const mockKnowledgeBaseModelFindById = vi.fn();
 const mockKnowledgeBaseModelQuery = vi.fn();
-const mockKnowledgeBaseModelReorderItems = vi.fn();
+const mockKnowledgeRepoReorderItems = vi.fn();
 const mockKnowledgeBaseModelRemoveFiles = vi.fn();
 const mockKnowledgeBaseModelTransferTo = vi.fn();
 const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(false);
@@ -107,6 +107,12 @@ vi.mock('@/database/models/resourcePermission', () => ({
   }),
 }));
 
+vi.mock('@/database/repositories/knowledge', () => ({
+  KnowledgeRepo: vi.fn(function () {
+    return { reorderItems: mockKnowledgeRepoReorderItems };
+  }),
+}));
+
 vi.mock('@/database/models/knowledgeBase', () => ({
   KnowledgeBaseModel: vi.fn(function () {
     return {
@@ -117,7 +123,6 @@ vi.mock('@/database/models/knowledgeBase', () => ({
       findById: mockKnowledgeBaseModelFindById,
       hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
       query: mockKnowledgeBaseModelQuery,
-      reorderItems: mockKnowledgeBaseModelReorderItems,
       removeFilesFromKnowledgeBase: mockKnowledgeBaseModelRemoveFiles,
       transferTo: mockKnowledgeBaseModelTransferTo,
       update: mockKnowledgeBaseModelUpdate,
@@ -167,7 +172,7 @@ describe('knowledgeBaseRouter', () => {
     beforeEach(() => {
       mockDocumentModelFindByIds.mockResolvedValue([{ id: 'docs_page' }]);
       mockFileModelFindByIds.mockResolvedValue([{ id: 'file_raw' }]);
-      mockKnowledgeBaseModelReorderItems.mockResolvedValue({ success: true });
+      mockKnowledgeRepoReorderItems.mockResolvedValue({ success: true });
     });
 
     it('checks edit permission and resource access before persisting the order', async () => {
@@ -186,7 +191,7 @@ describe('knowledgeBaseRouter', () => {
         expect.anything(),
         input.orderedIds,
       );
-      expect(mockKnowledgeBaseModelReorderItems).toHaveBeenCalledWith('kb-1', input.orderedIds);
+      expect(mockKnowledgeRepoReorderItems).toHaveBeenCalledWith('kb-1', input.orderedIds);
     });
 
     it('rejects a missing KB before writing', async () => {
@@ -194,7 +199,7 @@ describe('knowledgeBaseRouter', () => {
       await expect(caller.reorderKnowledgeItems(input)).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
-      expect(mockKnowledgeBaseModelReorderItems).not.toHaveBeenCalled();
+      expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
     });
 
     it('rejects inaccessible resources before writing', async () => {
@@ -202,7 +207,7 @@ describe('knowledgeBaseRouter', () => {
       await expect(caller.reorderKnowledgeItems(input)).rejects.toMatchObject({
         code: 'NOT_FOUND',
       });
-      expect(mockKnowledgeBaseModelReorderItems).not.toHaveBeenCalled();
+      expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
     });
 
     it.each(['permission', 'library', 'contents'])(
@@ -217,7 +222,7 @@ describe('knowledgeBaseRouter', () => {
         await expect(caller.reorderKnowledgeItems(input)).rejects.toMatchObject({
           code: 'FORBIDDEN',
         });
-        expect(mockKnowledgeBaseModelReorderItems).not.toHaveBeenCalled();
+        expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
       },
     );
 
@@ -228,7 +233,7 @@ describe('knowledgeBaseRouter', () => {
       await expect(caller.reorderKnowledgeItems({ ...input, orderedIds })).rejects.toMatchObject({
         code: 'BAD_REQUEST',
       });
-      expect(mockKnowledgeBaseModelReorderItems).not.toHaveBeenCalled();
+      expect(mockKnowledgeRepoReorderItems).not.toHaveBeenCalled();
     });
   });
 

@@ -36,7 +36,14 @@ import { alias, type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  knowledgeBases,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
 import { notAgentShareFile, ownChatAttachment } from '../../utils/fileVisibility';
@@ -894,12 +901,92 @@ export class KnowledgeRepo {
     return filter === 'none' ? sql`false` : filter;
   };
 
+  /** Persist a sibling order without turning a move into a content edit. */
+  reorderItems = async (
+    knowledgeBaseId: string,
+    orderedIds: string[],
+  ): Promise<{ success: boolean }> => {
+    return this.db.transaction(async (trx) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      const [kb] = await trx
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(
+          and(eq(knowledgeBases.id, knowledgeBaseId), buildWorkspaceWhere(scope, knowledgeBases)),
+        )
+        .limit(1);
+      if (!kb) return { success: false };
+
+      const links = await trx
+        .select({ fileId: knowledgeBaseFiles.fileId })
+        .from(knowledgeBaseFiles)
+        .where(
+          and(
+            eq(knowledgeBaseFiles.knowledgeBaseId, kb.id),
+            buildWorkspaceWhere(scope, knowledgeBaseFiles),
+          ),
+        );
+      const linkedFileIds = links.map((link) => link.fileId);
+      const documentMembership = linkedFileIds.length
+        ? or(
+            eq(documents.knowledgeBaseId, knowledgeBaseId),
+            inArray(documents.fileId, linkedFileIds),
+          )
+        : eq(documents.knowledgeBaseId, knowledgeBaseId);
+
+      for (const [index, id] of [...new Set(orderedIds)].entries()) {
+        const sortOrder = (index + 1) * 1000;
+        const documentUpdate = {
+          metadata: sql`jsonb_set(COALESCE(${documents.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
+          updatedAt: documents.updatedAt,
+        };
+        const fileUpdate = {
+          metadata: sql`jsonb_set(COALESCE(${files.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(${sortOrder}::int), true)`,
+          updatedAt: files.updatedAt,
+        };
+        if (id.startsWith('docs_')) {
+          const updated = await trx
+            .update(documents)
+            .set(documentUpdate)
+            .where(
+              and(eq(documents.id, id), documentMembership, buildWorkspaceWhere(scope, documents)),
+            )
+            .returning({ fileId: documents.fileId });
+          const fileIds = updated.flatMap((row) => (row.fileId ? [row.fileId] : []));
+          if (fileIds.length) {
+            await trx
+              .update(files)
+              .set(fileUpdate)
+              .where(and(inArray(files.id, fileIds), buildWorkspaceWhere(scope, files)));
+          }
+        } else if (linkedFileIds.includes(id)) {
+          const updated = await trx
+            .update(files)
+            .set(fileUpdate)
+            .where(and(eq(files.id, id), buildWorkspaceWhere(scope, files)))
+            .returning({ id: files.id });
+          if (updated.length) {
+            await trx
+              .update(documents)
+              .set(documentUpdate)
+              .where(and(eq(documents.fileId, id), buildWorkspaceWhere(scope, documents)));
+          }
+        }
+      }
+      return { success: true };
+    });
+  };
+
   private resourceOrderBy = (
     sortType?: string,
     sorter?: string,
     inKnowledgeBase = false,
   ): SQL[] => {
-    const direction = sortType?.toLowerCase() === SortType.Asc ? asc : desc;
+    const direction =
+      (sortType?.toLowerCase() ?? (sorter === 'custom' ? SortType.Asc : SortType.Desc)) ===
+      SortType.Asc
+        ? asc
+        : desc;
     const foldersFirst = asc(sql.raw('folder_rank'));
     const stableId = asc(sql.raw('id'));
     if (sorter === 'custom') {
@@ -908,7 +995,7 @@ export class KnowledgeRepo {
         sortType?.toLowerCase() === SortType.Desc
           ? sql`sort_order DESC NULLS LAST`
           : sql`sort_order ASC NULLS LAST`,
-        asc(sql.raw('natural_name_key')),
+        direction(sql.raw('natural_name_key')),
         stableId,
       ];
     }
@@ -916,7 +1003,9 @@ export class KnowledgeRepo {
       return [foldersFirst, direction(sql.raw('natural_name_key')), stableId];
     }
     const order = this.orderBy(sortType, sorter);
-    return inKnowledgeBase ? [foldersFirst, order, stableId] : [order];
+    return inKnowledgeBase
+      ? [foldersFirst, order, direction(sql.raw('natural_name_key')), stableId]
+      : [order];
   };
 
   /**
