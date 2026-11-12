@@ -945,4 +945,29 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## EmpirioLabs AI
+
+See [Using EmpirioLabs AI in LobeHub](/docs/usage/providers/empiriolabs) for setup instructions.
+
+### `EMPIRIOLABS_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in EmpirioLabs AI provider settings, which takes precedence.
+- Description: A key created on the [EmpirioLabs AI API Keys](https://platform.empiriolabs.ai/dashboard/api-keys) page. Setting a non-empty key enables EmpirioLabs AI in the server configuration. `ENABLED_EMPIRIOLABS` is derived from this key, not a separate environment switch.
+- Default: Unset; no shared server key.
+- Example: `sk-empiriolabs-xxxxxx...xxxxxx`
+
+### `EMPIRIOLABS_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the EmpirioLabs AI API base URL. An API proxy URL entered in provider settings takes precedence.
+- Default: `https://api.empiriolabs.ai/v1`
+- Example: `https://your-gateway.example.com/v1`
+
+### `EMPIRIOLABS_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas. Use model IDs from the [EmpirioLabs AI models page](https://empiriolabs.ai/models).
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+gemma-4-26b-a4b,+qwen3-8-flash=Qwen3.8 Flash`
+
 [model-list]: /docs/self-hosting/advanced/model-list

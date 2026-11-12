@@ -1,0 +1,55 @@
+---
+title: Using EmpirioLabs AI API Key in LobeHub
+description: >-
+  Configure an EmpirioLabs AI API key in LobeHub to chat with its text models and generate images and video.
+tags:
+  - EmpirioLabs AI
+  - API Key
+  - Image Generation
+  - Video Generation
+---
+
+# Using EmpirioLabs AI in LobeHub
+
+[EmpirioLabs AI](https://empiriolabs.ai) is specialized AI model hosting for open, proprietary, and custom stacks. In LobeHub, one EmpirioLabs AI API key gives you its chat, image generation, and video generation models.
+
+<Steps>
+  ### Step 1: Obtain your EmpirioLabs AI API key
+
+  - Sign up or sign in at [EmpirioLabs AI](https://platform.empiriolabs.ai).
+  - Open [API Keys](https://platform.empiriolabs.ai/dashboard/api-keys) and create a key. Keys start with `sk-empiriolabs-`.
+  - Copy the key and store it securely.
+
+  ### Step 2: Configure EmpirioLabs AI in LobeHub
+
+  - Open **App Settings → AI Providers** and select **EmpirioLabs AI** (type `Empirio` in the provider search box to find it).
+  - Paste your key into **API Key**. Changes are saved automatically.
+  - Turn on the switch next to the provider name.
+  - Click **Check** to verify the key.
+
+  ### Step 3: Choose models
+
+  The **Model List** shows the built-in chat, image, and video models. Click **Fetch Models** to load the chat models the API currently serves, then enable the ones you want. The full catalog is on the [EmpirioLabs AI models page](https://empiriolabs.ai/models).
+
+  <Callout type={'warning'}>
+    Requests are billed to your EmpirioLabs AI account. Review [EmpirioLabs AI pricing](https://empiriolabs.ai/pricing) before generating large amounts of images or video.
+  </Callout>
+</Steps>
+
+## Generate images and video
+
+- **Images**: choose an EmpirioLabs AI image model in LobeHub's image generation. The controls shown for each model, such as aspect ratio, resolution, or seed, are the ones that model accepts.
+- **Video**: choose an EmpirioLabs AI video model in LobeHub's video generation. A video is generated as a job, and LobeHub shows it when the job finishes. Most videos take 1 to 15 minutes.
+- **Reference images**: an image you attach is sent to EmpirioLabs AI as a URL, so a self-hosted LobeHub needs file storage that is reachable from the internet.
+
+## Troubleshooting
+
+**The key is rejected (401)**: the key is missing, mistyped, or no longer exists. Create or copy a key on the [API Keys](https://platform.empiriolabs.ai/dashboard/api-keys) page and paste it into **API Key**.
+
+**Insufficient credits (402)**: the account cannot cover the request. Add credits on the Billing page of the [EmpirioLabs AI dashboard](https://platform.empiriolabs.ai).
+
+**Too many requests (429)**: the account reached its rate limit. Wait a moment and try again.
+
+**A model is missing from the list**: click **Fetch Models**, or add the model by its ID from the [models page](https://empiriolabs.ai/models).
+
+For self-hosted deployments, see `EMPIRIOLABS_API_KEY` in the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#empiriolabs-ai).
