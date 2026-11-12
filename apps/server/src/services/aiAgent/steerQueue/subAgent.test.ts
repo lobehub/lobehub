@@ -125,6 +125,29 @@ describe('queueSubAgentSteer', () => {
     });
   });
 
+  it.each([
+    [
+      'the run’s status cannot be read',
+      () => mocks.isRunAlive.mockRejectedValue(new Error('db down')),
+    ],
+    [
+      'the take-back fails',
+      () => {
+        mocks.isRunAlive.mockResolvedValue(false);
+        mocks.remove.mockRejectedValue(new Error('redis down'));
+      },
+    ],
+  ])('reports a stored instruction unknown when %s after the append', async (_case, arrange) => {
+    arrange();
+
+    // Stored already, and the run may be following it: a resend could run it twice.
+    await expect(queueSubAgentSteer(ctx, params)).resolves.toEqual({
+      queued: false,
+      reason: 'unknown',
+    });
+    expect(mocks.append).toHaveBeenCalledTimes(1);
+  });
+
   it('reports it queued when the ending run already took it', async () => {
     mocks.isRunAlive.mockResolvedValue(false);
     mocks.remove.mockResolvedValue(false);

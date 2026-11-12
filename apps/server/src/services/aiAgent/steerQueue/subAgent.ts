@@ -17,8 +17,9 @@ export type SubAgentSteerOutcome =
    * `ended`: the run finished before the instruction was stored, so the caller
    * continues the thread with a new run instead. `full` / `unavailable`: it
    * was not stored and nothing will deliver it. `unknown`: the write failed
-   * twice and may still have landed — the run may already be following it, so
-   * sending it again could run it twice.
+   * twice and may still have landed, or it landed and the check after it
+   * failed — the run may already be following it, so sending it again could
+   * run it twice.
    */
   | { queued: false; reason: 'ended' | 'full' | 'unavailable' | 'unknown' };
 
@@ -81,12 +82,23 @@ export const queueSubAgentSteer = async (
   // its last chance to read the queue: it seals itself before its final read
   // (`steerQueue.seal`), or its row already says it ended. Take the entry back
   // so the caller can start a new run with it; losing the take-back means the
-  // run already took it.
-  if (
-    (await isPastLastRead(ctx, operationId)) &&
-    (await redisService.steerQueue.remove(scope, entry.id))
-  ) {
-    return { queued: false, reason: 'ended' };
+  // run already took it. The entry is stored by now, so a check that fails
+  // leaves it unknown whether the run follows it: a resend could run it twice.
+  try {
+    if (
+      (await isPastLastRead(ctx, operationId)) &&
+      (await redisService.steerQueue.remove(scope, entry.id))
+    ) {
+      return { queued: false, reason: 'ended' };
+    }
+  } catch (error) {
+    log(
+      '[%s] Checking the steer for thread %s after queuing failed: %O',
+      operationId,
+      threadId,
+      error,
+    );
+    return { queued: false, reason: 'unknown' };
   }
 
   log('[%s] Queued a steer instruction for thread %s', operationId, threadId);
