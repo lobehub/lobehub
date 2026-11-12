@@ -1,4 +1,5 @@
 import type { ChatRenderScenario, RunnerKind, ScenarioBudget } from './renderBudget';
+import { RENDER_REGIONS, type RenderRegion } from './renderProfile';
 
 /**
  * Render budgets for opening and switching chats, gated on the p50 of each
@@ -57,23 +58,44 @@ const LOCAL: Record<ChatRenderScenario, ScenarioBudget> = {
 };
 
 /**
- * GitHub-hosted `ubuntu-latest` runners. Provisional: render counts as local,
- * durations and frame gaps three times local, until CI receipts calibrate them.
+ * GitHub-hosted `ubuntu-latest` runners. Render counts match local, so they
+ * reuse the local ceilings. Durations and frame gaps allow about 2.5 times the
+ * first CI receipt (PR #22936, 1 run, p50):
+ *
+ * | scenario       | sidebar   | conversation | messages  | frame gap |
+ * | -------------- | --------- | ------------ | --------- | --------- |
+ * | open           | 21× 67ms  | 58× 211ms    | 34× 95ms  | 217ms     |
+ * | switchCached   | 7× 10ms   | 19× 59ms     | 8× 25ms   | 83ms      |
+ * | switchUncached | 9× 17ms   | 46× 103ms    | 28× 62ms  | 83ms      |
+ * | switchCold     | 9× 17ms   | 43× 111ms    | 26× 68ms  | 100ms     |
+ *
+ * Receipts are uploaded as the `render-budget` artifact of the
+ * `Render Budget` job.
  */
-const CI: Record<ChatRenderScenario, ScenarioBudget> = Object.fromEntries(
-  Object.entries(LOCAL).map(([scenario, budget]) => [
-    scenario,
-    {
-      maxFrameGapMs: budget.maxFrameGapMs * 3,
-      regions: Object.fromEntries(
-        Object.entries(budget.regions).map(([region, limit]) => [
-          region,
-          { actualDurationMs: limit.actualDurationMs * 3, renders: limit.renders },
-        ]),
-      ),
-    },
-  ]),
-) as Record<ChatRenderScenario, ScenarioBudget>;
+const withCiTiming = (
+  scenario: ChatRenderScenario,
+  maxFrameGapMs: number,
+  durations: Record<RenderRegion, number>,
+): ScenarioBudget => ({
+  maxFrameGapMs,
+  regions: Object.fromEntries(
+    RENDER_REGIONS.map((region) => [
+      region,
+      { actualDurationMs: durations[region], renders: LOCAL[scenario].regions[region].renders },
+    ]),
+  ) as ScenarioBudget['regions'],
+});
+
+const CI: Record<ChatRenderScenario, ScenarioBudget> = {
+  open: withCiTiming('open', 550, { conversation: 530, messages: 240, sidebar: 170 }),
+  switchCached: withCiTiming('switchCached', 210, { conversation: 150, messages: 65, sidebar: 30 }),
+  switchCold: withCiTiming('switchCold', 250, { conversation: 280, messages: 170, sidebar: 45 }),
+  switchUncached: withCiTiming('switchUncached', 210, {
+    conversation: 260,
+    messages: 160,
+    sidebar: 45,
+  }),
+};
 
 export const CHAT_RENDER_BUDGETS: Record<RunnerKind, Record<ChatRenderScenario, ScenarioBudget>> = {
   ci: CI,
