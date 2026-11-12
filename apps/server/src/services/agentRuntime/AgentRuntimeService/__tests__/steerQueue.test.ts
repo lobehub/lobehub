@@ -392,13 +392,20 @@ describe('server-side steer queue in the step loop', () => {
       it.each([
         ['an intermediate node', 'draft', 'review'],
         ['a state without its terminal node', 'review', undefined],
-      ])('does not treat a graph’s result at %s as the final answer', async (_case, node, end) => {
-        const deps = createDeps(undefined);
+      ])('takes the steer at a graph’s result at %s without sealing', async (_case, node, end) => {
+        const deps = createDeps({ messageId: 'msg-steer' });
 
-        await prepareGraphChild(deps, node, end);
+        const { currentContext } = await prepareGraphChild(deps, node, end);
 
-        // Not read at all: a graph's llm_result is no decision point, and no seal.
-        expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+        // Read before the graph moves on, so later nodes work with the
+        // correction; not the run's last read, so the queue stays open.
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: false,
+        });
+        expect(currentContext).toMatchObject({
+          payload: { parentMessageId: 'msg-steer' },
+          phase: 'user_input',
+        });
       });
 
       it('makes its last read at the graph’s terminal node', async () => {

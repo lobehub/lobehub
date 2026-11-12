@@ -30,17 +30,14 @@ const LLM_NEXT_PHASES = new Set([
 ]);
 
 /**
- * A sub-agent's final answer: the model replied without asking for a tool, so
- * the agent finishes next. A top-level run hands a follow-up that missed its
- * last decision point to the next turn; a sub-agent has no next turn for its
- * parent's steer instruction, so the instruction joins here instead and the
- * sub-agent answers again with it in context.
+ * A sub-agent's answer: the model replied without asking for a tool, so no
+ * tool result follows it to read a steer at. A top-level run hands a follow-up
+ * that missed its last decision point to the next turn; a sub-agent has no
+ * next turn for its parent's steer instruction, so the instruction joins here
+ * instead and the sub-agent answers again with it in context.
  */
-const isSubAgentFinalAnswer = (context: AgentRuntimeContext, state: AgentState): boolean => {
+const isSubAgentAnswer = (context: AgentRuntimeContext, state: AgentState): boolean => {
   if (!state.origin?.lineage?.isSubAgent || context.phase !== 'llm_result') return false;
-  // A graph moves a tool-free LLM node on to the next one: only its terminal
-  // node's result can be the final answer.
-  if (isGraphAgentIntermediateResult(state)) return false;
   const payload = context.payload as
     { hasToolsCalling?: boolean; result?: { tool_calls?: unknown[] } } | undefined;
 
@@ -272,13 +269,17 @@ export async function prepareStepInput(
   // from the DB (which now hold the steer message) and a `user_input` phase
   // anchored on it. Not while a tool of this turn still waits for approval —
   // the agent has to park for that first. A sub-agent also takes its parent's
-  // steer instruction at its final answer (see `isSubAgentFinalAnswer`).
-  const subAgentFinalAnswer =
-    !!currentContext && isSubAgentFinalAnswer(currentContext, currentState);
+  // steer instruction at an answer (see `isSubAgentAnswer`). A graph routes a
+  // node's answer before its terminal node on to the next node, so a steer
+  // joins there too — the node answers again with it, and later nodes work
+  // with the correction — but only the terminal node's answer is the run's
+  // last read.
+  const subAgentAnswer = !!currentContext && isSubAgentAnswer(currentContext, currentState);
+  const subAgentFinalAnswer = subAgentAnswer && !isGraphAgentIntermediateResult(currentState);
   if (
     currentContext &&
     !forcedFinishState &&
-    (LLM_NEXT_PHASES.has(currentContext.phase) || subAgentFinalAnswer) &&
+    (LLM_NEXT_PHASES.has(currentContext.phase) || subAgentAnswer) &&
     findCurrentTurnPendingToolMessages(currentState.messages).length === 0
   ) {
     const injected = await deps.injectQueuedFollowUp(operationId, stepIndex, currentState, {
