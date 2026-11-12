@@ -5,6 +5,7 @@ import {
 } from '@lobechat/business-knowledge';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { documents, files, knowledgeBaseFiles, knowledgeBases } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -103,16 +104,16 @@ export const resolveEnterpriseContentScopes = async (
       .where(and(inArray(knowledgeBases.id, enterpriseIds), isNull(knowledgeBases.workspaceId)));
     const enterpriseSet = new Set(enterpriseIds);
     const resolutions = new Map(
-      await Promise.all(
-        enterpriseIds.map(
-          async (id) =>
-            [
-              id,
-              ctx.userId
-                ? await resolveEnterpriseKbAccess(ctx.serverDB, ctx.userId, id)
-                : { enterprise: true as const, access: null },
-            ] as const,
-        ),
+      await pMap(
+        enterpriseIds,
+        async (id) =>
+          [
+            id,
+            ctx.userId
+              ? await resolveEnterpriseKbAccess(ctx.serverDB, ctx.userId, id)
+              : { enterprise: true as const, access: null },
+          ] as const,
+        { concurrency: 10 },
       ),
     );
 
