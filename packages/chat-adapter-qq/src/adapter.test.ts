@@ -210,6 +210,51 @@ describe('QQAdapter', () => {
     });
   });
 
+  // ---------- @-mention flag ----------
+
+  describe('@-mention flag', () => {
+    const messageOf = async (payload: QQWebhookPayload) => {
+      await adapter.handleWebhook(makeRequest(payload));
+      const factory = vi.mocked(mockChat.processMessage).mock.calls.at(-1)?.[2];
+      return factory?.();
+    };
+
+    it('marks a group @ event as a mention', async () => {
+      const message = await messageOf(
+        makeWebhookPayload(QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE, {}),
+      );
+
+      expect(message?.isMention).toBe(true);
+    });
+
+    it('marks a guild @ event as a mention', async () => {
+      const message = await messageOf(
+        makeWebhookPayload(QQ_EVENT_TYPES.AT_MESSAGE_CREATE, {
+          channel_id: 'channel_1',
+          group_openid: undefined,
+        }),
+      );
+
+      expect(message?.isMention).toBe(true);
+    });
+
+    it('leaves a c2c message unflagged — chat-sdk marks DMs itself', async () => {
+      const message = await messageOf(
+        makeWebhookPayload(QQ_EVENT_TYPES.C2C_MESSAGE_CREATE, { group_openid: undefined }),
+      );
+
+      expect(message?.isMention).toBe(false);
+    });
+
+    it('keeps the raw content free of the mention marker', async () => {
+      const message = await messageOf(
+        makeWebhookPayload(QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE, { content: '帮我看看' }),
+      );
+
+      expect(message?.text).toBe('帮我看看');
+    });
+  });
+
   // ---------- attachment mapping ----------
 
   describe('attachment mapping', () => {
@@ -402,6 +447,30 @@ describe('QQAdapter', () => {
       const raw = makeQQRawMessage();
       const message = adapter.parseMessage(raw);
       expect(message.threadId).toBe('qq:c2c:user_123');
+    });
+
+    it('marks a group message as a mention', () => {
+      const message = adapter.parseMessage(makeQQRawMessage({ group_openid: 'g1' }));
+
+      expect(message.isMention).toBe(true);
+    });
+
+    it('marks a guild message that carries the bot marker as a mention', () => {
+      (adapter as any)._botUserId = 'BOT_USER_ID';
+      const message = adapter.parseMessage(
+        makeQQRawMessage({ channel_id: 'ch1', content: '<@!BOT_USER_ID> hello' }),
+      );
+
+      expect(message.isMention).toBe(true);
+    });
+
+    it('leaves a guild message addressed to someone else unflagged', () => {
+      (adapter as any)._botUserId = 'BOT_USER_ID';
+      const message = adapter.parseMessage(
+        makeQQRawMessage({ channel_id: 'ch1', content: '<@!SOMEONE_ELSE> hello' }),
+      );
+
+      expect(message.isMention).toBe(false);
     });
   });
 

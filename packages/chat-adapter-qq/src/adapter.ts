@@ -30,6 +30,20 @@ import type {
 } from './types';
 import { QQ_EVENT_TYPES, QQ_OP_CODES } from './types';
 
+/**
+ * QQ event types that only fire when the bot itself was @-mentioned.
+ *
+ * chat-sdk's own `detectMention()` scans `message.text` for an `@name` / `<@!id>` marker, and
+ * neither survives here: QQ already strips the "@bot" prefix from a group message's content, and
+ * this adapter strips whatever `<@!…>` markers remain before parsing. Without the explicit flag
+ * `onNewMention` never fires, so a group @-mention is routed as ordinary channel chatter (and,
+ * with no watch keyword and bot-wake off, silently dropped).
+ */
+const BOT_MENTION_EVENT_TYPES = new Set<string>([
+  QQ_EVENT_TYPES.AT_MESSAGE_CREATE,
+  QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE,
+]);
+
 export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
   readonly name = 'qq';
   private readonly api: QQApiClient;
@@ -326,6 +340,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       },
       formatted,
       id: raw.id,
+      // A group message can only reach the bot through GROUP_AT_MESSAGE_CREATE, so it is always a
+      // mention; a guild message keeps the `<@!id>` marker in its raw content.
+      isMention: !!raw.group_openid || this.contentMentionsBot(raw.content),
       metadata: {
         dateSent: new Date(raw.timestamp),
         edited: false,
@@ -336,10 +353,19 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     });
   }
 
+  /** Whether the raw content carries a `<@!botUserId>` marker for this bot. */
+  private contentMentionsBot(content?: string): boolean {
+    if (!content || !this._botUserId) return false;
+
+    const escapedId = this._botUserId.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    return new RegExp(`<@!?${escapedId}>`).test(content);
+  }
+
   private async parseRawEvent(
     data: QQWebhookEventData,
     threadId: string,
-    _eventType: string,
+    eventType: string,
   ): Promise<Message<QQRawMessage>> {
     const content = data.content || '';
     const cleanText = this.formatConverter.cleanMentions(content);
@@ -374,6 +400,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       author,
       formatted,
       id: data.id || '',
+      // Both AT_MESSAGE_CREATE (guild) and GROUP_AT_MESSAGE_CREATE only reach the bot when it was
+      // @-mentioned — see BOT_MENTION_EVENT_TYPES. c2c / dms are DMs, which chat-sdk marks itself.
+      isMention: BOT_MENTION_EVENT_TYPES.has(eventType),
       metadata: {
         dateSent: new Date(data.timestamp || Date.now()),
         edited: false,
