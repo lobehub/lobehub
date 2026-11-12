@@ -92,6 +92,31 @@ describe('countRequestPayloadTokens', () => {
     );
   });
 
+  it('splits several blocks and leaves an unclosed tag in content', () => {
+    const blockA = '<files_info>alpha report</files_info>';
+    const blockB = '<files_info>beta report</files_info>';
+    const text = `intro ${blockA} middle ${blockB} tail <files_info> never closed`;
+
+    const result = countRequestPayloadTokens({ messages: [{ content: text, role: 'user' }] });
+
+    expect(result.bySource.fileContext).toBe(estimateTokenCount(blockA + blockB));
+    expect(result.bySource.content).toBe(
+      estimateTokenCount('intro  middle  tail <files_info> never closed'),
+    );
+  });
+
+  // ROOT CAUSE: a lazy `<files_info>[\s\S]*?</files_info>` regex over user
+  // text rescanned to the end once per unclosed opening tag (quadratic; flagged
+  // by CodeQL as a polynomial regex on uncontrolled data).
+  it('stays linear on user text made of unclosed <files_info> tags', () => {
+    const hostile = '<files_info>'.repeat(80_000);
+
+    const result = countRequestPayloadTokens({ messages: [{ content: hostile, role: 'user' }] });
+
+    expect(result.bySource.fileContext).toBe(0);
+    expect(result.bySource.content).toBe(estimateTokenCount(hostile));
+  });
+
   it('counts tool calls, tool results, tool_call_id, reasoning and signatures', () => {
     const toolResult = 'line one of the file\n'.repeat(200);
     const messages: RequestPayloadMessage[] = [

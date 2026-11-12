@@ -31,7 +31,8 @@ export interface CountRequestPayloadTokensParams {
 }
 
 /** The `<files_info>` block MessageContentProcessor appends to user content. */
-const FILES_INFO_BLOCK = /<files_info>[\s\S]*?<\/files_info>/g;
+const FILES_INFO_OPEN = '<files_info>';
+const FILES_INFO_CLOSE = '</files_info>';
 
 const estimate = (text: string | undefined) => (text ? estimateTokenCount(text) : 0);
 
@@ -55,14 +56,31 @@ const toText = (content: unknown): string => {
     .join('\n');
 };
 
+/**
+ * Split `<files_info>…</files_info>` blocks out of user text. A linear scan,
+ * not a lazy regex: user text is uncontrolled, and many unclosed opening tags
+ * would make the regex rescan to the end once per tag.
+ */
 const splitFileContext = (text: string) => {
   let fileContext = '';
-  const rest = text.replaceAll(FILES_INFO_BLOCK, (block) => {
-    fileContext += block;
-    return '';
-  });
+  let rest = '';
+  let cursor = 0;
 
-  return { fileContext, rest };
+  while (cursor < text.length) {
+    const start = text.indexOf(FILES_INFO_OPEN, cursor);
+    if (start === -1) break;
+
+    const end = text.indexOf(FILES_INFO_CLOSE, start + FILES_INFO_OPEN.length);
+    // No closing tag after this opening means none after any later one either.
+    if (end === -1) break;
+
+    const blockEnd = end + FILES_INFO_CLOSE.length;
+    rest += text.slice(cursor, start);
+    fileContext += text.slice(start, blockEnd);
+    cursor = blockEnd;
+  }
+
+  return { fileContext, rest: rest + text.slice(cursor) };
 };
 
 const toReasoning = (message: RequestPayloadMessage) => {
