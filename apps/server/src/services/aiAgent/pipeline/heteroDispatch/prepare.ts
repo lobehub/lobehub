@@ -17,6 +17,7 @@ import {
   RequestTrigger,
 } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { FileService } from '@/server/services/file';
@@ -35,6 +36,9 @@ import { traceHeteroStage } from '../sendTracing';
 import { buildViewedTaskContextPrompt, joinSystemContext } from '../viewedTaskContext';
 import type { HeteroDispatchDeps, HeteroDispatchInput } from './types';
 import { settleInOrder } from './utils';
+
+/** How many stored attachment keys are signed at once, per level. */
+const SIGN_URL_CONCURRENCY = 5;
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -204,16 +208,21 @@ export const prepareHeteroRun = async (
       const fileService = unanswered.some((turn) => turn.files.length > 0)
         ? new FileService(deps.db, deps.userId, deps.workspaceId)
         : undefined;
-      const unansweredUserTurns = await Promise.all(
-        unanswered.map(async (turn) => ({
+      // Both lists come from stored rows, so cap the URL signing they fan out into.
+      const unansweredUserTurns = await pMap(
+        unanswered,
+        async (turn) => ({
           ...turn,
-          files: await Promise.all(
-            turn.files.map(async (file) => ({
+          files: await pMap(
+            turn.files,
+            async (file) => ({
               ...file,
               url: (await fileService?.getFullFileUrl(file.url)) || file.url,
-            })),
+            }),
+            { concurrency: SIGN_URL_CONCURRENCY },
           ),
-        })),
+        }),
+        { concurrency: SIGN_URL_CONCURRENCY },
       );
       return { conversationHistory, unansweredUserTurns };
     } catch (err) {
