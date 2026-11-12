@@ -279,7 +279,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Cancel a sub-agent that is still running — one started with `runInBackground`, or one whose work is no longer needed or has gone off track. It stops at its next step, no result is delivered for it, and its history is kept: to steer it instead of abandoning it, cancel it, then send a corrected instruction with `callSubAgent` and the same `subAgentId`.',
+        'Cancel a sub-agent that is still running — typically one started with `runInBackground` — whose work is no longer needed. It stops at its next step, no result is delivered for it, and its history is kept. To correct a sub-agent that has gone off track, do not cancel it: send the correction with `callSubAgent` and the same `subAgentId` while it runs.',
       name: LobeAgentApiName.cancelSubAgent,
       parameters: {
         additionalProperties: false,
