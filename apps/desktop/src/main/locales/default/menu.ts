@@ -64,6 +64,7 @@ const menu = {
   'help.reportIssue': 'Send Feedback',
   'help.title': 'Help',
   'help.toggleHeteroTracing': 'Record Agent CLI Trace Logs',
+  'help.toggleRemoteDebugging': 'Allow Remote Debugging',
   'help.visitWebsite': 'Open Website',
   'history.back': 'Back',
   'history.forward': 'Forward',

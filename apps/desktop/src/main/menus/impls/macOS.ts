@@ -333,6 +333,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('help.toggleHeteroTracing'),
             type: 'checkbox',
           },
+          this.buildRemoteDebuggingMenuItem(t('help.toggleRemoteDebugging')),
         ],
       },
     ];

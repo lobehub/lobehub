@@ -36,6 +36,11 @@ const dialog = {
   'permissionGuide.retry.subtitle': 'Cancelled · Drag again to retry',
   'permissionGuide.waiting.subtitle': '{{permission}} · Or turn on its switch',
   'permissionGuide.waiting.title': 'Drag into the list above',
+  'remoteDebugging.disabled.message': 'Remote debugging turns off after you restart LobeHub.',
+  'remoteDebugging.enable.confirm': 'Allow',
+  'remoteDebugging.enable.detail':
+    'After you restart LobeHub, programs on this computer can connect to port {{port}}, control LobeHub windows, and read your signed-in session and data. The port opens on every launch until you turn this off. Turn it on only while debugging.',
+  'remoteDebugging.enable.message': 'Allow remote debugging?',
   'screenCaptureAccess.cancel': 'Later',
   'screenCaptureAccess.detail':
     'Open System Settings, enable Screen Recording for LobeHub, then try Quick Composer again.',

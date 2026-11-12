@@ -64,6 +64,7 @@
   "help.reportIssue": "反馈问题",
   "help.title": "帮助",
   "help.toggleHeteroTracing": "记录 Agent CLI 调试日志",
+  "help.toggleRemoteDebugging": "允许远程调试",
   "help.visitWebsite": "打开官网",
   "history.back": "后退",
   "history.forward": "前进",

@@ -88,6 +88,12 @@ export interface ElectronMainStore {
   localFileWorkspaceRoots: string[];
   networkProxy: NetworkProxySettings;
   pendingRestoreRoute: string;
+  /**
+   * Developer toggle (Help menu): open the Chromium DevTools protocol port on every
+   * launch, even in packaged builds, so agents can evaluate code, read store
+   * snapshots and take screenshots. Off by default; a change applies on restart.
+   */
+  remoteDebuggingEnabled: boolean;
   shortcuts: Record<string, string>;
   storagePath: string;
   themeMode: 'dark' | 'light' | 'system';

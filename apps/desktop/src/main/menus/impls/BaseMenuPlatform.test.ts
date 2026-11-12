@@ -1,4 +1,4 @@
-import { BrowserWindow, type BrowserWindow as ElectronBrowserWindow } from 'electron';
+import { BrowserWindow, type BrowserWindow as ElectronBrowserWindow, dialog } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -14,6 +14,11 @@ class TestMenuPlatform extends BaseMenuPlatform {
 class TestNewWindowMenuPlatform extends BaseMenuPlatform {
   triggerNewWindow(targetWindow?: ElectronBrowserWindow | null) {
     this.openNewWindow(targetWindow);
+  }
+}
+class TestRemoteDebuggingMenuPlatform extends BaseMenuPlatform {
+  buildRemoteDebuggingItem() {
+    return this.buildRemoteDebuggingMenuItem('Allow Remote Debugging');
   }
 }
 class TestDevToolsMenuPlatform extends BaseMenuPlatform {
@@ -73,7 +78,9 @@ const mockApp = {
     rebuildAppMenu: vi.fn(),
   },
   storeManager: {
+    get: vi.fn(),
     openInEditor: vi.fn(),
+    set: vi.fn(),
   },
 } as unknown as App;
 
@@ -326,6 +333,75 @@ describe('BaseMenuPlatform', () => {
       newWindowMenuPlatform.triggerNewWindow(null);
 
       expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+    });
+  });
+
+  describe('buildRemoteDebuggingMenuItem', () => {
+    let remoteDebuggingMenuPlatform: TestRemoteDebuggingMenuPlatform;
+
+    beforeEach(() => {
+      vi.mocked(mockApp.i18n.ns).mockReturnValue(((key: string) => key) as any);
+      remoteDebuggingMenuPlatform = new TestRemoteDebuggingMenuPlatform(mockApp);
+    });
+
+    it('reflects the persisted toggle', () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue(true);
+
+      const item = remoteDebuggingMenuPlatform.buildRemoteDebuggingItem();
+
+      expect(item).toMatchObject({ checked: true, type: 'checkbox' });
+      expect(mockApp.storeManager.get).toHaveBeenCalledWith('remoteDebuggingEnabled', false);
+    });
+
+    it('persists the toggle after the user accepts the warning', async () => {
+      let allow!: () => void;
+      vi.mocked(dialog.showMessageBox).mockReturnValue(
+        new Promise((resolve) => {
+          allow = () => resolve({ checkboxChecked: false, response: 0 });
+        }),
+      );
+      const menuItem = { checked: true };
+
+      remoteDebuggingMenuPlatform
+        .buildRemoteDebuggingItem()
+        .click?.(menuItem as any, undefined, undefined as any);
+
+      // The checkbox stays off while the warning is open.
+      expect(menuItem.checked).toBe(false);
+      expect(mockApp.storeManager.set).not.toHaveBeenCalled();
+      allow();
+
+      await vi.waitFor(() =>
+        expect(mockApp.storeManager.set).toHaveBeenCalledWith('remoteDebuggingEnabled', true),
+      );
+      expect(dialog.showMessageBox).toHaveBeenCalledWith(
+        expect.objectContaining({ cancelId: 1, defaultId: 1, type: 'warning' }),
+      );
+      expect(menuItem.checked).toBe(true);
+    });
+
+    it('keeps the toggle off when the user cancels the warning', async () => {
+      vi.mocked(dialog.showMessageBox).mockResolvedValue({ checkboxChecked: false, response: 1 });
+      const menuItem = { checked: true };
+
+      remoteDebuggingMenuPlatform
+        .buildRemoteDebuggingItem()
+        .click?.(menuItem as any, undefined, undefined as any);
+
+      await vi.waitFor(() => expect(menuItem.checked).toBe(false));
+      expect(mockApp.storeManager.set).not.toHaveBeenCalled();
+    });
+
+    it('turns the toggle off without a warning', async () => {
+      vi.mocked(dialog.showMessageBox).mockResolvedValue({ checkboxChecked: false, response: 0 });
+
+      remoteDebuggingMenuPlatform
+        .buildRemoteDebuggingItem()
+        .click?.({ checked: false } as any, undefined, undefined as any);
+
+      await vi.waitFor(() => expect(dialog.showMessageBox).toHaveBeenCalledOnce());
+      expect(mockApp.storeManager.set).toHaveBeenCalledWith('remoteDebuggingEnabled', false);
+      expect(dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({ type: 'info' }));
     });
   });
 });
