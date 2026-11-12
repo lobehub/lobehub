@@ -12,7 +12,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
-import { memo, type ReactNode, useEffect, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -92,30 +92,22 @@ interface EnvironmentManagerProps {
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isValidating, mutate } = useEnvironments(visibility);
+  const { confirmed, environments, error, revalidate } = useEnvironments(visibility);
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
   const [refreshing, setRefreshing] = useState(false);
+
   /**
-   * Whether the first fetch of THIS mount has come back.
-   *
-   * A pool visited earlier is still in SWR's cache, so switching back to it
-   * rendered last time's answer instantly and revalidated behind the scenes —
-   * no skeleton, no sign anything was happening, and a list that may already
-   * have been wrong. Switching tabs is the question being asked again, so it
-   * waits for the new answer. Only the first fetch after a mount gates; later
-   * background revalidations must not throw away a list the reader is using.
+   * Whether there is a list to paint. The last list paints from storage on the
+   * first frames and the network confirms it behind it, a tab switch included.
+   * An empty list restored from storage is not an answer: it may be stale, so
+   * it shows the skeleton rather than "no environments" until the server says.
    */
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (!isValidating) setReady(true);
-  }, [isValidating]);
-
-  const environments = data?.environments ?? [];
+  const settled = environments !== undefined && (environments.length > 0 || confirmed);
+  const list = environments ?? [];
   const selected = selectedId
-    ? environments.find((environment) => environment.id === selectedId)
+    ? list.find((environment) => environment.id === selectedId)
     : undefined;
 
   const select = (id: string) => {
@@ -127,14 +119,14 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const onEnvironmentCreated = (created: CreatedEnvironment) => setSelectedId(created.id);
 
   /**
-   * The spinner is driven by this call rather than by SWR's `isValidating`,
-   * which is true of every fetch the page makes — read off that flag the button
-   * would spin on a tab switch and on any background revalidation.
+   * The spinner is driven by this call rather than by `isValidating`, which is
+   * true of every fetch the page makes — read off that flag the button would
+   * spin on a tab switch and on any background revalidation.
    */
   const refresh = async () => {
     setRefreshing(true);
     try {
-      await mutate();
+      await revalidate();
     } finally {
       setRefreshing(false);
     }
@@ -167,16 +159,15 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     </Flexbox>
   );
 
-  const list = (
+  const content = (
     <AsyncBoundary
-      // Both gated on the same signal, because the boundary reads `data` as
-      // "has anything settled": handing it the cache while saying the fetch is
-      // still running would show that cache, which is the thing being avoided.
-      data={ready ? data : undefined}
+      // A failed background refresh keeps the list it has: the boundary shows
+      // the error only while nothing has settled.
+      data={settled ? environments : undefined}
       error={error}
       errorVariant={'block'}
-      isEmpty={environments.length === 0}
-      isLoading={!ready}
+      isEmpty={settled && list.length === 0}
+      isLoading={!settled && !error}
       loading={<EnvironmentListSkeleton />}
       empty={
         // Inside the same frame the rows land in, sized to the skeleton's
@@ -209,7 +200,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       <Flexbox horizontal align={'flex-start'} gap={16} wrap={'wrap'}>
         <Flexbox className={styles.listCol} flex={'1 1 320px'}>
           <Flexbox className={styles.listScroll} gap={2} padding={4}>
-            {environments.map((environment) => (
+            {list.map((environment) => (
               <EnvironmentItem
                 environment={environment}
                 key={environment.id}
@@ -252,7 +243,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         )}
         {actions}
       </Flexbox>
-      {list}
+      {content}
     </Flexbox>
   );
 });

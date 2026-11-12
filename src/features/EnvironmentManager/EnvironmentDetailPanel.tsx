@@ -30,6 +30,7 @@ import UserAvatar from '@/components/UserAvatar';
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import PanelSection from './PanelSection';
 import { repositoryPath } from './repository';
+import { EnvironmentDefinitionSkeleton } from './Skeleton';
 import TabPane from './TabPane';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
@@ -88,7 +89,7 @@ interface EnvironmentDetailPanelProps {
  * comparing six.
  *
  * Read by id from the list rather than handed a snapshot: the form writes
- * through to the same SWR entry, so a copy taken at open time would go stale
+ * through to the same replica entry, so a copy taken at open time would go stale
  * the moment someone saved.
  */
 const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment, onClose }) => {
@@ -100,6 +101,10 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
   const [picked, setTab] = useState<DetailTab>();
   // An editor works in the definition; a reader only has the summary.
   const tab: DetailTab = canEdit ? (picked === 'variables' ? 'variables' : 'settings') : 'overview';
+  // A row restored from storage has no configuration until the server answers:
+  // it carries `env`, so it is never stored. The definition waits for it rather
+  // than reading as empty — an editor saving over `{}` would erase it.
+  const configurationPending = environment.configuration === undefined;
   const configuration = environment.configuration ?? {};
   const repository = repositoryPath(configuration);
 
@@ -199,7 +204,9 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
             sections and meets the next one's icon exactly, so any space
             between them would show as a break in the line. */}
       <Flexbox>
-        {tab === 'overview' && (
+        {configurationPending && <EnvironmentDefinitionSkeleton />}
+
+        {!configurationPending && tab === 'overview' && (
           <TabPane desc={t('environments.detail.initializerDesc')}>
             <PanelSection icon={FolderGit2Icon} title={t('environments.form.sources')}>
               <Text fontSize={13}>{repository ?? t('environments.detail.noRepository')}</Text>
@@ -214,7 +221,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
 
         {/* Every field saves itself, so nothing is lost by unmounting the
               form on a tab switch and each tab mounts only what it shows. */}
-        {canEdit && (tab === 'variables' || tab === 'settings') && (
+        {!configurationPending && canEdit && (tab === 'variables' || tab === 'settings') && (
           <EnvironmentForm
             environment={environment}
             section={tab}
