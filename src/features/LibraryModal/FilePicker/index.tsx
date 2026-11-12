@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Button,
   Center,
   createModal,
@@ -48,8 +49,17 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
   const viewMode = useGlobalStore((s) => s.status.knowledgeBaseModalViewMode || 'list') as ViewMode;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const { error, files, hasMore, isAttachable, isLoading, isLoadingMore, loadMore, retry } =
-    useLibraryFiles();
+  const {
+    error,
+    files,
+    hasMore,
+    isAttachable,
+    isLoading,
+    isLoadingMore,
+    loadMore,
+    refreshError,
+    retry,
+  } = useLibraryFiles();
 
   const handleSelect = useCallback(
     (file: AttachableFile) => {
@@ -98,6 +108,18 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
           onViewChange={(mode) => updateSystemStatus({ knowledgeBaseModalViewMode: mode })}
         />
       </Flexbox>
+      {!!refreshError && (
+        <Alert
+          description={t('networkError', { ns: 'file' })}
+          style={{ marginBlockEnd: 12 }}
+          type={'warning'}
+          action={
+            <Button size={'small'} onClick={() => void retry()}>
+              {t('retry', { ns: 'common' })}
+            </Button>
+          }
+        />
+      )}
       {isLoading ? (
         <Loading />
       ) : error ? (

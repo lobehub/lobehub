@@ -161,6 +161,18 @@ describe('useLibraryFiles across a reload', { timeout: 60_000 }, () => {
 
     expect(ids(result.current.files)).toEqual(['f1']);
     expect(result.current.error).toBeUndefined();
+    // The restored files cannot be attached yet, so the failure stays retryable.
+    expect(result.current.isAttachable).toBe(false);
+    expect(result.current.refreshError).toBeInstanceOf(Error);
+
+    queryResources.mockReset();
+    queryResources.mockResolvedValue(page([file('f1', 'https://files.example.com/f1?sig=3')]));
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    await waitFor(() => expect(result.current.isAttachable).toBe(true));
+    expect(result.current.refreshError).toBeUndefined();
   });
 
   it('does not paint another identity’s files', async () => {
