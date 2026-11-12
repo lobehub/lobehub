@@ -198,7 +198,7 @@ export const ANTHROPIC_CACHE_ECONOMICS: CacheEconomics = {
   writePrice: 1.25, // cache write = 1.25× input
 };
 
-/** Anthropic with the opt-in 1-hour TTL: same reads, 2× writes, refreshed per hit. */
+/** Anthropic with the 1-hour TTL (the default when the model declares it): same reads, 2× writes. */
 export const ANTHROPIC_1H_CACHE_ECONOMICS: CacheEconomics = {
   readPrice: 0.1,
   ttlMs: 3_600_000,
@@ -666,8 +666,8 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
     // Cache-warmth gate. Trimming is free only when the prompt cache is cold —
     // i.e. the gap between the previous turn's last activity and this turn's
-    // trigger exceeds the provider's cache TTL (Anthropic: 5 min or the opt-in
-    // 1 h, refreshed per hit; DeepSeek's disk cache: up to 72 h, so a turn
+    // trigger exceeds the provider's cache TTL (Anthropic: 1 h by default or
+    // 5 min, refreshed per hit; DeepSeek's disk cache: up to 72 h, so a turn
     // boundary there is warm by default). When the user follows up within the
     // TTL, the cached prefix (with earlier turns' trims applied) would still
     // hit, so the new trims must clear a break-even check against the rewrite

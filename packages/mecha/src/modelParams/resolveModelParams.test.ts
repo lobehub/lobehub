@@ -307,27 +307,36 @@ describe('resolveModelParams', () => {
       expect(off.resolvedExtendParams?.enabledSearch).toBeUndefined();
     });
 
-    it('resolves the 1h prompt-cache TTL only where the Anthropic runtime writes it', async () => {
+    it('resolves the prompt-cache TTL only where the Anthropic runtime writes it', async () => {
       const claudeCards: ModelCardFacts[] = ['anthropic', 'bedrock', 'openrouter'].map(
         (providerId) => ({
           abilities: { functionCall: true },
-          extendParams: ['disableContextCaching'],
+          extendParams: ['disableContextCaching', 'contextCachingTTL'],
           id: 'claude-sonnet-4-6',
           providerId,
         }),
       );
-      const resolveTTL = async (provider: string, chatConfig: Record<string, unknown>) =>
+      const resolveTTL = async (
+        provider: string,
+        chatConfig: Record<string, unknown>,
+        modelCards = claudeCards,
+      ) =>
         (
           await resolveModelParams(
             request({ agent: { chatConfig, id: 'agt_1' }, model: 'claude-sonnet-4-6', provider }),
-            providers({ listModelCards: () => claudeCards }),
+            providers({ listModelCards: () => modelCards }),
           )
         ).resolvedExtendParams?.contextCachingTTL;
 
+      // An agent that never picked a TTL gets the 1h default.
+      expect(await resolveTTL('anthropic', {})).toBe('1h');
       expect(await resolveTTL('anthropic', { contextCachingTTL: '1h' })).toBe('1h');
-      // The default (unset or explicit 5m) adds nothing, keeping the payload byte-identical.
-      expect(await resolveTTL('anthropic', {})).toBeUndefined();
+      // 5m is the API default: nothing is written, keeping the payload byte-identical.
       expect(await resolveTTL('anthropic', { contextCachingTTL: '5m' })).toBeUndefined();
+      // A model that does not declare the param keeps the 5m default.
+      expect(
+        await resolveTTL('anthropic', {}, [{ ...claudeCards[0], extendParams: [] }]),
+      ).toBeUndefined();
       // No breakpoints without caching, so no TTL either.
       expect(
         await resolveTTL('anthropic', { contextCachingTTL: '1h', disableContextCaching: true }),

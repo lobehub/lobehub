@@ -6,6 +6,7 @@ import {
 import { isKimiAlwaysPreserveThinkingModel } from '@lobechat/model-runtime/providers/moonshot/modelId';
 import {
   applyModelExtendParams,
+  resolveContextCachingTTL,
   resolveEffectiveReasoningChatConfig,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
@@ -314,15 +315,14 @@ export const resolveModelParams = async (
   const { searchDecision } = request;
   const enabledSearch =
     searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
-  // Anthropic's opt-in 1h prompt-cache TTL. It rides on the payload (which writes the
-  // breakpoints) and hosts hand the same value to the context engine (which prices the
-  // stale-tool-result trim's warmth check), so the two can never disagree. Only the
-  // first-party Anthropic runtime writes `ttl`, and only while caching is on; anywhere
-  // else the field would leak into an OpenAI-style request body, so it is not sent.
+  // Anthropic's prompt-cache TTL (1h unless the agent picked 5m). It rides on the payload
+  // (which writes the breakpoints) and hosts hand the same value to the context engine
+  // (which prices the stale-tool-result trim's warmth check), so the two can never
+  // disagree. `5m` is the API default and is not written out, so those requests stay
+  // byte-identical to before the option existed.
   const contextCachingTTL =
-    provider === ModelProvider.Anthropic &&
-    effectiveChatConfig?.contextCachingTTL === '1h' &&
-    resolvedModelExtendParams?.enabledContextCaching !== false
+    resolveContextCachingTTL({ chatConfig: effectiveChatConfig, modelExtendParams, provider }) ===
+    '1h'
       ? ('1h' as const)
       : undefined;
   const resolvedExtendParams =

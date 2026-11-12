@@ -430,6 +430,15 @@ export const AiModelReasoningConfigSchema = z.object({
  * ExtendParamsType value and the AiModelReasoningConfig key it reads from —
  * used to filter which model-instance defaults a given model actually supports.
  */
+/** Prompt-cache lifetimes the first-party Anthropic runtime can request. */
+export const CONTEXT_CACHING_TTL_OPTIONS = ['5m', '1h'] as const;
+export type ContextCachingTTL = (typeof CONTEXT_CACHING_TTL_OPTIONS)[number];
+/**
+ * Cache lifetime used when an agent has not picked one. 1h breakpoints cost 2× base input to
+ * write (5m: 1.25×) but keep a prefix warm across 5–60 minute gaps between turns.
+ */
+export const DEFAULT_CONTEXT_CACHING_TTL: ContextCachingTTL = '1h';
+
 export const MODEL_REASONING_EXTEND_PARAMS = Object.keys(
   AiModelReasoningConfigSchema.shape,
 ) as (keyof AiModelReasoningConfig)[];
@@ -540,6 +549,7 @@ export type ExtendParamsType =
   | 'preserveThinking'
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
+  | 'contextCachingTTL'
   | 'effort'
   | 'deepseekV4GAReasoningEffort'
   | 'deepseekV4ReasoningEffort'
@@ -609,6 +619,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'preserveThinking',
   'enableAdaptiveThinking',
   'disableContextCaching',
+  'contextCachingTTL',
   'effort',
   'deepseekV4GAReasoningEffort',
   'deepseekV4ReasoningEffort',

@@ -39,7 +39,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/fable-5-2/overview
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'contextCachingTTL', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -112,7 +112,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/haiku-5-5/whats-new-haiku-5-5
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'opus47Effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -156,7 +161,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/sonnet-5-5/migration-guide#thinking-runs-by-default
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'contextCachingTTL', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -199,7 +204,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5#breaking-changes
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'contextCachingTTL', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -242,7 +247,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/fable-5-1/migration-guide
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'contextCachingTTL', 'opus47Effort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -282,7 +287,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-06-09',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'opus47Effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -322,7 +332,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-07-24',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'opus47Effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -365,7 +380,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-06-30',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'opus47Effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -405,7 +425,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-05-28',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'opus47Effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -445,7 +470,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-16',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'opus47Effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -483,7 +513,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'effort'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableAdaptiveThinking',
+        'effort',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -523,6 +558,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     settings: {
       extendParams: [
         'disableContextCaching',
+        'contextCachingTTL',
         'enableAdaptiveThinking',
         'enableReasoning',
         'reasoningBudgetToken',
@@ -564,7 +600,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-24',
     settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableReasoning',
+        'reasoningBudgetToken',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -601,7 +642,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-09-29',
     settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableReasoning',
+        'reasoningBudgetToken',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -640,7 +686,12 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-10-16',
     settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
+      extendParams: [
+        'disableContextCaching',
+        'contextCachingTTL',
+        'enableReasoning',
+        'reasoningBudgetToken',
+      ],
       searchImpl: 'params',
     },
     type: 'chat',

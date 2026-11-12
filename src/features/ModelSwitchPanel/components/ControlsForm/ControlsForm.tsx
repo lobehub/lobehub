@@ -1,3 +1,4 @@
+import { resolveContextCachingTTL } from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import { Flexbox, Switch } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm, useWatch } from '@lobehub/ui/form';
@@ -20,6 +21,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
+import ContextCachingTTLSegmented from './ContextCachingTTLSegmented';
 import DeepSeekReasoningEffortSlider, {
   DeepSeekV4GAReasoningEffortSlider,
 } from './DeepSeekReasoningEffortSlider';
@@ -168,6 +170,19 @@ const ControlsForm = memo<ControlsFormProps>(
     }, [form, initialValues]);
 
     const enableReasoningValue = useWatch(form, 'enableReasoning') ?? initialValues.enableReasoning;
+    const contextCachingTTLValue =
+      useWatch(form, 'contextCachingTTL') ?? initialValues.contextCachingTTL;
+    const disableContextCachingValue =
+      useWatch(form, 'disableContextCaching') ?? initialValues.disableContextCaching;
+    // The same resolver decides the request payload, so the panel shows what is sent.
+    const effectiveContextCachingTTL = resolveContextCachingTTL({
+      chatConfig: {
+        contextCachingTTL: contextCachingTTLValue,
+        disableContextCaching: disableContextCachingValue,
+      },
+      modelExtendParams,
+      provider,
+    });
 
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
@@ -203,6 +218,21 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'horizontal',
         minWidth: undefined,
         name: 'disableContextCaching',
+      },
+      {
+        children: (
+          <ContextCachingTTLSegmented
+            disabled={disabled}
+            effectiveTTL={effectiveContextCachingTTL}
+          />
+        ),
+        label: labelWithTooltip(
+          t('extendParams.contextCachingTTL.title'),
+          t('extendParams.contextCachingTTL.desc'),
+        ),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'contextCachingTTL',
       },
       {
         children: <Switch disabled={disabled} size={'small'} />,
@@ -667,6 +697,8 @@ const ControlsForm = memo<ControlsFormProps>(
           items={
             (modelExtendParams || [])
               .filter((item: any) => !(hideReasoningParams && REASONING_PARAMS_SET.has(item)))
+              // Only the first-party Anthropic runtime writes a cache `ttl`.
+              .filter((item: any) => item !== 'contextCachingTTL' || provider === 'anthropic')
               .map((item: any) => items.find((i) => i.name === item))
               .filter(Boolean) as FormFieldProps<LobeAgentChatConfig>[]
           }
