@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrphanedRunningTopic } from '@/database/models/task';
 
-import { isRunAlreadySettled, ORPHANED_RUN_GRACE_MS, reconcileOrphanedTaskRuns } from './reconcile';
+import { ORPHANED_RUN_GRACE_MS } from './constants';
+import { isRunAlreadySettled, reconcileOrphanedTaskRuns } from './reconcile';
 
 const {
   findOrphanedRunningTopics,

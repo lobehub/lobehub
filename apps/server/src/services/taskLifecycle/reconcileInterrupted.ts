@@ -5,7 +5,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { ORPHANED_RUN_GRACE_MS } from './reconcile';
+import { ORPHANED_RUN_GRACE_MS } from './constants';
 
 const log = debug('task-lifecycle:reconcile-interrupted');
 
