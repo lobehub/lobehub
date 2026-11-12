@@ -135,7 +135,7 @@ describe('open project Channels', () => {
     await expect(teammate.join(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
-  it('rejects a teammate who left the workspace', async () => {
+  it('closes the Channels to someone who left the workspace, or never belonged', async () => {
     const { channel, teammate } = await projectChannel();
     await db
       .update(workspaceMembers)
@@ -147,8 +147,19 @@ describe('open project Channels', () => {
         ),
       );
 
+    expect(await teammate.list()).toEqual([]);
+    await expect(teammate.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(teammate.join(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(await membershipOf(channel.id)).toEqual([]);
+
+    // An outsider naming the workspace gets nothing either.
+    const outsider = new ChannelRepository(
+      db,
+      'channel-project-access-outsider',
+      fixture.workspaceId,
+    );
+    expect(await outsider.list()).toEqual([]);
+    await expect(outsider.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('opens neither archived nor trashed Channels to newcomers', async () => {

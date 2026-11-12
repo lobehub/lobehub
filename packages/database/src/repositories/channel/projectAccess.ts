@@ -1,7 +1,7 @@
 import { and, eq, exists, isNotNull, isNull } from 'drizzle-orm';
 
 import type { ChannelItem } from '../../schemas';
-import { channelMembers, channels, projects } from '../../schemas';
+import { channelMembers, channels, projects, workspaceMembers } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { ChannelError } from './error';
@@ -13,7 +13,8 @@ import type { ChannelAccess } from './types';
  * A workspace project's group Channels are open to everyone who can read the project: they find
  * them in the project, read them, and become a member by joining or by sending. A private project
  * is readable by its creator only, so its Channels stay with their members. Personal scope has
- * no one else to open them to, so nothing is open there.
+ * no one else to open them to, so nothing is open there. Only active workspace members qualify:
+ * the workspace header alone is not proof of membership in every runtime.
  */
 export const openProjectChannelWhere = (
   db: LobeChatDatabase | Transaction,
@@ -25,6 +26,18 @@ export const openProjectChannelWhere = (
         isNotNull(channels.projectId),
         isNull(channels.agentId),
         eq(channels.workspaceId, workspaceId),
+        exists(
+          db
+            .select({ userId: workspaceMembers.userId })
+            .from(workspaceMembers)
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, workspaceId),
+                eq(workspaceMembers.userId, userId),
+                isNull(workspaceMembers.deletedAt),
+              ),
+            ),
+        ),
         exists(
           db
             .select({ id: projects.id })
