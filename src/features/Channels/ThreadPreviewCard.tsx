@@ -49,7 +49,6 @@ const styles = stylex.create({
     alignItems: 'center',
     minWidth: 0,
   },
-  // Same width as the avatar below, so the thread glyph and the reply avatar share a column.
   threadIcon: {
     display: 'inline-flex',
     flexShrink: 0,
@@ -119,13 +118,17 @@ export const ThreadPreviewCard = ({
   const isOwnReply = useUserStore(
     (s) => !!lastReply && isCurrentUserAuthor(lastReply.author, userProfileSelectors.userId(s)),
   );
+  // The sidebar's thread glyph, not a branch. It leads into the latest reply; a cached view
+  // without one keeps it in front of the title so the card still reads as a thread.
+  const threadIcon = (
+    <span {...stylex.props(styles.threadIcon)}>
+      <Icon icon={CornerDownRight} size={14} />
+    </span>
+  );
   return (
     <button type="button" {...stylex.props(styles.card)} onClick={onOpen}>
       <span {...stylex.props(styles.row)}>
-        {/* The glyph threads use in the sidebar, not a branch. */}
-        <span {...stylex.props(styles.threadIcon)}>
-          <Icon icon={CornerDownRight} size={14} />
-        </span>
+        {!lastReply && threadIcon}
         <span {...stylex.props(styles.title)}>{threadTitle(root) ?? t('thread')}</span>
         <span {...stylex.props(styles.count)}>
           {/* Views cached before thread summaries existed only know that the thread exists. */}
@@ -135,6 +138,7 @@ export const ThreadPreviewCard = ({
       </span>
       {lastReply && (
         <span {...stylex.props(styles.row)}>
+          {threadIcon}
           {isOwnReply ? (
             <UserAvatar shape="circle" size={16} />
           ) : (
