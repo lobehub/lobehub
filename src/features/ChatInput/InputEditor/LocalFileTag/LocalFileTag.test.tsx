@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@/store/chat';
 import { useDeviceStore } from '@/store/device';
 import { DEVICE_LIST_KEY } from '@/store/device/projection';
+import {
+  initialLocalFilePreviewState,
+  localFilePreviewKey,
+  useLocalFilePreviewStore,
+} from '@/store/localFilePreview';
 
 import { LocalFileTag } from './LocalFileTag';
 
@@ -62,6 +67,30 @@ describe('LocalFileTag remote device preview', () => {
     getLocalFilePreview.mockReset();
     useChatStore.setState(useChatStore.getInitialState());
     useDeviceStore.setState(useDeviceStore.getInitialState());
+    useLocalFilePreviewStore.setState(initialLocalFilePreviewState);
+  });
+
+  it('reads the thumbnail once through the local-file preview replica, however many tags show it', async () => {
+    setTopic({ boundDeviceId: 'device-1' });
+    setDevices([{ deviceId: 'device-1', online: true }]);
+
+    render(
+      <>
+        <LocalFileTag file={imageFile} />
+        <LocalFileTag file={imageFile} />
+      </>,
+    );
+
+    const key = localFilePreviewKey({
+      accept: 'image',
+      deviceId: 'device-1',
+      filePath: '/Users/me/project/shot.png',
+      workingDirectory: '/Users/me/project',
+    });
+    await waitFor(() =>
+      expect(useLocalFilePreviewStore.getState().previewMap[key]).toMatchObject({ type: 'image' }),
+    );
+    expect(getLocalFilePreview).toHaveBeenCalledTimes(1);
   });
 
   it('reads the image thumbnail through the online topic device off desktop', async () => {

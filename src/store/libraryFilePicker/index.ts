@@ -1,0 +1,129 @@
+import type { StoreApi } from 'zustand';
+import { shallow } from 'zustand/shallow';
+import { createWithEqualityFn, type UseBoundStoreWithEqualityFn } from 'zustand/traditional';
+
+import {
+  cacheScope,
+  createReplicaSlice,
+  createReplicaState,
+  definePagedReplica,
+  recordLens,
+  type ReplicaPagedData,
+  type ReplicaPageResult,
+  type ReplicaState,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
+import { resourceService } from '@/services/resource';
+import type { ResourceItem } from '@/types/resource';
+
+/** The picker lists one query (every library file), so the replica keeps a single entry. */
+export const LIBRARY_FILE_PICKER_KEY = 'default';
+
+export const LIBRARY_FILE_PICKER_PAGE_SIZE = 50;
+
+export type LibraryFilePickerValue = ReplicaPagedData<ResourceItem, number>;
+
+/**
+ * Files the library file picker offers (`resourceService.queryResources`, with
+ * knowledge-base files). A paged replica of its own rather than the explorer's
+ * `resourceList`: that one keeps a single entry for whatever folder the
+ * explorer shows, so the picker sharing it would repaint the explorer behind
+ * the modal with the picker's query. Only the head page is persisted (IndexedDB,
+ * user / workspace scope), so a reopened picker paints the last files at once.
+ */
+export const libraryFilePickerResource = definePagedReplica<string, ResourceItem, number>({
+  key: (key) => key,
+  name: 'libraryFilePicker',
+  paging: {
+    direction: 'forward',
+    getId: (item) => item.id,
+    mode: 'offset',
+    persist: { pages: 1 },
+  },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One page of the picker list; `cursor` is the page index (0 = head). */
+const fetchLibraryFilePage = async (
+  _key: string,
+  cursor?: number,
+): Promise<ReplicaPageResult<ResourceItem, number>> => {
+  const page = cursor ?? 0;
+  const response = await resourceService.queryResources({
+    limit: LIBRARY_FILE_PICKER_PAGE_SIZE,
+    offset: page * LIBRARY_FILE_PICKER_PAGE_SIZE,
+    showFilesInKnowledgeBase: true,
+  });
+
+  return {
+    items: response.items,
+    // Folders and pages are dropped on the client, and the server may filter
+    // rows after paging, so only its own `hasMore` ends the list.
+    nextCursor: response.hasMore ? page + 1 : null,
+    total: response.total,
+  };
+};
+
+export interface LibraryFilePickerStoreState {
+  /**
+   * Cache scope the server last answered the list under in this session. A
+   * restored head page is a snapshot until then; another scope never vouches
+   * for the active one.
+   */
+  confirmedScope?: string;
+  pickerMap: Record<string, LibraryFilePickerValue>;
+  pickerReplica: ReplicaState<LibraryFilePickerValue>;
+}
+
+export interface LibraryFilePickerSyncResult extends ReplicaSyncResult {
+  /**
+   * The server has answered for the active identity. A restored head page is a
+   * snapshot: until then an empty one is "loading", never "no files".
+   */
+  isConfirmed: boolean;
+}
+
+interface LibraryFilePickerStore extends LibraryFilePickerStoreState {
+  /** Append the next page. */
+  loadMoreFiles: () => Promise<void>;
+  /** Fetch orchestration only; read the files with `useLibraryFilePickerList`. */
+  useFetchFiles: () => LibraryFilePickerSyncResult;
+}
+
+export const initialLibraryFilePickerState: LibraryFilePickerStoreState = {
+  confirmedScope: undefined,
+  pickerMap: {},
+  pickerReplica: createReplicaState(),
+};
+
+export const useLibraryFilePickerStore: UseBoundStoreWithEqualityFn<
+  StoreApi<LibraryFilePickerStore>
+> = createWithEqualityFn<LibraryFilePickerStore>()((set, get) => {
+  const files = createReplicaSlice(libraryFilePickerResource, {
+    actionPrefix: 'libraryFilePicker/files',
+    effects: {
+      onApplied: (_data, _params, { scope }) => set({ confirmedScope: scope }),
+    },
+    fetcher: fetchLibraryFilePage,
+    get,
+    set,
+    stateKey: 'pickerReplica',
+    view: recordLens<LibraryFilePickerStore, LibraryFilePickerValue>('pickerMap'),
+  });
+
+  return {
+    ...initialLibraryFilePickerState,
+    loadMoreFiles: () => files.loadMore(LIBRARY_FILE_PICKER_KEY, LIBRARY_FILE_PICKER_KEY),
+    useFetchFiles: () => {
+      const sync = files.useSync(LIBRARY_FILE_PICKER_KEY);
+      const scope = cacheScope.use();
+      const isConfirmed = useLibraryFilePickerStore((state) => state.confirmedScope === scope);
+      return { ...sync, isConfirmed };
+    },
+  };
+}, shallow);
+
+/** The picker list, or `undefined` while neither persisted nor fetched. */
+export const useLibraryFilePickerList = () =>
+  useLibraryFilePickerStore((state) => state.pickerMap[LIBRARY_FILE_PICKER_KEY]);
