@@ -53,7 +53,7 @@ const GoalRequirement = memo<GoalRequirementProps>(({ goalId, requirement }) => 
     try {
       // On the unmount flush the child editor may already be disposed; a dead
       // instance means nothing newer than the last change event to save.
-      markdown = String(editor.getDocument('markdown') ?? '').trim();
+      markdown = String(editor.getDocument('markdown', { format: false }) ?? '').trim();
     } catch {
       return;
     }
