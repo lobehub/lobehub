@@ -8,11 +8,37 @@ import type {
   ChannelSendMessageParams,
   ChannelSentMessage,
 } from '@lobechat/types';
-import { Alert, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text, cssVar } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelApiName } from '../../types';
+
+const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail, summary }) => (
+  <Flexbox gap={4} paddingBlock={8}>
+    <Text style={{ color: cssVar.colorError }}>{summary}</Text>
+    {detail && (
+      <div
+        style={{
+          overflow: 'auto',
+          maxHeight: 180,
+          paddingBlock: 8,
+          paddingInline: 10,
+          border: `1px solid ${cssVar.colorBorderSecondary}`,
+          borderRadius: 6,
+          backgroundColor: cssVar.colorFillQuaternary,
+          color: cssVar.colorTextSecondary,
+          fontSize: 12,
+          overflowWrap: 'anywhere',
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {detail}
+      </div>
+    )}
+  </Flexbox>
+));
+ChannelErrorDetail.displayName = 'ChannelErrorDetail';
 
 const ChannelHistoryRender = memo<
   BuiltinRenderProps<unknown, ChannelHistoryPage | ChannelHistoryMessageDetail, string>
@@ -20,10 +46,9 @@ const ChannelHistoryRender = memo<
   const { t } = useTranslation('plugin');
   if (pluginError)
     return (
-      <Alert
-        description={pluginError.message || content}
-        title={t('builtins.lobe-channel.readError')}
-        type={'error'}
+      <ChannelErrorDetail
+        detail={pluginError.message || content}
+        summary={t('builtins.lobe-channel.readError')}
       />
     );
   if (!pluginState) return null;
@@ -68,10 +93,9 @@ const ListChannelsRender = memo<BuiltinRenderProps<unknown, ChannelDirectoryPage
     const { t } = useTranslation('plugin');
     if (pluginError)
       return (
-        <Alert
-          description={pluginError.message || content}
-          title={t('builtins.lobe-channel.listError')}
-          type={'error'}
+        <ChannelErrorDetail
+          detail={pluginError.message || content}
+          summary={t('builtins.lobe-channel.listError')}
         />
       );
     if (!pluginState) return null;
@@ -100,10 +124,9 @@ const SendMessageRender = memo<
   const { t } = useTranslation('plugin');
   if (pluginError)
     return (
-      <Alert
-        description={pluginError.message || content}
-        title={t('builtins.lobe-channel.sendError')}
-        type={'error'}
+      <ChannelErrorDetail
+        detail={pluginError.message || content}
+        summary={t('builtins.lobe-channel.sendError')}
       />
     );
   if (!pluginState) return null;
