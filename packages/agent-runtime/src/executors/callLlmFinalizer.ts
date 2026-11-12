@@ -213,7 +213,13 @@ const persistFinalMessage = async ({
       // (an empty string renders as still loading).
       content: aborted && !finalContent ? undefined : finalContent,
       imageList: output.imageList.length > 0 ? output.imageList : undefined,
-      metadata: workAnchor ? { ...metadata, work: workAnchor } : metadata,
+      metadata: {
+        ...metadata,
+        ...(workAnchor && { work: workAnchor }),
+        // A row stopped earlier and now written to completion is no longer stopped;
+        // the model merges metadata, so the stale marker is cleared explicitly.
+        ...(!aborted && { interruptedMidStream: false }),
+      },
       observationId: output.observationId,
       reasoning: finalReasoning,
       search: output.grounding,

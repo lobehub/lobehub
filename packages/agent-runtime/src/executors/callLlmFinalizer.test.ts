@@ -634,7 +634,7 @@ describe('callLlmFinalizer', () => {
           { text: 'Image answer', type: 'text' },
           { image: 'https://example.com/image.png', type: 'image' },
         ]),
-        metadata: { isMultimodal: true },
+        metadata: { interruptedMidStream: false, isMultimodal: true },
         reasoning: {
           content: JSON.stringify([
             { text: 'Visual reasoning', type: 'text' },
@@ -716,7 +716,12 @@ describe('callLlmFinalizer', () => {
     expect(update.metadata).toMatchObject({ interruptedMidStream: true });
   });
 
-  it('does not mark a turn that finished normally', async () => {
+  // A row stopped earlier keeps `interruptedMidStream` when it is written again,
+  // because the message model merges metadata. A continuation that finished
+  // normally therefore still read as stopped.
+  //
+  // Before: the marker survived. After: a normal final write clears it.
+  it('clears the stopped marker when the row then finishes normally', async () => {
     const messages = createMessageTransport();
 
     await finalizeCallLlmTurn({
@@ -732,7 +737,7 @@ describe('callLlmFinalizer', () => {
 
     const [, update] = vi.mocked(messages.update).mock.calls[0];
     expect(update.content).toBe('Answer');
-    expect(update.metadata).not.toHaveProperty('interruptedMidStream');
+    expect(update.metadata).toMatchObject({ interruptedMidStream: false });
   });
 
   it('records a client-executed attempt and its estimated usage on the message', async () => {
