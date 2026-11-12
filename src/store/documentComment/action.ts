@@ -361,6 +361,8 @@ export class DocumentCommentActionImpl {
     if (repliesUnloaded) void this.revalidateReplies(rootCommentId);
     if (created.isDuplicate) {
       for (const token of counts) token.rollback();
+      // The re-reads below already cover what a reconcile would re-read.
+      settleCounts();
       void this.revalidateReplies(rootCommentId);
       void this.revalidateDetail(rootCommentId);
       void this.revalidateDocument(documentId);

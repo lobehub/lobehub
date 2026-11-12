@@ -649,6 +649,79 @@ describe('documentComment replicas', () => {
       await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2));
       await waitFor(() => expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 3 }));
     });
+
+    it('still reconciles overlapping replies after a duplicate reply', async () => {
+      const listThreads = vi.spyOn(documentCommentService, 'listThreads').mockResolvedValue({
+        items: [thread('root-1', 1)],
+        nextCursor: null,
+      });
+      const summary = vi.spyOn(documentCommentService, 'summary').mockResolvedValue({ total: 2 });
+      vi.spyOn(documentCommentService, 'listAnchors').mockResolvedValue({ items: [] });
+      vi.spyOn(documentCommentService, 'listReplies').mockResolvedValue({
+        items: [],
+        nextCursor: null,
+      });
+      renderHook(
+        () => {
+          documentCommentActions.useFetchThreads(LIST);
+          documentCommentActions.useFetchSummary(DOCUMENT_ID);
+        },
+        { wrapper },
+      );
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(1));
+      await waitFor(() => expect(state().summaryMap[DOCUMENT_ID]).toEqual({ total: 2 }));
+
+      const reply = (clientId: string) =>
+        documentCommentActions.createReply({
+          input: {
+            clientId,
+            content: clientId,
+            documentId: DOCUMENT_ID,
+            parentCommentId: 'root-1',
+          },
+          optimisticComment: comment(`optimistic:${clientId}`, {
+            clientId,
+            parentCommentId: 'root-1',
+          }),
+          rootCommentId: 'root-1',
+        });
+
+      // A retried submit the server already had.
+      const create = vi.spyOn(documentCommentService, 'create').mockResolvedValueOnce({
+        comment: comment('reply-1', { clientId: 'r1', parentCommentId: 'root-1' }),
+        isDuplicate: true,
+      });
+      await act(() => reply('r1'));
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(1));
+
+      const first = deferred<{ comment: DocumentCommentItem; isDuplicate: boolean }>();
+      const second = deferred<{ comment: DocumentCommentItem; isDuplicate: boolean }>();
+      create
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never);
+      let firstDone!: Promise<unknown>;
+      let secondDone!: Promise<unknown>;
+      act(() => {
+        firstDone = reply('r2').catch(() => undefined);
+        secondDone = reply('r3');
+      });
+      expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(3);
+
+      // Only r3 lands on the server.
+      listThreads.mockResolvedValue({ items: [thread('root-1', 2)], nextCursor: null });
+      summary.mockResolvedValue({ total: 3 });
+      await act(async () => {
+        first.reject(new Error('offline'));
+        await firstDone;
+        second.resolve({
+          comment: comment('reply-3', { clientId: 'r3', parentCommentId: 'root-1' }),
+          isDuplicate: false,
+        });
+        await secondDone;
+      });
+
+      await waitFor(() => expect(state().threadFeedMap[LIST_KEY]?.items[0].replyCount).toBe(2));
+    });
   });
 
   describe('likes', () => {
