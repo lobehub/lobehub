@@ -127,12 +127,28 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'trae';
 
 /**
+ * Whether an agent with no stored `executionTarget` takes the `auto` default
+ * when it cannot run in-process. Heterogeneous agents keep `none` so they
+ * coerce to their own local/sandbox runtime, and a leftover `boundDeviceId`
+ * keeps routing to that device as before.
+ */
+const defaultsToAuto = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  isHetero: boolean | undefined,
+): boolean =>
+  agencyConfig?.executionTarget === undefined &&
+  !agencyConfig?.boundDeviceId &&
+  !isHetero &&
+  !agencyConfig?.heterogeneousProvider;
+
+/**
  * Single source of truth for where an agent executes — one global
  * `agencyConfig.executionTarget` drives both desktop and web.
  *
  * - `none`    → no execution environment (plain chat)
- * - `auto`    → auto-pick a device (opt-in; the only mode that activates a
- *               device the user did not explicitly select)
+ * - `auto`    → auto-pick an online device (the only mode that activates a
+ *               device the user did not explicitly select; also the web
+ *               default, see below)
  * - `local`   → this machine (in-process; desktop only)
  * - `sandbox` → server cloud sandbox
  * - `device`  → remote device (dispatched to `boundDeviceId`)
@@ -144,7 +160,10 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
  * to use is the user's observability/latency trade-off — never auto-collapse
  * `device(currentDeviceId)` into the in-process path.
  *
- * Defaults: desktop → `local`, web → `none`. On web `local` isn't available
+ * Defaults: desktop → `local`; web → `auto` when a device-gateway can route
+ * (`deviceRoutingAvailable`), else `none`. Heterogeneous agents and configs
+ * that already carry a `boundDeviceId` skip the `auto` default (see
+ * `defaultsToAuto`). On web `local` isn't available
  * (no local filesystem). A desktop `local` pick pins that desktop's own
  * `deviceId` as `boundDeviceId` (see `useSelectExecutionTarget`), and the
  * server routes such a config to that bound device — so on web we resolve it
@@ -198,7 +217,13 @@ export const resolveExecutionTarget = (
   ) {
     return 'device';
   }
-  let effective = stored ?? (clientAvailable ? 'local' : 'none');
+  let effective =
+    stored ??
+    (clientAvailable
+      ? 'local'
+      : deviceRoutingAvailable && defaultsToAuto(agencyConfig, isHetero)
+        ? 'auto'
+        : 'none');
   if (
     !clientAvailable &&
     (isHetero || deviceRoutingAvailable) &&
@@ -536,7 +561,15 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // agents always need a runtime, so they never take this path.
   if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
 
-  const target = resolveExecutionTarget(agencyConfig, {
+  // The server resolves an unset target as `local` whenever a gateway exists,
+  // but only the desktop that sends `localDeviceId` can run it in-process.
+  // Every other caller (web, tasks, schedules) gets the same `auto` default
+  // the web picker shows.
+  const planAgencyConfig: LobeAgentAgencyConfig | undefined =
+    clientExecutionAvailable && !localDeviceId && defaultsToAuto(agencyConfig, isHetero)
+      ? { ...agencyConfig, executionTarget: 'auto' }
+      : agencyConfig;
+  const target = resolveExecutionTarget(planAgencyConfig, {
     isHetero,
     clientExecutionAvailable,
     sandboxExecutionAvailable,
