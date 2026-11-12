@@ -57,6 +57,15 @@ export const FeatureFlagsSchema = z.object({
   agent_deferred_init: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for answering a plain chat send to a heterogeneous agent
+   * (Claude Code, Codex, …) on an online device before the device dispatch
+   * completes; the dispatch runs after the response and a failure lands on the
+   * assistant message. Off: the send waits for the device to accept the run.
+   * Array values are user ids.
+   */
+  agent_deferred_hetero_dispatch: FeatureFlagValue.optional(),
+
+  /**
    * Keep the immutable per-operation tool set out of the agent state blob that
    * is rewritten at every step; it is written once to its own Redis key and
    * re-attached on load. Off: the blob keeps its inline copy. Server only;
@@ -210,6 +219,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
   agent_deferred_init: false,
+  agent_deferred_hetero_dispatch: false,
   agent_runtime_strip_operation_toolset: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -272,6 +282,11 @@ export const mapFeatureFlagsEnvToState = (
       config.agent_deferred_init,
       userId,
       'agent_deferred_init',
+    ),
+    enableDeferredHeteroDispatch: evaluateFeatureFlag(
+      config.agent_deferred_hetero_dispatch,
+      userId,
+      'agent_deferred_hetero_dispatch',
     ),
     enableStripOperationToolset: evaluateFeatureFlag(
       config.agent_runtime_strip_operation_toolset,

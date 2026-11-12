@@ -73,6 +73,11 @@ export type IFeatureFlagsState = {
   /** A plain chat send leaves its init to the step-0 worker (`agent_deferred_init`). */
   enableDeferredInit: boolean | undefined;
   /**
+   * A plain chat send to a heterogeneous agent on an online device returns
+   * before the device dispatch completes (`agent_deferred_hetero_dispatch`).
+   */
+  enableDeferredHeteroDispatch: boolean | undefined;
+  /**
    * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
    * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
    * working.
