@@ -4,7 +4,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, CornerDownRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/features/User/UserAvatar';
@@ -48,6 +48,15 @@ const styles = stylex.create({
     gap: 6,
     alignItems: 'center',
     minWidth: 0,
+  },
+  // Same width as the avatar below, so the thread glyph and the reply avatar share a column.
+  threadIcon: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 16,
+    color: cssVar.colorTextSecondary,
   },
   title: {
     overflow: 'hidden',
@@ -113,6 +122,10 @@ export const ThreadPreviewCard = ({
   return (
     <button type="button" {...stylex.props(styles.card)} onClick={onOpen}>
       <span {...stylex.props(styles.row)}>
+        {/* The glyph threads use in the sidebar, not a branch. */}
+        <span {...stylex.props(styles.threadIcon)}>
+          <Icon icon={CornerDownRight} size={14} />
+        </span>
         <span {...stylex.props(styles.title)}>{threadTitle(root) ?? t('thread')}</span>
         <span {...stylex.props(styles.count)}>
           {/* Views cached before thread summaries existed only know that the thread exists. */}
