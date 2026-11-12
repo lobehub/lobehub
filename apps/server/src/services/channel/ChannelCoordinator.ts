@@ -28,6 +28,7 @@ import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
+import { openChannelReply } from './replyOpening';
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
@@ -88,6 +89,8 @@ export class ChannelCoordinator {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
               continue;
             }
+            // Before the claim: a reply that moves into a Thread runs there from the start.
+            await openChannelReply(this.db, channelId, job.id);
             const claimNow = () =>
               this.executions.claim(channelId, job.id, {
                 leaseMs: LEASE_MS,
@@ -202,10 +205,11 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context, primaryReply] = await Promise.all([
+      const [input, context, primaryReply, opening] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
         this.executions.primaryReply(job.channelId, job.id),
+        this.executions.openingReply(job.channelId, job.id),
       ]);
       const attachments = await resolveChannelAttachments(
         this.db,
@@ -231,6 +235,7 @@ export class ChannelCoordinator {
         prompt: buildChannelPrompt(job.manifest, input, {
           context: context.messages,
           omitted: context.omitted,
+          opening,
           primaryReply,
           wake: job.wake,
         }),

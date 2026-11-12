@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicMessage, ExternalWorkSummaryItem } from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { act, createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -179,5 +179,147 @@ describe('ChannelMessage collapse', () => {
 
     expect(collapsibleProps.current.collapsed).toBe(true);
     expect(screen.getByText('message.expand')).toBeTruthy();
+  });
+});
+
+describe('ChannelMessage works', () => {
+  const url = 'https://github.com/lobehub/lobehub/pull/1';
+  const work = {
+    description: 'Adds the cards',
+    event: {
+      cumulativeCost: 0.42,
+      cumulativeUsage: null,
+      metadata: { baseBranch: 'canary', headBranch: 'feat/cards' },
+    },
+    id: url,
+    identifier: 'lobehub/lobehub#1',
+    resourceDeleted: false,
+    resourceType: 'github_pull_request',
+    status: 'open',
+    title: 'Show works in channels',
+    totalCost: 0.42,
+    type: 'external',
+    url,
+  } as unknown as ExternalWorkSummaryItem;
+
+  it('shows a reply’s external Works as cards that open their link', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          content: 'Opened it',
+          works: [work],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Show works in channels')).toBeTruthy();
+    expect(screen.getByText('lobehub/lobehub#1')).toBeTruthy();
+    expect(screen.getByText('feat/cards')).toBeTruthy();
+    expect(screen.getByText('0.42')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Show works in channels'));
+    expect(open).toHaveBeenCalledWith(url, '_blank', 'noopener,noreferrer');
+    open.mockRestore();
+  });
+
+  it('renders no cards without Works', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          works: [],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('Show works in channels')).toBeNull();
+  });
+});
+
+describe('ChannelMessage thread card', () => {
+  const root = { ...message({ avatar: null, id: 'user-other', name: 'Ann', type: 'user' }) };
+  const withThread = (thread: Record<string, unknown>) =>
+    ({
+      ...detail,
+      threads: [{ followerMemberIds: [], id: 'cht_1', rootMessageId: root.id, ...thread }],
+    }) as unknown as ChannelDetail;
+
+  it('shows the thread title, reply count and latest reply, and opens the thread', () => {
+    const onOpenThread = vi.fn();
+    render(
+      <ChannelMessage
+        message={{ ...root, content: 'Topic header is unclickable\nmore detail' }}
+        detail={withThread({
+          lastReply: {
+            author: { avatar: null, id: 'agt_1', name: 'Nasa', type: 'agent' },
+            content: 'PR is up\nsecond line',
+            createdAt: new Date(),
+            id: 'msg_2',
+          },
+          replyCount: 5,
+        })}
+        onOpenThread={onOpenThread}
+      />,
+    );
+
+    expect(screen.getByText('Topic header is unclickable')).toBeTruthy();
+    expect(screen.getByText('threadCard.messages')).toBeTruthy();
+    // The sidebar's thread glyph, not a branch, leads the title row only.
+    const card = screen.getByRole('button', { name: /Topic header is unclickable/ });
+    const [titleRow, replyRow] = card.children;
+    expect(titleRow.firstElementChild?.querySelector('.lucide-corner-down-right')).not.toBeNull();
+    expect(replyRow.querySelector('.lucide-corner-down-right')).toBeNull();
+    expect(card.querySelector('.lucide-git-branch')).toBeNull();
+    expect(screen.getByText('Nasa')).toBeTruthy();
+    expect(screen.getByText('PR is up')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Topic header is unclickable/ }));
+    expect(onOpenThread).toHaveBeenCalledWith('cht_1');
+  });
+
+  it('shows the viewer’s own latest reply with their live avatar', () => {
+    render(
+      <ChannelMessage
+        message={root}
+        detail={withThread({
+          lastReply: {
+            author: { avatar: null, id: 'user-self', name: 'Me', type: 'user' },
+            content: 'On it',
+            createdAt: new Date(),
+            id: 'msg_3',
+          },
+          replyCount: 1,
+        })}
+      />,
+    );
+
+    expect(screen.getByText('me')).toBeTruthy();
+  });
+
+  it('names the card after the title an Agent gave the thread', () => {
+    render(
+      <ChannelMessage
+        detail={withThread({ replyCount: 1, title: 'Header click fix' })}
+        message={{ ...root, content: 'Topic header is unclickable' }}
+      />,
+    );
+
+    expect(screen.getByText('Header click fix')).toBeTruthy();
+  });
+
+  it('still offers the thread when a cached view has no summary', () => {
+    render(<ChannelMessage detail={withThread({})} message={root} />);
+
+    expect(screen.getByText('thread')).toBeTruthy();
+    expect(screen.getByText('openThread')).toBeTruthy();
+    // A cached view without a reply row still shows the glyph in front of the title.
+    expect(
+      screen.getByRole('button', { name: /openThread/ }).querySelector('.lucide-corner-down-right'),
+    ).not.toBeNull();
+    expect(screen.queryByText('threadCard.messages')).toBeNull();
   });
 });

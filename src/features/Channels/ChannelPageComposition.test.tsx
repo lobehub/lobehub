@@ -44,7 +44,7 @@ vi.mock('@/store/channel', () => ({
   channelSelectors: { detail: () => () => undefined },
   useChannelStore: (selector: (state: Record<string, never>) => unknown) => selector({}),
 }));
-vi.mock('./useAcceptancePanel', () => ({ useAcceptancePanelOpen: () => false }));
+vi.mock('./usePortalPanel', () => ({ usePortalPanelOpen: () => false }));
 vi.mock('./useThreadPanel', () => ({
   useThreadPanel: () => ({
     close: () => {},
@@ -61,8 +61,8 @@ vi.mock('./MemberStatus', () => ({ MemberStatus: () => null }));
 vi.mock('./MemberPanel', () => ({ MEMBER_FLOAT_BREAKPOINT: 800, MemberPanel: () => null }));
 vi.mock('./AgentProfilePanel', () => ({ AgentProfilePanel: () => null }));
 vi.mock('./ReplyTopicPanel', () => ({ ReplyTopicPanel: () => null }));
-vi.mock('./AcceptancePanel', () => ({
-  AcceptancePanel: () => null,
+vi.mock('./PortalPanel', () => ({
+  PortalPanel: () => null,
   CHANNEL_ENTITY_PORTAL_SCOPE: 'test',
 }));
 vi.mock('./ThreadPageTitle', () => ({ ThreadPageActions: () => null, ThreadPageTitle: () => null }));

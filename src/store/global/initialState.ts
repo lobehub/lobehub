@@ -197,6 +197,9 @@ export interface ChannelListSort {
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
 
+/** How the projects page lays out projects: folder cards or compact rows. */
+export type ProjectListViewMode = 'folder' | 'list';
+
 export interface SystemStatus {
   /**
    * Agent Builder panel width
@@ -263,9 +266,9 @@ export interface SystemStatus {
    */
   dismissedBannerIds?: string[];
   /**
-   * Keys of goal asks (clarification rounds, gates, sign-offs) the user waved
-   * off the approval island. Only the island honours them — the same ask stays
-   * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
+   * @deprecated Island dismissals live on the server now (`addIslandDismissals`),
+   * shared by every client. Read once to upload what this client dismissed
+   * before, then ignored; see `islandDismissalsUploaded`.
    */
   dismissedIslandItemKeys?: string[];
   dismissedProjectOnboarding?: Record<string, boolean>;
@@ -320,6 +323,8 @@ export interface SystemStatus {
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
+  /** This client's legacy `dismissedIslandItemKeys` have been uploaded to the server. */
+  islandDismissalsUploaded?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
@@ -384,6 +389,8 @@ export interface SystemStatus {
    * order itself is shared and lives on `projects.sort_order`.
    */
   projectListSortBy?: ProjectListSortBy;
+  /** Layout of the projects page. Device-local view setting. */
+  projectListViewMode?: ProjectListViewMode;
   /**
    * Per byProject group (keyed by the group id, e.g. `project-id:<id>`): how its
    * topics are sectioned. Absent means `none`.

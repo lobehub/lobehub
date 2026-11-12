@@ -50,6 +50,11 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - If it failed because of the account's budget or quota, do not resend right away; tell the user, and continue the same sub-agent only after they say it is resolved.
 - A sub-agent can only take one instruction at a time; do not send it a new instruction while it is still running.
 
+**Cancelling or steering a running sub-agent:**
+- \`cancelSubAgent({ subAgentId })\` stops a sub-agent that is still running (typically a background one). Use it when its result is no longer needed (the user changed their mind, another result already answered it) or when it is clearly heading the wrong way. No result is delivered for a cancelled sub-agent.
+- To steer instead of abandoning it, cancel it and then call \`callSubAgent\` with the same \`subAgentId\` and a corrected instruction; it keeps everything it has done so far.
+- Do not cancel a sub-agent just because it is taking a while.
+
 **Use sub-agents when:**
 - **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
 - **The task involves multiple steps**: The request cannot be answered in one simple response - it requires searching, reading, analyzing, and summarizing.

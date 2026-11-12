@@ -1,6 +1,8 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import {
   type AgentShareVisitorContext,
+  type CancelVirtualSubAgentParams,
+  type CancelVirtualSubAgentResult,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
@@ -42,6 +44,13 @@ export interface RuntimeExecutorContext {
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
+  /**
+   * Callback to stop a running `lobe-agent.callSubAgent` child dispatched by
+   * this run's agent (`lobe-agent.cancelSubAgent`).
+   */
+  cancelVirtualSubAgent?: (
+    params: CancelVirtualSubAgentParams,
+  ) => Promise<CancelVirtualSubAgentResult>;
   /**
    * Callback to fork a group member ("call agent member") under a
    * `lobe-group-management` tool call. Injected by AiAgentService; powers the

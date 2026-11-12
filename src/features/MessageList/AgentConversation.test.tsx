@@ -49,7 +49,8 @@ vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   useAgentModal: () => ({ openCreateGroupModal: () => {} }),
 }));
 vi.mock('@/hooks/usePrefetchAgent', () => ({ usePrefetchAgent: () => () => {} }));
-vi.mock('@/store/chat', () => ({ useChatStore: () => false }));
+const chat = vi.hoisted(() => ({ running: false }));
+vi.mock('@/store/chat', () => ({ useChatStore: () => chat.running }));
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: { isAgentVisiblyRunning: () => () => false },
 }));
@@ -198,5 +199,18 @@ describe('AgentConversation reply activity', () => {
 
     expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-state', 'working');
     expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'true');
+  });
+
+  // The row said typing while the Channel was idle: the Agent was running in its other topics.
+  it('only animates the avatar while the Agent runs elsewhere', () => {
+    showReply({ status: 'completed' });
+    chat.running = true;
+    render(
+      createElement(AgentConversation, { active: true, conversation: conversation(undefined, {}) }),
+    );
+    chat.running = false;
+
+    expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-state', 'working');
+    expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'false');
   });
 });

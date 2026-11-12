@@ -3,26 +3,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 
-const { createChannelWorktree, executions, execAgent, getScopedOnlineDevices, notifyChannel } =
-  vi.hoisted(() => ({
-    createChannelWorktree: vi.fn(),
-    executions: {
-      accepted: vi.fn(),
-      assignWorktree: vi.fn(),
-      candidates: vi.fn(),
-      heartbeat: vi.fn(),
-      claim: vi.fn(),
-      finishDispatch: vi.fn(),
-      input: vi.fn(),
-      primaryReply: vi.fn(),
-      recentContext: vi.fn(),
-      worktreeCandidate: vi.fn(),
-      worktreeUnavailable: vi.fn(),
-    },
-    execAgent: vi.fn(),
-    getScopedOnlineDevices: vi.fn(),
-    notifyChannel: vi.fn(),
-  }));
+const {
+  createChannelWorktree,
+  executions,
+  execAgent,
+  getScopedOnlineDevices,
+  notifyChannel,
+  openChannelReply,
+} = vi.hoisted(() => ({
+  createChannelWorktree: vi.fn(),
+  executions: {
+    accepted: vi.fn(),
+    assignWorktree: vi.fn(),
+    candidates: vi.fn(),
+    heartbeat: vi.fn(),
+    claim: vi.fn(),
+    finishDispatch: vi.fn(),
+    input: vi.fn(),
+    openingReply: vi.fn(),
+    primaryReply: vi.fn(),
+    recentContext: vi.fn(),
+    worktreeCandidate: vi.fn(),
+    worktreeUnavailable: vi.fn(),
+  },
+  execAgent: vi.fn(),
+  getScopedOnlineDevices: vi.fn(),
+  notifyChannel: vi.fn(),
+  openChannelReply: vi.fn(),
+}));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
     constructor() {
@@ -47,6 +55,7 @@ vi.mock('./ChannelRoutingService', () => ({
 }));
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+vi.mock('./replyOpening', () => ({ openChannelReply }));
 vi.mock('./worktree', () => ({ createChannelWorktree }));
 
 const coordinator = (count = 3, recovering = false, members: unknown[] = []) => {
@@ -84,6 +93,7 @@ describe('Channel concurrent startup', () => {
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.primaryReply.mockResolvedValue(null);
+    executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     executions.claim.mockImplementation(async (_channelId, id: string) => ({
@@ -212,6 +222,26 @@ describe('Channel concurrent startup', () => {
     const [{ prompt }] = execAgent.mock.calls[0];
     expect(prompt).toContain('<channel_reply from="Coder" type="agent"');
     expect(prompt).toContain('Fixed in the tokenizer.');
+  });
+
+  it('opens the reply before claiming it, and continues from the acknowledgement', async () => {
+    const order: string[] = [];
+    openChannelReply.mockImplementation(async () => {
+      order.push('open');
+    });
+    const claim = executions.claim.getMockImplementation()!;
+    executions.claim.mockImplementation(async (...args: Parameters<typeof claim>) => {
+      order.push('claim');
+      return claim(...args);
+    });
+    executions.openingReply.mockResolvedValue('收到，我先翻一下昨天的报错日志。');
+    await coordinator(1).advance('channel');
+
+    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0');
+    expect(order).toEqual(['open', 'claim']);
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain('<channel_opening');
+    expect(prompt).toContain('收到，我先翻一下昨天的报错日志。');
   });
 
   describe('a job waiting on its directory', () => {

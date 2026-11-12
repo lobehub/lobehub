@@ -71,6 +71,34 @@ describe('the main agent a project creates', () => {
     ]);
   });
 
+  it('takes the ids the create form reserved, so its generated avatars match the preview', async () => {
+    const project = await createProject(repo, {
+      dedicatedAgentId: 'agt_reservedAgnt',
+      id: 'prj_reservedProj',
+      name: 'Reserved',
+    });
+
+    expect(project.id).toBe('prj_reservedProj');
+    expect(project.coordinatorAgentId).toBe('agt_reservedAgnt');
+    // The reserved agent id is not a column of the project.
+    expect(project).not.toHaveProperty('dedicatedAgentId');
+  });
+
+  it('ignores a reserved agent id when the project reuses an existing agent', async () => {
+    const existing = await new AgentModel(serverDB, userId).create({ title: 'Existing' });
+
+    const project = await createProject(repo, {
+      coordinatorAgentId: existing.id,
+      dedicatedAgentId: 'agt_unusedAgent',
+      name: 'Reuse',
+    });
+
+    expect(project.coordinatorAgentId).toBe(existing.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.id, 'agt_unusedAgent'))).toEqual(
+      [],
+    );
+  });
+
   it('shares one Project label across the projects of a scope', async () => {
     const first = await createProject(repo, { name: 'First' });
     const second = await createProject(repo, { name: 'Second' });

@@ -35,7 +35,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
-import { matchChannel } from './paths';
+import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
@@ -85,8 +85,8 @@ const styles = stylex.create({
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
   channel: { position: 'relative' },
-  // An unread Channel gets a pill on the row's leading edge and a bright, bold title, the way
-  // Discord marks it; an @mention adds a count badge. The accordion panel clips anything
+  // An unread Channel gets a pill on the row's leading edge and a title one step brighter, the
+  // way Discord marks it; an @mention adds a count badge. The accordion panel clips anything
   // outside the row, so the pill sits in the row's own inline padding.
   unreadPill: {
     pointerEvents: 'none',
@@ -99,7 +99,6 @@ const styles = stylex.create({
     borderEndEndRadius: 4,
     backgroundColor: cssVar.colorText,
   },
-  unreadTitle: { fontWeight: 600 },
   mentionBadge: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -173,6 +172,7 @@ const ChannelThreads = ({
               title={
                 threadTitle(
                   detail.messages.find((message) => message.id === thread.rootMessageId),
+                  thread,
                 ) || `${t('thread')} ${index + 1}`
               }
               onClick={() => navigate(path)}
@@ -200,7 +200,7 @@ interface ChannelSectionProps {
  */
 const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSectionProps) => {
   const { t } = useTranslation('channel');
-  const { pathname, search } = useActiveLocation();
+  const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
@@ -218,8 +218,7 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const create = () =>
     openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
   // Only a thread opened as the page is the current entry; one beside the Channel is not.
-  const query = new URLSearchParams(search);
-  const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
+  const activeThreadId = matchChannelThread(pathname) ?? null;
   const menuItems = useChannelMenu();
   const setSort = (channelListSort: ChannelListSort) => updateSystemStatus({ channelListSort });
   // Name sorts read as A–Z / Z–A; time sorts as newest / oldest first.
@@ -267,6 +266,7 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
           contextMenuItems={() => menuItems(channel)}
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
+          title={channel.title}
           titleColor={unread ? cssVar.colorText : undefined}
           actions={() => (
             <DropdownMenu items={menuItems(channel)}>
@@ -284,13 +284,6 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
                 {mentions > 99 ? '99+' : mentions}
               </span>
             ) : undefined
-          }
-          title={
-            unread ? (
-              <span {...stylex.props(styles.unreadTitle)}>{channel.title}</span>
-            ) : (
-              channel.title
-            )
           }
           onClick={() => navigate(path)}
           icon={Hash}

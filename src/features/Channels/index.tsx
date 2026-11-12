@@ -4,7 +4,7 @@ import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
@@ -14,19 +14,18 @@ import { channelActions, channelSelectors, useChannelStore } from '@/store/chann
 import { useChatStore } from '@/store/chat';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import { AcceptancePanel, CHANNEL_ENTITY_PORTAL_SCOPE } from './AcceptancePanel';
 import { AgentProfilePanel } from './AgentProfilePanel';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
 import { openTopic } from './openTopic';
-import { DirectReplyStatus } from './ReplyActivity';
+import { CHANNEL_ENTITY_PORTAL_SCOPE, PortalPanel } from './PortalPanel';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { ThreadPageActions, ThreadPageTitle } from './ThreadPageTitle';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
-import { useAcceptancePanelOpen } from './useAcceptancePanel';
+import { channelBrowserSessionId, usePortalPanelOpen } from './usePortalPanel';
 import { useThreadPanel } from './useThreadPanel';
 
 /** One Channel: the main conversation, with a thread beside it, or one thread as the page. */
@@ -46,28 +45,26 @@ function EnabledChannelPage() {
     ? detail.members.find((member) => member.agentId === detail.channel.agentId)
     : undefined;
   const [topic, setTopic] = useState<(ReplyTopic & { channelId: string }) | null>(null);
-  const acceptanceOpen = useAcceptancePanelOpen();
+  const portalOpen = usePortalPanelOpen();
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
-  // One side panel at a time. A report covers whatever was open and uncovers it when closed;
-  // explicitly opening another panel closes the report.
-  const threadId = acceptanceOpen ? null : panel.threadId;
-  const threadDraft = acceptanceOpen ? null : panel.draft;
+  const openBrowser = useChatStore((s) => s.openBrowser);
+  // One side panel at a time. A report or web page covers whatever was open and uncovers it
+  // when closed; explicitly opening another panel closes it.
+  const threadId = portalOpen ? null : panel.threadId;
+  const threadDraft = portalOpen ? null : panel.draft;
   const pageThreadId = panel.pageThreadId;
   // A direct conversation's side panel is its Agent's profile; a workspace group's is the roster.
   const hasMemberPanel =
     !!directAgent || (!!detail?.channel.workspaceId && !detail.channel.agentId);
   const membersOpen =
-    hasMemberPanel &&
-    membersChannelId === channelId &&
-    !threadId &&
-    !threadDraft &&
-    !acceptanceOpen;
+    hasMemberPanel && membersChannelId === channelId && !threadId && !threadDraft && !portalOpen;
   const visibleTopic = openTopic(topic, channelId, {
-    acceptance: acceptanceOpen,
+    portal: portalOpen,
     members: membersOpen,
     thread: !!(threadId || threadDraft || pageThreadId),
   });
   if (!channelId) return null;
+  if (panel.legacyPageUrl) return <Navigate replace to={panel.legacyPageUrl} />;
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>
@@ -85,7 +82,6 @@ function EnabledChannelPage() {
                 {detail?.channel.title || t('title')}
               </Text>
               {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
-              {directAgent && <DirectReplyStatus detail={detail!} />}
             </Flexbox>
           )
         }
@@ -117,7 +113,10 @@ function EnabledChannelPage() {
           )
         }
       />
-      <EntityLinkHostProvider portal={CHANNEL_ENTITY_PORTAL_SCOPE}>
+      <EntityLinkHostProvider
+        portal={CHANNEL_ENTITY_PORTAL_SCOPE}
+        onOpenSideBrowser={(url) => openBrowser(channelBrowserSessionId(channelId), url)}
+      >
         <Flexbox horizontal ref={conversationRef} {...stylex.props(styles.conversations)}>
           {/* The Channel stays mounted behind a thread page, so its composer keeps the draft. */}
           <ChannelConversation
@@ -125,7 +124,7 @@ function EnabledChannelPage() {
             hidden={!!pageThreadId}
             inert={
               !!pageThreadId ||
-              (!!(threadId || threadDraft || acceptanceOpen) &&
+              (!!(threadId || threadDraft || portalOpen) &&
                 (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
               (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
               (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
@@ -136,7 +135,7 @@ function EnabledChannelPage() {
               // A send that finishes behind an open report (toggle: false) must not close it.
               if (toggle !== false) clearPortalStack();
               // Under a report the thread only looks closed, so bring it back, don't toggle it off.
-              panel.openThread(nextThreadId, acceptanceOpen ? false : toggle);
+              panel.openThread(nextThreadId, portalOpen ? false : toggle);
             }}
             onOpenTopic={(next) => {
               panel.close();
@@ -155,7 +154,7 @@ function EnabledChannelPage() {
               channelId={channelId}
               inert={
                 (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-                (acceptanceOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+                (portalOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
               }
               key={`${channelId}:${pageThreadId}`}
               threadId={pageThreadId}
@@ -197,7 +196,7 @@ function EnabledChannelPage() {
               onSendDraft={panel.send}
             />
           )}
-          <AcceptancePanel availableWidth={conversationWidth} channelId={channelId} />
+          <PortalPanel availableWidth={conversationWidth} channelId={channelId} />
         </Flexbox>
       </EntityLinkHostProvider>
     </Flexbox>

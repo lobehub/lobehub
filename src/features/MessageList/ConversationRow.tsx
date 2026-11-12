@@ -30,6 +30,8 @@ export interface ConversationRowProps {
   ref?: Ref<HTMLElement>;
   /** Title only, no preview line — for directory lists like the contacts tab. */
   singleLine?: boolean;
+  /** A muted label after the title, e.g. the project a Channel belongs to. */
+  tag?: string;
   title: string;
   /** The Agent is replying: the preview line says "typing" like the conversation header. */
   typing?: boolean;
@@ -71,6 +73,7 @@ const ConversationRow = memo<ConversationRowProps>(
     preview,
     ref,
     singleLine,
+    tag,
     title,
     typing,
     unread,
@@ -102,7 +105,10 @@ const ConversationRow = memo<ConversationRowProps>(
           {...stylex.props(styles.rowText, singleLine && styles.rowTextSingleLine)}
         >
           <Flexbox horizontal align={'center'} gap={8}>
-            <span {...stylex.props(styles.title)}>{title}</span>
+            <span {...stylex.props(styles.title)}>
+              {title}
+              {tag && <span {...stylex.props(styles.tag)}>{tag}</span>}
+            </span>
             {activeAt && (
               <span {...stylex.props(styles.time)}>{formatConversationTime(activeAt)}</span>
             )}

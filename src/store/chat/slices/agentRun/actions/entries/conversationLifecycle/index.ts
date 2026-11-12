@@ -93,11 +93,12 @@ import {
   handOffQueuedMessage,
   reclaimServerQueuedMessages,
 } from '@/store/chat/slices/agentRun/actions/transports/gateway/serverSteerQueue';
+import { findUntrackedHeteroMarker } from '@/store/chat/slices/agentRun/actions/transports/gateway/untrackedHeteroRun';
 import {
   getNativeHeteroSessionBindingKey,
   resolveHeteroResume,
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
-import { isQueueBlockingOperation, snapshotQueuedFiles } from '@/store/chat/slices/operation/types';
+import { snapshotQueuedFiles } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { topicListFilterOf } from '@/store/chat/slices/topic/projection';
@@ -141,6 +142,7 @@ import { pageConversationNeedsGateway, preparePageConversation } from '../pageCo
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
 
@@ -658,42 +660,10 @@ export class ConversationLifecycleActionImpl {
           ].filter((key) => key !== currentContextKey)
         : []),
     ];
-    const findRunningBlockingOp = (key: string) => {
-      const contextOpIds = this.#get().operationsByContext[key] || [];
-      const hasQueuedMessages = (this.#get().queuedMessages[key]?.length ?? 0) > 0;
-      const ownVoiceUploadIndex = optimisticUserMessageId
-        ? contextOpIds.findIndex((id) => {
-            const operation = this.#get().operations[id];
-            return (
-              operation?.type === 'uploadVoiceMessage' &&
-              operation.context.messageId === optimisticUserMessageId
-            );
-          })
-        : -1;
-
-      return contextOpIds
-        .map((id, index) => ({ index, operation: this.#get().operations[id] }))
-        .find(
-          ({ index, operation }) =>
-            operation &&
-            // Shared predicate — an op the composer already treats as finished
-            // (aborting, or done with its visible output) must NOT swallow this
-            // send into the tray.
-            isQueueBlockingOperation(operation, { hasQueuedMessages }) &&
-            // The upload transaction calls this lifecycle after its own binary is ready. It must
-            // not queue behind itself (or a later voice upload); earlier voice uploads still block.
-            !(
-              optimisticUserMessageId &&
-              operation.type === 'uploadVoiceMessage' &&
-              (operation.context.messageId === optimisticUserMessageId ||
-                (ownVoiceUploadIndex >= 0 && index > ownVoiceUploadIndex))
-            ),
-        )?.operation;
-    };
     let queueTargetKey = currentContextKey;
     let runningQueueBlockingOp: ReturnType<typeof findRunningBlockingOp>;
     for (const key of queueCandidateKeys) {
-      runningQueueBlockingOp = findRunningBlockingOp(key);
+      runningQueueBlockingOp = findRunningBlockingOp(this.#get, key, optimisticUserMessageId);
       if (runningQueueBlockingOp) {
         queueTargetKey = key;
         break;
@@ -703,15 +673,16 @@ export class ConversationLifecycleActionImpl {
       !runningQueueBlockingOp &&
       !onlyAddUserMessage &&
       operationSelectors.isQueueDrainPending(operationContext)(this.#get());
+    const canQueue = (key: string) =>
+      !onlyAddUserMessage &&
+      canQueueOnServer(this.#get, key, {
+        context: operationContext,
+        isGatewayRun: runtimeType === 'gateway' && !directMentionRoute && !willCreateNewTopic,
+      });
     /** Queue this send behind what holds `key`; on the server when the run can join it there. */
     const queueThisSend = (key: string) => {
       const queuedId = nanoid();
-      const queueOnServer =
-        !onlyAddUserMessage &&
-        canQueueOnServer(this.#get, key, {
-          context: operationContext,
-          isGatewayRun: runtimeType === 'gateway' && !directMentionRoute && !willCreateNewTopic,
-        });
+      const queueOnServer = canQueue(key);
       this.#get().enqueueMessage(
         key,
         {
@@ -744,7 +715,11 @@ export class ConversationLifecycleActionImpl {
         );
       notifyMessageAccepted();
     };
-    if (runningQueueBlockingOp || queueDrainPending) return void queueThisSend(queueTargetKey);
+    // A live hetero run this tab lost track of takes the send as a steer, never a parallel run.
+    const untrackedHetero =
+      canQueue(currentContextKey) && !!findUntrackedHeteroMarker(this.#get, operationContext);
+    if (runningQueueBlockingOp || queueDrainPending || untrackedHetero)
+      return void queueThisSend(queueTargetKey);
 
     // Nothing runs: take server-queued follow-ups back; one still being delivered keeps its place.
     await Promise.all(queueCandidateKeys.map((key) => reclaimServerQueuedMessages(this.#get, key)));
@@ -855,6 +830,11 @@ export class ConversationLifecycleActionImpl {
     const steeredTurnStartTime = (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
       ? operationSelectors.getLatestAgentRuntimeTurnStartTime(operationContext)(this.#get())
       : undefined;
+    // Editor state for cancel restoration, on the op from its start: a Stop during
+    // the preflight awaits below must find it, or the draft is never handed back.
+    const jsonState = preserveComposer
+      ? undefined
+      : (inputEditorData ?? targetInputEditor?.getJSONState());
     const { operationId, abortController } = this.#get().startOperation({
       type: 'sendMessage',
       context: { ...operationContext, messageId: tempId },
@@ -862,6 +842,7 @@ export class ConversationLifecycleActionImpl {
       metadata: {
         // Mark this as thread operation if threadId exists
         inThread: !!operationContext.threadId,
+        inputEditorTempState: jsonState,
         ...(steeredTurnStartTime === undefined ? {} : { turnStartTime: steeredTurnStartTime }),
       },
     });
@@ -890,12 +871,12 @@ export class ConversationLifecycleActionImpl {
     const restoreComposerAfterFailedSend = (error: unknown) => {
       if (preserveComposer || hasNotifiedMessageAccepted) return;
 
-      // Cancellation is a deliberate user action with its own restore path
-      // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
-      // composer here would fight it.
+      // A Stop (an AbortError, or the signal's own reason a transport rethrows) has its
+      // own restore path (the cancel flow replays `inputEditorTempState`); don't fight it.
       const isAbort =
-        error instanceof Error &&
-        (error.message.includes('aborted') || error.name === 'AbortError');
+        (abortController.signal.aborted && error === abortController.signal.reason) ||
+        (error instanceof Error &&
+          (error.message.includes('aborted') || error.name === 'AbortError'));
       if (isAbort) return;
 
       this.#get().updateOperationMetadata(operationId, {
@@ -1392,15 +1373,6 @@ export class ConversationLifecycleActionImpl {
       optimisticTopicActive = true;
     }
 
-    // Store editor state in operation metadata for cancel restoration
-    const jsonState = preserveComposer
-      ? undefined
-      : (inputEditorData ?? targetInputEditor?.getJSONState());
-    this.#get().updateOperationMetadata(operationId, {
-      inputEditorTempState: jsonState,
-      inputSendErrorMsg: undefined,
-    });
-
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
     if (runtimeType === 'hetero' && heterogeneousProvider) {
@@ -1747,11 +1719,10 @@ export class ConversationLifecycleActionImpl {
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
-        // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
-        // completes it the instant phase-1 init finishes (after the child
-        // `execServerAgentRuntime` op starts). Without this hand-off the
-        // input loading state would drop during the execAgentTask round-trip
-        // and the send button would flicker back to "send".
+        // Pass `sendMessage` as `parentOperationId`: executeGatewayAgent completes it once
+        // phase-1 init finishes, so the send button doesn't flicker back during the
+        // round-trip. Once the request is out the server persists the turn, so a Stop
+        // keeps it in the chat instead of handing the text back to the composer.
         const result = await this.#get().executeGatewayAgent({
           // Ids and branch tail the optimistic rows render under; the server honours
           // them like sendMessageInServer, so the turn stays on the visible branch.
@@ -1778,6 +1749,8 @@ export class ConversationLifecycleActionImpl {
             ? { ...requestMetadata, steer: true }
             : requestMetadata,
           onMessageAccepted: notifyMessageAccepted,
+          onStartRequestSent: () =>
+            this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null }),
           onTopicCreated: context.isolatedTopic ? onTopicCreated : undefined,
           parentOperationId: operationId,
           clientOperations,
@@ -1867,11 +1840,10 @@ export class ConversationLifecycleActionImpl {
           userMessageId: result.userMessageId,
         };
       } catch (e) {
-        // User cancelled during phase-1 init — `cancelOperation` already set
-        // the op to 'cancelled' and `executeGatewayAgent` cleaned up the
-        // server task. Don't clobber that with 'failed'.
+        // A Stop keeps 'cancelled'; a refused turn gets its text back unless typed over.
         const op = this.#get().operations[operationId];
         if (op?.status === 'cancelled') {
+          if (!targetInputEditor?.getMarkdownContent?.().trim()) restoreComposerAfterFailedSend(e);
           cleanupTempMessages({
             preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
           });

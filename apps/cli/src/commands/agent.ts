@@ -9,6 +9,7 @@ import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerAgentAccountCommand, registerAgentInboxCommand } from './agent/account';
+import { registerAgentMoveCommands } from './agent/move';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
@@ -446,6 +447,10 @@ export function registerAgentCommand(program: Command) {
       await client.agent.updateAgentPinned.mutate({ id: agentId, pinned: false });
       console.log(`${pc.green('✓')} Unpinned agent ${pc.bold(agentId)}`);
     });
+
+  // ── transfer / move-group ───────────────────────────
+
+  registerAgentMoveCommands(agent);
 
   // ── kb-files ───────────────────────────────────────
 

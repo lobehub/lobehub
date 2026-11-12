@@ -26,6 +26,8 @@ const styles = stylex.create({
 
 interface MainAgentSectionProps {
   agentId?: string;
+  /** Id reserved for the dedicated agent: seeds the character it keeps after creation. */
+  dedicatedAgentId: string;
   disabled?: boolean;
   mode: MainAgentMode;
   onAgentChange: (agentId: string) => void;
@@ -41,7 +43,16 @@ interface MainAgentSectionProps {
  * created, so its row previews the agent the server will create.
  */
 const MainAgentSection = memo<MainAgentSectionProps>(
-  ({ agentId, disabled, mode, onAgentChange, onModeChange, projectAvatar, projectName }) => {
+  ({
+    agentId,
+    dedicatedAgentId,
+    disabled,
+    mode,
+    onAgentChange,
+    onModeChange,
+    projectAvatar,
+    projectName,
+  }) => {
     const { t } = useTranslation('project');
     const name = projectName.trim();
     const dedicatedTitle = name ? createProjectCoordinatorAgentConfig({ name }).title : undefined;
@@ -63,8 +74,10 @@ const MainAgentSection = memo<MainAgentSectionProps>(
         />
         {mode === 'dedicated' ? (
           <div {...stylex.props(styles.preview)}>
-            {/* Without a project avatar the agent draws a generated character. */}
+            {/* Without a project avatar the agent draws the generated character
+                its reserved id seeds, the one it keeps after creation. */}
             <AgentAvatar
+              agentId={dedicatedAgentId}
               avatar={projectAvatar}
               name={dedicatedTitle}
               size={22}

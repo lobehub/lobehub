@@ -1,6 +1,8 @@
 import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import { isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import type {
+  CancelVirtualSubAgentParams,
+  CancelVirtualSubAgentResult,
   ExecAgentResult,
   ExecSubAgentParams,
   ExecSubAgentResult,
@@ -127,11 +129,11 @@ type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
  * accumulated so far); the claim and every later write of this run carry it
  * forward instead of resetting it.
  */
-const claimSubAgentThread = async (
-  deps: SubAgentRunDeps,
-  params: { agentId: string; startedAt: string; threadId: string; topicId: string },
-): Promise<{ error: string } | { thread: ThreadRow; carryOver: ThreadCarryOver }> => {
-  const { agentId, startedAt, threadId, topicId } = params;
+const findCallSubAgentThread = async (
+  deps: Pick<SubAgentRunDeps, 'messageModel' | 'threadModel'>,
+  params: { agentId: string; threadId: string; topicId: string },
+): Promise<{ error: string } | { thread: ThreadRow }> => {
+  const { agentId, threadId, topicId } = params;
   const thread = await deps.threadModel.findById(threadId);
 
   if (
@@ -152,19 +154,64 @@ const claimSubAgentThread = async (
     return { error: `"${threadId}" is not a sub-agent started by callSubAgent.` };
   }
 
+  return { thread };
+};
+
+/**
+ * The thread's latest run and whether it is still going. The operation, not
+ * the thread row's own `status`, is authoritative: the inactivity watchdog
+ * abandons a stuck operation without touching its thread.
+ */
+const readSubAgentThreadRun = async (
+  deps: Pick<SubAgentRunDeps, 'agentOperationModel'>,
+  thread: ThreadRow,
+): Promise<{ operationId?: string; running: boolean }> => {
+  const operationId = (thread.metadata as ThreadMetadata | null)?.operationId;
+  const operation = operationId ? await deps.agentOperationModel.findById(operationId) : null;
+
+  return {
+    operationId,
+    running: operation
+      ? isAgentOperationInFlight(operation.status)
+      : thread.status === ThreadStatus.Processing,
+  };
+};
+
+/** Best-effort: a failed probe only loses the more precise busy message. */
+const isStopping = async (deps: SubAgentRunDeps, operationId: string): Promise<boolean> => {
+  try {
+    return await deps.agentRuntimeService.isOperationInterrupted(operationId);
+  } catch {
+    return false;
+  }
+};
+
+const claimSubAgentThread = async (
+  deps: SubAgentRunDeps,
+  params: { agentId: string; startedAt: string; threadId: string; topicId: string },
+): Promise<{ error: string } | { thread: ThreadRow; carryOver: ThreadCarryOver }> => {
+  const { agentId, startedAt, threadId, topicId } = params;
+  const found = await findCallSubAgentThread(deps, { agentId, threadId, topicId });
+  if ('error' in found) return found;
+
+  const { thread } = found;
   const previousMetadata = thread.metadata as ThreadMetadata | null;
-  const previousOperationId = previousMetadata?.operationId;
-  const previousOperation = previousOperationId
-    ? await deps.agentOperationModel.findById(previousOperationId)
-    : null;
-  // The operation, not the thread row's own `status`, is authoritative: the
-  // inactivity watchdog abandons a stuck operation without touching its thread.
-  const stillRunning = previousOperation
-    ? isAgentOperationInFlight(previousOperation.status)
-    : thread.status === ThreadStatus.Processing;
+  const { operationId: previousOperationId, running: stillRunning } = await readSubAgentThreadRun(
+    deps,
+    thread,
+  );
   const busyError = `Sub-agent "${threadId}" is still running. Wait for its result before sending it another instruction.`;
 
-  if (stillRunning) return { error: busyError };
+  if (stillRunning) {
+    // A cancelled run only stops at its next step boundary, so a follow-up sent
+    // right after cancelSubAgent can still find it live.
+    if (previousOperationId && (await isStopping(deps, previousOperationId))) {
+      return {
+        error: `Sub-agent "${threadId}" was cancelled and is still finishing its current step. Send this instruction again in a moment; its history is kept.`,
+      };
+    }
+    return { error: busyError };
+  }
 
   const carryOver = pickThreadCarryOver(previousMetadata);
   const claimed = await deps.threadModel.claimForRun(
@@ -174,6 +221,151 @@ const claimSubAgentThread = async (
   );
 
   return claimed ? { thread, carryOver } : { error: busyError };
+};
+
+export interface CancelSubAgentRunDeps extends Pick<
+  SubAgentRunDeps,
+  'agentOperationModel' | 'messageModel' | 'threadModel'
+> {
+  /** The facade's `interruptTask` — the same stop a user's Stop button runs. */
+  interruptTask: (params: {
+    operationId?: string;
+    threadId?: string;
+    topicId?: string;
+  }) => Promise<{ success: boolean }>;
+  /** Whether the run carries the interrupt mark (set only by a stop that caught it live). */
+  isOperationInterrupted: (operationId: string) => Promise<boolean>;
+  /** How long to wait for the stopped run to reach a terminal status; tests pass 0. */
+  stopWaitMs?: number;
+}
+
+const STOP_WAIT_MS = 10_000;
+const STOP_POLL_MS = 500;
+
+/** Poll the run's durable status until it is no longer in flight, up to `timeoutMs`. */
+const waitForRunToStop = async (
+  deps: Pick<CancelSubAgentRunDeps, 'agentOperationModel'>,
+  operationId: string,
+  timeoutMs: number,
+): Promise<boolean> => {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const operation = await deps.agentOperationModel.findById(operationId).catch(() => null);
+    if (operation && !isAgentOperationInFlight(operation.status)) return true;
+    if (Date.now() + STOP_POLL_MS > deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, STOP_POLL_MS));
+  }
+};
+
+/**
+ * Stop a running `callSubAgent` child on behalf of the agent that dispatched it
+ * (`lobe-agent.cancelSubAgent`). Only the dispatcher's own sub-agents in the
+ * same topic can be cancelled.
+ *
+ * The run is interrupted like a user Stop: it ends at its next step boundary
+ * and its thread turns `cancel`. Its history stays on the thread, so the parent
+ * can steer it afterwards with `callSubAgent({ subAgentId })`.
+ *
+ * A background run's answer is normally delivered to the parent as a new turn.
+ * The parent asked for this stop and already holds the result of this call, so
+ * the run's placeholder is marked delivered first — otherwise the stop would
+ * wake the parent with a "did not complete (interrupted)" message. When the
+ * run turns out to have finished before the stop landed, the mark is taken
+ * back so its real answer is still delivered.
+ */
+export const cancelSubAgentThreadRun = async (
+  deps: CancelSubAgentRunDeps,
+  params: CancelVirtualSubAgentParams,
+): Promise<CancelVirtualSubAgentResult> => {
+  const { agentId, threadId, topicId } = params;
+
+  const found = await findCallSubAgentThread(deps, { agentId, threadId, topicId });
+  if ('error' in found) return { error: found.error, status: 'failed', threadId };
+
+  const { operationId, running } = await readSubAgentThreadRun(deps, found.thread);
+  if (!running || !operationId) return { operationId, status: 'not_running', threadId };
+
+  const backgroundCalls = (
+    await deps.messageModel.listBackgroundSubAgentCalls({ scope: 'running', topicId })
+  ).filter((call) => call.state.threadId === threadId);
+  const suppressed = await deps.messageModel.claimBackgroundSubAgentDelivery(
+    backgroundCalls.map((call) => call.id),
+    new Date().toISOString(),
+    { suppressedByCancel: true },
+  );
+  // Only hands back this cancel's own claims: the run's completion releases
+  // them too when it still records an answer (see `completeSubAgentBridge`).
+  const restoreDelivery = (ids: string[]) =>
+    deps.messageModel
+      .releaseCancelSuppressedDelivery(ids)
+      .catch((error) => log('cancelSubAgent: failed to restore delivery of %O: %O', ids, error));
+
+  let interrupted: { success: boolean };
+  try {
+    interrupted = await deps.interruptTask({ operationId, threadId, topicId });
+  } catch (error) {
+    await restoreDelivery(suppressed);
+    log('cancelSubAgent: interrupting %s failed: %O', operationId, error);
+    return { error: String(error), operationId, status: 'failed', threadId };
+  }
+
+  if (!interrupted.success) {
+    await restoreDelivery(suppressed);
+    return {
+      error: 'The sub-agent could not be confirmed as stopped.',
+      operationId,
+      status: 'failed',
+      threadId,
+    };
+  }
+
+  // The run may have ended on its own between the liveness read and the stop:
+  // `interruptOperation` then acknowledges the terminal state without setting
+  // the interrupt sentinel, and its completion records a real answer that must
+  // still reach the parent.
+  const stoppedByUs = await deps.isOperationInterrupted(operationId).catch((error) => {
+    log('cancelSubAgent: reading the interrupt mark of %s failed: %O', operationId, error);
+    return false;
+  });
+  if (!stoppedByUs) {
+    await restoreDelivery(suppressed);
+    return { operationId, status: 'not_running', threadId };
+  }
+  const findFinished = async (): Promise<string[]> => {
+    const finished: string[] = [];
+    for (const id of suppressed) {
+      const plugin = await deps.messageModel.findMessagePlugin(id).catch((error) => {
+        log('cancelSubAgent: reading placeholder %s failed: %O', id, error);
+        return undefined;
+      });
+      if ((plugin?.state as { status?: string } | undefined)?.status === 'completed') {
+        finished.push(id);
+      }
+    }
+    return finished;
+  };
+  const finishedBeforeStop = await findFinished();
+  if (finishedBeforeStop.length > 0) {
+    await restoreDelivery(finishedBeforeStop);
+    return { operationId, status: 'not_running', threadId };
+  }
+
+  // The run only ends at its next step boundary. Waiting for it lets the parent
+  // steer the sub-agent right away: a follow-up is refused while it still runs,
+  // and nothing would tell the parent when it finally stopped.
+  const stopped = await waitForRunToStop(deps, operationId, deps.stopWaitMs ?? STOP_WAIT_MS);
+
+  // The interrupt mark can land after the run's last check but before it saves
+  // its end state, so the run may still finish with an answer. Its completion
+  // hands the claim back; this only reports it when that already happened.
+  const finishedDuringStop = await findFinished();
+  if (finishedDuringStop.length > 0) {
+    await restoreDelivery(finishedDuringStop);
+    return { operationId, status: 'not_running', threadId };
+  }
+
+  log('cancelSubAgent: cancelled %s on thread %s (stopped=%s)', operationId, threadId, stopped);
+  return { operationId, status: 'cancelled', stopped, threadId };
 };
 
 /**

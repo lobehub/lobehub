@@ -2,6 +2,7 @@ import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentTy
 import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
+import type { ExternalWorkSummaryItem } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -339,6 +340,16 @@ export interface ChannelInputManifest {
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
 
+/** A member pictured in a Channel's list avatar. */
+export interface ChannelAvatarMember {
+  actorType: ChannelMemberActorType;
+  avatar: string | null;
+  backgroundColor: string | null;
+  /** The Agent id or user id; seeds a generated avatar when there is no image. */
+  id: string;
+  name: string | null;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -349,6 +360,11 @@ export interface ChannelListItem {
   id: string;
   /** The newest main-channel message, cut for a preview; set by the Channel list. */
   lastMessage?: { content: string; createdAt: Date } | null;
+  /**
+   * The first members besides the caller, oldest first, for a group Channel's list avatar;
+   * set by the Channel list.
+   */
+  memberAvatars?: ChannelAvatarMember[];
   /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
   mentionCount?: number;
   /** The project the channel is grouped under; null for a standalone channel. */
@@ -411,6 +427,11 @@ export interface ChannelPublicMessage {
   sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
+  /**
+   * External Works a reply's run touched: the conversation's work summaries, for every member,
+   * without the ids that link them to the requester's Work, topic and run. Empty on requests.
+   */
+  works?: ExternalWorkSummaryItem[];
 }
 
 export interface ChannelPublicJob {
@@ -439,9 +460,18 @@ export type ChannelReplyJob = Pick<
 export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
+  /**
+   * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
+   * thread views and in views cached before summaries existed.
+   */
+  lastReply?: Pick<ChannelPublicMessage, 'author' | 'content' | 'createdAt' | 'id'> | null;
+  /** Replies in the thread, under the same conditions as `lastReply`. */
+  replyCount?: number;
   rootMessageId: string;
   rootSequence: number;
   status: ChannelThreadStatus;
+  /** Name an Agent gave the Thread when it moved its reply there; otherwise the root names it. */
+  title?: string;
 }
 
 export interface ChannelDetail {

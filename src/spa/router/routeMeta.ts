@@ -23,7 +23,7 @@ export interface DynamicRouteMeta {
    */
   avatarKind?: RouteAvatarKind;
   /**
-   * Name a generated avatar is seeded from, for an entity that draws one when it
+   * Id a generated avatar is seeded from, for an entity that draws one when it
    * has no image of its own (a project). Unset keeps the initials fallback.
    */
   avatarSeed?: string;
