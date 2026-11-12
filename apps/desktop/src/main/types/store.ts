@@ -16,6 +16,11 @@ export interface ElectronMainStore {
   };
   dataSyncConfig: DataSyncConfig;
   /**
+   * Settings → About → Debug logs: packaged builds also write `debug` records to
+   * `<userData>/logs/*.jsonl`. Dev builds always do.
+   */
+  debugLoggingEnabled: boolean;
+  /**
    * Explicit completion state for the multi-step desktop onboarding flow.
    * Undefined preserves the legacy behavior for users who completed onboarding
    * before this marker existed.

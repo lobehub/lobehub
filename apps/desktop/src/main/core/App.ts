@@ -33,6 +33,7 @@ import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
 import * as electronIs from '@/utils/platform';
 import { refreshShellPath } from '@/utils/shellPath';
+import { applyDebugLogging } from '@/utils/structuredLog';
 
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
@@ -128,6 +129,7 @@ export class App {
     logger.debug('Initializing App');
     // Initialize store manager
     this.storeManager = new StoreManager(this);
+    applyDebugLogging(this.storeManager.get('debugLoggingEnabled', false));
 
     this.rendererUrlManager = new RendererUrlManager();
     // Wire the backend reverse-proxy as an `app://` interceptor: keeps
