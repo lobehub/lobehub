@@ -10,13 +10,15 @@ import ChannelPage from './index';
 const upload = vi.hoisted(() => vi.fn());
 /** The thread panel's page state is the only thing this test drives. */
 const panel = vi.hoisted(() => ({ pageThreadId: null as string | null }));
+/** Each case gets its own Channel: the attachment drafts live in module state, keyed by it. */
+const channel = vi.hoisted(() => ({ id: 'ch-1' }));
 /** The mounted Channel composer's attachments, so the test can attach a file to it. */
 const composer = vi.hoisted(() => ({
   current: null as null | { items: { file: { name: string } }[]; upload: (files: File[]) => Promise<void> },
 }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('react-router', () => ({ useParams: () => ({ channelId: 'ch-1' }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ channelId: channel.id }) }));
 vi.mock('ahooks', () => ({ useSize: () => ({ width: 1200 }) }));
 vi.mock('@/components/404', () => ({ default: () => null }));
 vi.mock('@/components/Skeleton/RouteSegment', () => ({ RouteLoading: () => null }));
@@ -116,8 +118,13 @@ const attachNotes = async (name = 'notes.txt') => {
 const channelFiles = () =>
   within(screen.getByTestId('conversation-main')).getAllByTestId('attached-file');
 
+let cases = 0;
+
 describe('Channel page composition', () => {
   beforeEach(() => {
+    cases += 1;
+    // Drafts are module state keyed by Channel; a fresh key keeps one case's files out of the next.
+    channel.id = `ch-${cases}`;
     panel.pageThreadId = null;
     composer.current = null;
     upload.mockReset();
