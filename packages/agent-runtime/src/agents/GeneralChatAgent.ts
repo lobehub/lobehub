@@ -34,7 +34,7 @@ import {
 } from '../utils/emptyArgumentsCalls';
 import { selectEffectiveToolManifestMap, selectRunTools } from '../utils/operationToolSet';
 import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
-import { shouldCompress } from '../utils/tokenCounter';
+import { isUsableCompressionRatio, shouldCompress } from '../utils/tokenCounter';
 import {
   findCurrentTurnPendingToolMessages,
   isFoldedAssistantGroup,
@@ -505,9 +505,11 @@ export class GeneralChatAgent implements Agent {
    * context to grow to a higher watermark before compressing it again.
    */
   private getCompressionThresholdRatio(messages: any[]): number | undefined {
+    const modelRatio = this.config.compressionConfig?.modelThresholdRatio;
+    // An out-of-range model ratio counts as unset, as it does in getCompressionThreshold.
     const initialRatio =
       this.config.compressionConfig?.thresholdRatio ??
-      this.config.compressionConfig?.modelThresholdRatio;
+      (isUsableCompressionRatio(modelRatio) ? modelRatio : undefined);
     if (!this.findExistingSummary(messages)) return initialRatio;
 
     const configuredRecompressionRatio = this.config.compressionConfig?.recompressionThresholdRatio;
