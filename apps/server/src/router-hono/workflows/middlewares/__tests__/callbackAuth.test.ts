@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { verifyQStashSignature } from '@/libs/qstash';
+import { OtelQstashClient, verifyQStashSignature } from '@/libs/qstash';
 import { signInternalCallback } from '@/libs/qstash/internalSignature';
 import { deliverWebhook } from '@/server/services/agentRuntime/hooks/httpWebhook';
 
@@ -75,6 +75,28 @@ describe('callback authentication across HTTP delivery and Hono', () => {
     },
   );
 
+  it('signs the direct fallback with the internal signature when QStash is configured', async () => {
+    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'current-test-key');
+    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', 'next-test-key');
+    vi.stubEnv('QSTASH_TOKEN', 'test-token');
+    const publish = vi
+      .spyOn(OtelQstashClient.prototype, 'publishJSON')
+      .mockRejectedValue(new Error('qstash unavailable'));
+    const app = makeApp();
+    let received: Response | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (target: string, init: RequestInit) => {
+        expect(new Headers(init.headers).get('x-lobe-callback-signature')).toBeTruthy();
+        received = await app.request(target, init);
+        return new Response(null, { status: received.status });
+      }),
+    );
+    await deliverWebhook({ delivery: 'qstash', url }, JSON.parse(body));
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(received?.status).toBe(200);
+  });
+
   it('does not authenticate callbacks sent to a different origin', async () => {
     vi.stubGlobal(
       'fetch',
@@ -135,6 +157,37 @@ describe('callback authentication across HTTP delivery and Hono', () => {
       });
       expect(await verifyQStashSignature(request, body)).toBe(true);
       expect(await verifyQStashSignature(request, '{}')).toBe(false);
+    },
+  );
+
+  it('accepts a valid internal signature alongside configured QStash keys', async () => {
+    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'current-test-key');
+    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', 'next-test-key');
+    const headers = signInternalCallback(url, body);
+    expect(headers['x-lobe-callback-signature']).toBeTruthy();
+    expect(
+      await verifyQStashSignature(new Request(url, { body, headers, method: 'POST' }), body),
+    ).toBe(true);
+  });
+
+  it.each(['body', 'forged', 'expired'])(
+    'rejects an internal signature with %s changed when QStash is configured',
+    async (change) => {
+      vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'current-test-key');
+      vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', 'next-test-key');
+      const headers = signInternalCallback(url, body);
+      let content = body;
+      if (change === 'body') content = '{}';
+      if (change === 'forged') {
+        headers['x-lobe-callback-signature'] = `${Date.now()}.${'0'.repeat(64)}`;
+      }
+      if (change === 'expired') vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 301_000);
+      expect(
+        await verifyQStashSignature(
+          new Request(url, { body: content, headers, method: 'POST' }),
+          content,
+        ),
+      ).toBe(false);
     },
   );
 

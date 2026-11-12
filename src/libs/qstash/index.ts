@@ -158,6 +158,8 @@ export const workflowClient = new OtelWorkflowClient({
 /**
  * Verify QStash signature using Receiver.
  * Without QStash keys, only development, Electron or signed internal callbacks are allowed.
+ * With complete QStash keys, either a valid QStash signature or a valid internal callback
+ * signature is accepted, so the direct HTTP fallback after a publish failure still works.
  */
 export async function verifyQStashSignature(request: Request, rawBody: string): Promise<boolean> {
   const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
@@ -171,17 +173,19 @@ export async function verifyQStashSignature(request: Request, rawBody: string): 
   }
 
   const signature = request.headers.get('Upstash-Signature');
-  if (!signature) {
+  if (signature) {
+    const receiver = new Receiver({ currentSigningKey, nextSigningKey });
+
+    try {
+      if (await receiver.verify({ body: rawBody, signature })) return true;
+    } catch (error) {
+      log('QStash signature verification failed: %O', error);
+    }
+  } else {
     log('Missing Upstash-Signature header');
-    return false;
   }
 
-  const receiver = new Receiver({ currentSigningKey, nextSigningKey });
-
-  try {
-    return await receiver.verify({ body: rawBody, signature });
-  } catch (error) {
-    log('QStash signature verification failed: %O', error);
-    return false;
-  }
+  // QStash publish failures fall back to a direct HTTP callback, which is signed
+  // with the internal scheme. Either authentication method is sufficient.
+  return verifyInternalCallback(request, rawBody);
 }

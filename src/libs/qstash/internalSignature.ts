@@ -18,11 +18,13 @@ function signatureFor(
     .digest('hex');
 }
 
-/** Sign only same-origin callbacks when QStash authentication is not configured. */
+/**
+ * Sign same-origin callbacks with the internal scheme. This also authenticates the
+ * direct HTTP fallback used when publishing a callback to QStash fails.
+ */
 export function signInternalCallback(url: string, body: string): Record<string, string> {
   const secret = process.env.KEY_VAULTS_SECRET;
-  if (!secret || process.env.QSTASH_CURRENT_SIGNING_KEY || process.env.QSTASH_NEXT_SIGNING_KEY)
-    return {};
+  if (!secret) return {};
 
   const origin = new URL(url).origin;
   const isApplicationOrigin = [process.env.INTERNAL_APP_URL, process.env.APP_URL].some((base) => {
