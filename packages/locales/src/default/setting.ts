@@ -4896,6 +4896,9 @@ When I am ___, I need ___
   'drive.cleanup.deleteFailed': 'Couldn’t delete the selected items. Try again.',
   'drive.cleanup.freed': 'Deleted. {{size}} freed.',
   'drive.cleanup.someFailed': '{{count}} items couldn’t be deleted. The rest were deleted.',
+  'drive.cleanup.scopeChanged':
+    'The workspace changed, so nothing was deleted. Choose again in this workspace.',
+  'drive.cleanup.incomplete': 'Scan stopped · {{size}} counted, figures are incomplete',
   'drive.cleanup.partial': '{{count}} items are still being deleted. Delete them again to finish.',
   'drive.cleanup.overQuota': 'This drive is {{size}} over its quota',
   'drive.cleanup.overQuotaHint':

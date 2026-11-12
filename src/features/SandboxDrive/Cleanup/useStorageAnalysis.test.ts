@@ -85,7 +85,7 @@ describe('useStorageAnalysis', () => {
     service.analyzeStorage.mockResolvedValue(done);
     service.deleteFiles
       .mockResolvedValueOnce({
-        deleted: [],
+        deleted: ['app/node_modules'],
         done: false,
         freedBytes: 100,
         missing: [],
@@ -214,5 +214,40 @@ describe('useStorageAnalysis large selections', () => {
     ]);
     expect(outcome).toEqual({ failed: [], freedBytes: 230, pending: [] });
     expect(result.current.analysis?.result?.items).toEqual([]);
+  });
+});
+
+describe('useStorageAnalysis partial failure', () => {
+  it('should reconcile what earlier batches deleted when a later batch fails', async () => {
+    const many = Array.from({ length: 150 }, (_, index) => ({
+      bytes: 1,
+      category: 'other' as const,
+      isDirectory: false,
+      path: `f/${index}.bin`,
+      regenerable: false,
+    }));
+    service.analyzeStorage.mockResolvedValue({
+      ...done,
+      result: { ...done.result, items: many, totalBytes: 150 },
+    });
+    service.deleteFiles
+      .mockImplementationOnce(async ({ paths }: { paths: string[] }) => ({
+        deleted: paths,
+        done: true,
+        failed: [],
+        freedBytes: paths.length,
+        missing: [],
+        pending: [],
+      }))
+      .mockRejectedValueOnce(new Error('BAD_GATEWAY'));
+    const { result } = renderHook(() => useStorageAnalysis('personal'));
+    await waitFor(() => expect(result.current.scanning).toBe(false));
+
+    await act(async () => {
+      await expect(result.current.remove(many)).rejects.toThrow('BAD_GATEWAY');
+    });
+
+    expect(result.current.analysis?.result?.items).toHaveLength(50);
+    expect(refreshDrive).toHaveBeenCalled();
   });
 });

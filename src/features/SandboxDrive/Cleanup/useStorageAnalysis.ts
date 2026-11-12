@@ -100,30 +100,36 @@ export const useStorageAnalysis = (drive: SandboxDrive) => {
       let pending = [...new Set(items.map((item) => item.path))];
       let freedBytes = 0;
       const failed: string[] = [];
+      // Gone from the drive: deleted now, or already missing.
+      const gone = new Set<string>();
       const rounds = MAX_DELETE_ROUNDS + Math.ceil(pending.length / DELETE_BATCH_SIZE);
-      for (let round = 0; round < rounds && pending.length > 0; round++) {
-        const batch = pending.slice(0, DELETE_BATCH_SIZE);
-        const result = await sandboxStorageService.deleteFiles({
-          drive,
-          paths: batch,
-          regenerableOnly: options.regenerableOnly,
-        });
-        freedBytes += result.freedBytes;
-        failed.push(...(result.failed ?? []).map((entry) => entry.path));
-        pending = [...(result.done ? [] : result.pending), ...pending.slice(batch.length)];
+      try {
+        for (let round = 0; round < rounds && pending.length > 0; round++) {
+          const batch = pending.slice(0, DELETE_BATCH_SIZE);
+          const result = await sandboxStorageService.deleteFiles({
+            drive,
+            paths: batch,
+            regenerableOnly: options.regenerableOnly,
+          });
+          freedBytes += result.freedBytes;
+          failed.push(...(result.failed ?? []).map((entry) => entry.path));
+          for (const path of [...result.deleted, ...result.missing]) gone.add(path);
+          pending = [...(result.done ? [] : result.pending), ...pending.slice(batch.length)];
+        }
+      } finally {
+        // Also when a later batch failed: what earlier ones removed is gone
+        // for good, and the figures and the meter must say so.
+        const removed = items.filter((item) => gone.has(item.path));
+        setAnalysis((current) =>
+          current?.result
+            ? {
+                ...current,
+                result: withoutDeleted(current.result as StorageAnalysisResult, removed),
+              }
+            : current,
+        );
+        await refreshDrive();
       }
-
-      const removed = items.filter(
-        (item) => !pending.includes(item.path) && !failed.includes(item.path),
-      );
-      setAnalysis((current) =>
-        current?.result
-          ? { ...current, result: withoutDeleted(current.result as StorageAnalysisResult, removed) }
-          : current,
-      );
-      // The usage figure was invalidated by the delete; the meter and any
-      // listing reload to show the space coming back.
-      await refreshDrive();
 
       return { failed, freedBytes, pending } satisfies DeleteOutcome;
     },

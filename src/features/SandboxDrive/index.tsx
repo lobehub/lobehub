@@ -86,12 +86,16 @@ const DriveSettings = memo(() => {
       {view === 'files' && <OverQuotaBanner onCleanup={() => setView('cleanup')} />}
       {/* Keyed on the drive, so a path browsed on one never carries to the other. */}
       {view === 'cleanup' ? (
-        <StorageCleanup drive={active} key={active} onBack={() => setView('files')} />
+        <StorageCleanup
+          drive={active}
+          key={`${workspaceId ?? 'personal'}:${active}`}
+          onBack={() => setView('files')}
+        />
       ) : (
         <DriveExplorer
           drive={active}
           isWorkspace={isWorkspace}
-          key={active}
+          key={`${workspaceId ?? 'personal'}:${active}`}
           toolbarExtra={
             <>
               {!isWorkspace && <DriveUsage />}

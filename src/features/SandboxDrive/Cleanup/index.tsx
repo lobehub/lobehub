@@ -1,13 +1,14 @@
 'use client';
 
 import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
-import { ActionIcon, Button, Center, Flexbox, Icon, Spin, Text, toast } from '@lobehub/ui';
+import { ActionIcon, Alert, Button, Center, Flexbox, Icon, Spin, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { describeError } from '@/features/EnvironmentManager/errorMessage';
 import { formatSize } from '@/utils/format';
 
@@ -64,10 +65,17 @@ const StorageCleanup = memo<StorageCleanupProps>(({ drive, onBack }) => {
 
   const deleteChosen = () => {
     const items = chosen;
+    // What was chosen belongs to this workspace's drive; a confirmation that
+    // outlives a workspace switch must not delete in the next one.
+    const workspace = getActiveWorkspaceId();
     confirmStorageDelete({
       bytes: chosenBytes,
       count: items.length,
       onConfirm: async () => {
+        if (getActiveWorkspaceId() !== workspace) {
+          toast.error(t('drive.cleanup.scopeChanged'));
+          return;
+        }
         try {
           const outcome = await remove(items);
           selection.clear();
@@ -109,9 +117,11 @@ const StorageCleanup = memo<StorageCleanupProps>(({ drive, onBack }) => {
           <Text fontSize={12} type={'secondary'}>
             {scanning
               ? t('drive.cleanup.scanning', { size: formatSize(analysis?.scannedBytes ?? 0) })
-              : result
-                ? t('drive.cleanup.summary', { size: formatSize(total) })
-                : t('drive.cleanup.description')}
+              : error && result
+                ? t('drive.cleanup.incomplete', { size: formatSize(analysis?.scannedBytes ?? 0) })
+                : result
+                  ? t('drive.cleanup.summary', { size: formatSize(total) })
+                  : t('drive.cleanup.description')}
           </Text>
         </Flexbox>
         <ActionIcon
@@ -149,6 +159,18 @@ const StorageCleanup = memo<StorageCleanupProps>(({ drive, onBack }) => {
               />
             ))}
           </div>
+          {error && (
+            <Alert
+              showIcon
+              title={describeError(error, t, t('drive.cleanup.failed'))}
+              type={'warning'}
+              action={
+                <Button size={'small'} onClick={() => void rescan()}>
+                  {t('retry', { ns: 'common' })}
+                </Button>
+              }
+            />
+          )}
           {result.stale && (
             <Text fontSize={12} type={'secondary'}>
               {t('drive.cleanup.stale')}
