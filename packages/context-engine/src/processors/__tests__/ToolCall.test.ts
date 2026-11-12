@@ -24,18 +24,6 @@ describe('ToolCallProcessor', () => {
     provider: 'openai',
   };
 
-  describe('constructor', () => {
-    it('should initialize with config', () => {
-      const processor = new ToolCallProcessor(defaultConfig);
-      expect(processor.name).toBe('ToolCallProcessor');
-    });
-
-    it('should initialize with custom options', () => {
-      const processor = new ToolCallProcessor(defaultConfig, { debug: true });
-      expect(processor.name).toBe('ToolCallProcessor');
-    });
-  });
-
   describe('process - assistant messages', () => {
     it('should convert tools to tool_calls format', async () => {
       const processor = new ToolCallProcessor(defaultConfig);

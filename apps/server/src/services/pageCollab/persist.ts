@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import type { DocumentWriteSource } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -34,8 +35,8 @@ const bodyDigest = (editorData: unknown) =>
     .digest('hex');
 
 export class PageProjectionRejectedError extends Error {
-  constructor(documentId: string) {
-    super(`Refusing to persist page ${documentId}: the room holds blocks the projection lost`);
+  constructor(documentId: string, reason = 'the room holds blocks the projection lost') {
+    super(`Refusing to persist page ${documentId}: ${reason}`);
     this.name = 'PageProjectionRejectedError';
   }
 }
@@ -49,12 +50,21 @@ export const persistPageState = async (
   db: LobeChatDatabase,
   documentId: string,
   state: Uint8Array,
-  options: { history?: DocumentHistoryAttribution; saveSource: DocumentHistorySaveSource },
+  options: {
+    history?: DocumentHistoryAttribution;
+    saveSource: DocumentHistorySaveSource;
+    /**
+     * Who wrote the room's latest changes; decides whether the per-document
+     * character limit applies. The room's own projection carries browser edits,
+     * so it defaults to `user`.
+     */
+    writeSource?: DocumentWriteSource;
+  },
 ): Promise<boolean> => {
   const meta = await getResourceMeta(db, 'document', documentId);
   if (!meta) return false;
 
-  const { editorData, lostBlocks, markdown, title } = await withHeadlessEditorLock(() =>
+  const { editorData, erasedBody, lostBlocks, markdown, title } = await withHeadlessEditorLock(() =>
     projectPageState(state),
   );
   // A binding that fails to read the room exports an empty page; writing it
@@ -65,6 +75,12 @@ export const persistPageState = async (
   const row = await service.getDocumentById(documentId);
   if (!row) return false;
 
+  // An empty room that never erased anything never received the stored body,
+  // e.g. a seed whose body push was lost. Projecting it would blank the page.
+  if (!markdown.trim() && !erasedBody && row.content?.trim()) {
+    throw new PageProjectionRejectedError(documentId, 'the room never received the stored body');
+  }
+
   // Every known writer of a room page's body goes through its room. A body that
   // changed since the last projection was written around it anyway; keep that
   // version as its own `system` entry in the history before the room replaces it.
@@ -72,11 +88,25 @@ export const persistPageState = async (
   const writtenOutsideRoom = lastProjected !== null && lastProjected !== bodyDigest(row.editorData);
   if (writtenOutsideRoom) log('page %s body was written outside its room', documentId);
 
+  // A projection that drops most of the body may be a real delete or a room
+  // that lost its content; either way the previous body stays recoverable.
+  const previousLength = row.content?.length ?? 0;
+  if (previousLength > 0 && markdown.length * 2 < previousLength) {
+    console.warn(
+      '[page-collab] room %s shrank the page from %d to %d characters',
+      documentId,
+      previousLength,
+      markdown.length,
+    );
+    await service.trySaveCurrentDocumentHistory(documentId, 'system');
+  }
+
   await service.updateDocument(documentId, {
     content: toStoredMarkdown(row, markdown),
     editorData: editorData as unknown as Record<string, unknown>,
     history: options.history,
     origin: 'room-projection',
+    writeSource: options.writeSource,
     ...(writtenOutsideRoom
       ? { breakAutosaveWindow: true, saveSource: 'system' as const }
       : { saveSource: options.saveSource }),

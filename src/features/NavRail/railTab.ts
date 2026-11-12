@@ -22,8 +22,8 @@ const TAB_BY_ROOT: Record<string, RailTabKey> = {
 };
 
 /**
- * The rail tab a pathname belongs to. Agent / group chats and the home page
- * are Messages; their profile and config pages are Contacts.
+ * The rail tab a pathname belongs to. The home page is Messages; every page
+ * inside an agent or group, chats included, is Contacts.
  */
 export const resolveRailTab = (
   pathname: string,

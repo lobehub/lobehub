@@ -90,6 +90,16 @@ beforeEach(() => {
   });
 });
 
+const parentWithSubtask = (): ReturnType<
+  typeof useTaskStore.getState
+>['taskDetailMap'][string] => ({
+  id: 'T-parent',
+  identifier: 'T-parent',
+  instruction: 'Parent',
+  status: 'backlog',
+  subtasks: [{ assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' }],
+});
+
 describe('TaskDetailSliceAction', () => {
   describe('task detail replica', () => {
     afterEach(() => {
@@ -834,15 +844,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-sub',
         taskDetailMap: {
-          'T-parent': {
-            id: 'T-parent',
-            identifier: 'T-parent',
-            instruction: 'Parent',
-            status: 'backlog',
-            subtasks: [
-              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
-            ],
-          },
+          'T-parent': parentWithSubtask(),
           'T-sub': { id: 'T-sub', identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
         },
       });
@@ -879,15 +881,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-sub',
         taskDetailMap: {
-          'T-parent': {
-            id: 'T-parent',
-            identifier: 'T-parent',
-            instruction: 'Parent',
-            status: 'backlog',
-            subtasks: [
-              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
-            ],
-          },
+          'T-parent': parentWithSubtask(),
           'T-sub': { id: 'T-sub', identifier: 'T-sub', instruction: 'Sub', status: 'backlog' },
         },
       });
@@ -920,15 +914,7 @@ describe('TaskDetailSliceAction', () => {
       useTaskStore.setState({
         activeTaskId: 'T-parent',
         taskDetailMap: {
-          'T-parent': {
-            id: 'T-parent',
-            identifier: 'T-parent',
-            instruction: 'Parent',
-            status: 'backlog',
-            subtasks: [
-              { assignee: null, id: 'T-sub', identifier: 'T-sub', name: 'Sub', status: 'backlog' },
-            ],
-          },
+          'T-parent': parentWithSubtask(),
         },
       });
 

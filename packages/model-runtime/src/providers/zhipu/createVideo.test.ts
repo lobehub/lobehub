@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../core/openaiCompatible';
 import type { CreateVideoPayload } from '../../types/video';
 import { createZhipuVideo, pollZhipuVideoStatus, queryZhipuVideoStatus } from './createVideo';
 

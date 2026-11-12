@@ -1,11 +1,21 @@
 'use client';
 
-import type { TaskExecutionConfig, TaskIntentAnalysis } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskIntentAnalysis, TaskLabelRef } from '@lobechat/types';
 import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Button, cssVar, DropdownMenu, Flexbox, Text, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronUp, Paperclip, TagIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,11 +27,15 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { taskService } from '@/services/task';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { shinyTextStyles } from '@/styles';
@@ -32,9 +46,11 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { useTaskProjectChoice } from '../features/useTaskProjectChoice';
 import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
@@ -74,6 +90,7 @@ interface CreateTaskInlineEntryProps {
   onCreated?: (task: { id: string; agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
+  /** The project the task starts in, e.g. the page it is composed on. The user can change it. */
   projectId?: string;
   /**
    * `hero` adapts the entry for the empty-tasks landing: hides collapse,
@@ -108,6 +125,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
+  const [labels, setLabels] = useState<TaskLabelRef[]>([]);
+  const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+  const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+  // Label ids read from a draft before the registry loaded; resolved (and
+  // stale ones dropped) once it has.
+  const pendingDraftLabelIdsRef = useRef<string[] | undefined>(undefined);
+  // A subtask has no picker: the server files it under its parent's project.
+  const { createProjectId, projectChoice, setProjectChoice } = useTaskProjectChoice(
+    projectId,
+    !parentTaskId,
+  );
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
   const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -242,6 +270,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // hydration only — it must not keep the previous scope's selection).
     editor.cleanDocument?.();
     setPriority(0);
+    // Labels belong to a workspace: one picked in the previous scope would be a
+    // foreign id here and fail the create.
+    setLabels([]);
+    pendingDraftLabelIdsRef.current = undefined;
+    setProjectChoice(projectId ?? null);
     setVisibility(defaultVisibility);
     setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
@@ -267,6 +300,19 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         setMemberChoice(draft.assigneeUserId);
       }
       if (draft.visibility) setVisibility(draft.visibility);
+      // `null` restores an explicit "no project"; a missing key keeps the scope's default.
+      if (draft.projectId === null || typeof draft.projectId === 'string')
+        setProjectChoice(draft.projectId);
+      const labelIds = Array.isArray(draft.labelIds)
+        ? draft.labelIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      if (labelIds.length > 0) {
+        if (getTaskStoreState().taskLabelsInit) {
+          setLabels(resolveTaskLabelRefs(getTaskStoreState().taskLabels, labelIds));
+        } else {
+          pendingDraftLabelIdsRef.current = labelIds;
+        }
+      }
     } catch {
       /* ignore a malformed draft */
     }
@@ -280,7 +326,18 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editor,
     isMembersLoading,
     lockAssignee,
+    projectId,
+    setProjectChoice,
   ]);
+
+  useEffect(() => {
+    const pending = pendingDraftLabelIdsRef.current;
+    if (!isLabelsInit || !pending?.length) return;
+    pendingDraftLabelIdsRef.current = undefined;
+    setLabels((current) =>
+      current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+    );
+  }, [isLabelsInit, labelRegistry]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Emptying the editor
@@ -300,8 +357,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         // `undefined` (the whole selection is `undefined`) drops the key, so
         // an untouched composer writes the same draft shape as before.
         execution,
+        // While a restore waits for the registry, keep writing the ids it holds
+        // so a reload in that window does not drop them.
+        labelIds:
+          labels.length > 0 ? labels.map((label) => label.id) : pendingDraftLabelIdsRef.current,
         markdown,
         priority,
+        projectId: projectChoice,
         visibility,
       },
       draftHasTextRef.current,
@@ -313,9 +375,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editor,
     execution,
     instruction,
+    labels,
     lockAssignee,
     memberChoice,
     priority,
+    projectChoice,
     visibility,
   ]);
 
@@ -343,6 +407,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const resetComposer = useCallback(() => {
     setPriority(0);
+    setLabels([]);
+    // A restore still waiting for the registry belongs to the draft just sent.
+    pendingDraftLabelIdsRef.current = undefined;
+    setProjectChoice(projectId ?? null);
     setAssigneeAgentId(agentId);
     setMemberChoice(undefined);
     setInstruction('');
@@ -352,7 +420,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     setIntentAnswers({});
     editor?.cleanDocument?.();
     if (draftStorageKey) clearTaskCreateDraft(draftStorageKey);
-  }, [agentId, defaultVisibility, draftStorageKey, editor]);
+  }, [agentId, defaultVisibility, draftStorageKey, editor, projectId, setProjectChoice]);
 
   /** What the composer currently holds, or null when there is nothing to create. */
   const readDraft = useCallback(() => {
@@ -411,10 +479,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: draft.editorJson,
           instruction: draft.instruction,
+          ...pickedLabelIds(labels, pendingDraftLabelIdsRef.current),
           name: draft.name,
           parentTaskId,
           priority: priority || undefined,
-          projectId,
+          projectId: createProjectId,
           // Only send visibility in workspace mode; personal mode lets the server
           // fall through to the schema default ('public', inert in personal mode).
           visibility: activeWorkspaceId ? visibility : undefined,
@@ -481,13 +550,14 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       draftStorageKey,
       assigneeAgentId,
       assigneeUserId,
+      createProjectId,
       createTask,
       execution,
+      labels,
       navigate,
       onCreated,
       parentTaskId,
       priority,
-      projectId,
       resetComposer,
       visibility,
     ],
@@ -634,15 +704,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       initialRequirement: seed.requirement,
       initialTitle: intentTitle.trim() || seed.title,
       onCreated: resetComposer,
-      projectId,
+      projectId: createProjectId,
     });
     setAnalysis(null);
   }, [
     analysis,
     assigneeAgentId,
+    createProjectId,
     intentAnswers,
     intentTitle,
-    projectId,
     readDraft,
     resetComposer,
     t,
@@ -756,6 +826,32 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
+
+            {!parentTaskId && (
+              <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
+            )}
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

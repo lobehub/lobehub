@@ -24,7 +24,7 @@ interface PlanHeaderActionsProps {
 const PlanHeaderActions = memo<PlanHeaderActionsProps>(({ graph, model, round }) => {
   const { t } = useTranslation('chat');
   const { selected, setSelected } = usePlanVersionSelection();
-  const { versions } = usePlanVersions(graph, model);
+  const { skillId, versions } = usePlanVersions(graph, model);
   if (versions.length < 2) return null;
 
   const current = selected ?? round.planVersion;
@@ -58,7 +58,7 @@ const PlanHeaderActions = memo<PlanHeaderActionsProps>(({ graph, model, round })
         icon={GitCompareArrows}
         size={DESKTOP_HEADER_ICON_SMALL_SIZE}
         title={t('goalBatch.planPanel.compare')}
-        onClick={() => openPlanCompareModal({ target: current, versions })}
+        onClick={() => openPlanCompareModal({ skillId, target: current, versions })}
       />
     </Flexbox>
   );

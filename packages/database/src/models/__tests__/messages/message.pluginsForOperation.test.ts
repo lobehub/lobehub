@@ -10,6 +10,25 @@ import { messagePlugins, messages, threads, topics, users } from '../../../schem
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
+const operationWindow = (
+  completedAt: Date,
+  startedAt: Date,
+): Parameters<MessageModel['listMessagePluginsForOperation']>[0] => ({
+  completedAt,
+  operationId: 'op-1',
+  startedAt,
+  threadId: 'thread1',
+  topicId: 'topic1',
+});
+
+const heterogeneousToolInput = (): Parameters<typeof seedToolCall>[0] => ({
+  createdAt: new Date('2027-01-01T00:00:00.000Z'),
+  id: 'hetero',
+  metadata: { heterogeneousToolStateOperationId: 'op-1' },
+  threadId: 'thread1',
+  topicId: 'topic1',
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'plugins-for-op-user';
@@ -119,13 +138,7 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
     await seedToolCall({ createdAt: T2, id: 'm-b', threadId: 'thread1', topicId: 'topic1' });
     await seedToolCall({ createdAt: T1, id: 'm-a', threadId: 'thread1', topicId: 'topic1' });
 
-    const rows = await messageModel.listMessagePluginsForOperation({
-      completedAt: T3,
-      operationId: 'op-1',
-      startedAt: T0,
-      threadId: 'thread1',
-      topicId: 'topic1',
-    });
+    const rows = await messageModel.listMessagePluginsForOperation(operationWindow(T3, T0));
 
     expect(rows.map((r) => r.id)).toEqual(['m-a', 'm-b']);
     expect(rows[0]).toMatchObject({ apiName: 'writeFile', identifier: 'lobe-cloud-sandbox' });
@@ -155,34 +168,16 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
     // Same time window, different topic — must not leak in.
     await seedToolCall({ createdAt: T1, id: 'other-topic', threadId: null, topicId: 'topic2' });
 
-    const rows = await messageModel.listMessagePluginsForOperation({
-      completedAt: T3,
-      operationId: 'op-1',
-      startedAt: T0,
-      threadId: 'thread1',
-      topicId: 'topic1',
-    });
+    const rows = await messageModel.listMessagePluginsForOperation(operationWindow(T3, T0));
 
     expect(rows.map((r) => r.id)).toEqual(['right']);
   });
 
   it('matches heterogeneous rows by operation metadata even outside the window', async () => {
     // createdAt sits well after the window, but the metadata op-id must still match.
-    await seedToolCall({
-      createdAt: new Date('2027-01-01T00:00:00.000Z'),
-      id: 'hetero',
-      metadata: { heterogeneousToolStateOperationId: 'op-1' },
-      threadId: 'thread1',
-      topicId: 'topic1',
-    });
+    await seedToolCall(heterogeneousToolInput());
 
-    const rows = await messageModel.listMessagePluginsForOperation({
-      completedAt: T3,
-      operationId: 'op-1',
-      startedAt: T0,
-      threadId: 'thread1',
-      topicId: 'topic1',
-    });
+    const rows = await messageModel.listMessagePluginsForOperation(operationWindow(T3, T0));
 
     expect(rows.map((r) => r.id)).toEqual(['hetero']);
   });
@@ -196,13 +191,7 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
       topicId: 'topic2',
     });
 
-    const rows = await messageModel.listMessagePluginsForOperation({
-      completedAt: T3,
-      operationId: 'op-1',
-      startedAt: T0,
-      threadId: 'thread1',
-      topicId: 'topic1',
-    });
+    const rows = await messageModel.listMessagePluginsForOperation(operationWindow(T3, T0));
 
     expect(rows).toEqual([]);
   });
@@ -234,13 +223,9 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
       topicId: 'topic1',
     });
 
-    const asOther = await new MessageModel(serverDB, otherUserId).listMessagePluginsForOperation({
-      completedAt: T3,
-      operationId: 'op-1',
-      startedAt: T0,
-      threadId: 'thread1',
-      topicId: 'topic1',
-    });
+    const asOther = await new MessageModel(serverDB, otherUserId).listMessagePluginsForOperation(
+      operationWindow(T3, T0),
+    );
 
     expect(asOther).toEqual([]);
   });
@@ -327,13 +312,7 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
         threadId: 'thread1',
         topicId: 'topic1',
       });
-      await seedToolCall({
-        createdAt: new Date('2027-01-01T00:00:00.000Z'),
-        id: 'hetero',
-        metadata: { heterogeneousToolStateOperationId: 'op-1' },
-        threadId: 'thread1',
-        topicId: 'topic1',
-      });
+      await seedToolCall(heterogeneousToolInput());
 
       const pool = (
         serverDB as unknown as {
@@ -345,13 +324,9 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
 
       // Capture the exact statements the method issues, faithfully.
       const statements = await captureEmittedSql(async (db) => {
-        const rows = await new MessageModel(db, userId).listMessagePluginsForOperation({
-          completedAt: T3,
-          operationId: 'op-1',
-          startedAt: T0,
-          threadId: 'thread1',
-          topicId: 'topic1',
-        });
+        const rows = await new MessageModel(db, userId).listMessagePluginsForOperation(
+          operationWindow(T3, T0),
+        );
         // Correctness still holds across both branches under the skew.
         expect(rows.map((r) => r.id).sort()).toEqual(['hetero', 'in-window', 'in-window-2']);
       });

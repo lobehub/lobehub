@@ -182,11 +182,15 @@ export class MessageLookupQueries extends MessageScope {
    * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
    * with `metadata.verifyOperationId = operationId`). Used by auto-repair to
    * persist the failure feedback onto the card it belongs to.
+   *
+   * Pass the run's `topicId` when known: it keeps the JSONB predicate inside
+   * the topic's own (indexed) rows instead of every row the user owns.
    */
-  findVerifyMessageByOperationId = async (operationId: string) => {
+  findVerifyMessageByOperationId = async (operationId: string, topicId?: string) => {
     return this.db.query.messages.findFirst({
       where: and(
         this.ownership(),
+        topicId ? eq(messages.topicId, topicId) : undefined,
         eq(messages.role, 'verify'),
         sql`${messages.metadata}->>'verifyOperationId' = ${operationId}`,
       ),

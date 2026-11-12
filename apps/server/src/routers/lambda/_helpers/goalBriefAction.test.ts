@@ -7,7 +7,6 @@ import { applyGoalBriefAction } from './goalBriefAction';
 
 const mocks = vi.hoisted(() => ({
   accept: vi.fn(),
-  archiveSignedOffGoalTasks: vi.fn(),
   dispatchAcceptanceRepair: vi.fn(),
   reject: vi.fn(),
   settleSignOff: vi.fn(),
@@ -23,9 +22,6 @@ vi.mock('../acceptance', () => ({
 }));
 vi.mock('./acceptanceRepairDispatch', () => ({
   dispatchAcceptanceRepair: mocks.dispatchAcceptanceRepair,
-}));
-vi.mock('./acceptanceStatus', () => ({
-  archiveSignedOffGoalTasks: mocks.archiveSignedOffGoalTasks,
 }));
 vi.mock('@/server/services/goal/goalBriefs', () => ({
   GoalBriefService: vi.fn().mockImplementation(function () {
@@ -45,17 +41,17 @@ describe('applyGoalBriefAction sign-off', () => {
     vi.clearAllMocks();
   });
 
-  it('archives the goal Tasks after signing off from the inbox', async () => {
+  it('signs off from the inbox and settles the brief', async () => {
     expect(await applyGoalBriefAction(ctx, signOffBrief, 'signOff')).toBe(true);
 
     expect(mocks.accept).toHaveBeenCalledWith('acc_1', undefined);
-    expect(mocks.archiveSignedOffGoalTasks).toHaveBeenCalledWith(ctx.serverDB, acceptance);
+    expect(mocks.settleSignOff).toHaveBeenCalledWith('acc_1', 'signOff', undefined);
   });
 
-  it('archives nothing when the delivery is sent back', async () => {
+  it('sends the delivery back and hands it to the repair dispatch', async () => {
     expect(await applyGoalBriefAction(ctx, signOffBrief, 'requestChanges', 'Redo it')).toBe(true);
 
-    expect(mocks.reject).toHaveBeenCalled();
-    expect(mocks.archiveSignedOffGoalTasks).not.toHaveBeenCalled();
+    expect(mocks.reject).toHaveBeenCalledWith('acc_1', 'Redo it');
+    expect(mocks.dispatchAcceptanceRepair).toHaveBeenCalled();
   });
 });

@@ -309,6 +309,15 @@ end
 return #returned
 `;
 
+const RENEW_SCRIPT = `${LUA_HELPERS}
+local batch = redis.call('HGET', KEYS[1], ARGV[1])
+if not batch then return 0 end
+local _, items = splitBatch(batch)
+redis.call('HSET', KEYS[1], ARGV[1], joinBatch(tonumber(ARGV[2]), items))
+redis.call('EXPIRE', KEYS[1], ARGV[3])
+return 1
+`;
+
 const keyOf = (scope: SteerQueueScope) =>
   RedisKeys.agentSteer.followUps(scope.userId, scope.topicId, scope.threadId);
 
@@ -461,6 +470,60 @@ export const steerQueue = {
       QUEUE_TTL_SECONDS,
       ...returnIds,
     );
+  },
+
+  /**
+   * Extends a drained batch's lease, for a delivery the run is still holding
+   * (a message sent into a live agent session it has not picked up yet).
+   *
+   * @returns false when the batch is gone (settled, or already lapsed back)
+   * @throws when Redis is unavailable — the lease then lapses as usual
+   */
+  async renew(scope: SteerQueueScope, drainId: string): Promise<boolean> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to renew queued follow-ups');
+
+    const renewed = await redis.eval<unknown>(
+      RENEW_SCRIPT,
+      1,
+      drainedKeyOf(scope),
+      drainId,
+      Date.now() + PROCESSING_LEASE_MS,
+      QUEUE_TTL_SECONDS,
+    );
+    return Number(renewed) === 1;
+  },
+
+  /**
+   * Records a follow-up a heterogeneous run took into its live session, until
+   * the agent picks it up (see {@link RedisKeys.agentSteer.heteroDeliveries}).
+   */
+  async putHeteroDelivery(operationId: string, messageId: string, delivery: unknown) {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to record a delivered follow-up');
+
+    const key = RedisKeys.agentSteer.heteroDeliveries(operationId);
+    await redis.hset(key, messageId, JSON.stringify(delivery));
+    await redis.expire(key, QUEUE_TTL_SECONDS);
+  },
+
+  /** The deliveries a heterogeneous run still holds, by user message id. */
+  async listHeteroDeliveries<T>(operationId: string): Promise<Record<string, T>> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to read delivered follow-ups');
+
+    const raw = (await redis.hgetall(RedisKeys.agentSteer.heteroDeliveries(operationId))) ?? {};
+    return Object.fromEntries(
+      Object.entries(raw).map(([id, value]) => [id, JSON.parse(String(value)) as T]),
+    );
+  },
+
+  /** Drops a delivery record once it is settled. */
+  async removeHeteroDelivery(operationId: string, messageId: string): Promise<void> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to settle a delivered follow-up');
+
+    await redis.hdel(RedisKeys.agentSteer.heteroDeliveries(operationId), messageId);
   },
 
   /**

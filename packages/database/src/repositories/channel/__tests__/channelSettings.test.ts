@@ -98,3 +98,17 @@ describe('the public member projection', () => {
     for (const member of view.members) expect(member.joinedAt).toBeInstanceOf(Date);
   });
 });
+
+describe('the Channel config column', () => {
+  it('starts empty and keeps the settings written to it', async () => {
+    const team = await fixture.createTeamChannel();
+    const [created] = await db.select().from(channels).where(eq(channels.id, team.channel.id));
+    expect(created.config).toBeNull();
+
+    const config = { wake: { pace: 'calm' } };
+    await db.update(channels).set({ config }).where(eq(channels.id, team.channel.id));
+
+    const [row] = await db.select().from(channels).where(eq(channels.id, team.channel.id));
+    expect(row.config).toEqual(config);
+  });
+});

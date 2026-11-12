@@ -1,5 +1,7 @@
 import { extractTodosFromMessages, normalizeTodosState } from '@lobechat/agent-runtime';
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   CloudSandboxIdentifier,
@@ -23,8 +25,10 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentManagementContext,
+  type DocumentReferenceItem,
   type GroupAgentBuilderContext,
   type PlanTodoConfig,
+  resolveDocumentReferences,
   resolveTopicReferences,
   type TopicReferenceItem,
   type WorkspaceContext,
@@ -115,6 +119,32 @@ const gatherTopicReferences = async (
             return (await listTopicMessages(topic)) ?? [];
           }
         : undefined,
+    ),
+  );
+};
+
+/**
+ * Resolve `<refer_document>` tags against the executing agent's documents. A
+ * share visitor never reads the creator's documents through a typed tag.
+ */
+const gatherDocumentReferences = async (
+  request: ContextFactRequest,
+  providers: ContextFactProviders,
+): Promise<DocumentReferenceItem[] | undefined> => {
+  // Client-side preprocessing may already have injected the references.
+  if (contains(request.messages, ['document_reference_context'])) return undefined;
+  if (!contains(request.messages, ['refer_document', 'refer\\_document'])) return undefined;
+  const agentId = request.agentId;
+  const { findAgentDocument } = providers;
+  if (request.shareVisitor || !agentId || !findAgentDocument) return undefined;
+
+  return attempt('documentReferences', () =>
+    resolveDocumentReferences(
+      request.messages as Array<{ content: string | unknown; role?: string }>,
+      (documentId) => findAgentDocument(agentId, documentId),
+      // Without the documents tool the agent cannot read an earlier-turn
+      // reference on demand, so keep inlining those too.
+      { inlineEarlierTurns: !request.enabledToolIds.includes(AgentDocumentsIdentifier) },
     ),
   );
 };
@@ -470,10 +500,24 @@ export const gatherContextFacts = async (
       attempt('agentDocuments', () =>
         docsAgentId ? providers.listAgentDocuments?.(docsAgentId) : undefined,
       ),
+    () =>
+      attempt('agentAccountContext', async () => {
+        const context = await providers.listAgentAccountContext?.(request.agentId);
+        // Whether this step can actually read or answer mail is decided by the
+        // final tool set (custom / goal / chat modes can exclude the account
+        // tool), so the identity block must not promise a tool that is absent.
+        return context
+          ? {
+              ...context,
+              toolAvailable: request.enabledToolIds.includes(AgentAccountIdentifier),
+            }
+          : context;
+      }),
     () => gatherAgentBuilderContext(request, providers),
     () => gatherAgentManagementContext(request, providers),
     () => gatherComposioServices(request, providers),
     () => gatherCredentials(request, providers),
+    () => gatherDocumentReferences(request, providers),
     () => gatherGroupAgentBuilderContext(request, providers),
     () => gatherOnboardingContext(request, providers),
     () => gatherPlanTodo(request, providers),
@@ -498,10 +542,12 @@ export const gatherContextFacts = async (
 
   const [
     agentDocuments,
+    agentAccountContext,
     agentBuilderContext,
     agentManagementContext,
     composioServicesList,
     credentials,
+    documentReferences,
     groupAgentBuilderContext,
     onboardingContext,
     planTodo,
@@ -516,8 +562,10 @@ export const gatherContextFacts = async (
   return {
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
     step: {
+      agentAccountContext,
       agentBuilderContext,
       agentManagementContext,
+      documentReferences,
       groupAgentBuilderContext,
       onboardingContext,
       planTodo,

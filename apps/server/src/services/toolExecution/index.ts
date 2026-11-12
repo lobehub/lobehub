@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
@@ -20,6 +21,7 @@ import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceC
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
@@ -123,6 +125,22 @@ const getThrownErrorText = (error: unknown): string => {
   } catch {
     return 'Unknown tool execution error';
   }
+};
+
+/**
+ * What the model reads of a server MCP call. A result with an MCP App view
+ * gives its text only: MCP Apps keeps `structuredContent` and `_meta` for the
+ * view, out of model context. Any other result (no view, an error, a failed
+ * view lookup) keeps its serialized form, `structuredContent` included, but
+ * never `_meta`: protocol metadata, where an Apps-aware server keeps what only
+ * its views may see.
+ */
+const toModelContent = (result: any): string => {
+  if (result?.state?.mcpApp) return result.content;
+  if (!result?.state || typeof result.state !== 'object') return JSON.stringify(result);
+
+  const { _meta, ...state } = result.state;
+  return JSON.stringify({ ...result, state });
 };
 
 export class ToolExecutionService {
@@ -327,7 +345,7 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online LobeHub desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
@@ -341,13 +359,14 @@ export class ToolExecutionService {
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
+        mcpApps: await isMcpAppsEnabled(context.userId),
         toolName: apiName,
       });
 
       log('MCP tool execution completed for: %s:%s', identifier, apiName);
 
       return {
-        content: typeof result === 'string' ? result : JSON.stringify(result),
+        content: typeof result === 'string' ? result : toModelContent(result),
         ...(result?.success === false
           ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
           : {}),
@@ -537,9 +556,14 @@ export class ToolExecutionService {
       });
     }
 
+    // An MCP App view is read and driven from the client that opens the
+    // conversation, not from the device that ran the tool, so a result from a
+    // device offers none.
+    const { mcpApp: _deviceView, ...state } = (result.state as Record<string, any>) ?? {};
+
     return {
       content: result.content,
-      state: (result.state as Record<string, any>) ?? undefined,
+      state: result.state ? state : undefined,
       success: true,
     };
   }

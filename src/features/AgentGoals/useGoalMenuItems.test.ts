@@ -12,13 +12,22 @@ const mocks = vi.hoisted(() => ({
   openRename: vi.fn(),
   renameGoalId: undefined as string | undefined,
   store: {
+    archiveGoal: vi.fn(),
     closeGoal: vi.fn(),
     pauseGoal: vi.fn(),
     refreshGoals: vi.fn(),
     resumeGoal: vi.fn(),
     startGoal: vi.fn(),
   },
+  toastError: vi.fn(),
   transferItems: null as DropdownItem[] | null,
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  // Run the confirmation straight away, as if the person clicked OK.
+  confirmModal: (props: { onOk?: () => Promise<void> | void }) => props.onOk?.(),
+  toast: { error: mocks.toastError, success: vi.fn() },
 }));
 
 vi.mock('@/business/client/hooks/useGoalTransferMenuItem', () => ({
@@ -92,6 +101,25 @@ describe('useGoalItemMenu', () => {
     expect(mocks.store.refreshGoals).toHaveBeenCalledWith('agt_1');
   });
 
+  // The server refuses to close while it cannot confirm a run has stopped; the
+  // dialog used to swallow that, so nothing told the person why it stayed open.
+  it('says why a goal could not be closed', async () => {
+    mocks.store.closeGoal.mockRejectedValue(
+      new Error('Could not stop the work still running for this goal, so it was not closed.'),
+    );
+    const { result } = renderHook(() =>
+      useGoalItemMenu({ agentId: 'agt_1', goal: { ...goal, status: 'paused' }, projectId: 'p' }),
+    );
+
+    await act(async () => pickStatus(result.current, 'achieved'));
+
+    expect(mocks.store.closeGoal).toHaveBeenCalledWith('goal_1', 'achieved');
+    expect(mocks.toastError).toHaveBeenCalledWith('goalDetail.closeConfirm.failed');
+    // The refused close has still paused the goal, so the list must not keep
+    // showing it as it was.
+    expect(mocks.store.refreshGoals).toHaveBeenCalledWith('project:p');
+  });
+
   it('keeps the reader on the list after a delete', () => {
     renderHook(() => useGoalItemMenu({ agentId: 'agt_1', goal, routeAgentId: 'agt_1' }));
 
@@ -106,7 +134,141 @@ describe('useGoalItemMenu', () => {
     );
 
     const keys = result.current.map((item) => (item && 'key' in item ? item.key : item?.type));
-    expect(keys.slice(-4)).toEqual(['copyLink', 'copy-goal', 'divider', 'delete']);
+    expect(keys.slice(-5)).toEqual(['copyLink', 'copy-goal', 'divider', 'archive', 'delete']);
+  });
+
+  // The detail header shows archive as its own button beside the favorite star.
+  it('leaves the archive action out for a host that shows it on its own', () => {
+    const { result } = renderHook(() =>
+      useGoalMenuItems({
+        archivedAt: '2026-11-03T00:00:00.000Z',
+        goalId: 'goal_1',
+        omitArchive: true,
+        status: 'achieved',
+        title: 'Desk pet',
+      }),
+    );
+
+    const items = result.current;
+    const keys = items.map((item) => (item && 'key' in item ? item.key : item?.type));
+    expect(keys).not.toContain('archive');
+    expect(keys).toContain('delete');
+    // The goal is still archived, so its lifecycle stays locked until restored.
+    const status = items.find((item) => item && 'key' in item && item.key === 'status') as any;
+    expect(status.disabled).toBe(true);
+  });
+
+  describe('archive', () => {
+    const archiveItem = (items: DropdownItem[]) =>
+      items.find((item) => item && 'key' in item && item.key === 'archive') as any;
+
+    it('is disabled, with the reason, until the goal is completed or canceled', () => {
+      for (const status of [
+        'draft',
+        'planning',
+        'running',
+        'verifying',
+        'review',
+        'paused',
+        'failed',
+      ]) {
+        const { result } = renderHook(() =>
+          useGoalItemMenu({ agentId: 'agt_1', goal: { ...goal, archivedAt: null, status } }),
+        );
+        expect(archiveItem(result.current)).toMatchObject({
+          desc: 'goalList.archiveBlocked',
+          disabled: true,
+          label: 'goalList.archive',
+        });
+      }
+    });
+
+    // The list row and the detail header used to read the sign-off from two
+    // places; neither gates archiving any more.
+    it('is enabled for a completed goal, signed off or not', () => {
+      const { result } = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: null, status: 'achieved' },
+        }),
+      );
+
+      expect(archiveItem(result.current)).toMatchObject({ desc: undefined, disabled: false });
+    });
+
+    it('is enabled for a canceled goal', () => {
+      const { result } = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: null, status: 'canceled' },
+        }),
+      );
+
+      expect(archiveItem(result.current)).toMatchObject({ disabled: false });
+    });
+
+    it('archives a completed goal and refreshes the list it was opened from', async () => {
+      mocks.store.archiveGoal.mockResolvedValue(undefined);
+      const { result } = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: null, status: 'achieved' },
+          routeAgentId: 'agt_1',
+        }),
+      );
+
+      const item = archiveItem(result.current);
+      expect(item).toMatchObject({ disabled: false, label: 'goalList.archive' });
+      await act(async () => {
+        await item.onClick();
+      });
+
+      expect(mocks.store.archiveGoal).toHaveBeenCalledWith('goal_1', true);
+      expect(mocks.store.refreshGoals).toHaveBeenCalledWith('agt_1');
+    });
+
+    it('offers to restore an archived goal whatever its status', async () => {
+      mocks.store.archiveGoal.mockResolvedValue(undefined);
+      const { result } = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: '2026-11-03T00:00:00.000Z', status: 'canceled' },
+        }),
+      );
+
+      const item = archiveItem(result.current);
+      expect(item).toMatchObject({ disabled: false, label: 'goalList.unarchive' });
+      await act(async () => {
+        await item.onClick();
+      });
+
+      expect(mocks.store.archiveGoal).toHaveBeenCalledWith('goal_1', false);
+    });
+
+    it('locks the status submenu of an archived goal until it is restored', () => {
+      const status = (items: DropdownItem[]) =>
+        items.find((item) => item && 'key' in item && item.key === 'status') as any;
+      const archivedGoal = renderHook(() =>
+        useGoalItemMenu({
+          agentId: 'agt_1',
+          goal: { ...goal, archivedAt: '2026-11-03T00:00:00.000Z', status: 'achieved' },
+        }),
+      );
+      const liveGoal = renderHook(() =>
+        useGoalItemMenu({ agentId: 'agt_1', goal: { ...goal, archivedAt: null } }),
+      );
+
+      expect(status(archivedGoal.result.current).disabled).toBe(true);
+      expect(status(liveGoal.result.current).disabled).toBe(false);
+    });
+
+    it('is left out when the host does not know whether the goal is archived', () => {
+      const { result } = renderHook(() =>
+        useGoalMenuItems({ goalId: 'goal_1', status: 'achieved' }),
+      );
+
+      expect(archiveItem(result.current)).toBeUndefined();
+    });
   });
 
   // Same pair, copy and order as a topic's menu.

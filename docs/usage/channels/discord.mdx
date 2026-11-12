@@ -91,6 +91,8 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 
 ## Step 3: Invite the Bot to Your Server
 
+The bot can only receive messages from a server it has been added to, so do this before testing the connection. Saving the configuration in LobeHub does not add the bot to any server.
+
 <Steps>
   ### Generate an Invite URL
 
@@ -118,12 +120,19 @@ By connecting a Discord channel to your LobeHub agent, users can interact with t
 
   Copy the generated URL, open it in your browser, select the server you want to add the bot to, and click **Authorize**.
 
-  > **Private channels need explicit access.** Server-level authorization only grants the bot category/server defaults. If a channel is marked **Private Channel**, Discord ignores the bot's server-wide role and the bot won't receive any events there — including @mentions — until you open the channel's **Settings → Permissions** and add the bot (or a role it has) under **Members and roles**. You can also click **Sync Now** to make the channel inherit its category's permissions.
+  > **Private channels need explicit access.** Server-level authorization only grants the bot category/server defaults. If a channel is marked **Private Channel**, Discord ignores the bot's server-wide role and the bot won't receive any events there — including @mentions — until you open the channel's **Settings → Permissions** and add the bot (or a role it has) under **Members and roles**, with at least **View Channel**, **Send Messages**, **Read Message History** and **Send Messages in Threads** allowed. You can also click **Sync Now** to make the channel inherit its category's permissions.
 </Steps>
 
 ## Step 4: Test the Connection
 
-Back in LobeHub's channel settings for Discord, click **Test Connection** to verify everything is configured correctly. Then send a message to your bot on Discord to confirm it responds.
+Back in LobeHub's channel settings for Discord, click **Test Connection**. It checks that:
+
+- the bot token is valid;
+- the Application ID belongs to the same app as the bot token;
+- **Message Content Intent** is turned on;
+- the bot has been added to at least one server.
+
+Then @mention your bot in a server channel on Discord to confirm it responds. Test Connection cannot see channel-level permissions, so if the bot answers in one channel but not another, see the private channel note in Step 3.
 
 ## Step 5: Set Your Platform Identity (Recommended)
 
@@ -195,4 +204,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 - **Bot not responding in server:** Confirm the bot has been invited to the server with the correct permissions, and Message Content Intent is enabled. If **Group Policy** is `Disabled` or `Allowlist`, double-check the channel is in **Allowed Channel IDs**. If **Allowed User IDs** is set, the sender's user ID must be in it.
 - **@mention doesn't reach the bot in one specific channel:** The channel is likely a **Private Channel**. Discord drops every event for users/bots not explicitly listed in that channel's permissions, no matter what server-wide role they have. Open the channel's **Settings → Permissions**, click **Add members or roles**, and add the bot (or a role it has). Alternatively click **Sync Now** to inherit the parent category's permissions. A quick visual check: if the bot's name renders without an underline/link styling when you type `@<botname>`, Discord thinks it has no access to that channel.
 - **Bot not responding to DMs:** Open **Advanced Settings** and confirm **DM Policy** is not set to `Disabled`. If **Allowed User IDs** is set, make sure the sender's Discord user ID is in it.
-- **Test Connection failed:** Double-check the Application ID, Bot Token, and Public Key are correct.
+- **Test Connection says the bot isn't in any server:** You haven't finished Step 3. Open the invite link, pick the server, and click **Authorize**, then test again.
+- **Test Connection says Message Content Intent is off:** In the Developer Portal, open **Bot → Privileged Gateway Intents**, turn on **Message Content Intent**, and click **Save Changes**.
+- **Test Connection says the Application ID doesn't match the bot token:** The two values come from different apps. Copy the Application ID from **General Information** and the token from **Bot** of the same app.
+- **Test Connection failed for another reason:** Double-check the Application ID, Bot Token, and Public Key are correct.

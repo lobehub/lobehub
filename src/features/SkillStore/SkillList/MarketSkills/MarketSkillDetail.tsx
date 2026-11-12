@@ -3,18 +3,16 @@
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { ActionIcon, Avatar, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
-import { unzip } from 'fflate';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
-import { marketApiService } from '@/services/marketApi';
 import { useDiscoverStore } from '@/store/discover';
-import { skillSelectors } from '@/store/discover/selectors';
+import { marketSelectors, skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { type DiscoverSkillDetail as DiscoverSkillDetailType } from '@/types/discover';
@@ -92,47 +90,6 @@ const buildMarketResourceTree = (
     }));
 };
 
-/**
- * Fetch zip from downloadUrl and extract text file contents
- */
-const fetchZipContents = async (
-  url: string,
-): Promise<{ contentMap: Record<string, string>; tree: SkillResourceTreeNode[] }> => {
-  const res = await fetch(url);
-  const buf = await res.arrayBuffer();
-
-  return new Promise((resolve, reject) => {
-    unzip(new Uint8Array(buf), (err, files) => {
-      if (err) return reject(err);
-
-      const contentMap: Record<string, string> = {};
-      const tree: SkillResourceTreeNode[] = [];
-      const decoder = new TextDecoder();
-
-      for (const [rawPath, data] of Object.entries(files)) {
-        if (rawPath.endsWith('/') || rawPath.includes('__MACOSX')) continue;
-
-        // Strip the top-level directory prefix (e.g. "skill-name/")
-        const slashIdx = rawPath.indexOf('/');
-        const path = slashIdx >= 0 ? rawPath.slice(slashIdx + 1) : rawPath;
-        if (!path || path === 'SKILL.md') continue;
-
-        const content = decoder.decode(data);
-        contentMap[path] = content;
-        tree.push({
-          content,
-          name: path.split('/').pop() || path,
-          path,
-          type: 'file',
-        });
-      }
-
-      tree.sort((a, b) => a.path.localeCompare(b.path));
-      resolve({ contentMap, tree });
-    });
-  });
-};
-
 const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
   const { t } = useTranslation('setting');
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
@@ -148,24 +105,21 @@ const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
     installedSkill?.id,
   );
 
-  // Zip-based content for uninstalled skills
-  const [zipContentMap, setZipContentMap] = useState<Record<string, string>>({});
-  const [zipTree, setZipTree] = useState<SkillResourceTreeNode[]>([]);
-
-  const downloadUrl = marketApiService.getSkillDownloadUrl(encodeURIComponent(identifier));
-
-  useEffect(() => {
-    if (installedSkill) return;
-
-    fetchZipContents(downloadUrl)
-      .then(({ contentMap, tree }) => {
-        setZipContentMap(contentMap);
-        setZipTree(tree);
-      })
-      .catch(() => {
-        // fall back to metadata-only view
-      });
-  }, [downloadUrl, installedSkill]);
+  // Package files of an uninstalled skill, kept in a replica so a reopened
+  // detail paints its file tree without downloading the zip again. A failed
+  // download falls back to the metadata-only view.
+  const useSkillPackageFiles = useDiscoverStore((s) => s.useSkillPackageFiles);
+  const { queryKey: packageFilesKey } = useSkillPackageFiles(identifier, !installedSkill);
+  const packageFiles = useDiscoverStore(marketSelectors.skillPackageFiles(packageFilesKey));
+  const { zipContentMap, zipTree } = useMemo(() => {
+    const contentMap: Record<string, string> = {};
+    const tree: SkillResourceTreeNode[] = [];
+    for (const { content, path } of packageFiles ?? []) {
+      contentMap[path] = content;
+      tree.push({ content, name: path.split('/').pop() || path, path, type: 'file' });
+    }
+    return { zipContentMap: contentMap, zipTree: tree };
+  }, [packageFiles]);
 
   const installedResourceTree = useMemo(
     () => installedData?.resourceTree ?? [],

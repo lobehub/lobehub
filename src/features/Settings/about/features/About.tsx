@@ -1,9 +1,15 @@
 'use client';
 
-import { SiDiscord, SiGithub, SiRss, SiX, SiYoutube } from '@icons-pack/react-simple-icons';
+import SiDiscord from '@icons-pack/react-simple-icons/icons/SiDiscord';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
+import SiRss from '@icons-pack/react-simple-icons/icons/SiRss';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
+import SiYoutube from '@icons-pack/react-simple-icons/icons/SiYoutube';
 import { BRANDING_EMAIL, BRANDING_NAME, SOCIAL_URL } from '@lobechat/business-const';
-import { createStaticStyles, Divider, Flexbox } from '@lobehub/ui';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,13 +20,9 @@ import ItemCard from './ItemCard';
 import ItemLink from './ItemLink';
 import Version from './Version';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    font-size: 14px;
-    font-weight: bold;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  title: { fontSize: '14px', fontWeight: 'bold', color: cssVar.colorTextSecondary },
+});
 
 const About = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('common');
@@ -73,7 +75,7 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
           ]}
         />
         <Divider style={{ marginBlock: 0 }} />
-        <div className={styles.title}>{t('contact')}</div>
+        <div {...stylex.props(styles.title)}>{t('contact')}</div>
         <AboutList
           ItemRender={ItemLink}
           items={[
@@ -95,7 +97,7 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
           ]}
         />
         <Divider style={{ marginBlock: 0 }} />
-        <div className={styles.title}>{t('legal')}</div>
+        <div {...stylex.props(styles.title)}>{t('legal')}</div>
         <AboutList
           ItemRender={ItemLink}
           items={[

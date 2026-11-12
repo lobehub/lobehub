@@ -40,10 +40,10 @@ const GroupConversation = memo<GroupConversationProps>(({ active, conversation }
 
   return (
     <ConversationRow
+      closeOnReselect
       active={active}
       activeAt={activeAt}
       contextMenuItems={contextMenuItems}
-      pinned={!!pinned}
       preview={preview}
       ref={setAnchor}
       title={title}

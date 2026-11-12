@@ -367,4 +367,20 @@ describe('mergeLocalReviewEvents', () => {
     const b: LocalReviewEvent = { ...a, createdAt: '2026-01-01T00:00:00.000Z', id: 'b' };
     expect(mergeLocalReviewEvents([a], [b, a]).map((event) => event.id)).toEqual(['b', 'a']);
   });
+
+  it('keeps log order for events written in the same millisecond', () => {
+    const checks: LocalReviewEvent = {
+      category: 'A',
+      comment: 'checks',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      id: 'z-random',
+      kind: 'group',
+      roundIndex: 1,
+    };
+    const decision: LocalReviewEvent = { ...checks, comment: 'decision', id: 'a-random' };
+    expect(mergeLocalReviewEvents([checks], [decision]).map((event) => event.id)).toEqual([
+      'z-random',
+      'a-random',
+    ]);
+  });
 });

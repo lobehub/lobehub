@@ -10,6 +10,7 @@ export const AGENT_SIGNAL_SOURCE_TYPES = {
   agentSelfReflectionRequested: 'agent.self_reflection.requested',
   agentUserMessage: 'agent.user.message',
   botMessageMerged: 'bot.message.merged',
+  channelMessageRouted: 'channel.message.routed',
   clientGatewayError: 'client.gateway.error',
   clientGatewayRuntimeEnd: 'client.gateway.runtime_end',
   clientGatewayStepComplete: 'client.gateway.step_complete',
@@ -135,6 +136,14 @@ export interface AgentSignalSourcePayloadMap {
     platformThreadId?: string;
     serializedContext?: string;
     topicId?: string;
+  };
+  [AGENT_SIGNAL_SOURCE_TYPES.channelMessageRouted]: {
+    agentId?: string;
+    channelId: string;
+    memberId: string;
+    message: string;
+    messageId: string;
+    threadId?: string;
   };
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError]: {
     agentId?: string;

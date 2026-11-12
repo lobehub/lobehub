@@ -1,5 +1,7 @@
 import { confirmModal, copyToClipboard, type DropdownItem, Icon, toast } from '@lobehub/ui';
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   CircleDashedIcon,
   CopyIcon,
   LinkIcon,
@@ -25,12 +27,17 @@ import {
   toManualStatus,
 } from './goalStatusMenu';
 import { useConfirmDeleteGoal, useGoalRename, useGoalShareUrl } from './useGoalActions';
+import { useGoalArchiveToggle } from './useGoalArchiveToggle';
 
 interface UseGoalMenuItemsOptions {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
   agentId?: string;
+  /** Omitted when the host does not know it, which leaves the archive action out. */
+  archivedAt?: Date | string | null;
   creatorUserId?: string | null;
   goalId: string;
+  /** Leaves the archive action out for a host that shows it on its own, like the detail header. */
+  omitArchive?: boolean;
   /** Replaces the default redirect to the goal list after a delete. */
   onDeleted?: () => void;
   /** Replaces the rename dialog, for a host that already edits the title in place. */
@@ -46,8 +53,10 @@ interface UseGoalMenuItemsOptions {
 /** The goal's action menu, shared by the detail header's "more" button and the list rows. */
 export const useGoalMenuItems = ({
   agentId,
+  archivedAt,
   creatorUserId,
   goalId,
+  omitArchive,
   onDeleted,
   onRename,
   onStatusChanged,
@@ -72,6 +81,14 @@ export const useGoalMenuItems = ({
   const canRename = canEditTask && canClose;
 
   const current = toManualStatus(status);
+  const archive = useGoalArchiveToggle({
+    archivedAt,
+    creatorUserId,
+    goalId,
+    onArchived: onStatusChanged,
+    status,
+  });
+  const { isArchived } = archive;
 
   const changeStatus = useCallback(
     (next: ManualGoalStatus) => {
@@ -86,7 +103,15 @@ export const useGoalMenuItems = ({
         okButtonProps: { danger: next === 'canceled' },
         okText: t(`goalDetail.closeConfirm.${next}.ok`),
         onOk: async () => {
-          await closeGoal(goalId, next);
+          try {
+            await closeGoal(goalId, next);
+          } catch (error) {
+            // The server refuses while it cannot confirm a run has stopped. Say
+            // so instead of leaving the dialog sitting there; it has already
+            // paused the goal, so the list is refreshed either way.
+            console.error('[goal:close] failed to close goal', error);
+            toast.error(t('goalDetail.closeConfirm.failed'));
+          }
           onStatusChanged?.();
         },
         title: t(`goalDetail.closeConfirm.${next}.title`),
@@ -129,7 +154,9 @@ export const useGoalMenuItems = ({
             onClick: () => changeStatus(next),
           };
         }),
-        disabled: !canEditTask || !status,
+        // An archived goal stays put until restored: the server refuses to
+        // start or resume it, so its lifecycle is not offered here either.
+        disabled: !canEditTask || !status || isArchived,
         icon: <Icon icon={CircleDashedIcon} />,
         key: 'status',
         label: t('taskList.contextMenu.status'),
@@ -157,6 +184,18 @@ export const useGoalMenuItems = ({
       },
       ...(transferItems ?? []),
       { type: 'divider' },
+      ...(omitArchive || archivedAt === undefined
+        ? []
+        : [
+            {
+              desc: archive.deniedReason,
+              disabled: !!archive.deniedReason,
+              icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
+              key: 'archive',
+              label: archive.label,
+              onClick: archive.toggle,
+            } satisfies DropdownItem,
+          ]),
       {
         danger: true,
         disabled: !canEditTask,
@@ -167,6 +206,8 @@ export const useGoalMenuItems = ({
       },
     ],
     [
+      archive,
+      archivedAt,
       autoRename,
       canClose,
       canEditTask,
@@ -175,6 +216,8 @@ export const useGoalMenuItems = ({
       confirmDelete,
       current,
       goalId,
+      isArchived,
+      omitArchive,
       onRename,
       openRename,
       shareUrl,
@@ -193,6 +236,7 @@ interface UseGoalItemMenuOptions {
   globalScopeId?: string;
   goal: {
     agentId?: string | null;
+    archivedAt?: Date | string | null;
     id: string;
     status: string;
     title?: string;
@@ -222,6 +266,8 @@ export const useGoalItemMenu = ({
 
   return useGoalMenuItems({
     agentId: agentId ?? undefined,
+    // A list row always knows it: the list read returns the whole goal row.
+    archivedAt: goal.archivedAt ?? null,
     creatorUserId: goal.userId,
     goalId: goal.id,
     // Deleting from the list keeps the reader on the list it just pruned.

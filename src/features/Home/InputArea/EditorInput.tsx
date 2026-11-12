@@ -13,7 +13,7 @@ import FileUpload from '@/features/ChatInput/ActionBar/Upload';
 import { useChatStore } from '@/store/chat';
 
 import type { HomeMode } from '../types';
-import { HOME_INPUT_BODY_HEIGHT } from './constants';
+import { HOME_INPUT_BODY_HEIGHT, HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import ModeSelect from './ModeSelect';
 
 const leftActions: ActionKeys[] = ['plus'];
@@ -77,6 +77,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
         leftActions={leftActions}
         rightActions={rightActions}
         slashPlacement="bottom"
+        uploadContextKey={HOME_UPLOAD_CONTEXT_KEY}
         chatInputEditorRef={(instance) => {
           if (!instance) return;
           useChatStore.setState({ mainInputEditor: instance });

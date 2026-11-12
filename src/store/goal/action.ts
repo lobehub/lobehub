@@ -27,12 +27,14 @@ import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
+import { briefListResource } from '@/store/brief/slices/list/projection';
+import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import { goalStatusesForFilter } from './goalListFilter';
+import { goalArchivedForFilter, goalStatusesForFilter } from './goalListFilter';
 import { buildGoalTitleMessages } from './goalTitle';
 import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
@@ -213,6 +215,7 @@ export class GoalActionImpl {
       fetcher: ({ agentId, filter, projectId }) =>
         goalService.list({
           agentId,
+          archived: goalArchivedForFilter(filter),
           limit: GOAL_LIST_FETCH_LIMIT,
           projectId,
           statuses: goalStatusesForFilter(filter),
@@ -326,7 +329,9 @@ export class GoalActionImpl {
       this.refreshGoalGraph(goalId),
       mutate(goalKeys.pendingForIsland()),
       revalidateReplica(homeGoalListResource),
-      mutate((key) => Array.isArray(key) && key[0] === 'brief:list'),
+      // The inbox brief carrying the same gate is a replica: an SWR key prefix
+      // (the old `brief:list`) no longer reaches it.
+      revalidateReplica(briefListResource),
     ]);
   };
 
@@ -344,9 +349,45 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  /**
+   * Archive a goal, or restore it. The row moves between every list's ordinary
+   * tabs and its Archived tab, so it leaves every list it is held in at once
+   * and each list — loaded tabs, the home rail — re-reads where it belongs now.
+   * The goal's Tasks are archived and restored with it, so the task lists and
+   * boards re-read too.
+   */
+  archiveGoal = async (goalId: string, archived: boolean): Promise<void> => {
+    await goalService.archive(goalId, archived);
+    this.#goalListRows.remove(goalId);
+    // The archive has landed; a refresh that fails afterwards is a stale view,
+    // not a failed archive, so it is logged rather than reported as one.
+    const refreshes = await Promise.allSettled([
+      this.refreshGoalGraph(goalId),
+      revalidateReplica(goalListResource),
+      revalidateReplica(homeGoalListResource),
+      revalidateReplica(topicGoalListResource),
+      revalidateReplica(taskListResource),
+      revalidateReplica(taskGroupListResource),
+    ]);
+    for (const result of refreshes) {
+      if (result.status === 'rejected')
+        console.error('[goal:archive] refresh failed after archiving', result.reason);
+    }
+  };
+
   closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {
-    await goalService.close(goalId, status);
-    await this.refreshGoalGraph(goalId);
+    let refused: unknown;
+    try {
+      await goalService.close(goalId, status);
+    } catch (error) {
+      refused = error;
+    }
+    // Refresh either way — a refused close has still paused the goal on the
+    // server — but a failed refresh must not read as a failed close.
+    await this.refreshGoalGraph(goalId).catch((error) =>
+      console.error('[goal:close] refresh failed after closing', error),
+    );
+    if (refused) throw refused;
   };
 
   refreshGoalGraph = async (goalId: string): Promise<void> => {

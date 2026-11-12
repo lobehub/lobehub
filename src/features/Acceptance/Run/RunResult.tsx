@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Info, Shield, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,61 +8,55 @@ import { useTranslation } from 'react-i18next';
 import { useVerifyResults, useVerifyState } from '../hooks';
 import { countResults, type DockPhase, phaseFromStatus } from '../utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-
-    font-size: 13px;
-    line-height: 1.7;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  card: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  cardFailed: css`
-    border-color: ${cssVar.colorErrorBorder};
-  `,
-  foot: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  head: css`
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-
-    padding-block: 14px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  status: css`
-    font-size: 13px;
-    font-weight: 600;
-  `,
-  sub: css`
-    margin-block-start: 4px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    font-size: 15px;
-    font-weight: 700;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    fontSize: '13px',
+    lineHeight: 1.7,
+    color: cssVar.colorTextSecondary,
+  },
+  card: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  cardFailed: { borderColor: cssVar.colorErrorBorder },
+  foot: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  head: {
+    display: 'flex',
+    gap: '14px',
+    alignItems: 'flex-start',
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  status: { fontSize: '13px', fontWeight: 600 },
+  sub: {
+    marginBlockStart: '4px',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextTertiary,
+  },
+  title: { fontSize: '15px', fontWeight: 700, color: cssVar.colorText },
+});
 
 interface BadgeMeta {
   color: 'default' | 'success' | 'error' | 'warning';
@@ -144,7 +140,7 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
   // never has to travel to the far edge of the card — a pill there read as a
   // separate control and left the title looking neutral on a failed round.
   const header = (
-    <div className={styles.head}>
+    <div {...stylex.props(styles.head)}>
       <Flexbox>
         <Flexbox horizontal align="center" gap={7}>
           <Icon
@@ -152,12 +148,15 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
             icon={meta.badge.icon}
             size={16}
           />
-          <span className={styles.title}>{t('result.title', { round })}</span>
-          <span className={styles.status} style={{ color: badgeTextMap[meta.badge.color] }}>
+          <span {...stylex.props(styles.title)}>{t('result.title', { round })}</span>
+          <span
+            className={stylex.props(styles.status).className}
+            style={{ color: badgeTextMap[meta.badge.color] }}
+          >
             {t(`badge.${meta.badge.key}` as any)}
           </span>
         </Flexbox>
-        <div className={styles.sub}>
+        <div {...stylex.props(styles.sub)}>
           {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
         </div>
       </Flexbox>
@@ -168,9 +167,9 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
   if (embedded) return header;
 
   return (
-    <div className={cx(styles.card, phase === 'failed' && styles.cardFailed)}>
+    <div {...stylex.props(styles.card, phase === 'failed' && styles.cardFailed)}>
       {header}
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <Flexbox gap={4}>
           {(state.verifyPlan ?? []).map((item) => {
             const result = (results ?? []).find((r) => r.checkItemId === item.id);
@@ -191,7 +190,7 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
           })}
         </Flexbox>
       </div>
-      <div className={styles.foot}>
+      <div {...stylex.props(styles.foot)}>
         <Icon icon={Info} size={14} />
         <span>{t('result.foot')}</span>
       </div>

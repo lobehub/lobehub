@@ -6,6 +6,11 @@ import { AgentRuntimeErrorType } from '../../../types/error';
 import { serializeScopedSignature } from '../../../utils/signatureScope';
 import { nanoid } from '../../../utils/uuid';
 import { convertGoogleAIUsage } from '../../usageConverters/google-ai';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
 import type {
   ChatPayloadForTransformStream,
   StreamContext,
@@ -13,12 +18,7 @@ import type {
   StreamProtocolChunk,
   StreamToolCallChunkData,
 } from '../protocol';
-import {
-  createCallbacksTransformer,
-  createSSEProtocolTransformer,
-  createTokenSpeedCalculator,
-  generateToolCallId,
-} from '../protocol';
+import { createTokenSpeedCalculator, generateToolCallId } from '../protocol';
 import { GOOGLE_AI_BLOCK_REASON } from './const';
 
 export const LOBE_ERROR_KEY = '__lobe_error';
@@ -419,8 +419,7 @@ export const GoogleGenerativeAIStream = (
         streamStack,
       }),
     )
-    .pipeThrough(
-      createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
-    )
-    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }));
+    .pipeThrough(createModelEventTransformer((c) => c, streamStack, { requireTerminalEvent: true }))
+    .pipeThrough(createEventCallbacksTransformer(callbacks, { streamStack }))
+    .pipeThrough(createSSEEncoder());
 };

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -602,11 +603,16 @@ export class CoreUpdateManager {
     this.app.updaterManager?.captureRestoreRoute();
     this.app.isQuiting = true;
     electronApp.releaseSingleInstanceLock();
-    electronApp.relaunch(
-      process.env.APPIMAGE
-        ? { args: process.argv.slice(1), execPath: process.env.APPIMAGE }
-        : { args: process.argv.slice(1) },
-    );
+    const appImage = process.env.APPIMAGE;
+    if (appImage) {
+      // app.relaunch() starts the new process with PR_SET_NO_NEW_PRIVS on Linux, which stops
+      // the AppImage runtime from using the setuid fusermount to mount itself.
+      spawn(appImage, process.argv.slice(1), { detached: true, stdio: 'ignore' })
+        .on('error', (error) => logger.error('Failed to relaunch AppImage', error))
+        .unref();
+    } else {
+      electronApp.relaunch({ args: process.argv.slice(1) });
+    }
     electronApp.quit();
   }
 

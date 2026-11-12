@@ -1,6 +1,7 @@
 // @vitest-environment node
+import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
+
 import { resetAgentSignalUserGateCache } from '../../featureGate';
-import { isBotWakeEnabled } from '../botWake/gate';
 import { isAgentSignalScenarioEnabled } from '../meta';
 
 const mocks = vi.hoisted(() => ({ getUserPreference: vi.fn() }));

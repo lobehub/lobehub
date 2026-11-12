@@ -7,7 +7,19 @@ import type { UIChatMessage } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { vi } from 'vitest';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
+
 import type { AgentRuntimeService } from '..';
+
+/**
+ * `executeStep` refuses to run when the durable terminal-status read fails.
+ * Scenario tests use an empty database stand-in, so answer the query with the
+ * live row they intend to exercise instead of letting `db.select` run.
+ */
+export const stubRunningDurableOperation = () =>
+  vi.spyOn(AgentOperationModel.prototype, 'findById').mockResolvedValue({
+    status: 'running',
+  } as any);
 
 /** The `importOriginal` a `vi.mock` factory receives. */
 type ImportOriginal = <T = unknown>() => Promise<T>;
@@ -241,6 +253,7 @@ export const setUpService = (
   mockUserId: string,
 ): ServiceTestContext => {
   vi.clearAllMocks();
+  stubRunningDurableOperation();
   process.env.AGENT_RUNTIME_BASE_URL = 'http://localhost:3010';
 
   // Mock database

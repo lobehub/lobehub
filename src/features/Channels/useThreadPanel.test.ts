@@ -16,11 +16,11 @@ const draft = (id = 'root'): ChannelThreadDraft => ({
   attachments: [],
   root: { id } as ChannelPublicMessage,
 });
-const setup = () =>
+const setup = (entry = '/channels/channel') =>
   renderHook(({ channelId }) => useThreadPanel(channelId), {
     initialProps: { channelId: 'channel' },
     wrapper: ({ children }: { children: ReactNode }) =>
-      createElement(MemoryRouter, { initialEntries: ['/channels/channel'] }, children),
+      createElement(MemoryRouter, { initialEntries: [entry] }, children),
   });
 
 describe('Local thread preview', () => {
@@ -128,5 +128,28 @@ describe('Local thread preview', () => {
       'Channel draft changed',
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('Thread opened as the page', () => {
+  afterEach(() => cleanup());
+
+  it('shows a sidebar thread link as the page, not beside the Channel', () => {
+    const { result } = setup('/channels/channel?thread=t1&view=page');
+    expect(result.current.pageThreadId).toBe('t1');
+    expect(result.current.threadId).toBeNull();
+  });
+
+  it('expands a side panel into the page and closes back to the Channel', () => {
+    const { result } = setup();
+    act(() => result.current.openThread('t1'));
+    expect(result.current.threadId).toBe('t1');
+    expect(result.current.pageThreadId).toBeNull();
+    act(() => result.current.openPage('t1'));
+    expect(result.current.pageThreadId).toBe('t1');
+    expect(result.current.threadId).toBeNull();
+    act(() => result.current.close());
+    expect(result.current.pageThreadId).toBeNull();
+    expect(result.current.threadId).toBeNull();
   });
 });

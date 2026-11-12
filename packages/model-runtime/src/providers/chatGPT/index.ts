@@ -2,7 +2,7 @@ import { CURRENT_VERSION } from '@lobechat/const';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { params as openAIParams } from '../openai';
 
 const CHATGPT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';

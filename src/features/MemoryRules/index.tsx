@@ -10,7 +10,13 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import { SelfLearningLabOff, useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { expertiseService, type RuleItem, type UpdateRuleInput } from '@/services/expertise';
+import {
+  expertiseService,
+  type RuleItem,
+  type RulesOverview,
+  type UpdateRuleInput,
+} from '@/services/expertise';
+import { expertiseActions } from '@/store/expertise';
 
 import { createComposeRuleModal } from './ComposeModal';
 import DetailPanel from './DetailPanel';
@@ -43,13 +49,15 @@ import { useJudgeDirections } from './useJudgeDirections';
  * so they share every control. What differs is reach: a rule of the reviewer's reaches every run,
  * an agent's lesson only that agent's, so a lesson can only be moved or merged within its part.
  *
- * Every write goes through the service and then re-reads the list; only the drag reorder and the
- * effect switch are applied optimistically, because both would visibly snap back otherwise.
+ * The sheet is a local replica: a reload paints the last one and revalidates it in the
+ * background. Every write goes through the service and then re-reads the list; the drag reorder,
+ * the effect / direction switches and archive / restore land on the replica at once and roll back
+ * if the call fails.
  */
 const MemoryRules = () => {
   const { t } = useTranslation('memory');
   const { enabled, ready } = useSelfLearningSurface();
-  const { data, error, isLoading, mutate } = useRules();
+  const { data, error, isConfirmed, isLoading, settled } = useRules(enabled);
   const [selectedId, setSelectedId] = useState<string>();
   const [titleEditing, setTitleEditing] = useState(false);
   const [mergeFrom, setMergeFrom] = useState<string>();
@@ -79,7 +87,8 @@ const MemoryRules = () => {
     () => partRules.filter((rule) => rule.status === 'retired'),
     [partRules],
   );
-  const isEmpty = !isLoading && !error && all.length === 0;
+  // A restored sheet may be last session's empty one: only the server's answer can say "empty".
+  const isEmpty = isConfirmed && !error && all.length === 0;
 
   // Display numbers follow the sheet order of the part on screen, not the per-group `P-nn` codes,
   // which restart in every group and would repeat down the page.
@@ -94,7 +103,7 @@ const MemoryRules = () => {
   const ruleCount = live.filter((rule) => sectionOf.get(rule.domainId)?.key === 'mine').length;
   const lessonCount = live.length - ruleCount;
   // "My rules" with nothing in it is the reviewer's first screen there, not an empty table.
-  const mineOnboarding = !isLoading && !error && part.key === 'mine' && part.groups.length === 0;
+  const mineOnboarding = isConfirmed && !error && part.key === 'mine' && part.groups.length === 0;
   const agentSections = sections.filter((section) => section.owner.kind === 'agent');
   const onboardingAgents: RulesOnboardingAgents | undefined =
     agentSections.length > 0 && agentSections[0].owner.kind === 'agent'
@@ -106,10 +115,11 @@ const MemoryRules = () => {
         }
       : undefined;
 
+  // Only rules the server confirmed lack a direction: a restored sheet may predate a judging.
   useJudgeDirections(
-    enabled,
+    enabled && isConfirmed,
     live.filter((rule) => !rule.direction).map((rule) => rule.id),
-    mutate,
+    expertiseActions.refreshRules,
   );
 
   // A selection or a merge in progress belongs to the part it started in; switching drops both,
@@ -121,20 +131,17 @@ const MemoryRules = () => {
     setMergeFrom(undefined);
   };
 
-  const refresh = () => mutate();
+  const refresh = () => expertiseActions.refreshRules();
 
-  const patchLocal = (id: string, patch: Partial<RuleItem>) =>
-    mutate(
-      (current) =>
-        current && {
-          ...current,
-          groups: current.groups.map((group) => ({
-            ...group,
-            rules: group.rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)),
-          })),
-        },
-      { revalidate: false },
-    );
+  const patchRule =
+    (id: string, patch: Partial<RuleItem>) =>
+    (current: RulesOverview): RulesOverview => ({
+      ...current,
+      groups: current.groups.map((group) => ({
+        ...group,
+        rules: group.rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)),
+      })),
+    });
 
   // Optimistic writes must not outlive a failed request: re-read the server's truth and say so.
   const recover = async (error: unknown) => {
@@ -146,9 +153,13 @@ const MemoryRules = () => {
   /** Resolves to whether the change was saved, so callers keep unsaved input on failure. */
   const updateRule = async (id: string, patch: UpdateRuleInput) => {
     try {
-      if (patch.enforcement) await patchLocal(id, { enforcement: patch.enforcement });
-      if (patch.direction) await patchLocal(id, { direction: patch.direction });
-      await expertiseService.updateRule(id, patch);
+      const local: Partial<RuleItem> = {
+        ...(patch.enforcement && { enforcement: patch.enforcement }),
+        ...(patch.direction && { direction: patch.direction }),
+      };
+      await expertiseActions.patchRules(patchRule(id, local), () =>
+        expertiseService.updateRule(id, patch),
+      );
       await refresh();
       return true;
     } catch (error) {
@@ -166,20 +177,18 @@ const MemoryRules = () => {
       items.map((rule) => rule.id),
     );
     if (!move) return;
-    await mutate(
-      (current) =>
-        current && {
+    try {
+      await expertiseActions.patchRules(
+        (current) => ({
           ...current,
           groups: current.groups.map((group) =>
             group.domain.id === domainId
               ? { ...group, rules: [...items, ...group.rules.filter((r) => r.status !== 'active')] }
               : group,
           ),
-        },
-      { revalidate: false },
-    );
-    try {
-      await expertiseService.reorderRule(domainId, move.id, move.beforeId);
+        }),
+        () => expertiseService.reorderRule(domainId, move.id, move.beforeId),
+      );
       await refresh();
     } catch (error) {
       await recover(error);
@@ -197,7 +206,12 @@ const MemoryRules = () => {
   };
 
   const handlers = {
-    archive: (id: string) => void run(() => expertiseService.archiveRule(id)),
+    archive: (id: string) =>
+      void run(() =>
+        expertiseActions.patchRules(patchRule(id, { status: 'retired' }), () =>
+          expertiseService.archiveRule(id),
+        ),
+      ),
     // Rewording opens the document with the title already in edit mode.
     edit: (id: string) => {
       setSelectedId(id);
@@ -209,7 +223,12 @@ const MemoryRules = () => {
         const moved = await expertiseService.moveRule(id, domainId);
         if (moved && selectedId === id) setSelectedId(moved.id);
       }),
-    restore: (id: string) => void run(() => expertiseService.restoreRule(id)),
+    restore: (id: string) =>
+      void run(() =>
+        expertiseActions.patchRules(patchRule(id, { status: 'active' }), () =>
+          expertiseService.restoreRule(id),
+        ),
+      ),
   };
 
   const select = (id: string) => {
@@ -400,7 +419,7 @@ const MemoryRules = () => {
             )}
 
             <AsyncBoundary
-              data={data}
+              data={settled}
               error={error}
               errorVariant={'page'}
               isEmpty={isEmpty}

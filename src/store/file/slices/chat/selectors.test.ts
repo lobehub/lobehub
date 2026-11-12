@@ -8,17 +8,9 @@ import { UPLOAD_STATUS_SET } from '@/types/files/upload';
 
 import { fileChatSelectors, filesSelectors } from './selectors';
 
-describe('filesSelectors', () => {
-  describe('chatUploadFileList', () => {
-    it('should return the chatUploadFileList from state', () => {
-      const state = {
-        ...initialState,
-        chatUploadFileList: [{ id: '1' }] as UploadFileItem[],
-      } as FilesStoreState;
-      expect(filesSelectors.chatUploadFileList(state)).toEqual([{ id: '1' }]);
-    });
-  });
+const CONTEXT_KEY = 'main_agent-1_new';
 
+describe('filesSelectors', () => {
   describe('isImageUploading', () => {
     it('should return true if there are uploading ids', () => {
       const state = { uploadingIds: ['1', '2'] } as FilesStoreState;
@@ -72,13 +64,15 @@ describe('fileChatSelectors', () => {
   describe('chatRawFileList', () => {
     it('should return a list of raw files', () => {
       const state = {
-        chatUploadFileList: [
-          { file: { name: 'test1.jpg' } },
-          { file: { name: 'test2.jpg' } },
-        ] as UploadFileItem[],
+        chatUploadFileListByContext: {
+          [CONTEXT_KEY]: [
+            { file: { name: 'test1.jpg' } },
+            { file: { name: 'test2.jpg' } },
+          ] as UploadFileItem[],
+        },
       } as FilesStoreState;
 
-      expect(fileChatSelectors.chatRawFileList(state)).toEqual([
+      expect(fileChatSelectors.chatRawFileList(CONTEXT_KEY)(state)).toEqual([
         { name: 'test1.jpg' },
         { name: 'test2.jpg' },
       ]);
@@ -88,53 +82,63 @@ describe('fileChatSelectors', () => {
   describe('chatUploadFileList', () => {
     it('should return the chatUploadFileList from state', () => {
       const state = {
-        chatUploadFileList: [{ id: '1' }] as UploadFileItem[],
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [{ id: '1' }] as UploadFileItem[] },
       } as FilesStoreState;
-      expect(fileChatSelectors.chatUploadFileList(state)).toEqual([{ id: '1' }]);
+      expect(fileChatSelectors.chatUploadFileList(CONTEXT_KEY)(state)).toEqual([{ id: '1' }]);
     });
   });
 
   describe('chatUploadFileListHasItem', () => {
     it('should return true if chatUploadFileList has items', () => {
-      const state = { chatUploadFileList: [{ id: '1' }] as UploadFileItem[] } as FilesStoreState;
-      expect(fileChatSelectors.chatUploadFileListHasItem(state)).toBe(true);
+      const state = {
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [{ id: '1' }] as UploadFileItem[] },
+      } as FilesStoreState;
+      expect(fileChatSelectors.chatUploadFileListHasItem(CONTEXT_KEY)(state)).toBe(true);
     });
 
     it('should return false if chatUploadFileList is empty', () => {
-      const state = { chatUploadFileList: [] as UploadFileItem[] } as FilesStoreState;
-      expect(fileChatSelectors.chatUploadFileListHasItem(state)).toBe(false);
+      const state = {
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [] as UploadFileItem[] },
+      } as FilesStoreState;
+      expect(fileChatSelectors.chatUploadFileListHasItem(CONTEXT_KEY)(state)).toBe(false);
     });
   });
 
   describe('isUploadingFiles', () => {
     it('should return true if any file is in uploading status', () => {
       const state = {
-        chatUploadFileList: [
-          { status: Array.from(UPLOAD_STATUS_SET)[0] },
-          { status: 'completed' },
-        ] as UploadFileItem[],
+        chatUploadFileListByContext: {
+          [CONTEXT_KEY]: [
+            { status: Array.from(UPLOAD_STATUS_SET)[0] },
+            { status: 'completed' },
+          ] as UploadFileItem[],
+        },
       } as FilesStoreState;
-      expect(fileChatSelectors.isUploadingFiles(state)).toBe(true);
+      expect(fileChatSelectors.isUploadingFiles(CONTEXT_KEY)(state)).toBe(true);
     });
 
     it('should return true if any file has unfinished embedding tasks', () => {
       const state = {
-        chatUploadFileList: [
-          { status: 'success', tasks: { finishEmbedding: false } },
-          { status: 'success', tasks: { finishEmbedding: true } },
-        ] as UploadFileItem[],
+        chatUploadFileListByContext: {
+          [CONTEXT_KEY]: [
+            { status: 'success', tasks: { finishEmbedding: false } },
+            { status: 'success', tasks: { finishEmbedding: true } },
+          ] as UploadFileItem[],
+        },
       } as FilesStoreState;
-      expect(fileChatSelectors.isUploadingFiles(state)).toBe(true);
+      expect(fileChatSelectors.isUploadingFiles(CONTEXT_KEY)(state)).toBe(true);
     });
 
     it('should return false if no files are uploading or have unfinished tasks', () => {
       const state: FilesStoreState = {
-        chatUploadFileList: [
-          { status: 'success', tasks: { finishEmbedding: true } },
-          { status: 'success' },
-        ] as UploadFileItem[],
+        chatUploadFileListByContext: {
+          [CONTEXT_KEY]: [
+            { status: 'success', tasks: { finishEmbedding: true } },
+            { status: 'success' },
+          ] as UploadFileItem[],
+        },
       } as FilesStoreState;
-      expect(fileChatSelectors.isUploadingFiles(state)).toBe(false);
+      expect(fileChatSelectors.isUploadingFiles(CONTEXT_KEY)(state)).toBe(false);
     });
   });
 });

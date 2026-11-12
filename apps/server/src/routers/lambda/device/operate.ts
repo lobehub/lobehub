@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { router } from '@/libs/trpc/lambda';
 import { signTunnelAccessToken } from '@/libs/trpc/utils/internalJwt';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { requestManagedDeviceWake } from '@/server/services/deviceGateway/managedDeviceWake';
 import { deviceTunnels, TUNNEL_MAX_TTL_SECONDS } from '@/server/services/deviceGateway/tunnels';
 
 import { assertDeviceOperable } from './guards';
@@ -22,6 +23,9 @@ const assertTunnelDeviceWritable = (
  * in a single request.
  */
 const MAX_TERMINAL_WRITE_CHARS = 65_536;
+
+/** The client a terminal session lives on, as `createTerminalSession` answered. */
+const terminalClientSchema = z.enum(['cli', 'desktop']).optional();
 
 /**
  * Relay a terminal call, surfacing the device's own reason. A device that is
@@ -168,6 +172,7 @@ export const operateRouter = router({
   writeTerminal: deviceProcedure
     .input(
       z.object({
+        client: terminalClientSchema,
         /** Base64 keystrokes. */
         data: z.string().max(MAX_TERMINAL_WRITE_CHARS),
         deviceId: z.string(),
@@ -178,6 +183,7 @@ export const operateRouter = router({
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.writeTerminal({
+          client: input.client,
           data: input.data,
           deviceId: input.deviceId,
           id: input.id,
@@ -187,11 +193,19 @@ export const operateRouter = router({
       );
     }),
   readTerminal: deviceProcedure
-    .input(z.object({ cursor: z.number().int().min(0), deviceId: z.string(), id: z.string() }))
+    .input(
+      z.object({
+        client: terminalClientSchema,
+        cursor: z.number().int().min(0),
+        deviceId: z.string(),
+        id: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.readTerminal({
+          client: input.client,
           cursor: input.cursor,
           deviceId: input.deviceId,
           id: input.id,
@@ -203,6 +217,7 @@ export const operateRouter = router({
   resizeTerminal: deviceProcedure
     .input(
       z.object({
+        client: terminalClientSchema,
         cols: z.number().int().min(1).max(1000),
         deviceId: z.string(),
         id: z.string(),
@@ -213,6 +228,7 @@ export const operateRouter = router({
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.resizeTerminal({
+          client: input.client,
           cols: input.cols,
           deviceId: input.deviceId,
           id: input.id,
@@ -223,11 +239,12 @@ export const operateRouter = router({
       );
     }),
   closeTerminal: deviceProcedure
-    .input(z.object({ deviceId: z.string(), id: z.string() }))
+    .input(z.object({ client: terminalClientSchema, deviceId: z.string(), id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
       return relayTerminal(() =>
         deviceGateway.closeTerminal({
+          client: input.client,
           deviceId: input.deviceId,
           id: input.id,
           userId: ctx.userId,
@@ -307,6 +324,35 @@ export const operateRouter = router({
       }
       if (outcome === 'not-found') {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Tunnel not found.' });
+      }
+      return { success: true };
+    }),
+  /**
+   * Ask a managed cloud device to start, for the device picker's wake
+   * control. Resolves when the provider accepts the request, not when the
+   * device is online: the caller watches the device list for that. Not gated
+   * on the create-time feature flag, so existing devices stay usable.
+   */
+  wakeManagedDevice: deviceProcedure
+    .input(z.object({ deviceId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'wake the device');
+
+      let outcome: Awaited<ReturnType<typeof requestManagedDeviceWake>>;
+      try {
+        outcome = await requestManagedDeviceWake(
+          { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+          input.deviceId,
+        );
+      } catch (error) {
+        console.warn('[device] Managed device wake failed', {
+          deviceId: input.deviceId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new TRPCError({ code: 'BAD_GATEWAY', message: 'Could not wake the device.' });
+      }
+      if (outcome === 'not-managed') {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Managed cloud device not found.' });
       }
       return { success: true };
     }),

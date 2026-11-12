@@ -1,3 +1,4 @@
+import type { ChannelJobWake } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type {
@@ -16,6 +17,9 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
+
+/** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
+export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
 
 /** The Thread a message belongs to, or null for the main channel. */
 export const findThread = async (
@@ -115,12 +119,17 @@ export const pairedAgent = async (
  * Queues one job per message and Agent member. Skips Agents whose
  * environment changed after the message, so a late route cannot run an old instruction
  * in a new directory. Returns the ids of the Agents that received a job.
+ *
+ * `wakes` records why each member was woken; a member without one owes an answer (`mention`).
+ * A wake deferred behind the message's primary responder (`afterMemberId`) is queued as
+ * `awaiting_primary` from the start, so it never reads as a reply in progress before it can run.
  */
 export const deliver = async (
   tx: Transaction,
   message: ChannelMessageItem,
   agents: ChannelMemberItem[],
   requesterMemberId: string,
+  wakes?: Readonly<Record<string, ChannelJobWake>>,
 ): Promise<string[]> => {
   const recipients = agents.filter((agent) => agent.actorType === 'agent');
   if (!recipients.length) return [];
@@ -134,6 +143,9 @@ export const deliver = async (
         messageId: message.id,
         requesterMemberId,
         threadId: message.threadId,
+        wake: wakes?.[agent.id] ?? null,
+        blockedCode: wakes?.[agent.id]?.afterMemberId ? ('awaiting_primary' as const) : null,
+        blockedReason: wakes?.[agent.id]?.afterMemberId ? AWAITING_PRIMARY_REASON : null,
       })),
     )
     .onConflictDoNothing();

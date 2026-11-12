@@ -88,6 +88,20 @@ export {
   toTomlBasicString,
 } from './codexShellEnv';
 export {
+  buildCopilotAcpArgs,
+  buildCopilotAcpPrompt,
+  type CopilotAcpImagePromptBlock,
+  type CopilotAcpModelCatalog,
+  type CopilotAcpPromptBlock,
+  CopilotAcpSession,
+  type CopilotAcpSessionOptions,
+  type CopilotAcpTextPromptBlock,
+  isCopilotAcpSessionNotFoundError,
+  listCopilotAcpModels,
+  type ListCopilotAcpModelsOptions,
+  parseCopilotAcpModelCatalog,
+} from './copilotAcpSession';
+export {
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
   CursorAcpSession,
@@ -194,7 +208,7 @@ export {
   findClaudeCodeTranscriptPath,
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
-export { getHeterogeneousAgentPresetEnv } from './presetEnv';
+export { getHeterogeneousAgentSpawnEnv } from './presetEnv';
 export {
   AMP_BASE_ARGS,
   buildQoderArgs,

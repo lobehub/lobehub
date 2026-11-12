@@ -44,7 +44,7 @@ import {
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
 import { applyStepMetrics } from './stepMetrics';
-import { insertStreamStartSeeds } from './streamStartSeed';
+import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -693,7 +693,7 @@ export const createGatewayEventHandler = (
               dispatchContext,
             );
           }
-          get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
+          get().updateOperationMetadata(operationId, streamStartOperationMetadata(data));
 
           // Native gateway streams carry `assistantMessage.id` directly on
           // stream_start and the shell-insert above guarantees a valid chunk

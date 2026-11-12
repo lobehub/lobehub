@@ -14,30 +14,28 @@ import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 import PortalHeader from '../components/Header';
 import Title from './Title';
 import { getTaskDetailPageUrl } from './url';
+import { useForeignTaskDetail } from './useForeignTaskDetail';
 
 const TaskDetailHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('verify');
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
-  const agentId = useTaskStore((state) =>
-    taskId
-      ? (state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]?.agentId ?? undefined)
+  const foreignWorkspace = useChatStore(chatPortalSelectors.taskDetailWorkspace);
+  const activeDetail = useTaskStore((state) =>
+    taskId && !foreignWorkspace
+      ? state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]
       : undefined,
   );
-  const taskTitle = useTaskStore((state) =>
-    taskId
-      ? (state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]?.name ?? undefined)
-      : undefined,
-  );
+  const { data: foreignDetail } = useForeignTaskDetail();
+  const detail = foreignWorkspace ? foreignDetail : activeDetail;
   const pageUrl = getTaskDetailPageUrl({
-    agentId,
+    agentId: detail?.agentId ?? undefined,
     appOrigin,
-    identifier: useTaskStore((state) =>
-      taskId ? state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]?.identifier : undefined,
-    ),
-    title: taskTitle,
-    workspaceSlug: activeWorkspaceSlug,
+    identifier: detail?.identifier,
+    title: detail?.name,
+    // A task from another workspace links to its own workspace's page.
+    workspaceSlug: foreignWorkspace ? foreignWorkspace.slug : activeWorkspaceSlug,
   });
 
   return (

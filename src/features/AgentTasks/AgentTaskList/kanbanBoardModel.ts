@@ -1,17 +1,22 @@
-import type { TaskStatus } from '@lobechat/types';
+import type { TaskLabelRef, TaskStatus } from '@lobechat/types';
 
 import type {
   TaskGroupItem,
   TaskKanbanGroupBy,
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
+import { TASK_UNAVAILABLE_PROJECT_GROUP_KEY } from '@/store/task/slices/list/projection';
 
 import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
+  getTaskLabelGroupId,
+  getTaskLabelGroupMeta,
   getTaskMemberGroupMeta,
   getTaskPriorityGroupMeta,
+  getTaskProjectGroupMeta,
+  isTaskLabelGroupBy,
   sortGroupEntries,
 } from './listViewOptions';
 
@@ -64,7 +69,13 @@ export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
 ];
 
 export const normalizeKanbanGroupBy = (groupBy: TaskGroupBy): TaskKanbanGroupBy =>
-  groupBy === 'assignee' || groupBy === 'member' || groupBy === 'priority' ? groupBy : 'status';
+  groupBy === 'assignee' ||
+  groupBy === 'member' ||
+  groupBy === 'priority' ||
+  groupBy === 'project' ||
+  isTaskLabelGroupBy(groupBy)
+    ? groupBy
+    : 'status';
 
 export interface KanbanGroupQueryInput {
   agentId?: string;
@@ -109,6 +120,30 @@ export const buildKanbanGroupQuery = ({
   return { allAgents: true, automated: false, excludeStatuses, groupBy };
 };
 
+/**
+ * Folds the columns of projects the caller cannot see into one "Unavailable
+ * project" column: the server groups by the raw column, but only the visible
+ * project list can name a column. Before that list loads there is nothing to
+ * decide from.
+ */
+export const mergeUnresolvedProjectGroups = <T extends TaskGroupItem>(
+  groups: T[],
+  projects: ReadonlyArray<{ id: string }> | undefined,
+): T[] => {
+  if (!projects) return groups;
+  const visible = new Set(projects.map((project) => project.id));
+  const orphans = groups.filter((group) => group.projectId && !visible.has(group.projectId));
+  if (orphans.length === 0) return groups;
+  const unavailable = {
+    ...orphans[0],
+    hasMore: orphans.some((orphan) => orphan.hasMore),
+    key: TASK_UNAVAILABLE_PROJECT_GROUP_KEY,
+    tasks: orphans.flatMap((orphan) => orphan.tasks),
+    total: orphans.reduce((sum, orphan) => sum + orphan.total, 0),
+  } as T;
+  return [...groups.filter((group) => !orphans.includes(group)), unavailable];
+};
+
 export const buildKanbanColumns = (
   taskGroups: TaskGroupItem[],
   groupBy: TaskKanbanGroupBy,
@@ -116,17 +151,21 @@ export const buildKanbanColumns = (
   if (groupBy === 'status') return STATUS_KANBAN_COLUMNS;
 
   const groupEntries = taskGroups.map((group) => {
-    const meta =
-      groupBy === 'assignee'
+    const meta = isTaskLabelGroupBy(groupBy)
+      ? getTaskLabelGroupMeta(groupBy, group.labelId)
+      : groupBy === 'assignee'
         ? getTaskAssigneeGroupMeta(group.assigneeAgentId)
         : groupBy === 'member'
           ? getTaskMemberGroupMeta(group.assigneeUserId)
-          : getTaskPriorityGroupMeta(group.priority);
+          : groupBy === 'project'
+            ? getTaskProjectGroupMeta(group.projectId)
+            : getTaskPriorityGroupMeta(group.priority);
     return [meta, group.tasks as TaskListItem[]] as [TaskGroupMeta, TaskListItem[]];
   });
 
   return sortGroupEntries(groupEntries, groupBy).map(([groupMeta]) => ({
-    droppable: true,
+    // Nobody can file a task under a project they cannot see.
+    droppable: !groupMeta.projectUnavailable,
     groupMeta,
     key: groupMeta.key,
     targetStatus: null,
@@ -165,15 +204,51 @@ export const getKanbanTaskPatch = (
   if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
     return { priority: column.groupMeta.priority ?? 0 };
   }
+  if (groupBy === 'project' && column.groupMeta?.groupBy === 'project') {
+    return { projectId: column.groupMeta.projectId ?? null };
+  }
   if (groupBy === 'status' && column.targetStatus) {
     return { status: column.targetStatus as TaskStatus };
   }
 };
 
+/**
+ * The labels a card carries after a drop on a label board: the task's label
+ * from the board's group is swapped for the column's (or dropped for "no
+ * label"); its other labels stay. `undefined` when the drop changes nothing.
+ */
+export const getKanbanLabelPatch = (
+  task: Pick<TaskListItem, 'labels'>,
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): { labels: TaskLabelRef[] } | undefined => {
+  const groupId = getTaskLabelGroupId(groupBy);
+  const meta = column.groupMeta;
+  if (!groupId || !meta || meta.groupBy !== groupBy) return;
+
+  const current = task.labels ?? [];
+  const currentInGroup = current.find((label) => label.parentId === groupId);
+  const targetId = meta.labelId ?? null;
+  if ((currentInGroup?.id ?? null) === targetId) return;
+
+  const rest = current.filter((label) => label.parentId !== groupId);
+  return {
+    labels: targetId
+      ? [...rest, { color: meta.labelColor, id: targetId, name: meta.label, parentId: groupId }]
+      : rest,
+  };
+};
+
 /** Pinned on the new task, so it lands in the column it was created from. */
 export interface KanbanColumnCreateDefaults {
   assigneeAgentId?: string;
+  /**
+   * Labels of a label column (and, when nested, of its parent group); the
+   * "No label" column pins none.
+   */
+  labelIds?: string[];
   priority?: number;
+  projectId?: string;
 }
 
 /**
@@ -185,6 +260,9 @@ export interface KanbanColumnCreateDefaults {
 export const getTaskGroupCreateDefaults = (
   groupMeta: TaskGroupMeta | undefined,
 ): KanbanColumnCreateDefaults | undefined => {
+  if (isTaskLabelGroupBy(groupMeta?.groupBy)) {
+    return groupMeta?.labelId ? { labelIds: [groupMeta.labelId] } : {};
+  }
   switch (groupMeta?.groupBy) {
     // New tasks start in backlog, so only that status group can receive one.
     case 'status': {
@@ -192,6 +270,12 @@ export const getTaskGroupCreateDefaults = (
     }
     case 'priority': {
       return { priority: groupMeta.priority ?? 0 };
+    }
+    // A new task starts without a project, so "No project" pins nothing, and
+    // "Unavailable project" has no entry: nobody can file a task under it.
+    case 'project': {
+      if (groupMeta.projectUnavailable) return undefined;
+      return groupMeta.projectId ? { projectId: groupMeta.projectId } : {};
     }
     // The unassigned group has no entry: the modal cannot pin "no agent".
     case 'assignee': {
@@ -211,7 +295,9 @@ export const getTaskSubGroupCreateDefaults = (
   const parent = getTaskGroupCreateDefaults(parentMeta);
   const sub = getTaskGroupCreateDefaults(subMeta);
   if (!parent || !sub) return undefined;
-  return { ...parent, ...sub };
+  // Two label groupings each pin one label; the task needs both to sit here.
+  const labelIds = [...(parent.labelIds ?? []), ...(sub.labelIds ?? [])];
+  return { ...parent, ...sub, ...(labelIds.length > 0 ? { labelIds } : {}) };
 };
 
 /**
@@ -237,10 +323,11 @@ export const getKanbanCreateTaskModalProps = (
   scope: { agentId?: string; projectId?: string },
 ): CreateTaskContentProps => ({
   agentId: defaults.assigneeAgentId ?? scope.agentId,
+  defaultLabelIds: defaults.labelIds?.length ? defaults.labelIds : undefined,
   defaultPriority: defaults.priority,
   // An agent-scoped board only holds that agent's tasks.
   lockAssignee: !!scope.agentId,
-  projectId: scope.projectId,
+  projectId: defaults.projectId ?? scope.projectId,
   // The board has no inline entry to minimize into.
   showInlineToggle: false,
 });

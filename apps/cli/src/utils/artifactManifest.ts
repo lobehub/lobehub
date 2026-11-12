@@ -16,10 +16,19 @@ export interface ArtifactBinding {
     deploymentId?: string;
     expectedVersion: number;
     fingerprint: string;
-    previous: Omit<ArtifactBinding, 'pendingCanvas' | 'pendingCreateKey' | 'pendingType'>;
+    previous: Omit<
+      ArtifactBinding,
+      'pendingCanvas' | 'pendingCreateFingerprint' | 'pendingCreateKey' | 'pendingType'
+    >;
     rejectedPublication?: { requestedSlug?: string };
     saved?: { canvasId: string; version: number; workId: string };
   };
+  /**
+   * What the pending HTML create sent (title, slug and file bytes). Market
+   * replays a key only for the identical request, so a changed publish must
+   * not reuse the key or it is rejected as a different publish.
+   */
+  pendingCreateFingerprint?: string;
   /**
    * Set before a create is sent and cleared once its deployment is recorded, so
    * a retry after a lost response reuses the key and the server returns the
@@ -68,6 +77,7 @@ const bindingSchema = z
           .optional(),
       })
       .optional(),
+    pendingCreateFingerprint: z.string().min(1).optional(),
     pendingCreateKey: z.string().min(1).optional(),
     pendingType: z.enum(['canvas', 'html']).optional(),
   })

@@ -2,11 +2,14 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  ChannelListSort,
+  ContactListSortBy,
   DocsPageSectionKey,
   DocsPageSectionView,
   GlobalState,
   ModelDetailPanelExpandedKey,
   ProjectListSortBy,
+  ProjectListViewMode,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
@@ -120,6 +123,11 @@ const projectSidebarSections =
   (s: GlobalState): Record<string, boolean> | undefined =>
     projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
 
+const projectOnboardingDismissed =
+  (projectId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    Boolean(projectId && s.status.dismissedProjectOnboarding?.[projectId]);
+
 /** Whether the topic list owned by `ownerId` (agent / group / project) shows only my topics. */
 const topicOnlyMine =
   (ownerId: string | undefined) =>
@@ -225,11 +233,11 @@ export const SIDEBAR_SPACER_ID = '__spacer__';
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
   'goals',
+  'project',
   'dashboard',
   'resource',
   'favorites',
   'recents',
-  'project',
   'private',
   'agent',
   SIDEBAR_SPACER_ID,
@@ -241,13 +249,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
 /** Items that must stay contiguous in the sidebar list (accordion block).
  * `private` sits above `agent` so workspace users see their personal items
  * first, with the workspace-shared agents right below. */
-export const SIDEBAR_ACCORDION_KEYS = new Set([
-  'favorites',
-  'recents',
-  'project',
-  'private',
-  'agent',
-]);
+export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'private', 'agent']);
 
 const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
@@ -282,21 +284,43 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
   return [...withoutSpacer.slice(0, insertAt), SIDEBAR_SPACER_ID, ...withoutSpacer.slice(insertAt)];
 };
 
+// Projects used to be an accordion listing every project; it is now a single
+// link to the project list. Saved orders still hold `project` inside the
+// accordion block, where a link would split the block in two, so move it up to
+// sit after Goals (or Tasks) like the other top links, or just above the block
+// when neither is up there. A spot the user picked outside the block is kept.
+const liftProjectOutOfAccordion = (order: string[]): string[] => {
+  const projectIndex = order.indexOf('project');
+  if (projectIndex === -1) return order;
+
+  const firstAccordionIndex = order.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+  if (firstAccordionIndex === -1 || projectIndex < firstAccordionIndex) return order;
+  // The block runs up to the spacer, or to its last section in orders saved
+  // without one.
+  const spacerIndex = order.indexOf(SIDEBAR_SPACER_ID);
+  const blockEnd =
+    spacerIndex === -1
+      ? order.findLastIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k)) + 1
+      : spacerIndex;
+  if (projectIndex > blockEnd) return order;
+
+  const without = order.filter((k) => k !== 'project');
+  const blockStart = without.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+  // Goals, else Tasks, may have been dragged below the spacer; then stay above the block.
+  const anchor = ['goals', 'tasks']
+    .map((k) => without.indexOf(k))
+    .find((i) => i !== -1 && i < blockStart);
+  const insertAt = anchor === undefined ? blockStart : anchor + 1;
+  return [...without.slice(0, insertAt), 'project', ...without.slice(insertAt)];
+};
+
 // Backfill missing default keys into their canonical group — top-group defaults
 // slot in just before the accordion (keeping accordion flush with the spacer),
 // bottom-group defaults go after the spacer. Without this split a new top-group
 // default added in a future version would silently appear in the bottom group
 // for existing users.
 const withAllKnownKeys = (order: string[]): string[] => {
-  let nextOrder = order;
-  if (!order.includes('project')) {
-    const recentsIndex = order.indexOf('recents');
-    const firstAgentIndex = order.findIndex((key) => key === 'private' || key === 'agent');
-    const insertAt =
-      recentsIndex >= 0 ? recentsIndex + 1 : firstAgentIndex >= 0 ? firstAgentIndex : 0;
-    nextOrder = [...order.slice(0, insertAt), 'project', ...order.slice(insertAt)];
-  }
-
+  const nextOrder = liftProjectOutOfAccordion(order);
   const present = new Set(nextOrder);
   const missingTop: string[] = [];
   const missingBottom: string[] = [];
@@ -439,6 +463,8 @@ const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? false;
 const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
 const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
 const homeGoalsCollapsed = (s: GlobalState): boolean => s.status.homeGoalsCollapsed ?? false;
+const teamBoardAttentionCollapsed = (s: GlobalState): boolean =>
+  s.status.teamBoardAttentionCollapsed ?? false;
 const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
 const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
@@ -482,8 +508,16 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   foldersFirst: true,
   order: 'asc',
 };
+const contactListSortBy = (s: GlobalState): ContactListSortBy =>
+  s.status.contactListSortBy ?? 'title';
+// The server lists Channels newest first; keep that as the default view.
+const DEFAULT_CHANNEL_LIST_SORT: ChannelListSort = { by: 'createdAt', order: 'desc' };
+const channelListSort = (s: GlobalState): ChannelListSort =>
+  s.status.channelListSort ?? DEFAULT_CHANNEL_LIST_SORT;
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
+const projectListViewMode = (s: GlobalState): ProjectListViewMode =>
+  s.status.projectListViewMode ?? 'folder';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
@@ -535,7 +569,10 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
+  contactListSortBy,
+  channelListSort,
   projectListSortBy,
+  projectListViewMode,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
@@ -583,8 +620,10 @@ export const systemStatusSelectors = {
   taskListFilter,
   taskListFilters,
   taskListViewOptions,
+  teamBoardAttentionCollapsed,
   sidebarExpandedKeys,
   agentSidebarSections,
+  projectOnboardingDismissed,
   projectSidebarSections,
   sidebarItems,
   sessionGroupKeys,

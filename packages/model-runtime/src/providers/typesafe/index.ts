@@ -1,6 +1,6 @@
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 
 export const params = {
   baseURL: 'https://api.typesafe.ai/v1',

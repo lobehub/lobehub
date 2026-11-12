@@ -26,6 +26,15 @@ const createEnqueueSource = () =>
     >()
     .mockResolvedValue({ enqueued: true });
 
+const strongIntentRequest = (): Parameters<
+  ReturnType<typeof createSelfFeedbackIntentService>['declareIntent']
+>[0] => ({
+  agentId: 'agent-1',
+  input: createStrongIntentInput(),
+  topicId: 'topic-1',
+  userId: 'user-1',
+});
+
 describe('selfFeedbackIntent', () => {
   /**
    * @example
@@ -38,12 +47,7 @@ describe('selfFeedbackIntent', () => {
       nextToolCallId: () => 'tool-call-1',
     });
 
-    const result = await service.declareIntent({
-      agentId: 'agent-1',
-      input: createStrongIntentInput(),
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const result = await service.declareIntent(strongIntentRequest());
 
     expect(result).toEqual({
       accepted: true,
@@ -123,14 +127,11 @@ describe('selfFeedbackIntent', () => {
       ).resolves.toMatchObject({ accepted: true });
     }
 
-    await expect(
-      service.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toEqual({ accepted: false, reason: 'rate_limited', strength: 'strong' });
+    await expect(service.declareIntent(strongIntentRequest())).resolves.toEqual({
+      accepted: false,
+      reason: 'rate_limited',
+      strength: 'strong',
+    });
     expect(enqueueSource).toHaveBeenCalledTimes(3);
   });
 
@@ -247,14 +248,9 @@ describe('selfFeedbackIntent', () => {
       });
     }
 
-    await expect(
-      service.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toMatchObject({ accepted: true });
+    await expect(service.declareIntent(strongIntentRequest())).resolves.toMatchObject({
+      accepted: true,
+    });
     expect(enqueueSource).toHaveBeenLastCalledWith(
       expect.objectContaining({ scopeKey: 'topic:topic-1' }),
     );
@@ -285,12 +281,7 @@ describe('selfFeedbackIntent', () => {
       topicId: 'topic-1',
       userId: 'user-1',
     });
-    const topicResult = await service.declareIntent({
-      agentId: 'agent-1',
-      input: createStrongIntentInput(),
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const topicResult = await service.declareIntent(strongIntentRequest());
 
     expect(operationResult.sourceId).toBe(
       'self-feedback-intent:user-1:agent-1:operation:operation-1:shared-tool-call',
@@ -318,26 +309,12 @@ describe('selfFeedbackIntent', () => {
       nextToolCallId: () => 'tool-call-1',
     });
 
-    await expect(
-      blockedDeclarationService.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toEqual({
+    await expect(blockedDeclarationService.declareIntent(strongIntentRequest())).resolves.toEqual({
       accepted: false,
       reason: 'intent_gate_rejected',
       strength: 'strong',
     });
-    await expect(
-      blockedEnqueueService.declareIntent({
-        agentId: 'agent-1',
-        input: createStrongIntentInput(),
-        topicId: 'topic-1',
-        userId: 'user-1',
-      }),
-    ).resolves.toEqual({
+    await expect(blockedEnqueueService.declareIntent(strongIntentRequest())).resolves.toEqual({
       accepted: false,
       reason: 'enqueue_gate_rejected',
       sourceId: 'self-feedback-intent:user-1:agent-1:topic:topic-1:tool-call-1',

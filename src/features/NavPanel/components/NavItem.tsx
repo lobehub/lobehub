@@ -76,6 +76,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface NavItemSlots {
+  /** Stacked under the leading icon, e.g. a short status label on a two-line row. */
+  iconBelow?: ReactNode;
   iconPostfix?: ReactNode;
   titlePrefix?: ReactNode;
 }
@@ -158,7 +160,7 @@ const NavItem = memo<NavItemProps>(
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
-    const { titlePrefix, iconPostfix } = slots || {};
+    const { titlePrefix, iconBelow, iconPostfix } = slots || {};
     // Link props for cmd+click support
     const linkProps = href
       ? {
@@ -177,6 +179,24 @@ const NavItem = memo<NavItemProps>(
             ...style,
           }
         : undefined;
+
+    const iconNode = icon && (
+      <Center
+        flex={'none'}
+        // With a description the row is two lines tall; align the leading icon
+        // to the title's first line (match its line-height) instead of letting
+        // it center across both lines, which drops it into the gap.
+        height={description ? 22 : 28}
+        style={description ? { alignSelf: 'flex-start' } : undefined}
+        width={28}
+      >
+        {loading ? (
+          <Spin size={iconSize} variant="network" />
+        ) : (
+          <Icon color={iconColor} icon={icon} size={iconSize} />
+        )}
+      </Center>
+    );
 
     const Content = (
       <Block
@@ -204,22 +224,21 @@ const NavItem = memo<NavItemProps>(
         onFocus={handleFocus}
         onPointerEnter={handlePointerEnter}
       >
-        {icon && (
-          <Center
+        {iconNode && iconBelow ? (
+          <Flexbox
+            align={'center'}
             flex={'none'}
-            // With a description the row is two lines tall; align the leading icon
-            // to the title's first line (match its line-height) instead of letting
-            // it center across both lines, which drops it into the gap.
-            height={description ? 22 : 28}
+            gap={2}
             style={description ? { alignSelf: 'flex-start' } : undefined}
+            // Keep the icon column width so the title does not shift; a wider
+            // label overflows evenly into the gaps around it.
             width={28}
           >
-            {loading ? (
-              <Spin size={iconSize} variant="network" />
-            ) : (
-              <Icon color={iconColor} icon={icon} size={iconSize} />
-            )}
-          </Center>
+            {iconNode}
+            {iconBelow}
+          </Flexbox>
+        ) : (
+          iconNode
         )}
 
         {iconPostfix}

@@ -65,7 +65,10 @@ describe('mobile settings useCategory', () => {
       .flatMap((group) => group.items)
       .find((item) => item.key === SettingsTabs.Provider);
 
+    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
+
     expect(provider).toBeDefined();
+    expect(keys).not.toContain(SettingsTabs.OAuthApps);
 
     provider?.onClick?.();
 
@@ -82,16 +85,6 @@ describe('mobile settings useCategory', () => {
     expect(keys).not.toContain(SettingsTabs.Provider);
   });
 
-  it('hides OAuth Apps by default', () => {
-    const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true),
-    });
-
-    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
-
-    expect(keys).not.toContain(SettingsTabs.OAuthApps);
-  });
-
   it('shows OAuth Apps when the Labs preference is enabled', () => {
     useUserStore.setState({
       preference: {
@@ -104,10 +97,8 @@ describe('mobile settings useCategory', () => {
       wrapper: createWrapper(true),
     });
 
-    const developerGroup = result.current.find((group) => group.key === SettingsGroupKey.Developer);
     const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
 
-    expect(developerGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
-    expect(systemGroup?.items.map((item) => item.key)).not.toContain(SettingsTabs.OAuthApps);
+    expect(systemGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
   });
 });

@@ -3,7 +3,7 @@ import Ajv from 'ajv';
 import Ajv2020 from 'ajv/dist/2020';
 import { describe, expect, it } from 'vitest';
 
-import { buildAnthropicTools } from '../core/contextBuilders/anthropic';
+import { buildAnthropicTools } from '../core/protocols/anthropicMessages/messages';
 import { normalizeAnthropicToolSchema } from './anthropicToolSchema';
 
 const ajv = new Ajv({ strict: false });

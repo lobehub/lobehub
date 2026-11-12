@@ -72,7 +72,7 @@ const Layout: FC = () => {
                 >
                   <NavPanelShell />
                   <DesktopLayoutContainer flush>
-                    {/* `/` stays the home dashboard; the Messages tab opens Lobe AI. */}
+                    {/* `/` stays the home dashboard; the Messages tab returns here or to the active Channel. */}
                     <DesktopHomeLayout>
                       <DesktopHome />
                     </DesktopHomeLayout>

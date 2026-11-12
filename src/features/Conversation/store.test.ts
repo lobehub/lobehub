@@ -103,6 +103,26 @@ vi.mock('@/store/chat/utils/messageMapKey', () => ({
   messageMapKey: vi.fn((sessionId, topicId) => `${sessionId}-${topicId ?? ''}`),
 }));
 
+const newConversationContext = (): ConversationContext => ({
+  agentId: 'session-1',
+  topicId: null,
+  threadId: null,
+});
+
+const groupConversationContext = (): ConversationContext => ({
+  agentId: 'agent-1',
+  groupId: 'group-1',
+  topicId: 'topic-1',
+  threadId: null,
+  scope: 'group',
+});
+
+const topicConversationContext = (): ConversationContext => ({
+  agentId: 'session-1',
+  topicId: 'topic-1',
+  threadId: null,
+});
+
 describe('ConversationStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -114,11 +134,7 @@ describe('ConversationStore', () => {
 
   describe('createStore', () => {
     it('should create a store with correct initial state', () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: 'topic-1',
-        threadId: null,
-      };
+      const context: ConversationContext = topicConversationContext();
 
       const store = createStore({ context });
       const state = store.getState();
@@ -130,11 +146,7 @@ describe('ConversationStore', () => {
     });
 
     it('should create store with custom hooks', () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = newConversationContext();
 
       const hooks: ConversationHooks = {
         onBeforeSendMessage: vi.fn(),
@@ -163,13 +175,7 @@ describe('ConversationStore', () => {
     });
 
     it('should create store with group scope context', () => {
-      const context: ConversationContext = {
-        agentId: 'agent-1',
-        groupId: 'group-1',
-        topicId: 'topic-1',
-        threadId: null,
-        scope: 'group',
-      };
+      const context: ConversationContext = groupConversationContext();
 
       const store = createStore({ context });
       const state = store.getState();
@@ -200,11 +206,7 @@ describe('ConversationStore', () => {
   describe('UI Actions', () => {
     describe('fillInputMessage', () => {
       it('should replace the composer content and focus the editor', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
         const editor = {
           focus: vi.fn(),
           setDocument: vi.fn(),
@@ -224,11 +226,7 @@ describe('ConversationStore', () => {
       });
 
       it('should update the input state before the editor is ready', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
         const store = createStore({ context });
 
         act(() => {
@@ -241,11 +239,7 @@ describe('ConversationStore', () => {
 
     describe('updateInputMessage', () => {
       it('should update input message', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
 
         const store = createStore({ context });
 
@@ -257,11 +251,7 @@ describe('ConversationStore', () => {
       });
 
       it('should handle empty message', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
 
         const store = createStore({ context });
 
@@ -276,11 +266,7 @@ describe('ConversationStore', () => {
 
     describe('setEditor', () => {
       it('should set editor instance', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
 
         const store = createStore({ context });
         const mockEditor = { getJSONState: vi.fn() };
@@ -293,11 +279,7 @@ describe('ConversationStore', () => {
       });
 
       it('should allow setting editor to null', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
 
         const store = createStore({ context });
         const mockEditor = { getJSONState: vi.fn() };
@@ -313,11 +295,7 @@ describe('ConversationStore', () => {
 
     describe('cleanupInput', () => {
       it('should reset input state on cleanupInput', () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: null,
-          threadId: null,
-        };
+        const context: ConversationContext = newConversationContext();
 
         const store = createStore({ context });
         const mockEditor = { getJSONState: vi.fn() };
@@ -341,11 +319,7 @@ describe('ConversationStore', () => {
 
     describe('sendMessage', () => {
       it('should preserve draft typed during pending send after streaming completes', async () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: 'topic-1',
-          threadId: null,
-        };
+        const context: ConversationContext = topicConversationContext();
 
         let resolveSend: (value: {
           assistantMessageId: string;
@@ -397,11 +371,7 @@ describe('ConversationStore', () => {
       });
 
       it('should filter local-only messages before forwarding to ChatStore.sendMessage', async () => {
-        const context: ConversationContext = {
-          agentId: 'session-1',
-          topicId: 'topic-1',
-          threadId: null,
-        };
+        const context: ConversationContext = topicConversationContext();
         const chatStoreState = useChatStore.getState();
         const sendMessageSpy = vi.fn().mockResolvedValue({
           assistantMessageId: 'assistant-1',
@@ -456,11 +426,7 @@ describe('ConversationStore', () => {
 
   describe('Store Isolation', () => {
     it('should create independent store instances', () => {
-      const context1: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context1: ConversationContext = newConversationContext();
 
       const context2: ConversationContext = {
         agentId: 'session-2',
@@ -490,13 +456,7 @@ describe('ConversationStore', () => {
         scope: 'main',
       };
 
-      const groupContext: ConversationContext = {
-        agentId: 'agent-1',
-        groupId: 'group-1',
-        topicId: 'topic-1',
-        threadId: null,
-        scope: 'group',
-      };
+      const groupContext: ConversationContext = groupConversationContext();
 
       const store1 = createStore({ context: mainContext });
       const store2 = createStore({ context: groupContext });
@@ -514,13 +474,7 @@ describe('ConversationStore', () => {
     });
 
     it('should isolate group and group_agent stores', () => {
-      const groupContext: ConversationContext = {
-        agentId: 'agent-1',
-        groupId: 'group-1',
-        topicId: 'topic-1',
-        threadId: null,
-        scope: 'group',
-      };
+      const groupContext: ConversationContext = groupConversationContext();
 
       const groupAgentContext: ConversationContext = {
         agentId: 'agent-1',

@@ -688,6 +688,36 @@ describe('Link Render — open an external link in the side browser', () => {
     );
   });
 
+  it("opens the page in the host's side browser when the host has one", () => {
+    mockConst.isDesktop = true;
+    const openInHostBrowser = vi.fn();
+
+    const { container } = render(
+      <EntityLinkHostProvider portal={['acceptance']} onOpenSideBrowser={openInHostBrowser}>
+        <Render
+          id="msg-1"
+          tagName="lobeLink"
+          type="element"
+          node={{
+            properties: {
+              linkDomain: 'localhost',
+              linkHref: 'http://localhost:3022/observability/context',
+              linkKind: 'generic',
+              linkLabel: 'http://localhost:3022/observability/context',
+            },
+          }}
+        >
+          {null}
+        </Render>
+      </EntityLinkHostProvider>,
+    );
+    fireEvent.click(container.querySelector('[data-side-browser]')!);
+
+    expect(openInHostBrowser).toHaveBeenCalledWith('http://localhost:3022/observability/context');
+    // The working sidebar is not on this page; a request left for it would pop it open later.
+    expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
+  });
+
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
     mockConst.isDesktop = true;
 
@@ -761,8 +791,8 @@ describe('Link Render — open an external link in the side browser', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/tasks', { escape: true });
   });
 
-  it('navigates workspace-qualified entities before opening a scoped portal', () => {
-    const { getByRole, queryByRole } = renderLink({
+  it('opens a task from another workspace beside the chat, scoped to that workspace', () => {
+    const { getByRole } = renderLink({
       linkHref: '/lobe-team/task/T-198',
       linkKind: 'generic',
       linkLabel: 'Workspace task',
@@ -770,9 +800,21 @@ describe('Link Render — open an external link in the side browser', () => {
 
     fireEvent.click(getByRole('link', { name: 'Workspace task' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
-    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
-    expect(queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mockOpenTaskDetail).toHaveBeenCalledWith('T-198', { id: 'ws-1', slug: 'lobe-team' });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('still navigates other workspace-qualified entities into their workspace', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/lobe-team/agent/agt_9',
+      linkKind: 'generic',
+      linkLabel: 'Workspace agent',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Workspace agent' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/agent/agt_9', { escape: true });
+    expect(mockOpenAgentDetail).not.toHaveBeenCalled();
   });
 
   it('preserves a different agent context for agent-scoped document links', () => {
@@ -844,6 +886,18 @@ describe('Link Render — host portal scope', () => {
     fireEvent.click(getByRole('link', { name: 'T-198' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/task/T-198');
+    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+  });
+
+  it('navigates a task from another workspace when the host has no panel', () => {
+    const { getByRole } = renderLinkInHost(
+      { linkHref: '/lobe-team/task/T-198', linkKind: 'generic', linkLabel: 'Workspace task' },
+      false,
+    );
+
+    fireEvent.click(getByRole('link', { name: 'Workspace task' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
     expect(mockOpenTaskDetail).not.toHaveBeenCalled();
   });
 

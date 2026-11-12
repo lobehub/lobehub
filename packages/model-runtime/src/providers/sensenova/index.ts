@@ -1,8 +1,8 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 
 export interface SenseNovaModelCard {
   context_length: number;

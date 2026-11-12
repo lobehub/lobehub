@@ -38,8 +38,11 @@ const styles = stylex.create({
     flex: '1',
     minWidth: 0,
   },
+  // Shrinks before anything beside it does: in a narrow composer the agent's
+  // name is the one label that can lose characters and stay recognizable.
   trigger: {
-    maxWidth: '200px',
+    minWidth: 0,
+    maxWidth: '280px',
     paddingInlineStart: '6px',
     paddingInlineEnd: '8px',
   },
@@ -97,6 +100,8 @@ const AgentRow = memo<{
 
 interface ProjectAgentSelectProps {
   agents: ProjectComposerAgent[];
+  /** Avatar only, the name in the button's tooltip — for a narrow composer. */
+  compact?: boolean;
   disabled?: boolean;
   onChange: (agentId: string) => void;
   value: string;
@@ -104,7 +109,7 @@ interface ProjectAgentSelectProps {
 
 /** Picks which project agent the composer sends to; the main agent leads. */
 const ProjectAgentSelect = memo<ProjectAgentSelectProps>(
-  ({ agents, disabled, onChange, value }) => {
+  ({ agents, compact, disabled, onChange, value }) => {
     const { t } = useTranslation('project');
     const [open, setOpen] = useState(false);
     const selected = agents.find((agent) => agent.id === value) ?? agents[0];
@@ -140,6 +145,7 @@ const ProjectAgentSelect = memo<ProjectAgentSelectProps>(
           {...stylex.props(styles.trigger)}
           disabled={disabled}
           size={'small'}
+          title={meta.name}
           type={'text'}
         >
           <AgentAvatar
@@ -150,9 +156,11 @@ const ProjectAgentSelect = memo<ProjectAgentSelectProps>(
             shape={'square'}
             size={18}
           />
-          <Text ellipsis fontSize={13} style={{ minWidth: 0 }} weight={500}>
-            {meta.name}
-          </Text>
+          {!compact && (
+            <Text ellipsis fontSize={13} style={{ minWidth: 0 }} weight={500}>
+              {meta.name}
+            </Text>
+          )}
           <ChevronDownIcon size={12} {...stylex.props(styles.chevron)} />
         </Button>
       </Popover>

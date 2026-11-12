@@ -12,6 +12,7 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -233,7 +234,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const renderStatus = () => {
       if (!server) {
         return (
-          <span className={styles.disconnected}>
+          <span {...stylex.props(styles.disconnected)}>
             {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -242,17 +243,17 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       switch (server.status) {
         case LobehubSkillStatus.CONNECTED: {
           return (
-            <span className={styles.connected}>
+            <span {...stylex.props(styles.connected)}>
               {t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
             </span>
           );
         }
         case LobehubSkillStatus.ERROR: {
-          return <span className={styles.error}>{t('tools.lobehubSkill.error')}</span>;
+          return <span {...stylex.props(styles.error)}>{t('tools.lobehubSkill.error')}</span>;
         }
         default: {
           return (
-            <span className={styles.disconnected}>
+            <span {...stylex.props(styles.disconnected)}>
               {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
             </span>
           );
@@ -374,7 +375,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -395,10 +396,10 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
                 : () => createLobehubSkillDetailModal({ identifier: provider.id })
             }
           >
-            <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
               {renderIcon()}
             </div>
-            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
               {provider.label}
             </span>
           </Flexbox>

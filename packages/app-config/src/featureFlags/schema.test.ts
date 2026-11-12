@@ -1,11 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import type * as BusinessConst from '@lobechat/business-const';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_FEATURE_FLAGS,
   evaluateFeatureFlag,
   FeatureFlagsSchema,
+  type IFeatureFlags,
   mapFeatureFlagsEnvToState,
 } from './schema';
+
+const businessConst = vi.hoisted(() => ({ enabled: false }));
+
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...(await importOriginal<typeof BusinessConst>()),
+  // A getter so per-test mutation is observed by the already-imported schema module.
+  get ENABLE_BUSINESS_FEATURES() {
+    return businessConst.enabled;
+  },
+}));
+
+afterEach(() => {
+  businessConst.enabled = false;
+});
 
 describe('FeatureFlagsSchema', () => {
   /**
@@ -17,6 +33,24 @@ describe('FeatureFlagsSchema', () => {
 
     expect(result.success).toBe(true);
     expect(result.data).toEqual({ dashboard: true });
+  });
+
+  /**
+   * The Cloud snapshot still carries the retired `workspace` / `voice_dictation` /
+   * `storage_overage` / `agent_gateway_mux_mobile` keys until they are deleted after deploy;
+   * parsing it must keep every other flag instead of dropping the whole snapshot.
+   */
+  it('parses a snapshot that still holds the retired rollout flags', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      agent_gateway_mux_mobile: true,
+      dashboard: ['user-1'],
+      storage_overage: true,
+      voice_dictation: true,
+      workspace: ['rollout:100', 'user-1'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ dashboard: ['user-1'] });
   });
 
   it('should validate correct feature flags with boolean values', () => {
@@ -125,30 +159,78 @@ describe('evaluateFeatureFlag', () => {
     expect(evaluateFeatureFlag([], 'user-123')).toBe(false);
     expect(evaluateFeatureFlag([])).toBe(false);
   });
+
+  describe('percentage rollout token', () => {
+    const userIds = Array.from({ length: 10_000 }, (_, i) => `user-${i}`);
+    const enabledUsers = (value: string[], flagKey: string) =>
+      userIds.filter((id) => evaluateFeatureFlag(value, id, flagKey));
+
+    it('buckets users by FNV-1a of "flagKey:userId" modulo 100', () => {
+      // FNV-1a("channel:user-1") = 4173342739 → bucket 39, derived outside the codebase
+      expect(evaluateFeatureFlag(['rollout:39'], 'user-1', 'channel')).toBe(false);
+      expect(evaluateFeatureFlag(['rollout:40'], 'user-1', 'channel')).toBe(true);
+    });
+
+    it('enables roughly the configured share of users', () => {
+      const share = enabledUsers(['rollout:10'], 'channel').length / userIds.length;
+
+      expect(share).toBeGreaterThan(0.08);
+      expect(share).toBeLessThan(0.12);
+    });
+
+    it('keeps every enabled user enabled when the percentage grows', () => {
+      const atTen = enabledUsers(['rollout:10'], 'channel');
+      const atTwenty = new Set(enabledUsers(['rollout:20'], 'channel'));
+
+      expect(atTen.every((id) => atTwenty.has(id))).toBe(true);
+    });
+
+    it('picks a different population for each flag key', () => {
+      const channelUsers = new Set(enabledUsers(['rollout:10'], 'channel'));
+      const overlap = enabledUsers(['rollout:10'], 'dashboard').filter((id) =>
+        channelUsers.has(id),
+      );
+
+      expect(overlap.length).toBeLessThan(channelUsers.size / 2);
+    });
+
+    it('enables nobody at 0% and everybody at 100%', () => {
+      expect(enabledUsers(['rollout:0'], 'channel')).toHaveLength(0);
+      expect(enabledUsers(['rollout:100'], 'channel')).toHaveLength(userIds.length);
+    });
+
+    it('still enables allowlisted users outside the rollout bucket', () => {
+      expect(evaluateFeatureFlag(['rollout:0', 'user-1'], 'user-1', 'channel')).toBe(true);
+    });
+
+    it('ignores malformed rollout tokens', () => {
+      for (const token of [
+        'rollout:abc',
+        'rollout:150',
+        'rollout:-5',
+        'rollout:10.5',
+        'rollout:',
+      ]) {
+        expect(enabledUsers([token], 'channel')).toHaveLength(0);
+      }
+    });
+
+    it('does not treat the token as a user id', () => {
+      expect(evaluateFeatureFlag(['rollout:0'], 'rollout:0', 'channel')).toBe(false);
+    });
+
+    it('returns false for anonymous callers', () => {
+      expect(evaluateFeatureFlag(['rollout:100'], undefined, 'channel')).toBe(false);
+    });
+  });
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
-  it('should enable auth captcha by default', () => {
+  it('should map the default feature flags', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
     expect(mappedState.enableAuthCaptcha).toBe(true);
-  });
-
-  it('should enable storage overage by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
-    expect(mappedState.enableStorageOverage).toBe(true);
-  });
-
-  it('should keep realtime voice dictation disabled by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
-    expect(mappedState.enableVoiceDictation).toBe(false);
-  });
-
-  it('should keep onboarding v2 off by default outside development', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
+    expect(mappedState).not.toHaveProperty('enableStorageOverage');
     expect(mappedState.enableOnboardingV2).toBe(false);
   });
 
@@ -162,14 +244,37 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableOnboardingV2).toBe(false);
   });
 
-  it('should map the workspace allowlist flag by user ID', () => {
-    const config = {
-      workspace: ['user-123'],
-    };
+  /**
+   * Released LobeHub Mobile clients still read these from `serverFeatureFlags`; they must keep
+   * getting what Cloud served while the flags were rolled out (`true`), and self-hosted
+   * deployments what they got by default (`false`), whatever the retired Redis keys say.
+   */
+  it('emits the deprecated mobile compatibility fields from the business-feature gate', () => {
+    // The retired keys are no longer part of IFeatureFlags; feed them like a stale snapshot would.
+    const retiredOff = {
+      agent_gateway_mux_mobile: false,
+      voice_dictation: false,
+      workspace: false,
+    } as IFeatureFlags;
+    const retiredOn = {
+      agent_gateway_mux_mobile: true,
+      voice_dictation: true,
+      workspace: true,
+    } as IFeatureFlags;
 
-    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableWorkspace).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableWorkspace).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableWorkspace).toBe(false);
+    businessConst.enabled = true;
+    expect(mapFeatureFlagsEnvToState(retiredOff, 'user-1')).toMatchObject({
+      enableGatewayMuxMobile: true,
+      enableVoiceDictation: true,
+      enableWorkspace: true,
+    });
+
+    businessConst.enabled = false;
+    expect(mapFeatureFlagsEnvToState(retiredOn, 'user-1')).toMatchObject({
+      enableGatewayMuxMobile: false,
+      enableVoiceDictation: false,
+      enableWorkspace: false,
+    });
   });
 
   it('should map DevDock access only for allowlisted user IDs', () => {
@@ -193,6 +298,34 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should keep mobile new-tier sales off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_new_tier_sales).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMobileNewTierSales,
+    ).toBe(false);
+
+    const config = { mobile_new_tier_sales: ['tester-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableMobileNewTierSales).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMobileNewTierSales).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableMobileNewTierSales).toBe(false);
+  });
+
+  it('should always report the new tiers as on for released clients that still read the flag', () => {
+    expect(mapFeatureFlagsEnvToState({}, 'user-1').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS).enableNewTierPlans).toBe(true);
+  });
+
+  it('should keep the mobile sandbox grant off by default and out of the client state', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_sandbox_grant).toBe(false);
+    expect(FeatureFlagsSchema.parse({ mobile_sandbox_grant: ['tester-123'] })).toEqual({
+      mobile_sandbox_grant: ['tester-123'],
+    });
+    expect(
+      mapFeatureFlagsEnvToState({ mobile_sandbox_grant: ['tester-123'] }, 'tester-123'),
+    ).toEqual(mapFeatureFlagsEnvToState({}, 'tester-123'));
+  });
+
   it('should keep topic previews off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(
@@ -205,21 +338,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableTopicPreview).toBe(false);
   });
 
-  it('should gate the mobile gateway mux behind its own flag', () => {
-    expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
-    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(
-      false,
-    );
-
-    const everyone = mapFeatureFlagsEnvToState({ agent_gateway_mux_mobile: true }, 'user-1');
-    expect(everyone.enableGatewayMuxMobile).toBe(true);
-
-    const config = { agent_gateway_mux_mobile: ['user-123'] };
-    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableGatewayMuxMobile).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableGatewayMuxMobile).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableGatewayMuxMobile).toBe(false);
-  });
-
   it('should keep dashboards off by default and enable them per user or globally', () => {
     expect(DEFAULT_FEATURE_FLAGS.dashboard).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableDashboard).toBe(false);
@@ -230,6 +348,28 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableDashboard).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableDashboard).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
+  });
+
+  it('should keep MCP Apps views off by default and enable them per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mcp_apps).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMcpApps).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ mcp_apps: true }).enableMcpApps).toBe(true);
+
+    const config = { mcp_apps: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApps).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
+  });
+
+  it('should keep agent knowledge spaces off by default and enable them per user', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentKnowledgeSpace,
+    ).toBe(false);
+
+    const config = { agent_knowledge_space: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableAgentKnowledgeSpace).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentKnowledgeSpace).toBe(false);
   });
 
   it('should keep the rail layout off by default and enable it per user or globally', () => {
@@ -255,6 +395,35 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableChannels).toBe(false);
   });
 
+  it('should keep managed cloud device creation off by default and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.managed_cloud_device).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableManagedCloudDevice,
+    ).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ managed_cloud_device: true }).enableManagedCloudDevice).toBe(
+      true,
+    );
+
+    const config = { managed_cloud_device: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableManagedCloudDevice).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableManagedCloudDevice).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableManagedCloudDevice).toBe(false);
+  });
+
+  it('should keep allowlisted users on while managed cloud device creation rolls out', () => {
+    const allowlistOnly = { managed_cloud_device: ['rollout:0', 'user-123'] };
+    expect(mapFeatureFlagsEnvToState(allowlistOnly, 'user-123').enableManagedCloudDevice).toBe(
+      true,
+    );
+    expect(mapFeatureFlagsEnvToState(allowlistOnly, 'user-456').enableManagedCloudDevice).toBe(
+      false,
+    );
+
+    const everyone = { managed_cloud_device: ['rollout:100', 'user-123'] };
+    expect(mapFeatureFlagsEnvToState(everyone, 'user-456').enableManagedCloudDevice).toBe(true);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,
@@ -270,11 +439,9 @@ describe('mapFeatureFlagsEnvToState', () => {
       auth_captcha: true,
       market: true,
       speech_to_text: true,
-      voice_dictation: true,
       changelog: false,
       api_key_manage: false,
       cloud_promotion: true,
-      storage_overage: false,
       commercial_hide_github: false,
       commercial_hide_docs: true,
     };
@@ -295,10 +462,8 @@ describe('mapFeatureFlagsEnvToState', () => {
       enableRAGEval: true,
       enableAgentOnboarding: true,
       enableAuthCaptcha: true,
-      enableStorageOverage: false,
       showMarket: true,
       enableSTT: true,
-      enableVoiceDictation: true,
       showCloudPromotion: true,
       hideGitHub: false,
       hideDocs: true,
@@ -311,7 +476,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       edit_agent: ['user-123', 'user-456'],
       agent_onboarding: ['user-123'],
       auth_captcha: ['user-123'],
-      storage_overage: ['user-123'],
       create_session: ['user-789'],
       dalle: true,
       knowledge_base: ['user-123'],
@@ -322,7 +486,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.isAgentEditable).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAuthCaptcha).toBe(true); // user-123 is in allowlist
-    expect(mappedState.enableStorageOverage).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableKnowledgeBase).toBe(true); // user-123 is in allowlist
   });
 
@@ -370,5 +533,40 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.showAiImage).toBe(false);
     expect(mappedState.enableKnowledgeBase).toBe(true);
     expect(mappedState.enableRAGEval).toBe(true);
+  });
+
+  it('salts the rollout bucket with each flag key', () => {
+    // user-1 lands in bucket 39 for channel and 74 for dashboard
+    const config = { channel: ['rollout:40'], dashboard: ['rollout:40'] };
+    const mappedState = mapFeatureFlagsEnvToState(config, 'user-1');
+
+    expect(mappedState.enableChannels).toBe(true);
+    expect(mappedState.enableDashboard).toBe(false);
+  });
+
+  describe('agent_runtime_strip_operation_toolset', () => {
+    it('is off by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);
+      expect(
+        mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableStripOperationToolset,
+      ).toBe(false);
+    });
+
+    it('maps true to enabled for every user', () => {
+      const config = { agent_runtime_strip_operation_toolset: true };
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(true);
+    });
+
+    it('maps a user allowlist to the listed users only', () => {
+      const config = FeatureFlagsSchema.parse({
+        agent_runtime_strip_operation_toolset: ['user-1'],
+      });
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableStripOperationToolset).toBe(false);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
+    });
   });
 });

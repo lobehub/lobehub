@@ -1,12 +1,16 @@
 'use client';
 
-import { ActionIcon, DropdownMenu, Flexbox, SearchBar, Text } from '@lobehub/ui';
-import { PlusIcon } from 'lucide-react';
+import { CHANNEL_URL } from '@lobechat/const';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, SearchBar, Text } from '@lobehub/ui';
+import { HashIcon, PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { openCreateChannel } from '@/features/Channels/CreateChannel';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { useMessageSearch } from './SearchContext';
 
@@ -37,10 +41,28 @@ export const ListHeader = memo<ListHeaderProps>(({ title, actions }) => (
 ListHeader.displayName = 'ListHeader';
 
 const Header = memo(() => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['common', 'channel']);
   const { query, setQuery } = useMessageSearch();
   const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
-  const createItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
+  const channelsEnabled = useChannelsEnabled();
+  const navigate = useWorkspaceAwareNavigate();
+  // Group Channels are rows of this list too, so they are created from the same entry.
+  const createItems = useMemo(() => {
+    const items = createTopLevelMenuItems();
+    if (!channelsEnabled) return items;
+    const [agent, group, ...rest] = items;
+    return [
+      agent,
+      group,
+      {
+        icon: <Icon icon={HashIcon} />,
+        key: 'newChannel',
+        label: t('create', { ns: 'channel' }),
+        onClick: () => openCreateChannel((id) => navigate(CHANNEL_URL(id))),
+      },
+      ...rest,
+    ];
+  }, [channelsEnabled, createTopLevelMenuItems, navigate, t]);
 
   // WeChat-style header: a search box that filters the list, and one "+" entry.
   return (

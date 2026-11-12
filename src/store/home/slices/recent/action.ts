@@ -23,6 +23,7 @@ import {
   docsHomeListResource,
   type DocsHomeRow,
   type DocsHomeTab,
+  type RecentListParams,
   recentListResource,
   toDocsHomeRow,
 } from './projection';
@@ -31,6 +32,51 @@ const n = setNamespace('recent');
 
 /** Rows in the "all recents" drawer. */
 export const ALL_RECENTS_LIMIT = 50;
+
+/** Topics the Home chat-mode recents block fetches (the customize slider's max). */
+export const HOME_TOPIC_RECENT_LIMIT = 15;
+
+/** Rows the desktop tray menu fetches. */
+export const TRAY_RECENT_LIMIT = 10;
+
+/** The Home chat-mode recents block: the viewer's own topics, with previews. */
+export const HOME_TOPIC_RECENTS_PARAMS = {
+  limit: HOME_TOPIC_RECENT_LIMIT,
+  types: 'topic',
+  view: 'mine',
+} as const satisfies RecentListParams;
+
+/** The tray menu: the viewer's own recents of every type. */
+export const TRAY_RECENTS_PARAMS = {
+  limit: TRAY_RECENT_LIMIT,
+  types: 'all',
+  view: 'mine',
+} as const satisfies RecentListParams;
+
+/**
+ * Several surfaces mount the same query (Home, the tray hook, the sidebar), so
+ * identical mount requests within this window collapse into one. Manual,
+ * post-write and active-topic refreshes still go through `revalidate`.
+ */
+const RECENT_SYNC_DEDUPE_MS = 10_000;
+
+const fetchRecentList = ({ limit, types = 'sidebar', view }: RecentListParams) => {
+  const mineOnly = view === undefined ? undefined : view === 'mine';
+  const sharedOnly = view === undefined ? undefined : view === 'team';
+  switch (types) {
+    case 'all': {
+      return recentService.getAll(limit, undefined, false, mineOnly, sharedOnly);
+    }
+    case 'topic': {
+      return recentService.getAll(limit, ['topic'], true, mineOnly, sharedOnly);
+    }
+    default: {
+      return view
+        ? recentService.getAll(limit, RECENT_SIDEBAR_TYPES, undefined, mineOnly, sharedOnly)
+        : recentService.getAll(limit, RECENT_SIDEBAR_TYPES);
+    }
+  }
+};
 
 interface RenameRecentParams {
   id: string;
@@ -81,7 +127,7 @@ export class RecentActionImpl {
     this.#recentList = createReplicaSlice(recentListResource, {
       actionPrefix: n('recentList'),
       entity: recentEntity,
-      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_SIDEBAR_TYPES),
+      fetcher: fetchRecentList,
       get,
       set,
       stateKey: 'recentListReplica',
@@ -170,6 +216,24 @@ export class RecentActionImpl {
    */
   useFetchConversationRecents = (limit: number = ALL_RECENTS_LIMIT): ReplicaSyncResult =>
     this.#conversationRecents.useSync({ limit }, { enabled: true });
+
+  /**
+   * Home chat-mode recent topics (the viewer's own, server-narrowed). Read them
+   * with `homeRecentSelectors.query(createRecentQueryKey(...HOME_TOPIC_RECENTS_PARAMS))`.
+   */
+  useFetchHomeTopicRecents = (enabled: boolean): ReplicaSyncResult =>
+    this.#recentList.useSync(HOME_TOPIC_RECENTS_PARAMS, {
+      dedupingInterval: RECENT_SYNC_DEDUPE_MS,
+      enabled,
+      revalidateOnFocus: false,
+    });
+
+  /** Desktop tray recents; `revalidate` refetches them when active topics change. */
+  useFetchTrayRecents = (enabled: boolean): ReplicaSyncResult =>
+    this.#recentList.useSync(TRAY_RECENTS_PARAMS, {
+      dedupingInterval: RECENT_SYNC_DEDUPE_MS,
+      enabled,
+    });
 
   /** Refetch every loaded Docs home tab, e.g. after a page or file was added. */
   refreshDocsHome = async (): Promise<void> => {
