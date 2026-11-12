@@ -1,6 +1,8 @@
 import { createReplicaState, type ReplicaPagedData, type ReplicaState } from '@/libs/replica';
 import { type ChatTopic, type TopicQuerySortBy } from '@/types/topic';
 
+import type { TopicShareEntry } from './projection';
+
 /** The project (and directory, when there is one) a blank conversation was opened in. */
 export type PendingNewTopicDirectory =
   | { agentId: string; projectId?: undefined; projectWorkingDirectoryId: string }
@@ -126,6 +128,10 @@ export interface ChatTopicState {
   topicLoadingIds: string[];
   topicRenamingId?: string;
   topicSearchKeywords: string;
+  /** Share records behind the Share popover (`topicShareMap[topicId]`). */
+  topicShareMap: Record<string, TopicShareEntry>;
+  /** Local-first bookkeeping for `topicShareMap`. */
+  topicShareReplica: ReplicaState<TopicShareEntry>;
 }
 
 export const initialTopicState: ChatTopicState = {
@@ -141,6 +147,8 @@ export const initialTopicState: ChatTopicState = {
   topicDetailMap: {},
   topicDetailReplica: createReplicaState<ChatTopic>(),
   topicListReplica: createReplicaState<TopicData>(),
+  topicShareMap: {},
+  topicShareReplica: createReplicaState<TopicShareEntry>(),
   topicLoadingIdCounts: {},
   topicLoadingIds: [],
   topicEffortUpdatingIds: [],
