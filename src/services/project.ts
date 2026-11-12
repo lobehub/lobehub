@@ -58,7 +58,9 @@ class ProjectService {
     params: {
       avatar?: string;
       coordinatorAgentId?: string;
+      dedicatedAgentId?: string;
       description?: string;
+      id?: string;
       identifier?: string;
       name: string;
       repository?: { defaultBranch?: string; name: string; url: string };

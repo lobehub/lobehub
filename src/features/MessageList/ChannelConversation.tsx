@@ -39,7 +39,12 @@ const ChannelConversation = memo<ChannelConversationProps>(({ active, activeAt, 
       url={CHANNEL_URL(channel.id)}
       avatar={
         project ? (
-          <ProjectAvatar avatar={project.avatar} name={project.name} size={AVATAR_SIZE} />
+          <ProjectAvatar
+            avatar={project.avatar}
+            id={project.id}
+            name={project.name}
+            size={AVATAR_SIZE}
+          />
         ) : (
           <Avatar
             avatar={<Icon color={cssVar.colorTextSecondary} icon={HashIcon} size={16} />}
