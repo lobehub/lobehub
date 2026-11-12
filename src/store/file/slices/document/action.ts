@@ -376,6 +376,8 @@ export class DocumentActionImpl {
       throw new Error(`Page with ID ${documentId} not found`);
     }
 
+    const knowledgeBaseId = sourcePage.knowledgeBaseId ?? undefined;
+
     // Create a new page with copied properties
     const newPage = await documentService.createDocument({
       content: sourcePage.content || '',
@@ -385,17 +387,22 @@ export class DocumentActionImpl {
           : JSON.stringify(sourcePage.editorData)
         : '{}',
       fileType: sourcePage.fileType,
+      knowledgeBaseId,
       metadata: {
         ...sourcePage.metadata,
         createdAt: Date.now(),
         duplicatedFrom: documentId,
       },
+      parentId: sourcePage.parentId ?? undefined,
       title: `${sourcePage.title} (Copy)`,
     });
 
     // Make the copy openable immediately: the replica entry is what
     // `getDocumentById` resolves, so the editor does not wait on a refetch.
     this.#documents.replace(newPage.id, { document: this.#toLobeDocument(newPage) });
+    this.#syncResourceItem(
+      this.#createResourceItem(this.#toResourceSnapshot(newPage, knowledgeBaseId)),
+    );
 
     return newPage;
   };
