@@ -314,9 +314,24 @@ export const resolveModelParams = async (
   const { searchDecision } = request;
   const enabledSearch =
     searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
+  // Anthropic's opt-in 1h prompt-cache TTL. It rides on the payload (which writes the
+  // breakpoints) and hosts hand the same value to the context engine (which prices the
+  // stale-tool-result trim's warmth check), so the two can never disagree. Only the
+  // first-party Anthropic runtime writes `ttl`, and only while caching is on; anywhere
+  // else the field would leak into an OpenAI-style request body, so it is not sent.
+  const contextCachingTTL =
+    provider === ModelProvider.Anthropic &&
+    effectiveChatConfig?.contextCachingTTL === '1h' &&
+    resolvedModelExtendParams?.enabledContextCaching !== false
+      ? ('1h' as const)
+      : undefined;
   const resolvedExtendParams =
-    resolvedModelExtendParams || enabledSearch
-      ? { ...resolvedModelExtendParams, ...(enabledSearch && { enabledSearch }) }
+    resolvedModelExtendParams || enabledSearch || contextCachingTTL
+      ? {
+          ...resolvedModelExtendParams,
+          ...(enabledSearch && { enabledSearch }),
+          ...(contextCachingTTL && { contextCachingTTL }),
+        }
       : undefined;
 
   const cards = providers.listModelCards();

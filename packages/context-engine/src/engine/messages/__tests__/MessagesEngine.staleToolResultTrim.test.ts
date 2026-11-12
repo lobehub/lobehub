@@ -106,3 +106,45 @@ describe('MessagesEngine — stale tool result trimming switch', () => {
     expect(payload).not.toContain('superseded by a later write');
   });
 });
+
+describe('MessagesEngine — prompt-cache TTL for the stale tool result trim', () => {
+  const T0 = Date.parse('2026-11-10T08:00:00Z');
+  const GAP = 30 * 60_000;
+
+  // A 30-minute turn gap over a large live prefix: cold under Anthropic's
+  // default 5m cache (the trim is free), warm under the opt-in 1h cache, where
+  // rewriting the 500k prefix at the 2× write price cannot pay off.
+  const turnAfterGap = (): UIChatMessage[] => [
+    { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' } as UIChatMessage,
+    ...supersededReadMessages(),
+    {
+      content: 'previous turn done',
+      createdAt: T0,
+      id: 'prev',
+      role: 'assistant',
+    } as UIChatMessage,
+    { content: 'next task', createdAt: T0 + GAP, id: 'trigger', role: 'user' } as UIChatMessage,
+  ];
+
+  const anthropicParams = (overrides?: Partial<MessagesEngineParams>) =>
+    createParams({
+      messages: turnAfterGap(),
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      ...overrides,
+    });
+
+  it('treats the gap as cold and trims on the default 5m cache', async () => {
+    const result = await new MessagesEngine(anthropicParams()).process();
+
+    expect(payloadText(result.messages)).toContain('superseded by a later write');
+  });
+
+  it('keeps the warm prefix intact when the request writes 1h breakpoints', async () => {
+    const result = await new MessagesEngine(anthropicParams({ contextCachingTTL: '1h' })).process();
+
+    const payload = payloadText(result.messages);
+    expect(payload).toContain(READ_CONTENT);
+    expect(payload).not.toContain('superseded by a later write');
+  });
+});

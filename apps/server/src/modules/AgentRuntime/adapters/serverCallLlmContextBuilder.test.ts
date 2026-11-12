@@ -337,3 +337,28 @@ describe('buildServerCallLlmContext - workspace context', () => {
     );
   });
 });
+
+describe('buildServerCallLlmContext - prompt-cache TTL', () => {
+  it('prices the stale-tool-result trim with the TTL the payload writes', async () => {
+    resolveServerCallLlmContextHintsMock.mockResolvedValue({
+      messagesForContext: [],
+      resolvedExtendParams: { contextCachingTTL: '1h' },
+      shouldReplayAssistantReasoning: false,
+    });
+
+    const result = await buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      state,
+      tooling,
+    });
+
+    expect(serverMessagesEngineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contextCachingTTL: '1h' }),
+    );
+    // The same extend params become the LLM call's `modelParameters`.
+    expect(result.resolvedExtendParams).toEqual({ contextCachingTTL: '1h' });
+  });
+});

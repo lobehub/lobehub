@@ -75,6 +75,11 @@ interface ContextEngineeringContext {
    */
   autoSkillIds?: string[];
   /**
+   * Prompt-cache TTL the payload writes (from the resolved extend params). Prices the
+   * stale-tool-result trim's warmth check; undefined → the provider's default TTL.
+   */
+  contextCachingTTL?: '5m' | '1h';
+  /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
    * out of `plugins` (pinned) — so a disabled skill is neither listed in
@@ -129,6 +134,7 @@ interface ContextEngineeringContext {
 export const contextEngineering = async ({
   additionalContexts,
   attachmentPreviewFileIds,
+  contextCachingTTL,
   messages = [],
   manifests,
   tools,
@@ -351,6 +357,7 @@ export const contextEngineering = async ({
     },
     model: {
       capabilities: { isCanUseAudio, isCanUseFC, isCanUseVideo, isCanUseVision },
+      contextCachingTTL,
       displayName: getRuntimeModelDisplayName(model, provider),
       knowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
       model,

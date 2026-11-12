@@ -704,6 +704,32 @@ describe('serverMessagesEngine', () => {
       expect(payload).toContain(READ_CONTENT);
       expect(payload).not.toContain('superseded by a later write');
     });
+
+    it('prices the warmth check with the forwarded prompt-cache TTL', async () => {
+      // A 30-minute turn gap over a large live prefix: cold under Anthropic's
+      // default 5m cache, warm under the opt-in 1h cache.
+      const T0 = Date.parse('2026-11-10T08:00:00Z');
+      const turnAfterGap = () =>
+        [
+          { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+          ...supersededReadMessages(),
+          { content: 'previous turn done', createdAt: T0, id: 'prev', role: 'assistant' },
+          { content: 'next task', createdAt: T0 + 30 * 60_000, id: 'trigger', role: 'user' },
+        ] as unknown as UIChatMessage[];
+      const run = (contextCachingTTL?: '1h') =>
+        serverMessagesEngine({
+          contextCachingTTL,
+          messages: turnAfterGap(),
+          model: 'claude-sonnet-4-6',
+          provider: 'anthropic',
+        });
+
+      expect(payloadText((await run()).messages)).toContain('superseded by a later write');
+
+      const warm = payloadText((await run('1h')).messages);
+      expect(warm).toContain(READ_CONTENT);
+      expect(warm).not.toContain('superseded by a later write');
+    });
   });
 
   describe('user memory injection', () => {
