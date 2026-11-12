@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 import {
@@ -9,6 +10,7 @@ import {
   type ReplicaLens,
 } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
+import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 import { discoverService } from '@/services/discover';
 import { type LocalMcpTool, mcpService } from '@/services/mcp';
@@ -29,6 +31,8 @@ import { connectorSelectors } from './selectors';
 import type { AgentBoundConnector, ConnectorWithTools } from './types';
 
 type Setter = StoreSetter<ToolStore>;
+
+const CONNECTOR_LIST_SWR_KEY = 'connectorList';
 
 /** The connector lists are one entry per scope, so every sync shares these params. */
 const LIST_PARAMS = {} as Record<string, never>;
@@ -230,6 +234,21 @@ export class ConnectorActionImpl {
     ]);
     if (result.applied) this.#confirmed.add(`${scope}|${BASE_LIST_KEY}`);
   };
+
+  /**
+   * Load the base connector list for a view that reads it, e.g. the install
+   * state of a marketplace MCP that only exists as a connector. Loads through
+   * {@link fetchConnectors}, so the list is confirmed for this cache scope like
+   * any other load; a view mounting after the first load reuses it. Keyed by
+   * the cache scope: a caller that re-renders when a scope switch drops the
+   * list (`isConnectorsInit`) loads the new identity's list.
+   */
+  useFetchConnectors = (enable: boolean): SWRResponse =>
+    useClientDataSWR(
+      enable ? [CONNECTOR_LIST_SWR_KEY, cacheScope.get()] : null,
+      () => this.fetchConnectors(),
+      { revalidateIfStale: false, revalidateOnFocus: false },
+    );
 
   /**
    * Refresh the connector lists after a mutation. Always refreshes the base
