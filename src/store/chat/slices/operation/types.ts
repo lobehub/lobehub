@@ -335,6 +335,12 @@ export interface QueuedMessage {
   /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
    *  keeps its gateway pin when the queue drains. */
   forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /**
+   * The untracked heterogeneous run this follow-up was handed to the server
+   * behind. A later refusal releases exactly that run's marker, so the local
+   * fallback send does not queue behind it again.
+   */
+  heldBehindOperationId?: string;
   id: string;
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;

@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UsageBreakdown } from './UsageBreakdown';
 
 vi.mock('@/business/client/features/RetainedMemberDrives', () => ({ default: () => null }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => navigate,
+}));
 const workspace = vi.hoisted(() => ({ id: 'ws-a' as string | null }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => workspace.id,
@@ -41,11 +45,42 @@ const overQuota = (overageAllowed: boolean) =>
   }) as any;
 
 describe('UsageBreakdown', () => {
+  // A toast from one case must not answer for the next one's assertion.
+  beforeEach(() => {
+    vi.mocked(toast.error).mockClear();
+  });
+
   it('should say saves are refused over a quota the plan does not bill past', () => {
     render(<UsageBreakdown data={overQuota(false)} onRefresh={vi.fn()} />);
 
     expect(screen.getByText('drive.usage.over')).toBeInTheDocument();
     expect(screen.queryByText('drive.usage.overBilled')).not.toBeInTheDocument();
+  });
+
+  it('should offer the space cleanup while saves are refused', () => {
+    render(<UsageBreakdown data={overQuota(false)} onRefresh={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('drive.cleanup.open'));
+
+    expect(navigate).toHaveBeenCalledWith('/resource/sandbox-storage?view=cleanup');
+  });
+
+  it('should keep the drive tab being viewed when opened from the storage page', () => {
+    window.history.pushState({}, '', '/resource/sandbox-storage?drive=personal');
+    render(<UsageBreakdown data={overQuota(false)} onRefresh={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('drive.cleanup.open'));
+
+    expect(navigate).toHaveBeenLastCalledWith(
+      '/resource/sandbox-storage?view=cleanup&drive=personal',
+    );
+    window.history.pushState({}, '', '/');
+  });
+
+  it('should not push a cleanup when the overage is billed', () => {
+    render(<UsageBreakdown data={overQuota(true)} onRefresh={vi.fn()} />);
+
+    expect(screen.queryByText('drive.cleanup.open')).not.toBeInTheDocument();
   });
 
   it('should say the overage is billed when the plan allows it', () => {
@@ -57,8 +92,8 @@ describe('UsageBreakdown', () => {
     expect(screen.queryByText('drive.usage.over')).not.toBeInTheDocument();
   });
 
-  // LOBE-15436: a refresh whose walk timed out used to answer with the old
-  // figure as if it had been re-measured.
+  // A refresh whose walk timed out used to answer with the old figure as if
+  // it had been re-measured.
   it('should say the figure is the last measurement when the drive could not be measured', async () => {
     const onRefresh = vi.fn().mockRejectedValue(new Error('STORAGE_USAGE_MEASURE_FAILED'));
     render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
@@ -79,7 +114,7 @@ describe('UsageBreakdown', () => {
     );
   });
 
-  // LOBE-15436: a drive too large to walk in one call is measured over several.
+  // A drive too large to walk in one call is measured over several calls.
   describe('a drive measured over several calls', () => {
     beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout'] });

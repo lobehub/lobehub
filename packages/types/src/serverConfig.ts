@@ -57,10 +57,12 @@ export type IFeatureFlagsState = {
    */
   enableMobileNewTierSales: boolean | undefined;
   /**
-   * LobeHub Mobile rollout gate for the multiplexed gateway socket and
-   * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
+   * @deprecated The `agent_gateway_mux_mobile` flag is retired. Always equals
+   * `ENABLE_BUSINESS_FEATURES` (the value Cloud already served) because
+   * released LobeHub Mobile clients still read it to pick the v2 gateway
+   * socket. Remove once those clients are no longer supported.
    */
-  enableGatewayMuxMobile: boolean | undefined;
+  enableGatewayMuxMobile: boolean;
   enableKnowledgeBase: boolean | undefined;
   /**
    * Rollout gate for relaying LLM calls of device-only model providers to the
@@ -70,6 +72,11 @@ export type IFeatureFlagsState = {
   enableLlmRelay: boolean | undefined;
   /** A plain chat send leaves its init to the step-0 worker (`agent_deferred_init`). */
   enableDeferredInit: boolean | undefined;
+  /**
+   * A plain chat send to a heterogeneous agent on an online device returns
+   * before the device dispatch completes (`agent_deferred_hetero_dispatch`).
+   */
+  enableDeferredHeteroDispatch: boolean | undefined;
   /**
    * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
    * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
@@ -89,7 +96,6 @@ export type IFeatureFlagsState = {
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
-  enableStorageOverage: boolean | undefined;
   /**
    * Keep the immutable `operationToolSet` out of the per-step agent state blob
    * and in its own Redis key (`agent_runtime_strip_operation_toolset`). Server
@@ -98,8 +104,23 @@ export type IFeatureFlagsState = {
   enableStripOperationToolset: boolean | undefined;
   /** Hover previews of a topic's final answer (`topic_preview`). */
   enableTopicPreview: boolean | undefined;
-  enableVoiceDictation: boolean | undefined;
-  enableWorkspace: boolean | undefined;
+  /**
+   * @deprecated The `voice_dictation` flag is retired: dictation is on wherever
+   * business features are. Always equals `ENABLE_BUSINESS_FEATURES` (the value
+   * Cloud already served) because released LobeHub Mobile clients still read
+   * it. Web reads `serverConfig.enableBusinessFeatures`. Remove once those
+   * clients are no longer supported.
+   */
+  enableVoiceDictation: boolean;
+  /**
+   * @deprecated The `workspace` flag is retired: workspaces are on wherever
+   * business features are. Always equals `ENABLE_BUSINESS_FEATURES` (the value
+   * Cloud already served) because released LobeHub Mobile clients still read
+   * it. Web reads `serverConfig.enableBusinessFeatures`; the server reads
+   * `ENABLE_BUSINESS_FEATURES`. Remove once those clients are no longer
+   * supported.
+   */
+  enableWorkspace: boolean;
   hideDocs: boolean | undefined;
   hideGitHub: boolean | undefined;
   isAgentEditable: boolean | undefined;

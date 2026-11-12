@@ -445,9 +445,18 @@ export type ChannelReplyJob = Pick<
 export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
+  /**
+   * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
+   * thread views and in views cached before summaries existed.
+   */
+  lastReply?: Pick<ChannelPublicMessage, 'author' | 'content' | 'createdAt' | 'id'> | null;
+  /** Replies in the thread, under the same conditions as `lastReply`. */
+  replyCount?: number;
   rootMessageId: string;
   rootSequence: number;
   status: ChannelThreadStatus;
+  /** Name an Agent gave the Thread when it moved its reply there; otherwise the root names it. */
+  title?: string;
 }
 
 export interface ChannelDetail {

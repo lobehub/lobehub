@@ -132,6 +132,22 @@ describe('application generation chains', () => {
     expect(messages[1].content).not.toContain('may move the conversation');
   });
 
+  it('tells a Channel opener that its acknowledgement announces the thread opening under it', () => {
+    const channel = chainBotReplyOpener({
+      ackPlacement: 'before-thread',
+      canOpenThread: true,
+      message: '帮我排查昨天部署失败的原因',
+    });
+    expect(channel.messages[1].content).toContain('the thread you choose opens under it');
+    expect(channel.messages[1].content).toContain('you are moving this into a thread');
+    expect(channel.messages[1].content).toContain('let me look into this');
+
+    // An IM bot posts its acknowledgement inside the thread it opened: no announcement.
+    const bot = chainBotReplyOpener({ canOpenThread: true, message: '帮我排查昨天部署失败的原因' });
+    expect(bot.messages[1].content).not.toContain('moving this into a thread');
+    expect(bot.messages[0].content).toBe(channel.messages[0].content);
+  });
+
   it('keeps the bot-wake classifier messages, schema, and version together', () => {
     const { messages } = chainBotWakeClassifier({
       customInstructions: 'Only billing questions.',

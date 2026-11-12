@@ -200,7 +200,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
     const handleContentChange = useCallback(() => {
       if (!canCreateTask) return;
       if (!editor) return;
-      instructionRef.current = String(editor.getDocument('markdown') ?? '');
+      instructionRef.current = String(editor.getDocument('markdown', { format: false }) ?? '');
     }, [canCreateTask, editor]);
 
     const handleAttach = useCallback(() => {

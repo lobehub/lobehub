@@ -4,6 +4,7 @@ import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelListItem } from '@lobechat/types';
 import { Avatar, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { HashIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -13,7 +14,7 @@ import { projectListItemSelector, useProjectStore } from '@/store/project';
 
 import ConversationRow from './ConversationRow';
 import { channelPreview } from './conversations';
-import { AVATAR_SIZE } from './style';
+import { AVATAR_SIZE, styles } from './style';
 
 interface ChannelConversationProps {
   active: boolean;
@@ -34,17 +35,23 @@ const ChannelConversation = memo<ChannelConversationProps>(({ active, activeAt, 
       activeAt={activeAt}
       contextMenuItems={menuItems(channel)}
       preview={channelPreview(channel)}
+      tag={project?.name}
       title={channel.title}
       unread={channel.unreadCount}
       url={CHANNEL_URL(channel.id)}
       avatar={
         project ? (
-          <ProjectAvatar
-            avatar={project.avatar}
-            id={project.id}
-            name={project.name}
-            size={AVATAR_SIZE}
-          />
+          <>
+            <ProjectAvatar
+              avatar={project.avatar}
+              id={project.id}
+              name={project.name}
+              size={AVATAR_SIZE}
+            />
+            <span {...stylex.props(styles.channelMark)}>
+              <Icon color={cssVar.colorTextSecondary} icon={HashIcon} size={9} />
+            </span>
+          </>
         ) : (
           <Avatar
             avatar={<Icon color={cssVar.colorTextSecondary} icon={HashIcon} size={16} />}

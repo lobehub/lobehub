@@ -6,8 +6,10 @@ import { aiAgentService } from '@/services/aiAgent';
 import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
 
+import { topicSelectors } from '../../../../selectors';
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
+import { resetReleasedMarkers } from '../transports/gateway/untrackedHeteroRun';
 import { createMockAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
@@ -215,4 +217,95 @@ describe('sendMessage behind a running Gateway run', () => {
       'newer',
     ]);
   });
+});
+
+// ROOT CAUSE (T-13930):
+//
+// The gateway ends the local operation of a Claude Code run on a transport
+// signal alone (a terminal resume status after a quiet socket), while the
+// server keeps the topic marker because the CLI is still working — e.g. waiting
+// on a background download. The composer then looked idle, and the next message
+// started a second run: the topic moved to it, the live CLI's output was
+// discarded as stale, and the CLI stopped its agent and the background work.
+//
+// Before: no local operation → a fresh send, next to the live run.
+// After: the send is queued on the server, which types it into the live session.
+describe('sendMessage while the topic names a hetero run this tab no longer follows', () => {
+  const marker = {
+    assistantMessageId: 'msg-assistant',
+    heteroType: 'claude-code',
+    operationId: 'op-hetero-live',
+  };
+
+  beforeEach(() => {
+    act(() => {
+      useChatStore.setState({
+        operations: {},
+        operationsByContext: {},
+        reconnectToGatewayOperation: vi.fn().mockResolvedValue(undefined),
+      });
+    });
+    vi.spyOn(topicSelectors, 'getTopicById').mockReturnValue(
+      () => ({ id: TEST_IDS.TOPIC_ID, metadata: { runningOperation: marker } }) as any,
+    );
+  });
+
+  afterEach(() => {
+    resetReleasedMarkers();
+  });
+
+  it('steers the live run through the server queue and re-attaches its stream', async () => {
+    const append = vi
+      .spyOn(aiAgentService, 'appendQueuedFollowUp')
+      .mockResolvedValue({ id: 'x', length: 1, queued: true });
+    const { result } = renderHook(() => useChatStore());
+
+    await act(async () => {
+      await result.current.sendMessage({ context, message: '怎么样了' });
+    });
+
+    await vi.waitFor(() => expect(append).toHaveBeenCalled());
+    expect(append.mock.calls[0][0].request).toMatchObject({ prompt: '怎么样了' });
+    expect(result.current.executeGatewayAgent).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(result.current.reconnectToGatewayOperation).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-hetero-live', topicId: TEST_IDS.TOPIC_ID }),
+      ),
+    );
+  });
+
+  // `full` / `unavailable` used to bounce: the fallback re-entered the send,
+  // which queued behind the same marker again every 100ms, never sending.
+  it.each(['idle', 'full', 'unavailable'])(
+    'sends fresh once the server does not take the follow-up (%s)',
+    async (reason) => {
+      vi.useFakeTimers();
+      vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
+        queued: false,
+        reason,
+      } as any);
+      const sendQueued = vi.fn().mockResolvedValue(undefined);
+      const { result } = renderHook(() => useChatStore());
+      const original = result.current.sendMessage;
+
+      await act(async () => {
+        await original({ context, message: 'hello' });
+      });
+      useChatStore.setState({ sendMessage: sendQueued });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      vi.useRealTimers();
+
+      // The client sends it itself; a re-entry no longer queues behind the stale marker.
+      expect(sendQueued).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello' }));
+      // No local reconnect op was started that could block that send.
+      expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
+      useChatStore.setState({ sendMessage: original });
+      await act(async () => {
+        await useChatStore.getState().sendMessage({ context, message: 'again' });
+      });
+      expect(useChatStore.getState().executeGatewayAgent).toHaveBeenCalled();
+    },
+  );
 });

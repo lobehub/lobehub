@@ -98,7 +98,7 @@ export const isShareBlockedBuiltinDispatch = (
   // that does NOT thread the parent's shareGate — the child would run with
   // the creator's full, unrestricted tool surface. Assembly strips the API
   // (`stripSubAgentDispatchApis`); this is its dispatch-time counterpart.
-  if (SUB_AGENT_DISPATCH_APIS[identifier]?.apiName === apiName) return true;
+  if (SUB_AGENT_DISPATCH_APIS[identifier]?.apiNames.has(apiName)) return true;
 
   // `humanIntervention` is deliberately NOT re-checked here: share runs keep
   // the manifest's intervention config and honor the visitor's own approval

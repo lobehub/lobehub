@@ -10,7 +10,11 @@ import type {
 } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
-import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
+import {
+  CRAWL_CONTENT_LIMITED_COUNT,
+  CRAWL_SAVE_MAX_CHARS,
+  SEARCH_ITEM_LIMITED_COUNT,
+} from '../const';
 
 const MAX_LOGGED_ERROR_LENGTH = 500;
 
@@ -137,6 +141,13 @@ export class WebBrowsingExecutionRuntime {
 
           const pageData = item.data as CrawlSuccessResult;
           if (!pageData.content) return;
+
+          if (pageData.content.length > CRAWL_SAVE_MAX_CHARS) {
+            console.warn(
+              `[WebBrowsing] Skipped saving crawl result as a document, ${pageData.content.length} characters exceeds the ${CRAWL_SAVE_MAX_CHARS} limit (${pageData.url})`,
+            );
+            return;
+          }
 
           try {
             const doc = await this.documentService!.createDocument({

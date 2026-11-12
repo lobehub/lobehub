@@ -99,6 +99,23 @@ describe('Channel request prompt', () => {
     ).not.toMatch(/channel_reply|asked to answer this request first/);
   });
 
+  it('tells a run it already acknowledged the request, after the request', () => {
+    const request = [message('current', 'Why did the deploy fail?', caller)];
+    const prompt = buildChannelPrompt(manifest, request, {
+      boundary: 'b0',
+      opening: 'Got it, checking the deploy logs first.',
+    });
+
+    expect(prompt.indexOf('<channel_opening boundary="b0">')).toBeGreaterThan(
+      prompt.indexOf('</channel_request boundary="b0">'),
+    );
+    expect(prompt).toContain('"Got it, checking the deploy logs first."');
+    expect(prompt).toContain('Do not acknowledge again');
+    expect(buildChannelPrompt(manifest, request, { boundary: 'b0' })).not.toContain(
+      '<channel_opening',
+    );
+  });
+
   it('renders the unseen context and the request as attributed blocks without ids', () => {
     const prompt = buildChannelPrompt(
       manifest,

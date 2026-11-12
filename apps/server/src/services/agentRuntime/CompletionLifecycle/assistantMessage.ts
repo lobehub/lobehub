@@ -110,3 +110,31 @@ export async function resolveErrorMessageId(
     return undefined;
   }
 }
+
+/**
+ * Mark the assistant row of the step a Stop interrupted, so every client can
+ * render the turn as stopped after a refresh: the run's newest row (the step
+ * that was streaming or calling tools, not an earlier completed one), or the
+ * placeholder the send created when the run stopped before step 0 stamped any
+ * row. The `call_llm` finalizer marks a Stop that ends its stream; this covers
+ * every other way an interrupted run settles. Non-fatal.
+ */
+export async function markInterruptedTurn(
+  deps: CompletionLifecycleDeps,
+  operationId: string,
+  state: { metadata?: { assistantMessageId?: string }; origin?: { assistantMessageId?: string } },
+  runOrigin: { topicId?: string; userId?: string },
+): Promise<void> {
+  const assistantMessageId =
+    (await resolveErrorMessageId(deps, operationId, state?.metadata, runOrigin)) ??
+    state?.origin?.assistantMessageId;
+  if (!assistantMessageId) return;
+
+  try {
+    await deps.messageModel.update(assistantMessageId, {
+      metadata: { interruptedMidStream: true },
+    });
+  } catch (error) {
+    log('[%s] Failed to mark the interrupted turn (non-fatal): %O', operationId, error);
+  }
+}

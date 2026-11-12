@@ -1018,7 +1018,7 @@ export class OperationActionsImpl {
     patch: Partial<
       Pick<
         QueuedMessage,
-        'serverDelivering' | 'serverDelivery' | 'serverRequest' | 'serverUnconfirmed'
+        'heldBehindOperationId' | 'serverDelivering' | 'serverDelivery' | 'serverRequest' | 'serverUnconfirmed'
       >
     >,
   ): void => {
