@@ -202,7 +202,10 @@ export const handOffQueuedMessage = (
     }
     if (!request) return giveUp('request-unavailable');
 
-    get().updateQueuedMessage(contextKey, id, { serverDelivery: 'appending' });
+    get().updateQueuedMessage(contextKey, id, {
+      heldBehindOperationId: heldMarkerId,
+      serverDelivery: 'appending',
+    });
     let queued = false;
     let unconfirmed = false;
     let refusal: string | undefined;
@@ -331,7 +334,9 @@ const reconcileUnconfirmed = async (
   } catch (error) {
     if (!isDefiniteRejection(error)) return 'held';
   }
-  // Not on the server and refused now: only this client holds it.
+  // Not on the server and refused now: only this client holds it, and it must
+  // not be held behind the same untracked run again when it is sent.
+  releaseUntrackedMarker(message.heldBehindOperationId, 'unconfirmed-refused');
   get().updateQueuedMessage(contextKey, message.id, {
     serverDelivery: undefined,
     serverUnconfirmed: undefined,

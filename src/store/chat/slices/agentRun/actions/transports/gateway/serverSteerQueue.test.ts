@@ -617,6 +617,27 @@ describe('server queue watch behind a hetero run this tab no longer follows', ()
     expect(findUntrackedHeteroMarker(get, context)?.operationId).toBe('op-newer');
   });
 
+  // An unknown append outcome turned the follow-up `serverUnconfirmed`; when
+  // the same-id retry is refused, the marker it was held behind is released
+  // too, or its local resend would queue behind the same run again.
+  it('releases the marker when an unconfirmed follow-up is refused later', async () => {
+    const append = vi
+      .spyOn(aiAgentService, 'appendQueuedFollowUp')
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue({ queued: false, reason: 'full' } as any);
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps').mockResolvedValue([]);
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    expect(queue()[0]).toMatchObject({ serverDelivery: 'server', serverUnconfirmed: true });
+    expect(findUntrackedHeteroMarker(get, context)?.operationId).toBe('op-hetero');
+
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS * 2);
+
+    expect(append).toHaveBeenCalledTimes(2);
+    expect(findUntrackedHeteroMarker(get, context)).toBeUndefined();
+  });
+
   it('keeps holding them while the server still names the run', async () => {
     vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
       id: 'tpc-1',

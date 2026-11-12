@@ -32,17 +32,18 @@ vi.mock('@/store/agent', () => {
   return { useAgentStore };
 });
 
+const chat = vi.hoisted(() => ({
+  state: {} as {
+    activeAgentId: string;
+    activeTopicId: string;
+    switchTopic: ReturnType<typeof vi.fn>;
+    topicDataMap: Record<string, { items: any[] }>;
+  },
+}));
+
 vi.mock('@/store/chat', () => {
-  const state = {
-    activeAgentId: 'agt_goal',
-    activeTopicId: 'tpc_goal',
-    switchTopic: vi.fn(),
-    topicDataMap: {
-      agent_agt_goal: { items: [{ id: 'tpc_goal', metadata: { runningOperation: marker } }] },
-    },
-  };
-  const useChatStore = (selector: (s: typeof state) => unknown) => selector(state);
-  useChatStore.getState = () => state;
+  const useChatStore = (selector: (s: typeof chat.state) => unknown) => selector(chat.state);
+  useChatStore.getState = () => chat.state;
   useChatStore.setState = vi.fn();
   return { useChatStore };
 });
@@ -59,6 +60,17 @@ vi.mock('@/store/chat/selectors', () => ({
 beforeEach(() => {
   hooks.useGatewayReconnect.mockReset();
   hooks.useTopicRunEvents.mockReset();
+  chat.state = {
+    activeAgentId: 'agt_goal',
+    activeTopicId: 'tpc_goal',
+    switchTopic: vi.fn(),
+    topicDataMap: {
+      agent_agt_goal: { items: [{ id: 'tpc_goal', metadata: { runningOperation: marker } }] },
+      agent_agt_other: {
+        items: [{ id: 'tpc_other', metadata: { runningOperation: { operationId: 'op_other' } } }],
+      },
+    },
+  };
 });
 
 describe('GoalChatProvider', () => {
@@ -80,5 +92,21 @@ describe('GoalChatProvider', () => {
 
     expect(hooks.useGatewayReconnect).toHaveBeenCalledWith('tpc_goal', marker, 'agt_goal');
     expect(hooks.useTopicRunEvents).toHaveBeenCalledWith('tpc_goal', 'agt_goal');
+  });
+
+  // Until the panel's switch lands, the store still names whatever was open
+  // before; its run must not be followed under the goal agent.
+  it('does not follow the previous conversation before the switch lands', () => {
+    chat.state.activeAgentId = 'agt_other';
+    chat.state.activeTopicId = 'tpc_other';
+
+    render(
+      <GoalChatProvider pinned agentId="agt_goal" goalId="goal_1" initialTopicId="tpc_goal">
+        <div />
+      </GoalChatProvider>,
+    );
+
+    for (const [topicId] of hooks.useGatewayReconnect.mock.calls) expect(topicId).toBeUndefined();
+    for (const [topicId] of hooks.useTopicRunEvents.mock.calls) expect(topicId).toBeUndefined();
   });
 });

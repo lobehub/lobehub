@@ -35,6 +35,7 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
     const [initialized, setInitialized] = useState(false);
     const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
     const activeTopicId = useChatStore((s) => s.activeTopicId);
+    const activeChatAgentId = useChatStore((s) => s.activeAgentId);
 
     useEffect(() => {
       if (!agentId) return;
@@ -74,13 +75,22 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
     // that opens here after a reload or in a new window has no local operation
     // for it, so without this the composer reads idle and the next message
     // starts a second run that discards the live one (and kills its CLI).
+    // Only once the store points at this panel's conversation: until the
+    // switch above lands, `activeTopicId` is whatever was open before, and its
+    // run would be followed under this panel's agent.
+    const followedTopicId =
+      initialized &&
+      activeChatAgentId === agentId &&
+      (!initialTopicId || activeTopicId === initialTopicId)
+        ? activeTopicId
+        : undefined;
     const runningOperation = useChatStore((s) =>
-      activeTopicId
-        ? topicSelectors.getTopicById(activeTopicId)(s)?.metadata?.runningOperation
+      followedTopicId
+        ? topicSelectors.getTopicById(followedTopicId)(s)?.metadata?.runningOperation
         : undefined,
     );
-    useGatewayReconnect(activeTopicId, runningOperation, agentId);
-    useTopicRunEvents(activeTopicId, agentId);
+    useGatewayReconnect(followedTopicId, runningOperation, agentId);
+    useTopicRunEvents(followedTopicId, agentId);
 
     if (!initialized) return null;
 
