@@ -112,11 +112,12 @@ const Timeline = ({
   }, [feedTail, before]);
 
   useEffect(() => {
-    if (threadId || sequence === undefined || before !== undefined) return;
+    // A Channel covered by a thread page is not being read: mark it read once it is back.
+    if (hidden || threadId || sequence === undefined || before !== undefined) return;
     void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
-  }, [channelId, threadId, sequence, before]);
+  }, [channelId, hidden, threadId, sequence, before]);
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
