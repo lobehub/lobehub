@@ -9,18 +9,16 @@ import { VirtuosoGrid } from 'react-virtuoso';
 import { ArticleSkeleton } from '@/components/Skeleton';
 
 import AgentItem from './AgentItem';
+import AgentsFooter, { type AgentsFooterContext } from './AgentsFooter';
 import { useDetailContext } from './DetailContext';
 import { agentListStyles as styles } from './style';
 import { usePluginAgentList } from './usePluginAgentList';
-import VirtuosoLoading from './VirtuosoLoading';
-
-const FooterSpacer = () => <div style={{ height: 16 }} />;
 
 const Agents = memo(() => {
   const { t } = useTranslation('plugin');
   const { identifier } = useDetailContext();
 
-  const { error, isEmpty, isInitialLoading, isLoadingMore, items, loadMore } =
+  const { error, isEmpty, isInitialLoading, isLoadingMore, items, loadMore, pageError, retry } =
     usePluginAgentList(identifier);
 
   // Initial loading state
@@ -56,7 +54,9 @@ const Agents = memo(() => {
 
   // Use VirtuosoGrid for rendering
   return (
-    <VirtuosoGrid
+    <VirtuosoGrid<(typeof items)[number], AgentsFooterContext>
+      components={{ Footer: AgentsFooter }}
+      context={{ isLoadingMore, message: t('skillDetail.networkError'), onRetry: retry, pageError }}
       data={items}
       endReached={loadMore}
       increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
@@ -65,9 +65,6 @@ const Agents = memo(() => {
       listClassName={styles.list}
       overscan={24}
       style={{ height: '50vh', width: '100%' }}
-      components={{
-        Footer: isLoadingMore ? VirtuosoLoading : FooterSpacer,
-      }}
     />
   );
 });

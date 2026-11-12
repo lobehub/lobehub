@@ -91,6 +91,27 @@ describe('usePluginAgentList', () => {
     await waitFor(() => expect(titles(result.current.items)).toEqual(['Agent 1', 'Agent 2']));
   });
 
+  it('keeps the agents and offers a retry when a later page fails', async () => {
+    let fail = true;
+    vi.spyOn(discoverService, 'getAgentsByPlugin').mockImplementation(async ({ page: n }) => {
+      if (n === 2 && fail) throw new Error('rate limited');
+      return page([`Agent ${n}`], 2) as never;
+    });
+
+    const { result } = renderHook(() => usePluginAgentList('web-search'), { wrapper });
+    await waitFor(() => expect(titles(result.current.items)).toEqual(['Agent 1']));
+
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.pageError).toBeInstanceOf(Error));
+    expect(titles(result.current.items)).toEqual(['Agent 1']);
+    expect(result.current.error).toBeUndefined();
+
+    fail = false;
+    act(() => result.current.retry());
+    await waitFor(() => expect(titles(result.current.items)).toEqual(['Agent 1', 'Agent 2']));
+    expect(result.current.pageError).toBeUndefined();
+  });
+
   it('starts another plugin from its first page', async () => {
     vi.spyOn(discoverService, 'getAgentsByPlugin').mockImplementation(
       async ({ page: n, pluginId }) => page([`${pluginId} ${n}`], 2) as never,

@@ -1,17 +1,8 @@
-import { type MarketUserProfile } from '@/layout/AuthProvider/MarketAuth/types';
-import { type MarketSkillPackageFile } from '@/services/marketApi';
-import type {
-  AgentForkSourceResponse,
-  AgentGroupForkSourceResponse,
-  DiscoverAssistantItem,
-} from '@/types/discover';
+import type { MarketUserProfile } from '@/layout/AuthProvider/MarketAuth/types';
+import type { MarketSkillPackageFile } from '@/services/marketApi';
+import type { AgentForkSourceResponse, AgentGroupForkSourceResponse } from '@/types/discover';
 
-import { pluginAgentsParams } from '../slices/market/action';
-import {
-  type MarketAgentGroupStatus,
-  type MarketAgentStatus,
-  pluginAgentsQueryKey,
-} from '../slices/market/projection';
+import type { MarketAgentGroupStatus, MarketAgentStatus } from '../slices/market/projection';
 import type { DiscoverStore } from '../store';
 
 /**
@@ -48,50 +39,13 @@ const userProfile =
   (s: DiscoverStore): MarketUserProfile | undefined =>
     queryKey ? s.marketUserProfileMap[queryKey] : undefined;
 
-export interface PluginAgentPages {
-  /** Rows of every loaded page, in page order, up to the first unloaded page. */
-  items: DiscoverAssistantItem[];
-  /** How many leading pages have a value (hydrated or fetched). */
-  loadedPages: number;
-  /** Total agents the server reported on the latest loaded page. */
-  totalCount?: number;
-}
-
 /**
- * The first `pageCount` pages of a plugin's agents, concatenated. Stops at the
- * first page without a value, so a gap never renders out of order. Takes the
- * `pluginAgentsMap` (select it, then derive in `useMemo`) so a render does not
- * build a new list on every unrelated store write.
+ * Whether the server answered this page of a plugin's agents in this session.
+ * A hydrated page may be stale or empty, so "no agents" is only rendered once
+ * the first page is confirmed.
  */
-const pluginAgentPages = (
-  pluginAgentsMap: DiscoverStore['pluginAgentsMap'],
-  pluginId: string | undefined,
-  pageCount: number,
-): PluginAgentPages => {
-  const items: DiscoverAssistantItem[] = [];
-  let loadedPages = 0;
-  let totalCount: number | undefined;
-  if (!pluginId) return { items, loadedPages };
-
-  for (let page = 1; page <= pageCount; page++) {
-    const entry = pluginAgentsMap[pluginAgentsQueryKey(pluginAgentsParams(pluginId, page))];
-    if (!entry) break;
-    items.push(...entry.items);
-    loadedPages = page;
-    totalCount = entry.totalCount;
-  }
-  return { items, loadedPages, totalCount };
-};
-
-/**
- * Whether the server answered the first page of a plugin's agents in this
- * session. A hydrated page may be stale or empty, so "no agents" is only
- * rendered once this is true.
- */
-const isPluginAgentsConfirmed = (pluginId: string | undefined) => (s: DiscoverStore) =>
-  !!pluginId &&
-  s.pluginAgentsReplica.entries[pluginAgentsQueryKey(pluginAgentsParams(pluginId, 1))]?.source ===
-    'server';
+const isPluginAgentsConfirmed = (queryKey?: string) => (s: DiscoverStore) =>
+  !!queryKey && s.pluginAgentsReplica.entries[queryKey]?.source === 'server';
 
 export const marketSelectors = {
   agentForkSource,
@@ -99,7 +53,6 @@ export const marketSelectors = {
   agentGroupStatus,
   agentStatus,
   isPluginAgentsConfirmed,
-  pluginAgentPages,
   skillPackageFiles,
   userProfile,
 };

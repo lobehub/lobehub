@@ -8,9 +8,11 @@ import { VirtuosoGrid } from 'react-virtuoso';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
 import AgentItem from '@/features/SkillStore/SkillDetail/AgentItem';
+import AgentsFooter, {
+  type AgentsFooterContext,
+} from '@/features/SkillStore/SkillDetail/AgentsFooter';
 import { agentListStyles as styles } from '@/features/SkillStore/SkillDetail/style';
 import { usePluginAgentList } from '@/features/SkillStore/SkillDetail/usePluginAgentList';
-import VirtuosoLoading from '@/features/SkillStore/SkillList/VirtuosoLoading';
 
 import { useDetailContext } from './DetailProvider';
 
@@ -18,13 +20,11 @@ interface AgentsProps {
   inModal?: boolean;
 }
 
-const FooterSpacer = () => <div style={{ height: 16 }} />;
-
 const Agents = memo<AgentsProps>(({ inModal }) => {
   const { t } = useTranslation('discover');
   const { identifier } = useDetailContext();
 
-  const { error, isEmpty, isInitialLoading, isLoadingMore, items, loadMore } =
+  const { error, isEmpty, isInitialLoading, isLoadingMore, items, loadMore, pageError, retry } =
     usePluginAgentList(identifier);
 
   // Initial loading state
@@ -60,7 +60,8 @@ const Agents = memo<AgentsProps>(({ inModal }) => {
 
   // Use VirtuosoGrid for rendering
   return (
-    <VirtuosoGrid
+    <VirtuosoGrid<(typeof items)[number], AgentsFooterContext>
+      components={{ Footer: AgentsFooter }}
       data={items}
       endReached={loadMore}
       increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
@@ -70,8 +71,11 @@ const Agents = memo<AgentsProps>(({ inModal }) => {
       overscan={24}
       style={inModal ? { height: '50vh', width: '100%' } : { width: '100%' }}
       useWindowScroll={!inModal}
-      components={{
-        Footer: isLoadingMore ? VirtuosoLoading : FooterSpacer,
+      context={{
+        isLoadingMore,
+        message: t('mcp.details.agents.networkError'),
+        onRetry: retry,
+        pageError,
       }}
     />
   );
