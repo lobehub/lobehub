@@ -1,4 +1,9 @@
-import type { AcceptanceReviewMarkInput, UpdateAcceptanceReviewMarkInput } from '@lobechat/types';
+import type {
+  AcceptanceReview,
+  AcceptanceReviewMark,
+  AcceptanceReviewMarkInput,
+  UpdateAcceptanceReviewMarkInput,
+} from '@lobechat/types';
 import {
   and,
   asc,
@@ -14,7 +19,6 @@ import {
 } from 'drizzle-orm';
 
 import { acceptanceComments } from '../schemas/acceptanceComment';
-import type { AcceptanceReviewMarkRow, AcceptanceReviewRow } from '../schemas/acceptanceReview';
 import { acceptanceReviewMarks, acceptanceReviews } from '../schemas/acceptanceReview';
 import type { LobeChatDatabase } from '../type';
 
@@ -49,7 +53,7 @@ export class AcceptanceReviewModel {
     return row;
   };
 
-  findById = async (id: string): Promise<AcceptanceReviewRow | undefined> => {
+  findById = async (id: string): Promise<AcceptanceReview | undefined> => {
     const [row] = await this.db
       .select()
       .from(acceptanceReviews)
@@ -150,7 +154,7 @@ export class AcceptanceReviewModel {
   addMark = async (
     reviewId: string,
     params: AddAcceptanceReviewMarkParams,
-  ): Promise<AcceptanceReviewMarkRow | undefined> => {
+  ): Promise<AcceptanceReviewMark | undefined> => {
     const inserted = await this.db
       .transaction(async (tx) => {
         const [counter] = await tx

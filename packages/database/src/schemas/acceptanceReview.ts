@@ -87,8 +87,3 @@ export const acceptanceReviewMarks = pgTable(
     index('acceptance_review_marks_route_key_review_id_idx').on(t.routeKey, t.reviewId),
   ],
 );
-
-export type AcceptanceReviewRow = typeof acceptanceReviews.$inferSelect;
-export type NewAcceptanceReview = typeof acceptanceReviews.$inferInsert;
-export type AcceptanceReviewMarkRow = typeof acceptanceReviewMarks.$inferSelect;
-export type NewAcceptanceReviewMark = typeof acceptanceReviewMarks.$inferInsert;

@@ -75,6 +75,85 @@ export type AcceptanceReviewRegionRefs = NonNullable<AcceptanceReviewMarkInput['
 export type AcceptanceReviewTargets = NonNullable<AcceptanceReviewMarkInput['targets']>;
 export type AcceptanceReviewSketch = NonNullable<AcceptanceReviewMarkInput['sketch']>;
 
+type ReviewScroll = { x: number; y: number };
+type ReviewViewport = { dpr: number; height: number; width: number };
+
+export interface AcceptanceReview {
+  createdAt: Date;
+  id: string;
+  lastMarkSeq: number;
+  projectId: string | null;
+  siteId: string;
+  status: AcceptanceReviewStatus;
+  submittedAt: Date | null;
+  taskId: string | null;
+  updatedAt: Date;
+  userId: string | null;
+  workspaceId: string | null;
+}
+
+export interface AcceptanceReviewInsert {
+  createdAt?: Date;
+  id?: string;
+  lastMarkSeq?: number;
+  projectId?: string | null;
+  siteId: string;
+  status?: AcceptanceReviewStatus;
+  submittedAt?: Date | null;
+  taskId?: string | null;
+  updatedAt?: Date;
+  userId?: string | null;
+  workspaceId?: string | null;
+}
+
+export interface AcceptanceReviewMark {
+  clientId: string;
+  content: string;
+  context: AcceptanceReviewMarkContext | null;
+  createdAt: Date;
+  id: string;
+  kind: AcceptanceReviewMarkKind;
+  pageMeta: AcceptanceReviewPageMeta | null;
+  rectDocument: AcceptanceReviewRect;
+  rectViewport: AcceptanceReviewRect;
+  regionRefs: AcceptanceReviewRegionRefs | null;
+  regions: AcceptanceReviewRect[] | null;
+  reviewId: string;
+  routeKey: string;
+  screenshotFileId: string | null;
+  scroll: ReviewScroll;
+  seq: number;
+  sketch: AcceptanceReviewSketch | null;
+  targets: AcceptanceReviewTargets | null;
+  updatedAt: Date;
+  url: string;
+  viewport: ReviewViewport;
+}
+
+export interface AcceptanceReviewMarkInsert {
+  clientId: string;
+  content: string;
+  context?: AcceptanceReviewMarkContext | null;
+  createdAt?: Date;
+  id?: string;
+  kind: AcceptanceReviewMarkKind;
+  pageMeta?: AcceptanceReviewPageMeta | null;
+  rectDocument: AcceptanceReviewRect;
+  rectViewport: AcceptanceReviewRect;
+  regionRefs?: AcceptanceReviewRegionRefs | null;
+  regions?: AcceptanceReviewRect[] | null;
+  reviewId: string;
+  routeKey: string;
+  screenshotFileId?: string | null;
+  scroll: ReviewScroll;
+  seq: number;
+  sketch?: AcceptanceReviewSketch | null;
+  targets?: AcceptanceReviewTargets | null;
+  updatedAt?: Date;
+  url: string;
+  viewport: ReviewViewport;
+}
+
 export const ACCEPTANCE_REVIEW_MARK_MAX_BYTES = 64 * 1024;
 
 const screenshotSchema = z.object({
