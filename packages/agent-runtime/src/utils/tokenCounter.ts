@@ -34,7 +34,8 @@ export const DEFAULT_MAX_CONTEXT = 128_000;
 /** Default threshold ratio (50% of max context) */
 export const DEFAULT_THRESHOLD_RATIO = 0.5;
 
-const isUsableRatio = (ratio: number | undefined): ratio is number =>
+/** A compression ratio in (0, 1]; anything else counts as unset. */
+export const isUsableCompressionRatio = (ratio: number | undefined): ratio is number =>
   typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0 && ratio <= 1;
 
 const isUsableWindow = (window: number | undefined): window is number =>
@@ -51,7 +52,9 @@ export function getCompressionThreshold(options: TokenCountOptions = {}): number
   const maxContext = isUsableWindow(options.maxWindowToken)
     ? options.maxWindowToken
     : DEFAULT_MAX_CONTEXT;
-  const ratio = [options.thresholdRatio, options.modelThresholdRatio].find(isUsableRatio);
+  const ratio = [options.thresholdRatio, options.modelThresholdRatio].find(
+    isUsableCompressionRatio,
+  );
   return Math.floor(maxContext * (ratio ?? DEFAULT_THRESHOLD_RATIO));
 }
 

@@ -79,4 +79,16 @@ describe('GeneralChatAgent — compression threshold source', () => {
       thresholdFor({ maxWindowToken: 200_000, modelThresholdRatio: 0.4 }, compressed),
     ).resolves.toBe(130_000);
   });
+
+  it.each([0, -0.5, Number.NaN, 1.5])(
+    'treats an out-of-range model ratio %s as unset, before and after a summary',
+    async (modelThresholdRatio) => {
+      await expect(
+        thresholdFor({ maxWindowToken: 200_000, modelThresholdRatio }, fresh),
+      ).resolves.toBe(100_000);
+      await expect(
+        thresholdFor({ maxWindowToken: 200_000, modelThresholdRatio }, compressed),
+      ).resolves.toBe(130_000);
+    },
+  );
 });
