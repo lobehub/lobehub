@@ -276,6 +276,13 @@ export class ChannelService {
     return member;
   };
 
+  /** Joins an open project Channel; its members see the newcomer. */
+  join = async (channelId: string) => {
+    const access = await this.repository.join(channelId);
+    await this.changed(channelId);
+    return access;
+  };
+
   changed = (channelId: string) => notifyChannel(this.db, channelId);
 
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {

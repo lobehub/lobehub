@@ -113,6 +113,7 @@ export default {
   'outgoing.retry': 'Retry',
   'outgoing.sending': 'Sending…',
   'composer': 'Message #{{name}}',
+  'composerToJoin': 'Message #{{name}} to join',
   'directComposer': 'Message {{name}}',
   'threadComposer': 'Reply in thread',
   'composer.actions': 'More actions',

@@ -231,6 +231,11 @@ export const channelRouter = router({
       });
       return { data: access?.channel.id ?? null, success: true };
     }),
+  /** Joins an open project Channel the caller can read through its project. */
+  join: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
+    await ctx.channelService.join(input.channelId);
+    return { success: true };
+  }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,

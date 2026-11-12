@@ -137,7 +137,10 @@ const Body = memo(() => {
     [allChannels, channelsEnabled],
   );
   const { archived, channels } = useMemo(() => {
-    const groups = channelsEnabled ? (allChannels ?? []).filter((channel) => !channel.agentId) : [];
+    // A project Channel the caller has not joined belongs to its project's list only.
+    const groups = channelsEnabled
+      ? (allChannels ?? []).filter((channel) => !channel.agentId && channel.joined !== false)
+      : [];
     const isHidden = (channel: (typeof groups)[number]) =>
       channel.status === 'archived' && channel.id !== activeRouteId;
     return {

@@ -260,11 +260,12 @@ describe('MessageList Body Channel rows', () => {
     ...patch,
   });
 
-  it('lists group and project Channels as rows, leaving out direct and archived ones', () => {
+  it('lists group and joined project Channels as rows, leaving out direct, not joined and archived ones', () => {
     home.channels = [
       channel({ id: 'chn_team', title: 'Team' }),
       channel({ agentId: 'agt_nasa', id: 'chn_direct', title: 'Nasa' }),
       channel({ id: 'chn_project', projectId: 'pro_1', title: 'Project' }),
+      channel({ id: 'chn_open', joined: false, projectId: 'pro_1', title: 'Not joined' }),
       channel({ id: 'chn_archived', status: 'archived', title: 'Old' }),
     ];
 
@@ -273,6 +274,7 @@ describe('MessageList Body Channel rows', () => {
     expect(screen.getByText('# Team')).toBeInTheDocument();
     expect(screen.queryByText('# Nasa')).not.toBeInTheDocument();
     expect(screen.getByText('# Project')).toBeInTheDocument();
+    expect(screen.queryByText('# Not joined')).not.toBeInTheDocument();
     expect(screen.queryByText('# Old')).not.toBeInTheDocument();
   });
 

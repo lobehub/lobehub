@@ -39,6 +39,7 @@
   "composer": "Message #{{name}}",
   "composer.actions": "More actions",
   "composer.mention": "Mention someone",
+  "composerToJoin": "Message #{{name}} to join",
   "conversationEmpty": "Start the conversation",
   "copyId": "Copy ID",
   "copyIdSuccess": "Channel ID copied",
