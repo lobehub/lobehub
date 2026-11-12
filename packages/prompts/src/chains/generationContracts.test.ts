@@ -91,7 +91,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: deploy failed again'],
     });
 
-    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v2');
+    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v3');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.name).toBe('bot_reply_opener');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.schema.required).toEqual([
       'acknowledge',
@@ -110,6 +110,17 @@ describe('application generation chains', () => {
     expect(messages[1].content).toContain('may move the conversation into a new thread');
     expect(messages[1].content).toContain('alice: deploy failed again');
     expect(messages[1].content).toContain('Nasa 帮我查下昨天部署失败的原因');
+  });
+
+  it('tells the bot reply opener when the subject lives in an attachment', () => {
+    const { messages } = chainBotReplyOpener({
+      canOpenThread: true,
+      hasAttachments: true,
+      message: '解读下这个',
+    });
+
+    expect(messages[1].content).toContain('(It comes with an attachment you cannot see.)');
+    expect(messages[0].content).toContain('never borrow the subject of the earlier messages');
   });
 
   it('tells the bot reply opener when a thread is not available', () => {

@@ -1,6 +1,6 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 
-export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v2';
+export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v3';
 
 export const BOT_REPLY_PLACEMENTS = ['channel', 'thread'] as const;
 export type BotReplyPlacement = (typeof BOT_REPLY_PLACEMENTS)[number];
@@ -31,9 +31,9 @@ Output a JSON object that conforms to the supplied schema. No prose outside the 
 
 Fields:
 - "acknowledge": true when answering takes real work first (looking things up, reading history or files, running tools, writing something long, several steps). False when you can answer right away: a greeting, "are you there", a short question, a quick yes or no, small talk.
-- "ack": when "acknowledge" is true, one short sentence you post right away, in the language of the message and in your own voice: say you got it and what you will do first, specific to this request ("Got it, I'll check yesterday's error logs first and then compare the configs."). Never the answer itself, no time estimates, no greeting, no emoji. Empty string when "acknowledge" is false.
+- "ack": when "acknowledge" is true, one short sentence you post right away, in the language of the message and in your own voice: say you got it and what you will do first, specific to this request ("Got it, I'll check yesterday's error logs first and then compare the configs."). Say what you will do with this message: when it points at an attachment, say you will look at the attachment. Never the answer itself, no time estimates, no greeting, no emoji. Empty string when "acknowledge" is false.
 - "placement": where the conversation should continue. "channel" for a reply that fits in a message or two and does not need back-and-forth. "thread" for work that produces a long answer, has several steps, or will likely need follow-up questions, so it does not flood the channel. When the request says where to answer, follow it.
-- "title": when "placement" is "thread", a short title for the thread in the language of the message, naming the subject (not "Request" or "Question"). Empty string otherwise.
+- "title": when "placement" is "thread", a short title for the thread in the language of the message, naming the subject (not "Request" or "Question"). Name what this message is about: never borrow the subject of the earlier messages. When the message points at an attachment you cannot see ("look at this"), name it from what the person said ("interpret this image"), not from the topic discussed above. Empty string otherwise.
 
 Rules:
 - When you are told a thread is not available, "placement" must be "channel" and "title" empty.
@@ -47,6 +47,8 @@ export interface BotReplyOpenerInput {
   /** Whether the reply can move into a new thread; false in a DM, an existing thread or a threadless platform. */
   canOpenThread: boolean;
   message: string;
+  /** Whether the message carried files or images; the opener never sees their content. */
+  hasAttachments?: boolean;
   /** Short transcript of the messages just before this one, oldest first. */
   recentMessages?: string[];
 }
@@ -71,7 +73,9 @@ const buildState = (input: BotReplyOpenerInput): string => {
   if (input.recentMessages?.length) {
     sections.push(`Earlier messages (oldest first):\n${input.recentMessages.join('\n')}`);
   }
-  sections.push(`Message to you:\n"""\n${input.message.trim()}\n"""`);
+  const attachmentNote =
+    input.hasAttachments === true ? '\n(It comes with an attachment you cannot see.)' : '';
+  sections.push(`Message to you:\n"""\n${input.message.trim()}\n"""${attachmentNote}`);
 
   return sections.join('\n\n');
 };
