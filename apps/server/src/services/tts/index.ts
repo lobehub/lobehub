@@ -182,18 +182,20 @@ export class TTSService {
   async synthesize(request: TTSSynthesizeRequest): Promise<TTSSynthesizeResult> {
     const { input, model, provider } = request;
 
-    // Count Unicode characters, as billing does: an emoji is one character, not two.
-    const inputCharacters = INLINE_INPUT_CAPPED_PROVIDERS.has(provider)
-      ? countTextToSpeechCharacters(input)
-      : 0;
+    const card = findTTSModelCard(provider, model);
+
+    // Capped by the model's vendor, so the LobeHub provider routing an ElevenLabs model is
+    // capped too. Counted in Unicode characters, as billing does: an emoji is one, not two.
+    const capped =
+      INLINE_INPUT_CAPPED_PROVIDERS.has(provider) ||
+      (!!card?.providerId && INLINE_INPUT_CAPPED_PROVIDERS.has(card.providerId));
+    const inputCharacters = capped ? countTextToSpeechCharacters(input) : 0;
     if (inputCharacters > INLINE_TTS_MAX_INPUT_CHARACTERS) {
       throw new TTSRequestError(
-        `input is ${inputCharacters} characters; ${provider} speech is limited to ${INLINE_TTS_MAX_INPUT_CHARACTERS} characters per request. Split the text into shorter requests.`,
+        `input is ${inputCharacters} characters; ${model} speech is limited to ${INLINE_TTS_MAX_INPUT_CHARACTERS} characters per request. Split the text into shorter requests.`,
         'invalid_params',
       );
     }
-
-    const card = findTTSModelCard(provider, model);
     const params: TTSSynthesizeParams = { ...request.params };
     // Older CLIs always send the deprecated top-level `speed`; drop it for models that
     // declare no speed instead of failing validation they never opted into.

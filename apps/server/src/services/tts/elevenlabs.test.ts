@@ -194,6 +194,17 @@ describe('TTSService with provider elevenlabs', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('caps ElevenLabs models routed through the LobeHub provider too', async () => {
+    await expect(
+      service.synthesize({
+        input: 'a'.repeat(INLINE_TTS_MAX_INPUT_CHARACTERS + 1),
+        model: 'eleven_flash_v2_5',
+        provider: 'lobehub',
+      }),
+    ).rejects.toMatchObject({ name: 'TTSRequestError', reason: 'invalid_params' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('counts the inline cap in Unicode characters, so emoji at the limit pass', async () => {
     // Each emoji is two UTF-16 units but one billed character.
     await service.synthesize({
