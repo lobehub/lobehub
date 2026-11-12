@@ -20,6 +20,14 @@ import { QQApiClient } from './api';
 import { signWebhookResponse } from './crypto';
 import { QQFormatConverter } from './format-converter';
 import { QQGatewayConnection } from './gateway';
+import {
+  createMemoryQQPassiveStore,
+  QQ_DEFERRED_PREFIX,
+  QQ_PASSIVE_LIMITS,
+  type QQPassiveSlot,
+  type QQPassiveStore,
+  type QQPassiveThreadType,
+} from './passive';
 import type {
   QQAdapterConfig,
   QQAttachment,
@@ -47,8 +55,11 @@ const BOT_MENTION_EVENT_TYPES = new Set<string>([
 export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
   readonly name = 'qq';
   private readonly api: QQApiClient;
+  private readonly appId: string;
   private readonly clientSecret: string;
   private readonly formatConverter: QQFormatConverter;
+  /** Tracks each conversation's passive-reply window; see `passive.ts`. */
+  private readonly passive: QQPassiveStore;
   private _userName: string;
   private _botUserId?: string;
   private chat!: ChatInstance;
@@ -64,8 +75,10 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
 
   constructor(config: QQAdapterConfig & { userName?: string }) {
     this.api = new QQApiClient(config.appId, config.clientSecret);
+    this.appId = config.appId;
     this.clientSecret = config.clientSecret;
     this.formatConverter = new QQFormatConverter();
+    this.passive = config.passiveStore ?? createMemoryQQPassiveStore();
     this._userName = config.userName || 'qq-bot';
   }
 
@@ -147,6 +160,16 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     if (!threadId) {
       return Response.json({ ok: true });
     }
+
+    // Every inbound message opens (or restarts) the passive-reply window the answer must go out
+    // in — QQ has no active-message channel since 2025-04-21. A reply the previous window could
+    // not carry goes out first, before the new message is answered.
+    await this.passive.open(this.passiveKey(threadId), {
+      at: Date.now(),
+      eventId: payload.id,
+      msgId: eventData.id,
+    });
+    await this.flushDeferred(threadId, this.threadTypeOf(threadId));
 
     // Create message via factory
     const messageFactory = () => this.parseRawEvent(eventData, threadId, eventType!);
@@ -235,28 +258,25 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     const { type, id, guildId } = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
 
-    let response;
-    switch (type) {
-      case 'group': {
-        response = await this.api.sendGroupMessage(id, text);
-        break;
-      }
-      case 'guild': {
-        response = await this.api.sendGuildMessage(id, text);
-        break;
-      }
-      case 'c2c': {
-        response = await this.api.sendC2CMessage(id, text);
-        break;
-      }
-      case 'dms': {
-        response = await this.api.sendDmsMessage(guildId || id, text);
-        break;
-      }
-      default: {
-        throw new Error(`Unknown thread type: ${type}`);
-      }
+    const slot = await this.reserveReplySlot(threadId, type);
+    if (!slot) {
+      // The window is closed or its reply budget is spent: QQ would reject the send, and there
+      // is no active-message channel to fall back to. Keep the text for the next inbound message.
+      await this.deferReply(threadId, text);
+
+      return {
+        id: `qq-deferred-${Date.now()}`,
+        raw: {
+          author: { id: this._botUserId || '' },
+          content: text,
+          id: '',
+          timestamp: new Date().toISOString(),
+        } as QQRawMessage,
+        threadId,
+      };
     }
+
+    const response = await this.sendInThread(type, id, guildId, text, slot);
 
     return {
       id: response.id,
@@ -268,6 +288,101 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       } as QQRawMessage,
       threadId,
     };
+  }
+
+  // ------------------------------------------------------------------
+  // Passive reply window
+  // ------------------------------------------------------------------
+
+  private passiveKey(threadId: string): string {
+    return `${this.appId}:${threadId}`;
+  }
+
+  private threadTypeOf(threadId: string): QQPassiveThreadType {
+    return this.decodeThreadId(threadId).type;
+  }
+
+  /** One reply slot inside the conversation's window, or null when nothing may be sent. */
+  private async reserveReplySlot(
+    threadId: string,
+    type: QQPassiveThreadType,
+  ): Promise<QQPassiveSlot | null> {
+    try {
+      return await this.passive.reserve(this.passiveKey(threadId), QQ_PASSIVE_LIMITS[type]);
+    } catch (error) {
+      this.logger?.warn('QQ passive window lookup failed for %s: %O', threadId, error);
+      return null;
+    }
+  }
+
+  private async sendInThread(
+    type: QQPassiveThreadType,
+    id: string,
+    guildId: string | undefined,
+    text: string,
+    slot: QQPassiveSlot,
+  ) {
+    const options = { eventId: slot.eventId, msgId: slot.msgId, msgSeq: slot.seq };
+
+    switch (type) {
+      case 'group': {
+        return this.api.sendGroupMessage(id, text, options);
+      }
+      case 'guild': {
+        return this.api.sendGuildMessage(id, text, options);
+      }
+      case 'c2c': {
+        return this.api.sendC2CMessage(id, text, options);
+      }
+      case 'dms': {
+        return this.api.sendDmsMessage(guildId || id, text, options);
+      }
+      default: {
+        throw new Error(`Unknown thread type: ${type}`);
+      }
+    }
+  }
+
+  /** Park text the current window cannot carry, so the next inbound message delivers it. */
+  private async deferReply(threadId: string, text: string): Promise<void> {
+    if (!text.trim()) return;
+
+    this.logger?.warn('QQ passive window closed for %s, deferring reply (%d chars)', threadId, text.length);
+
+    try {
+      await this.passive.savePending(this.passiveKey(threadId), text);
+    } catch (error) {
+      this.logger?.error('QQ failed to park a deferred reply for %s: %O', threadId, error);
+    }
+  }
+
+  /**
+   * Deliver a reply the previous window could not carry. Runs when the next inbound message opens
+   * a fresh window, so the reader gets the missed answer before the new one.
+   */
+  private async flushDeferred(threadId: string, type: QQPassiveThreadType): Promise<void> {
+    let text: string | undefined;
+    try {
+      text = await this.passive.takePending(this.passiveKey(threadId));
+    } catch (error) {
+      this.logger?.warn('QQ failed to read a deferred reply for %s: %O', threadId, error);
+      return;
+    }
+    if (!text?.trim()) return;
+
+    const slot = await this.reserveReplySlot(threadId, type);
+    if (!slot) {
+      await this.deferReply(threadId, text);
+      return;
+    }
+
+    const { id, guildId } = this.decodeThreadId(threadId);
+    try {
+      await this.sendInThread(type, id, guildId, `${QQ_DEFERRED_PREFIX}${text}`, slot);
+      this.logger?.info('QQ delivered a deferred reply in %s', threadId);
+    } catch (error) {
+      this.logger?.error('QQ failed to deliver a deferred reply in %s: %O', threadId, error);
+    }
   }
 
   async editMessage(

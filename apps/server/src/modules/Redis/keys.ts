@@ -40,6 +40,11 @@ export const RedisKeyNamespace = {
    */
   BOT_WAKE: 'bot-wake',
   /**
+   * QQ passive-reply windows: the inbound message a bot may answer, the replies spent, and the
+   * text a closed window could not carry.
+   */
+  QQ_PASSIVE: 'qq-passive',
+  /**
    * AI generation related keys (agent welcome, placeholders, etc.)
    */
   AI_GENERATION: 'aiGeneration',
@@ -278,6 +283,22 @@ export const RedisKeys = {
     workspaceRescanClaim: (userId: string, pool: string, deviceId: string, cwd: string): string =>
       `workspace_rescan_claim:v1:${userId}:${pool}:${deviceId}:${cwd}`,
   },
+  /**
+   * QQ passive-reply scope — see {@link RedisKeyNamespace.QQ_PASSIVE}. `{key}` is
+   * `{applicationId}:{threadId}`.
+   */
+  qqPassive: {
+    /**
+     * The inbound message that opened the current window, the replies spent in it.
+     * Full key: qq-passive:window:v1:{applicationId}:{threadId}
+     */
+    window: (key: string): string => `window:v1:${key}`,
+    /**
+     * The reply a closed window could not carry, waiting for the next inbound message.
+     * Full key: qq-passive:pending:v1:{applicationId}:{threadId}
+     */
+    pending: (key: string): string => `pending:v1:${key}`,
+  },
 } as const;
 
 /**
@@ -294,6 +315,7 @@ export const RedisKeyScopeNamespace = {
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
+  qqPassive: RedisKeyNamespace.QQ_PASSIVE,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,
 } as const satisfies Record<
   keyof typeof RedisKeys,

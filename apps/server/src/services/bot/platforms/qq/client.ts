@@ -9,6 +9,7 @@ import {
   getRuntimeStatusErrorMessage,
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
+import { redisService } from '@/server/services/redis';
 
 import { stripMarkdown } from '../stripMarkdown';
 import {
@@ -22,6 +23,7 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { deferQQReply, reserveQQReply, sendQQMessageInSlot } from './passiveReply';
 import { sendQQAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:qq:bot');
@@ -42,33 +44,22 @@ function extractThreadType(platformThreadId: string): string {
   return platformThreadId.split(':')[1] || 'group';
 }
 
+/** Text send that respects the conversation's passive window, deferring when it is closed. */
 async function sendQQMessage(
   api: QQApiClient,
+  applicationId: string,
+  platformThreadId: string,
   threadType: string,
   targetId: string,
   content: string,
 ): Promise<void> {
-  switch (threadType) {
-    case 'group': {
-      await api.sendGroupMessage(targetId, content);
-      return;
-    }
-    case 'guild': {
-      await api.sendGuildMessage(targetId, content);
-      return;
-    }
-    case 'c2c': {
-      await api.sendC2CMessage(targetId, content);
-      return;
-    }
-    case 'dms': {
-      await api.sendDmsMessage(targetId, content);
-      return;
-    }
-    default: {
-      await api.sendGroupMessage(targetId, content);
-    }
+  const slot = await reserveQQReply(applicationId, platformThreadId, threadType);
+  if (!slot) {
+    await deferQQReply(applicationId, platformThreadId, content);
+    return;
   }
+
+  await sendQQMessageInSlot(api, threadType, targetId, content, slot);
 }
 
 /**
@@ -258,12 +249,14 @@ class QQGatewayClient implements PlatformClient {
       qq: createQQAdapter({
         appId: this.config.applicationId,
         clientSecret: this.config.credentials.appSecret,
+        passiveStore: redisService.qqPassive,
       }),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
+    const applicationId = this.config.applicationId;
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
@@ -274,11 +267,18 @@ class QQGatewayClient implements PlatformClient {
           await sendQQAttachments(api, threadType, targetId, attachments, text);
           return;
         }
-        await sendQQMessage(api, threadType, targetId, text);
+        await sendQQMessage(api, applicationId, platformThreadId, threadType, targetId, text);
       },
       editMessage: (_messageId, content) =>
         // QQ does not support editing — send a new message as fallback
-        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
+        sendQQMessage(
+          api,
+          applicationId,
+          platformThreadId,
+          threadType,
+          targetId,
+          messengerContentText(content),
+        ),
       // QQ Bot API doesn't support reactions or typing
       removeReaction: () => Promise.resolve(),
     };
@@ -366,12 +366,14 @@ class QQWebhookClient implements PlatformClient {
       qq: createQQAdapter({
         appId: this.config.applicationId,
         clientSecret: this.config.credentials.appSecret,
+        passiveStore: redisService.qqPassive,
       }),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
+    const applicationId = this.config.applicationId;
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
@@ -382,10 +384,17 @@ class QQWebhookClient implements PlatformClient {
           await sendQQAttachments(api, threadType, targetId, attachments, text);
           return;
         }
-        await sendQQMessage(api, threadType, targetId, text);
+        await sendQQMessage(api, applicationId, platformThreadId, threadType, targetId, text);
       },
       editMessage: (_messageId, content) =>
-        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
+        sendQQMessage(
+          api,
+          applicationId,
+          platformThreadId,
+          threadType,
+          targetId,
+          messengerContentText(content),
+        ),
       removeReaction: () => Promise.resolve(),
     };
   }
