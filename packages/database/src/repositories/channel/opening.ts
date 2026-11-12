@@ -31,6 +31,11 @@ export const openingRequestKey = (jobId: string) => `opening:${jobId}`;
 
 /** A queued job that may still open its reply, with what the opener needs to decide. */
 export interface ChannelOpeningCandidate {
+  /**
+   * Whether someone addressed the Agent (owed answer). False for a follow-up its own rules woke:
+   * the opener then acknowledges only a clear request for work.
+   */
+  addressed: boolean;
   agent: { id: string; name: string | null; title: string | null };
   /**
    * Whether the reply may move into a new Thread: only a request on a group's main timeline can.
@@ -61,11 +66,14 @@ const isOpened = async (db: LobeChatDatabase | Transaction, jobId: string) => {
 };
 
 /**
- * Whether a job opens its reply before the run: an owed answer only. A follow-up nobody asked
- * for, or one deferred behind another member's answer, may stay silent and never acknowledges.
+ * Whether a job opens its reply before the run. An owed answer always does. So does a follow-up
+ * that leads the message (its name in the text, a follow-up window, its duties): its opener
+ * acknowledges only a clear request, and acknowledging commits it to answer (see
+ * {@link applyOpening}). A follow-up deferred behind another member's answer never opens: it
+ * reads that answer first, and most often stays silent.
  */
 export const opensReply = (job: { wake: { afterMemberId?: string; kind: string } | null }) =>
-  !job.wake || (job.wake.kind !== 'followup' && !job.wake.afterMemberId);
+  !job.wake?.afterMemberId;
 
 /**
  * The queued job's opening input, or undefined when it has nothing to open: already opened,
@@ -138,6 +146,7 @@ export const findOpeningCandidate = async (
   if (!requestMessage) return;
 
   return {
+    addressed: job.wake?.kind !== 'followup',
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
     canOpenThread: !job.threadId && !channel.agentId,
     recent: messages.filter((message) => message.id !== job.messageId),
@@ -180,6 +189,14 @@ export const applyOpening = async (
     // The acknowledgement goes where the person is looking: the request's own branch, answering
     // the request. A Thread opens under it, so the person sees the reply start and where it went.
     const ack = decision.ack?.trim();
+    // A follow-up that acknowledges has said it will answer: it owes the answer now, and may no
+    // longer end in silence. One that does not stays optional, where it was asked.
+    const optional = job.wake?.kind === 'followup';
+    if (optional && ack)
+      await tx
+        .update(channelJobs)
+        .set({ wake: { ...job.wake!, kind: 'mention' } })
+        .where(eq(channelJobs.id, job.id));
     const posted = ack
       ? await appendMessage(tx, {
           agentId: member.agentId,
@@ -193,7 +210,9 @@ export const applyOpening = async (
       : undefined;
 
     let threadId = job.threadId;
-    const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
+    // An optional reply never opens a Thread on its own: it may yet stay silent in it.
+    const title =
+      optional && !ack ? undefined : decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
     // Without an acknowledgement the Thread opens under the request itself, unless an archived
     // one already sits there: it takes no new work, so the reply stays where it was asked.
     const rootMessageId = posted?.id ?? job.messageId;
@@ -253,6 +272,7 @@ export const applyOpening = async (
 
     await audit(tx, channelId, REPLY_OPENED_EVENT, job.id, {
       ...(posted && { messageId: posted.id }),
+      ...(optional && posted && { committed: true }),
       ...(threadId !== job.threadId && { threadId }),
     });
 
