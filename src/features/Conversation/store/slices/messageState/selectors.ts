@@ -1,3 +1,5 @@
+import { LOADING_FLAT } from '@lobechat/const';
+
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
 import { getForwardableMessages } from '@/store/chat/slices/forward/helpers';
@@ -135,10 +137,17 @@ const isMessageContinuing = (id: string) => (s: State) =>
   s.operationState.getMessageOperationState(id).isContinuing;
 
 /**
- * Check if a message generation was interrupted by user
+ * Check if a message generation was interrupted by user: its operation was
+ * cancelled in this session, or the server marked the run stopped before its
+ * first output (otherwise the left-over placeholder renders as an empty bubble).
  */
-const isMessageInterrupted = (id: string) => (s: State) =>
-  s.operationState.getMessageOperationState(id).isInterrupted;
+const isMessageInterrupted = (id: string) => (s: State) => {
+  const { isGenerating, isInterrupted } = s.operationState.getMessageOperationState(id);
+  if (isInterrupted || isGenerating) return isInterrupted;
+
+  const message = dataSelectors.getDbMessageById(id)(s);
+  return !!message?.metadata?.interruptedMidStream && message.content === LOADING_FLAT;
+};
 
 /**
  * Check if a message is in reasoning state

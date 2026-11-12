@@ -1,6 +1,7 @@
 /**
  * Locating the run's own assistant message row in the database.
  */
+import { LOADING_FLAT } from '@lobechat/const';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
@@ -108,5 +109,31 @@ export async function resolveErrorMessageId(
   } catch (error) {
     log('[%s] Failed to resolve the run assistant row for its error: %O', operationId, error);
     return undefined;
+  }
+}
+
+/**
+ * Mark the run's assistant row stopped when the run was interrupted before its
+ * first output. Such a row still holds the `LOADING_FLAT` placeholder, which
+ * every client renders as an empty bubble once no live operation backs it;
+ * the persisted `interruptedMidStream` marker (the one a stop with partial
+ * output carries) lets them render the stopped state instead. Non-fatal.
+ */
+export async function markInterruptedPlaceholder(
+  deps: CompletionLifecycleDeps,
+  operationId: string,
+  assistantMessageId: string | undefined,
+): Promise<void> {
+  if (!assistantMessageId) return;
+
+  try {
+    const row = await deps.messageModel.findById(assistantMessageId);
+    if (row?.content !== LOADING_FLAT || row.tools?.length) return;
+
+    await deps.messageModel.update(assistantMessageId, {
+      metadata: { interruptedMidStream: true },
+    });
+  } catch (error) {
+    log('[%s] Failed to mark the stopped placeholder (non-fatal): %O', operationId, error);
   }
 }

@@ -1747,11 +1747,10 @@ export class ConversationLifecycleActionImpl {
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (runtimeType === 'gateway' && !directMentionRoute) {
       try {
-        // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
-        // completes it the instant phase-1 init finishes (after the child
-        // `execServerAgentRuntime` op starts). Without this hand-off the
-        // input loading state would drop during the execAgentTask round-trip
-        // and the send button would flicker back to "send".
+        // Pass `sendMessage` as `parentOperationId`: executeGatewayAgent completes it once
+        // phase-1 init finishes, so the send button doesn't flicker back during the
+        // round-trip. Once the request is out the server persists the turn, so a Stop
+        // keeps it in the chat instead of handing the text back to the composer.
         const result = await this.#get().executeGatewayAgent({
           // Ids and branch tail the optimistic rows render under; the server honours
           // them like sendMessageInServer, so the turn stays on the visible branch.
@@ -1778,6 +1777,8 @@ export class ConversationLifecycleActionImpl {
             ? { ...requestMetadata, steer: true }
             : requestMetadata,
           onMessageAccepted: notifyMessageAccepted,
+          onStartRequestSent: () =>
+            this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null }),
           onTopicCreated: context.isolatedTopic ? onTopicCreated : undefined,
           parentOperationId: operationId,
           clientOperations,
@@ -1867,11 +1868,10 @@ export class ConversationLifecycleActionImpl {
           userMessageId: result.userMessageId,
         };
       } catch (e) {
-        // User cancelled during phase-1 init — `cancelOperation` already set
-        // the op to 'cancelled' and `executeGatewayAgent` cleaned up the
-        // server task. Don't clobber that with 'failed'.
+        // A Stop keeps 'cancelled'; only a turn the server refused gets its text back.
         const op = this.#get().operations[operationId];
         if (op?.status === 'cancelled') {
+          restoreComposerAfterFailedSend(e);
           cleanupTempMessages({
             preserveOptimisticUser: Boolean(optimisticUserMessageId && !hasNotifiedMessageAccepted),
           });
