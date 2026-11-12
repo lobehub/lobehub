@@ -121,10 +121,12 @@ export const compareResourceItems = (
   b: SortableResource,
   sorter: ResourceSorter,
   sortType: SortType,
+  options?: { groupFolders?: boolean },
 ): number => {
   const aFolder = a.isFolder === true || a.fileType === CUSTOM_FOLDER_FILE_TYPE;
   const bFolder = b.isFolder === true || b.fileType === CUSTOM_FOLDER_FILE_TYPE;
-  if (aFolder !== bFolder) return aFolder ? -1 : 1;
+  const groupFolders = (options?.groupFolders ?? true) || sorter === 'custom' || sorter === 'name';
+  if (groupFolders && aFolder !== bFolder) return aFolder ? -1 : 1;
 
   const direction = sortType === SortType.Desc ? -1 : 1;
   let cmp = 0;
@@ -154,6 +156,7 @@ const compareResourcesForList =
       b,
       sorter ?? (libraryId ? 'custom' : 'createdAt'),
       sortType ?? (libraryId ? SortType.Asc : SortType.Desc),
+      { groupFolders: Boolean(libraryId) },
     );
 
 /**

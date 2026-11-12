@@ -1036,7 +1036,7 @@ export class KnowledgeRepo {
     const order = this.orderBy(sortType, sorter);
     return inKnowledgeBase
       ? [foldersFirst, order, direction(sql.raw('natural_name_key')), stableId]
-      : [order];
+      : [order, direction(sql.raw('natural_name_key')), stableId];
   };
 
   /**

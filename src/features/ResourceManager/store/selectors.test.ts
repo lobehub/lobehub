@@ -225,6 +225,32 @@ describe('resource ordering', () => {
     }
   });
 
+  it.each(['custom', 'name', 'createdAt', 'size'] as const)(
+    'applies library and Drive folder grouping for %s',
+    (sorter) => {
+      const rows = [
+        { ...row('a'), createdAt: new Date(0), size: 10 },
+        { ...row('z', true), createdAt: new Date(1000), size: 0 },
+      ];
+      for (const sortType of [SortType.Asc, SortType.Desc]) {
+        expect(sortFileList(rows, sorter, sortType, { groupFolders: true })?.[0].name).toBe('z');
+        const driveFirst =
+          sorter === 'custom' || sorter === 'name'
+            ? 'z'
+            : sorter === 'createdAt'
+              ? sortType === SortType.Asc
+                ? 'a'
+                : 'z'
+              : sortType === SortType.Asc
+                ? 'z'
+                : 'a';
+        expect(sortFileList(rows, sorter, sortType, { groupFolders: false })?.[0].name).toBe(
+          driveFirst,
+        );
+      }
+    },
+  );
+
   it('puts finite custom weights before missing and invalid weights in both directions', () => {
     const rows = [row('A'), row('B', false, Infinity), row('Z', false, 0), row('C', false, 1000)];
     expect(sortFileList(rows, 'custom', SortType.Asc)?.map((item) => item.name)).toEqual([

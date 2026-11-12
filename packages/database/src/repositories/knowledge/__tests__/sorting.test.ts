@@ -141,6 +141,53 @@ describe('knowledge resource sorting', () => {
     }
   });
 
+  it.each(['custom', 'name', 'createdAt', 'size'] as const)(
+    'matches client grouping and tie-breaking across library and Drive pages for %s',
+    async (sorter) => {
+      await addDocument('docs_folder', 'Z folder', { fileType: 'custom/folder' });
+      await db.update(documents).set({ createdAt: new Date('2024-02-01T00:00:00Z') });
+      await addFile('file_b', 'same');
+      await addFile('file_a', 'same');
+      await addFile('file_10', '10 file');
+      await addFile('file_2', '2 file');
+
+      for (const groupFolders of [true, false]) {
+        if (!groupFolders) {
+          await db.delete(knowledgeBaseFiles);
+          await db.update(documents).set({ knowledgeBaseId: null });
+        }
+        for (const includeContent of [true, false]) {
+          for (const sortType of [SortType.Asc, SortType.Desc]) {
+            const params = {
+              knowledgeBaseId: groupFolders ? knowledgeBaseId : undefined,
+              includeContent,
+              sorter,
+              sortType,
+            };
+            const rows = await repo.query({ ...params, limit: 100 });
+            const expected = [...rows].sort((a, b) =>
+              compareResourceItems(a, b, sorter, sortType, { groupFolders }),
+            );
+            const ids: string[] = [];
+            for (let offset = 0; offset < 5; offset += 2) {
+              const page = await repo.query({ ...params, limit: 2, offset });
+              ids.push(...page.map((item) => item.id));
+            }
+            expect(ids).toEqual(expected.map((item) => item.id));
+            const foldersFirst = groupFolders || sorter === 'custom' || sorter === 'name';
+            const folderIndex = ids.indexOf('docs_folder');
+            expect(folderIndex).toBe(
+              foldersFirst ||
+                (sorter === 'size' ? sortType === SortType.Asc : sortType === SortType.Desc)
+                ? 0
+                : 4,
+            );
+          }
+        }
+      }
+    },
+  );
+
   it('renumbers unloaded siblings after a reordered descending first page', async () => {
     for (let n = 1; n <= 60; n++) {
       await addDocument(`docs_${n}`, `Item ${n}`, { metadata: { sortOrder: n * 1000 } });

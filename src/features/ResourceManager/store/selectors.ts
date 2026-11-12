@@ -99,7 +99,9 @@ export const sortFileList = <T extends Parameters<typeof compareResourceItems>[0
   fileList: T[] | undefined,
   sorter: ResourceSorter,
   sortType: SortType,
-): T[] | undefined => fileList?.toSorted((a, b) => compareResourceItems(a, b, sorter, sortType));
+  options?: { groupFolders?: boolean },
+): T[] | undefined =>
+  fileList?.toSorted((a, b) => compareResourceItems(a, b, sorter, sortType, options));
 
 /**
  * Get sorted file list based on current sort settings
@@ -108,7 +110,7 @@ export const sortFileList = <T extends Parameters<typeof compareResourceItems>[0
  */
 const getSortedFileList = (s: State): FileListItem[] | undefined => {
   const fileList = useFileStore.getState().fileList;
-  return sortFileList(fileList, s.sorter, s.sortType);
+  return sortFileList(fileList, s.sorter, s.sortType, { groupFolders: Boolean(s.libraryId) });
 };
 
 /**

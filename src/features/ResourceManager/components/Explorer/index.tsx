@@ -122,7 +122,7 @@ const ResourceExplorer = memo<ResourceExplorerProps>(({ hero }) => {
   }));
 
   // Sort data using current sort settings
-  const data = sortFileList(rawData, sorter, sortType);
+  const data = sortFileList(rawData, sorter, sortType, { groupFolders: Boolean(libraryId) });
 
   // Check task status
   useCheckTaskStatus(data);

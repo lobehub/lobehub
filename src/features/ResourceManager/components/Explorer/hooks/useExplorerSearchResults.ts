@@ -29,7 +29,11 @@ export const useExplorerSearchResults = () => {
     searchKey ? s.explorerSearchEntries[searchKey] : undefined,
   );
 
-  const [sorter, sortType] = useResourceManagerStore((s) => [s.sorter, s.sortType]);
+  const [libraryId, sorter, sortType] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.sorter,
+    s.sortType,
+  ]);
   const rawData = current?.items;
   const data: FileListItem[] = useMemo(() => {
     const mapped = rawData?.map((item) => ({
@@ -42,8 +46,8 @@ export const useExplorerSearchResults = () => {
       finishEmbedding: item.finishEmbedding ?? false,
       url: item.url ?? '',
     }));
-    return sortFileList(mapped, sorter, sortType) ?? [];
-  }, [rawData, sorter, sortType]);
+    return sortFileList(mapped, sorter, sortType, { groupFolders: Boolean(libraryId) }) ?? [];
+  }, [libraryId, rawData, sorter, sortType]);
 
   // Hits beyond the first page used to be unreachable: the overlay never asked
   // for the next page, so a keyword matching hundreds of files showed 50.
