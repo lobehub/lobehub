@@ -20,4 +20,21 @@ describe('provider artwork', () => {
     expect(wordmark).not.toContain('lucide-provider');
     expect((wordmark.match(/<svg /g) || []).length).toBe(2);
   });
+
+  // Mapped locally until @lobehub/icons maps the id (see ./lobeIconMappings).
+  it.each(['elevenlabs', 'ElevenLabs'])(
+    'renders the official %s avatar and wordmark',
+    (provider) => {
+      const avatar = renderToStaticMarkup(
+        createElement(ProviderIcon, { provider, type: 'avatar' }),
+      );
+      const wordmark = renderToStaticMarkup(createElement(ProviderCombine, { provider }));
+
+      expect(avatar).toContain('<title>ElevenLabs</title>');
+      expect(avatar).not.toContain('lucide-provider');
+      // The brand's combined artwork is the wordmark alone.
+      expect(wordmark).toContain('<title>ElevenLabs</title>');
+      expect(wordmark).not.toContain('lucide-provider');
+    },
+  );
 });

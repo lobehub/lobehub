@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
 import { channelActions } from '@/store/channel';
 
+import { channelBasePath, matchChannelThread } from './paths';
 import type { ChannelThreadDraft } from './threadDraft';
 
 interface DraftSelection {
@@ -17,18 +18,24 @@ interface DraftSelection {
 /** Opening/closing a preview is local; only its first send creates a persisted thread. */
 export const useThreadPanel = (channelId: string) => {
   const [params, setParams] = useSearchParams();
-  const threadId = params.get('thread');
-  // A thread link from the sidebar opens the thread as the page instead of beside the Channel.
-  const page = !!threadId && params.get('view') === 'page';
+  const navigate = useNavigate();
   const location = useActiveLocation();
+  // A thread link from the sidebar opens the thread as the page (`…/threads/:threadId`); one
+  // opened from a message shows beside the Channel (`?thread=`).
+  const pageThreadId = matchChannelThread(location.pathname) ?? null;
+  const threadId = pageThreadId ? null : params.get('thread');
+  const basePath = channelBasePath(location.pathname) ?? location.pathname;
+  // Links shared before thread pages had their own path (`?thread=…&view=page`).
+  const legacyPageThreadId =
+    !pageThreadId && params.get('view') === 'page' ? params.get('thread') : null;
   const scope = cacheScope.use();
   const [selection, setSelection] = useState<DraftSelection | null>(null);
   const selected = useRef(selection);
   const selectionRevision = useRef(0);
   const renderedRevision = selectionRevision.current;
   const mounted = useRef(false);
-  const latest = useRef({ channelId, pathname: location.pathname, setParams, threadId });
-  latest.current = { channelId, pathname: location.pathname, setParams, threadId };
+  const latest = useRef({ basePath, channelId, pathname: location.pathname, setParams, threadId });
+  latest.current = { basePath, channelId, pathname: location.pathname, setParams, threadId };
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -42,7 +49,6 @@ export const useThreadPanel = (channelId: string) => {
         const next = new URLSearchParams(current);
         if (id) next.set('thread', id);
         else next.delete('thread');
-        next.delete('view');
         return next;
       },
       { replace },
@@ -67,16 +73,12 @@ export const useThreadPanel = (channelId: string) => {
   };
   const close = () => {
     clearDraft();
-    if (threadId) setThread(null);
+    if (pageThreadId) navigate(basePath);
+    else if (threadId) setThread(null);
   };
   const openPage = (id: string) => {
     clearDraft();
-    latest.current.setParams((current) => {
-      const next = new URLSearchParams(current);
-      next.set('thread', id);
-      next.set('view', 'page');
-      return next;
-    });
+    navigate(`${latest.current.basePath}/threads/${encodeURIComponent(id)}`);
   };
   const isCurrent = (draft: DraftSelection) =>
     mounted.current &&
@@ -121,9 +123,13 @@ export const useThreadPanel = (channelId: string) => {
     openDraft,
     openPage,
     openThread,
+    /** Where an old `?thread=…&view=page` link now lives; the page redirects there. */
+    legacyPageUrl: legacyPageThreadId
+      ? `${basePath}/threads/${encodeURIComponent(legacyPageThreadId)}`
+      : null,
     /** The thread shown as the page; `threadId` is then null, as no panel is open. */
-    pageThreadId: page ? threadId : null,
+    pageThreadId,
     send,
-    threadId: page ? null : threadId,
+    threadId,
   };
 };

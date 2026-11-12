@@ -49,7 +49,13 @@ describe('ttsRouter.synthesize', () => {
       undefined,
     );
     expect(textToSpeechMock).toHaveBeenCalledWith(
-      { input: 'hello', model: 'tts-1', params: { format: 'opus', speed: 1.5 }, voice: 'nova' },
+      {
+        input: 'hello',
+        model: 'tts-1',
+        params: { format: 'opus', speed: 1.5 },
+        voice: 'nova',
+        voiceIsDefault: false,
+      },
       { metadata: { trigger: 'tts' }, user: 'u1' },
     );
     expect(res).toEqual({
@@ -170,6 +176,102 @@ describe('ttsRouter.synthesize', () => {
     ).rejects.toMatchObject({
       code: 'TOO_MANY_REQUESTS',
       message: 'MiniMax API error: rate limit',
+    });
+  });
+  describe('provider elevenlabs', () => {
+    it('routes provider elevenlabs to its runtime with the card default voice', async () => {
+      textToSpeechMock.mockResolvedValue({
+        audio: new Uint8Array([4, 5]).buffer,
+        format: 'mp3',
+        usage: { cost: 0.000_16, inputCharacters: 2 },
+      });
+
+      const res = await caller.synthesize({
+        input: 'Hi',
+        model: 'eleven_multilingual_v2',
+        params: { speed: 1.1 },
+        provider: 'elevenlabs',
+      });
+
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+        expect.anything(),
+        'u1',
+        'elevenlabs',
+        undefined,
+      );
+      expect(textToSpeechMock).toHaveBeenCalledWith(
+        {
+          input: 'Hi',
+          model: 'eleven_multilingual_v2',
+          params: { speed: 1.1 },
+          voice: 'CwhRBWXzGAHq8TQ4Fs17',
+          voiceIsDefault: true,
+        },
+        { metadata: { trigger: 'tts' }, user: 'u1' },
+      );
+      expect(res).toEqual({
+        audioBase64: Buffer.from([4, 5]).toString('base64'),
+        format: 'mp3',
+        mimeType: 'audio/mpeg',
+        usage: { cost: 0.000_16, inputCharacters: 2 },
+      });
+    });
+
+    it('validates params against the ElevenLabs card', async () => {
+      await expect(
+        caller.synthesize({
+          input: 'Hi',
+          model: 'eleven_multilingual_v2',
+          params: { format: 'aac', speed: 2 },
+          provider: 'elevenlabs',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('params.speed must be between 0.7 and 1.2'),
+      });
+      expect(textToSpeechMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a missing API key with the InvalidProviderAPIKey copy instead of a bare 500', async () => {
+      // what a runtime constructor throws when neither the user nor the server has a key
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce({
+        errorType: 'InvalidProviderAPIKey',
+      });
+
+      const error = await caller
+        .synthesize({ input: 'Hi', model: 'eleven_v4', provider: 'elevenlabs' })
+        .catch((e) => e);
+
+      expect(error).toMatchObject({
+        code: 'BAD_GATEWAY',
+        message:
+          'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again. Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
+      });
+      // the lambda errorFormatter exposes `cause.data` to clients as `data.errorData`
+      expect(error.cause).toMatchObject({
+        data: { errorType: 'InvalidProviderAPIKey', provider: 'elevenlabs' },
+      });
+    });
+
+    it('reports a rejected key with the InvalidProviderAPIKey copy and the upstream message', async () => {
+      textToSpeechMock.mockRejectedValue({
+        error: {
+          detail: { message: 'Invalid API key', status: 'invalid_api_key' },
+          message: 'ElevenLabs API error (401): Invalid API key',
+          status: 401,
+        },
+        errorType: 'InvalidProviderAPIKey',
+        provider: 'elevenlabs',
+      });
+
+      await expect(
+        caller.synthesize({ input: 'Hi', model: 'eleven_v4', provider: 'elevenlabs' }),
+      ).rejects.toMatchObject({
+        cause: { data: { errorType: 'InvalidProviderAPIKey', provider: 'elevenlabs' } },
+        code: 'BAD_GATEWAY',
+        message:
+          'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again (ElevenLabs API error (401): Invalid API key). Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
+      });
     });
   });
 });
