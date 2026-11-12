@@ -468,6 +468,7 @@
   "pageList.transferWarning": "This is a one-way move; reverting requires another move.",
   "pageList.untitled": "Untitled",
   "portal.openInPageEditor": "Edit in Page",
+  "preview.audioLoadFailed": "This audio could not be played in the browser. Download it to listen.",
   "preview.downloadFile": "Download File",
   "preview.raw": "Raw",
   "preview.render": "Preview",
