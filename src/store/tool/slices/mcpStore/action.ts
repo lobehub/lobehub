@@ -500,7 +500,7 @@ export class PluginMCPStoreActionImpl {
       if (connection?.type === 'stdio') {
         manifest = await mcpService.getStdioMcpServerManifest(
           {
-            // Config placeholders in args are filled here; the stored connection keeps them
+            // Config placeholders in args are filled here and in the stored connector
             args: renderMcpArgs(connection.args, normalizedConfig),
             command: connection.command!,
             env: mergedStdioEnv,
@@ -609,6 +609,12 @@ export class PluginMCPStoreActionImpl {
         : { ...connection };
       if (finalConnection.type === 'http' && mergedHttpHeaders && !isOAuth) {
         finalConnection.headers = mergedHttpHeaders;
+      }
+      // A connector has no plugin settings to fill `{{KEY}}` placeholders on
+      // each call: it stores the URL and args this install connected with.
+      if (finalConnection.type === 'http' && !isOAuth && httpUrl) finalConnection.url = httpUrl;
+      if (finalConnection.type === 'stdio') {
+        finalConnection.args = renderMcpArgs(connection.args, normalizedConfig);
       }
       if (finalConnection.type === 'stdio' && mergedStdioEnv) {
         finalConnection.env = mergedStdioEnv;
