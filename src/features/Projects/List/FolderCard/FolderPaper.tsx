@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import type { ProjectListItem } from '@/store/project';
-import { taskListSelectors } from '@/store/task/selectors';
 import { sx } from '@/styles/sx';
 
 import type { FolderSheet } from './folderSheet';
@@ -116,6 +115,7 @@ const statusVisual = (status: string) =>
 /** The front paper: the project's latest tasks, or its brief before it has any. */
 export const FolderPaper = ({ project, sheet }: FolderPaperProps) => {
   const { t } = useTranslation('project');
+  const { t: tChat } = useTranslation('chat');
 
   if (sheet.kind === 'tasks') {
     const { latest, others } = sheet;
@@ -126,7 +126,9 @@ export const FolderPaper = ({ project, sheet }: FolderPaperProps) => {
           <span>{t('list.folder.recentTask')}</span>
           <span {...stylex.props(styles.headlineStatus)}>
             <Icon color={latestVisual.color} icon={latestVisual.icon} size={10} />
-            {taskListSelectors.getDisplayStatus(latest.status)}
+            {tChat(`taskDetail.status.${latest.status}` as 'taskDetail.status.backlog', {
+              defaultValue: latest.status,
+            })}
           </span>
         </div>
         <div {...stylex.props(styles.headline)}>{latest.name || latest.identifier}</div>
