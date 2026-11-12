@@ -16,13 +16,14 @@ import { chunkRouter } from '../../chunk';
 const boundary = vi.hoisted(() => ({
   db: undefined as LobeChatDatabase | undefined,
   identity: undefined as string | undefined,
+  credential: {} as Record<string, unknown>,
   sign: vi.fn(async () => 'https://storage.example/temporary'),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: () => boundary.db }));
 vi.mock('@/database/server', () => ({ getServerDB: () => boundary.db }));
 vi.mock('@/libs/trpc/lambda/context', () => ({
-  createLambdaContext: vi.fn(async () => ({ userId: boundary.identity })),
+  createLambdaContext: vi.fn(async () => ({ userId: boundary.identity, ...boundary.credential })),
 }));
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
@@ -180,6 +181,7 @@ afterAll(async () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  boundary.credential = {};
   boundary.identity = undefined;
   vi.mocked(business.isEnterpriseKnowledgeEnabled).mockReturnValue(false);
 });
@@ -344,6 +346,20 @@ describe('knowledge content read boundaries', () => {
     enablePolicy();
     boundary.identity = viewer;
     expect((await proxy('file_content_a')).status).toBe(302);
+    boundary.identity = undefined;
+    expect((await proxy('file_content_personal')).status).toBe(302);
+  });
+
+  it('refuses operation-scoped tokens and API keys without file read scope at the file proxy', async () => {
+    enablePolicy();
+    boundary.identity = viewer;
+    boundary.credential = { oidcAuth: { purpose: 'hetero-operation', sub: viewer } };
+    expect((await proxy('file_content_a')).status).toBe(404);
+    boundary.credential = { apiKeyScopes: ['agent:read'] };
+    expect((await proxy('file_content_a')).status).toBe(404);
+    boundary.credential = { apiKeyScopes: ['file:read'] };
+    expect((await proxy('file_content_a')).status).not.toBe(404);
+    boundary.credential = { oidcAuth: { purpose: 'hetero-operation', sub: viewer } };
     boundary.identity = undefined;
     expect((await proxy('file_content_personal')).status).toBe(302);
   });
