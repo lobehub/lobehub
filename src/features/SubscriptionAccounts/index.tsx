@@ -6,6 +6,7 @@ import { RefreshCwIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SubscriptionAccountsPurchase from '@/business/client/features/SubscriptionAccountsPurchase';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import { cacheScope } from '@/libs/replica';
 import { agentQuotaSelectors, type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
@@ -122,6 +123,7 @@ const SubscriptionAccounts = () => {
 
   return (
     <Flexbox gap={16} width={'100%'}>
+      <SubscriptionAccountsPurchase />
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
         <Text fontSize={13} type={'secondary'}>
           {accounts.length > 0 &&
