@@ -3,6 +3,7 @@ import type { TaskAssignableMember } from '@lobechat/prompts';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
+  formatTaskComment,
   formatTaskCreated,
   formatTaskDeleted,
   formatTaskDetail,
@@ -1166,7 +1167,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   viewTask = async (
-    params: { identifier?: string },
+    params: { commentId?: string; identifier?: string },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
@@ -1175,6 +1176,17 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const detail = await getTaskStoreState().fetchTaskDetail(
         params.identifier ?? ctx?.taskId ?? undefined,
       );
+
+      if (params.commentId) {
+        const comment = formatTaskComment(detail, params.commentId);
+        if (!comment)
+          throw new Error(`Comment not found on ${detail.identifier}: ${params.commentId}`);
+        return {
+          content: comment,
+          state: { identifier: detail.identifier, taskId: detail.id, success: true },
+          success: true,
+        };
+      }
 
       return {
         content: formatTaskDetail(detail),
