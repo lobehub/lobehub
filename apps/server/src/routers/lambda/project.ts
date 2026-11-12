@@ -1,5 +1,7 @@
 import {
+  PROJECT_AGENT_ID_REGEX,
   PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_ID_REGEX,
   PROJECT_IDENTIFIER_REGEX,
   PROJECT_STATUSES,
   PROJECT_VISIBILITIES,
@@ -196,7 +198,15 @@ export const projectRouter = router({
       z.object({
         avatar: z.string().optional(),
         coordinatorAgentId: z.string().optional(),
+        /**
+         * Id reserved for the dedicated main agent, so the avatar the form
+         * previewed is the one it keeps. Ignored when `coordinatorAgentId`
+         * picks an existing agent.
+         */
+        dedicatedAgentId: z.string().regex(PROJECT_AGENT_ID_REGEX).optional(),
         description: z.string().optional(),
+        /** Id reserved by the create form; its generated avatar is seeded by it. */
+        id: z.string().regex(PROJECT_ID_REGEX).optional(),
         identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
         repository: z

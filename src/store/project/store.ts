@@ -50,6 +50,10 @@ interface ProjectStore extends ProjectStoreState {
   createProject: (input: {
     avatar?: string;
     coordinatorAgentId?: string;
+    /** Reserved id of the dedicated main agent; see `reserveProjectIds`. */
+    dedicatedAgentId?: string;
+    /** Reserved project id; see `reserveProjectIds`. */
+    id?: string;
     identifier?: string;
     name: string;
     /** GitHub repository to attach as the project's environment, in the same write. */

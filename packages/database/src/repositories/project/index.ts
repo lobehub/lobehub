@@ -24,7 +24,7 @@ export class ProjectRepository {
     private readonly workspaceId?: string,
   ) {}
 
-  async create({ repository, ...input }: CreateProjectInput) {
+  async create({ dedicatedAgentId, repository, ...input }: CreateProjectInput) {
     const identifier = normalizeProjectIdentifier(input.identifier);
 
     return this.db.transaction(async (tx) => {
@@ -43,7 +43,12 @@ export class ProjectRepository {
         : await createProjectMainAgent(
             db,
             { userId: this.userId, workspaceId: this.workspaceId },
-            { avatar: input.avatar, name: input.name, visibility: input.visibility },
+            {
+              avatar: input.avatar,
+              id: dedicatedAgentId,
+              name: input.name,
+              visibility: input.visibility,
+            },
           );
       if (!mainAgent) throw new Error('Agent not found');
 

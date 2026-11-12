@@ -51,7 +51,7 @@ const TaskProjectChip = ({ projectId }: TaskProjectChipProps) => {
 
   return (
     <span data-testid={'task-project-chip'} title={project.name} {...stylex.props(styles.chip)}>
-      <ProjectAvatar avatar={project.avatar} name={project.name} size={14} />
+      <ProjectAvatar avatar={project.avatar} id={project.id} name={project.name} size={14} />
       {/* `type="secondary"` resolves to the tertiary text colour, under AA at 12px. */}
       <Text ellipsis color={cssVar.colorTextSecondary} fontSize={12}>
         {project.name}
