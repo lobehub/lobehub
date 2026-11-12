@@ -21,7 +21,6 @@ import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
 import { openTopic } from './openTopic';
 import { CHANNEL_ENTITY_PORTAL_SCOPE, PortalPanel } from './PortalPanel';
-import { DirectReplyStatus } from './ReplyActivity';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { ThreadPageActions, ThreadPageTitle } from './ThreadPageTitle';
@@ -82,7 +81,6 @@ function EnabledChannelPage() {
                 {detail?.channel.title || t('title')}
               </Text>
               {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
-              {directAgent && <DirectReplyStatus detail={detail!} />}
             </Flexbox>
           )
         }
