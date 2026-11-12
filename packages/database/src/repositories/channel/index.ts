@@ -51,6 +51,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export type { ChannelOpeningCandidate, ChannelOpeningDecision } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';

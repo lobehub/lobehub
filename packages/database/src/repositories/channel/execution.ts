@@ -19,6 +19,8 @@ import { claimJob } from './claim';
 import { appendMessage } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
+import type { ChannelOpeningDecision } from './opening';
+import { applyOpening, findOpeningCandidate, findOpeningReply } from './opening';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
@@ -339,6 +341,7 @@ export class ChannelExecutionRepository {
     const [seen] = job.topicId
       ? await this.db
           .select({
+            id: channelJobs.id,
             manifest: channelJobs.manifest,
             publishedMessageId: channelJobs.publishedMessageId,
           })
@@ -359,22 +362,40 @@ export class ChannelExecutionRepository {
           .limit(1)
       : [];
     const seenThrough = seen?.manifest?.cutoffSequence ?? 0;
-    // One extra row absorbs the topic's own published reply.
+    // The topic wrote its reply, and the acknowledgement it opened with, itself.
+    const opening = seen ? await findOpeningReply(this.db, channelId, seen.id) : undefined;
+    const ownIds = [seen?.publishedMessageId, opening?.id].filter((id): id is string => !!id);
+    // Extra rows absorb the topic's own messages.
     const recent = await readManifestMessages(this.db, channelId, job.manifest, {
       beforeSequence: job.manifest.cutoffSequence,
-      limit: RECENT_CONTEXT_LIMIT + 1,
+      limit: RECENT_CONTEXT_LIMIT + ownIds.length,
     });
     const messages = recent
-      .filter(({ id, sequence }) => sequence > seenThrough && id !== seen?.publishedMessageId)
+      .filter(({ id, sequence }) => sequence > seenThrough && !ownIds.includes(id))
       .slice(-RECENT_CONTEXT_LIMIT);
     const unseen = await countManifestMessages(this.db, channelId, job.manifest, {
       afterSequence: seenThrough,
       beforeSequence: job.manifest.cutoffSequence,
-      excludeId: seen?.publishedMessageId,
+      excludeIds: ownIds,
     });
 
     return { messages, omitted: Math.max(0, unseen - messages.length) };
   };
+
+  /**
+   * What a queued job's opener decides from; undefined once it opened or when it never does.
+   * See {@link findOpeningCandidate}.
+   */
+  openingCandidate = (channelId: string, jobId: string) =>
+    findOpeningCandidate(this.db, channelId, jobId);
+
+  /** Opens a queued job's reply once. See {@link applyOpening}. */
+  open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>
+    applyOpening(this.db, channelId, jobId, decision);
+
+  /** The acknowledgement the job posted before its run, if any. */
+  openingReply = async (channelId: string, jobId: string) =>
+    (await findOpeningReply(this.db, channelId, jobId))?.content;
 
   /** The runtime took the input; only now may the job publish. */
   accepted = async (channelId: string, jobId: string) =>
