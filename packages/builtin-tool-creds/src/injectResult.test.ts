@@ -84,4 +84,46 @@ describe('buildInjectCredsResult', () => {
     expect(result.credentials).toEqual({ env: { DEEPSEEK_API_KEY: '******' }, files });
     expect(JSON.stringify(result)).not.toContain('sk******ab');
   });
+
+  describe('credential keys named like Object.prototype members', () => {
+    it('does not read an inherited property for a file-only key', () => {
+      const result = buildInjectCredsResult(['constructor'], {
+        credentials: {
+          env: {},
+          files: [{ filename: 'sa.json', key: 'constructor', path: '~/.creds/files/sa.json' }],
+        },
+      });
+
+      expect(result.content).toBe(
+        [
+          'Credentials injected successfully: constructor.',
+          'Injected per key (variable names only, values are never shown):',
+          '- constructor → file ~/.creds/files/sa.json',
+        ].join('\n'),
+      );
+      expect(result.envVarsByKey).toEqual({});
+    });
+
+    it('ignores inherited entries of the server-resolved mapping', () => {
+      const result = buildInjectCredsResult(['hasOwnProperty', 'deepseek'], {
+        credentials: { env: { DEEPSEEK_API_KEY: 'sk******ab' } },
+        envVarsByKey: { deepseek: ['DEEPSEEK_API_KEY'] },
+      });
+
+      expect(result.envVarsByKey).toEqual({ deepseek: ['DEEPSEEK_API_KEY'] });
+      expect(result.content).toContain('- deepseek → DEEPSEEK_API_KEY');
+      expect(result.content).not.toContain('hasOwnProperty →');
+    });
+
+    it('keeps a `__proto__` key as an own, serializable entry', () => {
+      const result = buildInjectCredsResult(['__proto__'], {
+        credentials: { env: { PROTO_TOKEN: 'ab******cd' } },
+      });
+
+      expect(Object.hasOwn(result.envVarsByKey, '__proto__')).toBe(true);
+      expect(JSON.stringify(result.envVarsByKey)).toBe('{"__proto__":["PROTO_TOKEN"]}');
+      expect(result.unattributedEnvVars).toEqual([]);
+      expect(result.content).toContain('- __proto__ → PROTO_TOKEN');
+    });
+  });
 });

@@ -54,27 +54,42 @@ const redactCredentials = (
   }),
 });
 
+/**
+ * Credential keys are user-chosen strings, so a key such as `constructor` or
+ * `__proto__` must never resolve to an `Object.prototype` member. Keys are
+ * held in a `Map` and the server mapping is read by own property only.
+ */
+const resolveEnvNamesByKey = (
+  injected: string[],
+  input: Pick<InjectCredsResultInput, 'credentials' | 'envVarsByKey'>,
+): { byKey: Map<string, string[]>; unattributedEnvVars: string[] } => {
+  const envNames = Object.keys(input.credentials?.env ?? {});
+  const byKey = new Map<string, string[]>();
+  const resolved = input.envVarsByKey;
+
+  if (resolved) {
+    for (const key of injected) {
+      const names = Object.hasOwn(resolved, key) ? resolved[key] : undefined;
+      if (Array.isArray(names) && names.length > 0) byKey.set(key, unique(names));
+    }
+  } else if (injected.length === 1 && envNames.length > 0) {
+    byKey.set(injected[0], envNames);
+  }
+
+  const attributed = new Set([...byKey.values()].flat());
+  return {
+    byKey,
+    unattributedEnvVars: envNames.filter((name) => !attributed.has(name)),
+  };
+};
+
 export const resolveEnvVarsByKey = (
   injected: string[],
   input: Pick<InjectCredsResultInput, 'credentials' | 'envVarsByKey'>,
 ): { envVarsByKey: Record<string, string[]>; unattributedEnvVars: string[] } => {
-  const envNames = Object.keys(input.credentials?.env ?? {});
-  const envVarsByKey: Record<string, string[]> = {};
-
-  if (input.envVarsByKey) {
-    for (const key of injected) {
-      const names = input.envVarsByKey[key];
-      if (names?.length) envVarsByKey[key] = unique(names);
-    }
-  } else if (injected.length === 1 && envNames.length > 0) {
-    envVarsByKey[injected[0]] = envNames;
-  }
-
-  const attributed = new Set(Object.values(envVarsByKey).flat());
-  return {
-    envVarsByKey,
-    unattributedEnvVars: envNames.filter((name) => !attributed.has(name)),
-  };
+  const { byKey, unattributedEnvVars } = resolveEnvNamesByKey(injected, input);
+  // `Object.fromEntries` defines own properties, so even `__proto__` stays a key.
+  return { envVarsByKey: Object.fromEntries(byKey), unattributedEnvVars };
 };
 
 export const buildInjectCredsResult = (
@@ -84,7 +99,7 @@ export const buildInjectCredsResult = (
   const notFound = input.notFound ?? [];
   const unsupportedInSandbox = input.unsupportedInSandbox ?? [];
   const injected = keys.filter((k) => !notFound.includes(k));
-  const { envVarsByKey, unattributedEnvVars } = resolveEnvVarsByKey(
+  const { byKey, unattributedEnvVars } = resolveEnvNamesByKey(
     injected.filter((k) => !unsupportedInSandbox.includes(k)),
     input,
   );
@@ -102,7 +117,7 @@ export const buildInjectCredsResult = (
   const mappingLines: string[] = [];
   for (const key of injected) {
     const parts: string[] = [];
-    const names = envVarsByKey[key];
+    const names = byKey.get(key);
     if (names?.length) parts.push(names.join(', '));
     const files = filesByKey.get(key);
     if (files?.length) parts.push(`file ${files.join(', ')}`);
@@ -128,7 +143,7 @@ export const buildInjectCredsResult = (
   return {
     content: content.trim(),
     credentials: redactCredentials(input.credentials),
-    envVarsByKey,
+    envVarsByKey: Object.fromEntries(byKey),
     injected,
     notFound,
     unattributedEnvVars,
