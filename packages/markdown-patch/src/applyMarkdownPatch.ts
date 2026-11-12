@@ -58,7 +58,7 @@ const applyContentHunk = (
 
   const next = hunk.replaceAll
     ? source.split(hunk.search).join(replacement)
-    : source.replace(hunk.search, replacement);
+    : source.replace(hunk.search, () => replacement);
 
   return { content: next, count: hunk.replaceAll ? occurrences : 1 };
 };
