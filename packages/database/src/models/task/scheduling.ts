@@ -232,3 +232,54 @@ export const findInterruptedRunningTopics = async (
     .orderBy(sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt})`)
     .limit(limit);
 };
+
+/** A successful operation whose run row missed its terminal delivery. */
+export interface CompletedRunningTopic {
+  operationId: string;
+  topicId: string;
+  userId: string;
+  workspaceId: string | null;
+}
+
+/**
+ * Find stale successful runs, including runs whose Task has already moved on.
+ * Only the run row is repaired: success delivery needs inputs and side effects
+ * that cannot safely be reconstructed from the operation's terminal status.
+ */
+export const findCompletedRunningTopics = async (
+  db: LobeChatDatabase,
+  options: { limit?: number; staleBefore: Date },
+): Promise<CompletedRunningTopic[]> => {
+  const { limit = 200, staleBefore } = options;
+
+  return db
+    .select({
+      operationId: agentOperations.id,
+      topicId: sql<string>`${taskTopics.topicId}`,
+      userId: tasks.createdByUserId,
+      workspaceId: tasks.workspaceId,
+    })
+    .from(taskTopics)
+    .innerJoin(agentOperations, eq(taskTopics.operationId, agentOperations.id))
+    .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))
+    .where(
+      and(
+        eq(taskTopics.status, 'running'),
+        isNotNull(taskTopics.topicId),
+        isNull(agentOperations.parentOperationId),
+        eq(agentOperations.status, 'done'),
+        sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt}) < ${staleBefore}`,
+        // A follow-up can still be running before it takes over this run row.
+        sql`not exists (
+          select 1 from ${agentOperations} as live
+          where live.topic_id = ${taskTopics.topicId}
+            and live.status in (${sql.join(
+              IN_FLIGHT_OPERATION_STATUS_LIST.map((status) => sql`${status}`),
+              sql`, `,
+            )})
+        )`,
+      ),
+    )
+    .orderBy(sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt})`)
+    .limit(limit);
+};
