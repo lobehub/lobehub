@@ -128,6 +128,32 @@ describe('marketplace MCPs installed as connectors', () => {
         .map((c) => c.identifier),
     ).toEqual(['my-mcp']);
   });
+
+  it('resolves the connector a reinstall over a legacy row runs on, for its settings', () => {
+    const withLegacyRow = state({
+      connectors: [marked],
+      installedPlugins: [{ identifier: 'oauth-market' }] as never,
+    });
+
+    // The list shows the legacy plugin, but its tools run on the connector
+    expect(connectorSelectors.marketplaceMcpConnectors(withLegacyRow)).toEqual([]);
+    expect(
+      connectorSelectors.marketplaceMcpConnectorByIdentifier('oauth-market')(withLegacyRow),
+    ).toBe(marked);
+  });
+
+  it('resolves no connector for a row that only projects a plugin or comes from another source', () => {
+    const projection = connector({ mcpConnectionType: null, mcpServerUrl: null });
+    const custom = connector({ sourceType: 'custom' });
+
+    for (const row of [projection, custom]) {
+      expect(
+        connectorSelectors.marketplaceMcpConnectorByIdentifier('oauth-market')(
+          state({ connectors: [row] }),
+        ),
+      ).toBeUndefined();
+    }
+  });
 });
 
 describe('connectorSelectors.connectorByIdentifierForAgent', () => {

@@ -263,6 +263,47 @@ describe('MCPService', () => {
         },
       );
 
+      // A marketplace stdio server ran over IPC as a plugin; installed as a
+      // connector it still does, while the connector route refuses stdio
+      it.each([true, undefined])(
+        'runs a marketplace stdio install over local IPC when gateway=%s',
+        async (gateway) => {
+          environment.deviceGatewayConfigured = gateway;
+          mockGetToolStoreState.mockReturnValue({
+            connectors: [{ ...connector, sourceType: 'marketplace' }],
+          });
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          const result = {
+            content: 'local result',
+            state: { content: [{ type: 'text', text: 'local result' }] },
+            success: true,
+          };
+          mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize(result));
+
+          await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
+          expect(lambdaClient.connector.getForEdit.query).toHaveBeenCalledWith({
+            id: connector.id,
+          });
+          expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+        },
+      );
+
+      it('sends a marketplace stdio install to the server route on the web', async () => {
+        environment.isDesktop = false;
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [{ ...connector, sourceType: 'marketplace' }],
+        });
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+          success: true,
+        } as never);
+
+        await mcpService.invokeMcpToolCall(payload, {});
+
+        expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+        expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalled();
+      });
+
       it.each([
         { ...detail, isEnabled: false },
         { ...detail, tools: [] },

@@ -67,6 +67,19 @@ const marketplaceMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => {
   return installedMarketplaceConnectors(s).filter((c) => !legacy.has(c.identifier));
 };
 
+/**
+ * The marketplace connector `identifier`'s tools run on, whether or not a
+ * legacy plugin row remains: a call goes to a connector with an endpoint
+ * before the plugin, so its connection settings are edited on the connector.
+ */
+const marketplaceMcpConnectorByIdentifier =
+  (identifier: string) =>
+  (s: ToolStoreState): ConnectorWithTools | undefined =>
+    (s.connectors ?? []).find(
+      (c) =>
+        c.identifier === identifier && c.sourceType === 'marketplace' && hasCallableMcpEndpoint(c),
+    );
+
 /** MCP servers the user added as connectors: custom ones and marketplace installs. */
 const userMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => [
   ...(s.connectors ?? []).filter((c) => c.sourceType === 'custom'),
@@ -204,6 +217,7 @@ export const connectorSelectors = {
   executableMcpConnectors,
   installedMarketplaceConnectors,
   isMarketplaceConnectorInstalled,
+  marketplaceMcpConnectorByIdentifier,
   marketplaceMcpConnectors,
   connectorToolsGroupedByIdentifier:
     (identifier: string) =>

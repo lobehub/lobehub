@@ -43,11 +43,12 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
   ]);
-  // A marketplace MCP installed as a connector (no legacy row): its settings
-  // live on the connector, not in the plugin settings modal.
+  // A marketplace MCP installed as a connector, a reinstall over a legacy row
+  // included: its tools run on the connector, so its settings are edited there,
+  // not in the plugin settings modal.
   const marketConnector = useToolStore((s) =>
     isCommunityMCP
-      ? connectorSelectors.marketplaceMcpConnectors(s).find((c) => c.identifier === identifier)
+      ? connectorSelectors.marketplaceMcpConnectorByIdentifier(identifier)(s)
       : undefined,
   );
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);

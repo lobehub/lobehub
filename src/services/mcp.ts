@@ -217,7 +217,8 @@ class MCPService {
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
-    // gateways keep the existing server route for conversation calls.
+    // gateways keep the existing server route for conversation calls, except
+    // for marketplace stdio installs, which always ran here as plugins.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
@@ -240,7 +241,10 @@ class MCPService {
         connector &&
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
-        (fromMcpApp || getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
+        (fromMcpApp ||
+          // A marketplace stdio server ran on this desktop as a plugin, gateway or not
+          connector.sourceType === 'marketplace' ||
+          getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
       if (runsHere) {
