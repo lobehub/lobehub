@@ -126,6 +126,8 @@ export default {
   'startThread': 'Start thread',
   'openThread': 'Open thread',
   'openThreadPage': 'Open as page',
+  'threadCard.replies_one': '{{count}} reply',
+  'threadCard.replies_other': '{{count}} replies',
   'closeThread': 'Close thread',
   'thread': 'Thread',
   'threadDivider': 'Replies in this thread',
