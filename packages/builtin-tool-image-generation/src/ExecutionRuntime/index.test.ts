@@ -118,6 +118,41 @@ describe('ImageGenerationExecutionRuntime', () => {
     expect(result.content).toContain('"1536x1024"');
   });
 
+  it('returns parameters for a model whose stored schema omits prompt', async () => {
+    const runtime = new ImageGenerationExecutionRuntime(
+      createService({
+        listImageModels: vi.fn().mockResolvedValue({
+          providers: [
+            {
+              id: 'ccapi',
+              models: [
+                {
+                  displayName: 'Custom Image Model',
+                  id: 'custom-image-model',
+                  parameters: { size: { default: '1024x1024', enum: ['1024x1024'] } },
+                },
+              ],
+              name: 'ccapi',
+            },
+          ],
+          totalModels: 1,
+        }),
+      }),
+    );
+
+    const result = await runtime.getImageModelParameters({
+      model: 'custom-image-model',
+      provider: 'ccapi',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      defaultValues: { prompt: '', size: '1024x1024' },
+      model: 'custom-image-model',
+      provider: 'ccapi',
+    });
+  });
+
   it('selects the first enabled image model when provider and model are omitted', async () => {
     const service = createService();
     const runtime = new ImageGenerationExecutionRuntime(service);

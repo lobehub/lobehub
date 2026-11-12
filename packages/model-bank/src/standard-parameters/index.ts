@@ -365,8 +365,13 @@ export function validateModelParamsSchema(paramsSchema: unknown): ModelParamsOut
  * Extract default values from parameter definition object
  */
 export function extractDefaultValues(paramsSchema: ModelParamsSchema) {
-  // Some default values are obtained from ModelParamsMetaSchema
-  const schemaWithDefault = ModelParamsMetaSchema.parse(paramsSchema);
+  // Some default values are obtained from ModelParamsMetaSchema.
+  // Stored schemas (e.g. a custom provider's model) can omit `prompt`; every model
+  // still takes one, so fall back to its empty spec instead of throwing.
+  const schemaWithDefault = ModelParamsMetaSchema.parse({
+    ...paramsSchema,
+    prompt: paramsSchema.prompt ?? {},
+  });
   return Object.fromEntries(
     Object.entries(schemaWithDefault).map(([key, value]) => {
       return [key, value.default];
