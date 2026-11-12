@@ -26,4 +26,24 @@ describe('SPA proxy route matching', () => {
       ).toBe(false);
     },
   );
+
+  it.each(['/oidc', '/oidc/auth', '/oidc/token', '/oidc/handoff', '/oidc/interaction/abc'])(
+    'keeps %s in the proxy pass',
+    (pathname) => {
+      expect(
+        unstable_doesMiddlewareMatch({ config, url: `http://localhost:3010${pathname}` }),
+      ).toBe(true);
+    },
+  );
+
+  // A matched request has its body buffered before the handler runs, which would
+  // defeat the handoff endpoint's own 4 KiB cap.
+  it.each(['/oidc/handoff/native', '/oidc/handoff/native/'])(
+    'leaves %s to its route handler without buffering the body',
+    (pathname) => {
+      expect(
+        unstable_doesMiddlewareMatch({ config, url: `http://localhost:3010${pathname}` }),
+      ).toBe(false);
+    },
+  );
 });

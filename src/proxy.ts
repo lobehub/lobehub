@@ -73,7 +73,12 @@ export const config = {
     '/reset-password(.*)',
     '/auth-error(.*)',
     '/oauth(.*)',
-    '/oidc(.*)',
+    // Not `/oidc/handoff/native`: a matched request has its whole body cloned and
+    // buffered (up to `proxyClientMaxBodySize`) before the route handler runs,
+    // which defeats that public endpoint's own 4 KiB cap. It needs no proxy pass:
+    // `/oidc` is a backend passthrough and the route authenticates its caller.
+    '/oidc',
+    '/oidc/((?!handoff/native(?:/|$)).*)',
     '/market-auth-callback(.*)',
   ],
 };
