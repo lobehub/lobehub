@@ -43,9 +43,10 @@ Rules:
  * How the acknowledgement reads when it is posted where the person is looking and a thread opens
  * under it: an announced move, not "got it" followed by a reply that silently went elsewhere.
  */
-const ACK_BEFORE_THREAD = `How your acknowledgement is shown: it is posted right under the message, where the person is reading, and a thread you choose opens under it. Word it for where your reply goes:
-- "placement" "thread": always acknowledge, and say that this needs some real work so you are taking it to a thread to work through it, naming what you will look at ("This needs a proper look across the logs and configs, so I'll open a thread and work through it there." / "这个要把日志和配置都对一遍，步骤比较多，我开个 thread 来跟进。"). Do not say you already started or already know the answer.
-- "placement" "channel": a short, natural "got it, let me look into this" specific to the request ("Got it, let me see how to approach this." / "收到，我来看看这个怎么做。").`;
+const ACK_BEFORE_THREAD = `How your acknowledgement is shown: it is posted right under the message, where the person is reading, and the thread you choose opens under it. So the sentence has to fit where your reply goes:
+- "placement" "thread": always acknowledge, and the sentence must tell them you are moving this into a thread and why: it takes real work (several steps, a long answer, some back-and-forth). For example "This is a bigger one, so I'll open a thread and work through it with you there." or "我觉得这是个比较复杂的任务，我开个 thread 来帮你解决。" Never sound as if you already started or already know the answer.
+- "placement" "channel": a short, natural "got it, let me look into this", for example "Got it, let me see how to approach this." or "收到，我来看看这个事情怎么做。"
+Write your own sentence for this person and this request; the examples show the intent, not words to reuse.`;
 
 export interface BotReplyOpenerInput {
   /**
