@@ -41,6 +41,7 @@ import { LobeMetaAI } from './providers/meta';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMinimaxCodingPlanAI } from './providers/minimaxCodingPlan';
 import { LobeMistralAI } from './providers/mistral';
+import { LobeModelflareAI } from './providers/modelflare';
 import { LobeModelScopeAI } from './providers/modelscope';
 import { LobeMoonshotAI } from './providers/moonshot';
 import { LobeNebiusAI } from './providers/nebius';
@@ -130,6 +131,7 @@ export const providerRuntimeMap = {
   minimax: LobeMinimaxAI,
   minimaxcodingplan: LobeMinimaxCodingPlanAI,
   mistral: LobeMistralAI,
+  modelflare: LobeModelflareAI,
   modelscope: LobeModelScopeAI,
   moonshot: LobeMoonshotAI,
   nebius: LobeNebiusAI,
