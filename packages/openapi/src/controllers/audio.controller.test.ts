@@ -162,6 +162,44 @@ describe('AudioController.handleSpeech', () => {
     });
   });
 
+  it('passes an ElevenLabs request through with its voice, model and format', async () => {
+    const res = await speech({
+      input: 'Hello',
+      model: 'eleven_multilingual_v2',
+      provider: 'elevenlabs',
+      response_format: 'opus',
+      speed: 1.1,
+      voice: 'gOupLcAkjEnguROwi4oS',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-LobeHub-Provider')).toBe('elevenlabs');
+    expect(synthesizeMock).toHaveBeenCalledWith({
+      input: 'Hello',
+      model: 'eleven_multilingual_v2',
+      params: { format: 'opus', speed: 1.1 },
+      provider: 'elevenlabs',
+      voice: 'gOupLcAkjEnguROwi4oS',
+    });
+  });
+
+  it('reports a missing ElevenLabs key as a readable 502, not a silent 500', async () => {
+    synthesizeMock.mockRejectedValue(
+      new TTSProviderError(
+        'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again. Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
+        'InvalidProviderAPIKey',
+      ),
+    );
+
+    const res = await speech({ input: 'hi', model: 'eleven_v4', provider: 'elevenlabs' });
+
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toMatchObject({
+      code: 'InvalidProviderAPIKey',
+      message: expect.stringContaining('ElevenLabs API Key is incorrect or empty'),
+    });
+  });
+
   it('surfaces upstream failures as 502 with a readable message', async () => {
     synthesizeMock.mockRejectedValue(
       new TTSProviderError('voice id not exist', 'ProviderBizError'),

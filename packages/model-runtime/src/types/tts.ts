@@ -17,6 +17,11 @@ export interface TextToSpeechPayload {
    */
   speed?: number;
   voice: string;
+  /**
+   * True when the caller gave no voice and `voice` is the model card default. Providers
+   * may then substitute a voice the account can use; an explicit voice is never replaced.
+   */
+  voiceIsDefault?: boolean;
 }
 
 export interface TextToSpeechOptions {
