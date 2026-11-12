@@ -1,5 +1,5 @@
 import type { ChannelContextMessage } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -179,14 +179,52 @@ export const applyOpening = async (
     let threadId = job.threadId;
     const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
     if (title && !threadId && !channel.agentId) {
+      // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
+      const deferred = await tx
+        .select({ id: channelJobs.id, memberId: channelJobs.memberId })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.messageId, job.messageId),
+            eq(channelJobs.status, 'queued'),
+            isNull(channelJobs.threadId),
+            sql`${channelJobs.wake}->>'afterMemberId' = ${job.memberId}`,
+          ),
+        );
+      const candidates = [
+        ...new Set([
+          job.requesterMemberId,
+          job.memberId,
+          ...deferred.map(({ memberId }) => memberId),
+        ]),
+      ];
+      // A member who has left since the request no longer follows anything.
+      const followers = (
+        await tx
+          .select({ id: channelMembers.id })
+          .from(channelMembers)
+          .where(
+            and(
+              eq(channelMembers.channelId, channelId),
+              eq(channelMembers.status, 'active'),
+              inArray(channelMembers.id, candidates),
+            ),
+          )
+      ).map(({ id }) => id);
       const thread = await createChannelThread(tx, channelId, {
-        followerMemberIds: [job.requesterMemberId, job.memberId],
+        followerMemberIds: followers,
         rootMessageId: job.messageId,
       });
-      // A Thread someone already opened under the request keeps its own name.
+      // A Thread already open under the request (another Agent's answer, or one someone
+      // branched) keeps its name, and gains whoever now answers in it.
+      await followThread(tx, thread, followers);
       if (!thread.metadata?.title) await nameThread(tx, thread.id, title);
       threadId = thread.id;
-      await tx.update(channelJobs).set({ threadId }).where(eq(channelJobs.id, job.id));
+      await tx
+        .update(channelJobs)
+        .set({ threadId })
+        .where(inArray(channelJobs.id, [job.id, ...deferred.map(({ id }) => id)]));
     }
 
     const ack = decision.ack?.trim();
@@ -209,6 +247,20 @@ export const applyOpening = async (
 
     return true;
   });
+
+/** Adds `memberIds` the Thread does not follow yet; the caller passes active members only. */
+const followThread = async (
+  tx: Transaction,
+  thread: { followerMemberIds: string[]; id: string },
+  memberIds: string[],
+) => {
+  const missing = memberIds.filter((id) => !thread.followerMemberIds.includes(id));
+  if (!missing.length) return;
+  await tx
+    .update(channelThreads)
+    .set({ followerMemberIds: [...thread.followerMemberIds, ...missing] })
+    .where(eq(channelThreads.id, thread.id));
+};
 
 const nameThread = async (tx: Transaction, threadId: string, title: string) => {
   const [thread] = await tx
