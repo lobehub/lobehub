@@ -268,11 +268,11 @@ describe('ChannelMessage thread card', () => {
 
     expect(screen.getByText('Topic header is unclickable')).toBeTruthy();
     expect(screen.getByText('threadCard.messages')).toBeTruthy();
-    // The sidebar's thread glyph, not a branch, leads into the latest reply row.
+    // The sidebar's thread glyph, not a branch, leads the title row only.
     const card = screen.getByRole('button', { name: /Topic header is unclickable/ });
     const [titleRow, replyRow] = card.children;
-    expect(replyRow.firstElementChild?.querySelector('.lucide-corner-down-right')).not.toBeNull();
-    expect(titleRow.querySelector('.lucide-corner-down-right')).toBeNull();
+    expect(titleRow.firstElementChild?.querySelector('.lucide-corner-down-right')).not.toBeNull();
+    expect(replyRow.querySelector('.lucide-corner-down-right')).toBeNull();
     expect(card.querySelector('.lucide-git-branch')).toBeNull();
     expect(screen.getByText('Nasa')).toBeTruthy();
     expect(screen.getByText('PR is up')).toBeTruthy();
@@ -305,7 +305,7 @@ describe('ChannelMessage thread card', () => {
 
     expect(screen.getByText('thread')).toBeTruthy();
     expect(screen.getByText('openThread')).toBeTruthy();
-    // Without a reply row the glyph stays in front of the title.
+    // A cached view without a reply row still shows the glyph in front of the title.
     expect(
       screen.getByRole('button', { name: /openThread/ }).querySelector('.lucide-corner-down-right'),
     ).not.toBeNull();
