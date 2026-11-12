@@ -1796,6 +1796,7 @@ export default {
   'floatingChatPanel.expand': 'Expand chat',
   'globalApproval.collapse': 'Collapse',
   'globalApproval.dismiss': 'Dismiss',
+  'globalApproval.dismissFailed': "Couldn't dismiss it. Please try again.",
   'globalApproval.dismissHint': 'Hide it here; it stays on Home',
   'globalApproval.dismissed': 'Dismissed. You can still handle it from Home.',
   'globalApproval.goToConversation': 'Open conversation',

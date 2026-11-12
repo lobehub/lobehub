@@ -266,9 +266,9 @@ export interface SystemStatus {
    */
   dismissedBannerIds?: string[];
   /**
-   * Keys of goal asks (clarification rounds, gates, sign-offs) the user waved
-   * off the approval island. Only the island honours them — the same ask stays
-   * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
+   * @deprecated Island dismissals live on the server now (`addIslandDismissals`),
+   * shared by every client. Read once to upload what this client dismissed
+   * before, then ignored; see `islandDismissalsUploaded`.
    */
   dismissedIslandItemKeys?: string[];
   dismissedProjectOnboarding?: Record<string, boolean>;
@@ -323,6 +323,8 @@ export interface SystemStatus {
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
+  /** This client's legacy `dismissedIslandItemKeys` have been uploaded to the server. */
+  islandDismissalsUploaded?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
