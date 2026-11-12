@@ -78,9 +78,11 @@ export const useAgentTransferJob = ({ agentId, groupId }: MigrationTarget) => {
   // key: opening a topic that the previous (capped) candidates missed would
   // otherwise read stale `pendingTopicIds` until the next 3s tick, leaving
   // the conversation ungated against unmigrated history. Revalidate the
-  // moment the active topic changes while a job is pending.
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  // moment the active topic changes while a job is pending. Only subscribe
+  // while one is: every sidebar topic row mounts this hook, and an
+  // unconditional subscription re-rendered all of them on each topic switch.
   const hasPendingJob = !!response.data;
+  const activeTopicId = useChatStore((s) => (hasPendingJob ? s.activeTopicId : null));
   const { mutate } = response;
   useEffect(() => {
     if (hasPendingJob) void mutate();

@@ -52,7 +52,7 @@ import { getAgentPublishErrorKey } from './agentMenuVisibility';
 
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
-interface UseAgentDropdownMenuParams {
+export interface UseAgentDropdownMenuParams {
   avatar?: string;
   backgroundColor?: string;
   group: string | undefined;

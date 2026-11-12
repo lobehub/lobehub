@@ -48,6 +48,7 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
+const useFetchDevicesMock = vi.hoisted(() => vi.fn(() => ({})));
 const deviceRows = vi.hoisted(() => [
   { deviceId: 'device-2', friendlyName: 'Studio Linux', scope: 'personal' },
   // This desktop (`device-1`) as a workspace device: same machine, own id.
@@ -59,7 +60,7 @@ vi.mock('@/store/device', () => ({
   useDeviceStore: (selector: (state: object) => unknown) =>
     selector({
       devices: deviceRows,
-      useFetchDevices: () => ({}),
+      useFetchDevices: useFetchDevicesMock,
     }),
 }));
 
@@ -387,6 +388,25 @@ describe('Project topic group item', () => {
     expect(document.body.textContent).toContain(
       'Studio Linux · heteroAgent.executionTarget.personalGroup',
     );
+    expect(useFetchDevicesMock).toHaveBeenCalledWith(true);
+  });
+
+  it('skips the device list fetch for a group without a device', () => {
+    useFetchDevicesMock.mockClear();
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [{ id: 't1', metadata: { workingDirectory: '/tmp/x' } }] as any,
+            id: 'project:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    expect(useFetchDevicesMock).not.toHaveBeenCalled();
   });
 
   it('archives only this group\'s merged-PR topics from the group "more" menu', async () => {
