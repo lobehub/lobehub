@@ -11,9 +11,8 @@ export const isTerminalAgentStatus = (status: AgentState['status'] | undefined) 
 /**
  * The durable operation row's status when it is terminal, else `undefined`.
  * Redis keeps the resumable step state, but the row is the authority for
- * cancellation, abandonment and recovery. A read failure preserves runtime
- * availability: it reads as not terminal, and the step lock and the normal
- * persistence path still apply.
+ * cancellation, abandonment and recovery. A read failure refuses execution: a queue retry must re-check
+ * the row before it can spend on models or tools.
  */
 export const loadTerminalDurableStatus = async (
   agentOperationModel: AgentOperationModel,
@@ -32,6 +31,7 @@ export const loadTerminalDurableStatus = async (
     }
   } catch (error) {
     log('[%s][%d] Durable operation status check failed: %O', operationId, stepIndex, error);
+    throw error;
   }
   return undefined;
 };

@@ -317,7 +317,17 @@ export async function createOperation(
           retries: queueRetries,
           stepIndex: initialStepCount,
         }),
-      );
+      ).catch(async (error: unknown) => {
+        // A publish timeout may still have delivered the message. The durable
+        // terminal guard makes a late delivery ACK without executing, and the
+        // reaper's running-only CAS excludes this user-visible failed request.
+        // Await persistence before returning the startup error to the caller.
+        await deps.agentOperationModel.recordDispatchFailure(
+          operationId,
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      });
       if (interventionResolution && deduplicationId) {
         await deps.persistInterventionDispatchAck({
           deduplicationId,

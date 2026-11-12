@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hookDispatcher } from '../../hooks';
 import { type AgentExecutionParams } from '../../types';
 import { AgentRuntimeService } from '..';
+import { stubRunningDurableOperation } from './testUtils';
 
 vi.mock('@lobechat/model-runtime', (...args) =>
   import('./testUtils').then((m) =>
@@ -146,6 +147,7 @@ describe('AgentRuntimeService executeStep', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    stubRunningDurableOperation();
     process.env.AGENT_RUNTIME_BASE_URL = 'http://localhost:3010';
   });
 
