@@ -69,7 +69,7 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
 
   const renderAction = useCallback(
     (file: AttachableFile) => (
-      <Button disabled={!isAttachable} type={'primary'} onClick={() => handleSelect(file)}>
+      <Button disabled={!isAttachable} onClick={() => handleSelect(file)}>
         {t('knowledgeBase.library.action.add', { ns: 'chat' })}
       </Button>
     ),
