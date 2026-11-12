@@ -79,7 +79,14 @@ const StorageCleanup = memo<StorageCleanupProps>(({ drive, onBack }) => {
         try {
           const outcome = await remove(items);
           selection.clear();
-          if (outcome.failed.length > 0) {
+          if (outcome.failed.length > 0 && outcome.pending.length > 0) {
+            toast.warning(
+              t('drive.cleanup.failedAndPending', {
+                failed: outcome.failed.length,
+                pending: outcome.pending.length,
+              }),
+            );
+          } else if (outcome.failed.length > 0) {
             toast.warning(t('drive.cleanup.someFailed', { count: outcome.failed.length }));
           } else if (outcome.pending.length > 0) {
             toast.warning(t('drive.cleanup.partial', { count: outcome.pending.length }));

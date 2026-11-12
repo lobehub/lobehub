@@ -65,6 +65,18 @@ describe('UsageBreakdown', () => {
     expect(navigate).toHaveBeenCalledWith('/resource/sandbox-storage?view=cleanup');
   });
 
+  it('should keep the drive tab being viewed when opened from the storage page', () => {
+    window.history.pushState({}, '', '/resource/sandbox-storage?drive=personal');
+    render(<UsageBreakdown data={overQuota(false)} onRefresh={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('drive.cleanup.open'));
+
+    expect(navigate).toHaveBeenLastCalledWith(
+      '/resource/sandbox-storage?view=cleanup&drive=personal',
+    );
+    window.history.pushState({}, '', '/');
+  });
+
   it('should not push a cleanup when the overage is billed', () => {
     render(<UsageBreakdown data={overQuota(true)} onRefresh={vi.fn()} />);
 

@@ -120,14 +120,17 @@ export const useStorageAnalysis = (drive: SandboxDrive) => {
         // Also when a later batch failed: what earlier ones removed is gone
         // for good, and the figures and the meter must say so.
         const removed = items.filter((item) => gone.has(item.path));
-        setAnalysis((current) =>
-          current?.result
-            ? {
-                ...current,
-                result: withoutDeleted(current.result as StorageAnalysisResult, removed),
-              }
-            : current,
-        );
+        // Sizes are the scan's; if the files changed since, what was actually
+        // freed differs and the adjusted figures are only an estimate.
+        const estimated = removed.reduce((sum, item) => sum + item.bytes, 0) !== freedBytes;
+        setAnalysis((current) => {
+          if (!current?.result) return current;
+          const result = withoutDeleted(current.result as StorageAnalysisResult, removed);
+          return {
+            ...current,
+            result: estimated && removed.length > 0 ? { ...result, stale: true } : result,
+          };
+        });
         await refreshDrive();
       }
 

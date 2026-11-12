@@ -650,6 +650,7 @@
   "drive.cleanup.environmentsHint": "环境快照会随环境一起删除，请在「环境」页面操作。",
   "drive.cleanup.expand": "展开",
   "drive.cleanup.failed": "无法分析网盘，请重试。",
+  "drive.cleanup.failedAndPending": "有 {{failed}} 个项目无法删除，还有 {{pending}} 个没删完，再删除一次即可完成。",
   "drive.cleanup.freed": "已删除，释放了 {{size}}。",
   "drive.cleanup.holdsHidden": "这个文件夹里有私有环境目录，不能在这里删除。",
   "drive.cleanup.incomplete": "扫描中断 · 已统计 {{size}}，数字不完整",

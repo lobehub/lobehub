@@ -650,6 +650,7 @@
   "drive.cleanup.environmentsHint": "Environment snapshots are deleted together with their environment, on the Environments page.",
   "drive.cleanup.expand": "Show items",
   "drive.cleanup.failed": "Couldn’t analyze the drive. Try again.",
+  "drive.cleanup.failedAndPending": "{{failed}} items couldn’t be deleted and {{pending}} are still being deleted. Delete again to finish.",
   "drive.cleanup.freed": "Deleted. {{size}} freed.",
   "drive.cleanup.holdsHidden": "This folder holds a private environment directory and can’t be deleted here.",
   "drive.cleanup.incomplete": "Scan stopped · {{size}} counted, figures are incomplete",

@@ -251,3 +251,25 @@ describe('useStorageAnalysis partial failure', () => {
     expect(refreshDrive).toHaveBeenCalled();
   });
 });
+
+describe('useStorageAnalysis estimates', () => {
+  it('should mark the figures an estimate when the freed bytes differ from the scan', async () => {
+    service.analyzeStorage.mockResolvedValue(done);
+    service.deleteFiles.mockResolvedValue({
+      deleted: ['app/data.bin'],
+      done: true,
+      failed: [],
+      freedBytes: 999,
+      missing: [],
+      pending: [],
+    });
+    const { result } = renderHook(() => useStorageAnalysis('personal'));
+    await waitFor(() => expect(result.current.scanning).toBe(false));
+
+    await act(async () => {
+      await result.current.remove([items[1]]);
+    });
+
+    expect(result.current.analysis?.result?.stale).toBe(true);
+  });
+});

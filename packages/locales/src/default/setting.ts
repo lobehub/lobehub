@@ -4899,6 +4899,8 @@ When I am ___, I need ___
   'drive.cleanup.scopeChanged':
     'The workspace changed, so nothing was deleted. Choose again in this workspace.',
   'drive.cleanup.incomplete': 'Scan stopped · {{size}} counted, figures are incomplete',
+  'drive.cleanup.failedAndPending':
+    '{{failed}} items couldn’t be deleted and {{pending}} are still being deleted. Delete again to finish.',
   'drive.cleanup.partial': '{{count}} items are still being deleted. Delete them again to finish.',
   'drive.cleanup.overQuota': 'This drive is {{size}} over its quota',
   'drive.cleanup.overQuotaHint':
