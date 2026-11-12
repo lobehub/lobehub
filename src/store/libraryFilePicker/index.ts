@@ -21,6 +21,9 @@ export const LIBRARY_FILE_PICKER_KEY = 'default';
 
 export const LIBRARY_FILE_PICKER_PAGE_SIZE = 50;
 
+/** How many loaded pages survive a reload (`paging.persist.pages`). */
+export const LIBRARY_FILE_PICKER_PERSISTED_PAGES = 5;
+
 export type LibraryFilePickerValue = ReplicaPagedData<ResourceItem, number>;
 
 /**
@@ -28,8 +31,10 @@ export type LibraryFilePickerValue = ReplicaPagedData<ResourceItem, number>;
  * knowledge-base files). A paged replica of its own rather than the explorer's
  * `resourceList`: that one keeps a single entry for whatever folder the
  * explorer shows, so the picker sharing it would repaint the explorer behind
- * the modal with the picker's query. Only the head page is persisted (IndexedDB,
- * user / workspace scope), so a reopened picker paints the last files at once.
+ * the modal with the picker's query. Up to
+ * {@link LIBRARY_FILE_PICKER_PERSISTED_PAGES} loaded pages are persisted
+ * (IndexedDB, user / workspace scope), so a reopened picker paints the last
+ * files at once.
  */
 export const libraryFilePickerResource = definePagedReplica<string, ResourceItem, number>({
   key: (key) => key,
@@ -38,7 +43,10 @@ export const libraryFilePickerResource = definePagedReplica<string, ResourceItem
     direction: 'forward',
     getId: (item) => item.id,
     mode: 'offset',
-    persist: { pages: 1 },
+    // Folders and pages share the list with files, so the first attachable
+    // file can sit pages deep: keep the pages the picker paged through to
+    // reach it (no content previews, so a page stays small).
+    persist: { pages: LIBRARY_FILE_PICKER_PERSISTED_PAGES },
   },
   storage: 'indexedDB',
   version: 1,
