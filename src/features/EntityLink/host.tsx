@@ -29,13 +29,32 @@ const EntityLinkPortalContext = createContext<EntityLinkPortalScope>(true);
  */
 const EntityLinkDismissContext = createContext<(() => void) | undefined>(undefined);
 
+/**
+ * Where a web link's "open in side browser" goes. Unset means the agent working
+ * sidebar, which only the conversation mounts; a host with its own side browser
+ * (a Channel's portal) routes the page there instead.
+ */
+const EntityLinkSideBrowserContext = createContext<((url: string) => void) | undefined>(undefined);
+
 export const EntityLinkHostProvider: FC<
-  PropsWithChildren<{ onDismiss?: () => void; portal: EntityLinkPortalScope }>
-> = ({ children, onDismiss, portal }) => (
+  PropsWithChildren<{
+    onDismiss?: () => void;
+    onOpenSideBrowser?: (url: string) => void;
+    portal: EntityLinkPortalScope;
+  }>
+> = ({ children, onDismiss, onOpenSideBrowser, portal }) => (
   <EntityLinkPortalContext value={portal}>
-    <EntityLinkDismissContext value={onDismiss}>{children}</EntityLinkDismissContext>
+    <EntityLinkDismissContext value={onDismiss}>
+      <EntityLinkSideBrowserContext value={onOpenSideBrowser}>
+        {children}
+      </EntityLinkSideBrowserContext>
+    </EntityLinkDismissContext>
   </EntityLinkPortalContext>
 );
+
+/** The host's side browser opener, when it has one — see {@link EntityLinkHostProvider}. */
+export const useEntityLinkSideBrowser = (): ((url: string) => void) | undefined =>
+  use(EntityLinkSideBrowserContext);
 
 /** The covering host's close callback, when it has one — see {@link EntityLinkHostProvider}. */
 export const useEntityLinkHostDismiss = (): (() => void) | undefined =>

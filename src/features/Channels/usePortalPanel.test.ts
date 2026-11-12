@@ -7,17 +7,17 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useChatStore } from '@/store/chat';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
-import { useAcceptancePanel } from './useAcceptancePanel';
+import { channelBrowserSessionId, usePortalPanel } from './usePortalPanel';
 
 const acceptanceView = { acceptanceId: 'acc_1', type: PortalViewType.Acceptance } as const;
 
-describe('useAcceptancePanel', () => {
+describe('usePortalPanel', () => {
   beforeEach(() => {
     act(() => useChatStore.setState({ portalStack: [], showPortal: false }));
   });
 
   it('opens when a link pushes an acceptance onto the portal stack', () => {
-    const { result } = renderHook(() => useAcceptancePanel('chn_1'));
+    const { result } = renderHook(() => usePortalPanel('chn_1'));
     expect(result.current.open).toBe(false);
 
     act(() => useChatStore.getState().openAcceptance('acc_1'));
@@ -28,13 +28,13 @@ describe('useAcceptancePanel', () => {
   it('does not reopen a report left on the portal stack by another page', () => {
     act(() => useChatStore.setState({ portalStack: [acceptanceView], showPortal: true }));
 
-    const { result } = renderHook(() => useAcceptancePanel('chn_1'));
+    const { result } = renderHook(() => usePortalPanel('chn_1'));
 
     expect(result.current.open).toBe(false);
   });
 
   it('closes the report when moving to another Channel', () => {
-    const { result, rerender } = renderHook(({ id }) => useAcceptancePanel(id), {
+    const { result, rerender } = renderHook(({ id }) => usePortalPanel(id), {
       initialProps: { id: 'chn_1' },
     });
     act(() => useChatStore.getState().openAcceptance('acc_1'));
@@ -45,11 +45,28 @@ describe('useAcceptancePanel', () => {
   });
 
   it('leaves no report behind after leaving the Channel page', () => {
-    const { unmount } = renderHook(() => useAcceptancePanel('chn_1'));
+    const { unmount } = renderHook(() => usePortalPanel('chn_1'));
     act(() => useChatStore.getState().openAcceptance('acc_1'));
 
     unmount();
 
     expect(useChatStore.getState().portalStack).toEqual([]);
+  });
+
+  it('opens a link in the Channel side browser, apart from agent topics', () => {
+    const { result } = renderHook(() => usePortalPanel('chn_1'));
+
+    act(() =>
+      useChatStore.getState().openBrowser(channelBrowserSessionId('chn_1'), 'https://example.com'),
+    );
+
+    expect(result.current.open).toBe(true);
+    expect(useChatStore.getState().portalStack).toEqual([
+      {
+        request: { nonce: expect.any(Number), url: 'https://example.com' },
+        sessionId: 'channel:chn_1',
+        type: PortalViewType.Browser,
+      },
+    ]);
   });
 });
