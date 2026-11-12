@@ -104,7 +104,18 @@ const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string
 };
 
 const connectorByIdentifierForAgent =
-  (identifier: string, agentId?: string) =>
+  (
+    identifier: string,
+    agentId?: string,
+    /**
+     * Whether the caller's private rows take part. Executors pass the answer to
+     * `connectorRunScope` (only a private agent's own conversation may run one);
+     * management surfaces leave the default. A private row the run may not use
+     * must not shadow the shared row of the same identifier, or a public agent
+     * would execute a connection its scope explicitly excludes.
+     */
+    { includePrivate = true }: { includePrivate?: boolean } = {},
+  ) =>
   (s: ToolStore): ConnectorWithTools | undefined => {
     const agentRows = agentId
       ? (s.agentConnectors?.[agentId] ?? []).filter((c) => c.identifier === identifier)
@@ -116,7 +127,10 @@ const connectorByIdentifierForAgent =
       // A base connector another agent mounted serves only that agent, as the
       // server's scope rule has it (`ConnectorModel.scopePredicate`)
       (s.connectors ?? []).find(
-        (c) => c.identifier === identifier && !isMountedByAnotherAgent(c, agentId),
+        (c) =>
+          c.identifier === identifier &&
+          !isMountedByAnotherAgent(c, agentId) &&
+          (includePrivate || c.visibility !== 'private'),
       )
     );
   };

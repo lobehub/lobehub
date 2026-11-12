@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ComposioService } from './index';
 
 const mocks = vi.hoisted(() => ({
+  connectorIdentifiersWithRows: vi.fn(),
   connectorQuery: vi.fn(),
   connectorQueryByIdentifiers: vi.fn(),
   connectorToolQueryAll: vi.fn(),
@@ -22,6 +23,10 @@ vi.mock('@/database/models/connector', () => ({
       // own connectorAgentScope tests).
       resolveAll: mocks.connectorQuery,
       resolveByIdentifiers: mocks.connectorQueryByIdentifiers,
+      // Health writes follow the resolved row's own scope; the scoped model is
+      // an implementation detail here, the call itself is what the test asserts.
+      forRow: () => ({ markComposioConnectionUnavailable: mocks.markComposioUnavailable }),
+      identifiersWithConnectorRows: mocks.connectorIdentifiersWithRows,
       markComposioConnectionUnavailable: mocks.markComposioUnavailable,
     };
   }),
@@ -76,6 +81,7 @@ beforeEach(() => {
     );
   });
   mocks.markComposioUnavailable.mockResolvedValue(false);
+  mocks.connectorIdentifiersWithRows.mockResolvedValue(new Set());
   mocks.connectorQuery.mockResolvedValue([]);
   mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
   mocks.connectorToolQueryAll.mockResolvedValue([]);
@@ -124,9 +130,7 @@ describe('ComposioService.getComposioManifests', () => {
     });
 
     expect(mocks.connectorQuery).not.toHaveBeenCalled();
-    expect(mocks.connectorQueryByIdentifiers).toHaveBeenCalledWith(['gmail'], {
-      agentId: 'agent-1',
-    });
+    expect(mocks.connectorQueryByIdentifiers).toHaveBeenCalledWith(['gmail'], 'agent-1');
     expect(manifests.map((m) => m.identifier)).toEqual(['gmail']);
   });
 
@@ -159,6 +163,24 @@ describe('ComposioService.getComposioManifests', () => {
     expect(manifests).toHaveLength(1);
     expect(manifests[0].identifier).toBe('slack');
     expect(manifests[0].api[0].name).toBe('SLACK_POST');
+  });
+
+  it('does not fall back to the plugin projection when a connector row exists but the run cannot see it', async () => {
+    // A shared Composio connector switched to private: runtime resolution leaves
+    // it out, and the mirrored plugin row must not serve it instead.
+    mocks.connectorQuery.mockResolvedValue([]);
+    mocks.connectorIdentifiersWithRows.mockResolvedValue(new Set(['gmail']));
+    mocks.pluginQuery.mockResolvedValue([
+      {
+        customParams: { composio: { status: 'ACTIVE' } },
+        identifier: 'gmail',
+        manifest: { api: [{ name: 'GMAIL_SEND_EMAIL' }] },
+      },
+    ]);
+
+    const manifests = await service().getComposioManifests();
+
+    expect(manifests).toEqual([]);
   });
 
   it('unions both sources and dedupes by identifier (connector wins)', async () => {

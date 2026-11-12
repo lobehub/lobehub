@@ -178,6 +178,34 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
   });
 
+  it("hands the conversation's topic to the server, so a private connector's view resolves as its call did", async () => {
+    connectors.set('agt_1:remote', {
+      id: 'conn_1',
+      identifier: 'remote',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      visibility: 'private',
+    });
+    connectorRead.mockResolvedValue(view);
+
+    await expect(
+      mcpService.readMcpAppResource('remote', 'ui://app', {
+        agentId: 'agt_1',
+        server: REMOTE,
+        topicId: 'tpc_own',
+      }),
+    ).resolves.toEqual(view);
+
+    expect(connectorRead).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      identifier: 'remote',
+      server: REMOTE,
+      topicId: 'tpc_own',
+      uri: 'ui://app',
+    });
+  });
+
   it('reads no view once only the plugin headers changed, which may route to another server', async () => {
     plugins.set('remote', {
       customParams: {

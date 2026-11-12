@@ -40,6 +40,12 @@ export interface AppViewContext {
   /** The MCP server the view came from; its tool calls reach no other. */
   server?: string;
   t: TFunction<'plugin'> | ((key: string, options?: Record<string, unknown>) => string);
+  /**
+   * The conversation the result belongs to: its calls resolve connectors with
+   * the same run scope the producing tool call had, so a private agent's own
+   * topic can reach its owner's private connectors.
+   */
+  topicId?: string;
 }
 
 export interface ConnectAppViewOptions {
@@ -177,7 +183,7 @@ export const connectAppView = ({
               type: 'mcp',
             },
             // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal },
+            { agentId, fromMcpApp: true, onThisDevice, server, signal, topicId },
           ),
         );
       } finally {

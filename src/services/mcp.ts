@@ -21,11 +21,24 @@ import { type MCPToolCallResult } from '@/libs/mcp';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
+import { useAgentStore } from '@/store/agent';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
+
+/**
+ * Whether this call belongs to a private agent's own conversation — the only
+ * place a private connector may run. Everywhere else (a workspace public agent,
+ * a group or channel run) a private row of the same identifier must not shadow
+ * the shared one: the server enforces the same scope, so leaving the connector
+ * out here sends the call to it instead of executing locally.
+ */
+const isPrivateConnectorRun = (agentId?: string): boolean => {
+  if (!agentId) return false;
+  return useAgentStore.getState().agentMap[agentId]?.visibility === 'private';
+};
 
 /**
  * Calculate byte size of object
@@ -222,7 +235,9 @@ class MCPService {
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId, {
+      includePrivate: isPrivateConnectorRun(agentId),
+    })(s);
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
@@ -489,6 +504,7 @@ class MCPService {
       agentId,
       onThisDevice = false,
       server,
+      topicId,
     }: {
       agentId?: string;
       /**
@@ -499,6 +515,13 @@ class MCPService {
        */
       onThisDevice?: boolean;
       server?: string;
+      /**
+       * The conversation the result belongs to. The server resolves the
+       * connector with the same run scope the tool call used, so a private
+       * agent's own conversation can read a view off its owner's private
+       * connector; without it the read resolves the shared rows only.
+       */
+      topicId?: string;
     },
   ): Promise<ReadResourceResult | undefined> {
     // A result that doesn't name its server can't be matched to one
@@ -520,7 +543,9 @@ class MCPService {
     }
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId, {
+      includePrivate: isPrivateConnectorRun(agentId),
+    })(s);
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
     // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
     // tools are synced to) leaves it to the plugin.
@@ -588,6 +613,7 @@ class MCPService {
         agentId,
         identifier,
         server,
+        topicId,
         uri,
       })) as ReadResourceResult;
     }

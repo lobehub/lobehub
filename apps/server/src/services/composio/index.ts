@@ -6,7 +6,7 @@ import debug from 'debug';
 import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import type { UserConnectorToolItem } from '@/database/schemas';
+import type { UserConnectorItem, UserConnectorToolItem } from '@/database/schemas';
 import {
   getComposioClient,
   isComposioClientAvailable,
@@ -86,7 +86,7 @@ export class ComposioService {
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
     const { identifier, toolSlug, args, agentId, topicId } = params;
     let resolvedConnectedAccountId: string | undefined;
-    let resolvedConnectorId: string | undefined;
+    let resolvedConnector: Pick<UserConnectorItem, 'id' | 'userId' | 'workspaceId'> | undefined;
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
@@ -135,7 +135,7 @@ export class ComposioService {
 
       const { connectedAccountId, ownerUserId } = account;
       resolvedConnectedAccountId = connectedAccountId;
-      resolvedConnectorId = account.connectorId;
+      resolvedConnector = account.connector;
 
       log(
         'executeComposioTool: calling Composio API with connectedAccountId=%s, ownerUserId=%s',
@@ -184,15 +184,17 @@ export class ComposioService {
       const err = error as Error;
       if (
         resolvedConnectedAccountId &&
-        resolvedConnectorId &&
+        resolvedConnector &&
         this.connectorModel &&
         isComposioConnectedAccountNotFoundError(error)
       ) {
         try {
-          await this.connectorModel.markComposioConnectionUnavailable(
-            resolvedConnectorId,
-            resolvedConnectedAccountId,
-          );
+          // The row may live in another scope than this service's (a private
+          // agent resolving its owner's personal row): write the health state
+          // through the row's own model, or the update silently matches nothing.
+          await this.connectorModel
+            .forRow(resolvedConnector)
+            .markComposioConnectionUnavailable(resolvedConnector.id, resolvedConnectedAccountId);
         } catch (healthError) {
           // Persisting connector health must not replace the original remote tool error.
           log('executeComposioTool: failed to persist connector health: %O', healthError);
@@ -232,7 +234,12 @@ export class ComposioService {
     identifier: string,
     target: ConnectorRunTarget,
   ): Promise<
-    { connectedAccountId: string; connectorId?: string; ownerUserId: string } | undefined
+    | {
+        connectedAccountId: string;
+        connector?: Pick<UserConnectorItem, 'id' | 'userId' | 'workspaceId'>;
+        ownerUserId: string;
+      }
+    | undefined
   > {
     if (this.connectorModel) {
       const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], target);
@@ -240,10 +247,21 @@ export class ComposioService {
       if (composio?.connectedAccountId) {
         return {
           connectedAccountId: composio.connectedAccountId,
-          connectorId: connector.id,
+          connector: {
+            id: connector.id,
+            userId: connector.userId,
+            workspaceId: connector.workspaceId,
+          },
           ownerUserId: composio.linkedByUserId ?? connector.userId ?? this.userId!,
         };
       }
+
+      // No row visible to this run — but a row exists. The plugin projection is
+      // a mirror of that connector, so the legacy fallback below would serve the
+      // very connection this run is not allowed to use (a private connector read
+      // by another member, another agent's row). Do not resurrect it.
+      const projected = await this.connectorModel.identifiersWithConnectorRows([identifier]);
+      if (projected.has(identifier)) return undefined;
     }
 
     if (this.pluginModel) {
@@ -344,12 +362,27 @@ export class ComposioService {
     if (this.pluginModel) {
       try {
         const allPlugins = await this.pluginModel.query();
-        const composioPlugins = allPlugins.filter(
+        const candidates = allPlugins.filter(
           (plugin) =>
             VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier) &&
             plugin.customParams?.composio?.status === 'ACTIVE' &&
             !coveredIdentifiers.has(plugin.identifier) &&
             (!identifiers || identifiers.includes(plugin.identifier)),
+        );
+
+        // A connector row that runtime resolution left out (private to another
+        // member, another agent's binding) still shadows its plugin mirror:
+        // advertising the old projection would hand this run a connection its
+        // connector explicitly keeps out of scope.
+        const connectorBacked =
+          this.connectorModel && candidates.length > 0
+            ? await this.connectorModel.identifiersWithConnectorRows(
+                candidates.map((plugin) => plugin.identifier),
+              )
+            : new Set<string>();
+
+        const composioPlugins = candidates.filter(
+          (plugin) => !connectorBacked.has(plugin.identifier),
         );
 
         for (const plugin of composioPlugins) {

@@ -87,6 +87,10 @@ const McpAppView = memo<McpAppViewProps>(
     const canSendMessage = useConversationStore((s) => s.composerTarget.writable);
     // The agent that produced the result: in a group, the member, not the supervisor
     const agentId = useConversationStore(mcpAppAgentIdSelector(messageId));
+    // The conversation the result belongs to: the view is read, and calls, with
+    // the same run scope the producing tool call had (a private agent's own
+    // topic can reach its owner's private connectors).
+    const topicId = useConversationStore((s) => s.context.topicId ?? undefined);
     const { t } = useTranslation('plugin');
 
     const useFetchMcpAppResource = useToolStore((s) => s.useFetchMcpAppResource);
@@ -94,6 +98,7 @@ const McpAppView = memo<McpAppViewProps>(
       agentId,
       onThisDevice,
       server,
+      topicId,
     });
 
     const resource = pickAppResource(data, resourceUri);
@@ -117,6 +122,7 @@ const McpAppView = memo<McpAppViewProps>(
       sendMessage,
       server,
       t,
+      topicId,
     });
     const bridgeRef = useRef<AppBridge>(undefined);
     // The session of the view now in the frame
