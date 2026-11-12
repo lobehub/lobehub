@@ -5,8 +5,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { AgentModel } from '../../../models/agent';
 import { ProjectModel } from '../../../models/project';
 import { TaskModel } from '../../../models/task';
-import { TopicModel } from '../../../models/topic';
-import { tasks, topics, users } from '../../../schemas';
+import { tasks, users } from '../../../schemas';
 import { ProjectRepository } from '../../project';
 import { ProjectOverviewRepository } from '../index';
 
@@ -21,18 +20,22 @@ let identifierSequence = 0;
 const createProject = (name: string, owner = projectRepo) =>
   owner.create({ identifier: `O${String(++identifierSequence).padStart(5, '0')}`, name });
 
-const createTopic = async (
+const createTask = async (
   projectId: string,
-  title: string,
+  name: string,
   updatedAt: Date,
-  extra: { description?: string; historySummary?: string } = {},
+  extra: { description?: string; status?: string } = {},
 ) => {
-  const topic = await new TopicModel(serverDB, userId).create({ projectId, title });
+  const task = await new TaskModel(serverDB, userId).create({
+    instruction: name,
+    name,
+    projectId,
+  });
   await serverDB
-    .update(topics)
+    .update(tasks)
     .set({ ...extra, updatedAt })
-    .where(eq(topics.id, topic.id));
-  return topic;
+    .where(eq(tasks.id, task.id));
+  return task;
 };
 
 describe('ProjectOverviewRepository.list', () => {
@@ -49,26 +52,19 @@ describe('ProjectOverviewRepository.list', () => {
     expect(await repo.list()).toEqual([]);
   });
 
-  it('batches topics, tasks and members per project', async () => {
+  it('batches tasks and members per project', async () => {
     const project = await createProject('Folder');
     const empty = await createProject('Empty');
 
-    await createTopic(project.id, 'Oldest', new Date('2026-01-01'));
-    await createTopic(project.id, 'Second', new Date('2026-01-02'));
-    await createTopic(project.id, 'Third', new Date('2026-01-03'));
-    await createTopic(project.id, 'Fourth', new Date('2026-01-04'), { description: 'not shown' });
-    await createTopic(project.id, 'Latest', new Date('2026-01-05'), {
-      historySummary: 'Summarized history',
+    await createTask(project.id, 'Oldest', new Date('2026-01-01'), { status: 'completed' });
+    await createTask(project.id, 'Second', new Date('2026-01-02'));
+    await createTask(project.id, 'Third', new Date('2026-01-03'));
+    await createTask(project.id, 'Fourth', new Date('2026-01-04'), { description: 'not shown' });
+    await createTask(project.id, 'Latest', new Date('2026-01-05'), {
+      description: 'Latest brief',
+      status: 'running',
     });
-    const deleted = await createTopic(project.id, 'Deleted', new Date('2026-01-06'));
-    await serverDB.update(topics).set({ deletedAt: new Date() }).where(eq(topics.id, deleted.id));
-
-    const taskModel = new TaskModel(serverDB, userId);
-    const done = await taskModel.create({ instruction: 'Done', projectId: project.id });
-    await taskModel.create({ instruction: 'Open', projectId: project.id });
-    const canceled = await taskModel.create({ instruction: 'Dropped', projectId: project.id });
-    await serverDB.update(tasks).set({ status: 'completed' }).where(eq(tasks.id, done.id));
-    await serverDB.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, canceled.id));
+    await createTask(project.id, 'Dropped', new Date('2026-01-06'), { status: 'canceled' });
 
     const agentModel = new AgentModel(serverDB, userId);
     for (const [index, title] of ['Writer', 'Reviewer', 'Tester'].entries()) {
@@ -79,21 +75,23 @@ describe('ProjectOverviewRepository.list', () => {
     const overviews = await repo.list();
     const overview = overviews.find((item) => item.projectId === project.id)!;
 
-    expect(overview.topicCount).toBe(5);
-    expect(overview.recentTopics.map((topic) => topic.title)).toEqual([
+    // Canceled tasks leave both the rows and the total.
+    expect(overview).toMatchObject({ taskCount: 5, taskDoneCount: 1 });
+    expect(overview.recentTasks.map((task) => task.name)).toEqual([
       'Latest',
       'Fourth',
       'Third',
       'Second',
     ]);
-    expect(overview.recentTopics.map((topic) => topic.summary)).toEqual([
-      'Summarized history',
+    expect(overview.recentTasks.map((task) => task.summary)).toEqual([
+      'Latest brief',
       null,
       null,
       null,
     ]);
-    expect(overview.recentTopics[0].updatedAt).toBeInstanceOf(Date);
-    expect(overview).toMatchObject({ taskCount: 2, taskDoneCount: 1 });
+    expect(overview.recentTasks[0]).toMatchObject({ status: 'running' });
+    expect(overview.recentTasks[0].identifier).toBeTruthy();
+    expect(overview.recentTasks[0].updatedAt).toBeInstanceOf(Date);
 
     // The main agent leads, then the project order, capped at three.
     expect(overview.agentCount).toBe(4);
@@ -106,22 +104,18 @@ describe('ProjectOverviewRepository.list', () => {
     // A project with only its main agent still gets a card overview.
     expect(overviews.find((item) => item.projectId === empty.id)).toMatchObject({
       agentCount: 1,
-      recentTopics: [],
+      recentTasks: [],
       taskCount: 0,
-      topicCount: 0,
     });
   });
 
-  it('prefers a topic description over its history summary', async () => {
-    const project = await createProject('Described');
-    await createTopic(project.id, 'Only', new Date('2026-02-01'), {
-      description: 'Short description',
-      historySummary: 'Long summary',
-    });
+  it('leaves the summary empty when the latest task has no description', async () => {
+    const project = await createProject('Undescribed');
+    await createTask(project.id, 'Only', new Date('2026-02-01'), { description: '' });
 
     const [overview] = await repo.list();
 
-    expect(overview.recentTopics[0].summary).toBe('Short description');
+    expect(overview.recentTasks[0].summary).toBeNull();
   });
 
   it('leaves out projects the caller cannot see', async () => {

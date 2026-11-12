@@ -1,24 +1,23 @@
-import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import { agents } from '../../schemas/agent';
 import { projectAgents, projects } from '../../schemas/project';
 import { tasks } from '../../schemas/task';
-import { topics } from '../../schemas/topic';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
-/** Topics a folder card lists: the latest one as its headline, the rest as rows. */
-export const PROJECT_OVERVIEW_TOPIC_LIMIT = 4;
+/** Tasks a folder card lists: the latest one as its headline, the rest as rows. */
+export const PROJECT_OVERVIEW_TASK_LIMIT = 4;
 /** Agents a folder card stacks. */
 export const PROJECT_OVERVIEW_AGENT_LIMIT = 3;
-/** The headline summary is a few lines on a card; the rest never renders. */
-const SUMMARY_MAX_CHARS = 240;
 
-export interface ProjectOverviewTopic {
+export interface ProjectOverviewTask {
   id: string;
-  /** Only the latest topic carries one; the card shows it under the headline. */
+  identifier: string;
+  name: string | null;
+  status: string;
+  /** Only the latest task carries one; the card shows it under the headline. */
   summary: string | null;
-  title: string | null;
   updatedAt: Date;
 }
 
@@ -35,21 +34,19 @@ export interface ProjectOverview {
   /** Members, the main agent first, at most {@link PROJECT_OVERVIEW_AGENT_LIMIT}. */
   agents: ProjectOverviewAgent[];
   projectId: string;
-  /** Newest first, at most {@link PROJECT_OVERVIEW_TOPIC_LIMIT}. */
-  recentTopics: ProjectOverviewTopic[];
+  /** Last updated first, at most {@link PROJECT_OVERVIEW_TASK_LIMIT}. */
+  recentTasks: ProjectOverviewTask[];
   taskCount: number;
   taskDoneCount: number;
-  topicCount: number;
 }
 
 const emptyOverview = (projectId: string): ProjectOverview => ({
   agentCount: 0,
   agents: [],
   projectId,
-  recentTopics: [],
+  recentTasks: [],
   taskCount: 0,
   taskDoneCount: 0,
-  topicCount: 0,
 });
 
 /**
@@ -75,20 +72,24 @@ export class ProjectOverviewRepository {
       .where(buildWorkspaceWhere(this.scope, projects));
   }
 
-  /** The same topics the project page lists (`ProjectModel.listTopics`). */
-  private topicWhere() {
+  /** The same tasks the project page lists (`ProjectModel.listTasks`), without canceled ones. */
+  private taskWhere() {
     return and(
-      inArray(topics.projectId, this.readableProjectIds()),
-      buildWorkspaceWhere(this.scope, topics),
-      isNull(topics.deletedAt),
+      inArray(tasks.projectId, this.readableProjectIds()),
+      ne(tasks.status, 'canceled'),
+      buildWorkspaceWhere(this.scope, {
+        isDeleted: tasks.isDeleted,
+        userId: tasks.createdByUserId,
+        visibility: tasks.visibility,
+        workspaceId: tasks.workspaceId,
+      }),
     );
   }
 
   async list(): Promise<ProjectOverview[]> {
-    const [topicCounts, recentTopics, taskCounts, agentCounts, members] = await Promise.all([
-      this.countTopics(),
-      this.listRecentTopics(),
+    const [taskCounts, recentTasks, agentCounts, members] = await Promise.all([
       this.countTasks(),
+      this.listRecentTasks(),
       this.countAgents(),
       this.listMembers(),
     ]);
@@ -103,64 +104,18 @@ export class ProjectOverviewRepository {
       return overview;
     };
 
-    for (const row of topicCounts) overviewOf(row.projectId).topicCount = Number(row.count);
-    for (const { projectId, ...topic } of recentTopics)
-      overviewOf(projectId).recentTopics.push(topic);
     for (const row of taskCounts) {
       const overview = overviewOf(row.projectId);
       overview.taskCount = Number(row.total);
       overview.taskDoneCount = Number(row.done);
     }
+    for (const { projectId, ...task } of recentTasks) overviewOf(projectId).recentTasks.push(task);
     for (const row of agentCounts) overviewOf(row.projectId).agentCount = Number(row.count);
     for (const { projectId, ...agent } of members) overviewOf(projectId).agents.push(agent);
 
     return [...overviews.values()];
   }
 
-  private async countTopics() {
-    return this.db
-      .select({ count: sql<number>`count(*)`, projectId: sql<string>`${topics.projectId}` })
-      .from(topics)
-      .where(this.topicWhere())
-      .groupBy(topics.projectId);
-  }
-
-  private async listRecentTopics() {
-    const ranked = this.db
-      .select({
-        id: topics.id,
-        projectId: sql<string>`${topics.projectId}`.as('project_id'),
-        rank: sql<number>`row_number() over (partition by ${topics.projectId} order by ${topics.updatedAt} desc, ${topics.id} desc)`.as(
-          'rank',
-        ),
-        summary: sql<
-          string | null
-        >`coalesce(nullif(${topics.description}, ''), left(${topics.historySummary}, ${SUMMARY_MAX_CHARS}))`.as(
-          'summary',
-        ),
-        title: topics.title,
-        updatedAt: topics.updatedAt,
-      })
-      .from(topics)
-      .where(this.topicWhere())
-      .as('ranked_project_topics');
-
-    const rows = await this.db
-      .select()
-      .from(ranked)
-      .where(sql`${ranked.rank} <= ${PROJECT_OVERVIEW_TOPIC_LIMIT}`)
-      .orderBy(asc(ranked.projectId), asc(ranked.rank));
-
-    return rows.map(({ id, projectId, rank, summary, title, updatedAt }) => ({
-      id,
-      projectId,
-      summary: Number(rank) === 1 ? summary : null,
-      title,
-      updatedAt,
-    }));
-  }
-
-  /** The same tasks the project page lists (`ProjectModel.listTasks`); canceled ones leave the total. */
   private async countTasks() {
     return this.db
       .select({
@@ -169,19 +124,38 @@ export class ProjectOverviewRepository {
         total: sql<number>`count(*)`,
       })
       .from(tasks)
-      .where(
-        and(
-          inArray(tasks.projectId, this.readableProjectIds()),
-          ne(tasks.status, 'canceled'),
-          buildWorkspaceWhere(this.scope, {
-            isDeleted: tasks.isDeleted,
-            userId: tasks.createdByUserId,
-            visibility: tasks.visibility,
-            workspaceId: tasks.workspaceId,
-          }),
-        ),
-      )
+      .where(this.taskWhere())
       .groupBy(tasks.projectId);
+  }
+
+  private async listRecentTasks() {
+    const ranked = this.db
+      .select({
+        description: tasks.description,
+        id: tasks.id,
+        identifier: tasks.identifier,
+        name: tasks.name,
+        projectId: sql<string>`${tasks.projectId}`.as('project_id'),
+        rank: sql<number>`row_number() over (partition by ${tasks.projectId} order by ${tasks.updatedAt} desc, ${tasks.id} desc)`.as(
+          'rank',
+        ),
+        status: tasks.status,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .where(this.taskWhere())
+      .as('ranked_project_tasks');
+
+    const rows = await this.db
+      .select()
+      .from(ranked)
+      .where(sql`${ranked.rank} <= ${PROJECT_OVERVIEW_TASK_LIMIT}`)
+      .orderBy(asc(ranked.projectId), asc(ranked.rank));
+
+    return rows.map(({ description, rank, ...task }) => ({
+      ...task,
+      summary: Number(rank) === 1 ? description || null : null,
+    }));
   }
 
   private memberWhere() {
