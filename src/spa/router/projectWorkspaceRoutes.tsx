@@ -49,6 +49,9 @@ export const projectWorkspaceRoute: RouteObject = {
     },
     { element: <LegacyProjectConversationRedirect />, path: 'conversation/:topicId?' },
     {
+      // A thread opened as the page. The Channel page reads it from the path, so moving
+      // between the thread beside the Channel and the thread page keeps the page mounted.
+      children: [{ path: 'threads/:threadId' }],
       element: dynamicElement(
         () => import('@/routes/(main)/project/[projectId]/channels/[channelId]'),
         'Desktop > Project Channel',

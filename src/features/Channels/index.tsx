@@ -4,7 +4,7 @@ import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
@@ -64,6 +64,7 @@ function EnabledChannelPage() {
     thread: !!(threadId || threadDraft || pageThreadId),
   });
   if (!channelId) return null;
+  if (panel.legacyPageUrl) return <Navigate replace to={panel.legacyPageUrl} />;
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>

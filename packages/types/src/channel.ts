@@ -404,6 +404,16 @@ export interface ChannelInputManifest {
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
 
+/** A member pictured in a Channel's list avatar. */
+export interface ChannelAvatarMember {
+  actorType: ChannelMemberActorType;
+  avatar: string | null;
+  backgroundColor: string | null;
+  /** The Agent id or user id; seeds a generated avatar when there is no image. */
+  id: string;
+  name: string | null;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -414,6 +424,11 @@ export interface ChannelListItem {
   id: string;
   /** The newest main-channel message, cut for a preview; set by the Channel list. */
   lastMessage?: { content: string; createdAt: Date } | null;
+  /**
+   * The first members besides the caller, oldest first, for a group Channel's list avatar;
+   * set by the Channel list.
+   */
+  memberAvatars?: ChannelAvatarMember[];
   /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
   mentionCount?: number;
   /** The project the channel is grouped under; null for a standalone channel. */

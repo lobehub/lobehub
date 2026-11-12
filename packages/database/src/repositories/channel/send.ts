@@ -25,11 +25,11 @@ import { createChannelThread } from './view';
 export interface ChannelSendInput {
   content: string;
   fileIds?: string[];
-  /** Member ids. Human quotes retain mentions without dispatching them. */
+  /** Member ids. A human quote dispatches only its mentioned Agents. */
   mentions?: string[];
   /** Stored with the message, e.g. `via` for a request an Agent relayed for the caller. */
   metadata?: ChannelMessageMetadata;
-  /** Quote a person without dispatch, or continue an Agent answer in its thread. */
+  /** Quote a person (only mentions dispatch), or continue an Agent answer in its thread. */
   replyToId?: string;
   /** Client retry key; a retry with the same key returns the original message. */
   requestKey: string;
@@ -67,8 +67,9 @@ export const validateSendInput = (input: ChannelSendInput) => {
 /**
  * Posts a human message. The caller holds the channel lock and is `access.member`.
  *
- * - Human quotes stay in their feed without jobs; Agent replies continue in a thread.
- * - Outside human quotes, @mentioned Agents get jobs in this transaction (`directed`, source `explicit`).
+ * - Human quotes stay in their feed; without mentions they get no jobs. Agent replies continue
+ *   in a thread.
+ * - @mentioned Agents get jobs in this transaction (`directed`, source `explicit`), quoted or not.
  * - @mentioning only people wakes no Agent.
  * - Without mentions, `decision` leaves the message `pending` for the routing task, and
  *   `fallback` hands it to every candidate Agent at once.
@@ -98,9 +99,11 @@ export const sendMessage = async (
     replyTo.id !== sourceThread?.rootMessageId
   )
     throw new ChannelError('BAD_REQUEST', 'Reply message belongs to another conversation');
-  const quoteOnly = !!replyTo && replyTo.routingStatus !== 'reply';
+  const humanQuote = !!replyTo && replyTo.routingStatus !== 'reply';
+  // An explicit @mention still dispatches; the quote only adds context.
+  const quoteOnly = humanQuote && !mentions.length;
   const [replyAgent] =
-    replyTo && !quoteOnly
+    replyTo && !humanQuote
       ? await tx
           .select()
           .from(channelMembers)
@@ -113,7 +116,7 @@ export const sendMessage = async (
             ),
           )
       : [];
-  if (replyTo && !quoteOnly && !replyAgent)
+  if (replyTo && !humanQuote && !replyAgent)
     throw new ChannelError('BAD_REQUEST', 'The replying Agent is no longer available');
   // A click is local. Create the Agent's thread atomically with the first sent reply.
   const thread = assertThreadOpen(

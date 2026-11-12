@@ -1,4 +1,5 @@
 import type {
+  ChannelAvatarMember,
   ChannelMemberConfig,
   ChannelMemberRole,
   ChannelReplyJob,
@@ -27,6 +28,7 @@ import {
   requireAgentMember,
   requireChannelAgent,
 } from './agent';
+import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
@@ -422,6 +424,7 @@ export class ChannelRepository {
       ChannelItem & {
         canDelete: boolean;
         lastMessage: { content: string; createdAt: Date } | null;
+        memberAvatars: ChannelAvatarMember[];
         mentionCount: number;
         replyJobs: ChannelReplyJob[];
         unreadCount: number;
@@ -528,10 +531,18 @@ export class ChannelRepository {
       : [];
     const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
 
+    // A group Channel's list avatar pictures its first members; a direct one shows its Agent.
+    const avatarsOf = await channelAvatarMembers(
+      this.db,
+      rows.filter(({ channel }) => !channel.agentId).map(({ channel }) => channel.id),
+      this.userId,
+    );
+
     return rows.map(({ channel, lastReadSequence, role }) => ({
       ...channel,
       canDelete: hasRole(role, 'admin'),
       lastMessage: lastMessageOf.get(channel.id) ?? null,
+      memberAvatars: avatarsOf.get(channel.id) ?? [],
       mentionCount: mentionCountOf.get(channel.id) ?? 0,
       replyJobs: replyJobsOf.get(channel.id) ?? [],
       unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
