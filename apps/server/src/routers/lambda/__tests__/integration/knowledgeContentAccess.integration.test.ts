@@ -191,6 +191,7 @@ beforeAll(async () => {
       { id: 'docs_node_sibling', content: 'sibling page' },
       { id: 'docs_node_granted', content: 'granted page' },
       { id: 'docs_node_page', parentId: 'docs_node_nested', content: 'editable page' },
+      { id: 'docs_node_html', content: 'html page', fileType: 'custom/html' },
     ].map((doc) => ({
       fileType: 'custom/document',
       sourceType: 'api' as const,
@@ -206,6 +207,7 @@ beforeAll(async () => {
     [
       { id: 'file_node_nested', parentId: 'docs_node_nested' },
       { id: 'file_node_page', parentId: null },
+      { id: 'file_node_html', parentId: null },
     ].map((file) => ({
       ...file,
       userId: owner,
@@ -216,7 +218,7 @@ beforeAll(async () => {
     })),
   );
   await db.insert(schema.knowledgeBaseFiles).values(
-    ['file_node_nested', 'file_node_page'].map((fileId) => ({
+    ['file_node_nested', 'file_node_page', 'file_node_html'].map((fileId) => ({
       fileId,
       knowledgeBaseId: 'content-kb-a',
       userId: owner,
@@ -226,6 +228,10 @@ beforeAll(async () => {
     .update(schema.documents)
     .set({ fileId: 'file_node_page' })
     .where(eq(schema.documents.id, 'docs_node_page'));
+  await db
+    .update(schema.documents)
+    .set({ fileId: 'file_node_html' })
+    .where(eq(schema.documents.id, 'docs_node_html'));
   await db.insert(schema.documents).values({
     id: 'docs_node_mirror',
     userId: owner,
@@ -346,6 +352,16 @@ describe('knowledge content node policies', () => {
     nodePolicies('path', [{ nodeId: 'docs_node_page', level: 'view' }]);
     expect((await proxy('file_node_page')).status).toBe(302);
     expect((await contents(viewer, ['docs_node_page']))[0].content).toBe('editable page');
+  });
+
+  it('applies an HTML page list to the page and its backing file, like any authored page', async () => {
+    nodePolicies('view', [{ nodeId: 'docs_node_html', level: null }]);
+    boundary.identity = viewer;
+    expect((await proxy('file_node_html')).status).toBe(404);
+    await expect(contents(viewer, ['docs_node_html'])).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    nodePolicies('path', [{ nodeId: 'docs_node_html', level: 'view' }]);
+    expect((await proxy('file_node_html')).status).toBe(302);
+    expect((await contents(viewer, ['docs_node_html']))[0].content).toBe('html page');
   });
 
   it('falls back to the library level only when no node list applies', async () => {

@@ -92,13 +92,12 @@ const resolveContentNodeLevels = async (
         ),
       ),
     );
-  // A user-authored page owns its backing file's location and policy. Parsed mirrors
-  // instead follow the file, and never become independent permission nodes.
+  // A page authored in the library (markdown, HTML, ...) owns its backing file's location and
+  // policy. Parsed mirrors (`sourceType: 'file'`) instead follow the file, and never become
+  // independent permission nodes.
   const pageByFile = new Map(
     documentRows
-      .filter(
-        (row) => row.fileId && row.fileType === 'custom/document' && row.sourceType !== 'file',
-      )
+      .filter((row) => row.fileId && row.sourceType !== 'file')
       .map((row) => [row.fileId, row.id]),
   );
   const nodes = new Map(
