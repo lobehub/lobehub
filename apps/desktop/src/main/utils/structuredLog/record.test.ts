@@ -110,6 +110,25 @@ describe('createLogRecord secret redaction in text', () => {
     expect(record.msg).toContain('page=2');
   });
 
+  it('redacts URL userinfo but keeps the host', () => {
+    const record = createLogRecord({
+      level: 'debug',
+      message: 'Testing proxy with URL: http://alice:my-proxy-pass@proxy.example.com:8080',
+      now,
+      process: 'main',
+    });
+
+    expect(record.msg).toBe('Testing proxy with URL: http://[REDACTED]@proxy.example.com:8080');
+    expect(
+      createLogRecord({
+        level: 'info',
+        message: 'mailto x@y.com https://example.com/a@b',
+        now,
+        process: 'main',
+      }).msg,
+    ).toBe('mailto x@y.com https://example.com/a@b');
+  });
+
   it('redacts numeric, uuid-like and quoted secret values', () => {
     const record = createLogRecord({
       level: 'debug',

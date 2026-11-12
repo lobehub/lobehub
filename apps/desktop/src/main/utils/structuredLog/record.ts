@@ -40,6 +40,8 @@ const SECRET_PATTERNS: [RegExp, string][] = [
     ),
     '$1[REDACTED]',
   ],
+  // URL userinfo: authenticated proxy URLs (`http://user:pass@host`) reach debug lines.
+  [/(\b[a-z][\d+.a-z-]*:\/\/)[^\s/?#@]+@/gi, '$1[REDACTED]@'],
   // Short query names that commonly carry credentials (`?key=AIza…`, presigned `sig=`).
   [/([?&](?:key|sig|signature|code)=)[^&\s"']+/gi, '$1[REDACTED]'],
   [/(bearer\s+)[\w.~+/-]+=*/gi, '$1[REDACTED]'],
