@@ -49,6 +49,7 @@ import { default as nebius } from './nebius';
 import { default as newapi } from './newapi';
 import { default as novita } from './novita';
 import { default as nvidia } from './nvidia';
+import { default as ofoxai } from './ofoxai';
 import { default as ollama } from './ollama';
 import { default as ollamacloud } from './ollamacloud';
 import { default as openai } from './openai';
@@ -163,6 +164,7 @@ const staticModelMap: ModelsMap = {
   newapi,
   novita,
   nvidia,
+  ofoxai,
   ollama,
   ollamacloud,
   openai,
@@ -283,6 +285,7 @@ export { default as nebius } from './nebius';
 export { default as newapi } from './newapi';
 export { default as novita } from './novita';
 export { default as nvidia } from './nvidia';
+export { default as ofoxai } from './ofoxai';
 export { default as ollama } from './ollama';
 export { default as ollamacloud } from './ollamacloud';
 export { default as openai, openaiChatModels } from './openai';
