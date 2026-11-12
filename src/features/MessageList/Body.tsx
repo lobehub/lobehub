@@ -190,6 +190,7 @@ const Body = memo(() => {
         activeRouteId={activeRouteId}
         channel={entry.channel}
         key={'inbox'}
+        topic={inboxTopic}
       />
     ) : entry.type === 'channel' ? (
       <ChannelConversation

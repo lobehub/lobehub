@@ -1,6 +1,7 @@
 import type {
   AcceptanceCommentList,
   CreatableAcceptanceSubjectType,
+  UserSkillVersionDetail,
   VerifyRubricConfig,
 } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
@@ -8,17 +9,27 @@ import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
+import type { VerifyCriterionItem, VerifyRubricItem } from '@/database/schemas/verify';
 import {
   createReplicaSlice,
   linkReplicaEntity,
   recordLens,
   type ReplicaPageResult,
   type ReplicaSyncResult,
+  revalidateReplica,
 } from '@/libs/replica';
 import { acceptanceCommentService } from '@/services/acceptanceComment';
 import { documentService } from '@/services/document';
-import type { AcceptanceBundle, AcceptanceBySubject, AcceptanceListItem } from '@/services/verify';
+import { type UserSkillDetail, userSkillService } from '@/services/userSkill';
+import type {
+  AcceptanceBundle,
+  AcceptanceBySubject,
+  AcceptanceListItem,
+  GoalCriterionWithInstruction,
+  VerifyReportBundle,
+} from '@/services/verify';
 import { verifyService } from '@/services/verify';
+import { documentDetailResource } from '@/store/document/slices/document/projection';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import { isTrpcErrorCode } from '@/utils/trpcError';
@@ -37,7 +48,20 @@ import {
   acceptancePageKey,
   type AcceptancePageParams,
   acceptancePageResource,
+  goalCriteriaResource,
+  planSkillResource,
+  type SkillVersionParams,
+  skillVersionResource,
+  toPersistedLookup,
+  toPersistedReportBundle,
   toPersistedVerifyRun,
+  type VerifierTracing,
+  verifierTracingResource,
+  VERIFY_RUBRIC_LIST_KEY,
+  type VerifyLookup,
+  verifyReportBundleResource,
+  verifyRubricCriteriaResource,
+  verifyRubricListResource,
   verifyRunResource,
   type VerifyRunSnapshot,
 } from './projection';
@@ -66,6 +90,20 @@ export const ACCEPTANCE_PAGE_SIZE = 30;
 const ACCEPTANCE_LIST_DEDUPE_MS = 10_000;
 
 /**
+ * Several views read one entry at once (the report page with the portal title,
+ * menu and link; the gate directory with its file toggle), and the app's SWR
+ * hook does not dedupe: collapse their mount requests into one. A manual,
+ * write-driven or polled `revalidate` still goes out.
+ */
+const SHARED_READ_DEDUPE = 10_000;
+
+/** The read was denied or the record is gone: the cached copy must stop rendering. */
+const isTerminalReadError = (error: unknown) =>
+  isTrpcErrorCode(error, 'NOT_FOUND') ||
+  isTrpcErrorCode(error, 'FORBIDDEN') ||
+  isTrpcErrorCode(error, 'UNAUTHORIZED');
+
+/**
  * The verify store owns the write-back loop for the delivery-check config
  * portal: every control writes through `updateCriterion` / `updateInstruction`,
  * which optimistically update an in-memory overlay and debounce-persist the
@@ -88,6 +126,20 @@ export class ActionImpl {
   readonly #listEntity;
   /** Each acceptance's discussion, behind `acceptanceCommentMap[acceptanceId]`. */
   readonly #comments;
+  /** Standalone verify reports, behind `verifyReportBundleMap[verifyRunId]`. */
+  readonly #report;
+  /** LLM verifier tracings, behind `verifierTracingMap[tracingId]`. */
+  readonly #tracing;
+  /** Rubric templates, behind `verifyRubricListMap.all`. */
+  readonly #rubrics;
+  /** The criteria of one rubric, behind `verifyRubricCriteriaMap[rubricId]`. */
+  readonly #rubricCriteria;
+  /** A Goal's acceptance criteria, behind `goalCriteriaMap[ids]`. */
+  readonly #goalCriteria;
+  /** Plan skills under review, behind `planSkillMap[skillId]`. */
+  readonly #planSkill;
+  /** Shipped skill versions, behind `skillVersionMap['<id>@<version>']`. */
+  readonly #skillVersion;
 
   /** Pending writes coalesced per id and flushed together on a debounce. */
   #pendingCriteria = new Map<string, VerifyCriterionEdit>();
@@ -174,6 +226,79 @@ export class ActionImpl {
       set,
       stateKey: 'acceptanceCommentReplica',
       view: acceptanceCommentLens,
+    });
+    this.#report = createReplicaSlice(verifyReportBundleResource, {
+      actionPrefix: 'verifyReportBundle',
+      fetcher: async (verifyRunId) => ({
+        value: await verifyService.getReportBundle(verifyRunId),
+      }),
+      get,
+      // A 5s poll of an in-flight run that returns the same report keeps its
+      // reference, so the page does not re-render on every tick.
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'verifyReportBundleReplica',
+      toPersisted: toPersistedReportBundle,
+      view: recordLens<Store, VerifyLookup<VerifyReportBundle>>('verifyReportBundleMap'),
+    });
+    this.#tracing = createReplicaSlice(verifierTracingResource, {
+      actionPrefix: 'verifierTracing',
+      fetcher: async (tracingId) => ({ value: await verifyService.getVerifierTracing(tracingId) }),
+      get,
+      set,
+      stateKey: 'verifierTracingReplica',
+      toPersisted: toPersistedLookup,
+      view: recordLens<Store, VerifyLookup<VerifierTracing>>('verifierTracingMap'),
+    });
+    this.#rubrics = createReplicaSlice(verifyRubricListResource, {
+      actionPrefix: 'verifyRubricList',
+      fetcher: () => verifyService.listRubrics(),
+      get,
+      set,
+      stateKey: 'verifyRubricListReplica',
+      view: recordLens<Store, VerifyRubricItem[]>('verifyRubricListMap'),
+    });
+    this.#rubricCriteria = createReplicaSlice(verifyRubricCriteriaResource, {
+      actionPrefix: 'verifyRubricCriteria',
+      fetcher: (rubricId) => verifyService.getRubricCriteria(rubricId),
+      get,
+      set,
+      stateKey: 'verifyRubricCriteriaReplica',
+      view: recordLens<Store, VerifyCriterionItem[]>('verifyRubricCriteriaMap'),
+    });
+    this.#goalCriteria = createReplicaSlice(goalCriteriaResource, {
+      actionPrefix: 'goalCriteria',
+      fetcher: (criteriaIds) => verifyService.getCriteria(criteriaIds),
+      get,
+      set,
+      stateKey: 'goalCriteriaReplica',
+      view: recordLens<Store, GoalCriterionWithInstruction[]>('goalCriteriaMap'),
+    });
+    this.#planSkill = createReplicaSlice(planSkillResource, {
+      actionPrefix: 'planSkill',
+      effects: {
+        onError: (error, _skillId, { key, scope }) => {
+          if (key && isTerminalReadError(error)) this.#planSkill.remove(key, scope);
+        },
+      },
+      fetcher: async (skillId) => ({ value: (await userSkillService.get(skillId)) ?? null }),
+      get,
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'planSkillReplica',
+      toPersisted: toPersistedLookup,
+      view: recordLens<Store, VerifyLookup<UserSkillDetail>>('planSkillMap'),
+    });
+    this.#skillVersion = createReplicaSlice(skillVersionResource, {
+      actionPrefix: 'skillVersion',
+      fetcher: async ({ skillId, version }) => ({
+        value: await userSkillService.getVersion(skillId, version),
+      }),
+      get,
+      set,
+      stateKey: 'skillVersionReplica',
+      toPersisted: toPersistedLookup,
+      view: recordLens<Store, VerifyLookup<UserSkillVersionDetail>>('skillVersionMap'),
     });
   }
 
@@ -299,6 +424,37 @@ export class ActionImpl {
     await Promise.all(operationIds.map((operationId) => this.#run.hydrate(operationId, scope)));
   };
 
+  /** Re-read one standalone verify report (after a rename or a manual refresh). */
+  refreshVerifyReportBundle = async (verifyRunId: string): Promise<void> => {
+    await this.#report.revalidate(verifyRunId);
+  };
+
+  /** Re-read the rubric templates (after one is saved). */
+  refreshVerifyRubrics = async (): Promise<void> => {
+    await this.#rubrics.revalidate(VERIFY_RUBRIC_LIST_KEY);
+  };
+
+  /** Re-read one plan skill (the batch moved on to another round). */
+  refreshPlanSkill = async (skillId: string): Promise<void> => {
+    await this.#planSkill.revalidate(skillId);
+  };
+
+  /**
+   * Rename a verify run: the new title shows on the report at once and the
+   * confirmed one lands in the replica (and its persisted row); a rejected
+   * rename rolls back to the confirmed title.
+   */
+  renameVerifyReportRun = async (verifyRunId: string, title: string): Promise<void> => {
+    await this.#report.optimistic(
+      verifyRunId,
+      (entry) =>
+        entry.value ? { value: { ...entry.value, run: { ...entry.value.run, title } } } : entry,
+      () => verifyService.updateRunTitle(verifyRunId, title),
+    );
+    // The confirmed title is already on the replica; pick up any other server change.
+    void this.#report.revalidate(verifyRunId);
+  };
+
   /** Re-read one Agent Run's verify card (after a plan action or a manual refresh). */
   refreshVerifyRun = async (operationId: string): Promise<void> => {
     await this.#run.revalidate(operationId);
@@ -359,6 +515,64 @@ export class ActionImpl {
       revalidateOnReconnect: true,
     });
 
+  /**
+   * Fetch orchestration only; the caller reads the report through
+   * `verifyReportBundleMap`. A finished report paints from IndexedDB on reload;
+   * the report page drives the poll of a run that is still moving.
+   */
+  useFetchVerifyReportBundle = (verifyRunId?: string | null): ReplicaSyncResult =>
+    this.#report.useSync(verifyRunId || null, {
+      dedupingInterval: SHARED_READ_DEDUPE,
+      onError: (error, { key, scope }) => {
+        if (key && isTerminalReadError(error)) this.#report.remove(key, scope);
+      },
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    });
+
+  /** Fetch orchestration only; the caller reads `verifierTracingMap`. A tracing never changes. */
+  useFetchVerifierTracing = (tracingId?: string | null): ReplicaSyncResult =>
+    this.#tracing.useSync(tracingId || null, {
+      dedupingInterval: SHARED_READ_DEDUPE,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    });
+
+  /** Fetch orchestration only; the caller reads `verifyRubricListMap.all`. */
+  useFetchVerifyRubrics = (enabled = true): ReplicaSyncResult =>
+    this.#rubrics.useSync({}, { dedupingInterval: SHARED_READ_DEDUPE, enabled });
+
+  /** Fetch orchestration only; the caller reads `verifyRubricCriteriaMap[rubricId]`. */
+  useFetchVerifyRubricCriteria = (rubricId?: string | null): ReplicaSyncResult =>
+    this.#rubricCriteria.useSync(rubricId || null, { dedupingInterval: SHARED_READ_DEDUPE });
+
+  /** Fetch orchestration only; the caller reads `goalCriteriaMap[goalCriteriaKey(ids)]`. */
+  useFetchGoalCriteria = (criteriaIds: string[]): ReplicaSyncResult =>
+    this.#goalCriteria.useSync(criteriaIds.length > 0 ? criteriaIds : null, {
+      dedupingInterval: SHARED_READ_DEDUPE,
+    });
+
+  /** Re-read a Goal's criteria set (after one of its criteria is edited). */
+  refreshGoalCriteria = async (criteriaIds: string[]): Promise<void> => {
+    if (criteriaIds.length === 0) return;
+    await this.#goalCriteria.revalidate(goalCriteriaResource.key(criteriaIds));
+  };
+
+  /** Fetch orchestration only; the caller reads `planSkillMap[skillId]`. */
+  useFetchPlanSkill = (skillId?: string | null): ReplicaSyncResult =>
+    this.#planSkill.useSync(skillId || null, { dedupingInterval: SHARED_READ_DEDUPE });
+
+  /**
+   * Fetch orchestration only; the caller reads `skillVersionMap`. A shipped
+   * version never changes, so it is not re-read on focus or reconnect.
+   */
+  useFetchSkillVersion = (params: SkillVersionParams | null): ReplicaSyncResult =>
+    this.#skillVersion.useSync(params, {
+      dedupingInterval: SHARED_READ_DEDUPE,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    });
+
   #persist = async (): Promise<void> => {
     const criteria = [...this.#pendingCriteria.entries()];
     const instructions = [...this.#pendingInstructions.entries()];
@@ -391,6 +605,18 @@ export class ActionImpl {
         }),
       ),
     ]);
+
+    // The edited rows are read elsewhere from persisted replicas: re-read the
+    // mounted ones so a reload does not paint the pre-edit copy.
+    const refreshes: Promise<unknown>[] = [];
+    for (const [id] of instructions) refreshes.push(revalidateReplica(documentDetailResource, id));
+    if (criteria.length > 0)
+      refreshes.push(
+        revalidateReplica(verifyRubricCriteriaResource),
+        revalidateReplica(goalCriteriaResource),
+      );
+    if (rubricTitles.length > 0) refreshes.push(this.refreshVerifyRubrics());
+    await Promise.allSettled(refreshes);
   };
 
   /** Edit one or more fields of a criterion (optimistic + debounced persist). */

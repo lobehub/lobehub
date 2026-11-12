@@ -1,10 +1,12 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox, Spin } from '@lobehub/ui';
+import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type ComponentProps, memo, type MouseEvent, type ReactNode, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { activityLabel } from '@/features/Channels/activityLabel';
+import { TypingDots } from '@/features/Channels/TypingDots';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink, { type WorkspaceLinkProps } from '@/features/Workspace/WorkspaceLink';
 
@@ -26,10 +28,11 @@ export interface ConversationRowProps {
   preview?: string;
   /** The row element, e.g. the anchor for an inline rename popover. */
   ref?: Ref<HTMLElement>;
-  running?: boolean;
   /** Title only, no preview line — for directory lists like the contacts tab. */
   singleLine?: boolean;
   title: string;
+  /** The Agent is replying: "typing" follows the name, like the conversation header. */
+  typing?: boolean;
   unread?: number;
   url: string;
 }
@@ -67,13 +70,13 @@ const ConversationRow = memo<ConversationRowProps>(
     onMouseEnter,
     preview,
     ref,
-    running,
     singleLine,
     title,
+    typing,
     unread,
     url,
   }) => {
-    const { t } = useTranslation('common');
+    const { t } = useTranslation('channel');
     const link: WorkspaceLinkProps = {
       'aria-current': active ? 'page' : undefined,
       'aria-label': title,
@@ -99,27 +102,21 @@ const ConversationRow = memo<ConversationRowProps>(
           {...stylex.props(styles.rowText, singleLine && styles.rowTextSingleLine)}
         >
           <Flexbox horizontal align={'center'} gap={8}>
-            <span {...stylex.props(styles.title)}>{title}</span>
+            <span {...stylex.props(styles.title, typing && styles.titleBesideTyping)}>{title}</span>
+            {typing && (
+              <span role="status" {...stylex.props(styles.typing)}>
+                {activityLabel(t('activity.typing'))}
+                <TypingDots />
+              </span>
+            )}
             {activeAt && (
               <span {...stylex.props(styles.time)}>{formatConversationTime(activeAt)}</span>
             )}
           </Flexbox>
           {/* No preview: the title sits centered at the full row height, not over a blank line. */}
-          {!singleLine && (running || preview) && (
+          {!singleLine && preview && (
             <Flexbox horizontal align={'center'} gap={8}>
-              {running ? (
-                <Flexbox
-                  horizontal
-                  align={'center'}
-                  {...stylex.props(styles.preview, styles.running)}
-                  gap={4}
-                >
-                  <Spin size={10} style={{ color: 'inherit' }} />
-                  {t('messageList.running')}
-                </Flexbox>
-              ) : (
-                <span {...stylex.props(styles.preview)}>{preview}</span>
-              )}
+              <span {...stylex.props(styles.preview)}>{preview}</span>
             </Flexbox>
           )}
         </Flexbox>

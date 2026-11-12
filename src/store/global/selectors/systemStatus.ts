@@ -2,6 +2,7 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  ContactListSortBy,
   DocsPageSectionKey,
   DocsPageSectionView,
   GlobalState,
@@ -505,6 +506,8 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
   foldersFirst: true,
   order: 'asc',
 };
+const contactListSortBy = (s: GlobalState): ContactListSortBy =>
+  s.status.contactListSortBy ?? 'title';
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
@@ -558,6 +561,7 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
+  contactListSortBy,
   projectListSortBy,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,

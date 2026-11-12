@@ -79,6 +79,9 @@ jobs:
         run: pnpm install
         working-directory: apps/cli
 
+      - name: Verify CLI release automation
+        run: node --test .github/scripts/cliRelease.test.mjs
+
       - name: Verify hotfix operator CLI
         run: node --test .github/scripts/hotfixWorkflow.test.mjs
 

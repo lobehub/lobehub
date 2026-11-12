@@ -4832,6 +4832,12 @@ When I am ___, I need ___
   'drive.usage.overBy': '{{size}} over the quota',
   'drive.usage.others': 'Other members',
   'drive.usage.refresh': 'Measure again',
+  'drive.usage.measuring': 'Measuring · {{size}} counted so far',
+  'drive.usage.measuringHint':
+    'This drive is large, so it is measured in several passes. The figure shown is the last finished measurement. Measuring carries on in the background — measure again later to see the new figure.',
+  'drive.usage.measuringShort': 'Measuring…',
+  'drive.usage.refreshFailed':
+    'Could not measure the drive right now. The figure shown is still the last measurement — try again in a moment.',
   'drive.usage.membersTitle': "Members' personal drives",
   'drive.usage.membersHint': 'Usage only — contents stay private',
   'drive.usage.memberUnmeasured': 'Not measured',
@@ -4977,6 +4983,15 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.tomorrowDay': 'Tomorrow',
   'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
   'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
+  'subscriptionAccounts.visibility.private': 'Private',
+  'subscriptionAccounts.visibility.privateAction': 'Make private',
+  'subscriptionAccounts.visibility.privateConfirm.desc':
+    "Only you will see it. Other members' agents stop drawing on its quota.",
+  'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
+  'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
+  'subscriptionAccounts.visibility.publicConfirm.desc':
+    'Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.',
+  'subscriptionAccounts.visibility.publicConfirm.title': 'Share this account with the workspace?',
   'tab.subscriptionAccounts': 'Subscription Accounts',
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',

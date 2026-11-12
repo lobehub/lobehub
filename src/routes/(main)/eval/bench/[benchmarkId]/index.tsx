@@ -20,6 +20,8 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import BenchmarkLeaderboard from '@/features/LobeBench/BenchmarkLeaderboard';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import { datasetSelectors, runSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarkHeader from './features/BenchmarkHeader';
@@ -88,6 +90,7 @@ const BenchmarkDetail = memo(() => {
   const refreshDatasets = useEvalStore((s) => s.refreshDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
   const runList = useEvalStore(runSelectors.runList(benchmarkId));
+  const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
   const { error, isLoading, mutate } = useFetchBenchmarkDetail(benchmarkId);
   useFetchDatasets(benchmarkId);
@@ -125,9 +128,13 @@ const BenchmarkDetail = memo(() => {
         datasets={datasets}
         runCount={runList.length}
         systemIcon={systemIcon}
+        topLabel={lobeBench ? t('benchmark.detail.stats.topModels') : undefined}
         totalCases={totalCases}
         onBenchmarkUpdate={handleBenchmarkUpdate}
       />
+
+      {/* A Lobe Bench benchmark ranks its contenders here too, as on its Lobe Bench page. */}
+      {lobeBench && <BenchmarkLeaderboard benchmarkId={benchmarkId!} />}
 
       {/* Tags */}
       {(benchmark as any).tags && (benchmark as any).tags.length > 0 && (

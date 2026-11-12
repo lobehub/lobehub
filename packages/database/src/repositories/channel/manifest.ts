@@ -20,14 +20,17 @@ import { fileIdsByMessage } from './attachments';
 export const buildManifest = (params: {
   job: ChannelJobItem;
   member: ChannelMemberItem;
+  /** A deferred follow-up's view of the primary responder's published reply. */
+  primaryReplyMessageId?: string;
   request: ChannelMessageItem;
   thread: ChannelThreadItem | null;
 }): ChannelInputManifest => {
-  const { job, member, request, thread } = params;
+  const { job, member, primaryReplyMessageId, request, thread } = params;
 
   return {
     // Jobs inherit the request's branch, so the request itself always sorts last.
     cutoffSequence: request.sequence,
+    ...(primaryReplyMessageId && { primaryReplyMessageId }),
     requestMessageId: request.id,
     requesterMemberId: job.requesterMemberId,
     self: { agentId: member.agentId!, memberId: member.id, name: member.name ?? 'Agent' },

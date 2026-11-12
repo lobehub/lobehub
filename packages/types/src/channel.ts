@@ -213,6 +213,12 @@ export type ChannelJobStatus =
  * The details are what the woken Agent is told about the wake.
  */
 export interface ChannelJobWake {
+  /**
+   * The member whose reply to the same message this wake waits for: the message's one primary
+   * responder. The job starts only after that member's job settles, with its reply in the prompt,
+   * so it can stay silent when the reply already covers the request.
+   */
+  afterMemberId?: string;
   /** The message falls within the member's duties (`helpful`: it can settle an open question). */
   duty?: { helpful?: boolean; matched?: string };
   /** The member spoke here lately and this message followed. */
@@ -229,6 +235,8 @@ export interface ChannelJobWake {
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** A deferred `followup` waiting for the message's primary responder to settle. */
+  | 'awaiting_primary'
   | 'device_approval_pending'
   | 'device_offline'
   | 'device_required'
@@ -292,6 +300,11 @@ export interface ChannelHistoryMessageDetail {
 export interface ChannelInputManifest {
   /** Immutable at claim time; later public messages belong to the next run. */
   cutoffSequence: number;
+  /**
+   * A deferred `followup` (see `ChannelJobWake.afterMemberId`): the reply the primary responder
+   * published to the same request, delivered with the request even though it is past the cutoff.
+   */
+  primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
   requestMessageId: string;

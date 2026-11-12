@@ -821,7 +821,7 @@ describe('ModelRuntime', () => {
       it('onGenerateObjectComplete prefers errorType from ChatCompletionErrorPayload over name/code', async () => {
         const onGenerateObjectComplete = vi.fn();
         const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
-        // Shape that openaiCompatibleFactory.handleError throws on real provider errors.
+        // Shape that openaiCompatible's handleError throws on real provider errors.
         const cause = {
           endpoint: 'https://api.example.com',
           error: { status: 401 },

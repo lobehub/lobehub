@@ -127,6 +127,10 @@ runs and sub-agents do not inherit it.
 Pending routing is part of member FIFO even before a job exists. An earlier main-channel
 decision blocks later claims until its recipients are known; an earlier Thread decision blocks
 only that Thread's following members. Skipped, failed or stopped routing releases this barrier.
+A routed message's deferred follow-ups (`wake.afterMemberId`) are queued as `awaiting_primary`
+and claimed only after the same message's primary responder job settles; a deferred claim freezes
+the primary's published reply id in `manifest.primaryReplyMessageId`, read by
+`ChannelExecutionRepository.primaryReply`, without moving the history cutoff.
 Branches opened while their root is pending inherit its eventual responders, preserving explicit
 invitations. Their unmentioned replies stay pending until then, including replies sent with the
 all-candidate fallback. Stopping a reply still fences it; root completion never revives it.

@@ -15,9 +15,13 @@
     "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
+    "@lexical/list": "0.42.0",
+    "@lexical/rich-text": "0.42.0",
     "lexical": "0.42.0"
   },
   "peerDependencies": {
+    "@lexical/list": "*",
+    "@lexical/rich-text": "*",
     "@lobehub/editor": "^7.0.0",
     "debug": "*",
     "lexical": "*"

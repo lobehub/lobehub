@@ -137,6 +137,27 @@ describe('useGoalItemMenu', () => {
     expect(keys.slice(-5)).toEqual(['copyLink', 'copy-goal', 'divider', 'archive', 'delete']);
   });
 
+  // The detail header shows archive as its own button beside the favorite star.
+  it('leaves the archive action out for a host that shows it on its own', () => {
+    const { result } = renderHook(() =>
+      useGoalMenuItems({
+        archivedAt: '2026-11-03T00:00:00.000Z',
+        goalId: 'goal_1',
+        omitArchive: true,
+        status: 'achieved',
+        title: 'Desk pet',
+      }),
+    );
+
+    const items = result.current;
+    const keys = items.map((item) => (item && 'key' in item ? item.key : item?.type));
+    expect(keys).not.toContain('archive');
+    expect(keys).toContain('delete');
+    // The goal is still archived, so its lifecycle stays locked until restored.
+    const status = items.find((item) => item && 'key' in item && item.key === 'status') as any;
+    expect(status.disabled).toBe(true);
+  });
+
   describe('archive', () => {
     const archiveItem = (items: DropdownItem[]) =>
       items.find((item) => item && 'key' in item && item.key === 'archive') as any;

@@ -113,6 +113,12 @@ export default {
     'Spend your {{credits}} balance once plan limits run out. No extra cost.',
   'limitation.insufficientBudget.rescue.overflow.cta': 'Use balance and continue',
   'limitation.insufficientBudget.rescue.overflow.title': 'Use your balance',
+  'limitation.insufficientBudget.rescue.limit.benefit':
+    '{{spent}} of {{limit}} used this month. Raise the limit to keep going on your balance.',
+  'limitation.insufficientBudget.rescue.limit.benefitPlain':
+    'Raise the limit to keep going on your balance.',
+  'limitation.insufficientBudget.rescue.limit.cta': 'Adjust limit',
+  'limitation.insufficientBudget.rescue.limit.title': 'Raise your monthly balance limit',
   'limitation.insufficientBudget.rescue.topup.benefitOverflow':
     "Top-up balance is used after your plan limits run out. We'll turn that on for you.",
   'limitation.insufficientBudget.rescue.upgrade.benefitMultiple':
@@ -742,6 +748,9 @@ export default {
   'plansModal.persistentSandbox.desc':
     'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
   'plansModal.persistentSandbox.title': 'Keep your sandbox files',
+  'plansModal.preciseSchedule.desc':
+    'Run scheduled tasks at any exact minute, not only on the hour or half hour. Upgrade to a paid plan to pick your own time.',
+  'plansModal.preciseSchedule.title': 'Schedule tasks at an exact time',
   'plansModal.artifactDeploymentLimit.desc':
     'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
   'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
@@ -973,6 +982,15 @@ export default {
   'usage.window.overflow.off': 'Off: requests pause when a limit runs out',
   'usage.window.overflow.updateFailed': 'Update failed. Try again.',
   'usage.window.overflow.title': 'Use balance after limits',
+  'usage.window.overflow.belowSpend':
+    'Not above the {{spent}} used this month, so your balance stops covering requests.',
+  'usage.window.overflow.monthlyLimit': 'Monthly limit',
+  'usage.window.overflow.monthlyLimitDesc':
+    'The most your balance pays each month once plan limits run out. Leave empty for no limit.',
+  'usage.window.overflow.monthlyLimitTitle': 'Monthly balance limit',
+  'usage.window.overflow.noLimit': 'No limit',
+  'usage.window.overflow.save': 'Save',
+  'usage.window.overflow.spent': '{{spent}} used this month',
   'usage.window.resetsIn': 'Resets in {{duration}}',
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',

@@ -36,8 +36,6 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
 
   const data = useMessengerData('telegram');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'telegram',
   });

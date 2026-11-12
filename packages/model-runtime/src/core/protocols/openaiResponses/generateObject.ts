@@ -10,13 +10,13 @@ import type {
   GenerateObjectPayload,
   GenerateObjectSchema,
 } from '../../../types';
-import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
-import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatibleFactory/factoryOptions';
+import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatible/context';
+import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatible/factoryOptions';
 import {
   parseStructuredOutputText,
   parseStructuredToolArguments,
   StructuredOutputError,
-} from '../../openaiCompatibleFactory/structuredOutput';
+} from '../../openaiCompatible/structuredOutput';
 import type { ChatPayloadForTransformStream } from '../../streams/protocol';
 import { convertOpenAIResponseUsage } from '../../usageConverters/openai';
 import { convertOpenAIResponseInputs } from './inputs';

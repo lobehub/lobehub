@@ -57,11 +57,36 @@ groups merge field by field), parsed by the shared bot-wake schema.
   choose it, but not wake it on a hunch.
 
 One member woken by its own rules gets the message. Several are arbitrated by the decision model:
-any that is not a confident no is kept, woken for its own reason. When no member's rules claim the
-message, the decision model chooses among the eligible members, as below. A member woken by its
-own rules, or one the model was unsure about, is a `followup` wake (`channel_jobs.wake`): its
-prompt ends with a `channel_wake` block, and it may answer `NO_REPLY`, which settles the job as
-`silent` instead of failing it. A member the model chose owes an answer.
+any that is not a confident no is kept, woken for its own reason, and the most likely one leads
+(see [One primary responder](#one-primary-responder)). When no member's rules claim the message,
+the decision model chooses among the eligible members, as below. A member woken by its own rules,
+or one the model was unsure about, is a `followup` wake (`channel_jobs.wake`): its prompt ends with
+a `channel_wake` block, and it may answer `NO_REPLY`, which settles the job as `silent` instead of
+failing it. The member the model chose to lead owes an answer.
+
+### One primary responder
+
+An unaddressed message has exactly one primary responder; every other member woken for it is a
+`followup` deferred behind it (`channel_jobs.wake.afterMemberId`):
+
+- Decision model: the most likely member at or above 0.7 leads and owes an answer. Other members
+  at or above 0.7 follow as `routing-deferred`, uncertain ones as `routing-uncertain`.
+- Members' own rules: several members named in the text are led by the one named first; claims the
+  model arbitrated are led by the most likely. Without a usable model answer (disabled, failed),
+  the member the person was just talking to (`followup-window`) leads, then one whose duties
+  cover it, then candidate order. A primary woken by its own rules keeps its own `followup` wake.
+- Explicit @mentions are unchanged: every mentioned Agent owes an answer and runs in parallel.
+  So are the paired Agent of a one-person group and the all-candidate fallback.
+
+A deferred job is queued as `awaiting_primary` and the claim keeps it there until the primary's
+job settles (completed, silent, failed or cancelled), or the primary is stuck on a device or a
+person (`device_*`, `unavailable`, `workspace_changed`), in which case it runs without waiting.
+It then runs normally: its prompt carries the primary's published reply as a `channel_reply`
+block after the request (`manifest.primaryReplyMessageId`; the history cutoff stays at the
+request) and a `channel_wake` hint to stay silent if that reply already covers the request, or
+add only what is distinct. Clients do not count an `awaiting_primary` job as a reply in progress.
+`routing_decided` details record `primaryMemberId` and `deferredMemberIds`; each woken member's
+decision row records `responder: primary | deferred`.
 
 Owner presence and stand-down have no Channel equivalent and never fire. The classifier and duty
 judge run as the sender, with the deployment's bot-wake model, under a shared hourly budget per
@@ -88,8 +113,9 @@ answer (`channel:routing`). `channel.listWakeDecisions` pages them in the bots' 
 
 A single `ModelRuntime.decide()` call asks a boolean question per eligible member. Probabilities
 at least 0.7 select a member; probabilities at most 0.3 exclude them. A member between 0.3 and 0.7
-(exclusive) is woken as a `followup` that may stay silent, unless it is quiet; the others are
-unaffected. All confident negatives still produce `skipped`.
+(exclusive) that is not quiet follows a selected primary as a deferred `followup`. When nobody
+reaches 0.7, only the most likely such member is woken, as a `followup` that may stay silent.
+All confident negatives still produce `skipped`.
 A missing/refused answer, invalid probability or provider failure leaves the message unassigned,
 even when another answer is uncertain. These thresholds are policy defaults, not a claim of
 measured accuracy; calibrate them with actual Channel conversations.

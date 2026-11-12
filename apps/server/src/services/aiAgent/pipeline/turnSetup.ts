@@ -46,7 +46,7 @@ import type { InternalExecAgentParams } from '../types';
 import { buildNewTopicMetadata } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
-import { resolveTurnProjectId } from './topicProject';
+import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -636,8 +636,12 @@ export const setupTurn = async (
 
       const fallbackTitleSource = markdownToTxt(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
-      const metadataWithSnapshot: ChatTopicMetadata | undefined =
-        metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined;
+      const metadataWithSnapshot = await withProjectSandbox(deps, {
+        agentId: resolvedAgentId,
+        hasDirectory: !!projectDirectory,
+        metadata: metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined,
+        projectId: turnProjectId,
+      });
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
       const newTopicParams = {

@@ -138,7 +138,7 @@ const TaskArtifacts = memo(() => {
           gap={8}
           paddingBlock={4}
           paddingInline={8}
-          style={{ cursor: 'pointer', width: 'fit-content' }}
+          style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
           variant="borderless"
           onClick={() => setIsExpanded((prev) => !prev)}
         >
@@ -151,7 +151,7 @@ const TaskArtifacts = memo(() => {
         </Block>
       </Flexbox>
       {isExpanded && (
-        <Flexbox gap={8} paddingInline={12}>
+        <Flexbox gap={8}>
           {items.map((node) => (
             <ArtifactCard key={node.documentId} node={node} />
           ))}

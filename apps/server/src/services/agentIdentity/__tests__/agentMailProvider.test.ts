@@ -558,7 +558,7 @@ describe('agent-mail provider — outbound', () => {
       html: '<p>hi back</p>',
       subject: 'Re: Hello',
       text: 'hi back',
-      to: 'human@example.com',
+      to: ['human@example.com'],
     });
   });
 

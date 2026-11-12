@@ -67,12 +67,15 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceCheckInventoryProps {
   children?: ReactNode;
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
+  /** Rides right after the title — a host's word on where the delivery stands. */
+  titleExtra?: ReactNode;
   toolbar?: ReactNode;
 }
 
 const AcceptanceCheckInventory = ({
   children,
   onOpenTrace,
+  titleExtra,
   toolbar,
 }: AcceptanceCheckInventoryProps) => {
   const { t } = useTranslation('verify');
@@ -241,6 +244,7 @@ const AcceptanceCheckInventory = ({
           <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
             {t('acceptance.checks.title')}
           </Text>
+          {titleExtra}
           <Flexbox flex={1} />
           {toolbar}
         </Flexbox>

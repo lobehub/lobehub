@@ -572,6 +572,17 @@ describe('messagesReducer', () => {
       expect(newMessage?.createdAt).toBeDefined();
       expect(newMessage?.updatedAt).toBeDefined();
     });
+
+    it('keeps a creation time the dispatch supplies', () => {
+      const newState = messagesReducer(initialState, {
+        createdAt: 1_700_000_000_000,
+        id: 'seeded',
+        type: 'createMessage',
+        value: { content: '', role: 'assistant', sessionId: 'inbox' },
+      });
+
+      expect(newState.find((m) => m.id === 'seeded')?.createdAt).toBe(1_700_000_000_000);
+    });
   });
 
   describe('deleteMessage', () => {

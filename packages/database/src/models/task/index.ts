@@ -260,7 +260,7 @@ export class TaskModel {
   async groupList(
     options: TaskListFilterOptions & {
       excludeStatuses?: string[];
-      groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority';
+      groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority' | 'project';
       groups?: Array<{
         key: string;
         limit?: number;
@@ -279,6 +279,7 @@ export class TaskModel {
       limit: number;
       offset: number;
       priority?: number;
+      projectId?: string | null;
       tasks: TaskItem[];
       total: number;
     }>
@@ -300,6 +301,10 @@ export class TaskModel {
 
   async findAllDescendants(rootTaskId: string): Promise<TaskItem[]> {
     return tree.findAllDescendants(this.ctx, rootTaskId);
+  }
+
+  async hasSubtaskOutsideProject(taskId: string, projectId: string | null): Promise<boolean> {
+    return tree.hasSubtaskOutsideProject(this.ctx, taskId, projectId);
   }
 
   async getTaskTree(rootTaskId: string): Promise<TaskItem[]> {
@@ -547,6 +552,10 @@ export class TaskModel {
 
   async removeDependency(taskId: string, dependsOnId: string): Promise<void> {
     return dependencies.removeDependency(this.ctx, taskId, dependsOnId);
+  }
+
+  async hasDependencyOutsideProject(taskId: string, projectId: string | null): Promise<boolean> {
+    return dependencies.hasDependencyOutsideProject(this.ctx, taskId, projectId);
   }
 
   async getDependencies(taskId: string) {

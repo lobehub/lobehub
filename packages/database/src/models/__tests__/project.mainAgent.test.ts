@@ -60,6 +60,8 @@ describe('the main agent a project creates', () => {
     expect(agent).toEqual(
       expect.objectContaining({ avatar: '🚀', title: 'Apollo Project Agent', virtual: false }),
     );
+    // A project runs in the cloud sandbox unless someone picks a device.
+    expect(agent.agencyConfig).toEqual({ executionTarget: 'sandbox' });
     expect(await labelsOf(agent.id)).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, workspaceId: null }),
     ]);
