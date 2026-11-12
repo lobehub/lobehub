@@ -34,8 +34,9 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const { onClick, url } = useAgentConversationLink(id, agentUrl);
   const { channelActions, replyState } = useDirectChannelRow(conversation.channel, active);
   const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
-  // A blocked reply keeps the preview; its avatar already shows it waiting.
-  const typing = !!avatarState && avatarState !== 'waiting';
+  // Only the direct Channel's own reply says typing: a run in one of the Agent's other topics
+  // only animates the avatar. A blocked reply keeps the preview; its avatar shows it waiting.
+  const typing = !!replyState && replyState !== 'waiting';
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
 
