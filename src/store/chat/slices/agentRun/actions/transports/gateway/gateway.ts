@@ -73,7 +73,7 @@ import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
-import { awaitStartRequest, interruptGatewayTaskOrThrow } from './gatewayStartRequest';
+import { interruptGatewayTaskOrThrow } from './gatewayStartRequest';
 import { resolveInitialTopicMetadata } from './initialTopicMetadata';
 import {
   type GatewayMuxIdentity,
@@ -940,6 +940,8 @@ export class GatewayActionImpl {
     metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
+    /** Called once the start request is sent: a Stop can no longer take the turn back. */
+    onStartRequestSent?: () => void;
     /** Called when a new topic is persisted, before UI hydration and stream setup. */
     onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
@@ -1035,6 +1037,7 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      onStartRequestSent,
       newTopicMetadata,
       onTopicCreated,
       optimisticTopic,
@@ -1078,12 +1081,11 @@ export class GatewayActionImpl {
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state is still running, so
-    // the ChatInput stop button is active. Forward the abort into the
-    // round-trip wait (never into the fetch itself, see `awaitStartRequest`):
-    // the send rejects at once and the run the server still creates is
-    // interrupted when its result arrives, as is a run the intervention claim
-    // already precreated. If the server has already persisted the turn,
-    // interrupt generation but still reconcile the message locally.
+    // the ChatInput stop button is active. A Stop before the request is sent
+    // rejects the send. After that the abort never reaches the fetch: the server
+    // persists the turn regardless, so the run it creates (or the intervention
+    // claim already precreated) is interrupted when its result arrives and the
+    // persisted turn is reconciled locally.
     const abortSignal = parentOperationId
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
@@ -1108,73 +1110,61 @@ export class GatewayActionImpl {
     // config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
-    const serverResult =
-      precreatedResult ??
-      (agentShareId
-        ? await awaitStartRequest(
-            shareChatService.execAgentTask({
-              clientIds,
-              fileIds,
-              parentMessageId,
-              prompt: message,
-              resumeApproval,
-              resumeApprovals,
-              resumeToolResult,
-              shareId: agentShareId,
-              steer: metadata?.steer,
-              topicId: executionContext.topicId,
-              userInterventionConfig,
+    const startRequest = precreatedResult
+      ? undefined
+      : agentShareId
+        ? shareChatService.execAgentTask({
+            clientIds,
+            fileIds,
+            parentMessageId,
+            prompt: message,
+            resumeApproval,
+            resumeApprovals,
+            resumeToolResult,
+            shareId: agentShareId,
+            steer: metadata?.steer,
+            topicId: executionContext.topicId,
+            userInterventionConfig,
+          })
+        : aiAgentService.execAgentTask({
+            agentId: executionContext.agentId,
+            // Fresh sends only — resume flows never pass this, and the server drops
+            // it defensively on resume-like params anyway.
+            clientIds,
+            appContext: buildExecAppContext(this.#get, {
+              executionContext,
+              initialTopicMetadata,
+              messageContext,
+              newTopicProject: isCreateNewTopic ? { projectId, projectWorkingDirectoryId } : {},
             }),
-            abortSignal,
-            (abandoned) =>
-              shareChatService.interruptTask(
-                agentShareId,
-                abandoned.topicId,
-                abandoned.operationId,
-              ),
-          )
-        : await awaitStartRequest(
-            aiAgentService.execAgentTask({
-              agentId: executionContext.agentId,
-              // Fresh sends only — resume flows never pass this, and the server drops
-              // it defensively on resume-like params anyway.
-              clientIds,
-              appContext: buildExecAppContext(this.#get, {
-                executionContext,
-                initialTopicMetadata,
-                messageContext,
-                newTopicProject: isCreateNewTopic ? { projectId, projectWorkingDirectoryId } : {},
-              }),
-              ...desktopDeviceHints,
-              clientOperations,
-              fileIds,
-              replacesOperationId,
-              mentionedAgents,
-              parentMessageId,
-              prompt: message,
-              resumeApproval,
-              resumeApprovals,
-              resumeToolResult,
-              selectedSkillIds,
-              selectedToolIds,
-              // A queued follow-up keeps its continuation mark on the row the
-              // server persists, which replaces the optimistic one.
-              steer: metadata?.steer,
-              trigger: metadata?.trigger,
-              userInterventionConfig,
-              userMessage,
-              // Dual-write for servers that predate `userMessage` (they read only these
-              // top-level fields and strip the rest); a current server folds them in.
-              contextSelections: userMessage?.metadata?.contextSelections,
-              pageSelections: userMessage?.metadata?.pageSelections,
-            }),
-            abortSignal,
-            (abandoned) =>
-              interruptGatewayTaskOrThrow({
-                operationId: abandoned.operationId,
-                topicId: abandoned.topicId,
-              }),
-          ));
+            ...desktopDeviceHints,
+            clientOperations,
+            fileIds,
+            replacesOperationId,
+            mentionedAgents,
+            parentMessageId,
+            prompt: message,
+            resumeApproval,
+            resumeApprovals,
+            resumeToolResult,
+            selectedSkillIds,
+            selectedToolIds,
+            // A queued follow-up keeps its continuation mark on the row the
+            // server persists, which replaces the optimistic one.
+            steer: metadata?.steer,
+            trigger: metadata?.trigger,
+            userInterventionConfig,
+            userMessage,
+            // Dual-write for servers that predate `userMessage` (they read only these
+            // top-level fields and strip the rest); a current server folds them in.
+            contextSelections: userMessage?.metadata?.contextSelections,
+            pageSelections: userMessage?.metadata?.pageSelections,
+          });
+    // Once sent, the server persists the turn whatever the caller does, so a
+    // Stop from here on is a late cancel: the interrupt below stops the run and
+    // the persisted turn is reconciled instead of being taken back.
+    if (startRequest) onStartRequestSent?.();
+    const serverResult = precreatedResult ?? (await startRequest!);
     // A member continuation names the supervisor's run as `operationId` (safe
     // for older clients); this run is the member's continuation.
     const result: ExecAgentResult =
@@ -1386,6 +1376,16 @@ export class GatewayActionImpl {
             operationId: result.operationId,
             topicId,
           });
+          // No socket reports the end: mirror the server's stopped-placeholder marker.
+          if (cancelledAfterPersistence && result.assistantMessageId)
+            this.#get().internal_dispatchMessage(
+              {
+                id: result.assistantMessageId,
+                type: 'updateMessageMetadata',
+                value: { interruptedMidStream: true },
+              },
+              { conversationContext: resolvedMessageContext },
+            );
         });
       }
       if (parentOperationId) this.#get().completeOperation(parentOperationId);
