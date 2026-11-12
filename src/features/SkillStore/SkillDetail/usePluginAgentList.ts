@@ -4,6 +4,7 @@ import { useDiscoverStore } from '@/store/discover';
 import { marketSelectors } from '@/store/discover/selectors';
 import { pluginAgentsParams } from '@/store/discover/slices/market/action';
 import { pluginAgentsQueryKey } from '@/store/discover/slices/market/projection';
+import { globalHelpers } from '@/store/global/helpers';
 import { type DiscoverAssistantItem } from '@/types/discover';
 
 const pageKey = (pluginId: string, page: number) =>
@@ -15,10 +16,13 @@ const pageKey = (pluginId: string, page: number) =>
  * before the network answers; later pages load as the grid scrolls.
  */
 export const usePluginAgentList = (pluginId: string | undefined) => {
-  // Pages walked so far, owned by the plugin they were walked for: a different
-  // plugin starts again from its first page in the same render.
-  const [walked, setWalked] = useState({ pageCount: 1, pluginId });
-  const pageCount = walked.pluginId === pluginId ? walked.pageCount : 1;
+  // Pages walked so far, owned by the plugin and UI language they were walked
+  // for: either changing starts again from the first page in the same render
+  // (each language is its own set of entries, so a later page alone would
+  // never paint).
+  const locale = globalHelpers.getCurrentLanguage();
+  const [walked, setWalked] = useState({ locale, pageCount: 1, pluginId });
+  const pageCount = walked.pluginId === pluginId && walked.locale === locale ? walked.pageCount : 1;
 
   const usePluginAgents = useDiscoverStore((s) => s.usePluginAgents);
   const { error, revalidate } = usePluginAgents(pluginId, pageCount);
@@ -51,8 +55,8 @@ export const usePluginAgentList = (pluginId: string | undefined) => {
   const loadMore = useCallback(() => {
     // A failing page is retried explicitly, not by the scroll observer.
     if (isPageLoading || error || !hasMore) return;
-    setWalked({ pageCount: pageCount + 1, pluginId });
-  }, [error, hasMore, isPageLoading, pageCount, pluginId]);
+    setWalked({ locale, pageCount: pageCount + 1, pluginId });
+  }, [error, hasMore, isPageLoading, locale, pageCount, pluginId]);
 
   const retry = useCallback(() => {
     void revalidate();

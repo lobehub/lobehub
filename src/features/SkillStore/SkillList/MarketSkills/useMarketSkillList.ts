@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useDiscoverStore } from '@/store/discover';
 import { normalizeSkillListParams } from '@/store/discover/slices/skill/action';
 import { skillListQueryKey } from '@/store/discover/slices/skill/projection';
+import { globalHelpers } from '@/store/global/helpers';
 import { type DiscoverSkillItem, type SkillQueryParams, SkillSorts } from '@/types/discover';
 
 // All store tabs stay mounted. Deduplicate reopening the modal to avoid rate limits.
@@ -25,10 +26,12 @@ const pageParams = (q: string | undefined, page: number): SkillQueryParams => ({
  */
 export const useMarketSkillList = (keywords?: string) => {
   const q = keywords || undefined;
-  // Pages walked so far, owned by the search term they were walked for: a new
-  // term starts again from its first page in the same render.
-  const [walked, setWalked] = useState({ page: 1, q });
-  const page = walked.q === q ? walked.page : 1;
+  // Pages walked so far, owned by the search term and UI language they were
+  // walked for: either changing starts again from the first page in the same
+  // render (each language is its own set of entries).
+  const locale = globalHelpers.getCurrentLanguage();
+  const [walked, setWalked] = useState({ locale, page: 1, q });
+  const page = walked.q === q && walked.locale === locale ? walked.page : 1;
 
   const useFetchSkillList = useDiscoverStore((s) => s.useFetchSkillList);
   const { error, revalidate } = useFetchSkillList(pageParams(q, page), {
@@ -65,9 +68,9 @@ export const useMarketSkillList = (keywords?: string) => {
     // one is still failing — that turns a rate limit into a silent retry loop.
     if (error || isLoading) return;
     if (totalPages === undefined || loadedPages < totalPages) {
-      setWalked({ page: loadedPages + 1, q });
+      setWalked({ locale, page: loadedPages + 1, q });
     }
-  }, [error, isLoading, loadedPages, q, totalPages]);
+  }, [error, isLoading, loadedPages, locale, q, totalPages]);
 
   const retry = useCallback(() => {
     void revalidate();

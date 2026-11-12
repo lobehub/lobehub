@@ -18,6 +18,7 @@ import {
 } from '@/store/discover/__tests__/replicaHarness';
 import { pluginAgentsParams } from '@/store/discover/slices/market/action';
 import { pluginAgentsQueryKey } from '@/store/discover/slices/market/projection';
+import { globalHelpers } from '@/store/global/helpers';
 
 import { usePluginAgentList } from './usePluginAgentList';
 
@@ -127,6 +128,24 @@ describe('usePluginAgentList', () => {
 
     rerender({ id: 'calculator' });
     await waitFor(() => expect(titles(result.current.items)).toEqual(['calculator 1']));
+  });
+
+  it('starts again from the first page when the UI language changes', async () => {
+    let locale = 'en-US';
+    vi.spyOn(globalHelpers, 'getCurrentLanguage').mockImplementation(() => locale as never);
+    vi.spyOn(discoverService, 'getAgentsByPlugin').mockImplementation(
+      async ({ page: n }) => page([`${locale} ${n}`], 2) as never,
+    );
+
+    const { rerender, result } = renderHook(() => usePluginAgentList('web-search'), { wrapper });
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    locale = 'zh-CN';
+    rerender();
+    await waitFor(() => expect(titles(result.current.items)).toEqual(['zh-CN 1']));
+    expect(result.current.isInitialLoading).toBe(false);
   });
 
   it("never paints another identity's agents", async () => {
