@@ -1,3 +1,4 @@
+import { mergeIslandDismissals } from '@lobechat/const/goal';
 import type {
   NotificationSettings,
   SSOProvider,
@@ -530,6 +531,41 @@ export class UserModel {
       .set({ preference: { ...prevPreference, guide: merge(prevPreference.guide || {}, value) } })
       .where(eq(users.id, this.userId));
   };
+
+  /** Keys of the goal asks this user dismissed from the approval island. */
+  getIslandDismissals = async (): Promise<string[]> => {
+    const user = await this.db.query.users.findFirst({
+      columns: { preference: true },
+      where: eq(users.id, this.userId),
+    });
+    return (user?.preference as UserPreference | null)?.islandDismissals ?? [];
+  };
+
+  /**
+   * Add keys to `preference.islandDismissals` and return the stored list. The
+   * row is locked while it is read and rewritten, so two clients of the same
+   * user dismissing at once cannot drop each other's keys.
+   */
+  addIslandDismissals = async (keys: string[]): Promise<string[]> =>
+    this.db.transaction(async (trx) => {
+      const [user] = await trx
+        .select({ preference: users.preference })
+        .from(users)
+        .where(eq(users.id, this.userId))
+        .for('update');
+      if (!user) return [];
+
+      const preference = (user.preference || {}) as UserPreference;
+      const current = preference.islandDismissals ?? [];
+      const next = mergeIslandDismissals(current, keys);
+      if (next === current) return current;
+
+      await trx
+        .update(users)
+        .set({ preference: { ...preference, islandDismissals: next } })
+        .where(eq(users.id, this.userId));
+      return next;
+    });
 
   /**
    * Normalize unique user fields so empty strings become null, keeping unique constraints safe.

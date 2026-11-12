@@ -280,3 +280,33 @@ export const GOAL_BATCH_RELEASE_QUESTION_TAIL = 'Release the next wave?';
  * language — mirroring the other coordinator question tails.
  */
 export const GOAL_BATCH_BREAK_QUESTION_TAIL = 'How should this batch proceed?';
+
+/**
+ * Keys of the goal asks a person waved off the approval island. They are kept
+ * on the server per user, so a card dismissed on one client stays dismissed on
+ * every other client of the same account. Only the newest keys are kept: old
+ * ones point at asks long since answered.
+ */
+export const MAX_ISLAND_DISMISSALS = 200;
+
+export const goalDecisionIslandKey = (decisionId: string): string => `goal-decision:${decisionId}`;
+
+export const goalSignOffIslandKey = (acceptanceId: string): string =>
+  `goal-sign-off:${acceptanceId}`;
+
+/**
+ * A clarification round is keyed by its questions, not just its goal: waving
+ * off one round must not hide the next round the same goal asks.
+ */
+export const goalClarificationIslandKey = (round: {
+  goalId: string;
+  questions: { decisionId: string }[];
+}): string => `goal-clarify:${round.goalId}:${round.questions.map((q) => q.decisionId).join(',')}`;
+
+/** Union of the stored and new keys, newest last, capped at {@link MAX_ISLAND_DISMISSALS}. */
+export const mergeIslandDismissals = (current: string[], added: string[]): string[] => {
+  const fresh = added.filter(
+    (key, index) => !current.includes(key) && added.indexOf(key) === index,
+  );
+  return fresh.length === 0 ? current : [...current, ...fresh].slice(-MAX_ISLAND_DISMISSALS);
+};

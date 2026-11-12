@@ -2,6 +2,9 @@ import { TRACING_SCENARIOS } from '@lobechat/const';
 import {
   GOAL_ACCEPTANCE_TASK_TITLE,
   GOAL_TITLE_MAX_LENGTH,
+  goalClarificationIslandKey,
+  goalDecisionIslandKey,
+  goalSignOffIslandKey,
   type GoalStatus,
 } from '@lobechat/const/goal';
 import {
@@ -27,6 +30,7 @@ import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
+import { userService } from '@/services/user';
 import { briefListResource } from '@/store/brief/slices/list/projection';
 import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 import type { StoreSetter } from '@/store/types';
@@ -342,6 +346,51 @@ export class GoalActionImpl {
   ): Promise<void> => {
     await goalService.answerClarifications({ answers, id: goalId });
     await Promise.all([this.refreshGoalGraph(goalId), mutate(goalKeys.pendingClarifications())]);
+  };
+
+  /**
+   * Wave goal asks off the approval island on every client of this account.
+   * They leave the island at once; the ask itself stays pending on the goal
+   * page and in the Home inbox. The server keeps the keys, and the island
+   * reads leave them out, so another client drops them on its next poll.
+   */
+  dismissIslandItems = async (keys: string[]): Promise<void> => {
+    if (keys.length === 0) return;
+    const hidden = new Set(keys);
+    type IslandData = Awaited<ReturnType<typeof goalService.pendingForIsland>>;
+    type ClarificationData = Awaited<ReturnType<typeof goalService.pendingClarifications>>;
+
+    await Promise.all([
+      mutate(
+        goalKeys.pendingForIsland(),
+        (data?: IslandData) =>
+          data && {
+            decisions: data.decisions.filter(
+              (row) => !hidden.has(goalDecisionIslandKey(row.decisionId)),
+            ),
+            signOffs: data.signOffs.filter(
+              (row) => !hidden.has(goalSignOffIslandKey(row.acceptanceId)),
+            ),
+          },
+        { revalidate: false },
+      ),
+      mutate(
+        goalKeys.pendingClarifications(),
+        (groups?: ClarificationData) =>
+          groups?.filter((group) => !hidden.has(goalClarificationIslandKey(group))),
+        { revalidate: false },
+      ),
+    ]);
+
+    try {
+      await userService.addIslandDismissals(keys);
+    } finally {
+      // On failure this brings the cards back instead of hiding them on this client only.
+      await Promise.all([
+        mutate(goalKeys.pendingForIsland()),
+        mutate(goalKeys.pendingClarifications()),
+      ]);
+    }
   };
 
   pauseGoal = async (goalId: string): Promise<void> => {
