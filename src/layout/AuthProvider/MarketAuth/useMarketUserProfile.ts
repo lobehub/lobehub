@@ -1,33 +1,19 @@
-import useSWR from 'swr';
-
-import { lambdaClient } from '@/libs/trpc/client';
-
-import { type MarketUserProfile } from './types';
+import { useDiscoverStore } from '@/store/discover';
+import { marketSelectors } from '@/store/discover/selectors';
 
 /**
- * Fetcher function for user profile using tRPC
- */
-const fetchUserProfile = async (username: string): Promise<MarketUserProfile | null> => {
-  const result = await lambdaClient.market.user.getUserByUsername.query({ username });
-  return result as MarketUserProfile;
-};
-
-/**
- * Hook to fetch and cache Market user profile using SWR
+ * The Market profile of a username (typically `userInfo.sub`), read from the
+ * discover `marketUserProfile` replica: a reload paints the last confirmed
+ * profile before the network answers. Only public profile fields persist; the
+ * Market session and its tokens never enter the replica.
  *
- * @param username - The username to fetch profile for (typically userInfo.sub)
- * @returns SWR response with user profile data
+ * `data` is `undefined` while unloaded and when the account has no Market
+ * profile yet (the server answers NOT_FOUND, which is not retried).
  */
 export const useMarketUserProfile = (username: string | null | undefined) => {
-  return useSWR<MarketUserProfile | null>(
-    username ? ['market-user-profile', username] : null,
-    () => fetchUserProfile(username!),
-    {
-      dedupingInterval: 60_000, // 1 minute deduplication
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      // NOT_FOUND means the user hasn't created a market username yet — no point retrying
-      shouldRetryOnError: (error) => error?.data?.code !== 'NOT_FOUND',
-    },
-  );
+  const useSync = useDiscoverStore((s) => s.useMarketUserProfile);
+  const { queryKey, revalidate, ...sync } = useSync(username);
+  const data = useDiscoverStore(marketSelectors.userProfile(queryKey));
+
+  return { ...sync, data, mutate: revalidate, revalidate };
 };

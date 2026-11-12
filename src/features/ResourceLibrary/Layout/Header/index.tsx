@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
+import SortDropdown from '@/features/ResourceManager/components/Explorer/ToolBar/SortDropdown';
 import AddButton from '@/features/ResourceManager/components/Header/AddButton';
 
 import LibraryHead from './LibraryHead';
@@ -36,8 +37,9 @@ const Header = memo(() => {
         root rather than in whatever folder the URL happens to be in; each
         folder row carries its own "+" for creating inside that folder.
       */}
-      <Flexbox horizontal align={'center'} gap={8} paddingBlock={'0 8px'} paddingInline={8}>
+      <Flexbox horizontal align={'center'} gap={4} paddingBlock={'0 8px'} paddingInline={8}>
         <LibrarySearchBar />
+        <SortDropdown iconOnly />
         <AddButton iconOnly rootLevel />
       </Flexbox>
     </>

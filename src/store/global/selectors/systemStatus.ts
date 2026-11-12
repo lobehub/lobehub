@@ -2,12 +2,14 @@ import { type TopicGroupMode } from '@/types/topic';
 
 import type {
   AgentDocumentSort,
+  ChannelListSort,
   ContactListSortBy,
   DocsPageSectionKey,
   DocsPageSectionView,
   GlobalState,
   ModelDetailPanelExpandedKey,
   ProjectListSortBy,
+  ProjectListViewMode,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
@@ -508,8 +510,14 @@ const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
 };
 const contactListSortBy = (s: GlobalState): ContactListSortBy =>
   s.status.contactListSortBy ?? 'title';
+// The server lists Channels newest first; keep that as the default view.
+const DEFAULT_CHANNEL_LIST_SORT: ChannelListSort = { by: 'createdAt', order: 'desc' };
+const channelListSort = (s: GlobalState): ChannelListSort =>
+  s.status.channelListSort ?? DEFAULT_CHANNEL_LIST_SORT;
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
+const projectListViewMode = (s: GlobalState): ProjectListViewMode =>
+  s.status.projectListViewMode ?? 'folder';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
@@ -562,7 +570,9 @@ export const systemStatusSelectors = {
   agentBuilderPanelWidth,
   agentDocumentSort,
   contactListSortBy,
+  channelListSort,
   projectListSortBy,
+  projectListViewMode,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
   agentListViewMode,

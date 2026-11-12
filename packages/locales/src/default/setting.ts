@@ -1358,6 +1358,24 @@ export default {
   'settingAgent.tag.placeholder': 'Enter tag',
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
+  'settingAbout.debugLogs.desc':
+    'Also record detailed debug logs. Turn on while reproducing an issue, then turn off: debug logs use more disk space and may include file paths and URLs.',
+  'settingAbout.debugLogs.devDesc': 'Development builds always record debug logs.',
+  'settingAbout.debugLogs.directory': 'Log Files',
+  'settingAbout.debugLogs.openDirectory': 'Open Folder',
+  'settingAbout.debugLogs.openDirectoryDesc': 'Attach these files when you report an issue.',
+  'settingAbout.debugLogs.title': 'Debug Logs',
+  'settingAbout.diagnostics.title': 'Diagnostics',
+  'settingAbout.remoteDebugging.confirm.content':
+    'After you restart LobeHub, programs on this computer can connect to port {{port}}, control LobeHub windows, and read your signed-in session and data. The port opens on every launch until you turn this off. Turn it on only while debugging.',
+  'settingAbout.remoteDebugging.confirm.ok': 'Allow',
+  'settingAbout.remoteDebugging.confirm.title': 'Allow remote debugging?',
+  'settingAbout.remoteDebugging.desc':
+    'Let developer tools on this computer connect to LobeHub on port {{port}} and read app state.',
+  'settingAbout.remoteDebugging.launchOptionDesc':
+    'Remote debugging was turned on by a launch option for this session.',
+  'settingAbout.remoteDebugging.restartToApply': 'Restart LobeHub to apply this change.',
+  'settingAbout.remoteDebugging.title': 'Remote Debugging',
   'settingAppearance.appTray.desc':
     'Show the LobeHub icon in the system tray or macOS menu bar. Disabling it also removes tray menu access.',
   'settingAppearance.appTray.title': 'Show App Tray',
@@ -4866,6 +4884,72 @@ When I am ___, I need ___
   'drive.retained.deleteConfirm.desc': 'Everything on it is deleted and cannot be recovered.',
   'drive.retained.deleted': 'Drive deleted',
   'drive.usage.manage': 'Manage in Sandbox Storage',
+  'drive.cleanup.entry': 'Analyze space',
+  'drive.cleanup.open': 'Analyze and free up space',
+  'drive.cleanup.title': 'Space analysis and cleanup',
+  'drive.cleanup.description': 'See what takes up the drive and delete what you no longer need.',
+  'drive.cleanup.back': 'Back to files',
+  'drive.cleanup.rescan': 'Scan again',
+  'drive.cleanup.scanning': 'Scanning · {{size}} counted so far',
+  'drive.cleanup.scanningFirst': 'Scanning the drive. A large drive takes a few minutes.',
+  'drive.cleanup.summary': '{{size}} in total',
+  'drive.cleanup.stale':
+    'Some figures are estimates after the last cleanup. Scan again for exact figures.',
+  'drive.cleanup.empty': 'Nothing on this drive takes up space yet.',
+  'drive.cleanup.failed': 'Couldn’t analyze the drive. Try again.',
+  'drive.cleanup.unavailable': 'Space analysis isn’t available on this deployment yet.',
+  'drive.cleanup.holdsHidden':
+    'This folder holds a private environment directory and can’t be deleted here.',
+  'drive.cleanup.notRegenerable':
+    'Some of these files can’t be regenerated, so deleting them needs your confirmation.',
+  'drive.cleanup.regenerable': 'Regenerable',
+  'drive.cleanup.expand': 'Show items',
+  'drive.cleanup.collapse': 'Hide items',
+  'drive.cleanup.moreItems': '{{count}} smaller items not listed',
+  'drive.cleanup.environmentsHint':
+    'Environment snapshots are deleted together with their environment, on the Environments page.',
+  'drive.cleanup.selected': '{{count}} selected · {{size}}',
+  'drive.cleanup.selectHint': 'Select items, or a whole category, to delete',
+  'drive.cleanup.delete': 'Delete selected',
+  'drive.cleanup.deleteFailed': 'Couldn’t delete the selected items. Try again.',
+  'drive.cleanup.freed': 'Deleted. {{size}} freed.',
+  'drive.cleanup.someFailed': '{{count}} items couldn’t be deleted. The rest were deleted.',
+  'drive.cleanup.scopeChanged':
+    'The workspace changed, so nothing was deleted. Choose again in this workspace.',
+  'drive.cleanup.incomplete': 'Scan stopped · {{size}} counted, figures are incomplete',
+  'drive.cleanup.failedAndPending':
+    '{{failed}} items couldn’t be deleted and {{pending}} are still being deleted. Delete again to finish.',
+  'drive.cleanup.partial': '{{count}} items are still being deleted. Delete them again to finish.',
+  'drive.cleanup.overQuota': 'This drive is {{size}} over its quota',
+  'drive.cleanup.overQuotaHint':
+    'Saving files and running terminal commands are blocked until you free up space.',
+  'drive.cleanup.category.dependencies': 'Dependencies',
+  'drive.cleanup.category.cache': 'Caches and build output',
+  'drive.cleanup.category.archives': 'Archives',
+  'drive.cleanup.category.media': 'Media',
+  'drive.cleanup.category.git': 'Git repositories',
+  'drive.cleanup.category.environments': 'Environment snapshots',
+  'drive.cleanup.category.other': 'Other files',
+  'drive.cleanup.categoryHint.dependencies':
+    'node_modules, .venv and other installed packages. Reinstalling restores them.',
+  'drive.cleanup.categoryHint.cache':
+    'Caches and build output. The next run or build recreates them.',
+  'drive.cleanup.categoryHint.archives': '.zip, .tar.gz and other archives',
+  'drive.cleanup.categoryHint.media': 'Images, video and audio',
+  'drive.cleanup.categoryHint.git':
+    '.git history. Deleting it removes local commits that were never pushed.',
+  'drive.cleanup.categoryHint.environments': 'Saved code environments',
+  'drive.cleanup.categoryHint.other': 'Everything else',
+  'drive.cleanup.confirm.title': 'Delete {{count}} items?',
+  'drive.cleanup.confirm.summary':
+    '{{count}} items, {{size}} in total, will be deleted from the drive.',
+  'drive.cleanup.confirm.irreversible': 'Deleted files can’t be recovered',
+  'drive.cleanup.confirm.irreversibleHint':
+    'The drive has no trash. Download anything you want to keep first.',
+  'drive.cleanup.confirm.regenerableHint':
+    'These are dependencies, caches or build output. Reinstall or rebuild to get them back.',
+  'drive.cleanup.confirm.acknowledge': 'I understand these files can’t be recovered',
+  'drive.cleanup.confirm.ok': 'Delete {{count}} items',
   'drive.explorer.newFolder': 'New folder',
   'drive.explorer.columns.name': 'Name',
   'drive.explorer.columns.modified': 'Date modified',

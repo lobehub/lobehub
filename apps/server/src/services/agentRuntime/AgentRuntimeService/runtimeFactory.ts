@@ -23,6 +23,7 @@ import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 import { hookDispatcher } from '../hooks';
 import { createEvalConnectorHook } from './evalConnectorHook';
 import { createEvalToolGateHook } from './evalToolGateHook';
+import { DurableStatusUnavailableError } from './executionErrors';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -45,6 +46,13 @@ export type RuntimeFactoryDeps = Pick<
 >;
 
 /**
+ * Local deliveries are not redelivered when they throw, so a step that refused
+ * to run on an unreadable durable status retries here, the way QStash would
+ * redeliver it (same budget as its default `retries`).
+ */
+export const LOCAL_DURABLE_STATUS_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+
+/**
  * Setup execution callback for LocalQueueServiceImpl
  * This breaks the circular dependency by using callback injection
  */
@@ -59,7 +67,22 @@ export function setupLocalExecutionCallback(deps: RuntimeFactoryDeps): void {
       // toolMessageId, resumeAsyncTool, …) ride the request body into
       // executeStep. Without this spread, local/in-memory resumes silently
       // lose their intervention/resume signal.
-      await deps.executeStep({ context, operationId, stepIndex, ...payload });
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await deps.executeStep({ context, operationId, stepIndex, ...payload });
+          return;
+        } catch (error) {
+          const delay = LOCAL_DURABLE_STATUS_RETRY_DELAYS_MS[attempt];
+          if (!(error instanceof DurableStatusUnavailableError) || delay === undefined) throw error;
+          log(
+            '[%s][%d] Durable status unavailable; retrying in %dms',
+            operationId,
+            stepIndex,
+            delay,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
     });
   }
 }

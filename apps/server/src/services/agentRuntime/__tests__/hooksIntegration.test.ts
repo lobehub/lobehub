@@ -9,9 +9,10 @@
  * This catches payload format regressions that unit tests miss because
  * they mock the dispatch layer.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
+import { stubRunningDurableOperation } from '../AgentRuntimeService/__tests__/testUtils';
 import { hookDispatcher } from '../hooks';
 import type { AgentHookEvent } from '../hooks/types';
 
@@ -79,6 +80,10 @@ vi.mock('@/server/services/toolExecution/builtin', () => ({
 vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
+
+beforeEach(() => {
+  stubRunningDurableOperation();
+});
 
 describe('Hooks integration — afterStep event carries step presentation data', () => {
   const createService = () => new AgentRuntimeService({} as any, 'user-1', { queueService: null });

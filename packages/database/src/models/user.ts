@@ -1,3 +1,4 @@
+import { mergeIslandDismissals } from '@lobechat/const/goal';
 import type {
   NotificationSettings,
   SSOProvider,
@@ -510,26 +511,69 @@ export class UserModel {
     return notification;
   };
 
-  updatePreference = async (value: Partial<UserPreference>) => {
-    const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
-    if (!user) return;
+  /**
+   * Read, change and write back `users.preference` while the row is locked.
+   * Every preference writer goes through here: one that read the old JSON
+   * without the lock would write it back over a concurrent change, such as an
+   * island dismissal another client just added. Returns undefined when the
+   * user does not exist.
+   */
+  private mutatePreference = async <T>(
+    change: (prev: UserPreference) => { next: UserPreference; result: T },
+  ): Promise<T | undefined> =>
+    this.db.transaction(async (trx) => {
+      const [user] = await trx
+        .select({ preference: users.preference })
+        .from(users)
+        .where(eq(users.id, this.userId))
+        .for('update');
+      if (!user) return undefined;
 
-    return this.db
-      .update(users)
-      .set({ preference: merge(user.preference, value) })
-      .where(eq(users.id, this.userId));
+      const prev = (user.preference || {}) as UserPreference;
+      const { next, result } = change(prev);
+      if (next !== prev) {
+        await trx.update(users).set({ preference: next }).where(eq(users.id, this.userId));
+      }
+      return result;
+    });
+
+  updatePreference = async (value: Partial<UserPreference>) => {
+    await this.mutatePreference((prev) => ({
+      next: merge(prev, value) as UserPreference,
+      result: undefined,
+    }));
   };
 
   updateGuide = async (value: Partial<UserGuide>) => {
-    const user = await this.db.query.users.findFirst({ where: eq(users.id, this.userId) });
-    if (!user) return;
-
-    const prevPreference = (user.preference || {}) as UserPreference;
-    return this.db
-      .update(users)
-      .set({ preference: { ...prevPreference, guide: merge(prevPreference.guide || {}, value) } })
-      .where(eq(users.id, this.userId));
+    await this.mutatePreference((prev) => ({
+      next: { ...prev, guide: merge(prev.guide || {}, value) },
+      result: undefined,
+    }));
   };
+
+  /** Keys of the goal asks this user dismissed from the approval island. */
+  getIslandDismissals = async (): Promise<string[]> => {
+    const user = await this.db.query.users.findFirst({
+      columns: { preference: true },
+      where: eq(users.id, this.userId),
+    });
+    return (user?.preference as UserPreference | null)?.islandDismissals ?? [];
+  };
+
+  /**
+   * Add keys to `preference.islandDismissals` and return the stored list. Done
+   * under the same row lock as every other preference writer, so neither two
+   * clients dismissing at once nor a concurrent preference save can drop a key.
+   */
+  addIslandDismissals = async (keys: string[]): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const current = prev.islandDismissals ?? [];
+      const next = mergeIslandDismissals(current, keys);
+      return {
+        next: next === current ? prev : { ...prev, islandDismissals: next },
+        result: next,
+      };
+    })) ?? [];
 
   /**
    * Normalize unique user fields so empty strings become null, keeping unique constraints safe.

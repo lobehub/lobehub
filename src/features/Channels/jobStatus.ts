@@ -88,17 +88,6 @@ export const hasReplyActivity = (detail: ChannelDetail, threadId: string | null)
 };
 
 /**
- * What a direct conversation's header says about its one Agent: "typing" while it works, or the
- * reply it is `waiting` on when blocked or stopping. Null when nothing is pending.
- */
-export const directReplyStatus = (detail: ChannelDetail) => {
-  const { jobs, receiving } = conversationReplies(detail, null);
-  const job = jobs[0] && memberCurrentJob(jobs, jobs[0].memberId);
-  if (!job) return receiving ? { jobs } : null;
-  return channelJobTone(job) === 'working' ? { jobs } : { jobs, waiting: job };
-};
-
-/**
  * How a direct conversation's Agent avatar acts out its pending replies: `working` while it
  * writes, `thinking` while a message is routed or the reply is prepared, `waiting` when blocked
  * or stopping. Undefined when nothing is pending, so the avatar stays idle.

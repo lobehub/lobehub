@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -16,6 +16,7 @@ import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
+import { externalWorksByMessage } from './works';
 
 const publicMessageColumns = {
   ...getTableColumns(channelMessages),
@@ -89,6 +90,49 @@ const sourceTopicsByMessage = async (
       ),
     );
   return new Map(rows.map((row) => [row.messageId!, { id: row.topicId, title: row.title }]));
+};
+
+const THREAD_PREVIEW_LENGTH = 240;
+
+type ThreadSummary = {
+  lastReply: Pick<ReturnType<typeof publicMessage>, 'author' | 'content' | 'createdAt' | 'id'>;
+  replyCount: number;
+};
+
+/** Reply count and newest reply per thread, so a root can show what it branched into. */
+const threadSummaries = async (tx: Transaction, channelId: string, threadIds: string[]) => {
+  if (!threadIds.length) return new Map<string, ThreadSummary>();
+  const scope = and(
+    eq(channelMessages.channelId, channelId),
+    inArray(channelMessages.threadId, threadIds),
+  );
+  const [counts, latest] = await Promise.all([
+    tx
+      .select({ replyCount: count(), threadId: channelMessages.threadId })
+      .from(channelMessages)
+      .where(scope)
+      .groupBy(channelMessages.threadId),
+    tx
+      .selectDistinctOn([channelMessages.threadId], publicMessageColumns)
+      .from(channelMessages)
+      .leftJoin(users, eq(users.id, channelMessages.userId))
+      .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+      .where(scope)
+      .orderBy(asc(channelMessages.threadId), desc(channelMessages.sequence)),
+  ]);
+  const replyCounts = new Map(counts.map((row) => [row.threadId, row.replyCount]));
+  return new Map<string, ThreadSummary>(
+    latest.map((row) => {
+      const { author, content, createdAt, id } = publicMessage(row, []);
+      return [
+        row.threadId!,
+        {
+          lastReply: { author, content: content.slice(0, THREAD_PREVIEW_LENGTH), createdAt, id },
+          replyCount: replyCounts.get(row.threadId) ?? 0,
+        },
+      ];
+    }),
+  );
 };
 
 export const readChannelView = async (
@@ -193,6 +237,12 @@ export const readChannelView = async (
         )
     : [];
   const page = reversed.slice(0, limit).reverse();
+  // Only main-timeline roots on this page show a thread card; other views skip the scan.
+  const pageIds = new Set(page.map((message) => message.id));
+  const summarized = options.threadId
+    ? []
+    : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
+  const summaries = await threadSummaries(tx, channelId, summarized);
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -218,14 +268,13 @@ export const readChannelView = async (
     ...page.map((message) => message.id),
     ...(rootMessage ? [rootMessage.id] : []),
   ]);
-  const sourceTopics = await sourceTopicsByMessage(
-    tx,
-    channelId,
-    [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
-      message.routingStatus === 'reply' ? [message.id] : [],
-    ),
-    viewerUserId,
+  const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+    message.routingStatus === 'reply' ? [message.id] : [],
   );
+  const [sourceTopics, works] = await Promise.all([
+    sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
+    externalWorksByMessage(tx, channelId, replyIds),
+  ]);
   const ids = [...new Set([...files.values()].flat())];
   const attachments = ids.length
     ? await tx
@@ -244,12 +293,23 @@ export const readChannelView = async (
     hasMore: reversed.length > limit,
     jobs,
     members,
-    threads,
+    threads: threads.map((entry) => {
+      const title = entry.metadata?.title;
+      const named = typeof title === 'string' && title ? { ...entry, title } : entry;
+      return summarized.includes(entry.id)
+        ? {
+            ...named,
+            lastReply: summaries.get(entry.id)?.lastReply ?? null,
+            replyCount: summaries.get(entry.id)?.replyCount ?? 0,
+          }
+        : named;
+    }),
     rootMessage: rootMessage
       ? {
           ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
+          works: works.get(rootMessage.id) ?? [],
           replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
         }
       : null,
@@ -257,6 +317,7 @@ export const readChannelView = async (
       ...publicMessage(message, files.get(message.id) ?? []),
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
+      works: works.get(message.id) ?? [],
       replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
     })),
   };

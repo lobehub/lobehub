@@ -335,9 +335,22 @@ export interface QueuedMessage {
   /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
    *  keeps its gateway pin when the queue drains. */
   forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /**
+   * The untracked heterogeneous run this follow-up was handed to the server
+   * behind. A later refusal releases exactly that run's marker, so the local
+   * fallback send does not queue behind it again.
+   */
+  heldBehindOperationId?: string;
   id: string;
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;
+  /**
+   * A run already took this follow-up from the server queue and is handing it
+   * to the agent (a live Claude Code session reads it after its current step).
+   * It can no longer be edited, sent now or deleted; it leaves the tray once
+   * the agent confirms it, or turns back into a waiting entry if that fails.
+   */
+  serverDelivering?: boolean;
   /**
    * Where the server holds this follow-up: `appending` while it is being
    * handed to the server queue behind the running Gateway run, `server` once
@@ -361,6 +374,14 @@ export interface QueuedMessage {
 /** Whether only this client holds the queued message, so only it can send it. */
 export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
   !message.serverDelivery;
+
+/**
+ * Whether a run already took the queued message from the server and is
+ * handing it to the agent. Only a message the server still holds counts: one
+ * taken back to this client is waiting here again, whatever flag it kept.
+ */
+export const isServerDeliveringQueuedMessage = (message: QueuedMessage): boolean =>
+  message.serverDelivery === 'server' && !!message.serverDelivering;
 
 /**
  * Merged message ready for injection

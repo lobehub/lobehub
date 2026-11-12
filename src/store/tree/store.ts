@@ -2,6 +2,7 @@ import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 import type { StateCreator } from 'zustand/vanilla';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useFileStore } from '@/store/file';
 import { RESOURCE_LIST_KEY } from '@/store/file/slices/resource/projection';
 
@@ -53,4 +54,16 @@ useFileStore.subscribe((state) => {
     resourceList.map((item) => toTreeItemFromResource(item)),
     { confirmed },
   );
+});
+
+// Explorer and every expanded sidebar folder use the library's active order.
+useResourceManagerStore.subscribe((state, previous) => {
+  if (!state.libraryId || state.libraryId !== useTreeStore.getState().knowledgeBaseId) return;
+  if (
+    state.sorter === previous.sorter &&
+    state.sortType === previous.sortType &&
+    state.libraryId === previous.libraryId
+  )
+    return;
+  useTreeStore.getState().setTreeSort(state.sorter, state.sortType);
 });

@@ -1,10 +1,18 @@
 'use client';
 
-import { Button, cx, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { cx, DropdownMenu, Empty, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { MessageCircleIcon, PencilLineIcon, UserRoundXIcon } from 'lucide-react';
-import { type CSSProperties, memo } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  MessageCircleIcon,
+  MoreHorizontalIcon,
+  PencilLineIcon,
+  Settings2Icon,
+  UserRoundIcon,
+  UserRoundXIcon,
+} from 'lucide-react';
+import { type CSSProperties, memo, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -14,8 +22,12 @@ import { coverPattern } from '@/features/AgentViewAll/coverColor';
 import { resolveAgentBadge } from '@/features/AgentViewAll/resolveAgentBadge';
 import SidebarItemAvatar from '@/features/AgentViewAll/SidebarItemAvatar';
 import { useAgentCoverColor } from '@/features/AgentViewAll/useAgentCoverColor';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
+import { useAgentConversationLink } from '@/features/MessageList/useAgentConversationLink';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useCopyAgentIdMenuItem } from '@/hooks/useCopyAgentIdMenuItem';
 
 import { ContactInfo } from './ContactInfo';
 import { type ContactCardState, useContactCard } from './useContactCard';
@@ -44,19 +56,37 @@ const styles = stylex.create({
   avatar: {
     marginBlockStart: `-${AVATAR_SIZE / 2}px`,
   },
-  description: {
-    fontSize: '14px',
-    lineHeight: '22px',
-    color: cssVar.colorTextSecondary,
-    whiteSpace: 'pre-wrap',
+  actions: {
+    display: 'grid',
+    gridAutoColumns: 'minmax(0, 1fr)',
+    gridAutoFlow: 'column',
+    gap: '8px',
+    width: '100%',
+    marginBlockStart: '16px',
   },
-  placeholder: {
-    fontSize: '14px',
-    color: cssVar.colorTextQuaternary,
-  },
-  slug: {
-    fontSize: '13px',
-    color: cssVar.colorTextTertiary,
+  // An IM-profile action: icon over label, the whole tile clickable.
+  tile: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '4px',
+    paddingBlock: '12px',
+    paddingInline: '8px',
+    borderWidth: 0,
+    borderRadius: '12px',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: cssVar.colorText,
+    textDecoration: 'none',
+    cursor: 'pointer',
+    backgroundColor: {
+      'default': cssVar.colorFillTertiary,
+      ':hover': cssVar.colorFillSecondary,
+    },
+    transitionProperty: 'background-color',
+    transitionDuration: '0.15s',
   },
   state: {
     paddingBlock: '48px',
@@ -66,12 +96,56 @@ const styles = stylex.create({
   },
 });
 
+const TileContent = ({ icon, label }: { icon: LucideIcon; label: string }) => (
+  <>
+    <Icon icon={icon} size={20} />
+    <span>{label}</span>
+  </>
+);
+
+// Takes the ref and props a DropdownMenu trigger hands its child.
+const MenuTile = ({
+  className,
+  label,
+  ref,
+  ...rest
+}: {
+  className?: string;
+  label: string;
+  ref?: Ref<HTMLButtonElement>;
+}) => (
+  <button
+    ref={ref}
+    type="button"
+    {...rest}
+    className={cx(stylex.props(styles.tile).className, className)}
+  >
+    <TileContent icon={MoreHorizontalIcon} label={label} />
+  </button>
+);
+
 const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
   ({ canEdit, chatUrl, item, profileUrl, role, slug, title }) => {
     const { t } = useTranslation('common');
     const navigate = useWorkspaceAwareNavigate();
     const badge = resolveAgentBadge(item);
     const coverColor = useAgentCoverColor(item, badge.cover, !!badge.coverImage);
+    const isGroup = item.type === 'group';
+    const agentId = isGroup ? undefined : item.id;
+    // With Channels on, "Message" opens the direct Channel and "View" the Agent's own page;
+    // without them both would land on that page, so only "Message" is offered.
+    const channelsEnabled = useChannelsEnabled();
+    const message = useAgentConversationLink(agentId, chatUrl);
+    const copyIdItem = useCopyAgentIdMenuItem(agentId);
+    const moreItems = [
+      {
+        icon: canEdit ? PencilLineIcon : UserRoundIcon,
+        key: 'profile',
+        label: t(canEdit ? 'contacts.editProfile' : 'contacts.viewProfile'),
+        onClick: () => navigate(profileUrl),
+      },
+      ...(copyIdItem ? [copyIdItem] : []),
+    ];
 
     return (
       <>
@@ -97,7 +171,7 @@ const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
               stylex.props(styles.avatar).className,
               cardStyles.avatarRing,
               !badge.cover && cardStyles.avatarPlain,
-              item.type === 'group' && cardStyles.avatarRingGroup,
+              isGroup && cardStyles.avatarRingGroup,
             )}
           >
             <SidebarItemAvatar item={item} shape={'circle'} size={AVATAR_SIZE - 6} />
@@ -111,33 +185,29 @@ const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
           >
             {title}
           </Text>
-          {(role || slug) && (
-            <Flexbox horizontal align={'center'} gap={8} justify={'center'}>
-              {role && (
-                <span className={cardStyles.role} title={role}>
-                  {role}
-                </span>
-              )}
-              {slug && <span {...stylex.props(styles.slug)}>@{slug}</span>}
-            </Flexbox>
+          {role && (
+            <span className={cardStyles.role} title={role}>
+              {role}
+            </span>
           )}
-          {item.description ? (
-            <span {...stylex.props(styles.description)}>{item.description}</span>
-          ) : (
-            <span {...stylex.props(styles.placeholder)}>{t('contacts.noDescription')}</span>
-          )}
-          <Flexbox horizontal gap={8} justify={'center'} style={{ marginBlockStart: 16 }}>
-            <Button icon={MessageCircleIcon} type={'primary'} onClick={() => navigate(chatUrl)}>
-              {t('contacts.sendMessage')}
-            </Button>
-            {canEdit && (
-              <Button icon={PencilLineIcon} onClick={() => navigate(profileUrl)}>
-                {t('contacts.editProfile')}
-              </Button>
+          <div {...stylex.props(styles.actions)}>
+            <WorkspaceLink
+              to={message.url}
+              onClick={message.onClick}
+              {...stylex.props(styles.tile)}
+            >
+              <TileContent icon={MessageCircleIcon} label={t('contacts.sendMessage')} />
+            </WorkspaceLink>
+            {agentId && channelsEnabled && (
+              <WorkspaceLink to={chatUrl} {...stylex.props(styles.tile)}>
+                <TileContent icon={Settings2Icon} label={t('contacts.manage')} />
+              </WorkspaceLink>
             )}
-          </Flexbox>
-          {/* Groups own no addresses; only agents carry contact info. */}
-          {item.type !== 'group' && <ContactInfo agentId={item.id} />}
+            <DropdownMenu items={moreItems}>
+              <MenuTile label={t('more')} />
+            </DropdownMenu>
+          </div>
+          <ContactInfo agentId={agentId} description={item.description} slug={slug} />
         </Flexbox>
       </>
     );
@@ -147,10 +217,10 @@ const ContactCard = memo<Extract<ContactCardState, { status: 'ready' }>>(
 ContactCard.displayName = 'ContactCard';
 
 /**
- * A contact's card beside the Contacts list: the agents-wall badge widened into
- * a profile header, with "Send message" into its chat and, for editors, "Edit
- * profile". Opening a contact only previews it — the chat and the edit surface
- * are one click on.
+ * A contact's card beside the Contacts list, laid out like an IM profile: the
+ * agents-wall badge widened into a header, Message / View / More actions, and an
+ * info list with the handle, mail addresses and bio. Opening a contact only
+ * previews it — the conversation and the profile are one click on.
  */
 const ContactDetail = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('common');

@@ -8,9 +8,11 @@ import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
 
 const reclaimServerQueuedMessages = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const resumeClientHeldQueue = vi.hoisted(() => vi.fn());
 vi.mock('../transports/gateway/serverSteerQueue', () => ({
   restoreServerQueuedMessages: vi.fn(),
   reclaimServerQueuedMessages,
+  resumeClientHeldQueue,
   withdrawQueuedMessage: vi.fn(),
 }));
 
@@ -303,6 +305,25 @@ describe('external producer session ending without its terminal', () => {
     expect(run.internalPinTopicStatus).not.toHaveBeenCalled();
     expect(run.internalDispatchTopic).not.toHaveBeenCalled();
     expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+  });
+
+  // This path completes the local op without the run lifecycle's queue drain:
+  // a follow-up handed back to this client (e.g. a refused unconfirmed append)
+  // would wait for the next send unless it is resumed here.
+  it('resumes what waits in this conversation behind the run', async () => {
+    resumeClientHeldQueue.mockClear();
+    vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+      id: 'topic-1',
+      metadata: { runningOperation: { operationId: 'server-op' } },
+      status: 'running',
+    } as any);
+
+    await endExternalRunWithoutTerminal();
+
+    expect(resumeClientHeldQueue).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ agentId: 'agent-1', topicId: 'topic-1' }),
+    );
   });
 
   it('keeps the row running when the server row cannot be read', async () => {

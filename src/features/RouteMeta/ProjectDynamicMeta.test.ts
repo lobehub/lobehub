@@ -67,13 +67,13 @@ describe('useProjectTabAvatar', () => {
     useProjectStore.setState({ projectDetailMap: {} });
   });
 
-  it('seeds the generated avatar from the project name when there is no logo', () => {
+  it('seeds the generated avatar from the project id, so a rename keeps it', () => {
     seedStores();
 
     const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
 
     // `null`, not `undefined`: the project has loaded, so a cached logo is stale.
-    expect(result.current).toEqual({ avatar: null, avatarSeed: 'Alpha' });
+    expect(result.current).toEqual({ avatar: null, avatarSeed: 'prj_1' });
   });
 
   it("passes the project's own logo through", () => {
@@ -87,7 +87,7 @@ describe('useProjectTabAvatar', () => {
 
     const { result } = renderHook(() => useProjectTabAvatar({ projectId: 'prj_1' }));
 
-    expect(result.current).toEqual({ avatar: '🚀', avatarSeed: 'Alpha' });
+    expect(result.current).toEqual({ avatar: '🚀', avatarSeed: 'prj_1' });
   });
 
   it('publishes no avatar before the project detail lands', () => {
@@ -110,7 +110,7 @@ describe('ProjectSectionDynamicMeta', () => {
 
     expect(onResolve).toHaveBeenLastCalledWith({
       avatar: null,
-      avatarSeed: 'Alpha',
+      avatarSeed: 'prj_1',
       backgroundColor: undefined,
       title: undefined,
     });

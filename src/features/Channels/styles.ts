@@ -74,12 +74,15 @@ export const styles = stylex.create({
     paddingBlockStart: 8,
     paddingBlockEnd: 24,
   },
-  /** One message row; hovering highlights it and reveals its toolbar, like a chat app. */
+  /**
+   * One message row; hovering highlights it and reveals its toolbar, like a chat app.
+   * The wash spans the feed edge to edge (cancelling the feed's 16px padding), square,
+   * so it reads as a list row rather than a floating card.
+   */
   messageRow: {
     position: 'relative',
-    marginInline: -12,
-    paddingInline: 12,
-    borderRadius: cssVar.borderRadiusLG,
+    marginInline: -16,
+    paddingInline: 16,
     backgroundColor: {
       default: 'transparent',
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
@@ -95,7 +98,7 @@ export const styles = stylex.create({
   },
   // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
-    paddingInlineEnd: 84,
+    paddingInlineEnd: 88,
   },
   messageTime: {
     flexShrink: 0,
@@ -109,7 +112,7 @@ export const styles = stylex.create({
   continuationTime: {
     position: 'absolute',
     insetBlockStart: 4,
-    insetInlineStart: 0,
+    insetInlineStart: 4,
     width: 54,
     textAlign: 'center',
     opacity: {
@@ -134,7 +137,7 @@ export const styles = stylex.create({
   messageToolbar: {
     position: 'absolute',
     insetBlockStart: 6,
-    insetInlineEnd: 12,
+    insetInlineEnd: 16,
     zIndex: 1,
     display: 'flex',
     alignItems: 'center',
@@ -245,10 +248,9 @@ export const styles = stylex.create({
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    // Buttons sit on the last line; the glyphs ride about 1.5px high in the line box,
-    // so drop the text that much to center it on the 28px icons beside it. Layout snaps
-    // text to whole pixels, so only a transform can move it the half pixel.
-    transform: 'translateY(1.5px)',
+    // Buttons sit on the last line; glyphs ride high in the line box, so drop the
+    // text 1px to center it on the 28px icons beside it.
+    marginBlockEnd: -1,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {
@@ -399,14 +401,6 @@ export const activityStyles = stylex.create({
     height: 24,
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
-  },
-  /** Beside the Agent's name in a direct conversation's header. */
-  header: {
-    color: cssVar.colorTextDescription,
-  },
-  headerButton: {
-    height: 22,
-    paddingInline: 4,
   },
   avatars: {
     display: 'inline-flex',

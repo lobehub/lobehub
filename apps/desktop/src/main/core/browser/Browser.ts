@@ -10,6 +10,7 @@ import { preloadDir, resourcesDir } from '@/const/dir';
 import { DESKTOP_EXTERNAL_NAVIGATION_HOSTS, isMac } from '@/const/env';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
+import { getRemoteDebuggingRendererArgs } from '@/modules/remoteDebugging';
 import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
@@ -242,7 +243,10 @@ export default class Browser {
       show: false,
       title,
       webPreferences: {
-        additionalArguments: [`${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`],
+        additionalArguments: [
+          `${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`,
+          ...getRemoteDebuggingRendererArgs(),
+        ],
         backgroundThrottling: false,
         contextIsolation: true,
         preload: path.join(preloadDir, 'index.js'),
@@ -765,7 +769,6 @@ export default class Browser {
       if (requestHeaders['Origin']) {
         originMap.set(details.id, requestHeaders['Origin']);
         delete requestHeaders['Origin'];
-        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
 
       appendVercelCookie(requestHeaders);

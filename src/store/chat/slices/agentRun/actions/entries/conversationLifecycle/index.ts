@@ -93,11 +93,12 @@ import {
   handOffQueuedMessage,
   reclaimServerQueuedMessages,
 } from '@/store/chat/slices/agentRun/actions/transports/gateway/serverSteerQueue';
+import { findUntrackedHeteroMarker } from '@/store/chat/slices/agentRun/actions/transports/gateway/untrackedHeteroRun';
 import {
   getNativeHeteroSessionBindingKey,
   resolveHeteroResume,
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
-import { isQueueBlockingOperation, snapshotQueuedFiles } from '@/store/chat/slices/operation/types';
+import { snapshotQueuedFiles } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { topicListFilterOf } from '@/store/chat/slices/topic/projection';
@@ -141,6 +142,7 @@ import { pageConversationNeedsGateway, preparePageConversation } from '../pageCo
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
 
@@ -658,42 +660,10 @@ export class ConversationLifecycleActionImpl {
           ].filter((key) => key !== currentContextKey)
         : []),
     ];
-    const findRunningBlockingOp = (key: string) => {
-      const contextOpIds = this.#get().operationsByContext[key] || [];
-      const hasQueuedMessages = (this.#get().queuedMessages[key]?.length ?? 0) > 0;
-      const ownVoiceUploadIndex = optimisticUserMessageId
-        ? contextOpIds.findIndex((id) => {
-            const operation = this.#get().operations[id];
-            return (
-              operation?.type === 'uploadVoiceMessage' &&
-              operation.context.messageId === optimisticUserMessageId
-            );
-          })
-        : -1;
-
-      return contextOpIds
-        .map((id, index) => ({ index, operation: this.#get().operations[id] }))
-        .find(
-          ({ index, operation }) =>
-            operation &&
-            // Shared predicate — an op the composer already treats as finished
-            // (aborting, or done with its visible output) must NOT swallow this
-            // send into the tray.
-            isQueueBlockingOperation(operation, { hasQueuedMessages }) &&
-            // The upload transaction calls this lifecycle after its own binary is ready. It must
-            // not queue behind itself (or a later voice upload); earlier voice uploads still block.
-            !(
-              optimisticUserMessageId &&
-              operation.type === 'uploadVoiceMessage' &&
-              (operation.context.messageId === optimisticUserMessageId ||
-                (ownVoiceUploadIndex >= 0 && index > ownVoiceUploadIndex))
-            ),
-        )?.operation;
-    };
     let queueTargetKey = currentContextKey;
     let runningQueueBlockingOp: ReturnType<typeof findRunningBlockingOp>;
     for (const key of queueCandidateKeys) {
-      runningQueueBlockingOp = findRunningBlockingOp(key);
+      runningQueueBlockingOp = findRunningBlockingOp(this.#get, key, optimisticUserMessageId);
       if (runningQueueBlockingOp) {
         queueTargetKey = key;
         break;
@@ -703,15 +673,16 @@ export class ConversationLifecycleActionImpl {
       !runningQueueBlockingOp &&
       !onlyAddUserMessage &&
       operationSelectors.isQueueDrainPending(operationContext)(this.#get());
+    const canQueue = (key: string) =>
+      !onlyAddUserMessage &&
+      canQueueOnServer(this.#get, key, {
+        context: operationContext,
+        isGatewayRun: runtimeType === 'gateway' && !directMentionRoute && !willCreateNewTopic,
+      });
     /** Queue this send behind what holds `key`; on the server when the run can join it there. */
     const queueThisSend = (key: string) => {
       const queuedId = nanoid();
-      const queueOnServer =
-        !onlyAddUserMessage &&
-        canQueueOnServer(this.#get, key, {
-          context: operationContext,
-          isGatewayRun: runtimeType === 'gateway' && !directMentionRoute && !willCreateNewTopic,
-        });
+      const queueOnServer = canQueue(key);
       this.#get().enqueueMessage(
         key,
         {
@@ -744,7 +715,11 @@ export class ConversationLifecycleActionImpl {
         );
       notifyMessageAccepted();
     };
-    if (runningQueueBlockingOp || queueDrainPending) return void queueThisSend(queueTargetKey);
+    // A live hetero run this tab lost track of takes the send as a steer, never a parallel run.
+    const untrackedHetero =
+      canQueue(currentContextKey) && !!findUntrackedHeteroMarker(this.#get, operationContext);
+    if (runningQueueBlockingOp || queueDrainPending || untrackedHetero)
+      return void queueThisSend(queueTargetKey);
 
     // Nothing runs: take server-queued follow-ups back; one still being delivered keeps its place.
     await Promise.all(queueCandidateKeys.map((key) => reclaimServerQueuedMessages(this.#get, key)));

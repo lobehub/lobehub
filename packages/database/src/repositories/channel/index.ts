@@ -51,6 +51,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export type { ChannelOpeningCandidate, ChannelOpeningDecision } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
@@ -420,6 +421,7 @@ export class ChannelRepository {
       ChannelItem & {
         canDelete: boolean;
         lastMessage: { content: string; createdAt: Date } | null;
+        mentionCount: number;
         replyJobs: ChannelReplyJob[];
         unreadCount: number;
       }
@@ -429,6 +431,7 @@ export class ChannelRepository {
       .select({
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
+        memberId: channelMembers.id,
         role: channelMembers.role,
       })
       .from(channels)
@@ -500,10 +503,35 @@ export class ChannelRepository {
       replyJobsOf.set(channelId, jobs);
     }
 
+    // Unread messages that @mention the caller, counted from the same read position as
+    // `unreadCount`; only channels with unread messages are scanned.
+    const unreadMemberIds = rows
+      .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
+      .map(({ memberId }) => memberId);
+    const mentioned = unreadMemberIds.length
+      ? await this.db
+          .select({
+            channelId: channelMessages.channelId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(channelMessages)
+          .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
+          .where(
+            and(
+              inArray(channelMembers.id, unreadMemberIds),
+              sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
+              sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
+            ),
+          )
+          .groupBy(channelMessages.channelId)
+      : [];
+    const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
+
     return rows.map(({ channel, lastReadSequence, role }) => ({
       ...channel,
       canDelete: hasRole(role, 'admin'),
       lastMessage: lastMessageOf.get(channel.id) ?? null,
+      mentionCount: mentionCountOf.get(channel.id) ?? 0,
       replyJobs: replyJobsOf.get(channel.id) ?? [],
       unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
     }));
