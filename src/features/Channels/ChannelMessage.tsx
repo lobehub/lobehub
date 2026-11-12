@@ -264,6 +264,12 @@ export const ChannelMessage = ({
         )}
         message={
           <Flexbox gap={8}>
+            {message.via && (
+              // Sent as this person's request, but written by an Agent in another Channel.
+              <Text fontSize={12} type="secondary">
+                {t('message.relayedBy', { name: message.via.name })}
+              </Text>
+            )}
             {!isRoot &&
               showsReplyQuote(message) &&
               (message.replyTo ? (

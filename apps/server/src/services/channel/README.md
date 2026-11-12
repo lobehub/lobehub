@@ -193,11 +193,37 @@ would mean threading a Channel flag through the server context snapshot, `@lobec
 messages engine for no change in what the model sees. External runtimes keep getting it in
 their system context from `heteroDispatch/prepare.ts`.
 
+### Messaging Agents in other Channels
+
+A Native run can also reach Agents outside its Channel, so "tell / ask that Agent" is a message
+the Agent decides on, not a task created for it. `lobe-channel.listChannels` lists the requester's
+active Channels (archived and trashed ones are left out) with their active Agent members.
+`lobe-channel.sendMessage` posts into one of them through `ChannelService.send`, @mentioning the
+chosen Agents (`ChannelMessagingService`).
+
+- **Who sends it.** The run's requester is the sender and execution identity, as if they had
+  posted it, so the target Channel's membership, routing and Agent permissions apply unchanged.
+  A Channel message has exactly one sender and an Agent-authored row is always a `reply` that
+  routes nowhere, so the relaying Agent is recorded in `metadata.via` instead. The timeline shows
+  "Relayed by", and the woken run sees a `via` attribute on its `channel_request`.
+- **What it may do.** Every call first passes the same live-run check as a history read
+  (`ChannelHistoryRepository.currentRun`). The target must be one of the requester's Channels and
+  each `agentId` an active member there; at most five Agents, never the sender itself or the
+  Channel it is answering in (its final answer is posted there).
+- **One hop.** A run answering a relayed request cannot relay again, so two Agents cannot keep
+  waking each other on the requester's behalf.
+- **Retries.** The request key is `agent-relay:<operationId>:<toolCallId>`, so a retried call
+  returns the message already posted.
+- **Where the answer goes.** The addressed Agent answers in its own Channel. The tool returns a
+  link to that Channel for the relaying run's final answer; nothing reports back automatically yet.
+  External runtimes have no `lh channel` equivalent yet.
+
 ### Why history reads stay on `lobe-channel`
 
 `lobe-message.readMessages` reads a bot platform by model-supplied `platform` / `channelId`
-arguments, authorised by the bot's platform credentials. `lobe-channel` takes no ids from the
-model: every read is scoped and re-authorised by the run's frozen manifest (branch, cutoff,
-membership, live operation). Folding Channel into `lobe-message` would either weaken that to
+arguments, authorised by the bot's platform credentials. `lobe-channel` history reads take no ids
+from the model: every read is scoped and re-authorised by the run's frozen manifest (branch,
+cutoff, membership, live operation). `sendMessage` does take a Channel id, but only one the
+requester is a member of, posted as the requester. Folding Channel into `lobe-message` would either weaken that to
 model-chosen ids or add a second authorisation mode to a tool built around the first, so the two
 stay separate and share only the model-facing projection.

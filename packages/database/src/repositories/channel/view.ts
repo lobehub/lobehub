@@ -1,3 +1,4 @@
+import { channelMessageVia } from '@lobechat/types';
 import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import {
@@ -57,6 +58,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    via: isAgent ? null : (channelMessageVia(message.metadata) ?? null),
   };
 };
 

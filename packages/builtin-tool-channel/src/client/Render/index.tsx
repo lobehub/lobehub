@@ -2,8 +2,11 @@
 
 import type {
   BuiltinRenderProps,
+  ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
+  ChannelSendMessageParams,
+  ChannelSentMessage,
 } from '@lobechat/types';
 import { Alert, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
@@ -60,7 +63,74 @@ const ChannelHistoryRender = memo<
 });
 ChannelHistoryRender.displayName = 'ChannelHistoryRender';
 
+const ListChannelsRender = memo<BuiltinRenderProps<unknown, ChannelDirectoryPage, string>>(
+  ({ content, pluginError, pluginState }) => {
+    const { t } = useTranslation('plugin');
+    if (pluginError)
+      return (
+        <Alert
+          description={pluginError.message || content}
+          title={t('builtins.lobe-channel.listError')}
+          type={'error'}
+        />
+      );
+    if (!pluginState) return null;
+    if (pluginState.channels.length === 0)
+      return <Text type={'secondary'}>{t('builtins.lobe-channel.noChannels')}</Text>;
+    return (
+      <Flexbox gap={8} paddingBlock={8}>
+        {pluginState.channels.map((channel) => (
+          <Flexbox gap={2} key={channel.id}>
+            <Text weight={500}>{`# ${channel.title}`}</Text>
+            <Text type={'secondary'}>
+              {channel.agents.map(({ name }) => name).join(' · ') ||
+                t('builtins.lobe-channel.noAgents')}
+            </Text>
+          </Flexbox>
+        ))}
+      </Flexbox>
+    );
+  },
+);
+ListChannelsRender.displayName = 'ChannelListChannelsRender';
+
+const SendMessageRender = memo<
+  BuiltinRenderProps<ChannelSendMessageParams, ChannelSentMessage, string>
+>(({ args, content, pluginError, pluginState }) => {
+  const { t } = useTranslation('plugin');
+  if (pluginError)
+    return (
+      <Alert
+        description={pluginError.message || content}
+        title={t('builtins.lobe-channel.sendError')}
+        type={'error'}
+      />
+    );
+  if (!pluginState) return null;
+  return (
+    <Flexbox gap={8} paddingBlock={8}>
+      <Text type={'secondary'}>
+        {t('builtins.lobe-channel.sentTo', {
+          agents: pluginState.agents.map(({ name }) => `@${name}`).join(' '),
+          channel: pluginState.channelTitle,
+        })}
+      </Text>
+      {args?.content && (
+        <div style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+          {args.content.slice(0, 600)}
+        </div>
+      )}
+      <a href={pluginState.url} rel={'noreferrer'} target={'_blank'}>
+        {t('builtins.lobe-channel.openChannel')}
+      </a>
+    </Flexbox>
+  );
+});
+SendMessageRender.displayName = 'ChannelSendMessageRender';
+
 export const ChannelRenders = {
+  [ChannelApiName.listChannels]: ListChannelsRender,
   [ChannelApiName.readMessage]: ChannelHistoryRender,
   [ChannelApiName.readMessages]: ChannelHistoryRender,
+  [ChannelApiName.sendMessage]: SendMessageRender,
 };

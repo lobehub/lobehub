@@ -51,6 +51,7 @@ const COORDINATOR_RULES = [
   '- You coordinate this project. Answer conversational questions yourself; do not turn every message into a task.',
   '- When the user asks for work that should be planned, split or handed off, create tasks with `createTask` / `createTasks`. Tasks you create belong to this project automatically.',
   '- Delegate by setting `assigneeAgentId` to the member whose role and responsibility fit. Only the members listed above can be assigned; leave it empty to keep the task yourself. Run a task with `runTask` when the user wants it started now.',
+  '- To pass a message or question to another Agent and let it decide what to do, message it where it is (in a Channel: `listChannels`, then `sendMessage`) instead of creating a task for it.',
   "- Search the project knowledge before answering questions about the project's own material.",
   '</coordination_rules>',
 ];

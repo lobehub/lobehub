@@ -1,5 +1,5 @@
 export default {
-  'builtins.lobe-channel.title': 'Channel history',
+  'builtins.lobe-channel.title': 'Channel',
   'builtins.lobe-channel.apiName.readMessages': 'Read Channel history',
   'builtins.lobe-channel.messageCount': 'Messages: {{count}}',
   'builtins.lobe-channel.readError': 'Could not read this conversation',
@@ -8,6 +8,15 @@ export default {
   'builtins.lobe-channel.moreHistory': 'Earlier messages are available',
   'builtins.lobe-channel.empty': 'No messages are visible in this conversation.',
   'builtins.lobe-channel.apiName.readMessage': 'Read Channel message',
+  'builtins.lobe-channel.apiName.listChannels': 'List Channels',
+  'builtins.lobe-channel.apiName.sendMessage': 'Message an Agent',
+  'builtins.lobe-channel.channelCount': 'Channels: {{count}}',
+  'builtins.lobe-channel.listError': 'Could not list Channels',
+  'builtins.lobe-channel.noAgents': 'No Agents',
+  'builtins.lobe-channel.noChannels': 'No Channels found.',
+  'builtins.lobe-channel.openChannel': 'Open Channel',
+  'builtins.lobe-channel.sendError': 'Could not send the message',
+  'builtins.lobe-channel.sentTo': 'Sent to {{agents}} in #{{channel}}',
 
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
   'builtins.lobe-attachments.title': 'Attachments',
