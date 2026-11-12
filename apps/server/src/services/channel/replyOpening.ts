@@ -1,5 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChannelContextMessage } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import debug from 'debug';
 
 import type { ChannelOpeningCandidate } from '@/database/repositories/channel';
@@ -42,7 +43,8 @@ const decide = async (
             name: candidate.agent.name ?? undefined,
             title: candidate.agent.title ?? undefined,
           },
-          botNames: candidate.agent.name ? [candidate.agent.name] : undefined,
+          // What people call it: its name, or the title an Agent without one goes by.
+          botNames: [agentDisplayName(candidate.agent)].filter((name): name is string => !!name),
           canOpenThread: candidate.canOpenThread,
           message: candidate.request.content,
           recentMessages: candidate.recent.map((message) => describe(message, candidate.agent.id)),

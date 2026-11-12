@@ -67,6 +67,21 @@ describe('openChannelReply', () => {
     });
   });
 
+  it('calls an Agent without a name by its title', async () => {
+    executions.openingCandidate.mockResolvedValue({
+      ...candidate,
+      agent: { id: 'agt-coder', name: null, title: '小澄' },
+    });
+    const opener = vi.fn().mockResolvedValue({ placement: 'channel' });
+
+    await openChannelReply({} as never, 'channel', 'job', { createOpener: () => opener });
+
+    expect(opener).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: { name: undefined, title: '小澄' }, botNames: ['小澄'] }),
+      expect.any(AbortSignal),
+    );
+  });
+
   it('answers in place without a word when the opener says so', async () => {
     const opener = vi.fn().mockResolvedValue({ placement: 'channel' });
 
