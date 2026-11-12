@@ -83,8 +83,8 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   /**
-   * Opt-in Anthropic `1h` prompt-cache TTL, resolved from `chatConfig.contextCachingTTL`.
-   * Undefined → the API default `5m`.
+   * Anthropic `1h` prompt-cache TTL, resolved from `chatConfig.contextCachingTTL`
+   * (`resolveContextCachingTTL`). Undefined → the API default `5m`.
    */
   contextCachingTTL?: '5m' | '1h';
   /**

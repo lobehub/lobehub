@@ -337,7 +337,7 @@ export const buildAnthropicMessage = async (
 export const buildAnthropicMessages = async (
   inputMessages: OpenAIChatMessage[],
   options: {
-    /** Opt-in `1h` cache lifetime for the breakpoint; omitted → API default `5m`. */
+    /** `1h` cache lifetime for the breakpoint; omitted → API default `5m`. */
     cacheTTL?: '5m' | '1h';
     enabledContextCaching?: boolean;
     /** Overrides for the inline image budget, e.g. a provider's lower body limit. */
