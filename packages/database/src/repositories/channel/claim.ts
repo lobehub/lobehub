@@ -21,6 +21,7 @@ import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
 import { resolveTopic } from './topic';
 import { audit } from './transaction';
+import { assignedWorktree } from './worktree';
 
 export interface ChannelClaimOptions {
   /** How long the claimer may go without a heartbeat before reconcile takes over. */
@@ -126,12 +127,12 @@ const deviceBlock = async (
     return { code: 'unavailable', reason: 'The device owner did not allow this environment' };
 };
 
-/** Another channel's live writer in the same device directory. */
+/** Another live writer in the same device directory, from any channel or member. */
 const directoryBlock = async (
   tx: Transaction,
-  member: ChannelMemberItem,
+  deviceId: string | undefined,
+  workingDirectory: string | undefined,
 ): Promise<Block | undefined> => {
-  const { deviceId, workingDirectory } = member.config ?? {};
   if (!deviceId || !workingDirectory) return;
 
   const [busy] = await tx
@@ -316,13 +317,20 @@ export const claimJob = async (
     return null;
   }
 
-  const executionConfig = await resolveExecutionConfig(
+  const resolved = await resolveExecutionConfig(
     tx,
     channel,
     member,
     requester.userId,
     options.serverDefaultAgentConfig,
   );
+  // A branch that moved into its own worktree runs there; the grant still covers the
+  // configured directory it was cut from.
+  const worktree = assignedWorktree(member, job.threadId);
+  const executionConfig =
+    resolved && worktree
+      ? { ...resolved, workingDirectory: worktree.path, worktreeBranch: worktree.branch }
+      : resolved;
   if (!executionConfig) {
     await block(tx, job, 'unavailable', 'The Agent is unavailable');
     return null;
@@ -334,7 +342,9 @@ export const claimJob = async (
     return null;
   }
 
-  const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
+  const blocked =
+    (await deviceBlock(tx, channel, member)) ??
+    (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
     return null;
@@ -399,7 +409,7 @@ export const claimJob = async (
           operationId,
           topicId: topic.id,
           status: 'running',
-          workingDirectory: member.config!.workingDirectory,
+          workingDirectory: executionConfig.workingDirectory,
           writerHeld: true,
         })
         .where(eq(channelJobs.id, job.id))

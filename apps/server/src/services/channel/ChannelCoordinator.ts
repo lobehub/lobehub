@@ -28,6 +28,7 @@ import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
+import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
 // Limit startup IO, not the number of Agents that may execute concurrently.
@@ -87,12 +88,19 @@ export class ChannelCoordinator {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
               continue;
             }
-            const claim = await this.executions.claim(channelId, job.id, {
-              leaseMs: LEASE_MS,
-              leaseOwner: crypto.randomUUID(),
-              onlineDeviceIds,
-              serverDefaultAgentConfig: getServerDefaultAgentConfig(),
-            });
+            const claimNow = () =>
+              this.executions.claim(channelId, job.id, {
+                leaseMs: LEASE_MS,
+                leaseOwner: crypto.randomUUID(),
+                onlineDeviceIds,
+                serverDefaultAgentConfig: getServerDefaultAgentConfig(),
+              });
+            let claim = await claimNow();
+            if (
+              !claim &&
+              (await this.moveToWorktree(channelId, job.id, channel.workspaceId, onlineDeviceIds))
+            )
+              claim = await claimNow();
             await Promise.all([
               notifyChannel(this.db, channelId),
               claim ? this.dispatch(claim, channel.workspaceId) : undefined,
@@ -105,6 +113,28 @@ export class ChannelCoordinator {
       if (pending.length) await notifyChannel(this.db, channelId);
     }
   };
+
+  /**
+   * A job held back only because another run uses its member's directory moves its branch into
+   * a worktree of that directory instead of waiting. Returns whether the branch got one; a
+   * directory that cannot host one (not a git repo, device too old) keeps the job waiting.
+   */
+  private async moveToWorktree(
+    channelId: string,
+    jobId: string,
+    workspaceId: string | null,
+    onlineDeviceIds: string[],
+  ) {
+    const candidate = await this.executions.worktreeCandidate(channelId, jobId);
+    if (!candidate || !onlineDeviceIds.includes(candidate.deviceId)) return false;
+    // A device call, so it runs outside the channel lock; assignment rechecks the member.
+    const created = await createChannelWorktree(candidate, workspaceId);
+    if (created.path === undefined) {
+      await this.executions.worktreeUnavailable(channelId, candidate, created.error);
+      return false;
+    }
+    return this.executions.assignWorktree(channelId, candidate, created.path);
+  }
 
   private async dispatch({ job, member, topic }: ChannelClaim, workspaceId: string | null) {
     if (

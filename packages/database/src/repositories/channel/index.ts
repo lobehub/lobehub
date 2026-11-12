@@ -56,6 +56,7 @@ export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelWriteOptions } from './types';
+export type { ChannelWorktreeCandidate } from './worktree';
 
 /** Recycle-bin row title: the start of the thread's root message. */
 const CHANNEL_THREAD_TITLE_LENGTH = 120;
