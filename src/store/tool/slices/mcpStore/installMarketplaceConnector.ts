@@ -132,6 +132,9 @@ export const installMarketplaceConnector = async (
   }
 
   try {
+    // The create's own list refresh may have failed, leaving the replaced row in
+    // the list the steps below read (its transport, its metadata)
+    if (!isOAuth) await get().fetchConnectors();
     // An OAuth authorization synced a new row's tools already; over an existing
     // row it only added to them, so a reinstall lists them again to drop the rest
     if (!isOAuth || !isNew) {

@@ -397,7 +397,15 @@ export class ConnectorActionImpl {
     this.#set({ connectorCreating: true }, false, 'createConnector/start');
     try {
       const created = await lambdaClient.connector.create.mutate(params);
-      await this.fetchConnectors();
+      // The row is written: a list refresh that fails now must not fail the
+      // create, or the caller could not roll back the row it replaced
+      await this.fetchConnectors().catch((error) => {
+        console.error(
+          '[connector] refreshing the list after creating %s failed:',
+          created.id,
+          error,
+        );
+      });
       return { id: created.id, isNew: created.isNew };
     } finally {
       this.#set({ connectorCreating: false }, false, 'createConnector/end');

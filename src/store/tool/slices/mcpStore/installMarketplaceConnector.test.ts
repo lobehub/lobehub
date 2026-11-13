@@ -336,6 +336,53 @@ describe('installMarketplaceConnector', () => {
     });
   });
 
+  // `createConnector` resolves once the row is written, even when its list
+  // refresh fails: the install refreshes again where a failure rolls back
+  it('restores the connector it reinstalled over when the list refresh after the create fails', async () => {
+    state.connectors = [
+      {
+        id: 'connector-1',
+        identifier: 'market-mcp',
+        mcpConnectionType: 'cloud',
+        metadata: { marketplaceInstalled: true },
+        sourceType: 'marketplace',
+      },
+    ] as never;
+    vi.mocked(state.getConnectorForEdit).mockResolvedValue({
+      credentials: null,
+      id: 'connector-1',
+      isEnabled: true,
+      mcpConnectionType: 'cloud',
+      mcpServerUrl: null,
+      mcpStdioConfig: null,
+      metadata: { cloudEndPoint: 'https://cloud.example', marketplaceInstalled: true },
+      name: 'Old MCP',
+      oidcConfig: null,
+      status: 'disconnected',
+      tools: [],
+    } as never);
+    vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
+    // The snapshot's own read succeeds; the refresh after the create does not
+    vi.mocked(state.fetchConnectors)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('network down'));
+
+    await expect(install({ type: 'http', url: 'https://new.example' })).rejects.toThrow(
+      'network down',
+    );
+
+    expect(state.syncConnectorTools).not.toHaveBeenCalled();
+    expect(state.updateConnector).toHaveBeenCalledTimes(1);
+    expect(state.updateConnector).toHaveBeenCalledWith(
+      'connector-1',
+      expect.objectContaining({
+        mcpConnectionType: 'cloud',
+        mcpServerUrl: null,
+        metadata: { cloudEndPoint: 'https://cloud.example', marketplaceInstalled: true },
+      }),
+    );
+  });
+
   it('puts a legacy tool projection back off the endpoint a failed reinstall wrote', async () => {
     state.connectors = [
       { id: 'connector-1', identifier: 'market-mcp', metadata: {}, sourceType: 'marketplace' },
