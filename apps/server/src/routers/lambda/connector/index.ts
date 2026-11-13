@@ -2,7 +2,11 @@ import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
-import { CONNECTOR_VISIBILITIES, upsertPluginMode } from '@lobechat/types';
+import {
+  CONNECTOR_VISIBILITIES,
+  type ConnectorOidcConfig,
+  upsertPluginMode,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
@@ -18,7 +22,6 @@ import {
 } from '@/database/models/connectorEval';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -609,7 +612,7 @@ const connectorManageRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
       }
 
-      const existing: OIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
+      const existing: ConnectorOidcConfig = connector.oidcConfig ?? { scheme: 'dcr' };
       const redirectUri = getConnectorRedirectUri();
 
       // 1. Discover the authorization server backing the MCP resource.
@@ -646,7 +649,7 @@ const connectorManageRouter = router({
         });
 
       // 3. Persist the resolved config so the callback + refresh can reuse it.
-      const resolvedOidc: OIDCConfig = {
+      const resolvedOidc: ConnectorOidcConfig = {
         ...existing,
         authorizationEndpoint: metadata.authorization_endpoint,
         clientId,

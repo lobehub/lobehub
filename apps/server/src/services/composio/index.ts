@@ -1,7 +1,7 @@
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { CustomPluginParams } from '@lobechat/types';
+import type { CustomPluginParams, ResolvedConnectorRef } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -11,7 +11,6 @@ import {
 } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import type { UserConnectorItem, UserConnectorToolItem } from '@/database/schemas';
 import {
   getComposioClient,
   isComposioClientAvailable,
@@ -91,7 +90,7 @@ export class ComposioService {
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
     const { identifier, toolSlug, args, agentId, topicId } = params;
     let resolvedConnectedAccountId: string | undefined;
-    let resolvedConnector: Pick<UserConnectorItem, 'id' | 'userId' | 'workspaceId'> | undefined;
+    let resolvedConnector: ResolvedConnectorRef | undefined;
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
@@ -245,7 +244,7 @@ export class ComposioService {
   ): Promise<
     | {
         connectedAccountId: string;
-        connector?: Pick<UserConnectorItem, 'id' | 'userId' | 'workspaceId'>;
+        connector?: ResolvedConnectorRef;
         ownerUserId: string;
       }
     | undefined
@@ -350,7 +349,7 @@ export class ComposioService {
           const tools = await this.connectorToolModel.queryAllByConnectorIds(
             composioConnectors.map((c) => c.id),
           );
-          const toolsByConnector = new Map<string, UserConnectorToolItem[]>();
+          const toolsByConnector = new Map<string, typeof tools>();
           for (const tool of tools) {
             const list = toolsByConnector.get(tool.userConnectorId) ?? [];
             list.push(tool);
