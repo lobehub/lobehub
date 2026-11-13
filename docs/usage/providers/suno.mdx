@@ -27,10 +27,10 @@ tags:
 
   ### Step 2: Configure Suno in LobeHub
 
-  - Open **Settings → AI Providers** and select **Suno**.
+  - Open **Settings → Provider** and select **Suno**.
   - Paste the key into **API Key**.
-  - For sunoapi.org, enter `https://api.sunoapi.org` in **API proxy URL**. Leave it empty for kie.ai (`https://api.kie.ai`).
-  - Click **Check**; a valid key shows **Check Passed**. LobeHub reads the gateway's credit balance, so the check generates nothing and costs nothing. A wrong key shows the gateway's own error, for example `Unauthorized – Authentication failed`.
+  - For sunoapi.org, enter `https://api.sunoapi.org` in **API Proxy URL**. Leave it empty for kie.ai (`https://api.kie.ai`).
+  - Click **Check**; a valid key shows **Check Passed**. LobeHub reads the gateway's credit balance, so the check generates nothing and costs nothing. A wrong key shows `Suno API Key is incorrect or empty…`; expand **Show Details** to see the gateway's own message, for example `Unauthorized – Authentication failed`.
   - Turn on the switch next to the provider name.
 
   ### Step 3: Choose models
@@ -92,7 +92,7 @@ curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
     }}}'
 ```
 
-`params` accepts `prompt`, `style`, `lyrics`, `title`, `negativeStyle`, `instrumental`, `referenceAudioUrl` and `duration`. Unknown keys are rejected. The response contains the batch and one entry per song. Each song has a `generation.id` and an `asyncTaskId`:
+`params` accepts `prompt`, `style`, `lyrics`, `title`, `negativeStyle`, `instrumental`, `referenceAudioUrl` and `duration`. Unknown keys are rejected. The response contains the batch and one entry per song in `data.generations`. Each entry has an `id` (the generation id) and an `asyncTaskId`:
 
 ```json
 { "result": { "data": { "json": {
@@ -107,7 +107,7 @@ curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
 } } } }
 ```
 
-**3. Poll until each song finishes.** The server already polls the gateway every 5 seconds; you only read the task status. Call this for each song until `status` is `success` or `error`:
+**3. Poll until each song finishes.** The server already polls the gateway every 5 seconds; you only read the task status. Call this for each entry in `data.generations` until `status` is `success` or `error`:
 
 ```bash
 curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
@@ -115,7 +115,7 @@ curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
   --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId-1>","generationId":"<generationId-1>"}}'
 ```
 
-`status` moves through `pending` → `processing` → `success`. On `success`, `generation.asset.url` is the stored audio file, and `generation.asset` also has the duration, title, cover, and tags. On `error`, `error.body.detail` has the gateway's message.
+`status` moves through `pending` → `processing` → `success`; a request the provider rejects goes from `pending` straight to `error`. On `success`, `generation.asset.url` is the stored audio file, and `generation.asset` also has the duration, title, cover, and tags. On `error`, `error.body.detail` has the provider's message, for example `Failed to submit music task: …`.
 
 ### What LobeHub sends to the gateway
 
@@ -153,7 +153,7 @@ curl -s "https://api.kie.ai/api/v1/generate/record-info?taskId=<taskId>" \
 
 **"Suno custom mode … needs lyrics, a style, or a negative style"**: you set **Title** or **Exclude Styles**; also fill **Style** or **Lyrics**.
 
-**Check fails with `Unauthorized`**: the key is wrong or belongs to the other gateway. Make sure **API proxy URL** matches the gateway that issued the key.
+**Check fails with `Unauthorized`**: the key is wrong or belongs to the other gateway. Make sure **API Proxy URL** matches the gateway that issued the key.
 
 **Insufficient credits**: top up on the gateway.
 

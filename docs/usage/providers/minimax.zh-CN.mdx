@@ -62,10 +62,10 @@ tags:
 MiniMax Music 可以根据歌词和风格提示词生成带人声的歌曲，也可以翻唱参考音频。它与对话使用同一个 MiniMax 密钥和 API 主机，无需额外配置。
 
 <Callout type={'warning'}>
-  MiniMax 已不再向新账号开放音乐 API，只有已开通付费音乐 API 的账号才能生成音乐。其他密钥可以通过服务商 **检查**（检查使用对话模型），但每次音乐请求都会失败，并返回 `This Music API is no longer available to new users`（MiniMax 状态码 `2153`）。
+  MiniMax 已不再向新账号开放音乐 API，只有已开通付费音乐 API 的账号才能生成音乐。其他密钥可以通过服务商 **检查**（检查使用对话模型），但每首歌都会失败，并显示 `MiniMax music API error (410): This Music API is no longer available to new users…`（直接调用 API 时状态码为 `2153`）。
 </Callout>
 
-**模型列表** 的 **音乐** 标签页列出音乐模型：
+**模型列表** 的 **音乐** 标签页列出音乐模型。它们默认关闭，请开启账号可用的模型：
 
 | 模型            | 用途                                    |
 | ------------- | ------------------------------------- |

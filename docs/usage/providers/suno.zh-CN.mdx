@@ -28,7 +28,7 @@ tags:
   - 打开 **设置 → AI 服务商**，选择 **Suno**。
   - 将密钥粘贴到 **API Key**。
   - 使用 sunoapi.org 时，在 **API 代理地址** 填写 `https://api.sunoapi.org`；使用 kie.ai 时留空（默认 `https://api.kie.ai`）。
-  - 点击 **检查**，密钥有效时显示 **检查通过**。LobeHub 会读取网关的余额，不会生成音乐，也不产生费用。密钥错误时会显示网关返回的原始错误，例如 `Unauthorized – Authentication failed`。
+  - 点击 **检查**，密钥有效时显示 **检查通过**。LobeHub 会读取网关的余额，不会生成音乐，也不产生费用。密钥错误时显示 `Suno API密钥不正确或为空…`；展开下方的错误详情可查看网关返回的原始错误，例如 `Unauthorized – Authentication failed`。
   - 打开服务商名称旁的开关。
 
   ### 步骤三：选择模型
@@ -90,7 +90,7 @@ curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
     }}}'
 ```
 
-`params` 支持 `prompt`、`style`、`lyrics`、`title`、`negativeStyle`、`instrumental`、`referenceAudioUrl` 和 `duration`，未知字段会被拒绝。响应包含批次信息，以及每首歌各一条记录，每条记录带有 `generation.id` 和 `asyncTaskId`：
+`params` 支持 `prompt`、`style`、`lyrics`、`title`、`negativeStyle`、`instrumental`、`referenceAudioUrl` 和 `duration`，未知字段会被拒绝。响应包含批次信息，`data.generations` 中每首歌一条记录，每条记录带有 `id`（生成 ID）和 `asyncTaskId`：
 
 ```json
 { "result": { "data": { "json": {
@@ -105,7 +105,7 @@ curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
 } } } }
 ```
 
-**3. 轮询直到每首歌完成。** 服务端已经每 5 秒轮询一次网关，你只需要读取任务状态。对每首歌调用以下接口，直到 `status` 为 `success` 或 `error`：
+**3. 轮询直到每首歌完成。** 服务端已经每 5 秒轮询一次网关，你只需要读取任务状态。对 `data.generations` 中的每条记录调用以下接口，直到 `status` 为 `success` 或 `error`：
 
 ```bash
 curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
@@ -113,7 +113,7 @@ curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
   --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId-1>","generationId":"<generationId-1>"}}'
 ```
 
-`status` 依次为 `pending` → `processing` → `success`。成功时 `generation.asset.url` 是已存储的音频文件，`generation.asset` 还包含时长、标题、封面和标签。失败时 `error.body.detail` 是网关返回的信息。
+`status` 依次为 `pending` → `processing` → `success`；被服务商拒绝的请求会从 `pending` 直接变为 `error`。成功时 `generation.asset.url` 是已存储的音频文件，`generation.asset` 还包含时长、标题、封面和标签。失败时 `error.body.detail` 是服务商返回的信息，例如 `Failed to submit music task: …`。
 
 ### LobeHub 发给网关的请求
 
