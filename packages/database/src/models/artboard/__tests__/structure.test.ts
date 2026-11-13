@@ -142,6 +142,19 @@ describe('ArtboardStructureModel', () => {
     expect(a.id).toMatch(uuid);
   });
 
+  it('reads rows written in one transaction back in the order they were written', async () => {
+    const { artboard, page } = await seedArtboard();
+
+    await serverDB.transaction(async (tx) => {
+      const model = structure.withTransaction(tx);
+      for (const title of ['one', 'two', 'three', 'four', 'five', 'six'])
+        await model.createBoard(artboard.id, board(page.id, null, title));
+    });
+
+    const { boards } = (await structure.getStructure(artboard.id))!;
+    expect(boards.map((b) => b.title)).toEqual(['one', 'two', 'three', 'four', 'five', 'six']);
+  });
+
   it('updates a board in place', async () => {
     const { a } = await seedOptions();
 

@@ -40,6 +40,10 @@ const fail = (code: ArtboardStructureErrorCode, message: string): never => {
   throw new ArtboardStructureError(code, message);
 };
 
+// now() is frozen for a whole transaction, so a batch of rows would tie on created_at and read
+// back in random order.
+const writtenAt = sql`clock_timestamp()`;
+
 type Scoped = 'artboardId' | 'createdAt' | 'id' | 'updatedAt' | 'userId' | 'workspaceId';
 
 export type CreatePageParams = Omit<NewArtboardPageRow, Scoped>;
@@ -173,7 +177,7 @@ export class ArtboardStructureModel {
     const owner = await this.ownerOf(artboardId);
     const [row] = await this.db
       .insert(artboardPages)
-      .values({ ...params, ...owner, artboardId })
+      .values({ ...params, ...owner, artboardId, createdAt: writtenAt })
       .returning();
     return row;
   };
@@ -218,7 +222,7 @@ export class ArtboardStructureModel {
     await this.assertWithin(artboardPages, artboardId, [params.pageId]);
     const [row] = await this.db
       .insert(artboardRounds)
-      .values({ ...params, ...owner, artboardId })
+      .values({ ...params, ...owner, artboardId, createdAt: writtenAt })
       .returning();
     return row;
   };
@@ -253,7 +257,7 @@ export class ArtboardStructureModel {
     await this.assertWithin(artboardPages, artboardId, [params.pageId]);
     const [row] = await this.db
       .insert(artboardGroups)
-      .values({ ...params, ...owner, artboardId })
+      .values({ ...params, ...owner, artboardId, createdAt: writtenAt })
       .returning();
     return row;
   };
@@ -291,7 +295,7 @@ export class ArtboardStructureModel {
     await this.assertBoardPlacement(artboardId, params.pageId, params);
     const [row] = await this.db
       .insert(artboardBoards)
-      .values({ ...params, ...owner, artboardId })
+      .values({ ...params, ...owner, artboardId, createdAt: writtenAt })
       .returning();
     return row;
   };
@@ -332,7 +336,7 @@ export class ArtboardStructureModel {
     ]);
     const [row] = await this.db
       .insert(artboardEdges)
-      .values({ ...params, ...owner, artboardId })
+      .values({ ...params, ...owner, artboardId, createdAt: writtenAt })
       .returning();
     return row;
   };
