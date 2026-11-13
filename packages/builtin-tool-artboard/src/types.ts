@@ -1,11 +1,15 @@
-import type { ArtboardContent, ArtboardPhase } from '@lobechat/types';
+import type { ArtboardCommentThreadView, ArtboardContent, ArtboardPhase } from '@lobechat/types';
 
 export const ArtboardIdentifier = 'lobe-artboard';
 
 export const ArtboardApiName = {
+  askArtboardQuestion: 'askArtboardQuestion',
   createArtboard: 'createArtboard',
+  listArtboardComments: 'listArtboardComments',
   listArtboards: 'listArtboards',
   readArtboard: 'readArtboard',
+  replyArtboardComment: 'replyArtboardComment',
+  resolveArtboardComment: 'resolveArtboardComment',
   updateArtboard: 'updateArtboard',
 } as const;
 
@@ -28,6 +32,27 @@ export interface ReadArtboardParams {
   id: string;
 }
 
+export interface ListArtboardCommentsParams {
+  id: string;
+}
+
+export interface ReplyArtboardCommentParams {
+  commentId: string;
+  content: string;
+}
+
+export interface ResolveArtboardCommentParams {
+  commentId: string;
+}
+
+export interface AskArtboardQuestionParams {
+  boardId?: string;
+  content: string;
+  groupId?: string;
+  id: string;
+  pageId?: string;
+}
+
 export interface ArtboardToolSnapshot {
   content: ArtboardContent;
   description: string | null;
@@ -35,7 +60,7 @@ export interface ArtboardToolSnapshot {
   phase: ArtboardPhase;
   projectId: string | null;
   revision: number;
-  taskId: string;
+  taskId: string | null;
   title: string;
 }
 
@@ -59,7 +84,7 @@ export type ArtboardToolReadOutcome =
       artboard: ArtboardToolSnapshot;
       canvases: Record<string, { latestVersion: number; title: string } | null>;
       ok: true;
-      staleFrameIds: string[];
+      staleBoardIds: string[];
     }
   | ArtboardToolFailure;
 
@@ -70,17 +95,26 @@ export type ArtboardToolListOutcome =
     }
   | ArtboardToolFailure;
 
+export type ArtboardToolCommentsOutcome =
+  { ok: true; threads: ArtboardCommentThreadView[] } | ArtboardToolFailure;
+
+export type ArtboardToolCommentOutcome = { commentId: string; ok: true } | ArtboardToolFailure;
+
 export interface ArtboardToolService {
+  askQuestion: (params: AskArtboardQuestionParams) => Promise<ArtboardToolCommentOutcome>;
   create: (params: CreateArtboardParams) => Promise<ArtboardToolWriteOutcome>;
   list: () => Promise<ArtboardToolListOutcome>;
+  listComments: (params: ListArtboardCommentsParams) => Promise<ArtboardToolCommentsOutcome>;
   read: (params: ReadArtboardParams) => Promise<ArtboardToolReadOutcome>;
+  replyComment: (params: ReplyArtboardCommentParams) => Promise<ArtboardToolCommentOutcome>;
+  resolveComment: (params: ResolveArtboardCommentParams) => Promise<ArtboardToolCommentOutcome>;
   update: (params: UpdateArtboardParams) => Promise<ArtboardToolWriteOutcome>;
 }
 
 export interface ArtboardToolState {
   artboardId: string;
+  boardCount: number;
   changedIds: string[];
-  frameCount: number;
   groupCount: number;
   phase: ArtboardPhase;
   revision: number;

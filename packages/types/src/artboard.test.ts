@@ -1,142 +1,137 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  artboardContentSchema,
+  type ArtboardBoardView,
+  type ArtboardContent,
   artboardOpSchema,
-  artboardUserOpSchema,
   formatArtboardResultLine,
   parseArtboardResultLine,
 } from './artboard';
+import { checkFinalizeReadiness } from './artboardReadiness';
 
-const content = {
-  arrows: [{ from: 'f1', id: 'a1', label: '点「接入资料」', to: 'f2' }],
-  frames: [
-    {
-      check: { expected: '看到接入入口' },
-      groupId: 'g1',
-      id: 'f1',
-      source: { canvasId: 'cvs_1', kind: 'canvas', version: 3 },
-      title: '空项目',
-      x: 0,
-      y: 0,
-    },
-    {
-      groupId: 'g1',
-      id: 'f2',
-      source: { fileId: 'file_1', kind: 'image' },
-      title: '接入资料',
-      x: 720,
-      y: 0,
-    },
-  ],
-  groups: [{ desc: '', id: 'g1', kind: 'journey', title: '用户旅程' }],
-  notes: [
-    {
-      id: 'n1',
-      kind: 'sticky',
-      question: { status: 'open', suggestion: '可以跳过' },
-      text: '接入资料这一步能不能跳过？',
-      x: 0,
-      y: 480,
-    },
-  ],
-};
+const rect = { h: 400, w: 640, x: 0, y: 0 };
 
-describe('artboardContentSchema', () => {
-  it('accepts a complete board document', () => {
-    expect(artboardContentSchema.parse(content)).toEqual(content);
-  });
+const board = (id: string, patch: Partial<ArtboardBoardView> = {}): ArtboardBoardView => ({
+  expected: `sees ${id}`,
+  flowNodeId: null,
+  groupId: 'abg_journey',
+  id,
+  pageId: 'abp_1',
+  rect,
+  roundId: null,
+  source: { canvasId: 'cvs_1', kind: 'canvas', version: 1 },
+  title: id,
+  type: 'html',
+  ...patch,
+});
 
-  it('rejects a question on a note that is not a sticky', () => {
-    const titled = {
-      ...content,
-      notes: [{ ...content.notes[0], kind: 'title' }],
-    };
-    expect(artboardContentSchema.safeParse(titled).success).toBe(false);
-  });
+const edge = (from: string, to: string) => ({
+  condition: null,
+  flowEdgeId: null,
+  from,
+  id: `${from}-${to}`,
+  isDefault: false,
+  label: 'next',
+  to,
+});
 
-  it('rejects an unknown frame source kind', () => {
-    const bad = {
-      ...content,
-      frames: [{ ...content.frames[0], source: { kind: 'video', url: 'x' } }],
-    };
-    expect(artboardContentSchema.safeParse(bad).success).toBe(false);
-  });
+const content = (patch: Partial<ArtboardContent> = {}): ArtboardContent => ({
+  boards: [board('b1'), board('b2')],
+  edges: [edge('b1', 'b2')],
+  groups: [{ desc: '', id: 'abg_journey', kind: 'journey', pageId: 'abp_1', rect, title: 'Flow' }],
+  pages: [{ id: 'abp_1', name: 'Page 1', sortOrder: 0 }],
+  questions: [],
+  rounds: [],
+  ...patch,
 });
 
 describe('artboardOpSchema', () => {
-  const ops = [
-    { group: { kind: 'options', title: '方案' }, type: 'addGroup' },
-    { id: 'g1', patch: { title: '旅程' }, type: 'updateGroup' },
-    { id: 'g1', type: 'removeGroup' },
-    {
-      frame: {
-        groupId: 'g1',
-        source: { canvasId: 'cvs_1', kind: 'canvas' },
-        title: 'A',
-        x: 0,
-        y: 0,
-      },
-      type: 'addFrame',
-    },
-    {
-      frame: { groupId: 'g1', source: { fileRef: 'img_1', kind: 'image' }, title: 'B', x: 0, y: 0 },
-      type: 'addFrame',
-    },
-    {
-      id: 'f1',
-      patch: { source: { canvasId: 'cvs_1', kind: 'canvas', version: 4 } },
-      type: 'updateFrame',
-    },
-    { id: 'f1', type: 'removeFrame' },
-    { arrow: { from: 'f1', label: '下一步', to: 'f2' }, type: 'addArrow' },
-    { id: 'a1', type: 'removeArrow' },
-    {
-      note: { kind: 'sticky', question: { suggestion: '跳过' }, text: '?', x: 0, y: 0 },
-      type: 'addNote',
-    },
-    { id: 'n1', patch: { text: 'x' }, type: 'updateNote' },
-    { id: 'n1', type: 'removeNote' },
-    { expected: '看到入口', frameId: 'f1', type: 'setCheck' },
-    { decision: '可以跳过', noteId: 'n1', type: 'decideQuestion' },
-  ];
+  it('accepts a board with a canvas source and no version', () => {
+    const op = {
+      board: { groupId: 'g', source: { canvasId: 'cvs_1', kind: 'canvas' }, title: 'A', x: 0, y: 0 },
+      ref: 'a',
+      type: 'addBoard',
+    };
+    expect(artboardOpSchema.parse(op)).toEqual(op);
+  });
 
-  it.each(ops)('accepts $type', (op) => {
+  it('accepts a decision board without a source', () => {
+    const op = { board: { title: 'Paid?', type: 'decision', x: 0, y: 0 }, type: 'addBoard' };
     expect(artboardOpSchema.safeParse(op).success).toBe(true);
   });
 
-  it('rejects an unknown op', () => {
-    expect(artboardOpSchema.safeParse({ id: 'f1', type: 'paint' }).success).toBe(false);
-  });
-});
-
-describe('artboardUserOpSchema', () => {
-  it.each([
-    { id: 'f1', type: 'moveItem', x: 10, y: 20 },
-    { decision: '可以跳过', noteId: 'n1', type: 'decideQuestion' },
-    { id: 'n1', text: '新文字', type: 'updateNoteText' },
-  ])('accepts $type', (op) => {
-    expect(artboardUserOpSchema.safeParse(op).success).toBe(true);
+  it('rejects the frame and note ops of the JSON board', () => {
+    for (const type of ['addFrame', 'addArrow', 'addNote', 'decideQuestion'])
+      expect(artboardOpSchema.safeParse({ id: 'x', type }).success).toBe(false);
   });
 
-  it('rejects content ops from a user', () => {
-    expect(artboardUserOpSchema.safeParse({ id: 'f1', type: 'removeFrame' }).success).toBe(false);
+  it('rejects moving a board to another page through updateBoard', () => {
+    const parsed = artboardOpSchema.parse({
+      id: 'b1',
+      patch: { pageId: 'abp_2', title: 'A' },
+      type: 'updateBoard',
+    });
+    expect(parsed).toEqual({ id: 'b1', patch: { title: 'A' }, type: 'updateBoard' });
   });
 });
 
 describe('artboard result line', () => {
-  it('round-trips the board id and revision through the CLI line', () => {
-    const line = formatArtboardResultLine({
-      frameCount: 10,
-      groupCount: 3,
-      id: 'art_8f2k',
-      revision: 2,
-    });
-    expect(line).toBe('artboard art_8f2k · revision 2 · 3 groups · 10 frames');
-    expect(parseArtboardResultLine(`some log\n${line}\n`)).toEqual({
-      artboardId: 'art_8f2k',
-      revision: 2,
-    });
-    expect(parseArtboardResultLine('artboard list is empty')).toBeUndefined();
+  it('round-trips the id and revision', () => {
+    const line = formatArtboardResultLine({ boardCount: 3, groupCount: 2, id: 'art_1', revision: 7 });
+    expect(parseArtboardResultLine(`ok\n${line}\n`)).toEqual({ artboardId: 'art_1', revision: 7 });
+  });
+});
+
+describe('checkFinalizeReadiness', () => {
+  it('passes a connected journey whose boards all have a check', () => {
+    expect(checkFinalizeReadiness(content())).toEqual([]);
+  });
+
+  it('reports a journey board without a check, but not a decision board', () => {
+    const issues = checkFinalizeReadiness(
+      content({
+        boards: [
+          board('b1'),
+          board('d1', { expected: null, source: null, type: 'decision' }),
+          board('b2', { expected: ' ' }),
+        ],
+        edges: [edge('b1', 'd1'), edge('d1', 'b2')],
+      }),
+    );
+    expect(issues).toEqual([{ boardId: 'b2', code: 'missing_check' }]);
+  });
+
+  it('reports a board no edge reaches', () => {
+    const issues = checkFinalizeReadiness(
+      content({ boards: [board('b1'), board('b2'), board('b3')], edges: [edge('b2', 'b3')] }),
+    );
+    expect(issues).toEqual([{ code: 'entry_count', entryBoardIds: ['b1', 'b2'] }]);
+  });
+
+  it('blocks on a round that is still open and on an unresolved agent question', () => {
+    const issues = checkFinalizeReadiness(
+      content({
+        questions: [{ boardId: null, content: 'Skip?', groupId: null, id: 'c1', pageId: 'abp_1' }],
+        rounds: [
+          {
+            batchId: null,
+            chosenBoardId: null,
+            id: 'r1',
+            pageId: 'abp_1',
+            recommendedBoardId: null,
+            status: 'open',
+            title: 'Layout',
+          },
+        ],
+      }),
+    );
+    expect(issues).toEqual([
+      { code: 'open_round', roundId: 'r1' },
+      { code: 'open_question', commentId: 'c1' },
+    ]);
+  });
+
+  it('reports a board with no journey group before anything else', () => {
+    expect(checkFinalizeReadiness(content({ groups: [] }))[0]).toEqual({ code: 'no_journey' });
   });
 });
