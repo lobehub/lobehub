@@ -25,6 +25,7 @@ import { inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { findComposioAccountConflict } from './_helpers/composioAccountBinding';
 import { removeComposioProjection } from './_helpers/composioProjection';
 import { assertConnectorMaintainable } from './_helpers/connectorManagePolicy';
 
@@ -83,12 +84,18 @@ type ComposioWriteTarget = Awaited<ReturnType<ConnectorModel['findManageableById
  * shared one; checking the shared row instead would let `admins_only` block a
  * member from reconnecting a connector that is theirs alone.
  *
+ * The account itself is then bound to that row by id, not by the identifier
+ * the request names ({@link findComposioAccountConflict}): the remote delete
+ * acts on the account id alone, so a write naming a teammate's private
+ * account, or an account another connector runs, is refused.
+ *
  * Checked BEFORE any external side effect (Composio account link/delete). The
  * policy is a no-op in personal mode.
  */
 async function resolveComposioWriteTarget(
   ctx: {
     connectorModel: ConnectorModel;
+    pluginModel: PluginModel;
     serverDB: LobeChatDatabase;
     userId: string;
     workspaceId?: string | null;
@@ -101,22 +108,18 @@ async function resolveComposioWriteTarget(
     agentId,
     connectedAccountId,
   );
-  if (!ctx.workspaceId) return target;
 
-  // The account sits on a teammate's private row the caller cannot see (its id
-  // is still readable from the workspace-wide plugin projection). Acting on it
-  // through a visible row would delete their remote account or copy it onto a
-  // shared row.
-  if (
-    connectedAccountId &&
-    target?.metadata?.composio?.connectedAccountId !== connectedAccountId &&
-    (await ctx.connectorModel.isComposioAccountPrivateToTeammate(identifier, connectedAccountId))
-  ) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'This Composio connection belongs to another member’s private connector',
-    });
+  if (connectedAccountId) {
+    // Only a base connection has a legacy plugin projection to act on.
+    const conflict = await findComposioAccountConflict(
+      ctx,
+      target,
+      connectedAccountId,
+      agentId ? undefined : () => ctx.pluginModel.queryComposioMirrors([identifier]),
+    );
+    if (conflict) throw conflict;
   }
+  if (!ctx.workspaceId) return target;
 
   await assertConnectorMaintainable(ctx, {
     agentId,

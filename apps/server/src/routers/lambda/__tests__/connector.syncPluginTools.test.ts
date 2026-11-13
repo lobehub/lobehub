@@ -454,12 +454,21 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     connectorModelMock = {
       delete: vi.fn().mockResolvedValue(undefined),
       findById: vi.fn(),
+      // The Composio rows below run their own account and no other row does.
+      queryComposioAccountHolders: vi
+        .fn()
+        .mockResolvedValue([
+          { agentId: null, id: 'c-composio', userId: 'user_test', visibility: 'public' },
+        ]),
     };
     agentModelMock = {
       getAgentConfigById: vi.fn(),
       update: vi.fn().mockResolvedValue(undefined),
     };
-    pluginModelMock = { delete: vi.fn().mockResolvedValue(undefined) };
+    pluginModelMock = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      deleteComposioMirrors: vi.fn().mockResolvedValue(undefined),
+    };
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
     vi.mocked(ConnectorModel).mockImplementation(function () {
       return connectorModelMock;
@@ -558,6 +567,39 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
     warn.mockRestore();
+  });
+
+  it('keeps a teammate’s private account when a row of the caller’s merely names it', async () => {
+    // A connector's metadata is client-written, so a member's own row can name
+    // the account of a teammate's private connector. Deleting the row must not
+    // delete that remote account or the projection rows mirroring it.
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: null,
+      id: 'c-forged',
+      identifier: 'gmail',
+      metadata: { composio: { connectedAccountId: 'ca-mate' } },
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    connectorModelMock.queryComposioAccountHolders.mockResolvedValueOnce([
+      { agentId: null, id: 'c-forged', userId: 'user_test', visibility: 'private' },
+      { agentId: null, id: 'c-mate', userId: 'another-user', visibility: 'private' },
+    ]);
+
+    await connectorRouter
+      .createCaller({
+        serverDB: {},
+        userId: 'user_test',
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      } as any)
+      .delete({ id: DELETE_ID });
+
+    expect(connectorModelMock.queryComposioAccountHolders).toHaveBeenCalledWith('ca-mate');
+    expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
+    expect(pluginModelMock.delete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioMirrors).not.toHaveBeenCalled();
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
   it('does not call Composio or delete a plugin for an ordinary connector', async () => {

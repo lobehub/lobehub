@@ -70,7 +70,12 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       // The shared row only (the lookup a create of a new row uses).
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       delete: vi.fn().mockResolvedValue(undefined),
-      isComposioAccountPrivateToTeammate: vi.fn().mockResolvedValue(false),
+      // By default the account a write names is held by the row the write
+      // resolves (the implementation is read without recording a lookup call).
+      queryComposioAccountHolders: vi.fn(async () => {
+        const row = await connectorModelMock.findManageableByIdentifier.getMockImplementation()?.();
+        return row ? [row] : [];
+      }),
       update: vi.fn().mockResolvedValue(undefined),
     };
     connectorToolModelMock = { deleteToolsNotIn: vi.fn(), upsertMany: vi.fn() };
@@ -79,6 +84,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       delete: vi.fn(),
       deleteComposioMirrors: vi.fn(),
       findById: vi.fn(),
+      queryComposioMirrors: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
     };
     agentModelMock = { existsOwnedById: vi.fn().mockResolvedValue(true) };
@@ -147,6 +153,15 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
   });
 
   it('updateComposioPlugin also scopes the model + agent check to the workspace', async () => {
+    // createConnection already wrote the agent's row with the pending account.
+    connectorModelMock.findManageableByIdentifier.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'conn-agent',
+      metadata: { composio: { connectedAccountId: 'acc-1' } },
+      userId: 'user_test',
+      visibility: 'public',
+    });
+
     await callerFor('ws-1').updateComposioPlugin({
       agentId: 'agent-1',
       appSlug: 'gmail',
@@ -228,43 +243,175 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     expect(connectorModelMock.update).not.toHaveBeenCalled();
   });
 
-  it('refuses to act on an account held by a teammate’s private connector', async () => {
-    // The plugin projection is workspace-wide, so a member can still read a
-    // privatized connection's account id. Removing it through the shared row
-    // they can see would delete the teammate's remote account; refreshing it
-    // would copy that account onto a shared row.
-    connectorModelMock.findManageableByIdentifier.mockResolvedValue({
+  describe('binds the account a write names to the connector it runs on', () => {
+    // The plugin projection is workspace-wide, so every member reads every
+    // account id in it, privatized connections included, and the Composio
+    // client deletes an account by its id alone. A write is judged on the rows
+    // that actually hold the account, not on the identifier it names.
+    const sharedRow = {
       agentId: null,
       id: 'conn-shared',
+      identifier: 'gmail',
       metadata: { composio: { connectedAccountId: 'acc-shared' } },
       userId: 'another-user',
-      visibility: 'public',
-    });
-    connectorModelMock.isComposioAccountPrivateToTeammate.mockResolvedValue(true);
-
-    await expect(
-      memberCaller().deleteConnection({ connectedAccountId: 'acc-private', identifier: 'gmail' }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    await expect(
+      visibility: 'public' as const,
+    };
+    const matePrivateRow = {
+      agentId: null,
+      id: 'conn-mate',
+      identifier: 'gmail',
+      userId: 'another-user',
+      visibility: 'private' as const,
+    };
+    const refresh = (connectedAccountId: string, identifier = 'gmail') =>
       memberCaller().updateComposioPlugin({
-        appSlug: 'gmail',
+        appSlug: identifier,
         authConfigId: 'auth-cfg-1',
-        connectedAccountId: 'acc-private',
-        identifier: 'gmail',
-        label: 'Gmail',
+        connectedAccountId,
+        identifier,
+        label: identifier,
         status: 'ACTIVE',
         tools: [],
-      }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      });
 
-    expect(connectorModelMock.isComposioAccountPrivateToTeammate).toHaveBeenCalledWith(
-      'gmail',
-      'acc-private',
-    );
-    expect(composioClientMocks.deleteAccount).not.toHaveBeenCalled();
-    expect(connectorModelMock.delete).not.toHaveBeenCalled();
-    expect(connectorModelMock.update).not.toHaveBeenCalled();
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    const expectNothingWritten = () => {
+      expect(composioClientMocks.deleteAccount).not.toHaveBeenCalled();
+      expect(connectorModelMock.delete).not.toHaveBeenCalled();
+      expect(connectorModelMock.update).not.toHaveBeenCalled();
+      expect(connectorModelMock.create).not.toHaveBeenCalled();
+      expect(pluginModelMock.delete).not.toHaveBeenCalled();
+    };
+
+    it('refuses an account held by a teammate’s private connector', async () => {
+      // Removing it through the shared row the member can see would delete the
+      // teammate's remote account; refreshing it would copy it onto that row.
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(sharedRow);
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([matePrivateRow]);
+
+      await expect(
+        memberCaller().deleteConnection({ connectedAccountId: 'acc-private', identifier: 'gmail' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(refresh('acc-private')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expect(connectorModelMock.queryComposioAccountHolders).toHaveBeenCalledWith('acc-private');
+      expectNothingWritten();
+    });
+
+    it('refuses it under any identifier the request names', async () => {
+      // ROOT CAUSE:
+      //
+      // The private-account check also matched on the request's identifier, so
+      // naming another app missed the teammate's `gmail` row; the policy was
+      // judged on an unrelated (or no) row and the account was deleted.
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(null);
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([matePrivateRow]);
+
+      await expect(
+        memberCaller().deleteConnection({
+          connectedAccountId: 'acc-private',
+          identifier: 'notion',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(refresh('acc-private', 'notion')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expectNothingWritten();
+    });
+
+    it('refuses it when a row of the caller’s names the account too', async () => {
+      // A connector's metadata is client-written: a member can add a private
+      // row naming the teammate's account and remove "their own" connection.
+      const forged = {
+        ...matePrivateRow,
+        id: 'conn-forged',
+        metadata: { composio: { connectedAccountId: 'acc-private' } },
+        userId: 'user_test',
+      };
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(forged);
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([forged, matePrivateRow]);
+
+      await expect(
+        memberCaller().deleteConnection({ connectedAccountId: 'acc-private', identifier: 'gmail' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expectNothingWritten();
+    });
+
+    it('refuses an account a connector the member may not maintain runs', async () => {
+      // A private row is exempt from the shared-connector policy; naming the
+      // shared account in one must not reach a shared row that admins locked.
+      workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+      const forged = {
+        ...matePrivateRow,
+        id: 'conn-forged',
+        metadata: { composio: { connectedAccountId: 'acc-shared' } },
+        userId: 'user_test',
+      };
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(forged);
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([forged, sharedRow]);
+
+      await expect(
+        memberCaller().deleteConnection({ connectedAccountId: 'acc-shared', identifier: 'gmail' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expectNothingWritten();
+    });
+
+    it('refuses an account another connector runs', async () => {
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(sharedRow);
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([
+        { ...sharedRow, id: 'conn-github', identifier: 'github' },
+      ]);
+
+      await expect(
+        memberCaller().deleteConnection({ connectedAccountId: 'acc-github', identifier: 'gmail' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expectNothingWritten();
+    });
+
+    it('acts on a legacy connection only through the app’s own projection', async () => {
+      // No connector row runs a legacy account: it exists as a plugin
+      // projection row of the app, under the shared connector policy.
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(sharedRow);
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([]);
+      pluginModelMock.queryComposioMirrors.mockResolvedValue([
+        { customParams: { composio: { connectedAccountId: 'acc-legacy' } }, identifier: 'gmail' },
+      ]);
+
+      await expect(
+        memberCaller().deleteConnection({ connectedAccountId: 'acc-unknown', identifier: 'gmail' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expectNothingWritten();
+
+      await memberCaller().deleteConnection({
+        connectedAccountId: 'acc-legacy',
+        identifier: 'gmail',
+      });
+
+      expect(pluginModelMock.queryComposioMirrors).toHaveBeenCalledWith(['gmail']);
+      expect(composioClientMocks.deleteAccount).toHaveBeenCalledWith('acc-legacy');
+      expect(connectorModelMock.delete).toHaveBeenCalledWith('conn-shared');
+    });
+
+    it('never treats an agent connection as a legacy one', async () => {
+      // Agent connections have no plugin projection, so a base legacy account
+      // must not be removed through an agent's row.
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([]);
+      pluginModelMock.queryComposioMirrors.mockResolvedValue([
+        { customParams: { composio: { connectedAccountId: 'acc-legacy' } }, identifier: 'gmail' },
+      ]);
+
+      await expect(
+        memberCaller().deleteConnection({
+          agentId: 'agent-1',
+          connectedAccountId: 'acc-legacy',
+          identifier: 'gmail',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(pluginModelMock.queryComposioMirrors).not.toHaveBeenCalled();
+      expectNothingWritten();
+    });
   });
 
   it('removes the shared account’s row, not the caller’s private one', async () => {
@@ -289,7 +436,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       undefined,
       'acc-shared',
     );
-    expect(connectorModelMock.isComposioAccountPrivateToTeammate).not.toHaveBeenCalled();
+    expect(connectorModelMock.queryComposioAccountHolders).toHaveBeenCalledWith('acc-shared');
     expect(composioClientMocks.deleteAccount).toHaveBeenCalledWith('acc-shared');
     expect(connectorModelMock.delete).toHaveBeenCalledWith('conn-shared');
     // The shared connection is the workspace's projection of the app.

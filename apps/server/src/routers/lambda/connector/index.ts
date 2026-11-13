@@ -48,6 +48,7 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
+import { findComposioAccountConflict } from '../_helpers/composioAccountBinding';
 import { removeComposioProjection } from '../_helpers/composioProjection';
 import { toConnectorEditDetail } from '../_helpers/connectorEditDetail';
 import {
@@ -743,7 +744,14 @@ const connectorManageRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const connectedAccountId = target.metadata?.composio?.connectedAccountId;
-      if (connectedAccountId) {
+      // A connector's metadata is client-written, so the account it names may be
+      // one a teammate's private connector (or one the caller may not maintain)
+      // runs. Then the remote account and its projection are not this row's to
+      // remove; the row itself still goes.
+      if (
+        connectedAccountId &&
+        !(await findComposioAccountConflict(ctx, target, connectedAccountId))
+      ) {
         try {
           await getComposioClient().connectedAccounts.delete(connectedAccountId);
         } catch (error) {

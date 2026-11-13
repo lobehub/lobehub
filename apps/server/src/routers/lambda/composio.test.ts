@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   connectorDelete: vi.fn(),
   connectorFindManageableByIdentifier: vi.fn(),
   connectorFindScopedByIdentifier: vi.fn(),
+  connectorQueryComposioAccountHolders: vi.fn(),
   connectorToolDeleteToolsNotIn: vi.fn(),
   connectorToolUpsertMany: vi.fn(),
   connectorUpdate: vi.fn(),
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   pluginCreate: vi.fn(),
   pluginDelete: vi.fn(),
   pluginFindById: vi.fn(),
+  pluginQueryComposioMirrors: vi.fn(),
   pluginUpdate: vi.fn(),
 }));
 
@@ -40,6 +42,7 @@ vi.mock('@/database/models/plugin', () => ({
       create: mocks.pluginCreate,
       delete: mocks.pluginDelete,
       findById: mocks.pluginFindById,
+      queryComposioMirrors: mocks.pluginQueryComposioMirrors,
       update: mocks.pluginUpdate,
     };
   }),
@@ -52,6 +55,7 @@ vi.mock('@/database/models/connector', () => ({
       delete: mocks.connectorDelete,
       findManageableByIdentifier: mocks.connectorFindManageableByIdentifier,
       findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
+      queryComposioAccountHolders: mocks.connectorQueryComposioAccountHolders,
       update: mocks.connectorUpdate,
     };
   }),
@@ -86,6 +90,20 @@ beforeEach(() => {
   mocks.connectorFindManageableByIdentifier.mockResolvedValue(null);
   mocks.connectorCreate.mockResolvedValue({ id: 'conn-new' });
   mocks.pluginFindById.mockResolvedValue(undefined);
+  mocks.pluginQueryComposioMirrors.mockResolvedValue([]);
+  // By default the account a write names is held by the row the write resolves
+  // (the implementation is read without recording a lookup call).
+  mocks.connectorQueryComposioAccountHolders.mockImplementation(async () => {
+    const row = await mocks.connectorFindManageableByIdentifier.getMockImplementation()?.();
+    return row ? [{ agentId: null, userId: 'user-1', visibility: 'public', ...row }] : [];
+  });
+});
+
+/** The plugin projection row of a legacy connection, which no connector row runs. */
+const legacyMirror = (connectedAccountId: string) => ({
+  customParams: { composio: { connectedAccountId } },
+  identifier: 'gmail',
+  userId: 'user-1',
 });
 
 /** @example OAuth callback polling reports whether Gmail can be read. */
@@ -183,7 +201,9 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   };
 
   it('creates the connector projection (ACTIVE) + tools when none exists', async () => {
+    // A legacy connection: only the plugin projection holds the account.
     mocks.connectorFindManageableByIdentifier.mockResolvedValue(null);
+    mocks.pluginQueryComposioMirrors.mockResolvedValue([legacyMirror('ca-1')]);
 
     const res = await caller().updateComposioPlugin(input);
 
@@ -307,6 +327,39 @@ describe('composioRouter delete paths clean up the connector projection', () => 
     );
     expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-shared');
     expect(mocks.connectorDelete).toHaveBeenCalledWith('conn-shared');
+  });
+
+  it('deleteConnection removes a legacy connection the plugin projection holds', async () => {
+    mocks.pluginQueryComposioMirrors.mockResolvedValue([legacyMirror('ca-legacy')]);
+
+    await caller().deleteConnection({ connectedAccountId: 'ca-legacy', identifier: 'gmail' });
+
+    expect(mocks.pluginQueryComposioMirrors).toHaveBeenCalledWith(['gmail']);
+    expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-legacy');
+    expect(mocks.pluginDelete).toHaveBeenCalledWith('gmail');
+  });
+
+  it('deleteConnection refuses an account that is none of the connection’s', async () => {
+    // The Composio client deletes by account id alone: an account neither a
+    // connector row nor the app's plugin projection holds is not the caller's
+    // to delete, nor is one another connector runs.
+    mocks.pluginQueryComposioMirrors.mockResolvedValue([legacyMirror('ca-legacy')]);
+
+    await expect(
+      caller().deleteConnection({ connectedAccountId: 'ca-elsewhere', identifier: 'gmail' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-gmail' });
+    mocks.connectorQueryComposioAccountHolders.mockResolvedValue([
+      { agentId: null, id: 'conn-github', identifier: 'github', userId: 'user-1' },
+    ]);
+    await expect(
+      caller().deleteConnection({ connectedAccountId: 'ca-github', identifier: 'gmail' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
+    expect(mocks.pluginDelete).not.toHaveBeenCalled();
+    expect(mocks.connectorDelete).not.toHaveBeenCalled();
   });
 
   it('does not call connector delete when no projection exists', async () => {

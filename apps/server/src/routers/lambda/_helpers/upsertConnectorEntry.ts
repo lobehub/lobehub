@@ -70,7 +70,7 @@ export async function upsertConnectorEntry(
   const accountIsTeammatePrivate =
     !!accountId &&
     row?.metadata?.composio?.connectedAccountId !== accountId &&
-    (await ctx.connectorModel.isComposioAccountPrivateToTeammate(params.identifier, accountId));
+    (await ctx.connectorModel.isComposioAccountPrivateToTeammate(accountId));
   // The projection is workspace-wide, so it is no source of truth for a
   // private row's account: copying its block (with the linker it attributes
   // the account to) onto a private row whose metadata merely names the same
