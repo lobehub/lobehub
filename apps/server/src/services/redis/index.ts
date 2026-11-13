@@ -5,6 +5,7 @@ import { agentSignal } from './agentSignal';
 import { botReply } from './botReply';
 import { botWake } from './botWake';
 import { deviceSystemInfo } from './deviceSystemInfo';
+import { inboundWebhook } from './inboundWebhook';
 import { linear } from './linear';
 import { pageCollab } from './pageCollab';
 import { skillTools } from './skillTools';
@@ -22,6 +23,7 @@ export const redisService = {
   botReply,
   botWake,
   deviceSystemInfo,
+  inboundWebhook,
   linear,
   pageCollab,
   skillTools,

@@ -58,6 +58,7 @@ import {
   McpBoundDeviceUnavailableError,
   McpDeviceUnavailableError,
 } from '@/server/services/mcp/deviceTunnel';
+import { refreshByConnector, removeByConnector } from '@/server/services/inboundWebhook/lifecycle';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -624,6 +625,17 @@ const connectorCoreRouter = router({
                 ...(credentials === null ? { tokenExpiresAt: null } : {}),
               }),
         } as any);
+        const headersChanged =
+          patch.metadata !== undefined &&
+          JSON.stringify(metadata?.customHeaders) !==
+            JSON.stringify(target.metadata?.customHeaders);
+        if (credentials !== undefined || headersChanged) {
+          await refreshByConnector(
+            ctx.serverDB,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            input.id,
+          );
+        }
       } catch (error) {
         if (error instanceof EvalConnectorUpdateError)
           throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
@@ -656,6 +668,11 @@ const connectorCoreRouter = router({
         if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
       }
 
+      await removeByConnector(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        input.id,
+      );
       await ctx.connectorModel.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's

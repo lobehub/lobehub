@@ -140,12 +140,20 @@ export class TrashService {
     run: (ctx: TrashHandlerContext) => Promise<TrashCascade[] | TrashCascade | null>,
     deletedAt: Date,
   ): Promise<TrashItemRow[]> {
-    return this.db.transaction(async (tx) => {
+    const removedTopics: string[] = [];
+    const removedAgents: string[] = [];
+    const result = await this.db.transaction(async (tx) => {
       const db = tx as unknown as LobeChatDatabase;
       const produced = await run(this.ctx(db));
       const cascades = (Array.isArray(produced) ? produced : produced ? [produced] : []).filter(
         Boolean,
       );
+      for (const cascade of cascades) {
+        for (const entry of [cascade.root, ...cascade.children]) {
+          if (entry.resourceType === 'topic') removedTopics.push(entry.resourceId);
+          if (entry.resourceType === 'agent') removedAgents.push(entry.resourceId);
+        }
+      }
       // One chunked bulk write for the whole batch: a "clear all topics" over
       // hundreds of rows must not hold the transaction open for one registry
       // round trip per topic.
@@ -160,6 +168,20 @@ export class TrashService {
       );
       return roots;
     });
+    // Do remote teardown after commit, for the actual rows stamped (including cascades).
+    // A rollback never removes live subscriptions; a missing remote cannot undo the trash operation.
+    if (removedTopics.length || removedAgents.length) {
+      try {
+        const { removeByAgent, removeByTopics } =
+          await import('@/server/services/inboundWebhook/lifecycle');
+        const scope = { userId: this.userId, workspaceId: this.workspaceId };
+        for (const agentId of removedAgents) await removeByAgent(this.db, scope, agentId);
+        await removeByTopics(this.db, scope, removedTopics);
+      } catch (error) {
+        console.error('[trash] Inbound webhook cleanup failed', error);
+      }
+    }
+    return result;
   }
 
   // ─────────────────────────── trash (soft delete) ───────────────────────────

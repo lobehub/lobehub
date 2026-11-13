@@ -120,6 +120,8 @@ export interface ServerCreateAgentToolsEngineParams {
   globalMemoryEnabled?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
+  /** An available enabled HTTP connector supports events and mcp_events is on. */
+  hasEventConnector?: boolean;
   /**
    * Whether the executing agent owns an identity account (e.g. a mail
    * address). Gates

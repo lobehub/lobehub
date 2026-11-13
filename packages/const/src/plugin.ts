@@ -183,3 +183,5 @@ export const withMandatoryApprovalMark = (
   mayRequireMandatoryApproval(humanIntervention)
     ? { ...metadata, [MANDATORY_APPROVAL_KEY]: true }
     : metadata;
+
+export const MCP_EVENT_TAG = 'mcpEvent';
