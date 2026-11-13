@@ -17,6 +17,8 @@ const LOCAL_PROVIDER_MAPPINGS = [
 const LOCAL_MODEL_MAPPINGS = [
   { Icon: ElevenLabs, keywords: ['^eleven_'], probe: 'eleven_multilingual_v2' },
   { Icon: FishAudio, keywords: ['^s2(\\.1)?-pro', '^drama-\\d', '^s1$'], probe: 's2.1-pro' },
+  // The package's OpenAI `tts-` keyword would claim these ids otherwise.
+  { Icon: Doubao, keywords: ['^seed-(tts|icl)-'], probe: 'seed-tts-2.0' },
 ];
 
 let registered = false;
@@ -32,10 +34,13 @@ export const registerLocalIconMappings = () => {
     if (!mapped) providerMappings.push(mapping);
   }
 
+  // `ModelIcon` takes the first matching entry, so a model id another brand's broad keyword
+  // already claims (e.g. OpenAI's `tts-`) needs its entry in front of that one.
   for (const { probe, ...mapping } of LOCAL_MODEL_MAPPINGS) {
-    const mapped = modelMappings.some((item) =>
+    const match = modelMappings.find((item) =>
       item.keywords.some((keyword) => new RegExp(keyword, 'i').test(probe)),
     );
-    if (!mapped) modelMappings.push(mapping);
+    if (!match) modelMappings.push(mapping);
+    else if (match.Icon !== mapping.Icon) modelMappings.unshift(mapping);
   }
 };

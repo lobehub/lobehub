@@ -1,9 +1,11 @@
 'use client';
 
+import { Flexbox } from '@lobehub/ui';
 import { DoubaoSpeechProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { SkeletonInput } from '@/components/Skeleton';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
@@ -25,6 +27,20 @@ const useProviderCard = (): ProviderItem => {
 
   return {
     ...DoubaoSpeechProviderCard,
+    // The Doubao combined logo reads 豆包大模型 (the Ark chat models), so show the
+    // Doubao mark with this provider's own name instead.
+    title: (
+      <Flexbox horizontal align={'center'} gap={8}>
+        <ProviderIcon
+          provider={providerKey}
+          shape={'square'}
+          size={24}
+          style={{ borderRadius: 6 }}
+          type={'avatar'}
+        />
+        {DoubaoSpeechProviderCard.name}
+      </Flexbox>
+    ),
     apiKeyItems: [
       {
         children: isLoading ? (
