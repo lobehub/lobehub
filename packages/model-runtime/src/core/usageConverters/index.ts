@@ -8,8 +8,10 @@ export {
 export {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
+  isFishAudioSpeechModel,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
 } from './tts';

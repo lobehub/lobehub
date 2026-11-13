@@ -9,6 +9,7 @@ import {
 
 import {
   convertTextToSpeechUsage,
+  countFishAudioBilledBytes,
   countTextToSpeechCharacters,
 } from '../../core/usageConverters/tts';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
@@ -103,12 +104,8 @@ export const normalizeFishAudioBaseURL = (baseURL?: string | null) => {
   return url.endsWith('/v1') ? url.slice(0, -3) : url;
 };
 
-/**
- * Fish Audio bills per million UTF-8 bytes, so a Han character costs three times a Latin
- * letter. Reported as `inputCharacters` against the per-byte price on the model card.
- * @see https://docs.fish.audio/developer-guide/models-pricing/pricing-and-rate-limits
- */
-export const countFishAudioBilledBytes = (text: string) => new TextEncoder().encode(text).length;
+/** Shared with the OpenAI-compatible path, where gateways bill Fish models the same way. */
+export { countFishAudioBilledBytes };
 
 /**
  * Text sent to Fish Audio: the S2 family and Drama 3 take a natural-language `[direction]`

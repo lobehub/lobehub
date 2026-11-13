@@ -1,6 +1,6 @@
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
-import { DEFAULT_TTS_AUDIO_FORMAT } from 'model-bank';
+import { DEFAULT_TTS_AUDIO_FORMAT, FISH_AUDIO_DEFAULT_VOICE_ID } from 'model-bank';
 import type OpenAI from 'openai';
 import type { SpeechCreateParams } from 'openai/resources/audio/speech';
 
@@ -15,7 +15,9 @@ import { getModelPricing } from '../../utils/getModelPricing';
 import {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
+  isFishAudioSpeechModel,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
 } from '../usageConverters/tts';
@@ -96,6 +98,11 @@ export const createOpenAICompatibleSpeech = async (
   const format = params.format ?? DEFAULT_TTS_AUDIO_FORMAT;
   const pricing = await getModelPricing(payload.model, context.provider, options?.pricingContext);
   const streamUsage = isTokenBilledTextToSpeech(pricing);
+  const fishAudio =
+    isFishAudioSpeechModel(payload.model) || isFishAudioSpeechModel(context.requestModel);
+  // Fish Audio's default voice is "no reference voice": gateways (OpenRouter) reject the
+  // `default` sentinel with 400 but speak the default voice when `voice` is left out.
+  const omitVoice = fishAudio && (!payload.voice || payload.voice === FISH_AUDIO_DEFAULT_VOICE_ID);
 
   log(
     'textToSpeech called with input length: %d, voice: %s, format: %s, sse: %s',
@@ -105,15 +112,15 @@ export const createOpenAICompatibleSpeech = async (
     streamUsage,
   );
 
-  const body: SpeechCreateParams = {
+  const body = {
     input: payload.input,
     model: context.requestModel,
     response_format: format,
-    voice: payload.voice,
+    ...(!omitVoice && { voice: payload.voice }),
     ...(params.speed !== undefined && { speed: params.speed }),
     ...(params.instructions && { instructions: params.instructions }),
     ...(streamUsage && { stream_format: 'sse' as const }),
-  };
+  } as SpeechCreateParams;
 
   let result: SpeechEventStreamResult;
   try {
@@ -132,12 +139,15 @@ export const createOpenAICompatibleSpeech = async (
 
   log('generated audio with size: %d bytes', result.audio.byteLength);
 
-  // Gateways bill MiniMax speech models by MiniMax's own count (a Chinese character is 2).
-  const billedCharacters =
-    !streamUsage &&
-    (isMiniMaxSpeechModel(payload.model) || isMiniMaxSpeechModel(context.requestModel))
-      ? { inputCharacters: countMiniMaxSpeechCharacters(payload.input) }
-      : undefined;
+  // Gateways bill by the vendor's own count: MiniMax counts a Chinese character as 2,
+  // Fish Audio counts UTF-8 bytes (a Chinese character is 3).
+  const billedCharacters = streamUsage
+    ? undefined
+    : fishAudio
+      ? { inputCharacters: countFishAudioBilledBytes(payload.input) }
+      : isMiniMaxSpeechModel(payload.model) || isMiniMaxSpeechModel(context.requestModel)
+        ? { inputCharacters: countMiniMaxSpeechCharacters(payload.input) }
+        : undefined;
   const usage = convertTextToSpeechUsage(
     payload.input,
     pricing,

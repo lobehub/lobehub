@@ -33,6 +33,25 @@ export const isMiniMaxSpeechModel = (model?: string) =>
   !!model && MINIMAX_SPEECH_MODEL_PATTERN.test(model);
 
 /**
+ * Fish Audio bills per million UTF-8 bytes, so a Han character costs three times a Latin
+ * letter. Gateways that resell these models (e.g. OpenRouter `fish-audio/s2.1-pro`) bill the
+ * same count. Reported as `inputCharacters` against the per-byte price on the model card.
+ * @see https://docs.fish.audio/developer-guide/models-pricing/pricing-and-rate-limits
+ */
+export const countFishAudioBilledBytes = (text: string) => new TextEncoder().encode(text).length;
+
+/**
+ * Fish Audio speech models: the catalog ids of the `fishaudio` provider (`s2.1-pro`,
+ * `drama-3`, ...) and their gateway ids (`fish-audio/s2.1-pro`).
+ */
+const FISH_AUDIO_SPEECH_MODEL_PATTERN =
+  /^(?:fish-audio\/)?(?:s1|s2-pro|s2\.1-pro(?:-free)?|drama-3)$/i;
+
+/** Whether a model id names a Fish Audio speech model, by catalog or gateway id. */
+export const isFishAudioSpeechModel = (model?: string) =>
+  !!model && FISH_AUDIO_SPEECH_MODEL_PATTERN.test(model);
+
+/**
  * Whether the model is billed per token (e.g. `gpt-4o-mini-tts`) rather than per input
  * character (e.g. `tts-1`). Token-billed models need provider-reported token usage.
  */

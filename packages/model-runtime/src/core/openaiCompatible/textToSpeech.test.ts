@@ -141,6 +141,52 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(result.usage).toEqual({ inputCharacters: 2 });
   });
 
+  it('omits the Fish Audio default voice and bills a gateway Fish model by UTF-8 bytes', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好, hi', model: 's2.1-pro', params: { speed: 1.2 }, voice: 'default' },
+      undefined,
+      { ...context, provider: 'lobehub', requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      { input: '你好, hi', model: 'fish-audio/s2.1-pro', response_format: 'mp3', speed: 1.2 },
+      { headers: undefined, signal: undefined },
+    );
+    // 2 Han × 3 bytes + ", hi" (4) = 10 billed bytes; 10 × $15/1M
+    expect(result.usage).toEqual({ cost: 0.00015, inputCharacters: 10 });
+  });
+
+  it('sends a Fish Audio reference voice and recognizes Fish by its gateway id alone', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+    const voice = '0123456789abcdef0123456789abcdef';
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '语音', model: 'custom-fish', voice },
+      undefined,
+      { ...context, requestModel: 'fish-audio/drama-3' },
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ model: 'fish-audio/drama-3', voice });
+    expect(result.usage?.inputCharacters).toBe(6);
+  });
+
+  it('keeps a voice named "default" for non-Fish models', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'tts-1', voice: 'default' },
+      undefined,
+      context,
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ voice: 'default' });
+  });
+
   it('keeps counting code points for non-MiniMax models', async () => {
     create.mockResolvedValue(audioResponse([0]));
 
