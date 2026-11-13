@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Flexbox, Icon, Segmented, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Segmented, Tag, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -44,6 +44,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const board = useBoard();
   const { finalized } = board;
   const pendingLeft = board.blockers.length;
+  const hasTask = !!board.artboard.taskId;
   const { data: threads = [] } = useArtboardComments(board.artboard.id);
   const waiting = waitingQuestions(threads).length;
   const { gallery, mode, outlineOpen, tool, verifyOpen } = useArtboardStore((s) => ({
@@ -135,18 +136,21 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
             {t('artboard.header.finalized')}
           </Tag>
         ) : (
-          <Button
-            icon={StampIcon}
-            size={'small'}
-            type={'primary'}
-            onClick={() => createFinalizeModal(board.artboard.id)}
-          >
-            {narrow
-              ? t('artboard.header.finalizeShort')
-              : pendingLeft
-                ? t('artboard.header.finalizePending', { count: pendingLeft })
-                : t('artboard.header.finalize')}
-          </Button>
+          <Tooltip title={hasTask ? undefined : t('artboard.header.noTask')}>
+            <Button
+              disabled={!hasTask}
+              icon={StampIcon}
+              size={'small'}
+              type={'primary'}
+              onClick={() => createFinalizeModal(board.artboard.id)}
+            >
+              {narrow
+                ? t('artboard.header.finalizeShort')
+                : pendingLeft
+                  ? t('artboard.header.finalizePending', { count: pendingLeft })
+                  : t('artboard.header.finalize')}
+            </Button>
+          </Tooltip>
         )}
         {mode === 'verify' && (
           <ActionIcon
