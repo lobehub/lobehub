@@ -315,10 +315,19 @@ export interface SystemStatus {
   homeGoalsCollapsed?: boolean;
   homeRecentsCount?: number;
   /**
-   * Agent picked from the home AgentSelect dropdown. When unset the home page
-   * falls back to the inbox agent. Persisted so the choice survives reloads.
+   * Agent picked from the home AgentSelect dropdown, keyed by cache scope
+   * (`${userId}:${workspaceId}`, see `buildCacheScope`). A scope without an
+   * entry falls back to its own inbox agent. Persisted so the choice survives
+   * reloads.
+   *
+   * Keyed by scope rather than stored once (or in the `workspace` overlay,
+   * which is shared by every workspace and falls back to the personal value):
+   * an agent only exists in the scope it was picked in, and a single value let
+   * the personal inbox reach a workspace home after a switch, where every
+   * config save and send against it returned NOT_FOUND until the workspace
+   * agent list loaded.
    */
-  homeSelectedAgentId?: string;
+  homeSelectedAgentIdByScope?: Record<string, string>;
   homeTaskCount?: number;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
