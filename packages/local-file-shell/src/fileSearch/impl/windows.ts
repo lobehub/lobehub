@@ -20,6 +20,16 @@ type WindowsFallbackTool = 'fast-glob' | 'fd' | 'powershell';
 type FastGlobStatsEntry = { path: string; stats: Stats };
 
 /**
+ * Quote a value for embedding in a PowerShell single-quoted literal.
+ *
+ * The impl builds one `-Command` string, so `searchDir` and `keywords` are parsed as
+ * PowerShell source, not passed as argv. A `'` in either one closes the literal early
+ * and the leftover text is parsed as code — a directory like `C:\Users\o'brien`
+ * fails with "The string is missing the terminator".
+ */
+const toPowerShellLiteral = (value: string): string => value.replaceAll("'", "''");
+
+/**
  * Windows file search implementation
  * Uses fd > PowerShell > fast-glob fallback strategy
  */
@@ -160,8 +170,12 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     try {
       const filter = options.keywords ? `*${options.keywords}*` : '*';
 
+      // `-LiteralPath` (not `-Path`): `-Path` resolves the value as a wildcard expression,
+      // so a directory named `[v2] builds` matches nothing and the search silently answers
+      // "0 files". Both interpolated values are quoted as PowerShell literals because a
+      // `'` in either one would end the string early and turn the rest into source.
       const psCommand = `
-        Get-ChildItem -Path '${searchDir}' -Filter '${filter}' -Recurse -File -Depth 10 -ErrorAction SilentlyContinue |
+        Get-ChildItem -LiteralPath '${toPowerShellLiteral(searchDir)}' -Filter '${toPowerShellLiteral(filter)}' -Recurse -File -Depth 10 -ErrorAction SilentlyContinue |
         Where-Object {
           $_.FullName -notlike '*\\node_modules\\*' -and
           $_.FullName -notlike '*\\.git\\*' -and
