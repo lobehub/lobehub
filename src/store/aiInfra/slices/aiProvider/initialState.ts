@@ -39,6 +39,7 @@ export interface AIProviderState {
   enabledChatModelList?: EnabledProviderWithModels[];
   enabledEmbeddingModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
+  enabledMusicModelList?: EnabledProviderWithModels[];
   enabledVideoModelList?: EnabledProviderWithModels[];
   hiddenBuiltinModels?: BuiltinModelIdentifier[];
   initAiProviderList: boolean;

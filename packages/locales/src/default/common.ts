@@ -640,6 +640,7 @@ export default {
   'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
+  'tab.music': 'Music',
   'tab.pages': 'Pages',
   'tab.resource': 'Docs',
   'tab.search': 'Search',

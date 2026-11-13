@@ -95,6 +95,8 @@ export interface GenerationConfig {
   imageUrls?: string[];
   previousGenerationId?: string;
   prompt: string;
+  /** Music cover reference track: a storage key in the DB, a full URL once read */
+  referenceAudioUrl?: string | null;
   resolution?: string;
   size?: string;
   steps?: number;

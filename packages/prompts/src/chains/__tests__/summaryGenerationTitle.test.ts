@@ -28,6 +28,12 @@ describe('chainSummaryGenerationTitle', () => {
     expect(result.messages![0].content).toContain(locale);
   });
 
+  it('should generate correct chat payload for music modal', () => {
+    const result = chainSummaryGenerationTitle(['Lo-fi rainy night'], 'music', 'en-US');
+
+    expect(result.messages![0].content).toContain('AI music prompt');
+  });
+
   it('should format single prompt correctly', () => {
     const prompts = ['Single prompt'];
     const modal = 'image' as const;

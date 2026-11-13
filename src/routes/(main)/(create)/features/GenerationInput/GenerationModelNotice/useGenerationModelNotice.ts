@@ -1,6 +1,8 @@
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
+import { useMusicStore } from '@/store/music';
+import { musicGenerationConfigSelectors } from '@/store/music/selectors';
 import { useVideoStore } from '@/store/video';
 import { videoGenerationConfigSelectors } from '@/store/video/selectors';
 
@@ -88,6 +90,24 @@ export const useVideoGenerationModelNotice = (): UseGenerationModelNoticeResult 
   const model = useVideoStore(videoGenerationConfigSelectors.model);
   const provider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
+
+  const notice = resolveGenerationModelNotice({
+    enabledModelList,
+    isModelConfigReady,
+    model,
+    provider,
+  });
+
+  return { isModelUnavailable: Boolean(notice), notice };
+};
+
+export const useMusicGenerationModelNotice = (): UseGenerationModelNoticeResult => {
+  const model = useMusicStore(musicGenerationConfigSelectors.model);
+  const provider = useMusicStore(musicGenerationConfigSelectors.provider);
+  const enabledModelList = useAiInfraStore(aiProviderSelectors.enabledMusicModelList);
   const isModelConfigReady = useAiInfraStore((s) =>
     aiProviderSelectors.isInitAiProviderRuntimeState(s),
   );
