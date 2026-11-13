@@ -1,6 +1,11 @@
 import type { ModelTokensUsage } from '@lobechat/types';
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import debug from 'debug';
-import { DEFAULT_TTS_AUDIO_FORMAT, FISH_AUDIO_DEFAULT_VOICE_ID } from 'model-bank';
+import {
+  DEFAULT_TTS_AUDIO_FORMAT,
+  FISH_AUDIO_DEFAULT_VOICE_ID,
+  FISH_AUDIO_MAX_INPUT_CHARACTERS,
+} from 'model-bank';
 import type OpenAI from 'openai';
 import type { SpeechCreateParams } from 'openai/resources/audio/speech';
 
@@ -11,12 +16,14 @@ import type {
 } from '../../types/tts';
 import { resolveTextToSpeechParams } from '../../types/tts';
 import type { ChatCompletionErrorPayload } from '../../types/type';
+import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
 import {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
   countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
+  countTextToSpeechCharacters,
   isFishAudioSpeechModel,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
@@ -108,6 +115,22 @@ export const createOpenAICompatibleSpeech = async (
   const streamUsage = isTokenBilledTextToSpeech(pricing);
   const fishAudio =
     isFishAudioSpeechModel(payload.model) || isFishAudioSpeechModel(context.requestModel);
+
+  // Fish Audio returns the whole audio inline; a longer input would be billed and then
+  // exceed the serverless response limit. Gateway ids (`fish-audio/s2.1-pro`) match no
+  // static card, so the TTS service cannot cap them and the cap is enforced here.
+  if (fishAudio) {
+    const inputCharacters = countTextToSpeechCharacters(payload.input);
+    if (inputCharacters > FISH_AUDIO_MAX_INPUT_CHARACTERS) {
+      throw AgentRuntimeError.chat({
+        error: {
+          message: `Fish Audio speech input is ${inputCharacters} characters; the limit is ${FISH_AUDIO_MAX_INPUT_CHARACTERS} per request. Split the text into shorter requests.`,
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: context.provider,
+      });
+    }
+  }
   // Fish Audio's default voice is "no reference voice": gateways (OpenRouter) reject the
   // `default` sentinel with 400 but speak the default voice when `voice` is left out.
   const omitVoice = fishAudio && (!payload.voice || payload.voice === FISH_AUDIO_DEFAULT_VOICE_ID);

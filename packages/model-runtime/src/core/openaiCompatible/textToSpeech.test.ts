@@ -189,6 +189,35 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(result.usage?.inputCharacters).toBe(16);
   });
 
+  it('refuses a gateway Fish Audio input over the per-request cap before the request', async () => {
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        { input: 'a'.repeat(4097), model: 'fish-audio/s2.1-pro', voice: 'default' },
+        undefined,
+        { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('the limit is 4096 per request') },
+      errorType: 'ProviderBizError',
+      provider: 'openrouter',
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('lets a gateway Fish Audio input at the cap through', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'a'.repeat(4096), model: 'fish-audio/s2.1-pro', voice: 'default' },
+      undefined,
+      { ...context, requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a voice named "default" for non-Fish models', async () => {
     create.mockResolvedValue(audioResponse([0]));
 

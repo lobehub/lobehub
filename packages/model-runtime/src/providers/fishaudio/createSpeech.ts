@@ -4,6 +4,7 @@ import type { TTSAudioFormat } from 'model-bank';
 import {
   DEFAULT_TTS_AUDIO_FORMAT,
   FISH_AUDIO_DEFAULT_VOICE_ID,
+  FISH_AUDIO_MAX_INPUT_CHARACTERS,
   FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH,
 } from 'model-bank';
 
@@ -29,12 +30,7 @@ const log = createDebug('lobe-tts:fishaudio');
 
 export const DEFAULT_FISH_AUDIO_BASE_URL = 'https://api.fish.audio';
 
-/**
- * Characters per request. The audio comes back in one inline response, so a longer request
- * would exceed the serverless response limit only after the synthesis was billed. Enforced
- * here as well as in the TTS service, so routed aliases are capped too.
- */
-export const FISH_AUDIO_MAX_INPUT_CHARACTERS = 4096;
+export { FISH_AUDIO_MAX_INPUT_CHARACTERS };
 
 /**
  * Values of the `model` header. Fish Audio does not reject an unknown value: it silently

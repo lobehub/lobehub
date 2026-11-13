@@ -392,6 +392,14 @@ const FISH_AUDIO_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
   (format) => format !== 'aac' && format !== 'flac',
 );
 
+/**
+ * Characters per Fish Audio request. The audio comes back in one inline response, so a
+ * longer request would exceed the serverless response limit only after the synthesis was
+ * billed. Enforced by the Fish Audio runtime and by the OpenAI-compatible path for gateway
+ * routes (`fish-audio/*`), so routed aliases are capped too.
+ */
+export const FISH_AUDIO_MAX_INPUT_CHARACTERS = 4096;
+
 /** Upper bound of the delivery direction placed in front of the text. */
 export const FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH = 200;
 
