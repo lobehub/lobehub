@@ -4434,5 +4434,8 @@ export default {
   'taskProject.searchPlaceholder': 'Search projects…',
   'taskProject.unavailable': 'Unavailable project',
   'taskList.filter.field.label': 'Label',
+  'taskList.find.clear': 'Clear search',
+  'taskList.find.open': 'Find in view',
+  'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
 };
