@@ -80,4 +80,11 @@ describe('pickModelConfigFormValues', () => {
         ?.ttsVoice,
     ).toBe('my voice');
   });
+
+  it('drops the TTS default voice once the model is no longer a TTS model', () => {
+    expect(
+      pickModelConfigFormValues({ ...formValues, settings: { ttsVoice: 'Kore' }, type: 'chat' })
+        .settings?.ttsVoice,
+    ).toBeUndefined();
+  });
 });

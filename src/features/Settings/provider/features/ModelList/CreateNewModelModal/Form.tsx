@@ -1,5 +1,5 @@
 import { Checkbox, Input, Select } from '@lobehub/ui';
-import { Form, type FormInstance, type FormValues, useForm } from '@lobehub/ui/form';
+import { Form, type FormInstance, type FormValues, useForm, useWatch } from '@lobehub/ui/form';
 import type { AiModelType, AiProviderModelListItem } from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +34,9 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
     const { t } = useTranslation('modelProvider');
 
     const formInstance = useForm<FormValues>({ initialValues });
+    // Follow the type picked in the form, so choosing `tts` while creating or editing a
+    // model shows the voice field right away.
+    const currentType = (useWatch(formInstance, 'type') as AiModelType | undefined) ?? type;
 
     const modelTypeOptions = useMemo(
       () =>
@@ -99,7 +102,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
               placeholder={t('providerModels.item.modelConfig.displayName.placeholder')}
             />
           </Form.Field>
-          {type === 'tts' && (
+          {currentType === 'tts' && (
             <Form.Field
               extra={t('providerModels.item.modelConfig.ttsVoice.extra')}
               label={t('providerModels.item.modelConfig.ttsVoice.title')}

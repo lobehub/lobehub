@@ -39,7 +39,11 @@ export const pickModelConfigFormValues = (
       extendParams: (settings.extendParams ?? undefined) as NonNullable<
         UpdateAiModelParams['settings']
       >['extendParams'],
-      ttsVoice: (settings.ttsVoice as string | undefined)?.trim() || undefined,
+      // Only a TTS model has a voice; switching the type away drops a leftover value.
+      ttsVoice:
+        values.type === 'tts'
+          ? (settings.ttsVoice as string | undefined)?.trim() || undefined
+          : undefined,
     },
     type: values.type as UpdateAiModelParams['type'],
   };
