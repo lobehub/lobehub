@@ -28,6 +28,7 @@ import type {
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   ModelRequestOptions,
+  MusicPollingRoute,
   PollMusicStatusResult,
   PollVideoStatusResult,
   PullModelParams,
@@ -83,7 +84,11 @@ export interface LobeRuntimeAI {
   ) => Promise<HandleCreateVideoWebhookResult>;
 
   /** Query an asynchronous music task once, for `createMusic` results that are `pending`. */
-  handlePollMusicStatus?: (inferenceId: string, model?: string) => Promise<PollMusicStatusResult>;
+  handlePollMusicStatus?: (
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+  ) => Promise<PollMusicStatusResult>;
 
   handlePollVideoStatus?: (
     inferenceId: string,

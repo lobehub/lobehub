@@ -292,6 +292,14 @@ export async function createSunoMusic(
   const { apiKey, baseURL, provider } = options;
 
   try {
+    // The gateway rejects submissions without a webhook even when the caller only polls.
+    if (!options.callbackUrl?.trim()) {
+      throw new SunoError(
+        'Suno requires options.callbackUrl (the gateway rejects submissions without callBackUrl)',
+        AgentRuntimeErrorType.InvalidRequestFormat,
+      );
+    }
+
     const modelVersion = resolveSunoModelVersion(resolveMappedModelId(payload.model, options));
     const body = buildSunoMusicRequest(payload, modelVersion, options.callbackUrl);
 
@@ -318,14 +326,17 @@ export async function createSunoMusic(
 
     if (!options.waitForCompletion) return { inferenceId: taskId, status: 'pending' };
 
-    const tracks = await waitForMusicCompletion(() => pollSunoMusicStatus(taskId, options), {
-      maxAttempts: options.maxAttempts,
-      pollIntervalMs: options.pollIntervalMs,
-      provider,
-      signal: options.signal,
-      taskId,
-      timeoutMs: options.timeoutMs,
-    });
+    const tracks = await waitForMusicCompletion(
+      (signal) => pollSunoMusicStatus(taskId, { ...options, signal }),
+      {
+        maxAttempts: options.maxAttempts,
+        pollIntervalMs: options.pollIntervalMs,
+        provider,
+        signal: options.signal,
+        taskId,
+        timeoutMs: options.timeoutMs,
+      },
+    );
 
     return { inferenceId: taskId, status: 'success', tracks };
   } catch (error) {

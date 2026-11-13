@@ -55,7 +55,7 @@ export interface MusicPollingOptions {
 }
 
 export interface CreateMusicOptions extends MusicPollingOptions {
-  /** Webhook the provider calls on completion (Suno requires one even when polling) */
+  /** Webhook the provider calls on completion. Required by Suno, even when polling. */
   callbackUrl?: string;
   signal?: AbortSignal;
   /**
@@ -83,6 +83,15 @@ export interface MusicTrack {
   title?: string;
 }
 
+/**
+ * Channel that accepted an asynchronous music task. Router runtimes return it with a pending
+ * result; pass it back to `handlePollMusicStatus` so polling reaches the same channel.
+ */
+export interface MusicPollingRoute {
+  channelId?: string;
+  routerId?: string;
+}
+
 /** Status of an asynchronous music generation task */
 export type MusicTaskStatus = 'failed' | 'pending' | 'success';
 
@@ -97,4 +106,4 @@ export type PollMusicStatusResult =
  */
 export type CreateMusicResult =
   | { inferenceId?: string; status: 'success'; tracks: MusicTrack[] }
-  | { inferenceId: string; status: 'pending' };
+  | { inferenceId: string; route?: MusicPollingRoute; status: 'pending' };

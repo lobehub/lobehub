@@ -33,7 +33,12 @@ import type {
   CreateImageMethodOptions,
   CreateImagePayload,
 } from '../types/image';
-import type { CreateMusicOptions, CreateMusicPayload, CreateMusicResult } from '../types/music';
+import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
+  MusicPollingRoute,
+} from '../types/music';
 import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
@@ -573,8 +578,8 @@ export class ModelRuntime {
     return this._runtime.createMusic?.(payload, options);
   }
 
-  async handlePollMusicStatus(inferenceId: string, model?: string) {
-    return this._runtime.handlePollMusicStatus?.(inferenceId, model);
+  async handlePollMusicStatus(inferenceId: string, model?: string, route?: MusicPollingRoute) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {

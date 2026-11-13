@@ -33,7 +33,10 @@ describe('createRouterRuntime music', () => {
         {
           apiType: 'openai',
           models: ['suno-v5'],
-          options: [{ apiKey: 'channel-a' }, { apiKey: 'channel-b' }],
+          options: [
+            { apiKey: 'channel-a', id: 'a' },
+            { apiKey: 'channel-b', id: 'b' },
+          ],
           runtime: MockMusicRuntime as any,
         },
       ],
@@ -46,6 +49,53 @@ describe('createRouterRuntime music', () => {
 
     await runtime.handlePollMusicStatus('task-1', 'suno-v5');
     expect(pollKeys).toEqual(['channel-a']);
+  });
+
+  it('returns the accepting channel as route and polls that pinned channel', async () => {
+    const pollKeys: string[] = [];
+
+    class MockMusicRuntime implements LobeRuntimeAI {
+      private apiKey: string;
+      constructor({ apiKey }: { apiKey: string }) {
+        this.apiKey = apiKey;
+      }
+      createMusic = vi.fn(async () => ({ inferenceId: 'task-1', status: 'pending' as const }));
+      handlePollMusicStatus = vi.fn(async () => {
+        pollKeys.push(this.apiKey);
+        return { status: 'pending' as const };
+      });
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'music-router',
+      routers: [
+        {
+          apiType: 'openai',
+          id: 'suno-router',
+          models: ['suno-v5'],
+          options: [
+            { apiKey: 'channel-a', id: 'a' },
+            { apiKey: 'channel-b', id: 'b' },
+          ],
+          runtime: MockMusicRuntime as any,
+        },
+      ],
+    });
+    const runtime = new Runtime();
+
+    await expect(runtime.createMusic(payload)).resolves.toEqual({
+      inferenceId: 'task-1',
+      route: { channelId: 'a', routerId: 'suno-router' },
+      status: 'pending',
+    });
+
+    // Without a model the poll still reaches the pinned channel, not the default one.
+    await runtime.handlePollMusicStatus('task-1', undefined, { channelId: 'b' });
+    expect(pollKeys).toEqual(['channel-b']);
+
+    await expect(
+      runtime.handlePollMusicStatus('task-1', 'suno-v5', { channelId: 'gone' }),
+    ).rejects.toThrow('The music generation route is no longer available');
   });
 
   it('reports runtimes without music support', async () => {

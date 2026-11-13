@@ -25,11 +25,11 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 /**
  * Poll an asynchronous music task until it succeeds, fails, or exceeds its time / attempt
- * budget. Failures and timeouts are thrown as runtime error payloads so callers see the
+ * budget. `poll` receives a signal that aborts when the remaining time runs out. Failures and timeouts are thrown as runtime error payloads so callers see the
  * same `AgentRuntimeErrorType` contract as the synchronous providers.
  */
 export const waitForMusicCompletion = async (
-  poll: () => Promise<PollMusicStatusResult>,
+  poll: (signal: AbortSignal) => Promise<PollMusicStatusResult>,
   {
     maxAttempts = DEFAULT_MUSIC_POLL_MAX_ATTEMPTS,
     pollIntervalMs = DEFAULT_MUSIC_POLL_INTERVAL_MS,
@@ -42,7 +42,18 @@ export const waitForMusicCompletion = async (
   const deadline = Date.now() + timeoutMs;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const result = await poll();
+    // Bound each request by the remaining budget too, so a stalled status call cannot
+    // outlive `timeoutMs`.
+    const timeoutSignal = AbortSignal.timeout(Math.max(deadline - Date.now(), 1));
+    const pollSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+
+    let result: PollMusicStatusResult;
+    try {
+      result = await poll(pollSignal);
+    } catch (error) {
+      if (timeoutSignal.aborted && !signal?.aborted) break;
+      throw error;
+    }
 
     if (result.status === 'success') return result.tracks;
 

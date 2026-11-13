@@ -3,7 +3,7 @@
  *
  * Real providers (costs credits):
  *   MINIMAX_API_KEY=... [MINIMAX_BASE_URL=https://api.minimaxi.com/v1] \
- *   SUNO_API_KEY=...    [SUNO_BASE_URL=https://api.sunoapi.org] [SUNO_CALLBACK_URL=https://...] \
+ *   SUNO_API_KEY=...    SUNO_CALLBACK_URL=https://... [SUNO_BASE_URL=https://api.sunoapi.org] \
  *     bun packages/model-runtime/scripts/music-smoke.ts
  *
  * Without keys, the script serves a local mock of both APIs and runs the same code path
@@ -99,7 +99,8 @@ const main = async () => {
         },
       },
       {
-        callbackUrl: process.env.SUNO_CALLBACK_URL,
+        // Suno requires a webhook even when polling; any reachable URL works for the smoke test.
+        callbackUrl: process.env.SUNO_CALLBACK_URL ?? 'https://example.com/suno-callback',
         pollIntervalMs: mock ? 100 : 10_000,
         timeoutMs: 10 * 60 * 1000,
         waitForCompletion: true,
@@ -113,7 +114,10 @@ const main = async () => {
       baseURL: `${mock.origin}/suno`,
     });
     await run('suno invalid key', () =>
-      badKey.createMusic({ model: 'suno-v5', params: { prompt: 'a happy song' } }),
+      badKey.createMusic(
+        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { callbackUrl: 'https://example.com/suno-callback' },
+      ),
     );
     mock.server.close();
   }

@@ -15,6 +15,7 @@ import { LobeSunoAI } from './index';
 const options: SunoMusicOptions = {
   apiKey: 'suno-key',
   baseURL: 'https://api.sunoapi.org',
+  callbackUrl: 'https://example.com/hook',
   provider: 'suno',
 };
 
@@ -312,6 +313,40 @@ describe('createSunoMusic', () => {
     ).rejects.toMatchObject({ errorType, provider: 'suno' });
   });
 
+  it('rejects a submission without a callback URL before calling Suno', async () => {
+    await expect(
+      createSunoMusic(
+        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { ...options, callbackUrl: undefined },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('callbackUrl') },
+      errorType: AgentRuntimeErrorType.InvalidRequestFormat,
+      provider: 'suno',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('times out a stalled status request instead of waiting forever', async () => {
+    fetchMock.mockResolvedValueOnce(submitted()).mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+
+    await expect(
+      createSunoMusic(
+        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { ...options, pollIntervalMs: 0, timeoutMs: 50, waitForCompletion: true },
+      ),
+    ).rejects.toMatchObject({
+      error: { taskId: 'task-1', timeoutMs: 50 },
+      errorType: AgentRuntimeErrorType.ProviderNetworkError,
+    });
+    expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('rejects a response without taskId', async () => {
     fetchMock.mockResolvedValue(envelope({}));
 
@@ -409,10 +444,10 @@ describe('LobeSunoAI', () => {
       baseURL: 'https://gateway.example.com/',
     });
 
-    const created = await runtime.createMusic({
-      model: 'suno-v5',
-      params: { prompt: 'a happy song' },
-    });
+    const created = await runtime.createMusic(
+      { model: 'suno-v5', params: { prompt: 'a happy song' } },
+      { callbackUrl: 'https://example.com/hook' },
+    );
     expect(created).toEqual({ inferenceId: 'task-1', status: 'pending' });
     expect(fetchMock.mock.calls[0][0]).toBe('https://gateway.example.com/api/v1/generate');
 
