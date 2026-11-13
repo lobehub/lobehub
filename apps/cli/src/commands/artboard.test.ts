@@ -24,19 +24,34 @@ vi.mock('../utils/format', () => ({ outputJson: output }));
 
 const board = {
   content: {
-    arrows: [],
-    frames: [
+    boards: [
       {
-        groupId: 'g1',
-        id: 'f1',
+        expected: null,
+        flowNodeId: null,
+        groupId: 'abg_1',
+        id: 'brd-1',
+        pageId: 'abp_1',
+        rect: { h: 400, w: 640, x: 0, y: 0 },
+        roundId: null,
         source: { canvasId: 'cvs_1', kind: 'canvas', version: 1 },
         title: '空项目',
-        x: 0,
-        y: 0,
+        type: 'html',
       },
     ],
-    groups: [{ desc: '', id: 'g1', kind: 'journey', title: '旅程' }],
-    notes: [],
+    edges: [],
+    groups: [
+      {
+        desc: '',
+        id: 'abg_1',
+        kind: 'journey',
+        pageId: 'abp_1',
+        rect: { h: 592, w: 736, x: -48, y: -144 },
+        title: '旅程',
+      },
+    ],
+    pages: [{ id: 'abp_1', name: 'Page 1', sortOrder: 0 }],
+    questions: [],
+    rounds: [],
   },
   id: 'art_8f2k',
   phase: 'discuss',
@@ -68,7 +83,7 @@ describe('lh artboard', () => {
   };
 
   it('creates a board in the run’s conversation and prints the result line', async () => {
-    create.mockResolvedValue({ artboard: board, changedIds: ['g1', 'f1'] });
+    create.mockResolvedValue({ artboard: board, changedIds: ['abg_1', 'brd-1'] });
     const ops = [{ group: { kind: 'journey', title: '旅程' }, type: 'addGroup' }];
     await run(['artboard', 'create', '--title', '首次进入', '--ops', JSON.stringify(ops)]);
 
@@ -79,7 +94,7 @@ describe('lh artboard', () => {
       title: '首次进入',
       topicId: 'tpc_run',
     });
-    expect(log).toHaveBeenCalledWith('artboard art_8f2k · revision 2 · 1 groups · 1 frames');
+    expect(log).toHaveBeenCalledWith('artboard art_8f2k · revision 2 · 1 groups · 1 boards');
   });
 
   it('needs --task when the run carries no conversation', async () => {
@@ -89,8 +104,8 @@ describe('lh artboard', () => {
   });
 
   it('updates with the revision it read and prints JSON on request', async () => {
-    update.mockResolvedValue({ artboard: board, changedIds: ['f1'] });
-    const ops = [{ id: 'f1', patch: { x: 10 }, type: 'updateFrame' }];
+    update.mockResolvedValue({ artboard: board, changedIds: ['brd-1'] });
+    const ops = [{ id: 'brd-1', patch: { x: 10 }, type: 'updateBoard' }];
     await run([
       'artboard',
       'update',
@@ -103,7 +118,7 @@ describe('lh artboard', () => {
     ]);
 
     expect(update).toHaveBeenCalledWith({ id: 'art_8f2k', ops, revision: 1 });
-    expect(output).toHaveBeenCalledWith({ artboard: board, changedIds: ['f1'] });
+    expect(output).toHaveBeenCalledWith({ artboard: board, changedIds: ['brd-1'] });
     expect(log).not.toHaveBeenCalled();
   });
 
@@ -112,5 +127,14 @@ describe('lh artboard', () => {
     await run(['artboard', 'list']);
     expect(list).toHaveBeenCalledWith({ taskId: undefined, topicId: 'tpc_run' });
     expect(log).toHaveBeenCalledWith('art_8f2k  首次进入  discuss  revision 2');
+  });
+
+  it('reads a board and names the boards behind their Canvas', async () => {
+    read.mockResolvedValue({ artboard: board, canvases: {}, staleBoardIds: ['brd-1'] });
+    await run(['artboard', 'read', 'art_8f2k']);
+
+    expect(read).toHaveBeenCalledWith({ id: 'art_8f2k' });
+    expect(log).toHaveBeenCalledWith('artboard art_8f2k · revision 2 · 1 groups · 1 boards');
+    expect(log).toHaveBeenCalledWith('stale board brd-1: its Canvas has a newer version');
   });
 });

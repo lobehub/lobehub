@@ -14,7 +14,7 @@ interface BoardLike {
 
 const resultLine = (artboard: BoardLike) =>
   formatArtboardResultLine({
-    frameCount: artboard.content.frames.length,
+    boardCount: artboard.content.boards.length,
     groupCount: artboard.content.groups.length,
     id: artboard.id,
     revision: artboard.revision,
@@ -51,7 +51,10 @@ export const registerArtboardCommand = (program: Command) => {
     .requiredOption('--title <title>', 'Board title')
     .option('--description <text>', 'One line shown on the board card')
     .option('--task <task>', 'Task id or identifier, such as PRJ-12')
-    .option('--ops <json>', 'Initial ops as a JSON array, or @file.json')
+    .option(
+      '--ops <json>',
+      'Initial ops (addGroup, addBoard, addEdge, addRound, addPage, …) as a JSON array, or @file.json',
+    )
     .option('--json', 'Print structured JSON')
     .action(
       async (options: {
@@ -80,7 +83,10 @@ export const registerArtboardCommand = (program: Command) => {
     .command('update <id>')
     .description('Apply ops; every op applies or none does')
     .requiredOption('--revision <n>', 'Revision you last read', positiveInteger)
-    .requiredOption('--ops <json>', 'Ops as a JSON array, or @file.json')
+    .requiredOption(
+      '--ops <json>',
+      'Ops (add/update/remove Board, Group, Page; addRound, updateRound; addEdge, removeEdge; setCheck) as a JSON array, or @file.json',
+    )
     .option('--json', 'Print structured JSON')
     .action(async (id: string, options: { json?: boolean; ops: string; revision: number }) => {
       const client = await getTrpcClient();
@@ -95,15 +101,15 @@ export const registerArtboardCommand = (program: Command) => {
 
   artboard
     .command('read <id>')
-    .description('Print the board, its revision, and frames behind their Canvas')
+    .description('Print the artboard, its revision, and boards behind their Canvas')
     .option('--json', 'Print structured JSON')
     .action(async (id: string, options: { json?: boolean }) => {
       const client = await getTrpcClient();
       const result = await client.artboard.read.query({ id });
       if (options.json) return outputJson(result);
       console.log(resultLine(result.artboard));
-      for (const frameId of result.staleFrameIds)
-        console.log(`stale frame ${frameId}: its Canvas has a newer version`);
+      for (const boardId of result.staleBoardIds)
+        console.log(`stale board ${boardId}: its Canvas has a newer version`);
       console.log(JSON.stringify(result.artboard.content, null, 2));
     });
 
