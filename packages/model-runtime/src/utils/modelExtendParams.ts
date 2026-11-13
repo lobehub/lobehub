@@ -67,8 +67,8 @@ export const resolveEffectiveReasoningChatConfig = (
 export interface ModelExtendParams {
   /**
    * Prompt-cache TTL the request writes, from the model's `settings.contextCachingTTL`
-   * (`resolveContextCachingTTL`). Only set where the API takes a TTL and the value is not the
-   * API default, so today only `1h` on the first-party Anthropic runtime.
+   * (`resolveRequestContextCachingTTL`). Only set where the API takes a TTL: today `5m` / `1h`
+   * on the first-party Anthropic runtime.
    */
   contextCachingTTL?: ContextCachingTTL;
   deepseekV4ReasoningEffort?: string;

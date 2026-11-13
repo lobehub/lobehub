@@ -346,16 +346,15 @@ describe('resolveModelParams', () => {
         effective: '1h',
         request: '1h',
       });
-      // The user's 5m in the provider's model config wins over the card; 5m is the API
-      // default, so nothing is written and the payload stays byte-identical.
+      // The user's 5m in the provider's model config wins over the card.
       expect(await resolveTTL({ cardTTL: '1h', provider: 'anthropic', userTTL: '5m' })).toEqual({
         effective: '5m',
-        request: undefined,
+        request: '5m',
       });
       // A card-declared value applies when the user set none.
       expect(await resolveTTL({ cardTTL: '5m', provider: 'anthropic' })).toEqual({
         effective: '5m',
-        request: undefined,
+        request: '5m',
       });
       // No breakpoints without caching, so no TTL either.
       expect(

@@ -8,14 +8,14 @@ type CacheTTL = Anthropic.Messages.CacheControlEphemeral['ttl'];
 export const DEFAULT_CACHE_TTL = '5m' as const;
 
 /**
- * Builds the `cache_control` marker for a breakpoint. Only `1h` is written out:
- * `5m` is the API default, so leaving `ttl` off keeps a 5m request byte-identical
- * to the payload before the option existed.
+ * Builds the `cache_control` marker for a breakpoint. A resolved TTL is written out as is
+ * (`5m` included, so the request states the lifetime the model config chose); without one the
+ * marker stays `{ type: 'ephemeral' }`, the API's 5m default, as compatible endpoints send it.
  * All breakpoints share one TTL, which satisfies the API rule that longer-TTL
  * entries must precede shorter ones.
  */
 export const buildCacheControl = (ttl?: CacheTTL): Anthropic.Messages.CacheControlEphemeral =>
-  ttl === '1h' ? { ttl: '1h', type: 'ephemeral' } : { type: 'ephemeral' };
+  ttl ? { ttl, type: 'ephemeral' } : { type: 'ephemeral' };
 
 /**
  * Resolves cache TTL from Anthropic payload or request settings

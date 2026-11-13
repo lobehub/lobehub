@@ -41,9 +41,12 @@ export const buildDefaultAnthropicPayload = async (
     enabledContextCaching = true,
     enabledSearch,
   } = payload;
-  // Anthropic takes `5m` (the default, left unwritten) or `1h`.
+  // Anthropic takes `5m` (its default) or `1h`; anything else is left off.
   const contextCachingTTL =
-    options.allowExtendedCacheTTL && payload.contextCachingTTL === '1h' ? '1h' : undefined;
+    options.allowExtendedCacheTTL &&
+    (payload.contextCachingTTL === '5m' || payload.contextCachingTTL === '1h')
+      ? payload.contextCachingTTL
+      : undefined;
 
   const { anthropic: anthropicModels } = await import('model-bank');
 

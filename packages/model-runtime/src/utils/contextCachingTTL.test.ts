@@ -66,10 +66,10 @@ describe('contextCachingTTL', () => {
   });
 
   describe('resolveRequestContextCachingTTL', () => {
-    it('writes only a non-default TTL, only where the API takes one', () => {
+    it('writes the TTL only where the API takes one', () => {
       expect(resolveRequestContextCachingTTL('anthropic', '1h')).toBe('1h');
-      // 5m is Anthropic's API default: nothing is written, keeping the payload byte-identical.
-      expect(resolveRequestContextCachingTTL('anthropic', '5m')).toBeUndefined();
+      expect(resolveRequestContextCachingTTL('anthropic', '5m')).toBe('5m');
+      expect(resolveRequestContextCachingTTL('anthropic', '72h')).toBeUndefined();
       expect(resolveRequestContextCachingTTL('anthropic', undefined)).toBeUndefined();
       // Elsewhere the TTL only informs context engineering.
       expect(resolveRequestContextCachingTTL('deepseek', '72h')).toBeUndefined();
