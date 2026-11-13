@@ -36,6 +36,22 @@ describe('resolveTTSModelRef', () => {
     expect(resolveTTSModelRef('tts-1')).toEqual({ model: 'tts-1', provider: 'openai' });
   });
 
+  it('resolves Fish Audio and Doubao Speech model references (lh generate tts -m)', () => {
+    expect(resolveTTSModelRef('fishaudio/s2.1-pro')).toEqual({
+      model: 's2.1-pro',
+      provider: 'fishaudio',
+    });
+    expect(resolveTTSModelRef('doubaospeech/seed-tts-2.0')).toEqual({
+      model: 'seed-tts-2.0',
+      provider: 'doubaospeech',
+    });
+    expect(resolveTTSModelRef('drama-3')).toEqual({ model: 'drama-3', provider: 'fishaudio' });
+    expect(resolveTTSModelRef('seed-tts-2.0')).toEqual({
+      model: 'seed-tts-2.0',
+      provider: 'doubaospeech',
+    });
+  });
+
   it('resolves ElevenLabs model references', () => {
     expect(resolveTTSModelRef('elevenlabs/eleven_v4')).toEqual({
       model: 'eleven_v4',

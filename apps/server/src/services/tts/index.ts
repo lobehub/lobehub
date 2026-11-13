@@ -21,12 +21,17 @@ export const INLINE_TTS_AUDIO_FORMATS = ['mp3', 'opus', 'aac'] as const;
 /**
  * Input cap for providers whose models accept far more text than fits in one inline
  * response. Audio comes back in a single base64 body, so a long ElevenLabs Flash request
- * (up to 40,000 characters) would exceed the serverless response limit only after the
- * synthesis was billed. Matches the OpenAPI `/audio/speech` input limit.
+ * (up to 40,000 characters), or a Fish Audio / Doubao Speech request with no documented
+ * limit, would exceed the serverless response limit only after the synthesis was billed.
+ * Matches the OpenAPI `/audio/speech` input limit.
  */
 export const INLINE_TTS_MAX_INPUT_CHARACTERS = 4096;
 
-const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([ModelProvider.ElevenLabs]);
+const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([
+  ModelProvider.DoubaoSpeech,
+  ModelProvider.ElevenLabs,
+  ModelProvider.FishAudio,
+]);
 
 export interface TTSSynthesizeParams {
   emotion?: string;
