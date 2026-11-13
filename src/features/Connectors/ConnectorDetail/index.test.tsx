@@ -175,6 +175,35 @@ describe('ConnectorDetail', () => {
     });
   });
 
+  // A protocol-link stdio MCP is a custom connector now, no longer a custom
+  // plugin whose command Settings could edit
+  it.each([
+    { mcpConnectionType: 'http', mcpServerUrl: 'https://mcp.example.com' },
+    { mcpConnectionType: 'stdio' },
+  ])('offers Edit for a custom connector: %o', (endpoint) => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      ...endpoint,
+      sourceType: ConnectorSourceType.custom,
+    };
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled();
+    expect(screen.getByTestId('custom-connector-modal')).toBeInTheDocument();
+  });
+
+  it('offers no Edit for a marketplace connector', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      mcpConnectionType: 'stdio',
+    };
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
   it('uses lifecycle actions instead of the generic marketplace uninstall action', () => {
     render(
       <ConnectorDetail
