@@ -45,6 +45,7 @@
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
     "immer": "^10.1.3",
     "model-bank": "workspace:*",

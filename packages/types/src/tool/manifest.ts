@@ -20,6 +20,7 @@ export interface ToolManifest {
   $schema?: string;
   api: LobeChatPluginApi[];
   author?: string;
+  connectorLinks?: { connectorId: string; param: string };
   createdAt?: string;
   gateway?: string;
   homepage?: string;
@@ -43,6 +44,7 @@ export interface ToolManifest {
 export const ToolManifestSchema = z.object({
   $schema: z.string().optional(),
   api: z.array(LobeChatPluginApiSchema),
+  connectorLinks: z.object({ connectorId: z.string(), param: z.string() }).optional(),
   author: z.string().optional(),
   createdAt: z.string().optional(),
   gateway: z.string().optional(),

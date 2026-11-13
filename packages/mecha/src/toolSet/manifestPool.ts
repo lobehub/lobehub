@@ -3,6 +3,8 @@ import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { BuiltinToolResolveContext, LobeBuiltinTool } from '@lobechat/types';
 import debug from 'debug';
 
+import { injectConnectorLinkParam, resolveConnectorLinkParam } from './connectorLinks';
+
 const log = debug('mecha:manifestPool');
 
 /** A connector tool's permission as the connectors settings store it. */
@@ -23,6 +25,7 @@ export interface ConnectorToolFacts {
 export interface ConnectorFacts {
   identifier: string;
   isEnabled?: boolean | null;
+  links?: { id: string; name: string }[];
   name: string;
   tools: ConnectorToolFacts[];
 }
@@ -79,6 +82,7 @@ export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManif
   const modelTools = connector.tools.filter((tool) => isSyncedMcpToolVisibleTo(tool, 'model'));
   if (modelTools.length === 0) return undefined;
 
+  const param = resolveConnectorLinkParam(connector.tools.map((tool) => tool.inputSchema));
   const api = modelTools.map((tool) => {
     const parameters = (tool.inputSchema ?? { properties: {}, type: 'object' }) as Record<
       string,
@@ -96,7 +100,10 @@ export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManif
       description: tool.description ?? '',
       humanIntervention: tool.permission === 'needs_approval' ? ('required' as const) : undefined,
       name: tool.toolName,
-      parameters,
+      parameters:
+        (connector.links?.length ?? 0) > 1
+          ? injectConnectorLinkParam(parameters, connector.links!, param)
+          : parameters,
     };
   });
 
