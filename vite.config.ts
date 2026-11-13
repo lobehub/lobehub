@@ -11,6 +11,7 @@ import { canvasRuntimeEntries } from './plugins/vite/canvasRuntime';
 import { customBrandingLoadingScreen } from './plugins/vite/customBrandingLoadingScreen';
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
 import { lobeUiImportSources } from './plugins/vite/lobeUiImports';
+import { nestedUiOptimizeDeps } from './plugins/vite/nestedUiOptimizeDeps';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -150,24 +151,7 @@ export default defineConfig({
     // into the optimizer would still pre-bundle every deferred UI dependency.
     include: [
       ...sharedOptimizeDeps.include.filter((dependency) => dependency !== '@lobehub/ui'),
-      // Excluded ESM UI modules still need their nested CommonJS shims optimized.
-      '@lobehub/ui > use-sync-external-store/shim',
-      '@lobehub/ui > use-sync-external-store/shim/with-selector',
-      '@lobehub/ui > lru_map',
-      '@lobehub/ui > style-to-js',
-      '@lobehub/ui > @primer/octicons',
-      '@lobehub/ui > extend',
-      '@lobehub/ui > dayjs/plugin/advancedFormat.js',
-      '@lobehub/ui > dayjs/plugin/customParseFormat.js',
-      '@lobehub/ui > dayjs/plugin/localeData.js',
-      '@lobehub/ui > dayjs/plugin/weekday.js',
-      '@lobehub/ui > dayjs/plugin/weekOfYear.js',
-      '@lobehub/ui > dayjs/plugin/weekYear.js',
-      // Served raw, its bare `mdast-util-to-markdown` import would be rewritten to the single
-      // optimized copy, the 2.1.2 the workspace pins, which lacks the attention API the CJK
-      // serializer needs ("Expected a handler with the attention API" on any emphasis).
-      // Pre-bundled, it resolves its own nested 2.2.
-      '@lobehub/ui > remark-cjk-friendly',
+      ...nestedUiOptimizeDeps,
     ],
     exclude: [...sharedOptimizeDeps.exclude, ...lobeUiImportSources, '@lobehub/icons'],
   },
