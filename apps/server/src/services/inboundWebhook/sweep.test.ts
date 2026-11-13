@@ -3,14 +3,18 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { CreateInboundWebhook } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { agents, signals, topics, userConnectors, users } from '@/database/schemas';
+import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 import { sweepInboundWebhooks } from './sweep';
 
 const boundary = vi.hoisted(() => ({
   subscribe: vi.fn(),
+  listTools: vi.fn(),
   unsubscribe: vi.fn(),
   schedule: vi.fn(),
   claimMaintenance: vi.fn(),
@@ -26,10 +30,19 @@ vi.mock('@/server/services/redis', () => ({
   redisService: { inboundWebhook: { claimMaintenance: boundary.claimMaintenance } },
 }));
 vi.mock('@/server/services/mcp', () => ({
-  mcpService: { subscribeEvent: boundary.subscribe, unsubscribeEvent: boundary.unsubscribe },
+  mcpService: {
+    subscribeEvent: boundary.subscribe,
+    unsubscribeEvent: boundary.unsubscribe,
+    listRawTools: boundary.listTools,
+    getEventsCapability: async () => ({ supported: true }),
+  },
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
   ensureFreshConnectorToken: async (connector: unknown) => connector,
+}));
+vi.mock('@/server/services/mcp/featureGate', () => ({
+  isMcpAppsEnabled: async () => false,
+  isMcpEventsEnabled: async () => true,
 }));
 vi.mock('./waker', () => ({ scheduleInboundWebhookWake: boundary.schedule }));
 const db = await getTestDB();
@@ -54,6 +67,7 @@ const seed = (patch: Partial<CreateInboundWebhook> = {}) =>
 beforeEach(async () => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
+  boundary.listTools.mockResolvedValue([]);
   boundary.subscribe.mockResolvedValue({ id: 'remote', refreshBefore: null });
   boundary.unsubscribe.mockResolvedValue({});
   boundary.claimMaintenance.mockResolvedValue(true);
@@ -75,6 +89,49 @@ beforeEach(async () => {
 afterEach(async () => {
   await db.delete(users).where(eq(users.id, userId));
   vi.restoreAllMocks();
+});
+
+describe('connector status after webhook maintenance authentication', () => {
+  it.each([
+    { status: 401 },
+    { cause: { data: { type: 'AUTHORIZATION_ERROR' } } },
+    { code: -32024, message: 'Forbidden' },
+  ])('marks the connector error after confirmed auth failure %#', async (error) => {
+    const row = await seed({ nextMaintenanceAt: new Date(Date.now() - 1000) });
+    boundary.subscribe.mockRejectedValue(error);
+    await sweepInboundWebhooks(db);
+    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'auth' });
+    expect(
+      (await db.select().from(userConnectors).where(eq(userConnectors.id, connectorId)))[0].status,
+    ).toBe('error');
+  });
+
+  it('returns to connected through the existing post-authorization tool sync', async () => {
+    await seed({ nextMaintenanceAt: new Date(Date.now() - 1000) });
+    boundary.subscribe.mockRejectedValue({ status: 401 });
+    await sweepInboundWebhooks(db);
+    expect(
+      (await db.select().from(userConnectors).where(eq(userConnectors.id, connectorId)))[0].status,
+    ).toBe('error');
+    // OAuth persists fresh credentials before calling this same sync function.
+    await syncConnectorToolsById(connectorId, {
+      connectorModel: new ConnectorModel(db, userId),
+      connectorToolModel: new ConnectorToolModel(db, userId),
+      userId,
+    });
+    expect(
+      (await db.select().from(userConnectors).where(eq(userConnectors.id, connectorId)))[0].status,
+    ).toBe('connected');
+  });
+
+  it('preserves connected status on a non-auth transport failure', async () => {
+    await seed({ nextMaintenanceAt: new Date(Date.now() - 1000) });
+    boundary.subscribe.mockRejectedValue(new Error('network offline'));
+    await sweepInboundWebhooks(db);
+    expect(
+      (await db.select().from(userConnectors).where(eq(userConnectors.id, connectorId)))[0].status,
+    ).toBe('connected');
+  });
 });
 
 describe('inbound webhook maintenance sweep', () => {
