@@ -144,6 +144,11 @@ export const lifecycleRouter = router({
         {
           ...input.groupConfig,
           config: normalizedConfig,
+          // Same rule as `createGroup`: a public workspace group never starts
+          // as a team pin.
+          ...(ctx.workspaceId && input.groupConfig.visibility !== 'private'
+            ? { pinned: false }
+            : {}),
         },
         memberAgentIds,
         supervisorConfig as any,

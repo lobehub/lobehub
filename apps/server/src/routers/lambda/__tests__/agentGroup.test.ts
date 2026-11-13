@@ -962,6 +962,23 @@ describe('agentGroupRouter', () => {
       });
     });
 
+    it('never creates a public workspace group already pinned from members either', async () => {
+      agentModelMock.batchCreate.mockResolvedValue([]);
+      agentGroupRepoMock.createGroupWithSupervisor.mockResolvedValue({
+        group: { id: 'group-1', visibility: 'private' },
+        supervisorAgentId: 'sup-1',
+      });
+
+      await agentGroupRouter.createCaller(wsCtx()).createGroupWithMembers({
+        groupConfig: { pinned: true, title: 'Team' },
+        members: [],
+      });
+
+      expect(agentGroupRepoMock.createGroupWithSupervisor.mock.calls[0][0]).toMatchObject({
+        pinned: false,
+      });
+    });
+
     it('keeps a private group pin and other edits free of the team check', async () => {
       chatGroupModelMock.findById.mockResolvedValue({ id: 'group-1', visibility: 'private' });
 

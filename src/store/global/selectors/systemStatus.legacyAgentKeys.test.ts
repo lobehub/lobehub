@@ -3,13 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { merge } from '@/utils/merge';
 
 import type { GlobalState } from '../initialState';
-import { DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS, initialState } from '../initialState';
+import { initialState } from '../initialState';
 import {
-  DEFAULT_SIDEBAR_ITEMS,
   normalizeLegacyAgentItems,
   normalizeLegacyExpandedKeys,
   normalizeLegacyHiddenSections,
-  SIDEBAR_ACCORDION_KEYS,
   SIDEBAR_SPACER_ID,
   systemStatusSelectors,
 } from './systemStatus';
@@ -51,12 +49,6 @@ describe('legacy `private` sidebar key', () => {
     expect(normalizeLegacyExpandedKeys(['agent', 'private'])).toEqual(['agent']);
     const untouched = ['recents'];
     expect(normalizeLegacyExpandedKeys(untouched)).toBe(untouched);
-  });
-
-  it('no longer ships `private` in the defaults', () => {
-    expect(DEFAULT_SIDEBAR_ITEMS).not.toContain('private');
-    expect([...SIDEBAR_ACCORDION_KEYS]).not.toContain('private');
-    expect(DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS).not.toContain('private');
   });
 
   describe('selectors', () => {

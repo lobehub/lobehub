@@ -922,6 +922,26 @@ describe('agentRouter', () => {
         },
       );
 
+      it('drops a team pin even when the policy strip rebuilds the patch', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        await agentRouter.createCaller(wsCtx()).updateAgentConfig({
+          agentId: 'agent-1',
+          value: {
+            agencyConfig: { boundDeviceId: 'device-1', modelSelectionPolicy: 'fixed' },
+            pinned: true,
+          },
+        });
+
+        // `pinned` is the owner/admin team pin; only `updateAgentPinned` writes it.
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          { agencyConfig: { boundDeviceId: 'device-1' } },
+          undefined,
+        );
+      });
+
       it('strips fully merged stale policies before a collaborator update', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
         vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
