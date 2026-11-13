@@ -657,6 +657,25 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
 
+    // An unset target is the same default as `auto`, so it must not resurrect a
+    // stale topic device either: the default agent re-picks the single online
+    // device instead of staying unrouted on the offline one.
+    it('should not reuse topic boundDeviceId for an unset target either', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      topicMock.findById.mockResolvedValue({ metadata: { boundDeviceId: 'device-002' } });
+      await useAgencyConfig({});
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        prompt: 'Run a command',
+      });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBe('device-001');
+    });
+
     // An explicit device on the request is a promise to the caller, so the new
     // topic records that the binding was pinned rather than auto-picked — a
     // later turn on an `auto` agent then stays on it instead of choosing

@@ -132,7 +132,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
  * agents keep their own local/sandbox runtime — `auto` is not offered for
  * them — and a leftover `boundDeviceId` keeps routing to that device.
  */
-const defaultsToAuto = (
+export const defaultsToAuto = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
   isHetero: boolean | undefined,
 ): boolean =>
@@ -373,7 +373,11 @@ export const applyTopicDeviceBinding = (
   const target = agencyConfig?.executionTarget;
   if (
     !topicDeviceId ||
+    // `auto` picks a fresh device every run, so its own earlier pick never pins
+    // the conversation. An unset target takes that same `auto` default (see
+    // `defaultsToAuto`), so it must not be converted into a concrete pin either.
     target === 'auto' ||
+    defaultsToAuto(agencyConfig, undefined) ||
     agencyConfig?.executionTargetSelectionPolicy === 'fixed'
   )
     return unchanged;
