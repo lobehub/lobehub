@@ -26,6 +26,7 @@ export const buildJourneyFlow = (content: ArtboardContent, newId: () => string):
   const entry = screens.find((board) => !targets.has(board.id));
   if (!entry) throw new Error('The journey has no entry board');
 
+  const titles = Object.fromEntries(boards.map((board) => [board.id, board.title]));
   const edgeFlowIds: Record<string, string> = {};
   const flowEdges: AcceptanceFlowEdgeInput[] = [];
 
@@ -40,7 +41,7 @@ export const buildJourneyFlow = (content: ArtboardContent, newId: () => string):
       required: true,
       sourceNodeId: boardNodeIds[first.from],
       targetNodeId: boardNodeIds[last.to],
-      trigger: first.label,
+      trigger: first.label || titles[first.to] || titles[last.to] || '',
     });
   };
 

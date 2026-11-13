@@ -28,3 +28,13 @@ export const toGroupRect = (rect: ArtboardRect, origin?: Origin): ArtboardRect =
 
 export const sameRect = (a: ArtboardRect, b: ArtboardRect) =>
   a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
+export const rectsOverlap = (a: ArtboardRect, b: ArtboardRect) =>
+  a.w > 0 &&
+  a.h > 0 &&
+  b.w > 0 &&
+  b.h > 0 &&
+  a.x < b.x + b.w &&
+  b.x < a.x + a.w &&
+  a.y < b.y + b.h &&
+  b.y < a.y + a.h;

@@ -93,7 +93,7 @@ const formatBoard = (artboard: ArtboardToolSnapshot) => {
     'Edges:',
     ...edges.map(
       (e) =>
-        `- ${e.id} ${e.from} → ${e.to} "${e.label}"${e.condition ? ` if: ${e.condition}` : ''}${e.isDefault ? ' (default)' : ''}`,
+        `- ${e.id} ${e.from} → ${e.to}${e.label ? ` "${e.label}"` : ''}${e.condition ? ` if: ${e.condition}` : ''}${e.isDefault ? ' (default)' : ''}`,
     ),
     'Your open questions:',
     ...questions.map((q) => `- ${q.id} ${formatAnchor(q)}: ${q.content}`),

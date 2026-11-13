@@ -239,7 +239,7 @@ export const artboardOpSchema = z.discriminatedUnion('type', [
       condition: text.optional(),
       from: id,
       isDefault: z.boolean().optional(),
-      label: text,
+      label: text.optional(),
       to: id,
     }),
     ref,

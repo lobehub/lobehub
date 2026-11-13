@@ -13,7 +13,14 @@ import type {
 } from '@/database/models/artboard/structure';
 
 import { failArtboard, toArtboardServiceError } from './errors';
-import { EMPTY_GROUP_RECT, sameRect, toGroupRect, toPageRect, wrapBoards } from './layout';
+import {
+  EMPTY_GROUP_RECT,
+  rectsOverlap,
+  sameRect,
+  toGroupRect,
+  toPageRect,
+  wrapBoards,
+} from './layout';
 import { boardTypeOf, resolveOpRefs, sourceColumns } from './opInputs';
 import type { ResolvedArtboardOp } from './sources';
 
@@ -426,7 +433,7 @@ class Draft {
     const row = await this.model.createEdge(this.artboard.id, {
       condition: edge.condition ?? null,
       isDefault: edge.isDefault ?? false,
-      label: edge.label,
+      label: edge.label ?? '',
       sortOrder: siblings.length,
       sourceBoardId: from.id,
       targetBoardId: to.id,
@@ -437,8 +444,25 @@ class Draft {
   }
 
   async flushLayout() {
-    for (const group of this.groups) {
-      const rect = wrapBoards(this.boards.filter((b) => b.groupId === group.id).map((b) => b.rect));
+    const wrapped = this.groups.map((group) => ({
+      group,
+      rect: wrapBoards(this.boards.filter((b) => b.groupId === group.id).map((b) => b.rect)),
+    }));
+    for (const moved of wrapped) {
+      if (sameRect(moved.group.rect, moved.rect)) continue;
+      const hit = wrapped.find(
+        (other) =>
+          other.group.id !== moved.group.id &&
+          other.group.pageId === moved.group.pageId &&
+          rectsOverlap(moved.rect, other.rect),
+      );
+      if (hit)
+        failArtboard(
+          'invalid',
+          `The frame of group "${moved.group.title}" lands on group "${hit.group.title}". A frame reaches 144 above and 48 around its boards: move the boards of one group so the two frames are apart.`,
+        );
+    }
+    for (const { group, rect } of wrapped) {
       if (sameRect(group.rect, rect)) continue;
       await this.model.updateGroup(group.id, { rect });
       group.rect = rect;

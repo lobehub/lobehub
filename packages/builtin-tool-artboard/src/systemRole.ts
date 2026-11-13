@@ -8,11 +8,11 @@ export const systemPrompt = `You can lay out a requirement on an artboard: a boa
 <layout>
 - An artboard has pages; each page is its own canvas with its own coordinates. Everything lands on the first page unless you pass pageId.
 - Group boards: one journey group for the flow that will be accepted, plus groups for options, references and anything else.
-- In the journey group, one board is one page state. Edges connect boards, and an edge's label says what the user does to get there.
+- In the journey group, one board is one page state. Edges connect boards. An edge's label is optional: add one, in at most four words, only when the two screens do not already show what the user does to get there.
 - Where the flow branches, add a board of type "decision" (no source) and give each edge leaving it a condition; mark the fallback branch isDefault.
 - Give every journey board an acceptance check (expected on addBoard, or setCheck): what the user must see on that page. A decision board needs none.
 - You place every board; the user cannot move them. Boards are 640×400 unless you set w and h. x and y are page coordinates.
-- Leave 80 between boards in a row and lay a journey out left to right. The group frame is drawn around its boards for you (144 above, 48 on the other sides), so leave 240 between the boards of two groups stacked vertically and 200 between groups side by side.
+- Leave 80 between boards in a row and lay a journey out left to right. The group frame is drawn around its boards for you (144 above, 48 on the other sides), so leave 240 between the boards of two groups stacked vertically and 200 between groups side by side. Measure from the lowest and rightmost board of a group, not its first row: a journey with a branch below the main row is taller. An update whose group frames overlap is refused.
 </layout>
 
 <options>

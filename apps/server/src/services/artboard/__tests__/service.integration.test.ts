@@ -187,6 +187,36 @@ describe('ArtboardService.create', () => {
     expect(stored.map((row) => row.rect.x).sort((a, b) => a - b)).toEqual([48, 768]);
   });
 
+  it('refuses a group whose frame lands on another group, and names both', async () => {
+    const overlapping = optionOps().map((op) =>
+      op.type === 'addBoard' ? { ...op, board: { ...op.board, y: 300 } } : op,
+    );
+
+    const error = await errorOf(createJourney(overlapping));
+
+    expect(error.code).toBe('invalid');
+    expect(error.message).toContain('首次进入');
+    expect(error.message).toContain('方案');
+    expect((await createJourney(optionOps())).artboard.content.groups).toHaveLength(2);
+  });
+
+  it('takes an edge without a label', async () => {
+    const { artboard } = await service().create(
+      {
+        ops: [
+          { group: { kind: 'journey', title: '首次进入' }, ref: 'j', type: 'addGroup' },
+          canvasBoard('empty', 'cvs_a', 0),
+          canvasBoard('ingest', 'cvs_b', 720),
+          { edge: { from: 'empty', to: 'ingest' }, type: 'addEdge' },
+        ],
+        title: '画板',
+      },
+      context,
+    );
+
+    expect(artboard.content.edges.map((edge) => edge.label)).toEqual(['']);
+  });
+
   it('creates a task in the conversation’s project when none is given', async () => {
     const result = await service().create(
       { description: '讨论首次进入的流程', title: '首次进入' },
@@ -338,7 +368,7 @@ describe('ArtboardService.update and read', () => {
           source: { canvasId: 'cvs_a', kind: 'canvas' },
           title: 'top',
           x: 0,
-          y: -500,
+          y: -700,
         },
         ref: 'top',
         type: 'addBoard',
@@ -347,7 +377,7 @@ describe('ArtboardService.update and read', () => {
     ]);
     const at = (item: typeof above, id: string) =>
       item.artboard.content.boards.find((b) => b.id === id)!.rect;
-    expect(above.artboard.content.groups[0].rect).toMatchObject({ x: -48, y: -644 });
+    expect(above.artboard.content.groups[0].rect).toMatchObject({ x: -48, y: -844 });
     expect(at(above, empty.id)).toMatchObject({ x: 0, y: 0 });
     expect(at(above, ingest.id)).toMatchObject({ x: 720, y: 0 });
 
@@ -358,8 +388,8 @@ describe('ArtboardService.update and read', () => {
       { id: top.id, patch: { groupId: other.id }, type: 'updateBoard' },
     ]);
     expect(moved.artboard.content.groups[0].rect).toMatchObject({ x: -48, y: -144 });
-    expect(moved.artboard.content.groups[1].rect).toMatchObject({ x: -48, y: -644 });
-    expect(at(moved, top.id)).toMatchObject({ x: 0, y: -500 });
+    expect(moved.artboard.content.groups[1].rect).toMatchObject({ x: -48, y: -844 });
+    expect(at(moved, top.id)).toMatchObject({ x: 0, y: -700 });
     expect(at(moved, ingest.id)).toMatchObject({ x: 720, y: 0 });
 
     const emptied = await service().update(artboard.id, 3, [{ id: top.id, type: 'removeBoard' }]);

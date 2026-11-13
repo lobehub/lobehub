@@ -61,7 +61,7 @@ const opSchema = {
     'updateGroup {id, patch:{title?, kind?, desc?}}; removeGroup {id} (only when empty);',
     'addBoard {board:{title, x, y, w?, h?, groupId?, roundId?, pageId?, type?, source?, recommended?, expected?}}: x/y are page coordinates, size defaults to 640×400, type defaults from the source, type "decision" is a branch point with no source, roundId makes the board an option of that round and recommended marks your pick, expected is the acceptance check of a journey board;',
     'updateBoard {id, patch:{title?, x?, y?, w?, h?, groupId?, roundId?, source?, recommended?, expected?}} (groupId or roundId null detaches); removeBoard {id} (also removes its edges);',
-    'addEdge {edge:{from, to, label, condition?, isDefault?}} where label is what the user does, condition is when a branch out of a decision board is taken and isDefault marks its fallback branch; removeEdge {id};',
+    'addEdge {edge:{from, to, label?, condition?, isDefault?}} where label is what the user does in at most four words and is left out when the two screens already make the step obvious, condition is when a branch out of a decision board is taken and isDefault marks its fallback branch; removeEdge {id};',
     'setCheck {boardId, expected} for a journey board.',
     'pageId defaults to the first page. Add ops may set ref; later ops in the same call use that ref wherever an id is expected.',
   ].join(' '),
