@@ -1,24 +1,28 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 
-const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    flex: none;
-
-    width: 100%;
-    min-height: 40px;
-    padding-block: 2px 4px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    flex: 'none',
+    width: '100%',
+    minHeight: '40px',
+    paddingBlockStart: '2px',
+    paddingBlockEnd: '4px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface RefreshErrorProps {
   error: unknown;
@@ -34,7 +38,7 @@ export const RefreshError = memo<RefreshErrorProps>(({ error, onRetry, retrying 
       horizontal
       align={'center'}
       aria-live={'polite'}
-      className={styles.row}
+      className={stylex.props(styles.row).className}
       justify={'center'}
       role={'status'}
     >

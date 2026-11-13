@@ -1,5 +1,6 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
+// Overseas (USD) price: https://mimo.mi.com/docs/en-US/pricing
 const xiaomimimoChatModels: AIChatModelCard[] = [
   {
     abilities: {
@@ -19,13 +20,14 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     family: 'mimo',
     generation: 'mimo-v2.6',
     id: 'mimo-v2.6-pro',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0036, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.435, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.87, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-09-22',
@@ -53,13 +55,14 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     family: 'mimo',
     generation: 'mimo-v2.6',
     id: 'mimo-v2.6-pro-ultraspeed',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.036, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4.35, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.7, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-09-22',
@@ -87,13 +90,14 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     family: 'mimo',
     generation: 'mimo-v2.6',
     id: 'mimo-v2.6-flash',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-09-22',
@@ -120,11 +124,11 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2024-12',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0036, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.435, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.87, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-22',
@@ -153,11 +157,11 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2024-12',
     maxOutput: 131_072,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-22',

@@ -34,6 +34,13 @@ messages directly to the bound Agent. Group channels leave `agentId` NULL, inclu
 only one Agent. A group whose only active members are one person and one Agent also skips routing:
 every message that mentions no Agent, in the main timeline or any Thread, goes to that Agent,
 which then follows the Thread. Deleting a bound Agent cascades its direct conversations and their public history.
+While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
+name, with the Agent on the device and directory a new Channel would give it
+(`createAgentDirectChannel`).
+Inviting from a direct conversation leaves it as it is and starts a group instead
+(`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
+plus the invited Agents and, in a workspace, people. `userCandidates` lists those people from a
+workspace direct conversation; `addUser` still refuses it.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have
@@ -101,7 +108,9 @@ starts a new topic instead of inheriting later context. Failed/unknown execution
 environments and unavailable topics also start afresh. An adapter's explicit “new conversation”
 feature is outside this foundation.
 
-Every dispatch receives only the triggering request, its author and attachment references. Public
+Every dispatch receives the triggering request, its explicit quote, their authors and attachment references, preceded by
+at most five public messages its topic has not seen (`recentContext`): those after the last request
+the topic accepted, minus the reply it published; a new topic gets the latest five. Older public
 history is read on demand through `lobe-channel.readMessages` / `readMessage` in Native runs, or
 `lh channel history` / `lh channel message` in external runtimes. A Thread can read the main prefix
 through its root plus its own messages; the frozen request cutoff excludes later arrivals. Reads
@@ -118,6 +127,10 @@ runs and sub-agents do not inherit it.
 Pending routing is part of member FIFO even before a job exists. An earlier main-channel
 decision blocks later claims until its recipients are known; an earlier Thread decision blocks
 only that Thread's following members. Skipped, failed or stopped routing releases this barrier.
+A routed message's deferred follow-ups (`wake.afterMemberId`) are queued as `awaiting_primary`
+and claimed only after the same message's primary responder job settles; a deferred claim freezes
+the primary's published reply id in `manifest.primaryReplyMessageId`, read by
+`ChannelExecutionRepository.primaryReply`, without moving the history cutoff.
 Branches opened while their root is pending inherit its eventual responders, preserving explicit
 invitations. Their unmentioned replies stay pending until then, including replies sent with the
 all-candidate fallback. Stopping a reply still fences it; root completion never revives it.
@@ -157,6 +170,15 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
   Isolation frees the member but keeps the device/directory lock. Never retry an unknown delivery.
+- A job blocked only by another writer in its member's directory moves its conversation branch
+  (a Thread, or the main timeline) into a git worktree instead of waiting: the coordinator asks
+  the device to cut `lobe-channel/<member>-<branch>` from that directory's HEAD under
+  `~/.lobehub/worktrees/` (`deriveWorktreePath`), records it in the member's
+  `metadata.worktrees`, and claims again. The worktree then is the job's working directory and
+  directory lock, and the branch keeps it for later replies until the member's device or
+  directory changes. The grant still checks the configured directory it was cut from. Work stays
+  on the worktree branch; nothing merges it back. A directory that cannot host one (not a git
+  repo, device without a home path) keeps the job waiting and is not retried for 10 minutes.
 - Existing hard-delete paths already reach Channel rows: Agent deletion (including trash purge,
   session and group deletion) cascades direct conversations, `UserModel.deleteUser` removes
   personal channels and direct conversations, and workspace deletion cascades every channel in it.

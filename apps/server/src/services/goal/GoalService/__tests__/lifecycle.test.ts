@@ -3,11 +3,15 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
+import { GoalArchiveModel } from '@/database/models/goalArchive';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalArchiveRepository } from '@/database/repositories/goalArchive';
 import { agents, goalEvents, goals, tasks, topics, users, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -297,6 +301,113 @@ describe('GoalService', () => {
       // Still fenced so nothing new starts, but not claimed as ended.
       expect((await new GoalModel(serverDB, userId).findById(goalId))?.status).toBe('paused');
     });
+
+    // A dispatch that failed before its run was written (a database timeout in
+    // `execAgent`) leaves a claimed turn with no operation to interrupt.
+    const strandedGoal = async (
+      title: string,
+      startedAt: Date,
+      receipt: Record<string, unknown> = {},
+    ) => {
+      const service = new GoalService(serverDB, userId);
+      const graph = await service.create({ tasks: ['Managed'], title });
+      await serverDB
+        .update(goals)
+        .set({
+          config: {
+            ...graph.goal.config,
+            manager: {},
+            managerState: {
+              startedAt: startedAt.toISOString(),
+              token: `turn-${title}`,
+              topicId: 'management-topic',
+              turns: 3,
+              ...receipt,
+            },
+          } as never,
+        })
+        .where(eq(goals.id, graph.goal.id));
+      return { goalId: graph.goal.id, service };
+    };
+
+    it('ends a goal whose timed-out main Agent turn never wrote a run', async () => {
+      const { goalId, service } = await strandedGoal(
+        'stranded',
+        new Date(Date.now() - 2 * 60 * 60_000),
+        { dispatchReturnedWithoutRun: true },
+      );
+      const interrupt = vi.spyOn(AiAgentService.prototype, 'interruptTask');
+
+      expect((await service.close(goalId, 'achieved')).status).toBe('achieved');
+      expect(interrupt).not.toHaveBeenCalled();
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.config?.managerState?.consumed).toBe(true);
+    });
+
+    // A straggling dispatch can record its run between the first lookup and the
+    // locked re-check; that run is interrupted, not settled as never started.
+    it('interrupts a run recorded while the stranded turn was being settled', async () => {
+      const { goalId, service } = await strandedGoal(
+        'late-run',
+        new Date(Date.now() - 2 * 60 * 60_000),
+        { dispatchReturnedWithoutRun: true },
+      );
+      vi.spyOn(AgentOperationModel.prototype, 'findByTopicSourceMessage')
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce({ id: 'op-late', status: 'running' } as never);
+      const interrupt = vi
+        .spyOn(AiAgentService.prototype, 'interruptTask')
+        .mockResolvedValue({ success: true } as never);
+
+      expect((await service.close(goalId, 'achieved')).status).toBe('achieved');
+      expect(interrupt).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'op-late' }));
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
+
+    it('deletes a goal whose timed-out main Agent turn never wrote a run', async () => {
+      const { goalId, service } = await strandedGoal(
+        'stranded-delete',
+        new Date(Date.now() - 2 * 60 * 60_000),
+        { dispatchReturnedWithoutRun: true },
+      );
+
+      await service.delete(goalId);
+      expect(await new GoalModel(serverDB, userId).findById(goalId)).toBeFalsy();
+    });
+
+    // `execAgent` returned an operation id, so the run may be live even though
+    // its row was never written; only the explicit --confirm-exit settles it.
+    it('still refuses a timed-out turn that did get an operation id', async () => {
+      const { goalId, service } = await strandedGoal(
+        'dispatched',
+        new Date(Date.now() - 2 * 60 * 60_000),
+        { operationId: 'op-without-row' },
+      );
+
+      await expect(service.close(goalId, 'achieved')).rejects.toThrow(/not closed/);
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
+
+    // Receipts recorded before the dispatch outcome was: the call may in
+    // principle still be pending, so only an age no request could reach counts.
+    it('settles a turn with no recorded dispatch outcome only once no request could still run it', async () => {
+      const recent = await strandedGoal('legacy-recent', new Date(Date.now() - 2 * 60 * 60_000));
+      await expect(recent.service.close(recent.goalId, 'achieved')).rejects.toThrow(/not closed/);
+
+      const old = await strandedGoal('legacy-old', new Date(Date.now() - 25 * 60 * 60_000));
+      expect((await old.service.close(old.goalId, 'achieved')).status).toBe('achieved');
+    });
+
+    it('still refuses while a main Agent turn without a run may be starting', async () => {
+      const { goalId, service } = await strandedGoal('starting', new Date());
+
+      await expect(service.close(goalId, 'achieved')).rejects.toThrow(/not closed/);
+      const goal = await new GoalModel(serverDB, userId).findById(goalId);
+      expect(goal?.status).toBe('paused');
+      expect(goal?.config?.managerState?.consumed).toBeFalsy();
+    });
   });
 
   it('restarts a split-role goal under a new executor without replacing its supervisor', async () => {
@@ -574,5 +685,156 @@ describe('GoalService', () => {
 
     await expect(service.delete(graph.goal.id)).rejects.toThrow(/not deleted/);
     expect(await service.graph(graph.goal.id)).toBeDefined();
+  });
+});
+
+describe('archiving a signed-off goal with its Tasks', () => {
+  /** The owner accepts the Goal-level acceptance for `taskId`. */
+  const signOff = async (taskId: string) => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('task', taskId);
+    await model.updateStatus(acceptance.id, 'accepted');
+  };
+
+  /**
+   * Tick a goal with one work Task up to its last step: the work is done and
+   * the Goal-level acceptance Task has passed, so the next tick achieves it.
+   */
+  const readyToAchieve = async () => {
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'A one-page onboarding checklist',
+      title: 'Signed off',
+      tasks: ['Draft the checklist'],
+    });
+    const work = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(work.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const acceptance = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(acceptance.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    return {
+      acceptanceTaskId: acceptance.taskId!,
+      goalId: graph.goal.id,
+      service,
+      taskModel,
+      workTaskId: work.taskId!,
+    };
+  };
+
+  /** An achieved goal with one work Task and its Goal-level acceptance Task. */
+  const achieveGoal = async () => {
+    const ready = await readyToAchieve();
+    expect((await ready.service.tick(ready.goalId)).outcome).toBe('achieved');
+    return ready;
+  };
+
+  it('leaves the Tasks in the task lists when the goal is signed off', async () => {
+    const { acceptanceTaskId, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+
+    // Signing off closes the goal; putting it and its Tasks away is the owner's archive.
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeNull();
+  });
+
+  it('archives the goal’s Tasks with it, and restores them with it', async () => {
+    const { acceptanceTaskId, goalId, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    const archive = new GoalArchiveRepository(serverDB, userId);
+
+    const goal = await archive.archive(goalId);
+
+    expect(goal?.archivedAt).toBeInstanceOf(Date);
+    const work = await taskModel.findById(workTaskId);
+    expect(work?.archivedAt?.getTime()).toBe(goal?.archivedAt?.getTime());
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeInstanceOf(Date);
+    // Status is untouched, so a restored Task reads exactly as it did.
+    expect(work?.status).toBe('completed');
+
+    await archive.unarchive(goalId);
+
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeNull();
+  });
+
+  it('leaves a Task archived on its own archived when the goal is restored', async () => {
+    const { acceptanceTaskId, goalId, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    expect(await new TaskArchiveModel(serverDB, userId).archive(workTaskId)).not.toBeNull();
+    const archive = new GoalArchiveRepository(serverDB, userId);
+
+    await archive.archive(goalId);
+    await archive.unarchive(goalId);
+
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeInstanceOf(Date);
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeNull();
+  });
+
+  it('keeps a Task that is still running live when its goal is archived', async () => {
+    const { acceptanceTaskId, goalId, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    await taskModel.updateStatus(workTaskId, 'running');
+
+    expect(await new GoalArchiveRepository(serverDB, userId).archive(goalId)).not.toBeNull();
+
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('restores the reworked Task when a signed-off goal is sent back for changes', async () => {
+    const { acceptanceTaskId, service, taskModel } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    await new TaskArchiveModel(serverDB, userId).archive(acceptanceTaskId);
+    // A further round reopens the acceptance so it can be decided again.
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    const acceptance = await acceptanceModel.ensureForSubject('task', acceptanceTaskId);
+    await acceptanceModel.updateStatus(acceptance.id, 'delivered');
+
+    expect(await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda')).toBeDefined();
+
+    // The runner refuses an archived Task, so the rework must be live again.
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeNull();
+    expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('backlog');
+  });
+
+  it('leaves an archived goal put when its sign-off is sent back for changes', async () => {
+    const { acceptanceTaskId, goalId, service, taskModel } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    expect(await new GoalArchiveModel(serverDB, userId).archive(goalId)).not.toBeNull();
+
+    expect(
+      await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda'),
+    ).toBeUndefined();
+
+    // Nothing reworks it out of sight: the goal stays achieved, the Task done.
+    expect((await new GoalModel(serverDB, userId).findById(goalId))?.status).toBe('achieved');
+    expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('completed');
+  });
+
+  it('writes nothing when an archive lands between the reopen’s read and its lock', async () => {
+    const { acceptanceTaskId, goalId, service, taskModel } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    const goals = new GoalModel(serverDB, userId);
+    const unarchived = await goals.findByGraphTask(acceptanceTaskId);
+    expect(await new GoalArchiveModel(serverDB, userId).archive(goalId)).not.toBeNull();
+    // The reopen read the goal before the archive committed.
+    const serviceGoals = (service as unknown as { goalModel: GoalModel }).goalModel;
+    vi.spyOn(serviceGoals, 'findByGraphTask').mockResolvedValueOnce(unarchived);
+
+    expect(
+      await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda'),
+    ).toBeUndefined();
+
+    const goal = await goals.findById(goalId);
+    expect(goal?.status).toBe('achieved');
+    expect(goal?.config?.changeRequest).toBeUndefined();
+    expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('completed');
+    const graph = await service.graph(goalId);
+    const node = graph.nodes.find((candidate) => candidate.taskId === acceptanceTaskId);
+    expect(node?.status).toBe('resolved');
   });
 });

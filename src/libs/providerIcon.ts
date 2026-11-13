@@ -1,9 +1,13 @@
-/* eslint-disable no-restricted-imports -- the lazy wrapper in @/components/LobeIcons is the only importer */
+/* eslint-disable eslint-core/no-restricted-imports -- the lazy wrapper in @/components/LobeIcons is the only importer */
 import {
   ProviderCombine as LobeProviderCombine,
   ProviderIcon as LobeProviderIcon,
 } from '@lobehub/icons';
+
 /* eslint-enable no-restricted-imports */
+import { registerLocalIconMappings } from './lobeIconMappings';
+
+registerLocalIconMappings();
 
 // Do not turn these back into `export { ... }` re-exports: with rolldown's
 // strictExecutionOrder (rolldown 1.2.12) the icon modules' init wrappers are

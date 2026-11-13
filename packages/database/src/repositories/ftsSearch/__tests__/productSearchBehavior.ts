@@ -155,18 +155,12 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       expect(topicResults[0].title).toBe('React Hooks Guide');
     });
 
-    // Note: ICU tokenizer treats "react-component.jsx" as a single token,
-    // so we search by prefix "react" which matches via BM25
-    it('should find files by name', async () => {
+    it('finds results across all types with the matching file name', async () => {
       const results = await ftsSearchRepo.search({ query: 'react' });
 
       const fileResults = results.filter((r) => r.type === 'file');
       expect(fileResults).toHaveLength(1);
       expect(fileResults[0].title).toBe('react-component.jsx');
-    });
-
-    it('should find results across all types', async () => {
-      const results = await ftsSearchRepo.search({ query: 'react' });
 
       // Should find: 1 agent, 1 topic, 1 file
       expect(results.length).toBeGreaterThanOrEqual(3);
@@ -224,24 +218,16 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       await serverDB.insert(agents).values(testAgents);
     });
 
-    it('should assign relevance values in valid range', async () => {
+    it('returns ranked relevance values within the valid range', async () => {
       const results = await ftsSearchRepo.search({ query: 'test' });
 
       const agentResults = results.filter((r) => r.type === 'agent');
       expect(agentResults.length).toBe(3);
 
-      // All relevance values should be in [1, 3] range
       for (const result of agentResults) {
         expect(result.relevance).toBeGreaterThanOrEqual(1);
         expect(result.relevance).toBeLessThanOrEqual(3);
       }
-    });
-
-    it('should rank results by BM25 relevance (lower = better)', async () => {
-      const results = await ftsSearchRepo.search({ query: 'test' });
-
-      const agentResults = results.filter((r) => r.type === 'agent');
-      expect(agentResults.length).toBe(3);
 
       // Best match should have lowest relevance value
       expect(agentResults[0].relevance).toBeLessThanOrEqual(agentResults[1].relevance);
@@ -296,7 +282,7 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       });
     });
 
-    it('should only return current user results', async () => {
+    it('returns current-user results and excludes the foreign agent', async () => {
       const results = await ftsSearchRepo.search({ query: 'agent' });
 
       expect(results.length).toBeGreaterThan(0);
@@ -305,11 +291,6 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       results.forEach((result) => {
         expect(result.title).not.toContain('Other');
       });
-    });
-
-    it('should not return other user agents', async () => {
-      const results = await ftsSearchRepo.search({ query: 'agent' });
-
       const otherAgent = results.find((r) => r.title === 'Other Agent');
       expect(otherAgent).toBeUndefined();
     });
@@ -590,16 +571,22 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       });
     });
 
-    it('should include topics from all agents when agentId is not provided', async () => {
+    it('includes topics from all agents with default limits and relevance', async () => {
       const results = await ftsSearchRepo.search({
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
+      expect(topicResults.length).toBeLessThanOrEqual(3);
       const agentIds = new Set(topicResults.map((t) => (t.type === 'topic' ? t.agentId : null)));
 
       expect(agentIds.has(testAgentId)).toBe(true);
       expect(agentIds.has(otherAgentId)).toBe(true);
+
+      topicResults.forEach((topic) => {
+        expect(topic.relevance).toBeGreaterThanOrEqual(1);
+        expect(topic.relevance).toBeLessThanOrEqual(3);
+      });
     });
 
     it('should populate agent metadata on topic results', async () => {
@@ -730,30 +717,6 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
 
       expect(agentResults.length).toBeLessThanOrEqual(3);
       expect(fileResults.length).toBeLessThanOrEqual(3);
-    });
-
-    it('should use normal limits without agent context', async () => {
-      const results = await ftsSearchRepo.search({
-        query: 'testing',
-      });
-
-      const topicResults = results.filter((r) => r.type === 'topic');
-
-      // Should use default limit of 3 per type
-      expect(topicResults.length).toBeLessThanOrEqual(3);
-    });
-
-    it('should return topics with normal relevance range (1-3) when agentId is not provided', async () => {
-      const results = await ftsSearchRepo.search({
-        query: 'testing',
-      });
-
-      const topicResults = results.filter((r) => r.type === 'topic');
-
-      topicResults.forEach((topic) => {
-        expect(topic.relevance).toBeGreaterThanOrEqual(1);
-        expect(topic.relevance).toBeLessThanOrEqual(3);
-      });
     });
   });
 
@@ -966,17 +929,22 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       expect(results).toEqual([]);
     });
 
-    it('should match documents within KB scope by content', async () => {
+    it('returns scoped knowledge-base documents with bounded snippets and relevance', async () => {
       const results = await ftsSearchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
       expect(results.length).toBeGreaterThan(0);
       // Should hit ML overview, not cooking
       expect(results.some((r) => r.title === 'Machine Learning Overview')).toBe(true);
       expect(results.every((r) => r.knowledgeBaseId === kbA)).toBe(true);
-    });
-
-    it('should respect KB scope (KB-A query does not return KB-B docs)', async () => {
-      const results = await ftsSearchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
       expect(results.every((r) => r.title !== 'Machine Learning in KB-B')).toBe(true);
+
+      results.forEach((r) => {
+        expect(r.snippet.length).toBeLessThanOrEqual(303); // 300 + '...' suffix
+      });
+
+      results.forEach((r) => {
+        expect(r.relevance).toBeGreaterThanOrEqual(1);
+        expect(r.relevance).toBeLessThanOrEqual(3);
+      });
     });
 
     it('should isolate across users', async () => {
@@ -1034,21 +1002,6 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
 
       expect(privateAgentResults).toHaveLength(1);
       expect(publicAgentResults).toEqual([]);
-    });
-
-    it('should produce snippet ≤ 300 characters', async () => {
-      const results = await ftsSearchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
-      results.forEach((r) => {
-        expect(r.snippet.length).toBeLessThanOrEqual(303); // 300 + '...' suffix
-      });
-    });
-
-    it('should produce relevance in [1, 3] range', async () => {
-      const results = await ftsSearchRepo.searchKnowledgeBaseDocuments('machine learning', [kbA]);
-      results.forEach((r) => {
-        expect(r.relevance).toBeGreaterThanOrEqual(1);
-        expect(r.relevance).toBeLessThanOrEqual(3);
-      });
     });
 
     describe('file-backed documents (PDF / parsed files)', () => {
@@ -1227,7 +1180,7 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       ]);
     });
 
-    it('should expand pages to 6 in page context', async () => {
+    it('expands pages while capping other types in page context', async () => {
       const results = await ftsSearchRepo.search({
         contextType: 'page',
         query: 'context test',
@@ -1235,13 +1188,6 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
 
       const pageResults = results.filter((r) => r.type === 'page');
       expect(pageResults.length).toBe(6);
-    });
-
-    it('should limit other types to 3 in page context', async () => {
-      const results = await ftsSearchRepo.search({
-        contextType: 'page',
-        query: 'context test',
-      });
 
       const agentResults = results.filter((r) => r.type === 'agent');
       const topicResults = results.filter((r) => r.type === 'topic');
@@ -1581,10 +1527,25 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       expect(new Set(results.map((r) => r.type))).toEqual(new Set(REWRITTEN_RESULT_TYPES));
     };
 
-    it('should never surface workspace-scoped rows in personal mode', async () => {
+    it('keeps personal rows and their joined agent metadata', async () => {
       const results = await createRepo(serverDB, userId).search({ query: 'Kubernetes' });
 
       expectEveryHitScopedTo(results, 'personal');
+
+      const topic = results.find((r) => r.type === 'topic');
+      expect(topic).toBeDefined();
+      if (topic?.type === 'topic') {
+        expect(topic.agentId).toBe(personalAgentId);
+        expect(topic.agent?.title).toBe('Kubernetes Personal Agent');
+      }
+
+      const message = results.find((r) => r.type === 'message');
+      expect(message).toBeDefined();
+      if (message?.type === 'message') {
+        expect(message.agentId).toBe(personalAgentId);
+        // messages render the owning agent's title as their subtitle
+        expect(message.description).toBe('Kubernetes Personal Agent');
+      }
     });
 
     it('should never surface personal rows in workspace mode', async () => {
@@ -1605,25 +1566,6 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       expect(scoped.length).toBeGreaterThan(0);
       for (const r of scoped) {
         if (r.type === 'topic' || r.type === 'message') expect(r.agentId).toBe(workspaceAgentId);
-      }
-    });
-
-    it('should keep joined agent metadata on topics and messages after the scan split', async () => {
-      const results = await createRepo(serverDB, userId).search({ query: 'Kubernetes' });
-
-      const topic = results.find((r) => r.type === 'topic');
-      expect(topic).toBeDefined();
-      if (topic?.type === 'topic') {
-        expect(topic.agentId).toBe(personalAgentId);
-        expect(topic.agent?.title).toBe('Kubernetes Personal Agent');
-      }
-
-      const message = results.find((r) => r.type === 'message');
-      expect(message).toBeDefined();
-      if (message?.type === 'message') {
-        expect(message.agentId).toBe(personalAgentId);
-        // messages render the owning agent's title as their subtitle
-        expect(message.description).toBe('Kubernetes Personal Agent');
       }
     });
 
@@ -1684,7 +1626,7 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
       ]);
     });
 
-    it('should only surface the requested agent rows in topics and messages', async () => {
+    it('returns only requested-agent rows with their joined metadata', async () => {
       const results = await ftsSearchRepo.search({ agentId: agentAId, query: 'Terraform' });
 
       const scoped = results.filter((r) => r.type === 'topic' || r.type === 'message');
@@ -1694,6 +1636,14 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
         (r) => (r.type === 'topic' || r.type === 'message') && r.agentId !== agentAId,
       );
       expect(foreign.map((r) => `${r.type}: ${r.title}`)).toEqual([]);
+
+      const topic = results.find((r) => r.type === 'topic');
+      expect(topic).toBeDefined();
+      if (topic?.type === 'topic') expect(topic.agent?.title).toBe('Terraform Agent A');
+
+      const message = results.find((r) => r.type === 'message');
+      expect(message).toBeDefined();
+      if (message?.type === 'message') expect(message.description).toBe('Terraform Agent A');
     });
 
     it('should not leak rows between two agent-scoped searches', async () => {
@@ -1718,18 +1668,6 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
         scoped.map((r) => (r.type === 'topic' || r.type === 'message' ? r.agentId : null)),
       );
       expect(agentIds).toEqual(new Set([agentAId, agentBId, null]));
-    });
-
-    it('should keep joined agent metadata after the agent filter moved above the scan', async () => {
-      const results = await ftsSearchRepo.search({ agentId: agentAId, query: 'Terraform' });
-
-      const topic = results.find((r) => r.type === 'topic');
-      expect(topic).toBeDefined();
-      if (topic?.type === 'topic') expect(topic.agent?.title).toBe('Terraform Agent A');
-
-      const message = results.find((r) => r.type === 'message');
-      expect(message).toBeDefined();
-      if (message?.type === 'message') expect(message.description).toBe('Terraform Agent A');
     });
   });
 };

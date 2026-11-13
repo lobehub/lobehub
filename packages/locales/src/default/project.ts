@@ -1,10 +1,21 @@
 export default {
   'directories.currentFolder': 'Current folder',
-  'settings.reuseEnvironmentDescription':
-    'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
   'settings.startDirectoryConversation': 'New topic here',
+  'settings.editDirectory': 'Edit folder',
+  'settings.editDirectoryBusy':
+    'A topic is running in this folder. Wait for it to finish and try again.',
+  'settings.editDirectoryOtherEnvironment':
+    'This folder already belongs to another environment. Choose a different folder or device.',
+  'settings.editDirectoryDescription':
+    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+  'settings.editDirectoryFailed': 'Could not update the folder',
+  'settings.removeDirectory': 'Remove folder',
+  'settings.removeDirectoryConfirmDescription':
+    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+  'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
+  'settings.removeDirectoryFailed':
+    'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
   'settings.configureDirectory': 'Add a working directory',
-  'settings.reuseEnvironment': 'Add an existing environment to this project',
   'settings.addDirectoryFailed': 'Could not add working directory',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
@@ -14,8 +25,8 @@ export default {
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
   'settings.workLocations': 'Working directories',
-  'settings.directoryDescription':
-    'Choose a folder and start a topic. The Agent will work with files in that folder on the connected device.',
+  'settings.directoryListDescription':
+    'Device folders this project works in. Agents read and change files in them on that device.',
   'settings.environmentDescription':
     'Keep repository sources together in an environment, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
@@ -68,6 +79,9 @@ export default {
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'directories.topicsSkipped':
     'Directory linked. {{count}} topics were left out because they run in another directory or on another device, belong to another project, are still running, or no longer exist.',
+  'settings.createdAt': 'Created {{date}}',
+  'settings.creator': 'Creator',
+  'settings.creatorUnknown': 'Former member',
   'settings.general': 'General',
   'settings.logo': 'Logo',
   'settings.logoDescription': 'Shown in the project header, sidebar and switcher.',
@@ -90,7 +104,7 @@ export default {
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
-  'directories.coordinator': 'Project coordinator',
+  'directories.coordinator': 'Lead',
   'directories.environment': 'Environment',
   'directories.newEnvironment': 'Create environment',
 
@@ -161,14 +175,25 @@ export default {
   'acceptance.success.start': 'Project started',
   'acceptance.title': 'Acceptance',
   'create.action': 'Create project',
+  'create.avatarHint': 'Pick an emoji or upload an image. You can also drop an image here.',
+  'create.avatarInvalidType': 'Use a JPG, PNG, GIF, or WEBP image.',
+  'create.avatarUploadFailed': "Couldn't upload the image. Try again.",
+  'create.blank': 'Blank project',
+  'create.fromGithub': 'From GitHub repository',
   'create.identifierDescription':
     'Replaces the task number prefix for this project, for example ACE. Leave it empty to use the default prefix.',
   'create.identifierInvalid': 'Use 3–6 uppercase letters or numbers, starting with a letter.',
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
-  'create.mainAgentDescription':
-    'Manages this project’s conversations, tasks, and goals. Your choice is reused next time.',
+  'create.identifierTaken': 'Another project in this workspace already uses this identifier.',
+  'create.mainAgentDedicatedDescription':
+    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
+  'create.mainAgentDedicatedPlaceholder': 'Named after the project',
+  'create.mainAgentDedicatedTag': 'New',
+  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
+  'create.mainAgentMode.dedicated': 'Create a dedicated agent',
+  'create.mainAgentMode.existing': 'Use an existing agent',
   'create.mainAgentPlaceholder': 'Select an agent',
   'create.nameLabel': 'Project name',
   'create.namePlaceholder': 'What are you working on?',
@@ -176,9 +201,51 @@ export default {
   'create.slugInvalid': 'Use lowercase letters, numbers, and single hyphens only.',
   'create.slugLabel': 'Slug (optional)',
   'create.slugPlaceholder': 'my-project',
+  'create.slugTaken': 'Another project in this workspace already uses this link name.',
   'create.title': 'New project',
+  'createFromGithub.connect': 'Connect GitHub',
+  'createFromGithub.disconnected':
+    'Connect GitHub to choose from your repositories, or paste a public repository URL below.',
+  'createFromGithub.duplicateIdentifier':
+    'Another project already uses this identifier. Choose a different one.',
+  'createFromGithub.duplicateName':
+    'A project with this name already exists, including in the trash. Choose a different name.',
+  'createFromGithub.empty':
+    "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
+  'createFromGithub.environmentHint':
+    "The repository becomes this project's environment, so agents can check it out when they work on the project.",
+  'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
+  'createFromGithub.manageAccess': 'Manage access',
+  'createFromGithub.private': 'Private',
+  'createFromGithub.repositoriesLabel': 'Your repositories',
+  'createFromGithub.searchEmpty': 'No matching repositories',
+  'createFromGithub.searchPlaceholder': 'Search repositories…',
+  'createFromGithub.title': 'New project from GitHub',
+  'createFromGithub.truncated':
+    "Only {{count}} repositories are listed. If yours isn't here, paste its URL below.",
+  'createFromGithub.unconfigured':
+    "GitHub isn't set up on this server. Paste a public repository URL below.",
+  'createFromGithub.urlInvalid':
+    'Enter a GitHub repository URL, such as https://github.com/owner/repo.',
+  'createFromGithub.urlLabel': 'Or paste a repository URL',
+  'createFromGithub.urlPlaceholder': 'https://github.com/owner/repo',
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
+  'delete.confirm.continue': 'Delete project',
+  'delete.confirm.kept.files': 'Files in the working directories on your devices',
+  'delete.confirm.kept.work': 'Tasks, goals, topics and channels',
+  'delete.confirm.keptLead': 'These are kept, but no longer belong to a project:',
+  'delete.confirm.namePrompt': 'Type “{{name}}” to confirm',
+  'delete.confirm.removed.automation':
+    'Project widgets and their run history, Linear sync rules, review sites, dashboards and project memories',
+  'delete.confirm.removed.bindings':
+    'Links to agents, groups and knowledge bases (your agents and knowledge bases are kept)',
+  'delete.confirm.removed.settings':
+    'Project settings, members, working directories and environments',
+  'delete.confirm.removedLead': 'Deleting “{{name}}” cannot be undone. It permanently removes:',
+  'delete.confirm.title': 'Delete project',
+  'delete.description':
+    'Permanently delete this project and its settings. Tasks, goals and topics are kept but no longer belong to a project.',
   'goals.create': 'Create goal',
   'goals.description': 'Define the outcomes this project is pursuing and track them to acceptance.',
   'goals.emptyDescription': 'Create the first measurable outcome for this project.',
@@ -193,11 +260,17 @@ export default {
   'goals.status.running': 'Pursuing',
   'goals.status.scheduled': 'Scheduled',
   'goals.title': 'Goals',
+  'list.folder.coordinatedBy': 'Coordinated by {{name}}',
+  'list.folder.intro': 'About',
+  'list.folder.noTasks': 'No tasks',
+  'list.folder.noTasksHint':
+    'No tasks yet. Create the first one in this project and it shows up here.',
+  'list.folder.overviewError': "Couldn't load the tasks shown on the cards.",
+  'list.folder.recentTask': 'Latest task',
+  'list.folder.running': 'In progress',
+  'list.folder.taskProgress': '{{done}}/{{total}} tasks',
   'list.emptyDescription': 'Create your first project to organize goals, tasks, and resources.',
   'list.deleteAction': 'Delete project',
-  'list.deleteConfirmDescription':
-    'Delete “{{name}}”? Its project tasks, goals, topics, and bindings will be permanently removed.',
-  'list.deleteConfirmTitle': 'Delete project?',
   'list.deleteError': 'Could not delete the project.',
   'list.deleteSuccess': '“{{name}}” deleted',
   'list.moreActions': 'More project actions',
@@ -205,6 +278,9 @@ export default {
   'list.searchPlaceholder': 'Search projects',
   'list.title': 'Projects',
   'list.viewAll': 'View all projects',
+  'list.view.folder': 'Folders',
+  'list.view.list': 'List',
+  'list.view.title': 'View',
   'overview.noDescription': 'A dedicated workspace for this long-running goal.',
   'overview.activeTasks': 'In progress',
   'overview.agentSelect': 'Choose an agent',
@@ -235,8 +311,37 @@ export default {
   'rename.nameLabel': 'Project name',
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
+  'environment.add.action': 'Add',
+  'environment.add.existing': 'Add an existing one',
+  'environment.add.failed': "Couldn't add the environment to this project",
+  'environment.add.github': 'New from GitHub',
+  'environment.add.noExisting': 'All of your environments are already in this project.',
+  'environment.add.noPublished':
+    'No published environments to add. A shared project only uses published environments.',
+  'environment.add.title': 'Add environment',
+  'environment.privateInShared': 'Private',
+  'environment.privateInSharedTooltip':
+    "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
+  'overview.context.location.devices': 'Devices',
+  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directoryUnavailable':
+    "Couldn't reach this folder. Check that the device is online and the folder still exists.",
+  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectoryTooltip':
+    "This device has no project folder yet, so the conversation starts in the device's default directory.",
+  'overview.context.location.environments': 'Code environments',
+  'overview.context.location.noEnvironments': 'No code environments yet.',
+  'overview.context.location.title': 'Work location',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
+  'overview.context.repository.publishHint':
+    'This agent is shared with the workspace and only uses published environments, so the repository is added as one that workspace members can see.',
+  'overview.context.target.device': 'A connected device',
+  'overview.context.target.noneTooltip':
+    'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',
+  'overview.context.target.sandboxTooltip':
+    'Runs in the cloud sandbox, so none of your devices need to be online.',
+  'overview.context.target.switchFailed': "Couldn't change where this agent runs",
   'overview.sendHint': '⌘ ↵ to send',
   'overview.startConversation': 'Start moving',
   'overview.tasksEmpty': 'No tasks belong to this project yet.',
@@ -262,7 +367,6 @@ export default {
   'sidebar.newConversation': 'New topic',
   'sidebar.title': 'Projects',
   'sidebar.untitledConversation': 'Untitled topic',
-  'review.members.selectMember': 'Select a workspace member',
   'review.members.workspaceOnly': 'Project members are available only in a workspace.',
   'review.members.role': 'Role',
   'review.members.roleOf': 'Role of {{name}}',
@@ -283,19 +387,19 @@ export default {
   'review.sites.create': 'Create site',
   'review.sites.delete': 'Delete',
   'review.sites.deleteDescription':
-    'The script on {{name}} stops working, and the site’s review and all its discussions are deleted. This cannot be undone.',
+    'The script on {{name}} stops working, and the site’s acceptance and all its discussions are deleted. This cannot be undone.',
   'review.sites.deleteError': 'Could not delete the site',
   'review.sites.deleteTitle': 'Delete {{name}}?',
   'review.sites.description':
-    'Websites that can embed the review script. Only project members see the toolbar there.',
+    'Websites that can embed the acceptance script. Only project members see the toolbar there.',
   'review.sites.edit': 'Edit',
   'review.sites.editTitle': 'Edit site',
-  'review.sites.empty': 'No sites yet. Add one to review it with the project’s members.',
+  'review.sites.empty': 'No sites yet. Add one to run acceptance on it with the project’s members.',
   'review.sites.moreActions': 'More actions for {{name}}',
   'review.sites.name': 'Site name',
   'review.sites.namePlaceholder': 'Marketing site',
   'review.sites.newTitle': 'New site',
-  'review.sites.open': 'Open with review',
+  'review.sites.open': 'Open for acceptance',
   'review.sites.openUnavailable': 'Add an exact origin to open the site from here.',
   'review.sites.originLabel': 'Origin {{index}}',
   'review.sites.origins': 'Allowed origins',
@@ -307,7 +411,13 @@ export default {
   'review.sites.title': 'Sites',
   'review.sites.viewReview': 'View in Acceptance',
   'review.accessForbidden': 'Your project role does not allow this action.',
-  'review.members.setRole': 'Set project role',
+  'review.members.add': 'Add members',
+  'review.members.addAs': 'Add as',
+  'review.members.addCount': 'Add {{count}} member(s)',
+  'review.members.empty': 'No project-specific roles yet. Everyone follows their workspace role.',
+  'review.members.noCandidates': 'Every workspace member already has a project role',
+  'review.members.noMatch': 'No matching workspace members',
+  'review.members.search': 'Search by name or email',
   'review.members.setRoleError': 'Could not update the project role',
   'review.members.inheritRole': 'Follow workspace role',
   'review.members.roleInheritance':
@@ -375,4 +485,36 @@ export default {
   'overview.mode.task': 'Task',
   'overview.sendFailed': 'Could not create the topic',
   'overview.taskPlaceholder': 'Describe the task to add to this project…',
+  'onboarding.dismiss': 'Hide checklist',
+  'onboarding.progress': '{{completed}}/{{total}} done',
+  'onboarding.title': 'Get started',
+  'review.sites.detectSeen': 'Last detected {{time}}',
+  'review.sites.detectWaiting': 'Not detected yet',
+  'review.sites.detectWaitingDescription':
+    "Put the line above in your site's <head> and deploy, then open any page of the site. This notice disappears once the script is detected.",
+  'review.sites.detectWaitingTitle': 'Waiting for the script to load for the first time',
+  'create.moreSettings': 'More settings (identifier, slug)',
+  'create.afterCreateHint':
+    "After it's created, the project home helps you connect code folders, sites and libraries.",
+  'onboarding.basics.importTasks.title': 'Bring in or create tasks',
+  'onboarding.basics.importTasks.create': 'New task',
+  'onboarding.basics.firstChat.title': 'Start a first chat with the main agent',
+  'onboarding.basics.firstChat.action': 'Start chatting',
+  'onboarding.basics.inviteMembers.title': 'Invite members',
+  'onboarding.basics.inviteMembers.action': 'Invite',
+  'onboarding.connect.title': 'Connect what you need',
+  'onboarding.connect.hint': 'Only what this project uses. Not counted in progress.',
+  'onboarding.connect.directory.title': 'Code folders',
+  'onboarding.connect.directory.description': 'Let chats work in the repo',
+  'onboarding.connect.directory.count': '{{count}} connected',
+  'onboarding.connect.site.title': 'Site review',
+  'onboarding.connect.site.description': 'Review right on the page',
+  'onboarding.connect.site.waiting': 'Waiting for the script',
+  'onboarding.connect.site.seen': 'Script detected',
+  'onboarding.connect.knowledge.title': 'Libraries',
+  'onboarding.connect.knowledge.description': 'Docs and references',
+  'onboarding.connect.knowledge.count': '{{count}} added',
+  'onboarding.connect.goal.title': 'Goals',
+  'onboarding.connect.goal.description': 'Set a goal you can sign off',
+  'onboarding.connect.goal.count': '{{count}} set',
 };

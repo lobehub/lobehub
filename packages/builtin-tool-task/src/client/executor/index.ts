@@ -38,6 +38,11 @@ import { normalizeListTasksParams } from '../../listTasks';
 import { selectAssignableMembers } from '../../listWorkspaceMembers';
 import { TaskIdentifier } from '../../manifest';
 import { normalizeSetTaskVerifyParams } from '../../setTaskVerify';
+import {
+  describeTaskModelChange,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
+} from '../../taskModel';
 import { resolveTaskOpenTarget } from '../../taskRef';
 import type {
   AddTaskCommentParams,
@@ -49,6 +54,8 @@ import type {
   UpdateTaskCommentParams,
 } from '../../types';
 import { TaskApiName } from '../../types';
+import { applyTaskLabelDelta, resolveLabelIdsOrThrow } from './labelIds';
+import { settleAll } from './settleAll';
 
 const log = debug('lobe-task:executor');
 
@@ -202,10 +209,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
-      // Bind a goal entity to the created task (see TaskService.createTask).
+      labels?: string[];
+      model?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      provider?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -229,11 +238,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       // member owns the outcome, the agent executes) — a member owner does not
       // suppress the usual current-agent default.
       const parent = parentIdentifier ? (await taskService.find(parentIdentifier)).data : undefined;
+      const labelIds = await resolveLabelIdsOrThrow(params.labels);
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         assigneeUserId,
+        config: toCreateTaskModelConfig(params),
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
+        labelIds, // attached in the same request; the task is rolled back on failure
         name: params.name,
         parentTaskId: parent?.id,
         priority: params.priority,
@@ -254,6 +266,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           id: task.id,
           identifier: task.identifier,
           instruction: params.instruction,
+          labels: task.labels ?? [],
           name: task.name,
           parentLabel: parent?.identifier,
           parentTaskId: parent?.id,
@@ -294,9 +307,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
+      model?: string;
       name: string;
       parentIdentifier?: string;
       priority?: number;
+      provider?: string;
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -408,20 +423,29 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   editTask = async (
     params: {
       addDependencies?: string[];
+      addLabels?: string[];
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       description?: string;
       identifier: string;
       instruction?: string;
+      model?: string | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
+      provider?: string | null;
       removeDependencies?: string[];
+      removeLabels?: string[];
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    let undoLabels: (() => Promise<void>) | undefined;
     try {
       log('[TaskExecutor] editTask - params:', params);
+      const [add, remove] = await Promise.all([
+        resolveLabelIdsOrThrow(params.addLabels),
+        resolveLabelIdsOrThrow(params.removeLabels),
+      ]);
 
       const { addDependencies, removeDependencies } = params;
       const target = (await taskService.find(params.identifier)).data;
@@ -429,6 +453,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
+      // Labels first: a label failure then writes nothing else, and a later
+      // failure undoes just this label change (see the catch below).
+      const { addLabels: _a, identifier: _i, removeLabels: _r, ...otherEdits } = params;
+      const hasOtherEdits = Object.values(otherEdits).some((value) => value !== undefined);
+      undoLabels = await applyTaskLabelDelta(identifier, { add, remove }, hasOtherEdits);
 
       const updateData: {
         description?: string;
@@ -496,6 +525,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         );
       }
 
+      // Merged into `config` so checkpoint / review / execution keys survive.
+      const modelPatch = toTaskModelConfigPatch(params);
+      if (modelPatch) {
+        ops.push(store.updateTaskModelConfig(identifier, modelPatch, { rethrow: true }));
+        changes.push(describeTaskModelChange(modelPatch));
+      }
+
       const applyDependencies = async (refs: string[], remove: boolean) => {
         const tasks = await Promise.all(
           refs.map(async (ref) => (await taskService.find(ref)).data),
@@ -516,8 +552,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
       if (addDependencies?.length) await applyDependencies(addDependencies, false);
       if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
+      if (remove.length || add.length) ops.push(store.refreshTaskList());
+      if (remove.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
+      if (add.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
 
-      await Promise.all(ops);
+      await settleAll(ops);
 
       return {
         content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
@@ -525,6 +564,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         success: true,
       };
     } catch (error) {
+      await undoLabels?.();
       log('[TaskExecutor] editTask - error:', error);
       const message = error instanceof Error ? error.message : 'Failed to edit task';
       return {
@@ -852,6 +892,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   listTasks = async (
     params: {
       assigneeAgentId?: string;
+      labels?: string[];
       limit?: number;
       offset?: number;
       parentIdentifier?: string;
@@ -868,6 +909,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         defaultScope: ctx?.scope === 'task' ? 'allAgents' : 'currentAgent',
       });
 
+      const labelIds = await resolveLabelIdsOrThrow(params.labels, true);
+      if (labelIds.length)
+        normalized.query.filter = { label: { operator: 'is', values: labelIds } };
       const result = await getTaskStoreState().fetchTaskList(normalized.query);
 
       const tasks = result.data ?? [];
@@ -898,7 +942,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   runTask = async (
-    params: { continueTopicId?: string; identifier?: string; prompt?: string },
+    params: {
+      continueTopicId?: string;
+      identifier?: string;
+      model?: string;
+      prompt?: string;
+      provider?: string;
+    },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const identifier = params.identifier?.trim() || ctx?.taskId || undefined;
@@ -915,7 +965,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const target = (await taskService.find(identifier)).data;
       const result = await taskService.run(target.id, {
         continueTopicId: params.continueTopicId,
+        model: params.model,
         prompt: params.prompt,
+        provider: params.provider,
       });
 
       const topicId = (result as { topicId?: string } | undefined)?.topicId;
@@ -951,7 +1003,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   runTasks = async (
-    params: { identifiers: string[] },
+    params: { identifiers: string[]; model?: string; provider?: string },
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const identifiers = Array.isArray(params.identifiers)
@@ -996,7 +1048,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     }
     for (const task of byId.values()) {
       try {
-        const result = await taskService.run(task.id);
+        const result = await (params.model || params.provider
+          ? taskService.run(task.id, { model: params.model, provider: params.provider })
+          : taskService.run(task.id));
         results.push({
           identifier: task.identifier,
           taskId: task.id,

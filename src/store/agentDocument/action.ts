@@ -79,6 +79,30 @@ export class AgentDocumentActionImpl {
     return this.#private.reader.hydrate(params, scope);
   };
 
+  /**
+   * Seed the document's persisted chat topic id before the page mounts, so the
+   * floating chat panel opens on its conversation without waiting for the
+   * get-or-create round-trip. Resolves `true` when a persisted id landed.
+   */
+  preHydrateDocumentChatTopic = (params?: AgentDocumentReaderParams | null): Promise<boolean> => {
+    if (!params?.agentId || !params.documentId) return Promise.resolve(false);
+
+    const scope = cacheScope.get();
+    this.#private.chatTopic.ensureScope(scope);
+    return this.#private.chatTopic.hydrate(params, scope);
+  };
+
+  /**
+   * Fetch orchestration for the document's chat topic (get-or-create, so it
+   * runs only once the caller has proven the agent owns the document). Read the
+   * id with `agentDocumentSelectors.getDocumentChatTopicId`.
+   */
+  useFetchDocumentChatTopic = (params?: AgentDocumentReaderParams | null): ReplicaSyncResult =>
+    this.#private.chatTopic.useSync(params?.agentId && params.documentId ? params : null, {
+      dedupingInterval: 10_000,
+      revalidateOnFocus: false,
+    });
+
   /** Fetch orchestration for the read-only reader; read it with `getReaderDocument`. */
   useFetchReaderDocument = (params?: AgentDocumentReaderParams | null): ReplicaSyncResult =>
     this.#private.reader.useSync(params?.agentId && params.documentId ? params : null, {

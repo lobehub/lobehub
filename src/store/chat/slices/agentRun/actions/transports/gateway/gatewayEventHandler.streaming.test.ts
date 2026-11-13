@@ -74,6 +74,124 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
       );
     });
 
+    it('inserts a server-joined steer message ahead of the reply without a DB refetch', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', parentId: 'steer-1', role: 'assistant' },
+          parentMessage: {
+            content: 'why not the Feishu CLI',
+            id: 'steer-1',
+            metadata: { steer: true },
+            parentId: 'msg-step1',
+            role: 'user',
+          },
+        }),
+      );
+      await flush();
+
+      const created = vi
+        .mocked(store.internal_dispatchMessage)
+        .mock.calls.filter(([action]) => action.type === 'createMessage')
+        .map(([action]) => action);
+      expect(created).toEqual([
+        expect.objectContaining({
+          id: 'steer-1',
+          value: expect.objectContaining({
+            content: 'why not the Feishu CLI',
+            metadata: { steer: true },
+            parentId: 'msg-step1',
+            role: 'user',
+          }),
+        }),
+        expect.objectContaining({
+          id: 'msg-step2',
+          value: expect.objectContaining({ parentId: 'steer-1', role: 'assistant' }),
+        }),
+      ]);
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('does not insert the steer parent twice when the store already has it', async () => {
+      const store = createMockStore();
+      store.dbMessagesMap = { 'session_agent-1_topic-1': [{ id: 'steer-1', role: 'user' }] };
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', parentId: 'steer-1', role: 'assistant' },
+          parentMessage: { content: 'x', id: 'steer-1', role: 'user' },
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'steer-1', type: 'createMessage' }),
+        expect.anything(),
+      );
+    });
+
+    it('files a seeded reply after the message it answers when the client clock is behind', async () => {
+      const store = createMockStore();
+      // The user row carries the server's time; this client's clock runs a minute behind.
+      const userCreatedAt = Date.now() + 60_000;
+      store.dbMessagesMap = {
+        'session_agent-1_topic-1': [{ createdAt: userCreatedAt, id: 'user-1', role: 'user' }],
+      };
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step1', parentId: 'user-1', role: 'assistant' },
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdAt: userCreatedAt + 1,
+          id: 'msg-step1',
+          type: 'createMessage',
+        }),
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('keeps the server creation times a seeded stream_start ships', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: {
+            createdAt: 1_700_000_000_200,
+            id: 'msg-step2',
+            parentId: 'steer-1',
+            role: 'assistant',
+          },
+          parentMessage: {
+            content: 'x',
+            createdAt: 1_700_000_000_100,
+            id: 'steer-1',
+            metadata: { steer: true },
+            role: 'user',
+          },
+        }),
+      );
+      await flush();
+
+      const created = vi
+        .mocked(store.internal_dispatchMessage)
+        .mock.calls.filter(([action]) => action.type === 'createMessage')
+        .map(([action]) => [action.id, (action as { createdAt?: number }).createdAt]);
+      expect(created).toEqual([
+        ['steer-1', 1_700_000_000_100],
+        ['msg-step2', 1_700_000_000_200],
+      ]);
+    });
+
     it('should keep current ID if event data has no assistantMessage', async () => {
       const store = createMockStore();
       const handler = createHandler(store);

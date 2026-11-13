@@ -170,9 +170,8 @@ vi.mock('@/server/services/messenger/push', () => ({
 vi.mock('@/server/services/bot/agentBotProviderSettings', () => ({
   assertBotAccessSettings: vi.fn(),
   invalidateBotAfterUpdate: vi.fn().mockResolvedValue(undefined),
-  mergeBotSettingsForPersist: vi.fn(function (_platform, settings) {
-    return settings;
-  }),
+  mergeBotSettingsForCreate: vi.fn(async (_db, _agentId, _platform, settings) => settings),
+  mergeBotSettingsForPersist: vi.fn((_platform, settings) => settings),
 }));
 
 // Mock platform API constructors
@@ -323,6 +322,21 @@ beforeEach(() => {
 });
 
 // ==================== Tests ====================
+
+const telegramAccountLink = () => ({
+  createdAt: new Date('2026-03-01T00:00:00Z'),
+  platform: 'telegram',
+  tenantId: '',
+  userId: 'user-1',
+});
+
+const wechatAccountLink = () => ({
+  applicationId: 'bot@im.wechat',
+  createdAt: new Date('2026-03-01T00:00:00Z'),
+  id: 'link_wechat',
+  platform: 'wechat',
+  tenantId: 'alice@im.wechat',
+});
 
 describe('messageRuntime', () => {
   it('should have correct identifier', () => {
@@ -914,13 +928,7 @@ describe('messageRuntime', () => {
     it('synthesizes WeChat installs from account links', async () => {
       mockListByInstallerUserId.mockResolvedValueOnce([]);
       mockLinkList.mockResolvedValueOnce([
-        {
-          applicationId: 'bot@im.wechat',
-          createdAt: new Date('2026-03-01T00:00:00Z'),
-          id: 'link_wechat',
-          platform: 'wechat',
-          tenantId: 'alice@im.wechat',
-        },
+        wechatAccountLink(),
         // Non-WeChat links (and WeChat links without an applicationId) are
         // routing-only rows — they must not surface as installs.
         { createdAt: new Date(), id: 'link_tg', platform: 'telegram', tenantId: 'tg-user' },
@@ -959,14 +967,7 @@ describe('messageRuntime', () => {
         botToken: 'tg-env-token',
         botUsername: 'lobehub_bot',
       });
-      mockLinkList.mockResolvedValueOnce([
-        {
-          createdAt: new Date('2026-03-01T00:00:00Z'),
-          platform: 'telegram',
-          tenantId: '',
-          userId: 'user-1',
-        },
-      ]);
+      mockLinkList.mockResolvedValueOnce([telegramAccountLink()]);
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.listMessengers({});
@@ -986,14 +987,7 @@ describe('messageRuntime', () => {
     it('omits the telegram singleton when env config is missing', async () => {
       mockListByInstallerUserId.mockResolvedValueOnce([]);
       mockGetMessengerTelegramConfig.mockResolvedValueOnce(null);
-      mockLinkList.mockResolvedValueOnce([
-        {
-          createdAt: new Date('2026-03-01T00:00:00Z'),
-          platform: 'telegram',
-          tenantId: '',
-          userId: 'user-1',
-        },
-      ]);
+      mockLinkList.mockResolvedValueOnce([telegramAccountLink()]);
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.listMessengers({});
@@ -1033,14 +1027,7 @@ describe('messageRuntime', () => {
         botToken: 'tg-env-token',
         botUsername: 'lobehub_bot',
       });
-      mockLinkList.mockResolvedValueOnce([
-        {
-          createdAt: new Date('2026-03-01T00:00:00Z'),
-          platform: 'telegram',
-          tenantId: '',
-          userId: 'user-1',
-        },
-      ]);
+      mockLinkList.mockResolvedValueOnce([telegramAccountLink()]);
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.listMessengers({});
@@ -1075,13 +1062,7 @@ describe('messageRuntime', () => {
     });
 
     it('returns WeChat detail from the account link without touching installs', async () => {
-      mockLinkFindById.mockResolvedValueOnce({
-        applicationId: 'bot@im.wechat',
-        createdAt: new Date('2026-03-01T00:00:00Z'),
-        id: 'link_wechat',
-        platform: 'wechat',
-        tenantId: 'alice@im.wechat',
-      });
+      mockLinkFindById.mockResolvedValueOnce(wechatAccountLink());
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.getMessengerDetail({ installationId: 'link_wechat' });
@@ -1126,14 +1107,7 @@ describe('messageRuntime', () => {
         botToken: 'tg-env-token',
         botUsername: 'lobehub_bot',
       });
-      mockLinkList.mockResolvedValueOnce([
-        {
-          createdAt: new Date('2026-03-01T00:00:00Z'),
-          platform: 'telegram',
-          tenantId: '',
-          userId: 'user-1',
-        },
-      ]);
+      mockLinkList.mockResolvedValueOnce([telegramAccountLink()]);
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.getMessengerDetail({ installationId: 'telegram:singleton' });
@@ -1213,13 +1187,7 @@ describe('messageRuntime', () => {
     });
 
     it('deletes the account link and tears down the poller for a WeChat install', async () => {
-      mockLinkFindById.mockResolvedValueOnce({
-        applicationId: 'bot@im.wechat',
-        createdAt: new Date('2026-03-01T00:00:00Z'),
-        id: 'link_wechat',
-        platform: 'wechat',
-        tenantId: 'alice@im.wechat',
-      });
+      mockLinkFindById.mockResolvedValueOnce(wechatAccountLink());
       mockLinkDelete.mockResolvedValueOnce(undefined);
       mockDisconnectUserMessenger.mockResolvedValueOnce(undefined);
 

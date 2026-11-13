@@ -88,3 +88,24 @@ export const assertNotInOpenGoal = async (
     });
   }
 };
+
+/**
+ * Bulk form of {@link assertNotInOpenGoal}: the ids among `tasks` that an open
+ * Goal still owns, resolved in a fixed number of queries however many tasks
+ * are passed. Finished tasks are never blocked, exactly as for one task.
+ */
+export const findTasksInOpenGoals = async (
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string },
+  tasks: { id: string; status: string }[],
+): Promise<Set<string>> => {
+  const unfinished = tasks.filter((task) => !FINISHED_TASK_STATUSES.has(task.status));
+  if (unfinished.length === 0) return new Set();
+
+  const owners = await new GoalGraphModel(db, scope.userId, scope.workspaceId).findGoalsByTaskIds(
+    unfinished.map((task) => task.id),
+  );
+  return new Set(
+    [...owners].filter(([, goal]) => !TERMINAL_GOAL_STATUSES.has(goal.status)).map(([id]) => id),
+  );
+};

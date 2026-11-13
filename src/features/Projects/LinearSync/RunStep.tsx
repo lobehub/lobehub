@@ -11,6 +11,7 @@ import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
   linearSyncJobErrorMessage,
+  linearSyncJobProgress,
   linearSyncSkippedCount,
 } from './utils';
 
@@ -105,19 +106,22 @@ const RunStep = memo<RunStepProps>(({ actions, job, pendingIssueCount }) => {
         title={
           issueCount
             ? t('linear.sync.job.runningIssues', { count: issueCount })
-            : t('linear.sync.job.runningRule')
+            : job?.result?.created
+              ? linearSyncJobProgress(job, t)
+              : t('linear.sync.job.runningRule')
         }
       />
     );
   }
 
   if (job.status === 'error') {
+    const stopped = job.error === 'canceled';
     return (
       <Result
         extra={actions}
-        status={'error'}
+        status={stopped ? 'info' : 'error'}
         subTitle={linearSyncJobErrorMessage(job.error, t)}
-        title={t('linear.sync.job.failed')}
+        title={stopped ? t('linear.sync.job.stopped') : t('linear.sync.job.failed')}
       />
     );
   }

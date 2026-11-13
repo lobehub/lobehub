@@ -3,6 +3,7 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { deriveAgentInterventionContinuationOperationId } from '@/business/server/agent-run/agentInterventionIdentity';
+import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { TopicModel } from '@/database/models/topic';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -12,10 +13,15 @@ import {
   type SupersedeKind,
   type SupersedeRecord,
 } from '@/server/services/agentRuntime/foregroundOperation';
+import { isOperationLeaseFresh } from '@/server/services/agentRuntime/operationLease';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
-import { acquireTopicStartReservation, TopicStartReservationError } from '../topicStartReservation';
+import {
+  acquireTopicStartReservation,
+  ForeignLiveRunError,
+  TopicStartReservationError,
+} from '../topicStartReservation';
 import type { InternalExecAgentParams } from '../types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -53,7 +59,10 @@ export const resolveReplacedOperationId = async (
   if (!replacesOperationId || !params.interactiveStart) return replacesOperationId;
 
   const replaced = await deps.agentOperationModel.findById(replacesOperationId);
-  return replaced?.topicId === topicId ? replacesOperationId : undefined;
+  // Workspace reads are member-wide, so the row may be a teammate's run.
+  return replaced?.topicId === topicId && replaced.userId === deps.userId
+    ? replacesOperationId
+    : undefined;
 };
 
 /**
@@ -73,12 +82,16 @@ export const resolveReplacedOperationId = async (
  * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
  * - a background producer's run (task, cron, bot, …), see
  *   `isComposerSupersedableTrigger` in `agentRuntime/foregroundOperation`.
- *   An Agent Signal run on the main spine (task-result wakeup) is retired
+ *   A task-result wakeup or an Agent Signal run on the main spine is retired
  *   like a foreground run: the client never tracks it, so it cannot queue;
  * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
  *   for the device, far past the reservation's ~3s retry budget, so a
  *   concurrent send would fail. Those settle through `replacesOperationId`
  *   before reserving.
+ *
+ * A send never retires another member's live run: in a workspace topic a
+ * teammate may be driving it, so the start is refused with
+ * {@link ForeignLiveRunError}. That also covers a teammate's device-hosted run.
  *
  * @returns the retired run and whether it had already been asked to stop, so
  * the caller can record the overlap on the new run.
@@ -91,11 +104,29 @@ export const supersedeRunningForegroundOperation = async (
   const topic = await deps.topicModel.findById(topicId);
   const marker = topic?.metadata?.runningOperation;
   const holderId = marker?.operationId;
-  if (!holderId || marker.heteroType || alreadyHandledOperationIds.includes(holderId)) return;
+  if (!holderId || alreadyHandledOperationIds.includes(holderId)) return;
 
   const holder = await deps.agentOperationModel.findById(holderId);
   if (holder?.status !== 'running') return;
+
+  // A teammate's run the send would retire (or run next to, for a device
+  // process) refuses the send. One whose lease froze is dead — often a
+  // `running` row nothing will ever settle — and must not lock the topic, so
+  // it keeps the behavior below.
+  const heterogeneous = Boolean(marker.heteroType);
+  const refuseIfForeignAndAlive = () => {
+    if (holder.userId === deps.userId || !isOperationLeaseFresh(holder, { heterogeneous })) return;
+    throw new ForeignLiveRunError(
+      `Topic ${topicId} is driven by another member's running operation ${holderId}`,
+    );
+  };
+
+  if (heterogeneous) {
+    refuseIfForeignAndAlive();
+    return;
+  }
   if (!isComposerSupersedableTrigger(holder.trigger)) return;
+  refuseIfForeignAndAlive();
 
   // Read before interrupting: afterwards the sentinel is always set. The
   // read is diagnostic only, so a failure must not fail the send.
@@ -122,6 +153,9 @@ export const supersedeRunningForegroundOperation = async (
   if (!interrupted.success) {
     console.warn('[execAgent] supersede of %s was not confirmed', holderId, { topicId });
   }
+  // The interrupted run settles at its next step boundary; free its slot now
+  // so the send that replaces it is not refused for the run it just stopped.
+  await releaseAgentRunSlot(deps.userId, holderId);
   return { holderId, kind };
 };
 
@@ -268,6 +302,7 @@ export const runWithTopicStart = async (
     if (interruption.deviceCancellationConfirmed === false) {
       throw new Error('Replaced heterogeneous agent process did not confirm termination');
     }
+    await releaseAgentRunSlot(deps.userId, replacesOperationId);
   }
   const reserved = await acquireTopicStartReservation({
     allowSameReservationReentry: !params.approvalResolutionRequestId,

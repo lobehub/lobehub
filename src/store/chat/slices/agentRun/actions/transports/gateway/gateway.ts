@@ -39,13 +39,10 @@ import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-import {
-  consumePendingSandboxSelection,
-  getPendingSandboxSelection,
-  toSandboxTopicMetadata,
-} from '@/store/chat/pendingSandboxSelection';
-import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { consumePendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
+import { consumePendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
+import { leaveBlankConversationBucket } from '@/store/chat/slices/agentRun/actions/clearBlankBucket';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import {
   SETTLEABLE_TOPIC_RUN_OPERATION_TYPES,
@@ -76,7 +73,8 @@ import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
-import { awaitStartRequest, interruptGatewayTaskOrThrow } from './gatewayStartRequest';
+import { interruptGatewayTaskOrThrow } from './gatewayStartRequest';
+import { resolveInitialTopicMetadata } from './initialTopicMetadata';
 import {
   type GatewayMuxIdentity,
   getGatewayMux,
@@ -84,9 +82,10 @@ import {
   markGatewayMuxUnavailable,
 } from './muxRegistry';
 import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMessagesFlag';
-import { gatewayRunOperationMetadata } from './runOperationMetadata';
+import { gatewayRunOperationMetadata, isLocalStopNotice } from './runOperationMetadata';
 import { isCompletedRuntimeEnd } from './runtimeEndReason';
 import * as serverSteerQueue from './serverSteerQueue';
+import { watchSubAgentRun, type WatchSubAgentRunParams } from './watchSubAgentRun';
 
 const getGatewayServerConfig = () =>
   (typeof window !== 'undefined'
@@ -348,8 +347,8 @@ export class GatewayActionImpl {
    *   up as a sub-agent (right panel, the result message's thread link); when
    *   its parent is not streaming here (a background sub-agent), refetch the
    *   messages on its end too so its tool card settles.
-   * - A top-level run ending that this tab did not follow: refetch the topic's
-   *   messages and row, in case the live attach missed a short run.
+   * - A top-level run ending that this tab neither followed nor stopped: refetch
+   *   its messages and row, in case the live attach missed a short run.
    */
   #followUnownedRun = (lifecycle: MuxOpLifecycleMessage): void => {
     const { agentId, groupId, parentOperationId, topicId } = lifecycle.meta ?? {};
@@ -380,7 +379,8 @@ export class GatewayActionImpl {
     // and a short wake-up may finish before anything else refetches the topic
     // — so its end converges the conversation even if the live attach missed.
     if (!parentOperationId) {
-      // A turn of this tab still finishing settles through its own stream.
+      // A turn of this tab still finishing, or stopped here, settles through its own stream.
+      if (isLocalStopNotice(state.operations, lifecycle)) return;
       if (ended && !operationSelectors.isInputLoadingByContext({ agentId, topicId })(state)) {
         state.refreshMessages({ agentId, topicId }).catch(console.error);
         state.refreshTopic(topicMapKey({ agentId, groupId })).catch(console.error);
@@ -390,9 +390,7 @@ export class GatewayActionImpl {
 
     // The parent's stream carries the child's result but never the topic's
     // thread list, so the sub-agent list refreshes either way.
-    if (lifecycle.status === 'running' || ended) {
-      state.refreshThreads(topicId).catch(console.error);
-    }
+    if (lifecycle.status === 'running' || ended) state.refreshThreads(topicId).catch(console.error);
     if (ended && !state.gatewayConnections[parentOperationId]) {
       state.refreshMessages({ agentId, topicId }).catch(console.error);
     }
@@ -512,14 +510,8 @@ export class GatewayActionImpl {
 
     let superseded = false;
 
-    // Share visitors take protocol v2 wherever the deployment has it: the
-    // public surface has no user to carry a rollout flag. Owner runs wait for
-    // the rollout to reach them.
     const muxIdentity: GatewayMuxIdentity = { agentShareId, gatewayUrl };
-    const useGatewayMux =
-      (agentShareId
-        ? getGatewayServerConfig()?.agentGatewayProtocol === 2
-        : canUseGatewayProtocolV2()) && !isGatewayMuxUnavailable(muxIdentity);
+    const useGatewayMux = canUseGatewayProtocolV2() && !isGatewayMuxUnavailable(muxIdentity);
     let muxClient: OperationClient | undefined;
     if (useGatewayMux) {
       const mux = this.resolveGatewayMux(muxIdentity);
@@ -947,10 +939,14 @@ export class GatewayActionImpl {
     metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
+    /** Called once the start request is sent: a Stop can no longer take the turn back. */
+    onStartRequestSent?: () => void;
     /** Called when a new topic is persisted, before UI hydration and stream setup. */
     onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
+    /** New-topic cwd for a send without an optimistic row (an isolated handoff topic). */
+    newTopicMetadata?: ChatTopicMetadata;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
     optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -961,11 +957,8 @@ export class GatewayActionImpl {
      * without issuing a second legacy resume request.
      */
     precreatedResult?: ExecAgentResult;
-    /**
-     * Project working directory the NEW topic is born in — the blank
-     * conversation a project group's "+" staged. The caller reads it before the
-     * send adopts its minted topic, since that switch clears the staging.
-     */
+    /** Directory, else project, a project "+" staged the NEW topic in (read before adopt clears it). */
+    projectId?: string;
     projectWorkingDirectoryId?: string;
     /** Server operation whose visible output ended before this fresh turn. */
     replacesOperationId?: string;
@@ -1043,11 +1036,14 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      onStartRequestSent,
+      newTopicMetadata,
       onTopicCreated,
       optimisticTopic,
       parentMessageId,
       parentOperationId,
       precreatedResult,
+      projectId,
       projectWorkingDirectoryId,
       replacesOperationId,
       resumeApproval,
@@ -1075,55 +1071,20 @@ export class GatewayActionImpl {
     // the turn persists onto the topic's main spine and the subtopic collapses
     // back into the main chat.
 
-    // If this is a new topic, read any repos the user pre-selected before
-    // sending the first message. We read without consuming yet — if execAgentTask
-    // fails or is aborted, the selection is preserved so a retry can still pick
-    // it up. We clear only after the server confirms the topic was created.
-    const pendingRepos =
-      isCreateNewTopic && messageContext.agentId
-        ? getPendingTopicRepos(messageContext.agentId)
-        : [];
-    // Pending repo selection wins; otherwise carry the caller-resolved topic
-    // metadata (e.g. the hetero cwd `conversationLifecycle` resolved from the
-    // effective device + per-user legacy slot) so the SERVER topic is born with
-    // it — the server can't read client-local state, and without this a
-    // workspace hetero run's first send would fall back to the device default
-    // cwd instead of the member's pick.
-    // The instance the composer bound before any topic existed. Merged rather
-    // than folded into the branches below: it is orthogonal to the cwd, and a
-    // conversation can start with one, the other, or both.
-    const pendingSandboxSelection =
-      isCreateNewTopic && executionContext.agentId
-        ? getPendingSandboxSelection(executionContext.agentId)
-        : undefined;
-    const sandboxTopicMetadata = toSandboxTopicMetadata(pendingSandboxSelection);
-    const cwdTopicMetadata =
-      pendingRepos.length > 0
-        ? {
-            repos: pendingRepos,
-            workingDirectory: pendingRepos[0],
-            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
-          }
-        : isCreateNewTopic && optimisticTopic?.metadata?.workingDirectory
-          ? {
-              repos: optimisticTopic.metadata.repos,
-              workingDirectory: optimisticTopic.metadata.workingDirectory,
-              workingDirectoryConfig: optimisticTopic.metadata.workingDirectoryConfig,
-            }
-          : undefined;
-    const initialTopicMetadata =
-      cwdTopicMetadata || sandboxTopicMetadata
-        ? { ...cwdTopicMetadata, ...sandboxTopicMetadata }
-        : undefined;
+    const initialTopicMetadata = resolveInitialTopicMetadata({
+      callerTopicMetadata: optimisticTopic?.metadata ?? newTopicMetadata,
+      isCreateNewTopic,
+      repoAgentId: messageContext.agentId,
+      sandboxAgentId: executionContext.agentId,
+    });
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state is still running, so
-    // the ChatInput stop button is active. Forward the abort into the
-    // round-trip wait (never into the fetch itself, see `awaitStartRequest`):
-    // the send rejects at once and the run the server still creates is
-    // interrupted when its result arrives, as is a run the intervention claim
-    // already precreated. If the server has already persisted the turn,
-    // interrupt generation but still reconcile the message locally.
+    // the ChatInput stop button is active. A Stop before the request is sent
+    // rejects the send. After that the abort never reaches the fetch: the server
+    // persists the turn regardless, so the run it creates (or the intervention
+    // claim already precreated) is interrupted when its result arrives and the
+    // persisted turn is reconciled locally.
     const abortSignal = parentOperationId
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
@@ -1148,73 +1109,61 @@ export class GatewayActionImpl {
     // config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
-    const serverResult =
-      precreatedResult ??
-      (agentShareId
-        ? await awaitStartRequest(
-            shareChatService.execAgentTask({
-              clientIds,
-              fileIds,
-              parentMessageId,
-              prompt: message,
-              resumeApproval,
-              resumeApprovals,
-              resumeToolResult,
-              shareId: agentShareId,
-              steer: metadata?.steer,
-              topicId: executionContext.topicId,
-              userInterventionConfig,
+    const startRequest = precreatedResult
+      ? undefined
+      : agentShareId
+        ? shareChatService.execAgentTask({
+            clientIds,
+            fileIds,
+            parentMessageId,
+            prompt: message,
+            resumeApproval,
+            resumeApprovals,
+            resumeToolResult,
+            shareId: agentShareId,
+            steer: metadata?.steer,
+            topicId: executionContext.topicId,
+            userInterventionConfig,
+          })
+        : aiAgentService.execAgentTask({
+            agentId: executionContext.agentId,
+            // Fresh sends only — resume flows never pass this, and the server drops
+            // it defensively on resume-like params anyway.
+            clientIds,
+            appContext: buildExecAppContext(this.#get, {
+              executionContext,
+              initialTopicMetadata,
+              messageContext,
+              newTopicProject: isCreateNewTopic ? { projectId, projectWorkingDirectoryId } : {},
             }),
-            abortSignal,
-            (abandoned) =>
-              shareChatService.interruptTask(
-                agentShareId,
-                abandoned.topicId,
-                abandoned.operationId,
-              ),
-          )
-        : await awaitStartRequest(
-            aiAgentService.execAgentTask({
-              agentId: executionContext.agentId,
-              // Fresh sends only — resume flows never pass this, and the server drops
-              // it defensively on resume-like params anyway.
-              clientIds,
-              appContext: buildExecAppContext(this.#get, {
-                executionContext,
-                initialTopicMetadata,
-                messageContext,
-                projectWorkingDirectoryId: isCreateNewTopic ? projectWorkingDirectoryId : undefined,
-              }),
-              ...desktopDeviceHints,
-              clientOperations,
-              fileIds,
-              replacesOperationId,
-              mentionedAgents,
-              parentMessageId,
-              prompt: message,
-              resumeApproval,
-              resumeApprovals,
-              resumeToolResult,
-              selectedSkillIds,
-              selectedToolIds,
-              // A queued follow-up keeps its continuation mark on the row the
-              // server persists, which replaces the optimistic one.
-              steer: metadata?.steer,
-              trigger: metadata?.trigger,
-              userInterventionConfig,
-              userMessage,
-              // Dual-write for servers that predate `userMessage` (they read only these
-              // top-level fields and strip the rest); a current server folds them in.
-              contextSelections: userMessage?.metadata?.contextSelections,
-              pageSelections: userMessage?.metadata?.pageSelections,
-            }),
-            abortSignal,
-            (abandoned) =>
-              interruptGatewayTaskOrThrow({
-                operationId: abandoned.operationId,
-                topicId: abandoned.topicId,
-              }),
-          ));
+            ...desktopDeviceHints,
+            clientOperations,
+            fileIds,
+            replacesOperationId,
+            mentionedAgents,
+            parentMessageId,
+            prompt: message,
+            resumeApproval,
+            resumeApprovals,
+            resumeToolResult,
+            selectedSkillIds,
+            selectedToolIds,
+            // A queued follow-up keeps its continuation mark on the row the
+            // server persists, which replaces the optimistic one.
+            steer: metadata?.steer,
+            trigger: metadata?.trigger,
+            userInterventionConfig,
+            userMessage,
+            // Dual-write for servers that predate `userMessage` (they read only these
+            // top-level fields and strip the rest); a current server folds them in.
+            contextSelections: userMessage?.metadata?.contextSelections,
+            pageSelections: userMessage?.metadata?.pageSelections,
+          });
+    // Once sent, the server persists the turn whatever the caller does, so a
+    // Stop from here on is a late cancel: the interrupt below stops the run and
+    // the persisted turn is reconciled instead of being taken back.
+    if (startRequest) onStartRequestSent?.();
+    const serverResult = precreatedResult ?? (await startRequest!);
     // A member continuation names the supervisor's run as `operationId` (safe
     // for older clients); this run is the member's continuation.
     const result: ExecAgentResult =
@@ -1317,7 +1266,7 @@ export class GatewayActionImpl {
       // Attachments picked in the subtopic composer were staged under the
       // `_new` key; carry them over so the next turn in the thread still sees
       // them (mirrors the new-topic handoff below).
-      getFileStoreState().moveChatContextSelections(
+      getFileStoreState().moveChatComposerAttachments(
         messageMapKey(messageContext),
         messageMapKey(resolvedMessageContext),
       );
@@ -1368,7 +1317,7 @@ export class GatewayActionImpl {
             title: optimisticTopic.title,
           },
         });
-        getFileStoreState().moveChatContextSelections(
+        getFileStoreState().moveChatComposerAttachments(
           messageMapKey({ ...messageContext, topicId: optimisticTopic.id }),
           messageMapKey({ ...messageContext, topicId: result.topicId }),
         );
@@ -1380,23 +1329,10 @@ export class GatewayActionImpl {
         /* non-critical */
       }
 
-      if (!messageContext.isolatedTopic) {
-        await this.#get().switchTopic(result.topicId, {
-          clearNewKey: true,
-          // The cleanup targets the blank bucket this send came from — the
-          // user may be viewing a different conversation by now.
-          clearNewKeyContext: {
-            agentId: messageContext.agentId,
-            groupId: messageContext.groupId,
-          },
-          // Guard against yanking the user back if they navigated to another
-          // topic while execAgentTask's persistence round-trip was in flight.
-          // Both ids are accepted: the optimistic-topic re-key above moves
-          // `activeTopicId` from the minted id to the persisted one.
-          onlyIfActiveTopicIn: [messageContext.topicId ?? null, result.topicId],
-          skipRefreshMessage: true,
-        });
-      }
+      await leaveBlankConversationBucket(this.#get, messageContext, {
+        isolated: messageContext.isolatedTopic,
+        topicId: result.topicId,
+      });
 
       // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
       // Unlike the direct-API sendMessage path (which receives topics[] in the
@@ -1439,6 +1375,16 @@ export class GatewayActionImpl {
             operationId: result.operationId,
             topicId,
           });
+          // No socket reports the end: mirror the server's stopped-placeholder marker.
+          if (cancelledAfterPersistence && result.assistantMessageId)
+            this.#get().internal_dispatchMessage(
+              {
+                id: result.assistantMessageId,
+                type: 'updateMessageMetadata',
+                value: { interruptedMidStream: true },
+              },
+              { conversationContext: resolvedMessageContext },
+            );
         });
       }
       if (parentOperationId) this.#get().completeOperation(parentOperationId);
@@ -1620,9 +1566,8 @@ export class GatewayActionImpl {
           topicId: result.topicId,
         }),
       onSessionComplete: ({ authFailed, completion, succeeded, terminalReceived }) => {
-        // The gateway event handler already completed the op via the shared run
-        // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
-        // terminal-missing fallback so the op never sticks `running`.
+        // The shared run lifecycle completes the op on `agent_runtime_end` / `error`;
+        // this is the terminal-missing fallback so the op never sticks `running`.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
         // An external hetero producer does not run on this socket: the CLI
@@ -1756,6 +1701,13 @@ export class GatewayActionImpl {
     }
     return resumed;
   };
+
+  /** Stream a sub-agent run this tab dispatched but does not drive; see `watchSubAgentRun`. */
+  watchSubAgentRun = (params: WatchSubAgentRunParams): (() => void) =>
+    watchSubAgentRun(this.#get, params, {
+      disconnect: this.disconnectFromGateway,
+      gatewayUrl: getGatewayServerConfig()?.agentGatewayUrl,
+    });
 
   /**
    * Reconnect to an existing Gateway operation after page reload.
@@ -1998,8 +1950,7 @@ export class GatewayActionImpl {
         // the preserved external producer case below) must close it here.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
-        // An external producer never streamed over this socket: no transport
-        // signal proves it ended — see the same guard in `executeGatewayAgent`.
+        // External producer: no transport signal proves it ended (see `executeGatewayAgent`).
         if (!terminalReceived && heteroType !== null) {
           const { agentId } = context;
           if (!agentShareId) this.#retireExternalRow({ agentId, operationId, topicId });
@@ -2565,18 +2516,20 @@ export class GatewayActionImpl {
       .catch(console.error);
   };
 
-  /** See {@link retireLocalRowIfServerSettled}. */
+  /** See {@link retireLocalRowIfServerSettled}; what waited here behind the run goes next. */
   #retireExternalRow = (params: {
     agentId?: string;
     groupId?: string;
     operationId: string;
     topicId: string;
-  }) =>
+  }) => {
     void retireLocalRowIfServerSettled({
       clear: (status) => this.clearLocalRunningOperation({ ...params, status }),
       isViewing: () => this.#get().activeTopicId === params.topicId,
       readTopic: () => topicService.getTopicDetail(params.topicId),
     });
+    if (!params.groupId) serverSteerQueue.resumeClientHeldQueue(this.#get, params);
+  };
 
   /**
    * @returns Whether a terminal status was written without a local marker — the

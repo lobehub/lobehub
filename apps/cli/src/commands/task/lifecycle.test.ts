@@ -165,7 +165,7 @@ describe('task lifecycle — following the agent stream', () => {
     followAgentRun.mockReset();
     pollAgentRunStatus.mockReset();
     client.task.find.query.mockResolvedValue({
-      data: { assigneeAgentId: 'agt_1', identifier: 'T-1', status: 'pending' },
+      data: { assigneeAgentId: 'agt_1', identifier: 'T-1', status: 'backlog' },
     });
     client.task.updateStatus.mutate.mockResolvedValue({ data: { identifier: 'T-1' } });
     client.task.run.mutate.mockResolvedValue({
@@ -180,6 +180,29 @@ describe('task lifecycle — following the agent stream', () => {
   afterEach(() => {
     exitSpy.mockRestore();
     process.exitCode = undefined;
+  });
+
+  it('task run sends --model and --provider only with the first topic', async () => {
+    followAgentRun.mockResolvedValue({ kind: 'completed' });
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'task',
+      'run',
+      'T-1',
+      '--model',
+      'fixed-model',
+      '--provider',
+      'working',
+      '--topics',
+      '2',
+    ]);
+    expect(client.task.run.mutate).toHaveBeenNthCalledWith(1, {
+      id: 'T-1',
+      model: 'fixed-model',
+      provider: 'working',
+    });
+    expect(client.task.run.mutate).toHaveBeenNthCalledWith(2, { id: 'T-1' });
   });
 
   it('task run --topics 2 stops with exit 1 when a run fails, without starting the next one', async () => {

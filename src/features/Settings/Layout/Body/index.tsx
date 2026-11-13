@@ -12,6 +12,7 @@ import { SettingsTabs } from '@/store/global/initialState';
 import { isModifierClick } from '@/utils/navigation';
 
 import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
+import { useExpandedSettingsGroups } from '../../hooks/useExpandedSettingsGroups';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
@@ -29,6 +30,12 @@ const Body = memo(() => {
     return SettingsTabs.Profile;
   }, [location.pathname]);
 
+  const { expandedGroups, onExpandedGroupsChange } = useExpandedSettingsGroups(
+    categoryGroups,
+    activeTab,
+    SettingsGroupKey.System,
+  );
+
   return (
     <Flexbox gap={4} paddingInline={4}>
       <SearchSection scope={searchScope}>
@@ -36,14 +43,7 @@ const Body = memo(() => {
           gap={8}
           indicatorPlacement="inline"
           styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
-          defaultValue={[
-            SettingsGroupKey.Account,
-            SettingsGroupKey.General,
-            SettingsGroupKey.Subscription,
-            SettingsGroupKey.Agent,
-            SettingsGroupKey.System,
-            SettingsGroupKey.Developer,
-          ]}
+          value={expandedGroups}
           items={categoryGroups.map((group) => ({
             key: group.key,
             title: (
@@ -76,6 +76,7 @@ const Body = memo(() => {
               </Flexbox>
             ),
           }))}
+          onValueChange={(keys) => onExpandedGroupsChange(keys as SettingsGroupKey[])}
         />
       </SearchSection>
     </Flexbox>

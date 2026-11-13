@@ -17,9 +17,12 @@ import {
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCreateEntry';
 import AsyncBoundary from '@/components/AsyncBoundary';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DeviceCard from './DeviceCard';
 import DeviceGrid from './DeviceGrid';
@@ -241,6 +244,11 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   const { onConnect, onOpenDevice, scope, toolbarLeading, visibility } = props;
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
+  // The `managed_cloud_device` flag gates only the entry that creates a managed
+  // device. Managed devices that already exist still list and open here.
+  const showManagedDeviceCreate = useServerConfigStore(
+    serverConfigSelectors.enableManagedCloudDevice,
+  );
 
   // The device replica every device-listing surface reads (see `useDeviceList`):
   // a reload paints the persisted cards first, presence pending.
@@ -297,6 +305,9 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
               {t('devices.empty.methodCli.title')}
             </Button>
           )}
+          {showManagedDeviceCreate && (
+            <ManagedDeviceCreateEntry placement={'empty'} scope={scope} visibility={visibility} />
+          )}
         </Flexbox>
 
         {!isWorkspace && (
@@ -326,31 +337,54 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
 
   // Workspace machines are headless, so that pool enrolls through the CLI
   // only; the personal wizard also offers the desktop app.
+  const renderActions = (size?: 'small') => (
+    <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+      <Button
+        icon={<Icon icon={RefreshCwIcon} />}
+        loading={isValidating}
+        size={size}
+        title={t('devices.actions.refresh')}
+        onClick={() => mutate()}
+      />
+      {showManagedDeviceCreate && (
+        <ManagedDeviceCreateEntry placement={'toolbar'} scope={scope} visibility={visibility} />
+      )}
+      {isWorkspace ? (
+        <Button
+          icon={<Icon icon={TerminalIcon} />}
+          size={size}
+          type={'primary'}
+          onClick={() => onConnect('cli')}
+        >
+          {t('devices.empty.methodCli.title')}
+        </Button>
+      ) : (
+        <Button
+          icon={<Icon icon={MonitorUpIcon} />}
+          size={size}
+          type={'primary'}
+          onClick={() => onConnect()}
+        >
+          {t('devices.connectWizard.button')}
+        </Button>
+      )}
+    </Flexbox>
+  );
+
   const toolbar = (
     <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
       <div style={{ minWidth: 0 }}>{toolbarLeading}</div>
-      <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-        <Button
-          icon={<Icon icon={RefreshCwIcon} />}
-          loading={isValidating}
-          title={t('devices.actions.refresh')}
-          onClick={() => mutate()}
-        />
-        {isWorkspace ? (
-          <Button
-            icon={<Icon icon={TerminalIcon} />}
-            type={'primary'}
-            onClick={() => onConnect('cli')}
-          >
-            {t('devices.empty.methodCli.title')}
-          </Button>
-        ) : (
-          <Button icon={<Icon icon={MonitorUpIcon} />} type={'primary'} onClick={() => onConnect()}>
-            {t('devices.connectWizard.button')}
-          </Button>
-        )}
-      </Flexbox>
+      {renderActions()}
     </Flexbox>
+  );
+
+  // With nothing on the left (the personal pool), the actions join the shared
+  // settings header instead of leaving a half-empty toolbar row; hosts without
+  // that header (workspace settings, mobile) keep the toolbar.
+  const toolbarSlot = toolbarLeading ? (
+    toolbar
+  ) : (
+    <SettingsPageActions fallback={toolbar}>{renderActions()}</SettingsPageActions>
   );
 
   const list = (
@@ -379,7 +413,7 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
 
   return (
     <Flexbox gap={16}>
-      {toolbar}
+      {toolbarSlot}
       {list}
     </Flexbox>
   );

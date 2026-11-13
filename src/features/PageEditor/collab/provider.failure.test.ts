@@ -35,7 +35,13 @@ const synced = () => ({
 
 const setup = () => {
   const room = createMux();
-  const events = { onAccess: vi.fn(), onFailure: vi.fn(), onStatus: vi.fn() };
+  const events = {
+    onAccess: vi.fn(),
+    onCharLimitCleared: vi.fn(),
+    onCharLimitExceeded: vi.fn(),
+    onFailure: vi.fn(),
+    onStatus: vi.fn(),
+  };
   const provider = new PageCollabProvider('doc_1', new Y.Doc(), room.mux as any, events);
   provider.connect();
   room.ready();
@@ -66,6 +72,57 @@ describe('PageCollabProvider failures', () => {
     expect(events.onFailure).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'internal', message: 'boom' }),
     );
+  });
+
+  // The room relays the server's refusal to store an over-limit page.
+  it('reports a page refused for its length without failing the join', () => {
+    const { events, room } = setup();
+    room.deliver(synced());
+
+    room.deliver({
+      actual: 501_502,
+      code: 'char_limit_exceeded',
+      documentId: 'doc_1',
+      limit: 500_000,
+      message: 'Document is too long',
+      plan: 'plus',
+      type: 'doc_error',
+    });
+
+    expect(events.onCharLimitExceeded).toHaveBeenCalledWith({
+      actual: 501_502,
+      limit: 500_000,
+      plan: 'plus',
+    });
+    expect(events.onStatus).not.toHaveBeenCalledWith('error');
+    expect(events.onFailure).not.toHaveBeenCalled();
+  });
+
+  // A page already over the limit is stored again once it stops growing.
+  it('reports when the server stores a refused page again', () => {
+    const { events, room } = setup();
+    room.deliver(synced());
+
+    room.deliver({ documentId: 'doc_1', type: 'doc_char_limit_cleared' });
+
+    expect(events.onCharLimitCleared).toHaveBeenCalledTimes(1);
+    expect(events.onFailure).not.toHaveBeenCalled();
+  });
+
+  it('does not fail a join when the refusal arrives before the first sync', () => {
+    const { events, room } = setup();
+
+    room.deliver({
+      actual: 20,
+      code: 'char_limit_exceeded',
+      documentId: 'doc_1',
+      limit: 10,
+      message: '',
+      type: 'doc_error',
+    });
+
+    expect(events.onCharLimitExceeded).toHaveBeenCalled();
+    expect(events.onFailure).not.toHaveBeenCalled();
   });
 
   it('keeps a view-only member in the room', () => {

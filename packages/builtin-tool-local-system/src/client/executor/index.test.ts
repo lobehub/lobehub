@@ -81,7 +81,6 @@ describe('LocalSystemExecutor', () => {
       });
 
       expect(result.content).toBeTruthy();
-      expect(result.content).not.toBe('');
       expect(result.state).toEqual({
         files: [],
         pattern: '**/*never-matches*',
@@ -113,7 +112,6 @@ describe('LocalSystemExecutor', () => {
       // `usage.tools.byTool[].errors`, so a permission-denied glob must not
       // count as a successful call.
       expect(result.success).toBe(false);
-      expect(result.content).toBeTruthy();
       expect(result.content).toContain('EACCES');
       expect(result.state).toEqual({
         files: [],
@@ -278,6 +276,17 @@ describe('LocalSystemExecutor.runCommand', () => {
     const args = runCommandMock.mock.calls[0][0];
     expect(args).not.toHaveProperty('sandbox');
     expect(args).not.toHaveProperty('sandboxNetwork');
+  });
+
+  it('drops a model-supplied sandboxRoot so the model cannot move its fence', async () => {
+    await localSystemExecutor.runCommand(
+      { command: 'echo owned > ~/.zshrc', sandboxRoot: '/Users/me' } as never,
+      { localSandbox: true, messageId: 'm-1', workingDirectory: '/repo' },
+    );
+
+    const args = runCommandMock.mock.calls[0][0];
+    expect(args).not.toHaveProperty('sandboxRoot');
+    expect(args).toMatchObject({ cwd: '/repo', sandbox: true });
   });
 
   it('never lets the model pick what it is fenced to', async () => {

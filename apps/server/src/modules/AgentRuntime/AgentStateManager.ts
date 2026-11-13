@@ -8,6 +8,8 @@ import {
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
+
 import { hasNonPersistedMessage } from './messagePersistence';
 import { getAgentRuntimeRedisClient } from './redis';
 
@@ -100,13 +102,79 @@ const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number
  * deploy would hand it a blob with no tool set, and the next LLM call would go
  * out with the empty set `selectOperationToolSet` falls back to.
  *
- * So this build ships the reader only: while the flag is off nothing changes —
- * the blob keeps its inline tool set byte-for-byte and no external key is
- * written. Operators flip it on once the previous build has drained, which is
- * when the mixed-version window is gone.
+ * So stripping is opt-in: while it is off nothing changes — the blob keeps its
+ * inline tool set byte-for-byte and no external key is written. It is gated by
+ * the runtime feature flag `agent_runtime_strip_operation_toolset` (published
+ * without a redeploy, per-user allowlists keyed on the operation's owner), and
+ * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET` overrides it: `0` is the kill switch
+ * and never touches the flag provider, `1` forces it on.
+ *
+ * Flipping the flag either way is safe for operations already in flight: the
+ * load path re-attaches an external tool set unconditionally and leaves an
+ * inline one alone, so a blob written under either setting loads the same.
+ *
+ * Resolution is cached here per operation owner for a few seconds on top of the
+ * runtime-config provider's own snapshot cache, so a publish still lands within
+ * seconds without a redeploy and a save pays no per-owner lookup. If resolution
+ * fails, the blob stays inline — the pre-flag behaviour — rather than failing
+ * the save.
  */
-const isToolSetStripEnabled = (): boolean =>
-  process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET === '1';
+const STRIP_FLAG_CACHE_TTL_MS = 5000;
+const STRIP_FLAG_CACHE_MAX = 1024;
+
+/**
+ * Resolved values, keyed by owner ('' for the global value).
+ *
+ * `getMergedFeatureFlags` always reads the per-user override record when it is
+ * given a user id, and that provider does not cache a missing record
+ * (`cacheNullSnapshots: false`). Resolving with the owner on every save would
+ * therefore put a Redis GET on the per-step write path for every operation
+ * whose owner has no override — the common case, and the one that pays nothing
+ * back because stripping stays inline. This cache bounds the lookup to once per
+ * owner per TTL.
+ */
+const stripFlagCache = new Map<string, { expiresAt: number; value: boolean }>();
+
+/** Clear the strip-flag resolution cache (for testing). */
+export const resetStripOperationToolsetCache = () => {
+  stripFlagCache.clear();
+};
+
+const resolveStripOperationToolset = async (userId?: string): Promise<boolean> => {
+  const override = process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET;
+  if (override === '0') return false;
+  if (override === '1') return true;
+
+  // Owners without a user id all resolve the global value, so they share a key.
+  const cacheKey = userId ?? '';
+  const cached = stripFlagCache.get(cacheKey);
+  if (cached) {
+    if (cached.expiresAt > Date.now()) return cached.value;
+    stripFlagCache.delete(cacheKey);
+  }
+
+  try {
+    const flags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
+    const enabled = flags.enableStripOperationToolset === true;
+
+    // Evict the oldest entry instead of growing with the number of owners.
+    if (stripFlagCache.size >= STRIP_FLAG_CACHE_MAX) {
+      const oldestKey = stripFlagCache.keys().next().value;
+      if (oldestKey !== undefined) stripFlagCache.delete(oldestKey);
+    }
+    stripFlagCache.set(cacheKey, {
+      expiresAt: Date.now() + STRIP_FLAG_CACHE_TTL_MS,
+      value: enabled,
+    });
+
+    return enabled;
+  } catch (error) {
+    // Deliberately not cached: a transient read failure must not pin the flag
+    // off for a whole TTL.
+    log('Failed to resolve agent_runtime_strip_operation_toolset, keeping inline: %O', error);
+    return false;
+  }
+};
 
 export interface StepResult {
   events?: AgentEvent[];
@@ -206,22 +274,26 @@ export class AgentStateManager {
    * (group-member supervisor turns); the size win is forgone to avoid losing
    * the prompt.
    */
-  private serializeStateForPersist(state: AgentState): string {
+  private serializeStateForPersist(state: AgentState, stripToolSet: boolean): string {
     // `operationToolSet` is externalized to its own key (see
     // `externalizeToolSet`) and re-attached on load, so it never travels in the
     // blob — once stripping is enabled. Until then the blob keeps its inline
     // copy so a previous-build worker can still execute the operation (see
-    // `isToolSetStripEnabled`). It is immutable after creation, so a single
+    // `resolveStripOperationToolset`). It is immutable after creation, so a single
     // write per operation replaces re-serializing ~300–400 KB of tool schemas
     // at every step.
     const { operationToolSet: _toolSet, ...withoutToolSet } = state as AgentState & {
       operationToolSet?: unknown;
     };
-    const persistable = (isToolSetStripEnabled() ? withoutToolSet : state) as AgentState & {
+    const persistable = (stripToolSet ? withoutToolSet : state) as AgentState & {
       messages?: unknown;
       operationToolSet?: unknown;
     };
-    if (hasNonPersistedMessage(persistable.messages)) {
+    if (
+      !state.origin?.agentId ||
+      !state.origin.topicId ||
+      hasNonPersistedMessage(persistable.messages)
+    ) {
       return JSON.stringify(persistable);
     }
     const { messages: _messages, ...rest } = persistable;
@@ -278,9 +350,9 @@ export class AgentStateManager {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
 
     try {
-      const stripToolSet = isToolSetStripEnabled();
+      const stripToolSet = await resolveStripOperationToolset(state.origin?.userId);
       if (stripToolSet) await this.externalizeToolSet(operationId, state);
-      const serializedState = this.serializeStateForPersist(state);
+      const serializedState = this.serializeStateForPersist(state, stripToolSet);
       await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
       // Keep the externalized tool set alive in lockstep with the blob so a
       // long run never loads a stripped blob whose tool set has expired.
@@ -370,7 +442,7 @@ export class AgentStateManager {
     try {
       // Write-once before opening the pipeline; the inline loop warms the cache
       // on its first step and every later step skips the tool-set write.
-      const stripToolSet = isToolSetStripEnabled();
+      const stripToolSet = await resolveStripOperationToolset(stepResult.newState.origin?.userId);
       if (stripToolSet) await this.externalizeToolSet(operationId, stepResult.newState);
 
       const pipeline = this.redis.multi();
@@ -380,7 +452,7 @@ export class AgentStateManager {
       pipeline.setex(
         stateKey,
         this.DEFAULT_TTL,
-        this.serializeStateForPersist(stepResult.newState),
+        this.serializeStateForPersist(stepResult.newState, stripToolSet),
       );
       // Refresh the externalized tool set's TTL alongside the blob.
       if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);

@@ -2,12 +2,13 @@
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { ActionIcon, Avatar } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
@@ -135,9 +136,12 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
     <ConversationProvider skipFetch context={context} operationState={operationState}>
       <div data-pending-hotkey-scope className={styles.card}>
         <div className={styles.header}>
-          <Avatar
+          <AgentAvatar
+            agentId={context.agentId}
             avatar={meta.avatar}
             background={meta.backgroundColor}
+            name={agentDisplayName(meta)}
+            shape={'circle'}
             size={28}
             title={agentDisplayName(meta)}
           />

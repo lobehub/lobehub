@@ -138,7 +138,9 @@ export const agentsRouter = router({
         type: z.enum([
           'codebuddy',
           'codex',
+          'copilot',
           'cursor',
+          'deepseek-harness',
           'droid',
           'devin',
           'grok-build',

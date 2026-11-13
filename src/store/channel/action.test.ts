@@ -7,6 +7,7 @@ vi.mock('@/services/channel', () => ({
     addAgent: vi.fn(),
     addUser: vi.fn(),
     create: vi.fn(),
+    createGroupFromDirect: vi.fn(),
     detail: vi.fn(),
     list: vi.fn(),
     send: vi.fn(),
@@ -35,6 +36,23 @@ describe('channelActions after a committed write', () => {
     expect(channelService.create).toHaveBeenCalledTimes(1);
   });
 
+  it('opens the group started from a direct conversation even when the list refresh fails', async () => {
+    vi.mocked(channelService.createGroupFromDirect).mockResolvedValue({
+      data: { channel: { id: 'chn_000000000002' } },
+    } as never);
+    vi.mocked(channelService.list).mockRejectedValue(new Error('offline'));
+    const input = {
+      agents: [],
+      channelId: 'chn_000000000001',
+      title: 'Ada, Mia',
+      userIds: ['user-mia'],
+    };
+
+    await expect(channelActions.createGroupFromDirect(input)).resolves.toBe('chn_000000000002');
+    expect(channelService.createGroupFromDirect).toHaveBeenCalledExactlyOnceWith(input);
+    expect(channelService.list).toHaveBeenCalled();
+  });
+
   it('settles added members even when the detail refresh fails', async () => {
     vi.mocked(channelService.addAgent).mockResolvedValue({} as never);
     vi.mocked(channelService.detail).mockRejectedValue(new Error('offline'));
@@ -57,6 +75,23 @@ describe('channelActions after a committed write', () => {
         agents: [{ agentId: 'agt_a' }, { agentId: 'agt_b' }],
       }),
     ).rejects.toThrow('device offline');
+  });
+
+  it('returns the member an @mention invite added, even when the detail refresh fails', async () => {
+    vi.mocked(channelService.addUser).mockResolvedValue({ data: { id: 'mem_user' } } as never);
+    vi.mocked(channelService.addAgent).mockResolvedValue({ data: { id: 'mem_agent' } } as never);
+    vi.mocked(channelService.detail).mockRejectedValue(new Error('offline'));
+
+    await expect(channelActions.addMember('chn_000000000001', { userId: 'user_b' })).resolves.toBe(
+      'mem_user',
+    );
+    await expect(
+      channelActions.addMember('chn_000000000001', { agent: { agentId: 'agt_a' } }),
+    ).resolves.toBe('mem_agent');
+    expect(channelService.addUser).toHaveBeenCalledExactlyOnceWith('chn_000000000001', 'user_b');
+    expect(channelService.addAgent).toHaveBeenCalledExactlyOnceWith('chn_000000000001', {
+      agentId: 'agt_a',
+    });
   });
 
   // One invite adds people and Agents together; people go first so a failing Agent

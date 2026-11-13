@@ -1,3 +1,5 @@
+export type RouteRequestTasks = NonNullable<Awaited<ReturnType<typeof createRouteRequestTasks>>>;
+
 /** Keep request-scoped background work alive until the stream and its callbacks settle. */
 export const createRouteRequestTasks = async (
   schedule: (settled: Promise<void>) => void | Promise<void>,

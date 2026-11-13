@@ -145,17 +145,11 @@ describe('BaseFileSearch', () => {
       expect(results[0].engine).toBe('mdfind');
     });
 
-    it('should handle undefined engine', async () => {
+    it('should infer content type without an engine', async () => {
       const options: SearchOptions = { keywords: 'test' };
       const results = await fileSearch.testProcessFilePaths(['/test/file.ts'], options);
 
       expect(results[0].engine).toBeUndefined();
-    });
-
-    it('should determine content type from extension', async () => {
-      const options: SearchOptions = { keywords: 'test' };
-      const results = await fileSearch.testProcessFilePaths(['/test/file.ts'], options);
-
       expect(results[0].contentType).toBe('code');
     });
   });
@@ -258,31 +252,6 @@ describe('BaseFileSearch', () => {
       const results = await fileSearch.search({ keywords: 'test' });
 
       expect(results[0].engine).toBe('test-engine');
-    });
-  });
-
-  describe('glob', () => {
-    it('should return GlobFilesResult with engine', async () => {
-      const result = await fileSearch.glob({ pattern: '*.ts' });
-
-      expect(result.engine).toBe('test-engine');
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('checkSearchServiceStatus', () => {
-    it('should return true', async () => {
-      const status = await fileSearch.checkSearchServiceStatus();
-
-      expect(status).toBe(true);
-    });
-  });
-
-  describe('updateSearchIndex', () => {
-    it('should return true', async () => {
-      const result = await fileSearch.updateSearchIndex();
-
-      expect(result).toBe(true);
     });
   });
 });

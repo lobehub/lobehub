@@ -1,5 +1,5 @@
 import { libraryFolderPath } from '@/features/ResourceManager/utils/resourcePath';
-import type { TreeItem } from '@/store/tree';
+import { isExpandable, type TreeItem } from '@/store/tree';
 
 interface SelectionSource {
   currentFolderId?: string | null;
@@ -44,7 +44,7 @@ export const hierarchySubtreeHoldsSelection = (
 
     for (const row of children[id] ?? []) {
       if (isHierarchyNodeActive(row, selectedKey)) return true;
-      if (row.isFolder) pending.push(row.id);
+      if (isExpandable(row)) pending.push(row.id);
     }
   }
 

@@ -175,6 +175,38 @@ describe('Channel topic continuation', () => {
     expect(await state.input(next.job.id)).toEqual(['Request 2']);
   });
 
+  it('hands a run the latest public messages its topic has not seen', async () => {
+    const state = await setup();
+    const say = (content: string) =>
+      state.asOwner.send(state.channel.id, {
+        content,
+        mentions: [state.member.id],
+        requestKey: content,
+        routing: 'decision',
+      });
+    const recent = async (id: string) =>
+      (await execution.recentContext(state.channel.id, id)).messages.map((m) => m.content);
+    for (const n of [1, 2, 3, 4, 5, 6]) await say(`Earlier ${n}`);
+
+    const first = (await state.claim((await state.send()).id))!;
+    expect(await recent(first.job.id)).toEqual([
+      'Earlier 2',
+      'Earlier 3',
+      'Earlier 4',
+      'Earlier 5',
+      'Earlier 6',
+    ]);
+    // The oldest unseen message did not fit: the run is told one more exists.
+    expect((await execution.recentContext(state.channel.id, first.job.id)).omitted).toBe(1);
+    await state.finish(first.job.id);
+    await say('Two o’clock?');
+
+    const second = (await state.claim((await state.send()).id))!;
+    expect(second.topic.id).toBe(first.topic.id);
+    expect(await recent(second.job.id)).toEqual(['Two o’clock?']);
+    expect((await execution.recentContext(state.channel.id, second.job.id)).omitted).toBe(0);
+  });
+
   it('blocks a deleted Agent reference while retaining the public request', async () => {
     const state = await setup();
     const job = await state.send();

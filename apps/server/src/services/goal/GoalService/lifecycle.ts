@@ -6,6 +6,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { GoalRepository } from '@/database/repositories/goal';
 
+import { assertGoalNotArchived } from '../archiveGuard';
 import { GoalAssignmentService } from '../assignment';
 import { GOAL_ACCEPTANCE_TASK_TITLE, TERMINAL_NODE_STATUSES } from '../decideNextMove';
 import { GoalManagerService } from '../manager';
@@ -68,7 +69,11 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
     });
     graph = await ctx.graphModel.getGraph(goalId);
     if (graph) {
-      if (managed) await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
+      // Deleting is the person's own word too; see `GoalManagerService.stop`.
+      if (managed)
+        await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph, {
+          ownerConfirmsExit: true,
+        });
       if (supervised)
         await new GoalSupervisorService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
     }
@@ -156,6 +161,8 @@ export const transitionStatus = async (
 
 export const pause = async (ctx: GoalServiceContext, goalId: string) => {
   const graph = await ctx.requireGraph(goalId);
+  // An archived goal is done with (completed or canceled); pausing would reopen it out of sight.
+  assertGoalNotArchived(graph.goal);
   // A draft never ran; pausing it would let a later resume skip `start`.
   if (graph.goal.status === 'draft') throw draftNotStarted(goalId);
   // From here the pause is the person's, so no later measurement lifts it.
@@ -182,6 +189,8 @@ export const restart = async (
   options?: { agentId?: string },
 ): Promise<{ goal: GoalItem; restartedTaskIds: string[] }> => {
   const graph = await ctx.requireGraph(goalId);
+  // Restarting resets Tasks and resumes the goal; an archived one stays put.
+  assertGoalNotArchived(graph.goal);
   const assignment = new GoalAssignmentService(ctx.db, ctx.userId, ctx.workspaceId);
   if (options?.agentId) await assignment.assertUsableForGoal(graph.goal, options.agentId);
 
@@ -287,6 +296,7 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
     const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    assertGoalNotArchived(current);
     // Only `start` launches a draft: it settles the creating run's planning
     // turn and checks who may launch it, which a plain status flip skips.
     if (current.status === 'draft') throw draftNotStarted(goalId);
@@ -327,6 +337,10 @@ export const close = async (
   await ctx.db.transaction(async (db) => {
     const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
+    // An archived goal's status is frozen until it is restored; refuse before
+    // interrupting anything. (`updateStatus` refuses it too, should an archive
+    // land after this lock is released.)
+    if (current) assertGoalNotArchived(current);
     // Only a goal that can still dispatch needs fencing.
     if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
     await model.updateStatus(goalId, 'paused');
@@ -351,8 +365,14 @@ export const close = async (
         'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
     });
   try {
+    // Ending the goal is the person's own word that its stranded planning turn
+    // is over; see `GoalManagerService.stop`. The turn stays settled even if the
+    // Task pass below refuses the close: the person asked to end the goal, so a
+    // later resume plans afresh instead of pausing on that turn again.
     if (graph.goal.config?.manager)
-      await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
+      await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph, {
+        ownerConfirmsExit: true,
+      });
     if (graph.goal.config?.supervision?.enabled || graph.goal.config?.supervisorState)
       await new GoalSupervisorService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
   } catch (error) {

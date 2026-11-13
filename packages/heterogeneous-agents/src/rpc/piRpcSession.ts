@@ -6,6 +6,7 @@ import { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcCl
 import { PiOperationContextUnavailableError } from './piRpcOperationContext';
 import {
   PI_RPC_ABORT_TIMEOUT_MS,
+  type PiAgentSettledEvent,
   type PiExtensionUiRequest,
   type PiExtensionUiResponse,
   type PiMessageEndEvent,
@@ -13,6 +14,7 @@ import {
   type PiRpcCommand,
   type PiRpcEvent,
   type PiRpcImage,
+  type PiRpcPromptResponseData,
   type PiSessionEvent,
 } from './piRpcProtocol';
 
@@ -77,6 +79,7 @@ const DEFAULT_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
 const ABORTED_REASON = 'aborted';
 
 const isTerminalAbortedEvent = (event: PiRpcEvent): boolean => {
+  if (event.type === 'agent_settled') return (event as PiAgentSettledEvent).aborted === true;
   if (event.type === 'message_update') {
     const update = (event as PiMessageUpdateEvent).assistantMessageEvent;
     if (update?.type !== 'error') return false;
@@ -249,9 +252,14 @@ export class PiRpcSession {
         message: prompt.text,
         ...(prompt.images?.length ? { images: prompt.images } : {}),
       };
-      const response = await this.client.command(command);
+      const response = await this.client.command<PiRpcPromptResponseData>(command);
       if (!response.success) {
         throw new PiRpcResponseError('prompt', response.error ?? 'Unknown error');
+      }
+      // An extension command consumed the prompt: no run starts, so Pi never
+      // emits agent_settled. Settle through the adapter to end the turn.
+      if (response.data?.disposition === 'handled') {
+        await this.handleEvent({ type: 'agent_settled' } satisfies PiAgentSettledEvent);
       }
     };
     let failed = false;

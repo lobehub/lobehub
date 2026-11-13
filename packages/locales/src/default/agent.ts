@@ -61,12 +61,14 @@ export default {
     'In the Developer Portal, click New Application and name it.',
   'channel.quickSetup.discord.credentials.title': 'Copy the Application ID and Public Key',
   'channel.quickSetup.discord.credentials.desc': 'Both are on General Information.',
-  'channel.quickSetup.discord.bot.title': 'Get the bot token and allow message content',
-  'channel.quickSetup.discord.bot.desc':
-    'On the Bot page, Reset Token and copy it, then turn on Message Content Intent.',
+  'channel.quickSetup.discord.bot.title': 'Get the bot token',
+  'channel.quickSetup.discord.bot.desc': 'On the Bot page, click Reset Token and copy it.',
+  'channel.quickSetup.discord.intent.title': 'Turn on Message Content Intent',
+  'channel.quickSetup.discord.intent.desc':
+    "On the Bot page, under Privileged Gateway Intents, turn on Message Content Intent and save. Without it, the bot can't read messages.",
   'channel.quickSetup.discord.invite.title': 'Invite the bot to your server',
   'channel.quickSetup.discord.invite.desc':
-    'The invite link already carries the permissions the bot needs.',
+    "The invite link already carries the permissions the bot needs. For a private channel, also add the bot in that channel's Settings → Permissions.",
   'channel.quickSetup.telegram.botfather.title': 'Create a bot with BotFather',
   'channel.quickSetup.telegram.botfather.desc': 'Send /newbot and pick a name and username.',
   'channel.quickSetup.telegram.token.title': 'Copy the token',
@@ -191,12 +193,18 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.connectionError.application_mismatch':
+    "The Application ID doesn't match the bot token. Copy both from the same app in the Discord Developer Portal.",
   'channel.connectionError.application_not_found':
     'The bot application does not exist. Check the application ID in the platform console.',
+  'channel.connectionError.bot_not_installed':
+    "The bot isn't in any server yet. Open the invite link in the setup steps, add the bot to your server, then test again.",
   'channel.connectionError.connection_closed':
     'The platform connection was interrupted. LobeHub will try to reconnect automatically.',
   'channel.connectionError.invalid_credentials':
     'The bot credentials are invalid. Check the application ID, secret, and access tokens.',
+  'channel.connectionError.message_content_intent_disabled':
+    "Message Content Intent is off, so the bot can't read messages. Turn it on under Bot → Privileged Gateway Intents in the Discord Developer Portal and save.",
   'channel.connectionError.missing_credentials':
     'Required bot credentials are missing. Complete the bot configuration and try again.',
   'channel.connectionError.permission_denied':
@@ -465,9 +473,9 @@ export default {
   'channel.replyEmojiPlaceholder': 'e.g. <:doge:1234567890>',
   'channel.replyEmojiUsageLabel': 'When to use',
   'channel.replyEmojiUsagePlaceholder': 'e.g. when someone ships something',
-  'channel.botWakeEnabled': 'Judge unprompted follow-ups',
+  'channel.botWakeEnabled': 'Speak up on its own',
   'channel.botWakeEnabledHint':
-    "Turns on the wake options below. The bot judges messages nobody addressed to it and may join in; off keeps today's behavior, where a watch keyword wakes the bot without any check.",
+    'When on, the bot reads messages nobody addressed to it and may join in, following the duties, channels and pace below. When off, it only answers @-mentions, DMs, replies and watch keywords.',
   'channel.botWakeScope': 'Where it may join',
   'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
   'channel.botWakeScopeAll': 'Everywhere it can see',
@@ -574,7 +582,7 @@ export default {
   'channel.quickView.dm.disabled':
     "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
   'channel.quickView.group.disabled':
-    "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+    "Sorry, you don't have permission to talk to this bot in groups or channels. Please contact the bot's owner if you need access.",
   'channel.quickView.group.allowlist':
     "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
   'channel.quickView.sender.rejected':
@@ -609,8 +617,9 @@ export default {
   'channel.access.group.openDesc': 'Replies whenever it is @mentioned.',
   'channel.access.group.allowlist': 'Only chosen groups',
   'channel.access.group.allowlistDesc': 'Replies only in the groups you list below.',
-  'channel.access.group.disabled': 'Not in groups',
-  'channel.access.group.disabledDesc': 'It ignores group messages and points people to a DM.',
+  'channel.access.group.disabled': 'Only me in groups',
+  'channel.access.group.disabledDesc':
+    'In groups and channels it has joined, only you can use it (once your own ID is set above); others are told they lack permission. Telegram Guest Mode follows its own setting.',
   'channel.access.group.listNote':
     'The people list above also applies here: only people on it can use the bot in groups.',
   'channel.access.identity.desc':
@@ -667,6 +676,7 @@ export default {
   'channel.wake.section.judgementDesc':
     'What the bot is responsible for, so it can step in without being called, and the instructions it follows.',
   'channel.wake.section.more': 'More',
+  'channel.wake.section.switch': 'Proactive participation',
   'channel.tab.advanced': 'Advanced',
   'channel.tab.unsaved': 'Unsaved changes',
   'channel.tab.records': 'Wake records',
@@ -728,17 +738,17 @@ export default {
   'channel.records.column.score': 'Score',
   'channel.records.judge.addressed': 'Is it meant for the bot',
   'channel.records.judge.duty': 'Is it within its duties',
+  'channel.records.judge.routing': 'Should it be the one to answer',
   'channel.records.judge.allow': 'over the threshold',
   'channel.records.judge.deny': 'under the threshold',
   'channel.records.judge.hint': '{{judge}}: {{verdict}}',
   'channel.records.mark.undo': 'Click again to remove the mark',
   'channel.records.empty.title': 'No records yet',
+  'channel.records.total': '{{count}} records',
   'channel.records.empty.desc':
     'Records show up here once the bot judges a message in a channel it can see.',
   'channel.records.emptyFiltered.title': 'Nothing matches these filters',
   'channel.records.emptyFiltered.clear': 'Clear filters',
-  'channel.records.loadMore': 'Load more',
-  'channel.records.end': "That's everything from the last {{days}} days.",
   'channel.module.save': 'Save',
   'channel.module.unsaved': 'Unsaved changes',
   'channel.group.connection': 'Connection options',
@@ -756,6 +766,9 @@ export default {
   'channel.displayToolCalls': 'Display Tool Calls',
   'channel.displayToolCallsHint':
     'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
+  'channel.processingMessage': 'Processing Message',
+  'channel.processingMessageHint':
+    'Post a short message saying the bot is working on it before the reply. Where messages can be edited, tool call progress also shows in this message.',
   'channel.reactionMode': 'Status Reactions',
   'channel.reactionModeHint':
     'How the bot updates the emoji reaction on your message while it works. Every change can notify members who have message alerts enabled.',
@@ -838,7 +851,7 @@ export default {
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
-  'share.settings.limits.monthlySpendLimitUnit': 'M credits',
+  'share.settings.limits.monthlySpendLimitUnit': 'USD',
   'share.settings.limits.title': 'Limits',
   'share.settings.limits.workspaceDesc':
     'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
@@ -914,7 +927,7 @@ export default {
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
-  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}} credits',
+  'share.settings.usage.spendOfLimitCredits': '{{spend}} of {{limit}}',
   'share.settings.usage.title': 'Usage',
   'share.settings.usage.views': 'Page views',
   'share.settings.usage.viewsHint': 'Repeat views included. Your own previews are excluded.',

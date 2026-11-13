@@ -35,6 +35,12 @@ export type TopicQuerySortBy = 'updatedAt' | 'status';
 
 export interface GroupedTopic {
   children: ChatTopic[];
+  /**
+   * Set on a folder group only when another folder group shows the same path
+   * on a different machine, so the renderer can name the device that tells
+   * them apart.
+   */
+  deviceId?: string;
   id: string;
   title?: string;
 }
@@ -135,6 +141,14 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * The conversation's device was chosen explicitly for it (the composer's
+   * picker preset, a project directory, or `lh topic send --new --device`), not
+   * picked automatically by an `auto` agent. Later turns honour that choice
+   * instead of picking a fresh online device, because the caller was told the
+   * work stays on that machine.
+   */
+  deviceBindingPinned?: boolean;
+  /**
    * Set on a topic created by editing and resending a user message of a
    * runtime whose native history cannot be rewound (Codex). The topic holds a
    * copy of the source ancestry but no native session, so a fresh local run
@@ -166,6 +180,8 @@ export interface ChatTopicMetadata {
   editingGroupId?: string;
   /** Restored-history tail used as the source message for eval attempt threads. */
   evalHistoryTailMessageId?: string;
+  /** Immutable initial Memory hashes keyed by run/topic/thread attempt ID, including empty fixtures. */
+  evalMemoryFixtures?: Record<string, string>;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -405,6 +421,20 @@ export interface ChatTopicMetadata {
    */
   sandboxInstanceId?: string;
   /**
+   * Creation-time only, never stored: the placement this topic is created with
+   * is the plan's default, filled in by the composer rather than chosen. A
+   * project conversation is given the project's repository checkout in its
+   * place. The server reads it and drops it.
+   */
+  sandboxSeeded?: boolean;
+  /**
+   * Creation-time only, never stored: the composer explicitly chose a
+   * temporary sandbox before the topic existed. Without it that choice looks
+   * the same as no choice at all, and the server would apply a project's
+   * repository checkout over it. The server reads it and drops it.
+   */
+  sandboxTemporary?: boolean;
+  /**
    * The folder on the user's drive this topic's cloud sandbox works in,
    * relative to the drive's root; `'.'` is the root itself. Choosing a folder
    * IS the choice to persist: with neither this nor `sandboxInstanceId` the
@@ -614,7 +644,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
-  heteroSpeed: z.enum(['default', 'fast']).optional(),
+  heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({
@@ -823,6 +853,12 @@ export interface CreateTopicParams {
   metadata?: ChatTopicMetadata;
   /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
   model?: string;
+  /**
+   * Bind the new topic to a project without a directory (conversation-only).
+   * Ignored when `projectWorkingDirectoryId` resolves — the directory carries
+   * its own project.
+   */
+  projectId?: string;
   /**
    * Bind the new topic to a project working directory. The server resolves the
    * directory and pins its project, device and paths onto the topic — the same

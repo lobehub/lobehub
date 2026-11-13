@@ -83,3 +83,14 @@ export interface GrepContentParams {
   pattern: string;
   recursive?: boolean;
 }
+
+// ==================== Drive Space Params ====================
+
+export interface AnalyzeStorageParams {
+  top?: number;
+}
+
+export interface DeleteFilesParams {
+  paths: string[];
+  regenerableOnly?: boolean;
+}

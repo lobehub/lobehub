@@ -1,21 +1,8 @@
 'use client';
 
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import {
-  ActionIcon,
-  Block,
-  Center,
-  cx,
-  Flexbox,
-  Icon,
-  Input,
-  Spin,
-  stopPropagation,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
-import { ChevronDownIcon, FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
-import * as m from 'motion/react-m';
+import { Block, cx, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
+import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,20 +11,27 @@ import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
   getTransparentDragImage,
+  useCurrentDrag,
   useDragActive,
   useSetCurrentDrag,
 } from '@/features/ResourceManager/DndContextWrapper';
+import {
+  type DropPosition,
+  getRelativeY,
+  resolveDropPosition,
+} from '@/features/ResourceManager/dragDropPosition';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { libraryFolderPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { TreeItem } from '@/store/tree';
-import { useTreeStore } from '@/store/tree';
+import { isExpandable, useTreeStore } from '@/store/tree';
 
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
+import HierarchyNodeToggle from './HierarchyNodeToggle';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
@@ -213,9 +207,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     });
 
     const isDragActive = useDragActive();
+    const currentDrag = useCurrentDrag();
     const setCurrentDrag = useSetCurrentDrag();
     const [isDragging, setIsDragging] = useState(false);
-    const [isOver, setIsOver] = useState(false);
+    const [dropPosition, setDropPosition] = useState<DropPosition>(null);
 
     const dragData = useMemo(
       () => ({
@@ -250,26 +245,46 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
 
     const handleDragEnd = useCallback(() => {
       setIsDragging(false);
+      setDropPosition(null);
     }, []);
 
     const handleDragOver = useCallback(
       (e: React.DragEvent<HTMLDivElement>) => {
-        if (!item.isFolder || !isDragActive) return;
+        if (!isDragActive || !currentDrag) {
+          setDropPosition(null);
+          return;
+        }
+
+        const position = resolveDropPosition({
+          drag: currentDrag,
+          libraryId,
+          relY: getRelativeY(e.clientY, e.currentTarget.getBoundingClientRect()),
+          target: { id: item.id, isFolder: item.isFolder, parentKey },
+        });
+
+        setDropPosition(position);
+        if (!position) return;
 
         e.preventDefault();
         e.stopPropagation();
-        setIsOver(true);
       },
-      [item.isFolder, isDragActive],
+      [currentDrag, isDragActive, item.id, item.isFolder, libraryId, parentKey],
     );
 
-    const handleDragLeave = useCallback(() => {
-      setIsOver(false);
+    const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+      const nextTarget = e.relatedTarget as Node | null;
+      if (nextTarget && e.currentTarget.contains(nextTarget)) return;
+
+      setDropPosition(null);
     }, []);
 
     const handleDrop = useCallback(() => {
-      setIsOver(false);
+      setDropPosition(null);
     }, []);
+
+    useEffect(() => {
+      if (!isDragActive) setDropPosition(null);
+    }, [isDragActive]);
 
     const handleItemClick = useFileItemClick({
       id: item.id,
@@ -290,18 +305,16 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     if (item.isFolder) {
       const isActive = isHierarchyNodeActive(item, selectedKey);
 
-      const handleToggle = () => {
-        onToggle(item.id);
-      };
-
       return (
         <Flexbox gap={2}>
           <Block
             clickable
             horizontal
             align={'center'}
+            data-drop-item={flat ? undefined : 'true'}
             data-drop-target-id={item.id}
             data-is-folder={String(item.isFolder)}
+            data-parent-key={flat ? undefined : parentKey}
             draggable={!flat}
             gap={8}
             height={36}
@@ -309,7 +322,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             variant={isActive ? 'filled' : 'borderless'}
             className={cx(
               styles.treeItem,
-              isOver && styles.fileItemDragOver,
+              dropPosition === 'inside' && styles.fileItemDragOver,
+              dropPosition === 'before' && styles.dropBefore,
+              dropPosition === 'after' && styles.dropAfter,
               isDragging && styles.dragging,
             )}
             style={{
@@ -317,10 +332,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             }}
             onClick={() => handleFolderClick(item.id)}
             onDragEnd={handleDragEnd}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
+            onDragLeave={flat ? undefined : handleDragLeave}
+            onDragOver={flat ? undefined : handleDragOver}
             onDragStart={handleDragStart}
-            onDrop={handleDrop}
+            onDrop={flat ? undefined : handleDrop}
             onContextMenu={(e) => {
               e.preventDefault();
               showContextMenu(menuItems());
@@ -328,26 +343,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           >
             {flat ? (
               <div style={{ width: 20 }} />
-            ) : isLoading ? (
-              <Center flex={'none'} width={20}>
-                <Spin size={'small'} />
-              </Center>
             ) : (
-              <m.div
-                animate={{ rotate: isExpanded ? 0 : -90 }}
-                initial={false}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-              >
-                <ActionIcon
-                  icon={ChevronDownIcon}
-                  size={'small'}
-                  style={{ width: 20 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggle();
-                  }}
-                />
-              </m.div>
+              <HierarchyNodeToggle
+                isExpanded={isExpanded}
+                isLoading={isLoading}
+                onToggle={() => onToggle(item.id)}
+              />
             )}
             <Flexbox
               horizontal
@@ -399,7 +400,8 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       );
     }
 
-    // Render as file
+    // Render as file. A document that holds other documents gets the folder's
+    // caret; the row itself still opens the document.
     const isActive = isHierarchyNodeActive(item, selectedKey);
     return (
       <Flexbox gap={2}>
@@ -407,26 +409,45 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           clickable
           horizontal
           align={'center'}
-          className={cx(styles.treeItem, isDragging && styles.dragging)}
+          data-drop-item={flat ? undefined : 'true'}
           data-drop-target-id={item.id}
           data-is-folder={false}
+          data-parent-key={flat ? undefined : parentKey}
           draggable={!flat}
           gap={8}
           height={36}
           paddingInline={4}
           variant={isActive ? 'filled' : 'borderless'}
+          className={cx(
+            styles.treeItem,
+            isDragging && styles.dragging,
+            dropPosition === 'inside' && styles.fileItemDragOver,
+            dropPosition === 'before' && styles.dropBefore,
+            dropPosition === 'after' && styles.dropAfter,
+          )}
           style={{
             paddingInlineStart: level * 12 + 4,
           }}
           onClick={handleItemClick}
           onDragEnd={handleDragEnd}
+          onDragLeave={flat ? undefined : handleDragLeave}
+          onDragOver={flat ? undefined : handleDragOver}
           onDragStart={handleDragStart}
+          onDrop={flat ? undefined : handleDrop}
           onContextMenu={(e) => {
             e.preventDefault();
             showContextMenu(menuItems());
           }}
         >
-          <div style={{ width: 20 }} />
+          {!flat && isExpandable(item) ? (
+            <HierarchyNodeToggle
+              isExpanded={isExpanded}
+              isLoading={isLoading}
+              onToggle={() => onToggle(item.id)}
+            />
+          ) : (
+            <div style={{ width: 20 }} />
+          )}
           <Flexbox
             horizontal
             align={'center'}

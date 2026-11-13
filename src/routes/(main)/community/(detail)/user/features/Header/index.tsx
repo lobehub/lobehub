@@ -1,6 +1,7 @@
 'use client';
 
-import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
 import {
   ActionIcon,
   Avatar,

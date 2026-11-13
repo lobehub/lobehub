@@ -1,5 +1,6 @@
 import { defineReplica } from '@/libs/replica';
 
+import { isExpandable } from './items';
 import type { TreeItem } from './types';
 
 /**
@@ -19,17 +20,23 @@ export const MAX_PERSISTED_ITEMS_PER_FOLDER = 200;
 
 /**
  * Only the fields a sidebar row paints with. `url` can be a signed link, so it
- * never reaches storage; `metadata` keeps only the page emoji the row shows.
+ * never reaches storage; `metadata` keeps the page emoji and confirmed custom order.
  */
 const compactItem = (item: TreeItem): TreeItem => {
   const emoji = item.metadata?.emoji;
+  const sortOrder = item.metadata?.sortOrder;
+  const metadata = {
+    ...(emoji ? { emoji } : {}),
+    ...(typeof sortOrder === 'number' && Number.isFinite(sortOrder) ? { sortOrder } : {}),
+  };
   return {
     createdAt: item.createdAt,
     fileId: item.fileId,
     fileType: item.fileType,
+    hasChildren: item.hasChildren,
     id: item.id,
     isFolder: item.isFolder,
-    metadata: emoji ? { emoji } : undefined,
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     name: item.name,
     parentId: item.parentId,
     size: item.size,
@@ -66,7 +73,7 @@ export const buildLibraryTreeSnapshot = (
     folders += 1;
 
     for (const item of kept) {
-      if (item.isFolder && expanded[item.id] && children[item.id]) queue.push(item.id);
+      if (isExpandable(item) && expanded[item.id] && children[item.id]) queue.push(item.id);
     }
   }
 

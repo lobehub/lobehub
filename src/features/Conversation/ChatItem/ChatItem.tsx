@@ -41,7 +41,9 @@ const ChatItem = memo<ChatItemProps>(
     belowMessage,
     headerAddon,
     showAvatar = true,
+    showHeader = true,
     titleAddon,
+    quietHeader,
     disabled = false,
     id,
     style,
@@ -80,23 +82,31 @@ const ChatItem = memo<ChatItemProps>(
         }}
         {...rest}
       >
-        <Flexbox
-          align={'center'}
-          className={'message-header'}
-          direction={isUser ? 'horizontal-reverse' : 'horizontal'}
-          gap={8}
-          // The row wraps nothing, so without a cap it is sized by its content and
-          // simply overflows its lane — on a narrow viewport that is a header
-          // wider than the conversation pane (the source-topic link, a long agent
-          // name). Capped, the shrinkable addons yield to the space actually
-          // available and truncate instead.
-          style={{ maxInlineSize: '100%', minInlineSize: 0 }}
-        >
-          {showAvatar &&
-            (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
-          {headerAddon}
-          <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
-        </Flexbox>
+        {showHeader && (
+          <Flexbox
+            align={quietHeader ? 'baseline' : 'center'}
+            className={'message-header'}
+            direction={isUser ? 'horizontal-reverse' : 'horizontal'}
+            gap={8}
+            // The row wraps nothing, so without a cap it is sized by its content and
+            // simply overflows its lane — on a narrow viewport that is a header
+            // wider than the conversation pane (the source-topic link, a long agent
+            // name). Capped, the shrinkable addons yield to the space actually
+            // available and truncate instead.
+            style={{ maxInlineSize: '100%', minInlineSize: 0 }}
+          >
+            {showAvatar &&
+              (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
+            {headerAddon}
+            <Title
+              avatar={avatar}
+              quiet={quietHeader}
+              showTitle={showTitle}
+              time={time}
+              titleAddon={titleAddon}
+            />
+          </Flexbox>
+        )}
         <Flexbox
           className={'message-body'}
           gap={8}

@@ -1,7 +1,15 @@
 import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
-import { cssVar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, type ModalInstance, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  toast,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
@@ -28,6 +36,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import { type AgentProfileTab } from '@/features/AgentProfileTabs/tabOptions';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -103,7 +112,12 @@ const buildAgentProfileMarkdown = (params: {
   return `${sections.join('\n\n')}\n`;
 };
 
-const Header = memo(() => {
+interface HeaderProps {
+  /** The profile page being shown, so the page switcher highlights it. */
+  active?: AgentProfileTab;
+}
+
+const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
@@ -456,7 +470,7 @@ const Header = memo(() => {
         },
       }}
     >
-      {activeAgentId && <AgentProfileTabs active={'profile'} agentId={activeAgentId} />}
+      {activeAgentId && <AgentProfileTabs active={active} agentId={activeAgentId} />}
     </NavHeader>
   );
 });

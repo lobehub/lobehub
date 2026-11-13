@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hookDispatcher } from '../../hooks';
 import { type AgentExecutionParams } from '../../types';
 import { AgentRuntimeService } from '..';
+import { DurableStatusUnavailableError } from '../executionErrors';
+import { stubRunningDurableOperation } from './testUtils';
 
 vi.mock('@lobechat/model-runtime', (...args) =>
   import('./testUtils').then((m) =>
@@ -146,6 +148,7 @@ describe('AgentRuntimeService executeStep', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    stubRunningDurableOperation();
     process.env.AGENT_RUNTIME_BASE_URL = 'http://localhost:3010';
   });
 
@@ -415,6 +418,29 @@ describe('AgentRuntimeService executeStep', () => {
             .mockResolvedValue({ id: 'test-operation-1', status: 'error' });
         });
       });
+    });
+
+    it('leaves the run for a queue retry when the durable row cannot be read after init', async () => {
+      const runDeferredInit = vi.fn().mockResolvedValue({
+        context: { phase: 'user_input', payload: {} },
+        state: { operationToolSet: { enabledToolIds: ['lobe-web-browsing'] } },
+      });
+      const svc = buildService(runDeferredInit);
+      const { coordinator, step } = wireStep(svc);
+      coordinator.isInterrupted.mockResolvedValue(false);
+      vi.spyOn((svc as any).agentOperationModel, 'findById')
+        .mockResolvedValueOnce({ id: 'test-operation-1', status: 'running' })
+        .mockRejectedValue(new Error('connection reset'));
+      const dispatch = vi.spyOn((svc as any).completionLifecycle, 'dispatchHooks');
+
+      await expect(svc.executeStep({ ...mockParams, stepIndex: 0 })).rejects.toBeInstanceOf(
+        DurableStatusUnavailableError,
+      );
+
+      expect(runDeferredInit).toHaveBeenCalledTimes(1);
+      expect(step).not.toHaveBeenCalled();
+      expect(coordinator.saveAgentState).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
     });
 
     it('does not initialize a shared run whose share was revoked after enqueue', async () => {

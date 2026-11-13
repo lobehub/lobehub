@@ -9,12 +9,14 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { electronKeys } from '@/libs/swr/keys';
 import { agentQuotaService } from '@/services/agentQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 
 import { initialState, type State } from './initialState';
 import {
   hashQuotaSourceKey,
+  parseQuotaDeviceAccountKey,
   QUOTA_ACCOUNTS_KEY,
   QUOTA_HISTORY_DAYS,
   QUOTA_HISTORY_WINDOW_LIMIT,
@@ -22,6 +24,9 @@ import {
   quotaAccountsResource,
   type QuotaBinding,
   quotaBindingsResource,
+  type QuotaDeviceAccount,
+  quotaDeviceAccountKey,
+  quotaDeviceAccountResource,
   type QuotaHistory,
   type QuotaHistoryFetched,
   quotaHistoryResource,
@@ -45,7 +50,7 @@ type Setter = StoreSetter<Store>;
  */
 export const QUOTA_READ_DEDUPE_MS = 10_000;
 
-type QuotaResourceName = 'accounts' | 'bindings' | 'history' | 'readings';
+type QuotaResourceName = 'accounts' | 'bindings' | 'deviceAccount' | 'history' | 'readings';
 
 interface ReadOptions {
   /** Skip the dedupe window and retire older requests (after a write / ingest). */
@@ -82,6 +87,7 @@ export class ActionImpl {
   readonly #set: Setter;
   readonly #accounts;
   readonly #bindings;
+  readonly #deviceAccount;
   readonly #readings;
   readonly #history;
   readonly #panel;
@@ -121,9 +127,29 @@ export class ActionImpl {
       stateKey: 'quotaBindingsReplica',
       view: recordLens<Store, QuotaBinding[]>('quotaBindingsMap'),
     });
+    this.#deviceAccount = createReplicaSlice(quotaDeviceAccountResource, {
+      actionPrefix: 'quotaDeviceAccount',
+      effects: confirmOn('deviceAccount'),
+      fetcher: (key) => {
+        const { agentId, deviceId } = parseQuotaDeviceAccountKey(key);
+        return agentQuotaService.getDeviceAccount(agentId, deviceId);
+      },
+      get,
+      merge: sameValue,
+      set,
+      stateKey: 'quotaDeviceAccountReplica',
+      view: recordLens<Store, QuotaDeviceAccount>('quotaDeviceAccountMap'),
+    });
     this.#readings = createReplicaSlice(quotaReadingsResource, {
       actionPrefix: 'quotaReadings',
-      effects: confirmOn('readings'),
+      // Track failures per account: an entry that never loads must not read as "still loading".
+      effects: {
+        onApplied: (_data, accountId, context) => {
+          this.#markApplied('readings', context);
+          this.#setReadingsFailed(accountId, false);
+        },
+        onError: (_error, accountId) => this.#setReadingsFailed(accountId, true),
+      },
       fetcher: (accountId) => agentQuotaService.getLatestReadings(accountId),
       get,
       merge: sameValue,
@@ -187,8 +213,28 @@ export class ActionImpl {
   useFetchQuotaBindings = (agentId?: string | null): ReplicaSyncResult =>
     this.#bindings.useSync(agentId || null, this.#syncOptions('bindings', agentId));
 
-  useFetchQuotaReadings = (accountId?: string | null): ReplicaSyncResult =>
-    this.#readings.useSync(accountId || null, this.#syncOptions('readings', accountId));
+  /** Sync one agent's account choice on one device (gateway id). */
+  useFetchQuotaDeviceAccount = (
+    agentId?: string | null,
+    deviceId?: string | null,
+  ): ReplicaSyncResult => {
+    const key = agentId && deviceId ? quotaDeviceAccountKey(agentId, deviceId) : null;
+    return this.#deviceAccount.useSync(key, this.#syncOptions('deviceAccount', key));
+  };
+
+  /**
+   * Sync one account's newest readings. A view that stays open while others
+   * spend the account (the team capacity calendar) passes a `refreshInterval`
+   * so it keeps up; SWR pauses the polling while the tab is hidden.
+   */
+  useFetchQuotaReadings = (
+    accountId?: string | null,
+    schedule?: { refreshInterval?: number },
+  ): ReplicaSyncResult =>
+    this.#readings.useSync(accountId || null, {
+      ...this.#syncOptions('readings', accountId),
+      ...schedule,
+    });
 
   useFetchQuotaHistory = (accountId?: string | null): ReplicaSyncResult =>
     this.#history.useSync(accountId || null, this.#syncOptions('history', accountId));
@@ -227,6 +273,19 @@ export class ActionImpl {
   readQuotaBindings = (agentId: string, options?: ReadOptions): Promise<QuotaBinding[]> =>
     this.#read('bindings', this.#bindings, agentId, 'quotaBindingsMap', options);
 
+  readQuotaDeviceAccount = (
+    agentId: string,
+    deviceId: string,
+    options?: ReadOptions,
+  ): Promise<QuotaDeviceAccount> =>
+    this.#read(
+      'deviceAccount',
+      this.#deviceAccount,
+      quotaDeviceAccountKey(agentId, deviceId),
+      'quotaDeviceAccountMap',
+      options,
+    );
+
   /**
    * A `fresh` readings read follows an ingest (local, device-side or a reset),
    * which also appended to the account's snapshot series and windows: refresh a
@@ -257,6 +316,31 @@ export class ActionImpl {
       () => agentQuotaService.switchAccount(agentId, accountId),
     );
     await this.#refresh(this.#bindings, agentId);
+  };
+
+  /**
+   * Pin an account for an agent on one device (Manual mode there), or return
+   * that device to Auto with `null`. The server first hands a legacy
+   * agent-wide pin to the devices that hold its login, so the bindings change
+   * too and are re-read.
+   */
+  setQuotaDeviceAccount = async (
+    agentId: string,
+    deviceId: string,
+    accountId: string | null,
+  ): Promise<void> => {
+    const key = quotaDeviceAccountKey(agentId, deviceId);
+    if (this.#get().quotaDeviceAccountMap[key] === undefined)
+      await this.readQuotaDeviceAccount(agentId, deviceId);
+    await this.#deviceAccount.optimistic(
+      key,
+      () => ({ accountId }),
+      () => agentQuotaService.setDeviceAccount(agentId, deviceId, accountId),
+    );
+    await Promise.all([
+      this.#refresh(this.#deviceAccount, key),
+      this.#refresh(this.#bindings, agentId),
+    ]);
   };
 
   /** Add an account to an agent's pool, or change its role there. */
@@ -317,6 +401,25 @@ export class ActionImpl {
       (accounts) =>
         accounts.map((account) => (account.id === accountId ? { ...account, enabled } : account)),
       () => agentQuotaService.updateAccount(accountId, { enabled }),
+    );
+    await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+  };
+
+  /**
+   * Publish a workspace account to the team or keep it to the members signed in
+   * to it. Only its creator may; the server rejects anyone else.
+   */
+  setQuotaAccountVisibility = async (
+    accountId: string,
+    visibility: 'private' | 'public',
+  ): Promise<void> => {
+    await this.#accounts.optimistic(
+      QUOTA_ACCOUNTS_KEY,
+      (accounts) =>
+        accounts.map((account) =>
+          account.id === accountId ? { ...account, visibility } : account,
+        ),
+      () => agentQuotaService.updateAccount(accountId, { visibility }),
     );
     await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
   };
@@ -387,7 +490,13 @@ export class ActionImpl {
   reset = (): void => {
     // A mounted manager / calendar keeps its sync key across the reset, so
     // nothing would refetch until a focus or remount: revalidate once cleared.
-    for (const slice of [this.#accounts, this.#bindings, this.#readings, this.#history])
+    for (const slice of [
+      this.#accounts,
+      this.#bindings,
+      this.#deviceAccount,
+      this.#readings,
+      this.#history,
+    ])
       void slice.clear().then(() => slice.revalidate());
     void this.#panel.clear();
     this.#appliedAt.clear();
@@ -401,12 +510,47 @@ export class ActionImpl {
 
   // ---- internals ----
 
+  #setReadingsFailed = (accountId: string, failed: boolean) => {
+    const current = this.#get().quotaReadingsFailed;
+    if (!!current[accountId] === failed) return;
+    const { [accountId]: _cleared, ...rest } = current;
+    this.#set(
+      { quotaReadingsFailed: failed ? { ...rest, [accountId]: true } : rest },
+      false,
+      'quotaReadingsFailed',
+    );
+  };
+
   #syncClaudeLocalAccounts = async (): Promise<ClaudeCodeLocalAccount[]> => {
     const accounts = await heterogeneousAgentService.listClaudeCodeAccounts();
     const ingested = await Promise.all(
       accounts.map((account) => this.#ingestLocalLogin(account).catch(() => false)),
     );
     if (ingested.some(Boolean)) await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+    // Record which logins this machine holds, so a per-device account choice
+    // can only name one it can run (and a signed-out one stops counting).
+    const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
+    if (deviceId) {
+      const synced = await agentQuotaService
+        .syncDeviceLogins(
+          deviceId,
+          'claude-code',
+          accounts.flatMap((account) => account.identity.externalAccountId ?? []),
+        )
+        .then(() => true)
+        .catch((error) => {
+          console.error('[agentQuota:syncDeviceLogins]', error);
+          return false;
+        });
+      // A login gone from this machine takes the picks made on it along, so
+      // re-read the picks already on screen for this device.
+      if (synced)
+        await Promise.all(
+          Object.keys(this.#get().quotaDeviceAccountMap)
+            .filter((key) => parseQuotaDeviceAccountKey(key).deviceId === deviceId)
+            .map((key) => this.#refresh(this.#deviceAccount, key)),
+        );
+    }
     return accounts;
   };
 
@@ -504,7 +648,7 @@ export class ActionImpl {
       fetch: (params: string, options?: ReadOptions) => Promise<{ applied: boolean; data: T }>;
     },
     key: string,
-    field: 'quotaAccountsMap' | 'quotaBindingsMap' | 'quotaReadingsMap',
+    field: 'quotaAccountsMap' | 'quotaBindingsMap' | 'quotaDeviceAccountMap' | 'quotaReadingsMap',
     { fresh = false }: ReadOptions = {},
     retried = false,
   ): Promise<T> => {

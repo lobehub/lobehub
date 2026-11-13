@@ -3,6 +3,7 @@ import { Undo2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { cleanBotPromptTags } from '@/store/chat/utils/parseReferencedMessage';
 import { unescapeMarkdown } from '@/store/chat/utils/unescapeMarkdown';
 import { useFileStore } from '@/store/file';
@@ -25,6 +26,7 @@ export const restoreToInputAction = defineAction({
     const { t } = useTranslation('common');
 
     const editor = useConversationStore((s) => s.editor);
+    const contextKey = useConversationStore((s) => messageMapKey(s.context));
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
 
     return useMemo(() => {
@@ -93,9 +95,9 @@ export const restoreToInputAction = defineAction({
           ];
 
           const fileStore = useFileStore.getState();
-          fileStore.clearChatUploadFileList();
+          fileStore.clearChatUploadFileList(contextKey);
           if (restored.length > 0) {
-            fileStore.dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+            fileStore.dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
           }
 
           editor.focus();
@@ -105,6 +107,6 @@ export const restoreToInputAction = defineAction({
         key: 'restoreToInput',
         label: t('restoreToInput'),
       };
-    }, [t, ctx.role, ctx.data, editor, updateInputMessage]);
+    }, [t, ctx.role, ctx.data, contextKey, editor, updateInputMessage]);
   },
 });

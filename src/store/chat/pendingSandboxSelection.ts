@@ -1,6 +1,11 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
+import debug from 'debug';
 
 import type { SandboxSelection } from '@/features/ChatInput/ControlBar/useSandboxPlacement';
+import { sandboxStorageService } from '@/services/sandboxStorage';
+import { sandboxSelectors, useSandboxStore } from '@/store/sandbox';
+
+const log = debug('lobe-client:sandbox:pending-selection');
 
 /**
  * Module-level singleton for a sandbox selection made before the topic exists.
@@ -52,6 +57,78 @@ export const setPendingSandboxSelection = (agentId: string, selection?: SandboxS
   emit();
 };
 
+/**
+ * Selections the composer filled in itself rather than the person choosing
+ * them: the plan's default placement. Kept by identity, so a pick — always a
+ * new object — is never mistaken for one. The server needs the difference: a
+ * project conversation started on the default is given the project's
+ * repository checkout instead, while one the person placed keeps their choice.
+ */
+const seeded = new WeakSet<SandboxSelection>();
+
+/** Fill an agent's empty slot with the default placement, marked as not chosen by anyone. */
+export const seedPendingSandboxSelection = (agentId: string, selection: SandboxSelection): void => {
+  seeded.add(selection);
+  setPendingSandboxSelection(agentId, selection);
+};
+
+/**
+ * The place an agent's next conversation starts when nobody picks one, and
+ * the plan turns out to include a drive. Registered by the composer as soon as
+ * it knows the agent runs in the sandbox — before the entitlement has loaded —
+ * so a message sent while that request is still in flight is not born without
+ * a folder. Kept apart from the pending pick: it is a candidate, and only
+ * becomes the pick once the entitlement is confirmed.
+ */
+const defaults = new Map<string, SandboxSelection>();
+
+/** Register an agent's default placement; `undefined` clears it. */
+export const setSandboxDefaultSelection = (agentId: string, selection?: SandboxSelection): void => {
+  if (selection) seeded.add(selection);
+  if (selection) defaults.set(agentId, selection);
+  else defaults.delete(agentId);
+};
+
+/**
+ * Whether the active workspace's plan includes a drive. A cached yes is taken
+ * as is; a cached no is confirmed with the server first, because the cache is
+ * persisted — an account that has just upgraded still reads no until its
+ * revalidation lands, and its first conversation would otherwise lose the
+ * drive. A failed lookup reads as no — the run goes to the temporary sandbox,
+ * as it would have anyway.
+ */
+const isDriveEntitled = async (): Promise<boolean> => {
+  const cached = sandboxSelectors.entitlement(useSandboxStore.getState());
+  if (cached?.entitled) return true;
+
+  try {
+    return (await sandboxStorageService.getEntitlement()).entitled;
+  } catch (error) {
+    log('Failed to resolve the drive entitlement for a first send: %O', error);
+    return false;
+  }
+};
+
+/**
+ * The selection the first send carries: the pick, if one was made; otherwise
+ * the registered default, once the plan is confirmed to include a drive. The
+ * default then becomes the pick, so every later reader of this send sees it.
+ */
+export const resolvePendingSandboxSelection = async (
+  agentId: string,
+): Promise<SandboxSelection | undefined> => {
+  const picked = map.get(agentId);
+  if (picked) return picked;
+
+  const fallback = defaults.get(agentId);
+  if (!fallback || !(await isDriveEntitled())) return undefined;
+
+  // A pick made while the entitlement was in flight wins over the default.
+  if (!map.has(agentId)) setPendingSandboxSelection(agentId, fallback);
+
+  return map.get(agentId);
+};
+
 /** Read without consuming — what the closed chip names itself after. */
 export const getPendingSandboxSelection = (agentId: string): SandboxSelection | undefined =>
   map.get(agentId);
@@ -69,7 +146,13 @@ export const consumePendingSandboxSelection = (agentId: string): SandboxSelectio
   return selection;
 };
 
-/** The topic metadata a pending selection becomes when the topic is created with it. */
+/**
+ * The topic metadata a pending selection becomes when the topic is created with
+ * it. An empty selection is the temporary sandbox picked on purpose, and says so:
+ * otherwise it would arrive as nothing picked, and a project conversation would
+ * be given the project's checkout instead. A default nobody picked says that
+ * too, so the project's checkout can take its place.
+ */
 export const toSandboxTopicMetadata = (
   selection: SandboxSelection | undefined,
 ): ChatTopicMetadata | undefined =>
@@ -78,4 +161,8 @@ export const toSandboxTopicMetadata = (
     sandboxEnvironmentId: selection.environmentId,
     sandboxInstanceId: selection.instanceId,
     sandboxWorkingDirectory: selection.workingDirectory,
+    ...(seeded.has(selection) && { sandboxSeeded: true }),
+    ...(!selection.environmentId &&
+      !selection.instanceId &&
+      selection.workingDirectory === undefined && { sandboxTemporary: true }),
   };

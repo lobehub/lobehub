@@ -1,3 +1,5 @@
+import type { QuotaDeviceAccount } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -9,7 +11,8 @@ import {
 import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { AgentQuotaService } from '@/server/services/agentQuota';
+import { AccountNotSignedInOnDeviceError, AgentQuotaService } from '@/server/services/agentQuota';
+import { resolveDeviceRowId } from '@/server/services/agentQuota/resolveDeviceRowId';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { assertWorkspaceDeviceVisible } from './deviceWorkspaceGuard';
@@ -29,6 +32,35 @@ const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 });
 
 const providerSchema = z.enum(['claude-code', 'codex', 'kimi-code']);
+/** `devices.id` of a device the client names by its gateway id; see `resolveDeviceRowId`. */
+const deviceRowIdOf = (
+  ctx: { deviceModel: DeviceModel; workspaceId?: string | null },
+  gatewayDeviceId: string | undefined,
+) => resolveDeviceRowId(ctx.deviceModel, ctx.workspaceId, gatewayDeviceId);
+
+/** Like `deviceRowIdOf`, for writes that cannot proceed without the device. */
+const requireDeviceRowId = async (
+  ctx: { deviceModel: DeviceModel; workspaceId?: string | null },
+  gatewayDeviceId: string,
+): Promise<string> => {
+  const id = await deviceRowIdOf(ctx, gatewayDeviceId);
+  if (!id) throw new TRPCError({ code: 'NOT_FOUND', message: 'Device not found' });
+  return id;
+};
+
+/**
+ * Refuse an account id the caller cannot see. Readings, windows, spend and
+ * runs carry no visibility of their own — they inherit the account's — so
+ * every procedure taking an id checks it here, or a private account would
+ * stay readable (and bindable) by anyone who learned its id while it was public.
+ */
+const requireVisibleAccount = async (
+  ctx: { accountModel: AgentProviderAccountModel },
+  accountId: string,
+): Promise<void> => {
+  if (!(await ctx.accountModel.findById(accountId)))
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found' });
+};
 
 const readingSchema = z.object({
   capturedAt: z.number(),
@@ -177,29 +209,14 @@ export const agentQuotaRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Clients know a device by its gateway id (the string `devices.device_id`
-      // stored in `agencyConfig.boundDeviceId`), but snapshots reference the
-      // `devices.id` uuid. Resolve it here rather than trusting the client: a
-      // raw gateway id fails the uuid/foreign-key check and would take the
-      // whole ingest down with it, silently stranding the reading. An
-      // unresolvable device only costs attribution, so keep the reading.
-      //
-      // A workspace device's identity is `(workspaceId, deviceId)` — `userId`
-      // only records the first enroller — so the personal `(userId, deviceId)`
-      // lookup misses a machine any other member enrolled. Try the
-      // workspace-scoped lookup first when the request carries a workspace
-      // (it also applies the device's visibility rules), then fall back to the
-      // caller's own devices.
-      const deviceModel = new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-      const deviceRow = input.deviceId
-        ? ((ctx.workspaceId
-            ? await deviceModel.findWorkspaceDeviceById(input.deviceId)
-            : undefined) ?? (await deviceModel.findByDeviceId(input.deviceId)))
-        : undefined;
+      // An unresolvable device only costs attribution, so keep the reading: a
+      // raw gateway id would fail the uuid/foreign-key check and take the whole
+      // ingest down with it, silently stranding the reading.
+      const deviceRowId = await deviceRowIdOf(ctx, input.deviceId);
 
       return ctx.quotaService.ingestSnapshot({
         credentialRef: { origin: 'keychain' },
-        deviceId: deviceRow?.id,
+        deviceId: deviceRowId,
         extraUsage: input.extraUsage,
         identity: input.identity,
         provider: input.provider,
@@ -258,10 +275,20 @@ export const agentQuotaRouter = router({
         value: z.object({
           enabled: z.boolean().optional(),
           label: z.string().optional(),
+          visibility: z.enum(['private', 'public']).optional(),
         }),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.accountModel.update(input.id, input.value)),
+    .mutation(async ({ ctx, input }) => {
+      const { visibility, ...patch } = input.value;
+      if (visibility && !(await ctx.accountModel.setVisibility(input.id, visibility)))
+        // Personal accounts carry no visibility, and only the creator may change it.
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the member who added this account can change its visibility',
+        });
+      if (Object.keys(patch).length > 0) await ctx.accountModel.update(input.id, patch);
+    }),
 
   // ── bindings (agent ↔ account, incl. UI switch) ──────────────────────────
   bindAccount: quotaProcedure
@@ -274,7 +301,10 @@ export const agentQuotaRouter = router({
         weight: z.number().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.bindingModel.upsert(input)),
+    .mutation(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.bindingModel.upsert(input);
+    }),
 
   listBindings: quotaProcedure
     .input(z.object({ agentId: z.string() }))
@@ -283,16 +313,74 @@ export const agentQuotaRouter = router({
   /** UI "switch account": pin one account for an agent, demoting any prior pin. */
   switchAccount: quotaProcedure
     .input(z.object({ accountId: z.string(), agentId: z.string() }))
-    .mutation(async ({ ctx, input }) => ctx.bindingModel.pin(input.agentId, input.accountId)),
+    .mutation(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.bindingModel.pin(input.agentId, input.accountId);
+    }),
 
   unbindAccount: quotaProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => ctx.bindingModel.remove(input.id)),
 
+  // ── per-device account choice (a login only exists on its machine) ───────
+  /** The account an agent uses on one device; `accountId: null` = Auto there. */
+  getDeviceAccount: quotaProcedure
+    .input(z.object({ agentId: z.string(), deviceId: z.string() }))
+    .query(async ({ ctx, input }): Promise<QuotaDeviceAccount> => {
+      const deviceRowId = await deviceRowIdOf(ctx, input.deviceId);
+      return {
+        accountId: deviceRowId
+          ? await ctx.quotaService.getDeviceAccount(input.agentId, deviceRowId)
+          : null,
+      };
+    }),
+
+  /** Pin an account for an agent on one device, or return it to Auto (`accountId: null`). */
+  setDeviceAccount: quotaProcedure
+    .input(
+      z.object({ accountId: z.string().nullable(), agentId: z.string(), deviceId: z.string() }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const deviceRowId = await requireDeviceRowId(ctx, input.deviceId);
+      if (input.accountId) await requireVisibleAccount(ctx, input.accountId);
+      try {
+        await ctx.quotaService.setDeviceAccount(input.agentId, deviceRowId, input.accountId);
+      } catch (error) {
+        if (error instanceof AccountNotSignedInOnDeviceError)
+          throw new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: error.message,
+          });
+        throw error;
+      }
+    }),
+
+  /** A device reports every login it holds for a provider; the rest are forgotten there. */
+  syncDeviceLogins: quotaProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        externalAccountIds: z.array(z.string()),
+        provider: providerSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const deviceRowId = await requireDeviceRowId(ctx, input.deviceId);
+      await ctx.quotaService.syncDeviceLogins(
+        deviceRowId,
+        input.provider,
+        input.externalAccountIds,
+      );
+    }),
+
   // ── quota read (QuotaMenu read model) ────────────────────────────────────
   getWindows: quotaProcedure
     .input(z.object({ accountId: z.string(), limit: z.number().optional() }))
-    .query(async ({ ctx, input }) => ctx.windowModel.listByAccount(input.accountId, input.limit)),
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.windowModel.listByAccount(input.accountId, input.limit);
+    }),
 
   /**
    * Display read model: the newest reading per limit bucket. Prefer this over
@@ -301,7 +389,10 @@ export const agentQuotaRouter = router({
    */
   getLatestReadings: quotaProcedure
     .input(z.object({ accountId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.quotaService.listLatestReadings(input.accountId)),
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listLatestReadings(input.accountId);
+    }),
 
   /**
    * Full reading time series (oldest first) for the usage calendar's daily
@@ -309,12 +400,13 @@ export const agentQuotaRouter = router({
    */
   listSnapshots: quotaProcedure
     .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
-    .query(async ({ ctx, input }) =>
-      ctx.quotaService.listSnapshotSeries(
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listSnapshotSeries(
         input.accountId,
         new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
-      ),
-    ),
+      );
+    }),
 
   /**
    * Per-turn token + cost spend (oldest first) for the usage calendar. Kept
@@ -323,17 +415,21 @@ export const agentQuotaRouter = router({
    */
   listUsageTurns: quotaProcedure
     .input(z.object({ accountId: z.string(), sinceDays: z.number().min(1).max(90).optional() }))
-    .query(async ({ ctx, input }) =>
-      ctx.quotaService.listUsageTurns(
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listUsageTurns(
         input.accountId,
         new Date(Date.now() - (input.sinceDays ?? 42) * 24 * 60 * 60 * 1000),
-      ),
-    ),
+      );
+    }),
 
   /** Agent runs in flight on an account — who is spending it right now. */
   listActiveRuns: quotaProcedure
     .input(z.object({ accountId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.quotaService.listActiveRuns(input.accountId)),
+    .query(async ({ ctx, input }) => {
+      await requireVisibleAccount(ctx, input.accountId);
+      return ctx.quotaService.listActiveRuns(input.accountId);
+    }),
 
   // ── load balancing ───────────────────────────────────────────────────────
   resolveAccountLoads: quotaProcedure
@@ -344,6 +440,8 @@ export const agentQuotaRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        /** Gateway id of the device the run spawns on. */
+        deviceId: z.string().optional(),
         modelScope: z.string().optional(),
         provider: z.string().optional(),
         runnableExternalAccountIds: z.array(z.string()).optional(),
@@ -351,6 +449,7 @@ export const agentQuotaRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.quotaService.selectForAgent(input.agentId, {
+        deviceId: await deviceRowIdOf(ctx, input.deviceId),
         modelScope: input.modelScope,
         provider: input.provider,
         runnableExternalAccountIds: input.runnableExternalAccountIds,

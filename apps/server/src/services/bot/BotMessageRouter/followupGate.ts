@@ -2,11 +2,11 @@ import { botWakeSchedulerCounter } from '@lobechat/observability-otel/modules/bo
 import type { Message } from 'chat';
 import debug from 'debug';
 
-import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botWake/facts';
-import type { WakeScheduler } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
+import type { WakeScheduler } from '@/server/services/conversationWake/scheduler';
 
 import { deferBotMessages } from '../deferredMessages';
 import { getOriginMessageId } from '../mergeMessages';
+import { resolveChannelKeys } from '../wake/platformFacts';
 import type { BotWakeEntryPoint, BotWakeRecorder } from './wakeDecision';
 
 const log = debug('lobe-server:bot:followup-gate');
@@ -22,7 +22,7 @@ export interface FollowupGateDeps {
     threadSubscribed?: boolean,
   ) => void;
   platform: string;
-  recorder: Pick<BotWakeRecorder, 'isRolledOut' | 'judge' | 'rememberEngaged'>;
+  recorder: Pick<BotWakeRecorder, 'enabled' | 'judge' | 'rememberEngaged'>;
   scheduler?: WakeScheduler;
 }
 
@@ -65,8 +65,8 @@ export const createFollowupGate = (deps: FollowupGateDeps) => {
   return async (input: FollowupGateInput): Promise<'proceed' | 'stop'> => {
     const { entryPoint, immediate, initiated, merged, parked, thread, threadSubscribed } = input;
 
-    // Rollout off: no judging, no scheduling, no parking. The wake runs exactly as it used to.
-    if (!(await deps.recorder.isRolledOut())) return 'proceed';
+    // Switch off: no judging, no scheduling, no parking. The wake runs exactly as it used to.
+    if (!deps.recorder.enabled) return 'proceed';
 
     const decision = initiated
       ? undefined

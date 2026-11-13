@@ -7,5 +7,6 @@ export {
   type EditorCanvasWithEditorProps,
 } from './EditorCanvas';
 export { default as InlineToolbar, type InlineToolbarProps } from './InlineToolbar';
+export { requestListNumberMenu } from './richList/numberMenuRequest';
 export { TypoBar } from './TypoBar';
 export { useImageUpload } from './useImageUpload';

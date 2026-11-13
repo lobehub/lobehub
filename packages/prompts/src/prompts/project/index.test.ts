@@ -42,6 +42,20 @@ describe('buildProjectContextPrompt', () => {
     expect(buildProjectContextPrompt({ ...input, currentAgentId: 'agt_coord' })).toMatchSnapshot();
   });
 
+  it('points hand-off messages at Channels only when the run can message them', () => {
+    const rule = '`listChannels`, then `sendMessage`';
+    expect(buildProjectContextPrompt({ ...input, currentAgentId: 'agt_coord' })).not.toContain(
+      rule,
+    );
+    const prompt = buildProjectContextPrompt({
+      ...input,
+      channelMessaging: true,
+      currentAgentId: 'agt_coord',
+    });
+    expect(prompt).toContain(rule);
+    expect(prompt.indexOf(rule)).toBeLessThan(prompt.indexOf('</coordination_rules>'));
+  });
+
   it('marks a member agent and leaves the coordination rules out', () => {
     const prompt = buildProjectContextPrompt({ ...input, currentAgentId: 'agt_writer' });
 

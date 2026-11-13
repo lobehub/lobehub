@@ -1,0 +1,8 @@
+:root {
+  --ink: rgb(17 17 17);
+  --ink-alias: rgb(17 17 17);
+}
+
+body {
+  font-family: Arial, sans-serif;
+}

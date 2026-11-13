@@ -131,7 +131,19 @@ vi.mock('../../../store', () => ({
       continueHeteroAfterError: continueHeteroAfterErrorMock,
       deleteDBMessage: deleteDBMessageMock,
       retryFailedAssistantStep: retryFailedAssistantStepMock,
-      dbMessages: [{ id: 'block-1', metadata: { finishType: persistedFinishTypeMock } }],
+      dbMessages: [
+        { id: 'block-1', metadata: { finishType: persistedFinishTypeMock } },
+        {
+          id: 'launcher',
+          tools: [
+            {
+              apiName: 'Agent',
+              arguments: JSON.stringify({ description: 'Outbound audit' }),
+              id: 'call-agent',
+            },
+          ],
+        },
+      ],
       heteroOverloadRetryAttempts: {},
       internal_beginHeteroOverloadWait: vi.fn(),
       internal_endHeteroOverloadWait: vi.fn(),
@@ -151,6 +163,35 @@ describe('AssistantGroup ContentBlock', () => {
     navigateMock.mockClear();
     isInReasoningMock = false;
     persistedFinishTypeMock = undefined;
+  });
+
+  it('names the finished task above a wake-up step', () => {
+    const metadata = {
+      signal: { sourceToolCallId: 'call-agent', sourceToolName: 'Agent', type: 'task-completion' },
+    } as any;
+
+    const { rerender } = render(
+      <ContentBlock
+        showTaskCompletionNotice
+        assistantId="assistant-1"
+        content="C is done"
+        id="wake-1"
+        metadata={metadata}
+      />,
+    );
+
+    expect(screen.getByText('taskCompletion.title')).toBeInTheDocument();
+
+    rerender(
+      <ContentBlock
+        assistantId="assistant-1"
+        content="C is done"
+        id="wake-1"
+        metadata={metadata}
+      />,
+    );
+
+    expect(screen.queryByText('taskCompletion.title')).not.toBeInTheDocument();
   });
 
   it('reads the persisted finish reason when the grouped block projection is stale', () => {

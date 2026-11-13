@@ -46,20 +46,19 @@ vi.mock('../wake/scheduler', () => ({
   resolveWakeScheduler: (_platform: string, _app: string, settings: any) =>
     settings?.botWake?.scheduler?.mode === 'enforce' ? { submit: mocks.submit } : undefined,
 }));
-vi.mock('../wake/classify', () => ({
+vi.mock('@/server/services/conversationWake/classify', () => ({
   createWakeClassify: () => mocks.classify,
 }));
-vi.mock('../wake/dutyJudge', () => ({
+vi.mock('@/server/services/conversationWake/dutyJudge', () => ({
   createWakeDutyJudge: () => mocks.duty,
 }));
-vi.mock('../wake/identity', () => ({
+vi.mock('@/server/services/conversationWake/identity', () => ({
   createWakeIdentityLoader: () => async () => ({
     agentName: 'Arvin Agent',
     agentTitle: 'Release helper',
     ownerNames: ['Arvin Zhang'],
   }),
 }));
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -478,8 +477,8 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     ]);
   });
 
-  it('keeps nothing and changes nothing for a bot without bot-wake', async () => {
-    await boot(undefined);
+  it('keeps nothing and changes nothing for a bot with bot-wake switched off', async () => {
+    await boot(undefined, { botWakeDisabled: true });
 
     await catchAll()(thread(), message());
     await flush();

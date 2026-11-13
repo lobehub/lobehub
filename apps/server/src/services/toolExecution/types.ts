@@ -2,10 +2,12 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentShareVisitorContext,
+  type CancelVirtualSubAgentResult,
   type ChatToolPayload,
   type ChatTopicBotContext,
   type ClientSecretPayload,
   type DeviceUnavailableErrorData,
+  type EvalMemoryReference,
   type ExecSubAgentParams,
   type ExecutionPlan,
   type StepActivatedSkill,
@@ -60,6 +62,12 @@ export interface ServerSubAgentRunResult {
    * instead of parking the parent — otherwise the parent hangs forever.
    */
   started: boolean;
+  /**
+   * `subAgentId` named a sub-agent that is still running: no child was forked,
+   * the instruction was queued for that run's next step instead. The caller
+   * returns a receipt rather than parking on a result.
+   */
+  steered?: boolean;
   /** The spawned child operation id. */
   subOperationId?: string;
   /** The isolation thread holding the sub-agent's full message trace. */
@@ -84,6 +92,11 @@ export interface ServerSubAgentRunResult {
  * the completion bridge, which backfills the placeholder and resumes the parent.
  */
 export interface ServerSubAgentRunner {
+  /**
+   * Stop a running `callSubAgent` sub-agent this run's agent dispatched in the
+   * same topic (`cancelSubAgent`). Absent when the runtime cannot cancel.
+   */
+  cancel?: (params: { subAgentId: string }) => Promise<CancelVirtualSubAgentResult>;
   run: (params: ServerSubAgentRunParams) => Promise<ServerSubAgentRunResult>;
 }
 
@@ -264,6 +277,13 @@ export interface ToolExecutionContext {
    */
   enabledToolIds?: string[];
   /**
+   * Optional server-owned embedding runtime for memory search.
+   *
+   * Use when the acting user is synthetic and should not read user key vaults.
+   */
+  /** Server-authored isolated Memory scope of an eval trial. Never a tool argument. */
+  evalMemory?: EvalMemoryReference;
+  /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.
@@ -279,6 +299,8 @@ export interface ToolExecutionContext {
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */
   groupId?: string | null;
+  /** Eval trials must run on isolated Memory; set even when the scope is missing. */
+  isEval?: boolean;
   /** Whether this tool call is executing inside an isolated sub-agent run. */
   isSubAgent?: boolean;
   /**
@@ -297,11 +319,7 @@ export interface ToolExecutionContext {
    * {@link localSandbox}.
    */
   localSandboxNetwork?: boolean;
-  /**
-   * Optional server-owned embedding runtime for memory search.
-   *
-   * Use when the acting user is synthetic and should not read user key vaults.
-   */
+  memoryEffort?: string;
   memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';

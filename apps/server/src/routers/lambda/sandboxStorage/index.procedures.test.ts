@@ -30,11 +30,13 @@ function expected(): Array<
   [name: string, type: 'mutation' | 'query' | 'subscription', middlewares: number]
 > {
   return [
+    ['analyzeStorage', 'mutation', 15],
     ['copyInstance', 'mutation', 15],
     ['createDirectory', 'mutation', 15],
     ['createEnvironment', 'mutation', 15],
     ['createInstance', 'mutation', 15],
     ['createInstanceForEnvironment', 'mutation', 15],
+    ['deleteFiles', 'mutation', 15],
     ['getDriveUsage', 'query', 12],
     ['getEntitlement', 'query', 11],
     ['getInstance', 'query', 15],
@@ -46,6 +48,8 @@ function expected(): Array<
     ['listGithubRepositories', 'query', 11],
     ['listInstanceSessions', 'query', 15],
     ['listInstances', 'query', 15],
+    ['prepareDownload', 'mutation', 15],
+    ['preparePreview', 'mutation', 15],
     ['readFile', 'query', 15],
     ['refreshStorageUsage', 'mutation', 13],
     ['removeEnvironment', 'mutation', 15],

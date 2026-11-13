@@ -3,6 +3,7 @@ import isEqual from 'fast-deep-equal';
 import { useTranslation } from 'react-i18next';
 
 import { openRenameModal } from '@/components/RenameModal';
+import { isSubagentThread } from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/subagent';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -49,20 +50,22 @@ export const useThreadMoreMenu = (): PortalMoreMenuConfig | undefined => {
   return {
     copyId: threadId,
     copyLink: shareUrl,
-    delete: canEdit
-      ? () =>
-          confirmModal({
-            cancelText: t('cancel', { ns: 'common' }),
-            content: t('actions.confirmRemoveThread'),
-            okButtonProps: { danger: true },
-            okText: t('delete', { ns: 'common' }),
-            onOk: async () => {
-              await removeThread(threadId);
-              closeThreadPortal();
-            },
-            title: t('delete', { ns: 'common' }),
-          })
-      : undefined,
+    // Subagent threads are cleaned up with their topic, not one by one.
+    delete:
+      canEdit && !isSubagentThread(thread)
+        ? () =>
+            confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('actions.confirmRemoveThread'),
+              okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
+              onOk: async () => {
+                await removeThread(threadId);
+                closeThreadPortal();
+              },
+              title: t('delete', { ns: 'common' }),
+            })
+        : undefined,
     refresh: () =>
       Promise.all([
         refreshThreads(),

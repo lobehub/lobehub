@@ -1,6 +1,7 @@
 import type { Chat, Message, MessageContext } from 'chat';
 
 import type { LobeChatDatabase } from '@/database/type';
+import type { WakeInitiation } from '@/server/services/conversationWake/initiation';
 
 import type { AgentBridgeService } from '../AgentBridgeService';
 import type {
@@ -13,7 +14,7 @@ import type {
 } from '../platforms';
 import type { WakeMessageLike } from '../wake/signal';
 import type { FollowupGate } from './followupGate';
-import type { BotWakeEntryPoint, BotWakeInitiation, BotWakeReason } from './wakeDecision';
+import type { BotWakeEntryPoint, BotWakeReason } from './wakeDecision';
 
 export interface ResolvedAgentInfo {
   agentId: string;
@@ -134,7 +135,7 @@ export interface BotHandlerContext {
   bridge: AgentBridgeService;
   /**
    * Whether the agent may step back from this conversation (`STAND_DOWN`): a group conversation
-   * of a bot whose wake rules enforce, once the rollout reaches it.
+   * of a bot whose wake rules enforce, while its wake switch is on.
    */
   canStandDown: (thread: { isDM?: boolean }) => Promise<boolean>;
   charLimit?: number;
@@ -156,12 +157,7 @@ export interface BotHandlerContext {
     message: WakeMessageLike,
     thread: { id: string },
     threadSubscribed?: boolean,
-  ) => Promise<BotWakeInitiation | undefined>;
-  /**
-   * The `bot_wake` rollout flag for this bot's owner. Until it is on, every wake is answered, as
-   * it was before the pipeline existed.
-   */
-  isBotWakeRolledOut: () => Promise<boolean>;
+  ) => Promise<WakeInitiation | undefined>;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
   /** Watch keywords the owner marked as the bot's names (`asName`); a subset of `watchKeywords`. */
   nameKeywords: ReadonlyArray<string>;

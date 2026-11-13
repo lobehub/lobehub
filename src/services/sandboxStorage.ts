@@ -193,6 +193,22 @@ class SandboxStorageService {
     topicId?: string;
   }) => lambdaClient.sandboxStorage.readFile.query(params);
 
+  /**
+   * A link to download one file of the drive as it is, or one folder as a zip.
+   * Packing happens in a sandbox session, so this can take a while on a cold
+   * start or a large folder; callers show progress until it answers.
+   */
+  prepareDownload = async (params: { drive?: SandboxDrive; path: string }) =>
+    lambdaClient.sandboxStorage.prepareDownload.mutate(params);
+
+  /**
+   * A link one file of the drive is shown from in the page, with the type its
+   * name implies. Copied out through a sandbox session like a download, so it
+   * takes as long; callers show progress until it answers.
+   */
+  preparePreview = async (params: { drive?: SandboxDrive; path: string }) =>
+    lambdaClient.sandboxStorage.preparePreview.mutate(params);
+
   removeFile = async (params: {
     drive?: SandboxDrive;
     instanceId?: string;
@@ -200,6 +216,23 @@ class SandboxStorageService {
     recursive?: boolean;
     topicId?: string;
   }) => lambdaClient.sandboxStorage.removeFile.mutate(params);
+
+  /**
+   * One step of the drive's space analysis; call again while `status` is not
+   * `done`. Works on a drive over its quota, which is what it is for.
+   */
+  analyzeStorage = async (params: { drive?: SandboxDrive; restart?: boolean; top?: number } = {}) =>
+    lambdaClient.sandboxStorage.analyzeStorage.mutate(params);
+
+  /**
+   * Delete several files or folders for good, past the quota. `done: false`
+   * means time ran out: call again with `pending`.
+   */
+  deleteFiles = async (params: {
+    drive?: SandboxDrive;
+    paths: string[];
+    regenerableOnly?: boolean;
+  }) => lambdaClient.sandboxStorage.deleteFiles.mutate(params);
 }
 
 export const sandboxStorageService = new SandboxStorageService();

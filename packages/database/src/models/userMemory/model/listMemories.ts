@@ -1,15 +1,15 @@
-import type { UserMemoryDetail } from '@lobechat/types';
+import type {
+  UserMemoryActivity,
+  UserMemoryContext,
+  UserMemoryDetail,
+  UserMemoryExperience,
+  UserMemoryIdentity,
+  UserMemoryPreference,
+} from '@lobechat/types';
 import { LayersEnum } from '@lobechat/types';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
-import type {
-  UserMemoryActivity,
-  UserMemoryContext,
-  UserMemoryExperience,
-  UserMemoryIdentity,
-  UserMemoryPreference,
-} from '../../../schemas';
 import {
   userMemories,
   userMemoriesContexts,
@@ -21,15 +21,30 @@ import { selectNonVectorColumns } from '../../../utils/columns';
 import type { UserMemoryModelContext } from './context';
 
 export type ListMemoriesItem<L extends LayersEnum> = L extends LayersEnum.Context
-  ? UserMemoryDetail & { context: UserMemoryContext; layer: LayersEnum.Context }
+  ? UserMemoryDetail & {
+      context: UserMemoryContext;
+      layer: LayersEnum.Context;
+    }
   : L extends LayersEnum.Experience
-    ? UserMemoryDetail & { experience: UserMemoryExperience; layer: LayersEnum.Experience }
+    ? UserMemoryDetail & {
+        experience: UserMemoryExperience;
+        layer: LayersEnum.Experience;
+      }
     : L extends LayersEnum.Identity
-      ? UserMemoryDetail & { identity: UserMemoryIdentity; layer: LayersEnum.Identity }
+      ? UserMemoryDetail & {
+          identity: UserMemoryIdentity;
+          layer: LayersEnum.Identity;
+        }
       : L extends LayersEnum.Preference
-        ? UserMemoryDetail & { layer: LayersEnum.Preference; preference: UserMemoryPreference }
+        ? UserMemoryDetail & {
+            layer: LayersEnum.Preference;
+            preference: UserMemoryPreference;
+          }
         : L extends LayersEnum.Activity
-          ? UserMemoryDetail & { activity: UserMemoryActivity; layer: LayersEnum.Activity }
+          ? UserMemoryDetail & {
+              activity: UserMemoryActivity;
+              layer: LayersEnum.Activity;
+            }
           : never;
 
 export interface ListMemoriesParams<L extends LayersEnum> {
@@ -64,11 +79,7 @@ export const listMemories = async <
   const preferenceSelection = selectNonVectorColumns(userMemoriesPreferences);
   // TODO(@nekomeowww): extract a shared selection for the activity branch.
 
-  const baseConditions: Array<SQL | undefined> = [
-    ctx.memoryWhere(userMemories),
-    eq(userMemories.memoryLayer, layer),
-  ];
-  const baseWhere = baseConditions.filter(Boolean) as SQL[];
+  const baseWhere = and(ctx.memoryWhere(userMemories), eq(userMemories.memoryLayer, layer));
 
   const buildOrderBy = (updatedAtColumn: AnyColumn | SQL, createdAtColumn: AnyColumn | SQL) =>
     [applyOrder(updatedAtColumn), applyOrder(createdAtColumn)].filter(
@@ -88,13 +99,6 @@ export const listMemories = async <
         `,
       );
 
-      const contextFilters: Array<SQL | undefined> = [
-        baseWhere.length
-          ? and(...baseWhere)
-          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
-      ];
-      const contextWhere = contextFilters.filter(Boolean) as SQL[];
-
       const rows = await ctx.db
         .select({
           context: contextSelection,
@@ -102,11 +106,7 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesContexts, joinCondition)
-        .where(
-          contextWhere.length
-            ? and(...contextWhere)
-            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
-        )
+        .where(baseWhere)
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);
@@ -127,13 +127,6 @@ export const listMemories = async <
         ctx.memoryWhere(userMemoriesExperiences),
       );
 
-      const experienceFilters: Array<SQL | undefined> = [
-        baseWhere.length
-          ? and(...baseWhere)
-          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
-      ];
-      const experienceWhere = experienceFilters.filter(Boolean) as SQL[];
-
       const rows = await ctx.db
         .select({
           experience: experienceSelection,
@@ -141,11 +134,7 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesExperiences, joinCondition)
-        .where(
-          experienceWhere.length
-            ? and(...experienceWhere)
-            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
-        )
+        .where(baseWhere)
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);
@@ -166,13 +155,6 @@ export const listMemories = async <
         ctx.memoryWhere(userMemoriesIdentities),
       );
 
-      const identityFilters: Array<SQL | undefined> = [
-        baseWhere.length
-          ? and(...baseWhere)
-          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
-      ];
-      const identityWhere = identityFilters.filter(Boolean) as SQL[];
-
       const rows = await ctx.db
         .select({
           identity: identitySelection,
@@ -180,11 +162,7 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesIdentities, joinCondition)
-        .where(
-          identityWhere.length
-            ? and(...identityWhere)
-            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
-        )
+        .where(baseWhere)
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);
@@ -205,13 +183,6 @@ export const listMemories = async <
         ctx.memoryWhere(userMemoriesPreferences),
       );
 
-      const preferenceFilters: Array<SQL | undefined> = [
-        baseWhere.length
-          ? and(...baseWhere)
-          : /* v8 ignore next -- unreachable: baseWhere always holds the memoryLayer eq() */ undefined,
-      ];
-      const preferenceWhere = preferenceFilters.filter(Boolean) as SQL[];
-
       const rows = await ctx.db
         .select({
           memory: baseSelection,
@@ -219,11 +190,7 @@ export const listMemories = async <
         })
         .from(userMemories)
         .innerJoin(userMemoriesPreferences, joinCondition)
-        .where(
-          preferenceWhere.length
-            ? and(...preferenceWhere)
-            : /* v8 ignore next -- unreachable: always holds the non-empty baseWhere and() */ undefined,
-        )
+        .where(baseWhere)
         .orderBy(...orderByClauses)
         .limit(normalizedPageSize)
         .offset(offset);

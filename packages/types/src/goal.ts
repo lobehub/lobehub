@@ -2,7 +2,7 @@ import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { GoalRolloutPolicy, GoalRolloutState } from './goalRollout';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus, VerifyCheckTally } from './verify';
-import type { WorkType } from './work';
+import type { WorkResourceType, WorkType } from './work';
 
 // ============================================
 // Goal — independent target entity (`goals` table)
@@ -34,6 +34,14 @@ export type GoalStatus =
  * existing rows still carry the earlier `task` value.
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
+
+/**
+ * Who in a team workspace can see a goal. Mirrors agent / task visibility:
+ * 'public' goals are visible to every member, 'private' ones only to their
+ * creator. Personal-mode goals are implicitly private and ignore it.
+ */
+export const GOAL_VISIBILITIES = ['private', 'public'] as const;
+export type GoalVisibility = (typeof GOAL_VISIBILITIES)[number];
 
 /** Automatic recovery policy for Goal Graph Tasks. */
 export interface GoalRecoveryPolicy {
@@ -298,6 +306,13 @@ export interface GoalManagerState {
    */
   dispatchNeverStarted?: boolean;
   /**
+   * Set when this turn's `execAgent` call failed and returned without an
+   * operation id. Unlike `dispatchNeverStarted` it does not prove no run exists,
+   * but the call is over, so no late operation id can still be recorded; an
+   * owner closing the Goal may settle the turn once it is past the turn timeout.
+   */
+  dispatchReturnedWithoutRun?: boolean;
+  /**
    * Consecutive turns that ended in an error without committing a plan. Reset by
    * a turn that commits a plan or ends without an error. Reaching the limit
    * pauses the Goal on the last error instead of re-dispatching an Agent that
@@ -535,6 +550,8 @@ export type GoalCreateConfig = Omit<
  */
 export interface GoalItem {
   agentId: string | null;
+  /** Set when the user archives the goal; archived goals are hidden from lists by default. */
+  archivedAt?: Date | null;
   completedAt: Date | null;
   config: GoalConfig | null;
   createdAt: Date;
@@ -553,6 +570,8 @@ export interface GoalItem {
   title: string;
   updatedAt: Date;
   userId: string;
+  /** Who in the workspace sees the goal; see {@link GoalVisibility}. */
+  visibility: GoalVisibility;
   workspaceId: string | null;
 }
 
@@ -607,8 +626,10 @@ export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
  * Coordinator options carry it implicitly through their fixed ids
  * (`retry` / `retire` / `fail`); options the main Agent writes for its own
  * question name it, so its wording never has to match a reserved id.
+ * `retry_after_reset` leaves a Task stopped by a usage limit held until the
+ * limit resets; `retry` sends it back now.
  */
-export type GoalDecisionOptionEffect = 'retry' | 'retire';
+export type GoalDecisionOptionEffect = 'retry' | 'retire' | 'retry_after_reset';
 
 export interface GoalDecisionOption {
   /**
@@ -738,6 +759,8 @@ export interface GoalGraphWorkVersionDisplay {
   mimeType?: string;
   /** Canonical resource identity — the document id an in-app link addresses. */
   resourceId: string | null;
+  /** What the Work is beyond its type, e.g. `github_pull_request`; draws its state glyph. */
+  resourceType?: WorkResourceType;
   status: string | null;
   title: string | null;
   type: WorkType;

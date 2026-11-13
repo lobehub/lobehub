@@ -14,6 +14,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
+import { notTrashed } from '../utils/softDelete';
 import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -117,9 +118,14 @@ export class RecentModel {
 
     // `tasks` uses `createdByUserId` instead of `userId`, so apply the
     // workspace-aware predicate inline.
-    const taskScopeWhere = this.workspaceId
-      ? eq(tasks.workspaceId, this.workspaceId)
-      : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
+    // Hand-built (it bypasses `buildWorkspaceWhere`), so the recycle-bin
+    // filter the other arms get from that funnel is added here explicitly.
+    const taskScopeWhere = and(
+      this.workspaceId
+        ? eq(tasks.workspaceId, this.workspaceId)
+        : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId)),
+      notTrashed(tasks.isDeleted),
+    );
 
     // Workspace rows are shared across members; `mineOnly` narrows a workspace
     // feed back to the viewer's own items. A no-op in personal mode, where the

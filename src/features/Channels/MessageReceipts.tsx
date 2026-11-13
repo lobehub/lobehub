@@ -17,7 +17,7 @@ import { useOpenReplyAgent } from './useOpenReplyAgent';
 
 export interface ReplyEntry {
   agentId?: string | null;
-  avatar: string;
+  avatar?: string;
   job: ChannelPublicJob;
   name: string;
 }
@@ -99,13 +99,17 @@ export function ReplyDetail({
         </Flexbox>
         <ChannelStatus label={t(channelJobStatus(job))} tone={channelJobTone(job)} />
       </Flexbox>
+      {job.worktreeBranch && (
+        <Text ellipsis fontSize={12} title={job.worktreeBranch} type="secondary">
+          {t('receipt.worktree', { branch: job.worktreeBranch })}
+        </Text>
+      )}
       {job.status === 'failed' && (
         <Flexbox gap={4}>
           <Text weight={500}>{t('receipt.errorReason')}</Text>
           <Text style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
             {job.errorMessage?.trim() || t('receipt.errorUnavailable')}
           </Text>
-          <span {...stylex.props(styles.muted)}>{t('receipt.failedHint')}</span>
         </Flexbox>
       )}
       {job.canStop && isChannelJobActive(job) && (

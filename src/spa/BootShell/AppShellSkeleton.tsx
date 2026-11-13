@@ -1,8 +1,10 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { createStaticStyles, Flexbox, keyframes } from '@lobehub/ui';
+import { cx, Flexbox } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +15,11 @@ import {
   getOuterCssVariables,
 } from '@/features/DesktopLayoutContainer/cssVariables';
 import { styles as containerStyles } from '@/features/DesktopLayoutContainer/style';
+import { LIST_COLUMN_BACKGROUND, RAIL_WIDTH } from '@/features/NavRail/const';
+import { readImLayoutHint } from '@/features/NavRail/layoutHint';
+import { wrapStyles as layoutStyles } from '@/features/NavRail/wrapStyle';
 import { electronStylish } from '@/styles/electron';
+import { sx } from '@/styles/sx';
 
 import { readBootShellGeometry } from './geometry';
 import { useLoadingHint } from './useLoadingHint';
@@ -26,80 +32,64 @@ const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
-// Opacity only: on an otherwise still boot screen a rising caption reads as
-// the layout jumping, and leaving `transform` alone keeps the centering in one
-// place.
-const fadeIn = keyframes`
-  from {
-    opacity: 0;
-  }
+const fadeIn = stylex.keyframes({
+  from: { opacity: 0 },
+  to: { opacity: 1 },
+});
 
-  to {
-    opacity: 1;
-  }
-`;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  contentBrand: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    color: ${cssVar.colorTextQuaternary};
-  `,
+const styles = stylex.create({
+  contentBrand: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: cssVar.colorTextQuaternary,
+  },
   // Floated rather than stacked in flow: a caption that joins the column would
   // push the brand mark off the center it shares with the app that replaces it.
-  hint: css`
-    position: absolute;
-    inset-block-start: calc(100% + 8px);
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-
-    font-size: 13px;
-    white-space: nowrap;
-
-    &[data-enter] {
-      animation: ${fadeIn} 0.3s ${cssVar.motionEaseOut} both;
-
-      @media (prefers-reduced-motion: reduce) {
-        animation: none;
-      }
-    }
-  `,
-  brand: css`
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `,
-  dragRegion: css`
-    pointer-events: auto;
-    flex-shrink: 0;
-    width: 100%;
-    height: ${TITLE_BAR_HEIGHT}px;
-  `,
-  root: css`
-    pointer-events: none;
-
-    position: fixed;
-    z-index: 99999;
-    inset: 0;
-
-    display: flex;
-    flex-direction: column;
-
-    /* Dialogs live inside the theme's isolated stacking context, so lowering
-       this z-index alone cannot reveal them. Yield without releasing the boot gate. */
-    body:has([role='dialog'][data-open]) & {
-      visibility: hidden;
-    }
-  `,
-}));
+  hint: {
+    position: 'absolute',
+    insetBlockStart: 'calc(100% + 8px)',
+    insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: '13px',
+    whiteSpace: 'nowrap',
+  },
+  hintEnter: {
+    animationName: { 'default': fadeIn, '@media (prefers-reduced-motion: reduce)': 'none' },
+    animationDuration: { 'default': '0.3s', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': cssVar.motionEaseOut,
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
+    animationFillMode: { 'default': 'both', '@media (prefers-reduced-motion: reduce)': 'none' },
+  },
+  brand: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dragRegion: {
+    pointerEvents: 'auto',
+    flexShrink: 0,
+    width: '100%',
+  },
+  root: {
+    // The dialog and boot shell are siblings, not a marker/descendant pair.
+    // A self condition preserves the existing body :has() rule without moving
+    // the shell or introducing a component-scoped stylesheet.
+    visibility: { 'default': null, ':is(body:has([role="dialog"][data-open]) *)': 'hidden' },
+    pointerEvents: 'none',
+    position: 'fixed',
+    zIndex: 99_999,
+    inset: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+});
 
 /**
  * Split out so `useTranslation` runs only once the hint is due. The boot shell
@@ -111,7 +101,7 @@ const LoadingHint = memo<{ enter: boolean }>(({ enter }) => {
   const { t } = useTranslation('common');
 
   return (
-    <div className={styles.hint} data-enter={enter || undefined}>
+    <div {...stylex.props(styles.hint, enter && styles.hintEnter)} data-enter={enter || undefined}>
       {t('bootLoadingHint')}
     </div>
   );
@@ -126,12 +116,76 @@ interface AppShellSkeletonProps {
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
   const hint = useLoadingHint();
+  const imLayout = readImLayoutHint();
 
   useLayoutEffect(retainSkeleton, []);
 
+  const brand = (
+    <div {...stylex.props(styles.contentBrand)}>
+      <div {...stylex.props(styles.brand)}>
+        <LobeHub size={40} type={'text'} />
+        {hint && <LoadingHint enter={hint === 'enter'} />}
+      </div>
+    </div>
+  );
+
+  // `im_layout`: icon rail + one rounded wrap (list column + content).
+  if (imLayout)
+    return (
+      <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
+        {isDesktop && (
+          <div
+            {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}
+          />
+        )}
+        <Flexbox
+          horizontal
+          height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
+          width={'100%'}
+        >
+          <div
+            style={{
+              background: navPanelBackground,
+              flexShrink: 0,
+              height: '100%',
+              width: RAIL_WIDTH,
+            }}
+          />
+          <Flexbox
+            horizontal
+            style={getInnerCssVariables({ isDark })}
+            className={
+              stylex.props(layoutStyles.wrap, isDesktop && layoutStyles.wrapDesktop).className
+            }
+          >
+            {showLeftPanel && (
+              <div
+                style={{
+                  background: LIST_COLUMN_BACKGROUND,
+                  borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+                  flexShrink: 0,
+                  height: '100%',
+                  width: navPanelWidth,
+                }}
+              />
+            )}
+            <Flexbox
+              className={cx(containerStyles.innerContainer, containerStyles.innerFlush)}
+              height={'100%'}
+              width={'100%'}
+            >
+              {brand}
+            </Flexbox>
+          </Flexbox>
+        </Flexbox>
+      </div>
+    );
+
   return (
-    <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
-      {isDesktop && <div className={`${styles.dragRegion} ${electronStylish.draggable}`} />}
+    <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
+      {isDesktop && (
+        <div {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })} />
+      )}
       <Flexbox
         horizontal
         height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
@@ -160,12 +214,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             style={getInnerCssVariables({ isDark })}
             width={'100%'}
           >
-            <div className={styles.contentBrand}>
-              <div className={styles.brand}>
-                <LobeHub size={40} type={'text'} />
-                {hint && <LoadingHint enter={hint === 'enter'} />}
-              </div>
-            </div>
+            {brand}
           </Flexbox>
         </Flexbox>
       </Flexbox>

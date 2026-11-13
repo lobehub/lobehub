@@ -5,6 +5,8 @@ import {
   devicePoolForAgent,
   devicePoolForTask,
   executionTargetValue,
+  findOwnWorkspaceDevice,
+  getMachineDefaultTarget,
   groupExecutionTargetDevices,
   isSharedExecutionTarget,
   parseExecutionTargetValue,
@@ -146,9 +148,104 @@ describe('devicePoolForAgent', () => {
     expect(devicePoolForAgent(undefined, false)).toEqual([]);
   });
 
-  it('lets a workspace task pin only public workspace devices', () => {
-    expect(devicePoolForTask(all, true)).toEqual([publicWorkspace]);
-    expect(devicePoolForTask(all, false)).toEqual([personal]);
-    expect(devicePoolForTask(undefined, true)).toEqual([]);
+  it('lets the task creator pin their own private devices too', () => {
+    const asCreator = { includeOwnPrivate: true };
+    expect(devicePoolForTask(all, true, asCreator)).toEqual([privateWorkspace, publicWorkspace]);
+    expect(devicePoolForTask(all, false, asCreator)).toEqual([personal]);
+    expect(devicePoolForTask(undefined, true, asCreator)).toEqual([]);
+  });
+
+  // The creator's scheduled runs cannot resolve a collaborator's private row.
+  it('gives a collaborator on someone else’s task only the public workspace pool', () => {
+    const asCollaborator = { includeOwnPrivate: false };
+    expect(devicePoolForTask(all, true, asCollaborator)).toEqual([publicWorkspace]);
+    expect(devicePoolForTask(all, false, asCollaborator)).toEqual([personal]);
+  });
+});
+
+describe('findOwnWorkspaceDevice', () => {
+  const personal = device({ deviceId: 'personal-id' });
+  const own = device({ deviceId: 'ws-id', scope: 'workspace', visibility: 'private' });
+  const other = device({ deviceId: 'other', scope: 'workspace', visibility: 'public' });
+
+  it('ignores this machine’s row when it is shared as public', () => {
+    const ownPublic = device({ deviceId: 'ws-id', scope: 'workspace', visibility: 'public' });
+    expect(findOwnWorkspaceDevice([personal, ownPublic], ['personal-id', 'ws-id'])).toBeUndefined();
+  });
+
+  it('finds this machine’s workspace row, never its personal one', () => {
+    expect(findOwnWorkspaceDevice([personal, own, other], ['personal-id', 'ws-id'])).toBe(own);
+    expect(findOwnWorkspaceDevice([personal, other], ['personal-id', 'ws-id'])).toBeUndefined();
+    expect(findOwnWorkspaceDevice(undefined, ['personal-id'])).toBeUndefined();
+  });
+});
+
+describe('getMachineDefaultTarget', () => {
+  it('defaults an unset agent to this machine’s workspace row when it has one', () => {
+    expect(
+      getMachineDefaultTarget({
+        isOwnPick: true,
+        localSandboxEnabled: false,
+        ownWorkspaceDeviceId: 'ws-id',
+      }),
+    ).toEqual({ deviceId: 'ws-id', target: 'device' });
+  });
+
+  it('defaults an unset agent to local without a workspace row', () => {
+    expect(getMachineDefaultTarget({ isOwnPick: true, localSandboxEnabled: false })).toEqual({
+      target: 'local',
+    });
+  });
+
+  it('moves a plain local pick onto the workspace row', () => {
+    expect(
+      getMachineDefaultTarget({
+        boundDeviceId: 'personal-id',
+        executionTarget: 'local',
+        isOwnPick: true,
+        localSandboxEnabled: false,
+        ownWorkspaceDeviceId: 'ws-id',
+      }),
+    ).toEqual({ deviceId: 'ws-id', target: 'device' });
+  });
+
+  it('keeps a sandboxed local pick, and any other explicit pick', () => {
+    expect(
+      getMachineDefaultTarget({
+        executionTarget: 'local',
+        isOwnPick: true,
+        localSandboxEnabled: true,
+        ownWorkspaceDeviceId: 'ws-id',
+      }),
+    ).toBeUndefined();
+    expect(
+      getMachineDefaultTarget({
+        executionTarget: 'sandbox',
+        isOwnPick: true,
+        localSandboxEnabled: false,
+        ownWorkspaceDeviceId: 'ws-id',
+      }),
+    ).toBeUndefined();
+    expect(
+      getMachineDefaultTarget({
+        executionTarget: 'local',
+        isOwnPick: true,
+        localSandboxEnabled: false,
+      }),
+    ).toBeUndefined();
+  });
+
+  // A legacy shared `local` routes every member to its bound workspace device;
+  // a member who only inherits it must keep following the agent.
+  it('leaves an inherited shared local alone', () => {
+    expect(
+      getMachineDefaultTarget({
+        boundDeviceId: 'shared-ws-device',
+        executionTarget: 'local',
+        isOwnPick: false,
+        localSandboxEnabled: false,
+        ownWorkspaceDeviceId: 'ws-id',
+      }),
+    ).toBeUndefined();
   });
 });

@@ -1,21 +1,16 @@
 import { BRANDING_URL } from '@lobechat/business-const';
 import { ChatErrorType, Plans } from '@lobechat/types';
-import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Center, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatIntergerNumber, formatNumber } from '@/utils/format';
-
-import { ErrorActionContainer, FormAction } from '../style';
 import {
+  formatCreditAmount,
   getBudgetContextFromErrorBody,
   getNextUpgradePlan,
   isKnownPlan,
   type PlanLimitPricingBasis,
 } from './budget';
-
-/** Credits are displayed in units of 1M */
-const CREDIT_UNIT = 1_000_000;
 
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
@@ -30,8 +25,15 @@ const PLAN_TITLE_KEYS = {
 } as const satisfies Record<Plans, string>;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  budgetFact: css`
+  centered: css`
+    text-align: center;
+
+    /* even line lengths: a wrapped sentence never leaves a lone character on the last line */
+    text-wrap: balance;
+  `,
+  fact: css`
     display: flex;
+    gap: 12px;
     justify-content: space-between;
 
     width: 100%;
@@ -39,20 +41,34 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     line-height: 1.4;
   `,
-  budgetFactLabel: css`
-    color: ${cssVar.colorTextTertiary};
+  factLabel: css`
+    color: ${cssVar.colorTextSecondary};
   `,
-  budgetFactValue: css`
+  factValue: css`
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: ${cssVar.colorText};
+    text-align: end;
     white-space: nowrap;
   `,
-  budgetFactWarningValue: css`
+  factWarningValue: css`
     font-weight: 700;
     color: ${cssVar.colorError};
   `,
-  budgetFacts: css`
+  facts: css`
     width: 100%;
+  `,
+  form: css`
+    width: 100%;
+    max-width: 360px;
+
+    @media (width <= 768px) {
+      max-width: 90%;
+    }
+  `,
+  title: css`
+    font-size: 16px;
+    font-weight: bold;
   `,
 }));
 
@@ -71,12 +87,6 @@ const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
       return 'limitation.insufficientBudget.desc';
     }
   }
-};
-
-const formatCreditAmount = (credits: number): string => {
-  if (credits >= CREDIT_UNIT) return `${formatNumber(credits / CREDIT_UNIT, 2)}M`;
-
-  return formatIntergerNumber(credits);
 };
 
 interface PlanLimitCardProps {
@@ -128,18 +138,28 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
   ).filter((fact) => fact.value !== undefined && fact.value > 0);
 
   return (
-    <ErrorActionContainer>
-      <FormAction animation avatar={'💰'} description={description} title={title}>
+    <Center paddingBlock={12} width={'100%'}>
+      <Flexbox className={styles.form} gap={16}>
+        <Center gap={8}>
+          <Avatar animation avatar={'💰'} background={'transparent'} size={40} />
+          <Center gap={4}>
+            <Text className={styles.title}>{title}</Text>
+            <Text className={styles.centered} fontSize={13} type={'secondary'}>
+              {description}
+            </Text>
+          </Center>
+        </Center>
+
         {facts.length > 0 && (
-          <Flexbox className={styles.budgetFacts} gap={8}>
+          <Flexbox className={styles.facts} gap={8}>
             {facts.map((fact) => (
-              <div className={styles.budgetFact} key={fact.label}>
-                <span className={styles.budgetFactLabel}>{fact.label}</span>
+              <div className={styles.fact} key={fact.label}>
+                <span className={styles.factLabel}>{fact.label}</span>
                 <span
                   className={
                     fact.warning
-                      ? `${styles.budgetFactValue} ${styles.budgetFactWarningValue}`
-                      : styles.budgetFactValue
+                      ? `${styles.factValue} ${styles.factWarningValue}`
+                      : styles.factValue
                   }
                 >
                   {formatCreditAmount(fact.value!)}
@@ -151,23 +171,23 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
 
         <Flexbox gap={8} width={'100%'}>
           {BRANDING_URL.subscription && (
-            <a
+            <Button
+              block
               href={BRANDING_URL.subscription}
               rel={'noopener noreferrer'}
-              style={{ width: '100%' }}
+              size={'large'}
               target={'_blank'}
+              type={'primary'}
             >
-              <Button block size={'large'} type={'primary'}>
-                {upgradeLabel}
-              </Button>
-            </a>
+              {upgradeLabel}
+            </Button>
           )}
           <Button block size={'large'} onClick={onRetry}>
             {t('limitation.insufficientBudget.retry')}
           </Button>
         </Flexbox>
-      </FormAction>
-    </ErrorActionContainer>
+      </Flexbox>
+    </Center>
   );
 });
 

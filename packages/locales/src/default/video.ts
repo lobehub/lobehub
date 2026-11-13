@@ -41,8 +41,6 @@ export default {
   'generation.editing.hint': 'Describe what to change; everything else stays the same',
   'generation.editing.modelLocked': "Edits keep the original video's model",
   'generation.editing.title': 'Editing V{{version}}',
-  'generation.freeQuota.exhausted': '🎁 Free quota used up, credits will be consumed',
-  'generation.freeQuota.remaining': '🎁 {{remaining}} free videos today',
   'generation.status.editing': 'Generating Edit...',
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating...',

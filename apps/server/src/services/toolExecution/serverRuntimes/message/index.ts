@@ -27,12 +27,11 @@ import { agents } from '@/database/schemas';
 import { notTrashed } from '@/database/utils/softDelete';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
-  mergeBotSettingsForPersist,
+  mergeBotSettingsForCreate,
   mergeBotSettingsPatch,
 } from '@/server/services/bot/agentBotProviderSettings';
 import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
@@ -48,6 +47,7 @@ import {
   wechatPendingPushKey,
   wechatWindowKey,
 } from '@/server/services/bot/platforms/wechat/contextWindow';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
@@ -458,7 +458,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
           userId: context.userId!,
           workspaceId: context.workspaceId ?? undefined,
         });
-        const settings = mergeBotSettingsForPersist(params.platform, params.settings);
+        const settings = await mergeBotSettingsForCreate(
+          serverDB,
+          params.agentId,
+          params.platform,
+          params.settings,
+        );
         assertBotAccessSettings(settings);
         await assertWatchKeywordsWritable({
           applicationId: params.applicationId,

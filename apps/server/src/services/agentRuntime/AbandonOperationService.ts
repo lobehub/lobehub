@@ -2,10 +2,11 @@ import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { LOADING_FLAT } from '@lobechat/const';
 import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import type { ChatMessageError } from '@lobechat/types';
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, isAgentOperationSettled } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq, gt, gte, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
+import type { AgentAbandonmentMark } from '@/database/models/agentOperation';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
@@ -102,8 +103,39 @@ export interface FinalizeAbandonedResult {
  *
  * Idempotent: calling twice is a no-op the second time because `finalize()`
  * removes the partial, so `loadAgentState` may return null or finalize will
- * skip due to missing partial.
+ * skip due to missing partial. An operation whose durable row is already
+ * settled is skipped outright, before any of that — see the guard in
+ * `finalizeAbandoned`.
  */
+/** Terminal status an abandonment wrote when it claimed the durable row. */
+type ClaimedStatus = 'abandoned' | 'error';
+
+/**
+ * Read back the parent-resume linkage persisted with a `handoff_pending` mark.
+ *
+ * Validated field by field because it round-trips through jsonb: a truncated or
+ * hand-edited mark must degrade to "nothing to resume" rather than construct a
+ * bridge with `undefined` ids.
+ */
+const readAbandonmentHandoff = (
+  mark: AgentAbandonmentMark | undefined,
+): AbandonedSubAgentResume | undefined => {
+  const resume = mark?.handoff?.resume;
+  if (!resume || typeof resume !== 'object') return undefined;
+
+  const candidate = resume as Partial<AbandonedSubAgentResume>;
+  if (
+    !candidate.parentOperationId ||
+    !candidate.threadId ||
+    !candidate.toolMessageId ||
+    !candidate.userId
+  ) {
+    return undefined;
+  }
+
+  return candidate as AbandonedSubAgentResume;
+};
+
 export class AbandonOperationService {
   private readonly coordinator: AgentRuntimeCoordinator;
   private readonly snapshotStore: ISnapshotStore | null;
@@ -136,15 +168,93 @@ export class AbandonOperationService {
       found: false,
     };
 
+    // A caller that already CAS'd the row to a terminal status owns the
+    // abandonment: its claim is the decision, and this call only runs the side
+    // effects. `StaleOperationReaper` and the orphaned-run settle in `runStep`
+    // both arrive this way.
+    const callerClaimed = options?.settledAsAbandoned === true;
+
+    // The durable row is the authority on whether anything is left to abandon.
+    // The inactivity watchdog fires on *silence*, and a run that finished
+    // normally is silent too once its terminal event fails to reach the gateway
+    // — so this call can arrive for an operation that already settled. The
+    // snapshot side cannot tell the two apart: a completed run can still leave a
+    // partial behind, which is exactly the `found && finalized` shape the
+    // gateway has to read as a real death. Trusting the row instead keeps a
+    // phantom timeout from stamping a failure on a conversation that already
+    // delivered its answer, and reports it as a phantom so the gateway can
+    // reconcile rather than record one.
+    const row = await this.findOperationRow(operationId);
+    // A claim that never finished is not a settled run. `claimForAbandonment`
+    // retires the row *before* the side effects that the conversation depends
+    // on, so a host recycled in that window leaves a terminal row with nothing
+    // written: no error bubble, no topic cleanup, no hooks, no parent resume —
+    // and `StaleOperationReaper` only scans live rows, so nothing ever picks it
+    // back up. The `claimed` mark is the difference between "someone else
+    // settled this" and "we started and got cut off", so re-enter instead of
+    // reporting a phantom.
+    const abandonmentMark = (row?.metadata as { abandonment?: AgentAbandonmentMark } | undefined)
+      ?.abandonment;
+    const resumableClaim = abandonmentMark?.phase === 'claimed';
+    // Every side effect already landed in the invocation that wrote
+    // `handoff_pending`; the only thing still owed is the caller's parent-resume
+    // hand-off. Replaying the full finalisation would fire the same
+    // `onComplete` / `onError` hooks a second time, so hand back the persisted
+    // linkage and let the caller retry just that step.
+    if (row && !callerClaimed && abandonmentMark?.phase === 'handoff_pending') {
+      result.abandoned = true;
+      result.finalized = true;
+      result.found = true;
+      result.subAgentResume = readAbandonmentHandoff(abandonmentMark);
+      log('[%s] abandonment hand-off replayed: parent resume still owed', operationId);
+      return result;
+    }
+    if (row && !callerClaimed && !resumableClaim && isAgentOperationSettled(row.status)) {
+      log('[%s] abandon skipped: operation already %s', operationId, row.status);
+      result.abandoned = false;
+      return result;
+    }
+
+    // That read is a fast path only — the run can still settle between it and
+    // the side effects below (the executor commits `done` while the watchdog is
+    // deciding), and the error written then is invisible to the `settleLive`
+    // safety net at the end of this method, because that CAS runs after the
+    // damage. So claim the live row first and let the claim be the decision: it
+    // fails exactly when the run settled under us, and once it wins, this call
+    // owns the transition under the same contract as a caller-claimed row.
+    //
+    // Which terminal status the claim wrote matters downstream: the lifecycle
+    // persists onto it, and `recordCompletion` refuses to move a row from one
+    // terminal status to another. A caller's `settleStaleRunning` wrote
+    // `abandoned`; this local claim writes `error`, so the hooks must persist
+    // `error` — reporting it as `abandoned` would be refused and silently drop
+    // `onComplete` / `onError` for every real watchdog abandonment.
+    let claimedStatus: ClaimedStatus | undefined = callerClaimed
+      ? 'abandoned'
+      : resumableClaim
+        ? ((row?.status === 'abandoned' ? 'abandoned' : 'error') as ClaimedStatus)
+        : undefined;
+    if (row && !claimedStatus) {
+      const claimed = await new AgentOperationModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).claimForAbandonment(operationId, reason);
+      if (!claimed) {
+        log('[%s] abandon skipped: operation settled before it could be claimed', operationId);
+        result.abandoned = false;
+        return result;
+      }
+      claimedStatus = 'error';
+    }
+
     const state = await this.coordinator.loadAgentState(operationId);
     if (!state) {
       log('[%s] no agent state in coordinator — already cleaned up', operationId);
-      await this.finalizeRunningOperationWithoutState(
-        operationId,
-        reason,
-        result,
-        options?.settledAsAbandoned,
-      );
+      await this.finalizeRunningOperationWithoutState(operationId, reason, result, claimedStatus);
+      // Only once the no-state side effects have landed: the mark is what a
+      // retry reads to decide whether it still owes this run any work.
+      await this.markAbandonmentFinalized(operationId, row, callerClaimed);
       return result;
     }
     result.found = true;
@@ -269,7 +379,7 @@ export class AbandonOperationService {
         await new CompletionLifecycle(this.db, origin.userId, origin.workspaceId, {
           includeShareVisitor,
         }).dispatchHooks(operationId, finalState, 'error', {
-          settledAsAbandoned: options?.settledAsAbandoned,
+          settledAsAbandoned: claimedStatus === 'abandoned',
           skipErrorMessageWrite: result.assistantMessageUpdated,
         });
       } catch (e) {
@@ -389,22 +499,105 @@ export class AbandonOperationService {
       }
     }
 
+    // Close the claim only after every side effect above has run — hooks last,
+    // so an interruption before this point still looks resumable, and one after
+    // it can never fire them twice (nor re-resume the same parent).
+    //
+    // A pending parent resume is the exception: it happens in the *caller*,
+    // after this method returns, and the process can die in that gap. Keeping
+    // the mark resumable and carrying the linkage lets the retry replay the
+    // hand-off; the caller retires the mark once the resume actually landed
+    // (`completeAbandonmentHandoff`).
+    if (result.subAgentResume) {
+      await this.markAbandonmentHandoffPending(operationId, row, result.subAgentResume);
+    } else {
+      await this.markAbandonmentFinalized(operationId, row, callerClaimed);
+    }
+
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);
     return result;
+  }
+
+  /**
+   * Retire the `claimed` mark written by {@link AgentOperationModel.claimForAbandonment}.
+   *
+   * Skipped for caller-claimed rows: those were retired by another writer
+   * (`settleStaleRunning`), never carried this mark, and are not re-enterable
+   * anyway. A failure here is logged, not thrown — the abandonment itself
+   * already landed, and the worst case is one redundant re-entry later.
+   */
+  private async markAbandonmentFinalized(
+    operationId: string,
+    row: { userId?: string | null; workspaceId?: string | null } | null | undefined,
+    callerClaimed: boolean,
+  ): Promise<void> {
+    if (callerClaimed || !row?.userId) return;
+    try {
+      await new AgentOperationModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).markAbandonmentFinalized(operationId);
+    } catch (e) {
+      log('[%s] abandonment finalize mark failed (non-fatal): %O', operationId, e);
+    }
+  }
+
+  /**
+   * Persist the parent-resume linkage and keep the claim resumable.
+   *
+   * Skipped for caller-claimed rows for the same reason as
+   * {@link markAbandonmentFinalized}. A failure here is logged, not thrown: it
+   * only costs a redundant replay, never the abandonment itself.
+   */
+  private async markAbandonmentHandoffPending(
+    operationId: string,
+    row: { userId?: string | null; workspaceId?: string | null } | null | undefined,
+    resume: AbandonedSubAgentResume,
+  ): Promise<void> {
+    if (!row?.userId) return;
+    try {
+      await new AgentOperationModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).markAbandonmentHandoffPending(operationId, { resume });
+    } catch (e) {
+      log('[%s] abandonment hand-off mark failed (non-fatal): %O', operationId, e);
+    }
+  }
+
+  /**
+   * Retire the abandonment claim once the caller's parent-resume hand-off has
+   * landed, so a later invocation neither replays the hand-off nor re-fires the
+   * hooks.
+   *
+   * Called by the endpoint right after `resumeAbandonedParent` returns. A
+   * failure is swallowed: the mark stays `handoff_pending`, which is the safe
+   * direction (one redundant replay) rather than the unsafe one (a stranded
+   * parent).
+   */
+  async completeAbandonmentHandoff(operationId: string): Promise<void> {
+    const row = await this.findOperationRow(operationId);
+    await this.markAbandonmentFinalized(operationId, row, false);
   }
 
   private async finalizeRunningOperationWithoutState(
     operationId: string,
     reason: string,
     result: FinalizeAbandonedResult,
-    settledAsAbandoned?: boolean,
+    claimedStatus?: ClaimedStatus,
   ): Promise<void> {
     const op = await this.findOperationRow(operationId);
-    // A caller that already claimed the row (`settleStaleRunning`) has moved it
-    // to `abandoned`, so that status still needs the topic / placeholder /
-    // hook side effects below — otherwise the row retires while the turn keeps
-    // loading.
-    const preClaimed = settledAsAbandoned === true && op?.status === 'abandoned';
+    // A row this abandonment already claimed (`settleStaleRunning` writes
+    // `abandoned`, the live-row claim above writes `error`) is terminal on
+    // purpose, so it still needs the topic / placeholder / hook side effects
+    // below — otherwise the row retires while the turn keeps loading.
+    const preClaimed = claimedStatus !== undefined && op?.status === claimedStatus;
+    // Only an `abandoned` pre-claim has to be persisted onto as-is: the local
+    // `error` claim matches the status the terminal write below records anyway,
+    // which `recordCompletion` accepts, so that write still fills in the error.
+    const preClaimedAbandoned = preClaimed && claimedStatus === 'abandoned';
     if (
       !op ||
       (!preClaimed &&
@@ -424,8 +617,8 @@ export class AbandonOperationService {
       type: AgentRuntimeErrorType.AgentRuntimeError,
     };
 
-    // The pre-claim already wrote the terminal row; do not overwrite it.
-    if (!preClaimed) {
+    // The `abandoned` pre-claim already wrote the terminal row; do not overwrite it.
+    if (!preClaimedAbandoned) {
       try {
         await new AgentOperationModel(
           this.db,
@@ -435,12 +628,17 @@ export class AbandonOperationService {
           completedAt: new Date(),
           completionReason: 'error',
           error: { message, type: String(error.type) },
-          llmCalls: 0,
+          // A resumed claim may already carry the real counters —
+          // `CompletionLifecycle` persists usage before the finalise mark
+          // lands — so writing zeros here would erase the run's statistics.
+          // On a fresh claim these are the row's current values (usually 0),
+          // which is exactly what "no state was recorded" should look like.
+          llmCalls: op.llmCalls ?? 0,
           processingTimeMs: op.startedAt ? Date.now() - new Date(op.startedAt).getTime() : null,
           status: 'error',
-          stepCount: 0,
-          toolCalls: 0,
-          totalTokens: 0,
+          stepCount: op.stepCount ?? 0,
+          toolCalls: op.toolCalls ?? 0,
+          totalTokens: op.totalTokens ?? 0,
         });
       } catch (e) {
         reportSettleFailure(
@@ -509,7 +707,7 @@ export class AbandonOperationService {
         'error',
         // Persist onto the pre-claimed `abandoned` row instead of being refused
         // as a conflicting terminal owner, which would skip the hooks.
-        preClaimed
+        preClaimedAbandoned
           ? { settledAsAbandoned: true, skipErrorMessageWrite: true }
           : { skipErrorMessageWrite: true },
       );

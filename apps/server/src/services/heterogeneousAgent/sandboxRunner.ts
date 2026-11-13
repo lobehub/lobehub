@@ -4,6 +4,7 @@
 // repo source tree into every serverless function (250 MB limit blowout).
 import { isPersistentSandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
+  buildClaudeCodeEntrypointEnv,
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
@@ -26,6 +27,8 @@ export interface SandboxRunParams {
    * the CLI can pass it through the heteroIngest payload, removing the need for the server
    * to re-read topic.metadata.runningOperation on every cold Lambda start. */
   assistantMessageId: string;
+  /** Entrypoint name the agent asked Claude Code to report instead of its headless default. */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /** GitHub OAuth token for cloning private repos. */
   githubToken?: string;
@@ -228,6 +231,11 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),
+    ...(agentType === 'claude-code'
+      ? Object.entries(buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)).map(
+          ([key, value]) => `${key}=${shellQuote(value)}`,
+        )
+      : []),
   ].join(' ');
   const shellArgs = args.map(shellQuote).join(' ');
   const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${envVars} ${shellArgs}`;

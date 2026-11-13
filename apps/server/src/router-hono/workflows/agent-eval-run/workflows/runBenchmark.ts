@@ -1,8 +1,14 @@
 import { type WorkflowContext } from '@upstash/workflow';
 import debug from 'debug';
 
-import { AgentEvalRunModel, AgentEvalTestCaseModel } from '@/database/models/agentEval';
+import {
+  AgentEvalRunModel,
+  AgentEvalRunTopicModel,
+  AgentEvalTestCaseModel,
+} from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
+import { selectCases } from '@/server/services/agentEvalRun/caseSelection';
+import { runProgressOf } from '@/server/services/agentEvalRun/progress';
 import { AgentEvalRunWorkflow, type RunBenchmarkPayload } from '@/server/workflows/agentEvalRun';
 import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 import { runStep } from '@/server/workflows/step';
@@ -32,7 +38,20 @@ export const runBenchmarkHandler = async (context: WorkflowContext<RunBenchmarkP
   const runModel = new AgentEvalRunModel(db, userId, wsId);
 
   // Get run info
-  const run = await runStep(context, 'agent-eval-run:get-run', () => runModel.findById(runId));
+  const run = await runStep(context, 'agent-eval-run:get-run', async () => {
+    const row = await runModel.findSummaryById(runId);
+    return row
+      ? {
+          config: {
+            caseSelection: row.config?.caseSelection,
+            executionMode: row.config?.executionMode,
+          },
+          datasetId: row.datasetId,
+          startedAt: row.startedAt,
+          status: row.status,
+        }
+      : undefined;
+  });
 
   if (!run) {
     return { error: 'Run not found', success: false };
@@ -43,19 +62,36 @@ export const runBenchmarkHandler = async (context: WorkflowContext<RunBenchmarkP
     return { error: 'Run is already running', success: false };
   }
 
-  // Get all test cases
+  // The run's cases: the dataset narrowed by `config.caseSelection`, the same
+  // rule createRun pre-created the run's topics with. Counting the whole
+  // dataset here would set a `totalCases` a partial run can never reach, so
+  // it would stay `running` after its last case finished.
   const testCaseModel = new AgentEvalTestCaseModel(db, userId, wsId);
-  const allTestCases = await runStep(context, 'agent-eval-run:get-test-cases', () =>
-    testCaseModel.findByDatasetId(run.datasetId),
+  const allTestCases = await runStep(
+    context,
+    'agent-eval-run:get-test-cases',
+    async (): Promise<Array<string | { id: string }>> =>
+      selectCases(
+        await testCaseModel.findByDatasetId(run.datasetId),
+        run.config?.caseSelection,
+      ).map((testCase) => testCase.id),
   );
 
-  const allTestCaseIds = allTestCases.map((tc: { id: string }) => tc.id);
+  // Existing durable checkpoints contain full case objects; new ones contain only IDs.
+  const allTestCaseIds = allTestCases.map((testCase) =>
+    typeof testCase === 'string' ? testCase : testCase.id,
+  );
 
   log('Total test cases: %d', allTestCaseIds.length);
 
   if (allTestCaseIds.length === 0) {
+    if (!dryRun && run.config?.executionMode !== 'external') {
+      await runStep(context, 'agent-eval-run:fail-empty-selection', async () => {
+        await runModel.finalize(runId, { status: 'failed' }, { startedAt: run.startedAt });
+      });
+    }
     return {
-      error: 'No test cases in dataset',
+      error: 'No test cases selected for this run',
       success: false,
       totalTestCases: 0,
     };
@@ -101,19 +137,21 @@ export const runBenchmarkHandler = async (context: WorkflowContext<RunBenchmarkP
   }
 
   // Update run status to 'running'
-  await runStep(context, 'agent-eval-run:update-status', () =>
-    runModel.update(runId, {
+  await runStep(context, 'agent-eval-run:update-status', async () => {
+    // Cases kept from before (a rerun replaces only the unverified ones) count
+    // from the start, instead of showing 0 done until the next case ends.
+    const kept = await new AgentEvalRunTopicModel(db, userId, wsId).findByRunId(runId);
+    await runModel.update(runId, {
       metrics: {
         averageScore: 0,
-        failedCases: 0,
         passRate: 0,
-        passedCases: 0,
+        ...runProgressOf(kept),
         totalCases: allTestCaseIds.length,
       },
       startedAt: new Date(),
       status: 'running',
-    }),
-  );
+    });
+  });
 
   // Trigger paginate-test-cases workflow
   log('Triggering paginate-test-cases for run %s', runId);

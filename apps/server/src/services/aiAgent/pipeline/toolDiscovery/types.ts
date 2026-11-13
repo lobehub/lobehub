@@ -9,6 +9,7 @@ import type {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   FrozenCredentialFacts,
   FrozenModelFacts,
   RequestTrigger,
@@ -53,6 +54,7 @@ export interface ToolDiscoveryInput {
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
   discordContext?: any;
+  evalConnectorSnapshots?: EvalConnectorSnapshots;
   exclusivePluginIds?: string[];
   /**
    * Mime types of the raw bot/IM uploads. The stage only ever looked at the
@@ -69,6 +71,8 @@ export interface ToolDiscoveryInput {
   localDeviceId?: string;
   requestedDeviceId?: string;
   requestTrigger?: RequestTrigger;
+  /** See `AgentRunInitRequest.requireDevice`. */
+  requireDevice?: boolean;
   selectedToolIds?: string[];
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   topicBoundDeviceId?: string | null;

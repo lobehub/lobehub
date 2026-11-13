@@ -16,7 +16,7 @@ import {
   ReactVideoPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { CSSProperties, RefObject } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -30,8 +30,11 @@ import InlineToolbar from './InlineToolbar';
 import LinearFilePlugin from './LinearFilePlugin';
 import { registerAttachmentClickOpen } from './registerAttachmentClickOpen';
 import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
+import { registerBlockDecoratorClickToWrite } from './registerBlockDecoratorClickToWrite';
 import { registerImageFilePastePreference } from './registerImageFilePastePreference';
 import { needsImageRehost, rehostImage } from './rehostImage';
+import OrderedListNumberMenu from './richList/OrderedListNumberMenu';
+import { LIST_HEADING_ATTRIBUTE, ReactRichListPlugin } from './richList/RichListPlugin';
 import { useFileUpload, useImageUpload } from './useImageUpload';
 
 interface FileFilter {
@@ -58,6 +61,94 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+// A bullet item's marker at a given nesting depth. Lexical nests a list inside a
+// `.editor_listItemNested` item; items holding only a nested list, and check
+// list items, draw no bullet. `ul` outranks @lobehub/editor's own `-` marker rule.
+const bullet = (depth: number) =>
+  `${'.editor_listItemNested '.repeat(depth)}ul.editor_listUnordered > .editor_listItem:not(:has(ul), [role='checkbox'])::before`;
+
+// Notion-style list markers in the theme color: a solid disc, then a hollow
+// circle, then a square, repeating with depth; ordered list numbers match.
+// A text color applied to the item still colors its marker.
+const listMarkerStyles = createStaticStyles(({ css, cssVar }) => {
+  // Resolved on the item itself, where Lexical sets `--listitem-marker-color`.
+  const markerColor = `var(--listitem-marker-color, ${cssVar.colorPrimary})`;
+  const markerSize = '0.375em';
+
+  return {
+    content: css`
+      ol.editor_listOrdered > .editor_listItem::marker {
+        color: ${markerColor};
+      }
+
+      ${bullet(0)}, ${bullet(3)} {
+        content: '';
+
+        display: inline-block;
+
+        box-sizing: border-box;
+        width: ${markerSize};
+        height: ${markerSize};
+        margin-inline: -0.9em calc(0.9em - ${markerSize});
+        border-radius: 50%;
+
+        vertical-align: middle;
+
+        opacity: 1;
+        background: ${markerColor};
+      }
+
+      ${bullet(1)}, ${bullet(4)} {
+        border: 0.09em solid ${markerColor};
+        background: transparent;
+      }
+
+      ${bullet(2)}, ${bullet(5)} {
+        border: none;
+        border-radius: 0.06em;
+        background: ${markerColor};
+      }
+
+      /* A list item styled as a heading takes the heading's type scale
+         (@lobehub/editor's header styles); its marker scales with it. */
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}] {
+        margin-block-start: max(
+          calc(var(--lobe-markdown-header-multiple) * var(--lobe-markdown-margin-multiple) * 0.4em),
+          var(--lobe-markdown-font-size)
+        );
+        /* Indent by the body font, so heading items line up with plain ones. */
+        margin-inline-start: var(--lobe-markdown-font-size);
+        font-weight: bold;
+        line-height: 1.25;
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h1'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + 1.5 * var(--lobe-markdown-header-multiple))
+        );
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h2'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + var(--lobe-markdown-header-multiple))
+        );
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h3'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + 0.5 * var(--lobe-markdown-header-multiple))
+        );
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h4'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + 0.25 * var(--lobe-markdown-header-multiple))
+        );
+      }
+    `,
+  };
+});
+
 /**
  * Base plugins for the editor (without image and toolbar, which need dynamic config)
  */
@@ -74,6 +165,8 @@ const STATIC_PLUGINS = [
   ReactAlertPlugin,
   ReactFootnotePlugin,
   ReactChartPlugin,
+  // After ReactListPlugin (in the rich plugins above), whose markdown it extends.
+  ReactRichListPlugin,
 ];
 
 const EDITOR_INIT_DATA_SOURCE_TYPES = ['json', 'markdown'] as const;
@@ -296,13 +389,19 @@ const InternalEditor = memo<InternalEditorProps>(
       return () => unregister?.();
     }, [editor]);
 
-    // Opt-in (comment editors): keep the caret out of the root node around
+    // Opt-in (comment / task editors): keep the caret out of the root node around
     // block images by pushing an empty paragraph next to the image instead of
     // showing Lexical's horizontal root-level caret.
     useEffect(() => {
       if (!editor || !blockImageCaretGuard) return;
-      const unregister = registerBlockDecoratorCaretGuard(editor);
-      return () => unregister?.();
+      const unregisterGuard = registerBlockDecoratorCaretGuard(editor);
+      // A click in a block image's row, or typing with the image selected,
+      // continues writing on the line after it.
+      const unregisterClick = registerBlockDecoratorClickToWrite(editor);
+      return () => {
+        unregisterGuard?.();
+        unregisterClick?.();
+      };
     }, [blockImageCaretGuard, editor]);
 
     const onInitRef = useRef(onInit);
@@ -390,32 +489,35 @@ const InternalEditor = memo<InternalEditorProps>(
     }, [contentChangeLockRef, disabled, editor]); // Only depend on stable refs and editor
 
     return (
-      <div
-        className={className}
-        style={wrapperStyle}
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-      >
-        <Editor
-          content={''}
-          editable={editable && !disabled}
-          editor={editor}
-          getPopupContainer={getPopupContainer}
-          mentionOption={mentionOption}
-          placeholder={finalPlaceholder}
-          plugins={plugins}
-          slashOption={slashItems ? { items: slashItems } : undefined}
-          type={'text'}
-          style={{
-            paddingBottom: 32,
-            ...style,
-            ...contentStyle,
+      <>
+        <div
+          className={cx(listMarkerStyles.content, className)}
+          style={wrapperStyle}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
           }}
-          {...(onPressEnter ? { onPressEnter } : {})}
-        />
-      </div>
+        >
+          <Editor
+            content={''}
+            editable={editable && !disabled}
+            editor={editor}
+            getPopupContainer={getPopupContainer}
+            mentionOption={mentionOption}
+            placeholder={finalPlaceholder}
+            plugins={plugins}
+            slashOption={slashItems ? { items: slashItems } : undefined}
+            type={'text'}
+            style={{
+              paddingBottom: 32,
+              ...style,
+              ...contentStyle,
+            }}
+            {...(onPressEnter ? { onPressEnter } : {})}
+          />
+        </div>
+        {editable && !disabled && <OrderedListNumberMenu editor={editor} />}
+      </>
     );
   },
 );

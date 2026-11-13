@@ -1,7 +1,7 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
 import { Button, cssVar, Flexbox, Icon, Text, toast, Tooltip } from '@lobehub/ui';
 import { Check, SquarePen, Target, Workflow } from 'lucide-react';
-import { lazy, memo, Suspense, useCallback, useState } from 'react';
+import { lazy, memo, type ReactNode, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -45,6 +45,11 @@ export interface BriefCardActionsProps {
   topicId?: string | null;
   /** Drawer header title until the run's activity metadata loads. */
   topicTitle?: string | null;
+  /**
+   * A host-owned action drawn last in the answer group (e.g. a goal gate's
+   * "Open review"), so it shares the row instead of stacking above it.
+   */
+  trailingAction?: ReactNode;
 }
 
 type CommentMode = { type: 'feedback' } | { key: string; type: 'comment' };
@@ -72,6 +77,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     taskStatus,
     topicId,
     topicTitle,
+    trailingAction,
   }) => {
     const { t } = useTranslation('home');
     const [commentMode, setCommentMode] = useState<CommentMode | null>(null);
@@ -415,6 +421,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                 {getActionLabel(primaryActions)}
               </Button>
             ))}
+          {trailingAction}
         </Flexbox>
       </Flexbox>
     );

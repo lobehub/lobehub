@@ -1,9 +1,11 @@
-import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
-import { ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
+import { agentEvalDatasets, ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
+import { connectorAccessScope } from './connectorScope';
 
 interface GateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
@@ -31,6 +33,8 @@ export interface PublicConnectorRecord {
   isEnabled: boolean;
   mcpConnectionType: string | null;
   mcpServerUrl: string | null;
+  /** An Agent mount makes a base connection unavailable to other executors. */
+  mountedByAgentId: string | null;
   name: string;
   sourceType: string;
   status: string;
@@ -59,6 +63,21 @@ export class ConnectorModel {
   private db: LobeChatDatabase;
   private gateKeeper?: GateKeeper;
   private workspaceId?: string;
+  private evaluationDatasetId?: string;
+
+  static forEvaluation(
+    db: LobeChatDatabase,
+    userId: string,
+    datasetId: string,
+    workspaceId?: string,
+    gateKeeper?: GateKeeper,
+  ) {
+    if (!datasetId)
+      throw new EvalConnectorUpdateError('A Dataset is required for evaluation connections');
+    const model = new ConnectorModel(db, userId, workspaceId, gateKeeper);
+    model.evaluationDatasetId = datasetId;
+    return model;
+  }
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string, gateKeeper?: GateKeeper) {
     this.db = db;
@@ -68,7 +87,11 @@ export class ConnectorModel {
   }
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectors);
+    connectorAccessScope(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      this.evaluationDatasetId,
+    );
 
   /**
    * Base (non-agent) scope: the current user/workspace scope restricted to rows
@@ -79,6 +102,14 @@ export class ConnectorModel {
    * and collide on identifier.
    */
   private baseScope = () => and(this.ownership(), isNull(userConnectors.agentId));
+
+  /**
+   * Deterministic connector order for runtime resolution: by identifier, then id
+   * so rows sharing an identifier have a stable tie-break. Resolved connectors
+   * drive the order of the model's tool schema array, so they must not follow
+   * the physical row order, which changes whenever a row is updated.
+   */
+  private resolutionOrder = () => [asc(userConnectors.identifier), asc(userConnectors.id)];
 
   private publicSelection = {
     agentId: userConnectors.agentId,
@@ -91,6 +122,7 @@ export class ConnectorModel {
     isEnabled: userConnectors.isEnabled,
     mcpConnectionType: userConnectors.mcpConnectionType,
     mcpServerUrl: userConnectors.mcpServerUrl,
+    mountedByAgentId: sql<string | null>`${userConnectors.metadata} ->> 'mountedByAgentId'`,
     name: userConnectors.name,
     sourceType: userConnectors.sourceType,
     status: userConnectors.status,
@@ -115,6 +147,8 @@ export class ConnectorModel {
     // caller down at plan time. See the note on `TopicModel`. `''` is a safe
     // sentinel — a mount reference is always a real agent id, never empty.
     const mountedBy = sql`COALESCE(${userConnectors.metadata} ->> 'mountedByAgentId', '')`;
+    // Private Dataset imports are usable only through an exact evaluation binding.
+    // Exclude them before priority selection and credential decryption in ordinary chat.
     if (!agentId) {
       return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} = ''`);
     }
@@ -154,21 +188,61 @@ export class ConnectorModel {
     params: CreateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<UserConnectorItem> => {
-    const credentials = params.credentials
-      ? await encryptCredentials(params.credentials, gateKeeper)
-      : null;
+    return this.db.transaction(async (tx) => {
+      if (!this.evaluationDatasetId && params.metadata?.agentEval) {
+        throw new EvalConnectorUpdateError(
+          'Use the Dataset connection API for evaluation connections',
+        );
+      }
+      if (this.evaluationDatasetId) {
+        const [dataset] = await tx
+          .select({ id: agentEvalDatasets.id })
+          .from(agentEvalDatasets)
+          .where(
+            and(
+              eq(agentEvalDatasets.id, this.evaluationDatasetId),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                agentEvalDatasets,
+              ),
+            ),
+          )
+          .for('share');
+        if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
+        if (params.credentials && !gateKeeper)
+          throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
+        if (params.agentId || params.metadata?.mountedByAgentId)
+          throw new EvalConnectorUpdateError(
+            'Evaluation connections cannot be assigned to a normal Agent',
+          );
+        const marker = params.metadata?.agentEval;
+        params = {
+          ...params,
+          metadata: {
+            ...params.metadata,
+            agentEval: {
+              ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
+              datasetId: this.evaluationDatasetId,
+            },
+          },
+        };
+      }
+      const credentials = params.credentials
+        ? await encryptCredentials(params.credentials, gateKeeper)
+        : null;
 
-    const [result] = await this.db
-      .insert(userConnectors)
-      .values(
-        buildWorkspacePayload(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          { ...params, credentials },
-        ),
-      )
-      .returning();
+      const [result] = await tx
+        .insert(userConnectors)
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...params, credentials },
+          ),
+        )
+        .returning();
 
-    return result;
+      return result;
+    });
   };
 
   /**
@@ -185,7 +259,7 @@ export class ConnectorModel {
       .from(userConnectors)
       .where(and(eq(userConnectors.id, sourceId), this.ownership()))
       .limit(1);
-    if (!source) return null;
+    if (!source || source.metadata?.agentEval) return null;
 
     const { id: _id, createdAt: _c, updatedAt: _u, metadata, ...rest } = source;
     const cleanedMetadata = metadata
@@ -304,7 +378,8 @@ export class ConnectorModel {
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)))
+      .orderBy(...this.resolutionOrder());
 
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
   };
@@ -330,7 +405,8 @@ export class ConnectorModel {
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(and(this.scopePredicate(agentId), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.scopePredicate(agentId), inArray(userConnectors.identifier, identifiers)))
+      .orderBy(...this.resolutionOrder());
 
     return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
   };
@@ -345,7 +421,11 @@ export class ConnectorModel {
     agentId?: string,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<DecryptedConnector[]> => {
-    const rows = await this.db.select().from(userConnectors).where(this.scopePredicate(agentId));
+    const rows = await this.db
+      .select()
+      .from(userConnectors)
+      .where(this.scopePredicate(agentId))
+      .orderBy(...this.resolutionOrder());
 
     return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
   };
@@ -443,21 +523,41 @@ export class ConnectorModel {
     patch: UpdateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<void> => {
-    const credentials =
-      patch.credentials !== undefined && patch.credentials !== null
-        ? await encryptCredentials(patch.credentials, gateKeeper)
-        : undefined;
-
-    const set = {
-      ...patch,
-      ...(credentials !== undefined ? { credentials } : {}),
-      updatedAt: new Date(),
-    };
-
-    await this.db
-      .update(userConnectors)
-      .set(set)
-      .where(and(eq(userConnectors.id, id), this.ownership()));
+    await this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(userConnectors)
+        .where(and(eq(userConnectors.id, id), this.ownership()))
+        .limit(1)
+        .for('update');
+      if (!current) return;
+      const normalized = await normalizeEvalConnectorPatch(
+        current,
+        patch,
+        gateKeeper?.decrypt.bind(gateKeeper),
+      );
+      if (current.metadata?.agentEval && normalized.credentials && !gateKeeper) {
+        throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
+      }
+      let credentials: string | undefined;
+      if (normalized.credentials !== undefined && normalized.credentials !== null) {
+        try {
+          credentials = await encryptCredentials(normalized.credentials, gateKeeper);
+        } catch (error) {
+          if (current.metadata?.agentEval)
+            throw new EvalConnectorUpdateError('Could not securely store the mock connection');
+          throw error;
+        }
+      }
+      await tx
+        .update(userConnectors)
+        .set({
+          ...normalized,
+          ...(credentials !== undefined ? { credentials } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(userConnectors.id, id), this.ownership()));
+    });
   };
 
   updateStatus = async (id: string, status: ConnectorStatus): Promise<void> => {

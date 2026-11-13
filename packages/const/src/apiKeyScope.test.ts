@@ -118,6 +118,12 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('aiAgent.execAgent', 'mutation')).toEqual({
       scopes: ['agent:write', 'chat:write', 'model:invoke'],
     });
+    // a desktop-local run fee spends real balance, like the run entries
+    for (const path of ['aiAgent.beginLocalHeteroRunFee', 'aiAgent.finishLocalHeteroRunFee']) {
+      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
+        scopes: ['agent:write', 'chat:write', 'model:invoke'],
+      });
+    }
     // listing the queue reads conversation content
     expect(requiredApiKeyScopeForTrpc('agentSteerQueue.list', 'query')).toEqual({
       scopes: ['agent:read', 'chat:read'],
@@ -141,6 +147,28 @@ describe('requiredApiKeyScopeForTrpc', () => {
     // sibling procedures in the namespace are untouched
     expect(requiredApiKeyScopeForTrpc('agentDocument.createDocument', 'mutation')).toEqual({
       scopes: ['knowledge:write'],
+    });
+  });
+
+  it('separates installing an account credential from managing the account', () => {
+    // Reading and managing an agent's identity assets rides the agent domain…
+    expect(requiredApiKeyScopeForTrpc('agentAccount.list', 'query')).toEqual({
+      scopes: ['agent:read'],
+    });
+    expect(requiredApiKeyScopeForTrpc('agentAccount.create', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('agentAccount.provision', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('agentAccount.revoke', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+
+    // …but installing a credential adds the dedicated high-risk tier: a key
+    // that may manage the agent's accounts still cannot write a password.
+    expect(requiredApiKeyScopeForTrpc('agentAccount.setCredential', 'mutation')).toEqual({
+      scopes: ['agent:write', 'agent:credential:write'],
     });
   });
 

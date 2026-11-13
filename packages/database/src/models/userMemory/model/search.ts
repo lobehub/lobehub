@@ -1,11 +1,11 @@
 import type {
+  UserMemoryActivityWithoutVectors,
   UserMemoryContextWithoutVectors,
   UserMemoryExperienceWithoutVectors,
   UserMemoryPreferenceWithoutVectors,
 } from '@lobechat/types';
 import { and, cosineDistance, desc, eq, sql } from 'drizzle-orm';
 
-import type { UserMemoryActivitiesWithoutVectors } from '../../../schemas';
 import {
   userMemoriesActivities,
   userMemoriesContexts,
@@ -86,7 +86,7 @@ export const searchActivities = async (
     limit?: number;
     type?: string;
   },
-): Promise<UserMemoryActivitiesWithoutVectors[]> => {
+): Promise<UserMemoryActivityWithoutVectors[]> => {
   const { embedding, limit = 5, type } = params;
   if (limit <= 0) {
     return [];
@@ -135,7 +135,7 @@ export const searchActivities = async (
   } else {
     query = query.orderBy(desc(userMemoriesActivities.createdAt));
   }
-  return query.limit(limit) as Promise<UserMemoryActivitiesWithoutVectors[]>;
+  return query.limit(limit) as Promise<UserMemoryActivityWithoutVectors[]>;
 };
 
 export const searchContexts = async (

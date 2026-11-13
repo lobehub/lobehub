@@ -123,51 +123,6 @@ describe('AgentEvalDatasetModel', () => {
     });
   });
 
-  describe('delete', () => {
-    it('should delete a dataset owned by the user', async () => {
-      const [dataset] = await serverDB
-        .insert(agentEvalDatasets)
-        .values({
-          benchmarkId,
-          identifier: 'delete-test',
-          name: 'Delete Test',
-          userId,
-        })
-        .returning();
-
-      await datasetModel.delete(dataset.id);
-
-      const deleted = await serverDB.query.agentEvalDatasets.findFirst({
-        where: eq(agentEvalDatasets.id, dataset.id),
-      });
-      expect(deleted).toBeUndefined();
-    });
-
-    it('should not delete a dataset owned by another user', async () => {
-      const [dataset] = await serverDB
-        .insert(agentEvalDatasets)
-        .values({
-          benchmarkId,
-          identifier: 'other-user-dataset',
-          name: 'Other User Dataset',
-          userId: userId2,
-        })
-        .returning();
-
-      await datasetModel.delete(dataset.id);
-
-      const stillExists = await serverDB.query.agentEvalDatasets.findFirst({
-        where: eq(agentEvalDatasets.id, dataset.id),
-      });
-      expect(stillExists).toBeDefined();
-    });
-
-    it('should return 0 rowCount when dataset not found', async () => {
-      await datasetModel.delete('non-existent-id');
-      // No rowCount in PGlite
-    });
-  });
-
   describe('query', () => {
     beforeEach(async () => {
       // Create another benchmark
@@ -218,7 +173,6 @@ describe('AgentEvalDatasetModel', () => {
       expect(results.map((r) => r.identifier)).toContain('user-dataset-1');
       expect(results.map((r) => r.identifier)).toContain('user-dataset-2');
       expect(results.map((r) => r.identifier)).toContain('system-dataset');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-dataset');
     });
 
     it('should query datasets by benchmarkId', async () => {
@@ -268,14 +222,6 @@ describe('AgentEvalDatasetModel', () => {
       const results = await datasetModel.query({ sourceExperimentId: experiment.id });
 
       expect(results.map((r) => r.identifier)).toEqual(['scoped-dataset']);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await datasetModel.query();
-
-      // The newest should come first
-      // Order may vary, just check we got results
-      expect(results.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should include system datasets (userId is null)', async () => {

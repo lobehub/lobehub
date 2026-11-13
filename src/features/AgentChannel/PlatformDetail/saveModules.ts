@@ -27,8 +27,7 @@ export type SaveModuleId =
 
 export interface SaveModule {
   /**
-   * Settings keys written with this block that no field of it shows: the hidden wake switch, so
-   * a bot saved before the wake options existed still gets it, and the owner's ID with the
+   * Settings keys written with this block that no field of it shows: the owner's ID with the
    * conversation block, which a pairing policy needs.
    */
   alsoWrites?: string[];
@@ -38,9 +37,6 @@ export interface SaveModule {
   kind: 'credentials' | 'settings';
 }
 
-/** Written with every wake block; the form shows no switch for it (see `WAKE_MASTER_KEY`). */
-const WAKE_MASTER = 'botWakeEnabled';
-
 /**
  * Split a platform's settings into the blocks the page saves, in page order.
  *
@@ -49,7 +45,8 @@ const WAKE_MASTER = 'botWakeEnabled';
  *
  * Returns:
  * - A `credentials` block when the platform asks for credentials, then one block per titled group
- *   of settings. Every option the page shows, other than how a reply looks, is in exactly one.
+ *   of settings. Every option the page shows, other than how a reply looks and the wake switch,
+ *   is in exactly one.
  */
 export const resolveSaveModules = (
   groups: SettingsGroup[],
@@ -58,7 +55,7 @@ export const resolveSaveModules = (
 ): SaveModule[] => {
   const modules: SaveModule[] = [];
   const settings = (id: SaveModuleId, fields: { key: string }[], alsoWrites?: string[]) => {
-    const keys = fields.map((f) => f.key).filter((key) => key !== WAKE_MASTER);
+    const keys = fields.map((f) => f.key);
     if (keys.length > 0) modules.push({ alsoWrites, id, keys, kind: 'settings' });
   };
 
@@ -88,8 +85,9 @@ export const resolveSaveModules = (
         break;
       }
       case 'wake': {
+        // The master switch saves itself as it changes (see `WAKE_MASTER_KEY`).
         for (const section of groupWakeFields(group.fields)) {
-          settings(`wake-${section.key}`, section.fields, [WAKE_MASTER]);
+          if (section.key !== 'switch') settings(`wake-${section.key}`, section.fields);
         }
         break;
       }

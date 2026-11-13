@@ -1,7 +1,12 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- the antd textarea inside a message has no slot
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
 import { memo, Suspense, useCallback } from 'react';
@@ -10,6 +15,7 @@ import BubblesLoading from '@/components/BubblesLoading';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
@@ -32,16 +38,15 @@ import ToolMessage from './Tool';
 import UserMessage from './User';
 import VerifyMessage from './Verify';
 
-const prefixCls = 'ant';
+const styles = stylex.create({
+  loading: { opacity: 0.6 },
+  message: { position: 'relative' },
+});
 
-const styles = createStaticStyles(({ css }) => ({
-  loading: css`
-    opacity: 0.6;
-  `,
+const fallback = createStaticStyles(({ css }) => ({
   message: css`
-    position: relative;
-    // prevent the textarea too long
-    .${prefixCls}-input {
+    /* Prevent the antd textarea from growing too long. */
+    .ant-input {
       max-height: 900px;
     }
   `,
@@ -198,7 +203,7 @@ const MessageItem = memo<MessageItemProps>(
 
         case 'supervisor': {
           // Supervisor messages render through the rich AssistantGroup component
-          // (workflow collapse / taskCompletions / signalCallbacks) — it swaps in
+          // (workflow collapse / signalCallbacks) — it swaps in
           // the group's avatar + name + 主管 badge when the message is a supervisor
           // turn. Keeps a single code path instead of a thinner duplicate.
           return (
@@ -284,7 +289,11 @@ const MessageItem = memo<MessageItemProps>(
       <>
         {enableHistoryDivider && <History />}
         <Flexbox
-          className={cx(styles.message, className, shouldDimCreatingMessage && styles.loading)}
+          {...sx(
+            styles.message,
+            shouldDimCreatingMessage && styles.loading,
+            [fallback.message, className].filter(Boolean).join(' '),
+          )}
           data-index={index}
           onContextMenu={onContextMenu}
         >

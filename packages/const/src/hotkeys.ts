@@ -1,5 +1,7 @@
 import type { HotkeyGroupId, HotkeyId, HotkeyRegistration, HotkeyScopeId } from '@lobechat/types';
 
+import { isDesktop } from './version';
+
 const combineKeys = (keys: string[]) => keys.join('+');
 
 export const KeyEnum = {
@@ -51,6 +53,7 @@ export const HotkeyEnum = {
   OpenChatSettings: 'openChatSettings',
   PrevTab: 'prevTab',
   OpenHotkeyHelper: 'openHotkeyHelper',
+  OpenTaskFilter: 'openTaskFilter',
   RegenerateMessage: 'regenerateMessage',
   SaveDocument: 'saveDocument',
   SaveTopic: 'saveTopic',
@@ -91,17 +94,22 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Mod, 'j']),
     scopes: [HotkeyScopeEnum.Global],
   },
-  {
-    group: HotkeyGroupEnum.Essential,
-    id: HotkeyEnum.SwitchAgent,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
-    nonEditable: true,
-    scopes: [HotkeyScopeEnum.Global],
-  },
+  // Desktop's number shortcuts select titlebar tabs, not agents.
+  ...(!isDesktop
+    ? [
+        {
+          group: HotkeyGroupEnum.Essential,
+          id: HotkeyEnum.SwitchAgent,
+          keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
+          nonEditable: true,
+          scopes: [HotkeyScopeEnum.Global],
+        },
+      ]
+    : []),
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.SwitchTab,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Number]),
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
     nonEditable: true,
     scopes: [HotkeyScopeEnum.Global],
   },
@@ -147,6 +155,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.ToggleFavorite,
     keys: combineKeys([KeyEnum.Alt, 'f']),
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.OpenTaskFilter,
+    keys: 'f',
     scopes: [HotkeyScopeEnum.Global],
   },
   // Chat

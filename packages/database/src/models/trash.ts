@@ -21,6 +21,7 @@ import {
   dashboards,
   messages,
   projects,
+  tasks,
   topics,
   trashItems,
   widgets,
@@ -64,6 +65,7 @@ const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: a
   },
   dashboard: { id: dashboards.id, isDeleted: dashboards.isDeleted, table: dashboards },
   message: { id: messages.id, isDeleted: messages.isDeleted, table: messages },
+  task: { id: tasks.id, isDeleted: tasks.isDeleted, table: tasks },
   topic: { id: topics.id, isDeleted: topics.isDeleted, table: topics },
   widget: { id: widgets.id, isDeleted: widgets.isDeleted, table: widgets },
 };
@@ -126,6 +128,11 @@ const livePrivateWhere = (): SQL =>
       eq(trashItems.resourceType, 'message'),
       sql`EXISTS (SELECT 1 FROM ${messages} WHERE ${messages.id} = ${trashItems.resourceId} AND (${privateAgent(messages.agentId)} OR ${privateGroup(messages.groupId)} OR ${privateTopic(messages.topicId)}))`,
     ),
+    // A task is private on its own (`visibility`), or under a private project.
+    and(
+      eq(trashItems.resourceType, 'task'),
+      sql`EXISTS (SELECT 1 FROM ${tasks} WHERE ${tasks.id} = ${trashItems.resourceId} AND (${tasks.visibility} = 'private' OR ${privateProject(tasks.projectId)}))`,
+    ),
     and(
       eq(trashItems.resourceType, 'widget'),
       sql`EXISTS (SELECT 1 FROM ${widgets} WHERE ${widgets.id} = ${uuidResourceId('widget')} AND (${widgets.visibility} = 'private' OR ${privateAgent(widgets.agentId)} OR ${privateProject(widgets.projectId)}))`,
@@ -142,10 +149,11 @@ const livePrivateWhere = (): SQL =>
  * `registerMany`), so making a still-live parent public later does not expose
  * it.
  *
- * It fails closed: a root that cannot prove it was shared stays on its
- * deleter's private side — one registered before the snapshot existed (its
- * parents may have changed since), or one whose source row or recorded
- * project was removed outside the trash (a hard delete or an FK cascade).
+ * A root registered before the snapshot existed has no `meta.private`; it
+ * falls back to the live check, like every other workspace list. Otherwise it
+ * fails closed: a root whose source row or recorded project was removed
+ * outside the trash (a hard delete or an FK cascade) cannot prove it was
+ * shared, so it stays on its deleter's private side.
  */
 const privateRootWhere = (): SQL =>
   or(
@@ -156,7 +164,7 @@ const privateRootWhere = (): SQL =>
     ),
     // COALESCE: a NULL here would turn the whole OR, and its NOT, into NULL.
     sql`COALESCE((${trashItems.meta} ->> 'private') = 'true', false)`,
-    sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`,
+    and(sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`, livePrivateWhere()),
   ) as SQL;
 
 const toTrashItem = (row: TrashItemRow): TrashItem => ({
@@ -512,6 +520,25 @@ export class TrashModel {
         this.ownership(),
       ),
     });
+  };
+
+  /** The roots (not cascaded children) registered for these resources of one kind. */
+  findRootsByResources = async (
+    resourceType: TrashResourceType,
+    resourceIds: string[],
+  ): Promise<TrashItemRow[]> => {
+    if (resourceIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(trashItems)
+      .where(
+        and(
+          eq(trashItems.resourceType, resourceType),
+          inArray(trashItems.resourceId, resourceIds),
+          isNull(trashItems.rootId),
+          this.ownership(),
+        ),
+      );
   };
 
   /** Registry rows cascaded under a root (any type). */

@@ -81,15 +81,6 @@ export const appModule = () => ({
   },
 });
 
-/**
- * Factory for `vi.mock('@/server/featureFlags')`: the runtime flags with `bot_wake` on or off.
- * Routers read the flag from the bot owner's runtime flags, so a test that exercises the bot-wake
- * pipeline has to turn it on explicitly, exactly like a rollout does.
- */
-export const featureFlagsModule = (enableBotWake = true) => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({ enableBotWake }),
-});
-
 /** Factory for `vi.mock('@chat-adapter/state-ioredis')`. */
 export const stateIoredisModule = () => ({
   createIoRedisState: vi.fn(),

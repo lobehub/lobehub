@@ -21,10 +21,19 @@ export const RedisKeyNamespace = {
    */
   AGENT_SIGNAL: 'agent-signal',
   /**
+   * Leases on the agent runs a user has in flight, used to cap how many run at once.
+   */
+  AGENT_RUN: 'agentRun',
+  /**
    * Follow-ups a user queued behind a running agent turn ("steer"). The server
    * drains them into the next turn itself when the running one hands back.
    */
   AGENT_STEER: 'agentSteer',
+  /**
+   * Agent identity keys — replay claims for agent-account provider webhooks,
+   * shared by every instance that may receive a delivery.
+   */
+  AGENT_IDENTITY: 'agent-identity',
   /**
    * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
    * silent-wake budget and the per-channel wake scheduler.
@@ -142,6 +151,22 @@ export const RedisKeys = {
     schedulerLock: (key: string): string => `scheduler_lock:v1:${key}`,
   },
   /**
+   * Run lease scope — see {@link RedisKeyNamespace.AGENT_RUN}.
+   */
+  agentRun: {
+    /**
+     * One user's in-flight run leases (field = holder id, value = expiry in ms).
+     * Full key: agentRun:run_slots:v1:{userId}
+     */
+    runSlots: (userId: string): string => `run_slots:v1:${userId}`,
+    /**
+     * Whether one operation's `onComplete` delivery is settling or has settled
+     * its Task run, so a redelivery is not applied a second time.
+     * Full key: agentRun:task_run_delivery:v1:{operationId}
+     */
+    taskRunDelivery: (operationId: string): string => `task_run_delivery:v1:${operationId}`,
+  },
+  /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
    */
   agentSteer: {
@@ -174,6 +199,30 @@ export const RedisKeys = {
      * Full key: agentSteer:thread_start:v1:{threadId}
      */
     threadStartFence: (threadId: string): string => `thread_start:v1:${threadId}`,
+    /**
+     * Follow-ups a heterogeneous run (Claude Code) took into its live session
+     * and has not picked up yet (field = user message id). Their drained batch
+     * stays leased until the agent replays the message.
+     * Full key: agentSteer:hetero_deliveries:v1:{operationId}
+     */
+    heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Marks a sub-agent run whose final queue read came back empty: it ends
+     * without reading again, so a steer appended behind it must be taken back.
+     * Full key: agentSteer:sealed_run:v1:{operationId}
+     */
+    sealedRun: (operationId: string): string => `sealed_run:v1:${operationId}`,
+  },
+  /**
+   * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
+   */
+  agentIdentity: {
+    /**
+     * Replay claim on one provider webhook delivery.
+     * Full key: agent-identity:webhook_event:v1:{provider}:{eventId}
+     */
+    webhookEvent: (provider: string, eventId: string): string =>
+      `webhook_event:v1:${provider}:${eventId}`,
   },
   /**
    * AI generation scope - for AI-generated content like welcome messages
@@ -243,6 +292,8 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
+  agentRun: RedisKeyNamespace.AGENT_RUN,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,

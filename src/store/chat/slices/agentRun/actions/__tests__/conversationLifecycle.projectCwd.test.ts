@@ -3,7 +3,11 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { aiChatService } from '@/services/aiChat';
+import { deviceService } from '@/services/device';
+import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { useElectronStore } from '@/store/electron';
 import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getSessionStoreState } from '@/store/session';
 import { useUserStore } from '@/store/user';
@@ -47,6 +51,17 @@ const directoryRow = {
   projectId: 'prj-1',
 } as ProjectDirectory;
 
+const deviceAgent = () =>
+  setupMockSelectors({
+    agentConfig: {
+      agencyConfig: {
+        boundDeviceId: DEVICE_ID,
+        executionTarget: 'device',
+        workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+      },
+    },
+  });
+
 beforeEach(() => {
   resetTestEnvironment();
   spyOnMessageService();
@@ -79,15 +94,7 @@ describe('sendMessage in a project directory', () => {
   // branch, and the next turn was refused for a mismatched directory.
   it('seeds the new topic with the project directory, not the agent default', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
     const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
     const agentId = TEST_IDS.SESSION_ID;
 
@@ -207,15 +214,7 @@ describe('sendMessage in a project directory', () => {
   // must not inherit the directory it was sent from.
   it('keeps a /newTopic sent from a project topic on the agent default', async () => {
     mockConstEnv.isDesktop = true;
-    setupMockSelectors({
-      agentConfig: {
-        agencyConfig: {
-          boundDeviceId: DEVICE_ID,
-          executionTarget: 'device',
-          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
-        },
-      },
-    });
+    deviceAgent();
     const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
     const agentId = TEST_IDS.SESSION_ID;
 
@@ -266,6 +265,261 @@ describe('sendMessage in a project directory', () => {
         workingDirectory: AGENT_DEFAULT_PATH,
         workingDirectoryConfig: { path: AGENT_DEFAULT_PATH },
       }),
+    );
+  });
+});
+
+describe('sendMessage in a project without a directory', () => {
+  // Regression (user report): a project "+" with no runnable directory created
+  // an empty "untitled" topic up front. The blank draft now stages the project
+  // alone, and the first send creates the topic conversation-only inside it.
+  it('binds the new gateway topic to the staged project without routing to a device', async () => {
+    setupMockSelectors({ agentConfig: { agencyConfig: { executionTarget: 'cloud' } } });
+    const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
+    const agentId = TEST_IDS.SESSION_ID;
+
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: undefined,
+        executeGatewayAgent: executeGatewayAgentSpy,
+        isGatewayModeEnabled: () => true,
+        pendingNewTopicDirectory: { agentId, projectId: 'prj-1' },
+      });
+    });
+
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        message: 'Start in the project',
+      });
+    });
+
+    const params = executeGatewayAgentSpy.mock.calls[0][0];
+    expect(params.projectId).toBe('prj-1');
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    const optimisticRow = Object.values(result.current.topicDataMap)
+      .flatMap((data) => data.items)
+      .find((topic) => topic.id === params.optimisticTopic.id);
+    expect(optimisticRow?.projectId).toBe('prj-1');
+    expect(optimisticRow?.projectWorkingDirectoryId).toBeUndefined();
+  });
+
+  it('creates the client-runtime topic inside the staged project', async () => {
+    setupMockSelectors({ agentConfig: {} });
+    const agentId = TEST_IDS.SESSION_ID;
+    const sendMessageInServerSpy = vi
+      .spyOn(aiChatService, 'sendMessageInServer')
+      .mockRejectedValue(new Error('stop after the request is built'));
+
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: undefined,
+        isGatewayModeEnabled: () => false,
+        pendingNewTopicDirectory: { agentId, projectId: 'prj-1' },
+      });
+    });
+
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        message: 'Start in the project',
+      });
+    });
+
+    expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ newTopic: expect.objectContaining({ projectId: 'prj-1' }) }),
+      expect.any(AbortController),
+    );
+    // The refused first send hands the project back to the blank draft.
+    expect(result.current.pendingNewTopicDirectory).toEqual({ agentId, projectId: 'prj-1' });
+  });
+});
+
+describe('sendMessage continuing a source topic', () => {
+  const OTHER_DEVICE_ID = 'device-other';
+  const SOURCE_PATH = '/repo/source';
+  const forwardContext = (agentId: string) => ({
+    agentId,
+    isNew: true,
+    isolatedTopic: true,
+    scope: 'main' as const,
+  });
+  const statPath = (exists: boolean | null) =>
+    vi
+      .spyOn(deviceService, 'statPath')
+      .mockResolvedValue(exists === null ? null : ({ exists, isDirectory: exists } as any));
+  beforeEach(() => {
+    statPath(true);
+  });
+  const sendForward = async (sourceTopic: any) => {
+    const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
+    const agentId = TEST_IDS.SESSION_ID;
+    act(() => {
+      useChatStore.setState({
+        executeGatewayAgent: executeGatewayAgentSpy,
+        isGatewayModeEnabled: () => true,
+      });
+    });
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: forwardContext(agentId),
+        message: 'Continue the handoff',
+        sourceTopic,
+      });
+    });
+    return executeGatewayAgentSpy.mock.calls[0][0];
+  };
+
+  // Regression (user report): a forwarded task started in the receiving
+  // agent's default directory instead of the one the source topic ran in.
+  it('starts a forwarded topic in the source project directory', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
+      projectId: 'prj-1',
+      projectWorkingDirectoryId: 'dir-85',
+    });
+
+    expect(params.projectWorkingDirectoryId).toBe('dir-85');
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: PROJECT_PATH }),
+    );
+  });
+
+  it('carries the source bare directory to the server on the same machine', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+
+    const params = await sendForward({
+      metadata: {
+        boundDeviceId: DEVICE_ID,
+        heteroSessionId: 'source-cli-session',
+        workingDirectory: SOURCE_PATH,
+        workingDirectoryConfig: { path: SOURCE_PATH },
+      },
+    });
+
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    expect(params.newTopicMetadata).toEqual({
+      boundDeviceId: DEVICE_ID,
+      workingDirectory: SOURCE_PATH,
+      workingDirectoryConfig: { path: SOURCE_PATH },
+    });
+  });
+
+  // The path only exists on the machine it was recorded on.
+  // A legacy topic never recorded its machine: the same absolute path on the
+  // receiving machine may be an unrelated checkout, so it is not inherited.
+  it.each([
+    ['on another machine', { boundDeviceId: OTHER_DEVICE_ID, workingDirectory: SOURCE_PATH }],
+    ['on an unknown machine', { workingDirectory: SOURCE_PATH }],
+  ])('keeps the agent default when the source directory is %s', async (_, metadata) => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+
+    const params = await sendForward({ metadata });
+
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
+    );
+  });
+
+  // `auto` resolves this desktop client-side, but the server may route the run
+  // to another online device; a machine-specific path cannot be inherited until
+  // the run's machine is actually known.
+  it('keeps the agent default for an auto-routed agent', async () => {
+    mockConstEnv.isDesktop = true;
+    vi.spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId').mockResolvedValue(DEVICE_ID);
+    setupMockSelectors({
+      agentConfig: {
+        agencyConfig: {
+          executionTarget: 'auto',
+          workingDirByDevice: { [DEVICE_ID]: AGENT_DEFAULT_PATH },
+        },
+      },
+    });
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(params.newTopicMetadata?.workingDirectory).not.toBe(SOURCE_PATH);
+  });
+
+  // A source directory the receiving agent cannot resolve (deleted, gateway
+  // off) must not fail the handoff: it continues in the source's bare cwd.
+  it('falls back to the source cwd when its project directory cannot be resolved', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    useProjectDirectoryStore.setState({ directoriesMap: {} });
+    vi.spyOn(projectWorkingDirectoryService, 'resolve').mockRejectedValue(
+      new Error('Directory not found'),
+    );
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
+      projectWorkingDirectoryId: 'dir-gone',
+    });
+
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: PROJECT_PATH }),
+    );
+  });
+  // The source directory may have been deleted since it ran; the receiving
+  // agent then takes the handoff in its own default instead of a run that can
+  // only fail with "working directory not found".
+  it('falls back to the agent default when the source cwd no longer exists', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    statPath(false);
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(deviceService.statPath).toHaveBeenCalledWith(DEVICE_ID, SOURCE_PATH);
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
+    );
+  });
+
+  it('falls back to the agent default when the source project directory no longer exists', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    statPath(false);
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: PROJECT_PATH },
+      projectWorkingDirectoryId: 'dir-85',
+    });
+
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: AGENT_DEFAULT_PATH }),
+    );
+  });
+
+  // An unreachable device cannot say the directory is gone; the spawn-time
+  // check stays the authority rather than silently moving the task elsewhere.
+  it('keeps the source cwd when its existence cannot be verified', async () => {
+    mockConstEnv.isDesktop = true;
+    deviceAgent();
+    statPath(null);
+
+    const params = await sendForward({
+      metadata: { boundDeviceId: DEVICE_ID, workingDirectory: SOURCE_PATH },
+    });
+
+    expect(params.newTopicMetadata).toEqual(
+      expect.objectContaining({ workingDirectory: SOURCE_PATH }),
     );
   });
 });

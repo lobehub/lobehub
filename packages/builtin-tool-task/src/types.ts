@@ -59,9 +59,15 @@ export interface CreateTaskParams {
   /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
   assigneeUserId?: string;
   instruction: string;
+  /** Existing task label names to attach; unknown names fail, nothing is created. */
+  labels?: string[];
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
   sortOrder?: number;
 }
 
@@ -140,6 +146,8 @@ export interface CreateTasksState {
 
 export interface ListTasksParams {
   assigneeAgentId?: string;
+  /** Label or label group names; matches tasks carrying any of them. */
+  labels?: string[];
   limit?: number;
   offset?: number;
   parentIdentifier?: string;
@@ -220,16 +228,23 @@ export interface DeleteTaskCommentState {
 
 export interface EditTaskParams {
   addDependencies?: string[];
+  /** Existing label names to add; a grouped label replaces its sibling. */
+  addLabels?: string[];
   assigneeAgentId?: string | null;
   /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
   assigneeUserId?: string | null;
   description?: string;
   identifier: string;
   instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
   removeDependencies?: string[];
+  removeLabels?: string[];
 }
 
 export interface EditTaskState {
@@ -244,8 +259,12 @@ export interface RunTaskParams {
   /** Optional existing topic to continue (rather than creating a new topic). */
   continueTopicId?: string;
   identifier: string;
+  /** Replaces the task's pinned model, for this run and later ones. */
+  model?: string;
   /** Optional extra prompt prepended to the task instruction for this run. */
   prompt?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTaskState {
@@ -259,6 +278,10 @@ export interface RunTaskState {
 export interface RunTasksParams {
   /** Identifiers of tasks to run, in execution order. */
   identifiers: string[];
+  /** Replaces the pinned model of every task in the batch, for this run and later ones. */
+  model?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTasksItemResult {

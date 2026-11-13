@@ -15,6 +15,41 @@ class DesktopSettingsService {
   };
 
   /**
+   * Get the Debug logs setting (Settings → About)
+   */
+  getDebugLoggingSettings = async () => {
+    return ensureElectronIpc().system.getDebugLoggingSettings();
+  };
+
+  /**
+   * Turn `debug` records in `<userData>/logs/*.jsonl` on or off for packaged builds
+   */
+  setDebugLoggingEnabled = async (enabled: boolean) => {
+    return ensureElectronIpc().system.setDebugLoggingEnabled(enabled);
+  };
+
+  /**
+   * Get the Remote debugging setting (Settings → About)
+   */
+  getRemoteDebuggingSettings = async () => {
+    return ensureElectronIpc().system.getRemoteDebuggingSettings();
+  };
+
+  /**
+   * Persist the CDP toggle; it applies at the next launch
+   */
+  setRemoteDebuggingEnabled = async (enabled: boolean) => {
+    return ensureElectronIpc().system.setRemoteDebuggingEnabled(enabled);
+  };
+
+  /**
+   * Reveal the desktop log directory in the system file manager
+   */
+  openLogDirectory = async () => {
+    return ensureElectronIpc().system.openLogDirectory();
+  };
+
+  /**
    * Get proxy settings
    */
   getProxySettings = async () => {

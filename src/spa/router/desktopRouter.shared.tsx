@@ -22,9 +22,15 @@ import ProviderSettingsSkeleton, {
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
-import { createSettingsRouteMeta, settingsRouteMeta } from '@/features/Settings/features/routeMeta';
+import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
+import {
+  createSettingsRouteMeta,
+  providerDetailRouteMeta,
+  settingsRouteMeta,
+} from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
+import { createWorkspaceSettingsRouteMeta } from '@/features/WorkspaceSetting/routeMeta';
 import { agentChatDesktopRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
 import {
   groupPermissionRouteMeta,
@@ -35,6 +41,8 @@ import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShel
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
+import { evalRoute } from '@/spa/router/evalRoutes';
+import { homeInboxLoader } from '@/spa/router/homeInboxLoader';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
@@ -42,10 +50,13 @@ import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
 import { agentAccessLoader, agentGroupAccessLoader } from '@/spa/router/resourceAccessLoader';
 import { resourceRoute } from '@/spa/router/resourceRoutes';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
+import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
+import { settingsTabLoader } from '@/spa/router/statsPageLoader';
 import { taskWorkspaceChildren } from '@/spa/router/taskWorkspaceRoutes';
 import { withSegmentFallback } from '@/spa/router/withSegmentFallback';
 import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
 import { SettingsTabs } from '@/store/global/initialState';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import { collaborationRoutes } from './collaborationRoutes';
@@ -320,6 +331,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/agent'),
               'Desktop > Discover > Detail > Agent',
             ),
+            handle: { meta: communityDetailRouteMeta.agent },
             path: 'agent/:slug',
           },
           {
@@ -327,6 +339,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/group_agent'),
               'Desktop > Discover > Detail > Group Agent',
             ),
+            handle: { meta: communityDetailRouteMeta.groupAgent },
             path: 'group_agent/:slug',
           },
           {
@@ -334,6 +347,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/model'),
               'Desktop > Discover > Detail > Model',
             ),
+            handle: { meta: communityDetailRouteMeta.model },
             path: 'model/:slug',
           },
           {
@@ -341,6 +355,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/provider'),
               'Desktop > Discover > Detail > Provider',
             ),
+            handle: { meta: communityDetailRouteMeta.provider },
             path: 'provider/:slug',
           },
           {
@@ -348,6 +363,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/skill'),
               'Desktop > Discover > Detail > Skill',
             ),
+            handle: { meta: communityDetailRouteMeta.skill },
             path: 'skill/:slug',
           },
           {
@@ -355,6 +371,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/mcp'),
               'Desktop > Discover > Detail > MCP',
             ),
+            handle: { meta: communityDetailRouteMeta.mcp },
             path: 'mcp/:slug',
           },
           {
@@ -362,6 +379,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/user'),
               'Desktop > Discover > Detail > User',
             ),
+            handle: { meta: communityDetailRouteMeta.user },
             path: 'user/:slug',
           },
           {
@@ -369,6 +387,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(detail)/organization'),
               'Desktop > Discover > Detail > Organization',
             ),
+            handle: { meta: communityDetailRouteMeta.user },
             path: 'org/:slug',
           },
         ],
@@ -452,109 +471,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
   ...BusinessDesktopRoutesWithMainLayout,
 
   // Eval routes
-  {
-    children: [
-      // Home (overview)
-      {
-        children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval'),
-              'Desktop > Eval > Overview',
-              { preloadId: 'eval' },
-            ),
-            index: true,
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval/experiments/[experimentId]'),
-              'Desktop > Eval > Experiment Detail',
-            ),
-            path: 'experiments/:experimentId',
-          },
-          // A dataset and a case are addressable on their own — a dataset need
-          // not belong to a benchmark, so a benchmark id cannot be part of
-          // their canonical path. They live in the home group to keep the eval
-          // workspace sidebar; the bench group's sidebar is benchmark-scoped
-          // and has nothing to show for a dataset that belongs to none.
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval/datasets/[datasetId]'),
-              'Desktop > Eval > Dataset Detail',
-            ),
-            path: 'datasets/:datasetId',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval/cases/[caseId]'),
-              'Desktop > Eval > Test Case Detail',
-            ),
-            path: 'cases/:caseId',
-          },
-        ],
-        element: dynamicElement(
-          () => import('@/routes/(main)/eval/(home)/_layout'),
-          'Desktop > Eval > Home > Layout',
-          { preloadId: 'eval' },
-        ),
-      },
-      // Bench routes (with dedicated sidebar)
-      {
-        children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval/bench/[benchmarkId]'),
-              'Desktop > Eval > Benchmark Detail',
-            ),
-            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
-            index: true,
-          },
-          {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]'),
-                  'Desktop > Eval > Run Detail',
-                ),
-                index: true,
-              },
-              {
-                element: dynamicElement(
-                  () =>
-                    import('@/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/cases/[caseId]'),
-                  'Desktop > Eval > Case Detail',
-                ),
-                path: 'cases/:caseId',
-              },
-            ],
-            path: 'runs/:runId',
-          },
-          {
-            // Legacy shape, kept so existing links still resolve; it redirects
-            // to the benchmark-free `/eval/datasets/:datasetId`.
-            element: dynamicElement(
-              () => import('@/routes/(main)/eval/bench/[benchmarkId]/datasets/[datasetId]'),
-              'Desktop > Eval > Dataset Detail (legacy redirect)',
-            ),
-            path: 'datasets/:datasetId',
-          },
-        ],
-        element: dynamicElement(
-          () => import('@/routes/(main)/eval/bench/[benchmarkId]/_layout'),
-          'Desktop > Eval > Bench > Layout',
-        ),
-        path: 'bench/:benchmarkId',
-      },
-    ],
-    element: dynamicElement(
-      () => import('@/routes/(main)/eval/_layout'),
-      'Desktop > Eval > Layout',
-      { preloadId: 'eval' },
-    ),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
-    path: 'eval',
-  },
+  evalRoute,
 
   ...collaborationRoutes,
 
@@ -636,9 +553,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               // Renders inside the provider layout, so only the detail body is pending.
               { fallback: delayed(<ProviderDetailSkeleton />) },
             ),
-            handle: {
-              meta: routeMeta({ icon: Settings, titleKey: 'navigation.provider' }),
-            },
+            handle: { meta: providerDetailRouteMeta },
             path: ':providerId',
           },
         ],
@@ -667,18 +582,17 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: redirectElement('/settings/credential'),
         path: 'creds',
       },
-      // Devices list and detail get their own page-shaped skeletons; the generic
-      // `:tab` routes below would load them under the form-shaped settings one.
+      // Sandbox storage moved to Docs (`/resource/sandbox-storage`).
+      { element: <LegacySandboxStorageRedirect />, path: 'drive' },
+      // Devices list and detail are explicit routes so the page title resolves
+      // without a `:tab` param; their skeleton comes from the devices tab entry.
       {
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Devices',
         ),
         handle: {
-          meta: createSettingsRouteMeta({
-            Skeleton: createSurfaceSkeleton('grid'),
-            tab: SettingsTabs.Devices,
-          }),
+          meta: createSettingsRouteMeta({ tab: SettingsTabs.Devices }),
           settingsTab: SettingsTabs.Devices,
         },
         path: 'devices',
@@ -689,10 +603,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
           'Desktop > Settings > Devices > Detail',
         ),
         handle: {
-          meta: createSettingsRouteMeta({
-            Skeleton: createSurfaceSkeleton('detail'),
-            tab: SettingsTabs.Devices,
-          }),
+          meta: createSettingsRouteMeta({ tab: SettingsTabs.Devices }),
           settingsTab: SettingsTabs.Devices,
         },
         path: 'devices/:sub',
@@ -704,6 +615,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
           'Desktop > Settings > Tab',
         ),
         handle: { meta: settingsRouteMeta },
+        loader: settingsTabLoader,
         path: ':tab',
       },
       // Tabs that need a sub-segment (e.g. /settings/messenger/discord) reuse
@@ -736,6 +648,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: deferPlatformElement(options.createHomeElement),
         handle: { meta: workspaceHomeRouteMeta },
         index: true,
+        loader: homeInboxLoader,
       },
       ...sharedMainAreaChildren,
       // Workspace settings — `/:slug/settings/*`. Dedicated layout with its
@@ -747,6 +660,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
             element:
               deferPlatformElement(options.createWorkspaceSettingsIndexElement) ??
               redirectElement('general'),
+            handle: { meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }) },
             index: true,
           },
           // Full-bleed tabs render directly inside the workspace settings
@@ -756,7 +670,12 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               () => import('@/routes/(main)/[workspaceSlug]/settings/provider'),
               'Desktop > Workspace > Settings > Provider',
             ),
-            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+            handle: {
+              meta: createWorkspaceSettingsRouteMeta(
+                WorkspaceSettingsTabs.Provider,
+                createSurfaceSkeleton('list'),
+              ),
+            },
             path: 'provider',
           },
           // Path-shaped provider deep-links (`/:slug/settings/provider/:id`)
@@ -774,7 +693,12 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               'Desktop > Workspace > Settings > Skill',
               { preloadId: 'settings' },
             ),
-            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+            handle: {
+              meta: createWorkspaceSettingsRouteMeta(
+                WorkspaceSettingsTabs.Skill,
+                createSurfaceSkeleton('list'),
+              ),
+            },
             path: 'skill',
           },
           {
@@ -783,7 +707,12 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
               'Desktop > Workspace > Settings > Connector',
               { preloadId: 'settings' },
             ),
-            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+            handle: {
+              meta: createWorkspaceSettingsRouteMeta(
+                WorkspaceSettingsTabs.Connector,
+                createSurfaceSkeleton('list'),
+              ),
+            },
             path: 'connector',
           },
           workspaceSettingsContentRoute,
@@ -828,6 +757,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       }),
     },
     index: true,
+    loader: homeInboxLoader,
   },
   // Catch-all route
   {

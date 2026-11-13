@@ -3,6 +3,7 @@ import type {
   QueryTaxonomyOptionsParams,
   QueryTaxonomyOptionsResult,
   SearchMemoryParams,
+  UserMemoryIdentityWithoutVectors,
 } from '@lobechat/types';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 
@@ -18,7 +19,6 @@ import type {
   userMemoriesExperiences,
   userMemoriesIdentities,
   userMemoriesPreferences,
-  UserMemoryIdentitiesWithoutVectors,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { buildUserMemoryWhere } from '../where';
@@ -72,10 +72,20 @@ import {
 } from './taxonomy';
 import type { SearchLayerKey, UserMemoryHybridSearchAggregatedResult } from './types';
 
+export { DEFAULT_HYBRID_SEARCH_LIMIT } from './constants';
 export { buildBm25MatchCondition } from './lexical';
 export { scoreHybridCandidates } from './scoring';
+// The storage-independent parts of the hybrid search, so another store of the
+// same Memory entries (an eval attempt's) ranks them the way the account's are.
+export {
+  hasSearchFilters,
+  HYBRID_SEARCH_OVERFETCH_MULTIPLIER,
+  shouldRunSemanticSearch,
+  toSearchTags,
+} from './searchFilters';
 export type {
   Bm25MatchFieldGroup,
+  HybridSearchLayerMeta,
   LayerBaseMemorySignals,
   RankedSearchCandidate,
   RecommendationScoreBreakdown,
@@ -83,6 +93,8 @@ export type {
   UserMemoryHybridSearchAggregatedResult,
 } from './types';
 export {
+  buildRetrievalQuery,
+  combineEmbeddings,
   normalizeUserMemorySearchQueries,
   shouldRunUserMemoryLexicalSearch,
   USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT,
@@ -413,7 +425,7 @@ export class UserMemoryQueryModel {
     embedding: number[],
     limit: number,
     params: SearchMemoryParams,
-  ): Promise<UserMemoryIdentitiesWithoutVectors[]> {
+  ): Promise<UserMemoryIdentityWithoutVectors[]> {
     return searchIdentitiesSemantic(this.context, embedding, limit, params);
   }
 

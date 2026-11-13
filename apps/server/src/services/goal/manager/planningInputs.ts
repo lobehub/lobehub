@@ -6,6 +6,7 @@ import pMap from 'p-map';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 
 import { MANAGER_SOURCE_MESSAGE_PREFIX, type ManagerContext } from './turnState';
 
@@ -104,6 +105,47 @@ export const reviewFeedback = async (
         updatedAt: c.updatedAt,
       })),
   };
+};
+
+/** Most verified Tasks one planning turn lists; the newest graph nodes win. */
+export const VERIFIED_TASK_LIMIT = 30;
+
+/**
+ * Resolved Tasks whose latest run passed independent verification.
+ *
+ * A finding's text is a model's summary of the run, and can be wrong about what
+ * was delivered. The verdict is the record, so the planning turn is told it
+ * directly and does not re-dispatch verified work on the summary's word.
+ */
+export const verifiedTasks = async (ctx: ManagerContext, graph: GoalGraphSnapshot, db = ctx.db) => {
+  const nodes = graph.nodes
+    .filter((node) => node.status === 'resolved' && node.taskId)
+    .slice(-VERIFIED_TASK_LIMIT);
+  const runs = await new TaskTopicModel(db, ctx.userId, ctx.workspaceId).findWithHandoffByTaskIds(
+    nodes.map((node) => node.taskId!),
+    10_000,
+  );
+  const latest = new Map<string, (typeof runs)[number]>();
+  for (const run of runs) {
+    const current = latest.get(run.sourceTaskId);
+    if (!current || run.seq > current.seq) latest.set(run.sourceTaskId, run);
+  }
+  const verdicts = await new VerifyRunModel(db, ctx.userId, ctx.workspaceId).findByOperations(
+    [...latest.values()].flatMap((run) => (run.operationId ? [run.operationId] : [])),
+  );
+  return nodes.flatMap((node) => {
+    const operationId = latest.get(node.taskId!)?.operationId;
+    const verdict = operationId ? verdicts.get(operationId) : undefined;
+    if (!verdict || verdict.total === 0) return [];
+    if (verdict.status !== 'passed' && verdict.status !== 'delivered') return [];
+    return [
+      {
+        checks: `${verdict.passed}/${verdict.total}`,
+        taskId: node.taskId!,
+        taskTitle: node.title,
+      },
+    ];
+  });
 };
 
 /** Whether a budget bound is reached, with the numbers behind it for `lh goal state`. */

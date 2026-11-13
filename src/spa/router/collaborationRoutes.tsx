@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router';
 
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
-import { channelRouteMeta } from '@/features/Channels/routeMeta';
+import { channelRouteMeta, channelSettingsRouteMeta } from '@/features/Channels/routeMeta';
 import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
@@ -16,6 +16,15 @@ export const collaborationRoutes: RouteObject[] = [
         }),
         handle: { meta: agentsRouteMeta },
         index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/agents/[id]'),
+          'Desktop > Agents > Contact',
+          { preloadId: 'agents' },
+        ),
+        handle: { meta: agentsRouteMeta },
+        path: ':id',
       },
     ],
     errorElement: <ErrorBoundary resetPath=".." />,
@@ -70,12 +79,16 @@ export const collaborationRoutes: RouteObject[] = [
     path: 'dashboard',
   },
 
-  // Channels are listed in the home sidebar; a thread opens beside its Channel via `?thread=`.
+  // Channels are listed in the home sidebar; a thread opens beside its Channel via `?thread=`,
+  // or as the page at `threads/:threadId`.
   {
     children: [
       // No collection page: old `/channels` links return home, where the list lives.
       { element: redirectElement('..'), index: true },
       {
+        // A thread opened as the page. The Channel page reads it from the path, so moving
+        // between the thread beside the Channel and the thread page keeps the page mounted.
+        children: [{ path: 'threads/:threadId' }],
         element: dynamicElement(
           () => import('@/routes/(main)/channels/[channelId]'),
           'Desktop > Channel',
@@ -83,6 +96,15 @@ export const collaborationRoutes: RouteObject[] = [
         ),
         handle: { meta: channelRouteMeta },
         path: ':channelId',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/channels/[channelId]/settings'),
+          'Desktop > Channel Settings',
+          { preloadId: 'channels' },
+        ),
+        handle: { meta: channelSettingsRouteMeta },
+        path: ':channelId/settings',
       },
     ],
     errorElement: <ErrorBoundary resetPath=".." />,

@@ -91,16 +91,39 @@ describe('latestUsageView', () => {
     expect(view).toMatchObject({ latest: { diskPercent: null }, reportsDisk: false });
   });
 
+  it('shows the load row only for a device that reports load averages', () => {
+    const view = latestUsageView({ data: reported });
+
+    expect(!view.loading && view.reportsLoad).toBe(true);
+  });
+
+  // Windows has no load average, so the sampler reports `load1: null`.
+  it('hides the load row for a device without load averages', () => {
+    const view = latestUsageView({
+      data: { ...reported, points: [{ ...reported.points[0], load1: null }] },
+    });
+
+    expect(view).toMatchObject({ latest: { loadPercent: null }, reportsLoad: false });
+  });
+
+  it('hides the load row when the core count is unknown', () => {
+    const view = latestUsageView({ data: { ...reported, cpuCount: null } });
+
+    expect(!view.loading && view.reportsLoad).toBe(false);
+  });
+
   it('resolves to no reading, not loading, for a silent device or a failed read', () => {
     expect(latestUsageView({ data: series(0) })).toEqual({
       latest: null,
       loading: false,
       reportsDisk: false,
+      reportsLoad: false,
     });
     expect(latestUsageView({ error: new Error('gateway down') })).toEqual({
       latest: null,
       loading: false,
       reportsDisk: false,
+      reportsLoad: false,
     });
   });
 });

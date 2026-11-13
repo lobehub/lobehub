@@ -5,6 +5,7 @@ import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type {
   QuotaAccount,
   QuotaBinding,
+  QuotaDeviceAccount,
   QuotaHistory,
   QuotaLatestReading,
   QuotaPanelSnapshot,
@@ -33,6 +34,10 @@ export interface State {
    * the matching flag is set.
    */
   quotaConfirmed: Record<string, true>;
+  /** Replica view of each agent's account choice per device, keyed `quotaDeviceAccountKey`. */
+  quotaDeviceAccountMap: Record<string, QuotaDeviceAccount>;
+  /** Replica bookkeeping of `quotaDeviceAccountMap`. */
+  quotaDeviceAccountReplica: ReplicaState<QuotaDeviceAccount>;
   /** Replica view of each account's calendar history, keyed by account id. */
   quotaHistoryMap: Record<string, QuotaHistory>;
   /** Replica bookkeeping of `quotaHistoryMap`. */
@@ -41,6 +46,11 @@ export interface State {
   quotaPanelMap: Record<string, QuotaPanelSnapshot>;
   /** Replica bookkeeping of `quotaPanelMap`. */
   quotaPanelReplica: ReplicaState<QuotaPanelSnapshot>;
+  /**
+   * Accounts whose last readings request failed, keyed by account id. Cleared
+   * by the next answer, so a view can tell a failed read from one in flight.
+   */
+  quotaReadingsFailed: Record<string, true>;
   /** Replica view of each account's newest readings, keyed by account id. */
   quotaReadingsMap: Record<string, QuotaLatestReading[]>;
   /** Replica bookkeeping of `quotaReadingsMap`. */
@@ -55,10 +65,13 @@ export const initialState: State = {
   quotaBindingsMap: {},
   quotaBindingsReplica: createReplicaState(),
   quotaConfirmed: {},
+  quotaDeviceAccountMap: {},
+  quotaDeviceAccountReplica: createReplicaState(),
   quotaHistoryMap: {},
   quotaHistoryReplica: createReplicaState(),
   quotaPanelMap: {},
   quotaPanelReplica: createReplicaState(),
   quotaReadingsMap: {},
   quotaReadingsReplica: createReplicaState(),
+  quotaReadingsFailed: {},
 };

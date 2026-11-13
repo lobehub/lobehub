@@ -1,11 +1,18 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- title and desc are caller-provided nodes under bare h3 / p
+  createStaticStyles,
+  Flexbox,
+  type ModalInstance,
+  useModalContext,
+} from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
+const fallback = createStaticStyles(({ css }) => ({
   body: css`
     h3 {
       margin: 0;
@@ -43,7 +50,7 @@ const GuideModalContent = memo<GuideModalContentProps>(
     };
 
     return (
-      <Flexbox className={styles.body}>
+      <Flexbox className={fallback.body}>
         {cover}
         <Flexbox gap={4} padding={16}>
           <h3>{title}</h3>

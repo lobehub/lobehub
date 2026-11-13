@@ -7,13 +7,13 @@ import {
   Block,
   Button,
   ContextMenuTrigger,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Text,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -22,25 +22,28 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
 import { createNotificationDetailModal } from './NotificationDetailModal';
+import { getNotificationTabRoutes } from './notificationTabRoutes';
+import { resolveNotificationAction } from './resolveNotificationAction';
 import { toNotificationPreview } from './toNotificationPreview';
 import { useNotificationAgentMeta } from './useNotificationAgentMeta';
 
-const styles = createStaticStyles(({ css }) => ({
-  unreadDot: css`
-    flex-shrink: 0;
-
-    width: 8px;
-    height: 8px;
-    margin-block-start: 7px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-  `,
-}));
+const styles = stylex.create({
+  unreadDot: {
+    flexShrink: 0,
+    width: '8px',
+    height: '8px',
+    marginBlockStart: '7px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+  },
+});
 
 const TYPE_ICON_MAP: Record<string, typeof BellIcon> = {
   image_generation_completed: ImageIcon,
@@ -79,6 +82,7 @@ const NotificationItem = memo<NotificationItemProps>(
     const { i18n, t } = useTranslation('notification');
     const { close } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
+    const appOrigin = useAppOrigin();
     const TypeIcon = TYPE_ICON_MAP[type] || BellIcon;
     const dateLocale = i18n.resolvedLanguage || i18n.language;
     const preview = useMemo(() => toNotificationPreview(content), [content]);
@@ -94,13 +98,18 @@ const NotificationItem = memo<NotificationItemProps>(
 
       if (!actionUrl) return;
 
-      if (/^https?:\/\//i.test(actionUrl)) {
-        window.open(actionUrl, '_blank', 'noopener,noreferrer');
+      const action = resolveNotificationAction(actionUrl, {
+        appOrigin,
+        desktopTabRoutes: getNotificationTabRoutes(),
+      });
+
+      if (action.type === 'external') {
+        openTrustedExternalUrl(action.url);
       } else {
-        navigate(actionUrl);
+        navigate(action.path);
         close();
       }
-    }, [actionUrl, close, handleMarkAsRead, navigate]);
+    }, [actionUrl, appOrigin, close, handleMarkAsRead, navigate]);
 
     // The row only shows a two-line preview, so a click must always give access
     // to the full body — the detail modal is the only place a content-only
@@ -148,7 +157,7 @@ const NotificationItem = memo<NotificationItemProps>(
           onClick={handleOpenDetail}
         >
           <Flexbox horizontal align="flex-start" gap={12}>
-            {!isRead && <span className={styles.unreadDot} />}
+            {!isRead && <span {...stylex.props(styles.unreadDot)} />}
             {actor ? (
               <Avatar
                 alt={actor.name}

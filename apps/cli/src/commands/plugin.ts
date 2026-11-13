@@ -5,8 +5,13 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
-export function registerPluginCommand(program: Command) {
-  const plugin = program.command('plugin').description('Manage plugins');
+export function registerLegacyPluginCommand(program: Command) {
+  const plugin = program
+    .command('legacy-plugin')
+    .alias('plugin')
+    .description(
+      'Manage legacy 1.0 plugins (user_installed_plugins). Add new MCP servers with lh connector add',
+    );
 
   // ── list ──────────────────────────────────────────────
 
@@ -40,100 +45,58 @@ export function registerPluginCommand(program: Command) {
       printTable(rows, ['ID', 'IDENTIFIER', 'TYPE', 'TITLE']);
     });
 
-  // ── create ──────────────────────────────────────────
+  // ── search ────────────────────────────────────────────
 
   plugin
-    .command('create')
-    .description('Create a new plugin (without settings)')
-    .requiredOption('-i, --identifier <id>', 'Plugin identifier')
-    .requiredOption('--manifest <json>', 'Plugin manifest JSON')
-    .option('--type <type>', 'Plugin type: plugin or customPlugin', 'plugin')
-    .option('--custom-params <json>', 'Custom parameters JSON')
+    .command('search [query]')
+    .description('Search MCP plugins in the marketplace')
+    .option('-c, --category <category>', 'Filter by category (e.g. developer, productivity)')
+    .option('-L, --limit <n>', 'Number of results', '20')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
-      async (options: {
-        customParams?: string;
-        identifier: string;
-        manifest: string;
-        type: string;
-      }) => {
-        let manifest: any;
-        let customParams: any = {};
-        try {
-          manifest = JSON.parse(options.manifest);
-        } catch {
-          log.error('Invalid manifest JSON.');
-          process.exit(1);
+      async (
+        query: string | undefined,
+        options: { category?: string; json?: string | boolean; limit?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const [result, installed] = await Promise.all([
+          client.market.getMcpList.query({
+            category: options.category,
+            pageSize: Number.parseInt(options.limit || '20', 10),
+            q: query,
+          }),
+          client.plugin.getPlugins.query(),
+        ]);
+        const installedIds = new Set(
+          (Array.isArray(installed) ? installed : []).map((p: any) => p.identifier),
+        );
+        const items = (result?.items ?? []).map((item: any) => ({
+          ...item,
+          installed: installedIds.has(item.identifier),
+        }));
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(items, fields);
           return;
         }
-        if (options.customParams) {
-          try {
-            customParams = JSON.parse(options.customParams);
-          } catch {
-            log.error('Invalid custom-params JSON.');
-            process.exit(1);
-            return;
-          }
+
+        if (items.length === 0) {
+          console.log('No plugins found.');
+          return;
         }
 
-        const client = await getTrpcClient();
-        const result = await client.plugin.createPlugin.mutate({
-          customParams,
-          identifier: options.identifier,
-          manifest,
-          type: options.type as 'plugin' | 'customPlugin',
-        });
+        const rows = items.map((p: any) => [
+          truncate(p.identifier || '', 30),
+          truncate(p.name || '', 30),
+          truncate(p.description || '', 50),
+          p.installed ? pc.green('installed') : '',
+        ]);
 
-        const r = result as any;
-        console.log(
-          `${pc.green('✓')} Created plugin ${pc.bold(r.identifier || options.identifier)}`,
-        );
-      },
-    );
-
-  // ── install ───────────────────────────────────────────
-
-  plugin
-    .command('install')
-    .description('Install a plugin')
-    .requiredOption('-i, --identifier <id>', 'Plugin identifier')
-    .requiredOption('--manifest <json>', 'Plugin manifest JSON')
-    .option('--type <type>', 'Plugin type: plugin or customPlugin', 'plugin')
-    .option('--settings <json>', 'Plugin settings JSON')
-    .action(
-      async (options: {
-        identifier: string;
-        manifest: string;
-        settings?: string;
-        type: string;
-      }) => {
-        const client = await getTrpcClient();
-
-        let manifest: any;
-        let settings: any;
-        try {
-          manifest = JSON.parse(options.manifest);
-        } catch {
-          log.error('Invalid manifest JSON.');
-          process.exit(1);
+        printTable(rows, ['IDENTIFIER', 'NAME', 'DESCRIPTION', 'STATUS']);
+        if (result?.totalCount > items.length) {
+          console.log(pc.dim(`Showing ${items.length} of ${result.totalCount} results.`));
         }
-        if (options.settings) {
-          try {
-            settings = JSON.parse(options.settings);
-          } catch {
-            log.error('Invalid settings JSON.');
-            process.exit(1);
-          }
-        }
-
-        await client.plugin.createOrInstallPlugin.mutate({
-          customParams: {},
-          identifier: options.identifier,
-          manifest,
-          settings,
-          type: options.type as 'plugin' | 'customPlugin',
-        });
-
-        console.log(`${pc.green('✓')} Installed plugin ${pc.bold(options.identifier)}`);
       },
     );
 

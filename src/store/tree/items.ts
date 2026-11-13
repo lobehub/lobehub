@@ -2,6 +2,9 @@ import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 
 import { hierarchySearchResource } from '@/features/ResourceManager/store/projection';
 import { revalidateReplica } from '@/libs/replica';
+import { compareResourceItems } from '@/store/file/slices/resource/utils';
+import { SortType } from '@/types/files';
+import type { ResourceSorter } from '@/types/resource';
 
 import type { TreeItem } from './types';
 
@@ -24,41 +27,26 @@ export const revalidateHierarchySearch = async (): Promise<void> => {
   await revalidateReplica(hierarchySearchResource);
 };
 
-const createdTime = (value?: Date | string): number => {
-  if (!value) return 0;
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? 0 : time;
-};
+/** Folders first; custom drag weights then natural names by default. */
+export const sortTreeItems = <T extends TreeItem>(
+  items: T[],
+  sorter: ResourceSorter = 'custom',
+  sortType: SortType = SortType.Asc,
+): T[] => [...items].sort((a, b) => compareResourceItems(a, b, sorter, sortType));
 
 /**
- * Folders first, then newest first inside each group.
- *
- * Every write path (`loadChildren`, `revalidate`, `reconcile`, the optimistic
- * move inserts) runs rows through this, so it — not the server — decides what
- * the sidebar shows. Ordering by name dropped a just-created row into the
- * middle of an A-Z list, which is neither where the user was looking nor what
- * the explorer shows: the resource query returns `created_at desc` and the
- * explorer's default sorter is `createdAt` / `Desc`. Name only breaks ties, and
- * rows with no timestamp (optimistic stubs, older cached payloads) sort as 0 so
- * they keep a stable A-Z tail instead of drifting.
+ * Whether a row has children to walk: every folder, plus a document the server
+ * reports something under. Only for walking and expanding — folder navigation,
+ * drop targets and folder-only actions keep checking `isFolder`.
  */
-export const sortTreeItems = <T extends TreeItem>(items: T[]): T[] => {
-  return [...items].sort((a, b) => {
-    if (a.isFolder && !b.isFolder) return -1;
-    if (!a.isFolder && b.isFolder) return 1;
-
-    const aTime = createdTime(a.createdAt);
-    const bTime = createdTime(b.createdAt);
-    if (aTime !== bTime) return bTime - aTime;
-
-    return a.name.localeCompare(b.name);
-  });
-};
+export const isExpandable = (item: Pick<TreeItem, 'hasChildren' | 'isFolder'>): boolean =>
+  item.isFolder || !!item.hasChildren;
 
 export const toTreeItem = (item: {
   createdAt?: Date | string | null;
   fileId?: string | null;
   fileType: string;
+  hasChildren?: boolean;
   id: string;
   metadata?: Record<string, any> | null;
   name: string;
@@ -73,6 +61,7 @@ export const toTreeItem = (item: {
   createdAt: item.createdAt ?? undefined,
   fileId: item.fileId,
   fileType: item.fileType,
+  hasChildren: item.hasChildren,
   id: item.id,
   isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
@@ -100,6 +89,7 @@ export const toTreeItemFromResource = (item: {
   createdAt?: Date | string | null;
   fileId?: string | null;
   fileType: string;
+  hasChildren?: boolean;
   id: string;
   metadata?: Record<string, any> | null;
   name: string;

@@ -92,6 +92,17 @@ const stripTrailingSlashes = (url: string) => {
  * throws on a non-2xx response with the service's `{ error: { code, message } }`
  * envelope flattened into the message.
  */
+/** A non-2xx answer from the Agent Mail REST API, with its HTTP status kept. */
+export class LobeMailApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'LobeMailApiError';
+    this.status = status;
+  }
+}
+
 export class LobeMailApiClient {
   readonly apiKey: string;
   readonly baseUrl: string;
@@ -120,10 +131,16 @@ export class LobeMailApiClient {
       try {
         const parsed = JSON.parse(body) as EmailApiError;
         detail = parsed.error?.message || parsed.error?.code || body;
+        // A 422 only says "Invalid request"; the issues name the field at fault.
+        const issues = parsed.error?.issues
+          ?.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message))
+          .filter(Boolean);
+        if (issues?.length) detail = `${detail} (${issues.join('; ')})`;
       } catch {
         // keep the raw body
       }
-      throw new Error(
+      throw new LobeMailApiError(
+        response.status,
         `Agent Mail ${init.method ?? 'GET'} ${path} failed: ${response.status}${
           detail ? ` — ${detail}` : ''
         }`,
@@ -244,7 +261,8 @@ export class LobeMailApiClient {
     input: { html?: string; subject: string; text?: string; to: string },
   ): Promise<EmailMessageDetail> =>
     this.request<EmailMessageDetail>(`/v1/inboxes/${encodeURIComponent(inboxId)}/messages`, {
-      body: JSON.stringify(input),
+      // The send route takes a recipient list and rejects a bare address with a 422.
+      body: JSON.stringify({ ...input, to: [input.to] }),
       method: 'POST',
     });
 

@@ -1,5 +1,4 @@
 import type { ModelPerformance, ModelUsage, TracePayload } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '../utils/timing';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -23,7 +22,10 @@ import type {
   ModelRequestOptions,
   OnFinishData,
   PullModelParams,
+  RouteAttemptIdentity,
+  TextToSpeechOptions,
   TextToSpeechPayload,
+  UsageReportContext,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
 import type {
@@ -39,8 +41,11 @@ import type {
   VideoPollingRoute,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import { getModelType } from '../utils/getModelPricing';
+import { createTimingHelpers, getDurationMs } from '../utils/timing';
 import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
+import { emulateDecision } from './decision/emulate';
 
 const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
 
@@ -120,6 +125,10 @@ export interface ModelRuntimeHooks {
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
   ) => Promise<void>;
+  beforeTextToSpeech?: (
+    payload: TextToSpeechPayload,
+    options?: TextToSpeechOptions,
+  ) => Promise<void>;
   beforeTranscribe?: (payload: ASRPayload, options?: ASROptions) => Promise<void>;
   /**
    * Called when chat() throws. Handle side effects (sanitize, log, DB record).
@@ -182,7 +191,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onEmbeddingsFinal?: (
-    data: { latencyMs?: number; usage?: ModelUsage },
+    data: { latencyMs?: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
   ) => void | Promise<void>;
 
@@ -211,8 +220,23 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onGenerateObjectFinal?: (
-    data: { speed?: ModelPerformance; usage?: ModelUsage },
+    data: { routeAttempt?: RouteAttemptIdentity; speed?: ModelPerformance; usage?: ModelUsage },
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
+  ) => void | Promise<void>;
+
+  onTextToSpeechError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Fires once after a successful synthesis. `usage` is undefined when the provider
+   * reports none, so consumers can still settle or release anything taken in
+   * `beforeTextToSpeech`.
+   */
+  onTextToSpeechFinal?: (
+    data: { latencyMs: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
+    context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
   ) => void | Promise<void>;
 
   onTranscribeError?: (
@@ -226,7 +250,7 @@ export interface ModelRuntimeHooks {
    * settle or release anything taken in `beforeTranscribe`.
    */
   onTranscribeFinal?: (
-    data: { latencyMs: number; usage?: ModelUsage },
+    data: { latencyMs: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: ASROptions; payload: ASRPayload },
   ) => void | Promise<void>;
 }
@@ -475,12 +499,15 @@ export class ModelRuntime {
       const finalOptions = needsUsageCapture
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage) => {
+            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
               usageCapture = usage;
               const speed = buildGenerateObjectSpeed(runtimeStartedAt, usage);
-              await hookOptions?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage, context);
               try {
-                await this._hooks?.onGenerateObjectFinal?.({ speed, usage }, { options, payload });
+                await this._hooks?.onGenerateObjectFinal?.(
+                  { routeAttempt: context?.routeAttempt, speed, usage },
+                  { options, payload },
+                );
               } catch (e) {
                 // Hook failures (billing, tracing) must not interfere with response completion
                 console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
@@ -552,22 +579,33 @@ export class ModelRuntime {
 
       const startTime = Date.now();
 
+      let usage: ModelUsage | undefined;
+      let routeAttempt: UsageReportContext['routeAttempt'];
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage) => {
-              await hookOptions?.onUsage?.(usage);
-              try {
-                const latencyMs = Date.now() - startTime;
-                await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
-              } catch (e) {
-                console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
-              }
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
+              usage = reported;
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      const result = await this._runtime.embeddings?.(payload, finalOptions);
+
+      if (this._hooks?.onEmbeddingsFinal) {
+        try {
+          await this._hooks.onEmbeddingsFinal(
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+        }
+      }
+
+      return result;
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {
@@ -578,8 +616,48 @@ export class ModelRuntime {
       throw error;
     }
   }
-  async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
-    return this._runtime.textToSpeech?.(payload, options);
+  async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
+    try {
+      const hookOptions = this._hooks?.beforeTextToSpeech && !options ? {} : options;
+      await this._hooks?.beforeTextToSpeech?.(payload, hookOptions);
+
+      const startTime = Date.now();
+      let usage: ModelUsage | undefined;
+      let routeAttempt: RouteAttemptIdentity | undefined;
+      const finalOptions = this._hooks?.onTextToSpeechFinal
+        ? {
+            ...hookOptions,
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
+              usage = reported;
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
+            },
+          }
+        : hookOptions;
+
+      const result = await this._runtime.textToSpeech?.(payload, finalOptions);
+
+      if (this._hooks?.onTextToSpeechFinal) {
+        try {
+          await this._hooks.onTextToSpeechFinal(
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onTextToSpeechFinal hook error:', e);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this._hooks?.onTextToSpeechError) {
+        await this._hooks.onTextToSpeechError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
   }
 
   async transcribe(payload: ASRPayload, options?: ASROptions) {
@@ -589,12 +667,14 @@ export class ModelRuntime {
 
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
+      let routeAttempt: RouteAttemptIdentity | undefined;
       const finalOptions = this._hooks?.onTranscribeFinal
         ? {
             ...hookOptions,
-            onUsage: async (reported: ModelUsage) => {
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
               usage = reported;
-              await hookOptions?.onUsage?.(reported);
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
@@ -604,7 +684,7 @@ export class ModelRuntime {
       if (this._hooks?.onTranscribeFinal) {
         try {
           await this._hooks.onTranscribeFinal(
-            { latencyMs: Date.now() - startTime, usage },
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
             { options, payload },
           );
         } catch (e) {
@@ -624,21 +704,42 @@ export class ModelRuntime {
     }
   }
 
+  /**
+   * Answer typed questions about one state. A model-bank `type: 'decision'` model on a provider
+   * with native `decide` answers natively; any other model is emulated through `generateObject`.
+   * `response.providerMetadata.lobehub.decisionMode` says which path served the call.
+   */
   async decide<Q extends DecisionQuestions>(
     payload: DecisionPayload<Q>,
     options?: DecisionOptions,
   ): Promise<DecisionResponse<Q>> {
+    const runtime = this._runtime;
+    const provider = getRuntimeProviderId(runtime);
+    // A failed model-bank lookup only loses the routing hint: treat the model as unlisted.
+    const isDecisionModel =
+      !!runtime.decide &&
+      (await getModelType(payload.model, provider, options?.pricingContext).catch(
+        () => undefined,
+      )) === 'decision';
+
     // Unlike the optional-chained passthroughs above, an unsupported provider must not
     // resolve to `undefined`: callers branch on the answers and would read it as a result.
     // Thrown before the hooks run, so there is nothing for `onDecideError` to release.
-    const decide = this._runtime.decide?.bind(this._runtime);
-    if (!decide) {
+    if (!isDecisionModel && !runtime.generateObject) {
       throw AgentRuntimeError.chat({
         error: new Error('Decision models are not supported by this provider'),
         errorType: AgentRuntimeErrorType.CapabilityNotSupported,
-        provider: getRuntimeProviderId(this._runtime),
+        provider,
       });
     }
+    const decide = (decideOptions?: DecisionOptions) =>
+      isDecisionModel
+        ? runtime.decide!(payload, decideOptions)
+        : emulateDecision(payload, decideOptions, {
+            generateObject: (objectPayload, objectOptions) =>
+              runtime.generateObject!(objectPayload, objectOptions),
+            provider,
+          });
 
     try {
       const hookOptions = this._hooks?.beforeDecide && !options ? {} : options;
@@ -647,21 +748,28 @@ export class ModelRuntime {
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
       let providerReportedCost: number | undefined;
-      const finalOptions = this._hooks?.onDecideFinal
-        ? {
-            ...hookOptions,
-            onProviderReportedCost: async (cost: number) => {
-              providerReportedCost = cost;
-              await hookOptions?.onProviderReportedCost?.(cost);
-            },
-            onUsage: async (reported: ModelUsage) => {
-              usage = reported;
-              await hookOptions?.onUsage?.(reported);
-            },
-          }
-        : hookOptions;
-
-      const response = await decide(payload, finalOptions);
+      const raw = await decide({
+        ...hookOptions,
+        onProviderReportedCost: async (cost: number) => {
+          providerReportedCost = cost;
+          await hookOptions?.onProviderReportedCost?.(cost);
+        },
+        onUsage: async (reported: ModelUsage) => {
+          usage = reported;
+          await hookOptions?.onUsage?.(reported);
+        },
+      });
+      const response = {
+        ...raw,
+        providerMetadata: {
+          ...raw.providerMetadata,
+          lobehub: {
+            ...raw.providerMetadata?.lobehub,
+            decisionMode: isDecisionModel ? 'native' : 'emulated',
+          },
+        },
+        ...((raw.usage ?? usage) && { usage: raw.usage ?? usage }),
+      } as DecisionResponse<Q>;
 
       if (this._hooks?.onDecideFinal) {
         try {
@@ -674,7 +782,7 @@ export class ModelRuntime {
         }
       }
 
-      return response as DecisionResponse<Q>;
+      return response;
     } catch (error) {
       if (this._hooks?.onDecideError) {
         await this._hooks.onDecideError(error as ChatCompletionErrorPayload, {

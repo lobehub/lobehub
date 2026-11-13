@@ -58,6 +58,16 @@ describe('task runtime canonical references', () => {
       expect(write).toHaveBeenCalledTimes(11);
     },
   );
+  it('passes a replacement model through runTask and every runTasks item', async () => {
+    const { run, runtime } = setup();
+    await runtime.runTask({ identifier: 'T-1', model: 'fixed-model', provider: 'working' });
+    expect(run).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'task_1', model: 'fixed-model', provider: 'working' }),
+    );
+    await runtime.runTasks({ identifiers: ['T-2', 'T-3'], model: 'fixed-model' });
+    expect(run).toHaveBeenCalledWith({ id: 'task_2', model: 'fixed-model' });
+    expect(run).toHaveBeenCalledWith({ id: 'task_3', model: 'fixed-model' });
+  });
   it('resolves a run ref before calling the router and returns canonical state', async () => {
     const { run, runtime } = setup();
     const result = await runtime.runTask({

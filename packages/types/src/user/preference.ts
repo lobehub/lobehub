@@ -167,6 +167,10 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * enable agent identity: give an agent its own mail address
+   */
+  enableAgentIdentity: z.boolean().optional(),
+  /**
    * enable graph runtime configuration for agents
    */
   enableAgentGraphConfig: z.boolean().optional(),
@@ -174,6 +178,10 @@ export const UserLabSchema = z.object({
    * enable artifact deployment features (publish artifacts to a hosted URL)
    */
   enableArtifactDeployment: z.boolean().optional(),
+  /**
+   * edit workspace pages together in a live collaboration room
+   */
+  enablePageCollab: z.boolean().optional(),
   /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
@@ -199,7 +207,9 @@ export const UserLabSchema = z.object({
    */
   enableImessage: z.boolean().optional(),
   /**
-   * enable markdown rendering in chat input editor
+   * @deprecated The chat input always uses the rich editor; paste conversion moved to
+   * `settings.general.enablePasteAutoConvert`. Kept so a write from an older released
+   * client is not stripped by the schema, and to seed that setting for users who had it off.
    */
   enableInputMarkdown: z.boolean().optional(),
   /**
@@ -207,8 +217,8 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
-   * show the Integrations settings page (GitHub App and the coming-soon
-   * directory); hidden until the closed loop leaves alpha
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
    */
   enableIntegrations: z.boolean().optional(),
   /**
@@ -251,12 +261,6 @@ export const UserLabSchema = z.object({
    * running there can be opened from this UI
    */
   enableDeviceTunnel: z.boolean().optional(),
-  /**
-   * opt this user's cloud-sandbox runs into a persistent workspace: the working
-   * directory survives session recycling and is shared across their topics,
-   * instead of being thrown away with the sandbox
-   */
-  enablePersistentSandbox: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;
@@ -315,6 +319,15 @@ export interface UserPreference {
    * opt-out.
    */
   integration?: UserIntegrationPreference;
+  /**
+   * Keys of the goal asks this user dismissed from the approval island, shared
+   * by every client of the account. Written only through
+   * `UserModel.addIslandDismissals`; deliberately absent from
+   * {@link UserPreferenceSchema}, because `updatePreference` sends the whole
+   * object and replaces arrays, so a stale client would overwrite keys
+   * another client added.
+   */
+  islandDismissals?: string[];
   lab?: UserLab;
   /**
    * Last active workspace id. Used on cloud to land the user back in the

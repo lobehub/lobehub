@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from 'react';
 
-import type { DashboardWidgetItem } from '@/services/dashboard';
+import type { DashboardProjectWidgetItem } from '@/services/dashboard';
 
 import BoardWidgetCard from '../Board/BoardWidgetCard';
 import { cellStyle, gridStyles } from '../Board/style';
@@ -10,7 +10,7 @@ import { resolveLayouts } from '../utils/layout';
 import WidgetDetailDrawer from '../WidgetDetail';
 
 export interface DashboardWidgetGridProps {
-  widgets: DashboardWidgetItem[];
+  widgets: DashboardProjectWidgetItem[];
 }
 
 /**
@@ -40,7 +40,7 @@ const DashboardWidgetGrid = memo<DashboardWidgetGridProps>(({ widgets }) => {
             key={widget.id}
             style={cellStyle(layouts[widget.id])}
           >
-            <BoardWidgetCard widget={widget} onOpen={setOpenWidgetId} />
+            <BoardWidgetCard view={widget.publishedView} widget={widget} onOpen={setOpenWidgetId} />
           </div>
         ))}
       </div>

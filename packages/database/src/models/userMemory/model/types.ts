@@ -5,22 +5,19 @@ import type {
   Optional,
   RelationshipEnum,
   TypesEnum,
+  UserMemoryActivity,
+  UserMemoryActivityWithoutVectors,
+  UserMemoryContext,
   UserMemoryContextObjectType,
   UserMemoryContextSubjectType,
   UserMemoryContextWithoutVectors,
+  UserMemoryExperience,
   UserMemoryExperienceWithoutVectors,
+  UserMemoryIdentity,
   UserMemoryItemSimple,
+  UserMemoryPreference,
   UserMemoryPreferenceWithoutVectors,
 } from '@lobechat/types';
-
-import type {
-  UserMemoryActivitiesWithoutVectors,
-  UserMemoryActivity,
-  UserMemoryContext,
-  UserMemoryExperience,
-  UserMemoryIdentity,
-  UserMemoryPreference,
-} from '../../../schemas';
 
 export interface BaseCreateUserMemoryParams {
   capturedAt?: Date;
@@ -121,7 +118,7 @@ export interface SearchUserMemoryWithEmbeddingParams {
 }
 
 export interface UserMemorySearchAggregatedResult {
-  activities: UserMemoryActivitiesWithoutVectors[];
+  activities: UserMemoryActivityWithoutVectors[];
   contexts: UserMemoryContextWithoutVectors[];
   experiences: UserMemoryExperienceWithoutVectors[];
   preferences: UserMemoryPreferenceWithoutVectors[];

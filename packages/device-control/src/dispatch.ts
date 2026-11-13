@@ -392,7 +392,10 @@ export const executeDeviceRpc = async (
     }
 
     case 'getGitWorkingTreeFiles': {
-      return getGitWorkingTreeFiles((params as { path: string }).path);
+      // The client persists this overlay. A failed or timed-out `git status`
+      // must reject (the gateway answers the client with nothing), not report
+      // a confirmed clean working tree — same contract as the desktop GitCtr.
+      return getGitWorkingTreeFiles((params as { path: string }).path, { throwOnError: true });
     }
 
     case 'getGitWorkingTreePatches': {

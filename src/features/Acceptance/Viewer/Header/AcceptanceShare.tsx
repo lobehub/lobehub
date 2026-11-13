@@ -4,10 +4,9 @@ import { Button, confirmModal, DropdownMenu, Icon, toast } from '@lobehub/ui';
 import { Check, Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
@@ -59,7 +58,7 @@ const AcceptanceShare = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  const appOrigin = useAppOrigin();
+  const appOrigin = useAcceptanceOrigin();
   if (!data || !canReviewAcceptance(data)) return null;
 
   const current = data.acceptance.visibility;
@@ -73,7 +72,7 @@ const AcceptanceShare = () => {
         try {
           await verifyService.setAcceptanceVisibility(acceptanceId, visibility);
           await mutate();
-          void globalMutate(isAcceptanceListKey);
+          void useVerifyStore.getState().refreshAcceptanceLists();
           toast.success(t('acceptance.share.saved'));
         } catch (error) {
           toast.error(t('acceptance.actionError'));

@@ -1,8 +1,9 @@
 import type { TaskItem } from '@lobechat/types';
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
 
 import { taskDependencies, tasks } from '../../schemas/task';
-import { depsOwnership, type TaskModelContext, taskOwnership } from './context';
+import { notTrashed } from '../../utils/softDelete';
+import { depsOwnership, seqOwnership, type TaskModelContext, taskOwnership } from './context';
 
 export const removeDependency = async (
   ctx: TaskModelContext,
@@ -42,6 +43,41 @@ export const getDependents = async (ctx: TaskModelContext, taskId: string) => {
     .where(and(eq(taskDependencies.dependsOnId, taskId), depsOwnership(ctx)));
 };
 
+/**
+ * Whether a task linked to `taskId` by a dependency, in either direction, sits
+ * outside `projectId` (`null` meaning no project). Visibility-blind, like
+ * `hasSubtaskOutsideProject`: the rule that a dependency stays inside one project
+ * holds across the workspace, so another member's private task still counts. It
+ * only answers yes or no and never exposes that task.
+ */
+export const hasDependencyOutsideProject = async (
+  ctx: TaskModelContext,
+  taskId: string,
+  projectId: string | null,
+): Promise<boolean> => {
+  const [row] = await ctx.db
+    .select({ id: tasks.id })
+    .from(taskDependencies)
+    .innerJoin(
+      tasks,
+      or(
+        and(eq(taskDependencies.taskId, taskId), eq(tasks.id, taskDependencies.dependsOnId)),
+        and(eq(taskDependencies.dependsOnId, taskId), eq(tasks.id, taskDependencies.taskId)),
+      ),
+    )
+    .where(
+      and(
+        seqOwnership(ctx),
+        notTrashed(tasks.isDeleted),
+        projectId === null
+          ? isNotNull(tasks.projectId)
+          : sql`${tasks.projectId} IS DISTINCT FROM ${projectId}`,
+      ),
+    )
+    .limit(1);
+  return !!row;
+};
+
 // Check if all dependencies of a task are completed
 export const areAllDependenciesCompleted = async (
   ctx: TaskModelContext,
@@ -56,6 +92,9 @@ export const areAllDependenciesCompleted = async (
         eq(taskDependencies.taskId, taskId),
         eq(taskDependencies.type, 'blocks'),
         ne(tasks.status, 'completed'),
+        // A dependency sitting in the recycle bin no longer blocks: it is
+        // treated as removed, the way the hard delete's FK cascade removed it.
+        notTrashed(tasks.isDeleted),
         depsOwnership(ctx),
       ),
     );
@@ -98,6 +137,9 @@ export const getUnlockedTasksForMany = async (
         inArray(taskDependencies.taskId, dependentIds),
         eq(taskDependencies.type, 'blocks'),
         ne(tasks.status, 'completed'),
+        // A dependency sitting in the recycle bin no longer blocks: it is
+        // treated as removed, the way the hard delete's FK cascade removed it.
+        notTrashed(tasks.isDeleted),
         depsOwnership(ctx),
       ),
     );

@@ -5,8 +5,6 @@ import {
   ActionIcon,
   Avatar,
   Button,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Tag,
@@ -16,6 +14,8 @@ import {
   TooltipGroup,
   useResponsive,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookmarkCheckIcon,
   BookmarkIcon,
@@ -27,13 +27,13 @@ import {
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import PublishedTime from '@/components/PublishedTime';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
+import { useDiscoverStore } from '@/store/discover';
+import { socialSelectors } from '@/store/discover/selectors';
 import { formatIntergerNumber } from '@/utils/format';
 
 import { useCategory } from '../../../(list)/agent/features/Category/useCategory';
@@ -41,12 +41,7 @@ import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import AgentForkTag from './AgentForkTag';
 import { useDetailContext } from './DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  time: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({ time: { fontSize: '12px', color: cssVar.colorTextDescription } });
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
@@ -74,12 +69,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     socialService.setAccessToken(session.accessToken);
   }
 
-  // Fetch favorite status
-  const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? favoriteKeys.status('agent', identifier) : null,
-    () => socialService.checkFavoriteStatus('agent', identifier!),
-    { revalidateOnFocus: false },
-  );
+  const useFavoriteStatus = useDiscoverStore((s) => s.useFavoriteStatus);
+  const { queryKey: favoriteKey } = useFavoriteStatus('agent', identifier, isAuthenticated);
+  const favoriteStatus = useDiscoverStore(socialSelectors.favoriteStatus(favoriteKey));
+  const setFavorite = useDiscoverStore((s) => s.setFavorite);
 
   const isFavorited = favoriteStatus?.isFavorited ?? false;
 
@@ -93,14 +86,8 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
     setFavoriteLoading(true);
     try {
-      if (isFavorited) {
-        await socialService.removeFavorite('agent', identifier);
-        toast.success(t('assistant.unfavoriteSuccess'));
-      } else {
-        await socialService.addFavorite('agent', identifier);
-        toast.success(t('assistant.favoriteSuccess'));
-      }
-      await mutateFavorite();
+      await setFavorite('agent', identifier, !isFavorited);
+      toast.success(t(isFavorited ? 'assistant.unfavoriteSuccess' : 'assistant.favoriteSuccess'));
     } catch (error) {
       console.error('Favorite action failed:', error);
       toast.error(t('assistant.favoriteFailed'));
@@ -186,7 +173,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               author
             )}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={createdAt as string} />
+            <PublishedTime date={createdAt as string} xstyle={styles.time} />
             <AgentForkTag />
             {!!forkCount && forkCount > 0 && (
               <Tag color="default" icon={<Icon icon={GitBranchIcon} />}>

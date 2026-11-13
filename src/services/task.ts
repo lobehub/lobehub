@@ -4,10 +4,11 @@ import type {
   TaskAutomationMode,
   TaskInstructionSynthesis,
   TaskIntentAnalysis,
+  TaskListFilter,
   TaskStatus,
 } from '@lobechat/types';
 
-import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient, withLlmRelay } from '@/libs/trpc/client';
 import { buildLlmExecutorDeclaration, oneShotRelay } from '@/services/llmRelay';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
@@ -22,6 +23,14 @@ class TaskService {
 
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
 
+  /**
+   * Read a task from a workspace other than the active one. Task identifiers
+   * are only unique within a workspace, so the read is pinned to the owning
+   * workspace instead of resolving against the active scope.
+   */
+  getDetailInWorkspace = async (id: string, workspaceId: string) =>
+    createWorkspaceLambdaClient(workspaceId).task.detail.query({ id });
+
   list = async (params: {
     /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */
     after?: { at: Date | string; seq: number };
@@ -29,6 +38,8 @@ class TaskService {
     automated?: boolean;
     /** Keep completed / canceled tasks only when closed within this window. */
     completedWithin?: TaskCompletedWindow;
+    /** The Tasks page filter, applied server-side before paging. */
+    filter?: TaskListFilter;
     /** Archived tasks are left out unless this is set. */
     includeArchived?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
@@ -49,7 +60,8 @@ class TaskService {
     automated?: boolean;
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
-    groupBy?: 'assignee' | 'member' | 'priority';
+    filter?: TaskListFilter;
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -57,6 +69,8 @@ class TaskService {
       statuses: string[];
     }>;
     includeArchived?: boolean;
+    /** The label group whose labels are the columns when `groupBy` is 'label'. */
+    labelGroupId?: string;
     parentTaskId?: string | null;
     projectId?: string;
     /** "My tasks" narrowing: assigned to the caller, or created by them. */
@@ -125,6 +139,8 @@ class TaskService {
     description?: string;
     editorData?: unknown;
     instruction: string;
+    /** Labels attached on creation; validated before the task is written. */
+    labelIds?: string[];
     name?: string;
     parentTaskId?: string;
     priority?: number;
@@ -167,12 +183,44 @@ class TaskService {
       name?: string;
       parentTaskId?: string | null;
       priority?: number;
+      // null takes the task out of its project
+      projectId?: string | null;
       // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
       schedulePattern?: string | null;
       // scheduleTimezone: IANA timezone for the cron expression (e.g. 'Asia/Shanghai')
       scheduleTimezone?: string | null;
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
+
+  // ── Batch (list multi-select) ──
+  // One request per action for the whole selection; the server answers with a
+  // per-task outcome (`updated` / `skipped` / `failed`).
+
+  batchUpdate = async (params: {
+    assigneeAgentId?: string | null;
+    assigneeUserId?: string | null;
+    ids: string[];
+    priority?: number;
+  }) => lambdaClient.task.batchUpdate.mutate(params);
+
+  batchUpdateStatus = async (
+    ids: string[],
+    status: 'backlog' | 'canceled' | 'completed' | 'paused',
+  ) => lambdaClient.task.batchUpdateStatus.mutate({ ids, status });
+
+  batchArchive = async (ids: string[], archived: boolean) =>
+    lambdaClient.task.batchArchive.mutate({ archived, ids });
+
+  batchDelete = async (ids: string[]) => lambdaClient.task.batchDelete.mutate({ ids });
+
+  /** Undo of a batch status / field / archive change (the `reverts` it returned). */
+  batchRevert = async (
+    reverts: Parameters<typeof lambdaClient.task.batchRevert.mutate>[0]['reverts'],
+  ) => lambdaClient.task.batchRevert.mutate({ reverts });
+
+  /** Undo of a batch delete: restore the tasks from the recycle bin. */
+  batchRestoreDeleted = async (ids: string[]) =>
+    lambdaClient.task.batchRestoreDeleted.mutate({ ids });
 
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
 
@@ -197,8 +245,10 @@ class TaskService {
   updateStatusCascade = async (id: string, status: 'canceled' | 'completed') =>
     lambdaClient.task.updateStatusCascade.mutate({ id, status });
 
-  run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
-    lambdaClient.task.run.mutate({ id, ...params });
+  run = async (
+    id: string,
+    params?: { continueTopicId?: string; model?: string; prompt?: string; provider?: string },
+  ) => lambdaClient.task.run.mutate({ id, ...params });
 
   previewSubtaskLayers = async (id: string) => lambdaClient.task.previewSubtaskLayers.query({ id });
 

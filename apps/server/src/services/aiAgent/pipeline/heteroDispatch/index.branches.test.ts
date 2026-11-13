@@ -1,4 +1,5 @@
 import { HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR } from '@lobechat/heterogeneous-agents';
+import { CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   publishAgentRuntimeInit: vi.fn(),
   readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
+  waitForVerifyPlan: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
   scheduleTimedOutDispatchConfirmation: vi.fn(),
@@ -31,7 +33,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
   CompletionLifecycle: vi.fn().mockImplementation(function () {
-    return { completeOperation: mocks.completeOperation, recordStart: mocks.recordStart };
+    return {
+      completeOperation: mocks.completeOperation,
+      recordStart: mocks.recordStart,
+      waitForVerifyPlan: mocks.waitForVerifyPlan,
+    };
   }),
 }));
 
@@ -62,7 +68,10 @@ vi.mock('@/server/modules/AgentRuntime/factory', () => ({
 
 vi.mock('@/server/services/agentQuota', () => ({
   AgentQuotaService: vi.fn(function () {
-    return { planDeviceRouting: mocks.planDeviceRouting };
+    return {
+      planDeviceRouting: mocks.planDeviceRouting,
+      resolveDeviceRowId: async (id?: string) => (id ? `row-${id}` : undefined),
+    };
   }),
 }));
 
@@ -187,6 +196,7 @@ const finalizeParams = (fields: Record<string, unknown>) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.recordStart.mockResolvedValue(true);
+  mocks.waitForVerifyPlan.mockResolvedValue(undefined);
   mocks.signHeteroOperationJWT.mockResolvedValue('op-jwt');
   mocks.signUserJWT.mockResolvedValue('user-jwt');
   mocks.finalizeHeteroDispatchError.mockResolvedValue(true);
@@ -203,7 +213,7 @@ beforeEach(() => {
 
 describe('Channel history context', () => {
   it.each([true, false])(
-    'passes history instructions only for a reserved Channel run (%s)',
+    'passes complete Channel instructions only for a reserved Channel run (%s)',
     async (channel) => {
       const { deps } = createDeps();
       const result = await dispatchHeteroAgent(
@@ -220,12 +230,59 @@ describe('Channel history context', () => {
       );
       expect(result.success).toBe(true);
       const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
-      expect((dispatched.systemContext ?? '').includes('channel history --json')).toBe(channel);
-      expect((dispatched.systemContext ?? '').includes('Only the current request')).toBe(channel);
+      expect((dispatched.systemContext ?? '').includes(CHANNEL_INSTRUCTIONS)).toBe(channel);
       const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
       expect(signed.capabilities.includes('channel:read')).toBe(channel);
     },
   );
+});
+
+describe('goal management capability', () => {
+  it.each([
+    // The user typed this turn, so "run a goal" works without the `/goal` prefix.
+    ['a chat turn the user sent', { trigger: 'chat' }, true],
+    ['a run the user scheduled', { trigger: 'scheduled', userMessageId: undefined }, true],
+    // A server-started `chat` delivery (background results) writes no user row.
+    ['a chat delivery with no user turn', { trigger: 'chat', userMessageId: undefined }, false],
+    // Goal planning and supervision turns carry no trigger: no goal spawns goals.
+    ['a goal planning turn', { trigger: undefined }, false],
+    ['a bot message', { trigger: 'bot' }, false],
+    ['an inbox wakeup', { trigger: 'inbox' }, false],
+  ])('for %s: %s', async (_, overrides, granted) => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'run a goal to polish the mailbox', ...overrides },
+      ),
+      createInput('claude-code'),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities.includes('goal:manage')).toBe(granted);
+  });
+
+  it('keeps it out of a Task run the user did not type', async () => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'Implement this step of the goal', trigger: 'chat' },
+      ),
+      createInput('claude-code', { operationTaskId: 'task_1' }),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities).not.toContain('goal:manage');
+  });
 });
 
 describe('dispatchHeteroAgent — preparation failures', () => {
@@ -535,6 +592,35 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
   });
 
+  // Regression: the plan was started without being waited for, so a dispatch that
+  // returned first lost it and the builder's `plan state` read null all run.
+  it('holds the dispatch until the verify plan has settled', async () => {
+    const { deps } = createDeps();
+    let settlePlan = () => {};
+    mocks.waitForVerifyPlan.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settlePlan = resolve;
+      }),
+    );
+
+    const dispatch = dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+    await vi.waitFor(() => expect(mocks.waitForVerifyPlan).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.dispatchAgentRun).not.toHaveBeenCalled();
+
+    settlePlan();
+    await dispatch;
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+  });
+
   it('sends the Claude Code account the agent is routed to', async () => {
     // Without it the device always spawned on its default login, so picking an
     // account in Manage accounts changed nothing for a device-bound agent.
@@ -549,7 +635,11 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
 
     await dispatchHeteroAgent(deps, createCtx(deviceCtx), createInput('claude-code'));
 
-    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', { provider: 'claude-code' });
+    // The routing is asked for this device, so its own account choice applies.
+    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', {
+      deviceId: 'row-dev-1',
+      provider: 'claude-code',
+    });
     expect(mocks.dispatchAgentRun.mock.calls[0][0].claudeAccountRouting).toEqual(routing);
   });
 
@@ -750,5 +840,82 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
     expect(mocks.signUserJWT).toHaveBeenCalledTimes(1);
     expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h');
     expect(result).toMatchObject({ success: true, token: undefined });
+  });
+
+  describe('spawn failure', () => {
+    const marketService = { market: { creds: { list: vi.fn().mockResolvedValue({ data: [] }) } } };
+    const credentialMissing =
+      'CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证后再运行 claude-code。';
+    const spawnFailure = async (ctx: ExecRunContext, detail = credentialMissing) => {
+      mocks.spawnHeteroSandbox.mockRejectedValueOnce(new Error(detail));
+      const { deps } = createDeps({ getMarketService: vi.fn().mockResolvedValue(marketService) });
+      await dispatchHeteroAgent(deps, ctx, createInput('claude-code'));
+      await vi.waitFor(() => expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalled());
+      return mocks.finalizeHeteroDispatchError.mock.calls.at(-1)![1];
+    };
+
+    /**
+     * A sender without device access on a device-bound agent is degraded to the
+     * sandbox. When the sandbox then fails, the reply must say why the run was
+     * there at all — otherwise "the sandbox is missing a credential" reads as
+     * nonsense to someone who expected the owner's device.
+     */
+    it('marks a sandbox run that replaced a denied device', async () => {
+      const params = await spawnFailure(
+        createCtx(
+          {
+            boundDeviceId: 'dev-1',
+            executionTarget: 'device',
+            heterogeneousProvider: { type: 'claude-code' },
+          },
+          { canUseDevice: false, deviceAccessReason: 'bot-external-sender' },
+        ),
+      );
+
+      expect(params).toMatchObject({
+        detail: credentialMissing,
+        dispatch: {
+          agentType: 'claude-code',
+          deviceAccessDenied: true,
+          missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+          stage: 'sandbox_spawn',
+        },
+        message: 'Hetero sandbox spawn failed',
+      });
+    });
+
+    const sandboxAgent = () =>
+      createCtx(
+        { executionTarget: 'sandbox', heterogeneousProvider: { type: 'claude-code' } },
+        { canUseDevice: false },
+      );
+
+    it('reads the credential from English wording too', async () => {
+      const params = await spawnFailure(
+        sandboxAgent(),
+        'CLAUDE_CODE_OAUTH_TOKEN is not set. Add it under Credentials and retry.',
+      );
+
+      expect(params.dispatch.missingCredential).toBe('CLAUDE_CODE_OAUTH_TOKEN');
+    });
+
+    it('does not blame device access for an agent that targets the sandbox', async () => {
+      const params = await spawnFailure(sandboxAgent());
+
+      expect(params.dispatch).toEqual({
+        agentType: 'claude-code',
+        missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+        stage: 'sandbox_spawn',
+      });
+    });
+
+    it.each([
+      'E2B_API_KEY is not set; sandbox credential configuration is incomplete',
+      'Gateway Timeout',
+    ])('names no credential for a failure that is not about one (%s)', async (detail) => {
+      const params = await spawnFailure(sandboxAgent(), detail);
+
+      expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
+    });
   });
 });

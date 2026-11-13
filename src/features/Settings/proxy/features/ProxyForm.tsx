@@ -6,7 +6,7 @@ import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/form';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import ProxySkeleton from '@/components/Skeleton/Settings/tabs/Proxy';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { desktopSettingsService } from '@/services/electron/settings';
@@ -192,19 +192,8 @@ const ProxyForm = () => {
     }
   }, [proxySettings, testUrl, form, t]);
 
-  // Enable, basic settings (type/server/port), auth (credentials hidden until
-  // enabled) and connection test groups, as in the loaded form.
-  if (isLoading)
-    return (
-      <SettingsSectionSkeleton
-        groups={[
-          { rows: 1, titleWidth: 96 },
-          { rows: 3, titleWidth: 112 },
-          { rows: 1, titleWidth: 128 },
-          { rows: 1, titleWidth: 120 },
-        ]}
-      />
-    );
+  // Same groups the route and chunk fallbacks draw.
+  if (isLoading) return <ProxySkeleton.Body />;
 
   const enableProxyGroup: FormGroupItem<NetworkProxySettings> = {
     children: [

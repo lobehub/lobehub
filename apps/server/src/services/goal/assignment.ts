@@ -12,10 +12,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 
 import { isResourceAuthorOrAdmin } from '../resourcePermission';
+import { TaskService } from '../task';
 import { resolveMissingTaskModelConfig } from '../task/modelSnapshot';
 import { goalTaskAgentId } from './GoalService/utils';
 import { GoalManagerService } from './manager';
 import { assertGoalModelRunnable, goalTaskModelOverride } from './modelConfig';
+import { assertGoalAgentVisibilityCompat } from './visibility';
 
 const goalNotFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
@@ -90,21 +92,24 @@ export class GoalAssignmentService {
    * an admin acting on someone else's goal would be unreachable to every later
    * planning turn, or silently skipped as a missing executor.
    */
-  assertUsableForGoal = async (goal: Pick<GoalItem, 'userId'> | string, agentId: string) => {
+  assertUsableForGoal = async (
+    goal: Pick<GoalItem, 'userId' | 'visibility' | 'workspaceId'> | string,
+    agentId: string,
+  ) => {
     await this.assertUsable(agentId);
-    const ownerId =
-      typeof goal === 'string' ? (await this.goalModel.findById(goal))?.userId : goal.userId;
-    if (!ownerId) throw goalNotFound();
-    if (ownerId === this.userId) return;
-    await assertAgentUsableBy(this.db, agentId, {
-      userId: ownerId,
-      workspaceId: this.workspaceId,
-    }).catch(() => {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: "The goal's owner cannot use this Agent; pick one they have access to",
+    const row = typeof goal === 'string' ? await this.goalModel.findById(goal) : goal;
+    if (!row) throw goalNotFound();
+    if (row.userId !== this.userId)
+      await assertAgentUsableBy(this.db, agentId, {
+        userId: row.userId,
+        workspaceId: this.workspaceId,
+      }).catch(() => {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: "The goal's owner cannot use this Agent; pick one they have access to",
+        });
       });
-    });
+    await assertGoalAgentVisibilityCompat(this.db, row, [agentId]);
   };
 
   /**
@@ -454,7 +459,44 @@ export class GoalAssignmentService {
    */
   newTaskAssignment = async (goal: GoalItem) => {
     const assigneeAgentId = await this.resolveTaskAssignee(goal);
-    return { assigneeAgentId, model: liveTaskModelOverride(goal, assigneeAgentId) };
+    return {
+      assigneeAgentId,
+      assigneeUserId: await this.resolveTaskOwner(goal, assigneeAgentId),
+      model: liveTaskModelOverride(goal, assigneeAgentId),
+    };
+  };
+
+  /**
+   * The member a coordinator-created Task is assigned to: whoever created the
+   * goal.
+   *
+   * `createTask` rejects an unassignable member, and a creator can stop being
+   * one while their goal keeps running (they left the Workspace or lost its
+   * Task permission). The goal must still be able to create work, so such a
+   * Task goes unassigned. The same applies when someone else drives the goal
+   * and the Task would be private, from the goal or from its executor, because a
+   * private Task can only be assigned to whoever created it.
+   */
+  resolveTaskOwner = async (
+    goal: Pick<GoalItem, 'userId' | 'visibility'>,
+    executorId?: string,
+  ): Promise<string | undefined> => {
+    if (goal.userId !== this.userId) {
+      if (goal.visibility === 'private') return undefined;
+      const executor = executorId
+        ? await this.agentModel.getAgentSnapshotForTaskCreate(executorId)
+        : undefined;
+      if (executor?.visibility === 'private') return undefined;
+    }
+    try {
+      await new TaskService(this.db, this.userId, this.workspaceId).assertAssigneeUserAssignable(
+        goal.userId,
+      );
+      return goal.userId;
+    } catch (error) {
+      if (error instanceof TRPCError && error.code === 'NOT_FOUND') return undefined;
+      throw error;
+    }
   };
 
   /**

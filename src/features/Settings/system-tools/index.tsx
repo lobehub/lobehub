@@ -9,13 +9,13 @@ import CliTestSection from './features/CliTestSection';
 import ShellSection from './features/ShellSection';
 import ToolDetectorSection from './features/ToolDetectorSection';
 
-const Page = () => {
+const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => {
   const { t } = useTranslation('setting');
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return (
     <>
-      <SettingHeader title={t('tab.systemTools')} />
+      {showSettingHeader && <SettingHeader title={t('tab.systemTools')} />}
       <ShellSection />
       <ToolDetectorSection />
       <AppEnvironmentSection />

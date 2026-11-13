@@ -7,7 +7,7 @@ import type {
   MessageTransport,
   StreamSink,
 } from '../transport';
-import { TOOL_CALL_REPEAT_LIMIT } from '../utils/toolCallRepeatGuard';
+import { TOOL_CALL_BURST_LIMIT, TOOL_CALL_REPEAT_LIMIT } from '../utils/toolCallRepeatGuard';
 import {
   finalizeCallLlmTurn,
   persistInterruptedCallLlmResult,
@@ -20,6 +20,7 @@ const createMessageTransport = (): MessageTransport => ({
   deleteMessage: vi.fn(),
   findById: vi.fn(),
   findToolMessageIdByToolCallId: vi.fn(),
+  getToolMessage: vi.fn(),
   query: vi.fn(),
   update: vi.fn().mockResolvedValue(undefined),
   updatePluginState: vi.fn(),
@@ -181,6 +182,117 @@ describe('callLlmFinalizer', () => {
     });
 
     expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
+  });
+
+  const createToolBatch = (count: number, argumentsFor: (index: number) => string) => {
+    const toolsCalling = Array.from({ length: count }, (_, index) => ({
+      apiName: 'get_users_posts',
+      arguments: argumentsFor(index),
+      id: `call-${index}`,
+      identifier: 'twitter',
+      type: 'default' as const,
+    }));
+    return {
+      toolCalls: toolsCalling.map((tool) => ({
+        function: { arguments: tool.arguments, name: tool.apiName },
+        id: tool.id,
+        type: 'function' as const,
+      })),
+      toolsCalling,
+    };
+  };
+
+  it('blocks a turn that repeats one tool call limit times within the same response', async () => {
+    const messages = createMessageTransport();
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-7',
+      events: [],
+      host: createHost(messages),
+      model: 'mimo',
+      output: createOutput({
+        content: '',
+        ...createToolBatch(TOOL_CALL_REPEAT_LIMIT, () => '{"id":"acme_ai","max_results":100}'),
+      }),
+      provider: 'openrouter',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.nextContext).toMatchObject({
+      payload: { hasToolsCalling: false, toolsCalling: [] },
+      phase: 'llm_result',
+    });
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-7',
+      expect.objectContaining({
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        tools: undefined,
+      }),
+    );
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
+  });
+
+  it('blocks a turn that requests more distinct tool calls than the burst limit', async () => {
+    const messages = createMessageTransport();
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    const count = TOOL_CALL_BURST_LIMIT + 1;
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-8',
+      events: [],
+      host: createHost(messages),
+      model: 'mimo',
+      output: createOutput({
+        content: '',
+        ...createToolBatch(count, (index) => `{"query":"topic ${index}"}`),
+      }),
+      provider: 'openrouter',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.nextContext).toMatchObject({
+      payload: { hasToolsCalling: false, toolsCalling: [] },
+      phase: 'llm_result',
+    });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        result: expect.objectContaining({ finishReason: 'tool_call_repeat_limit' }),
+        type: 'llm_result',
+      }),
+    );
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-8',
+      expect.objectContaining({
+        content: `Stopped after ${count} tool calls were requested in one turn (limit ${TOOL_CALL_BURST_LIMIT}).`,
+        tools: undefined,
+      }),
+    );
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBe(true);
+  });
+
+  it('lets a fan-out at the burst limit through to the tools', async () => {
+    const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });
+    const batch = createToolBatch(TOOL_CALL_BURST_LIMIT, (index) => `{"query":"topic ${index}"}`);
+
+    const result = await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-9',
+      events: [],
+      host: createHost(),
+      model: 'mimo',
+      output: createOutput({ content: '', ...batch }),
+      provider: 'openrouter',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(result.nextContext).toMatchObject({
+      payload: { hasToolsCalling: true, toolsCalling: batch.toolsCalling },
+      phase: 'llm_result',
+    });
+    expect(result.newState.toolCallRepeatGuard?.stoppedByRepeatLimit).toBeUndefined();
   });
 
   it('preserves user cancellation when an aborted stream emits the limit-th repeated tool call', async () => {
@@ -522,7 +634,7 @@ describe('callLlmFinalizer', () => {
           { text: 'Image answer', type: 'text' },
           { image: 'https://example.com/image.png', type: 'image' },
         ]),
-        metadata: { isMultimodal: true },
+        metadata: { interruptedMidStream: false, isMultimodal: true },
         reasoning: {
           content: JSON.stringify([
             { text: 'Visual reasoning', type: 'text' },
@@ -564,10 +676,13 @@ describe('callLlmFinalizer', () => {
       state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
     });
 
+    // Before: a Stop mid-stream persisted the partial with no stopped marker,
+    // so after a refresh the turn read as finished. After: it carries one.
     expect(messages.update).toHaveBeenCalledWith(
       'assistant-1',
       expect.objectContaining({
-        metadata: { finishType: 'abort' },
+        content: 'Partial answer',
+        metadata: { finishType: 'abort', interruptedMidStream: true },
         observationId: 'observation-1',
         reasoning: { content: 'Reasoning', duration: 120, signature: 'signature-1' },
         traceId: 'trace-1',
@@ -580,6 +695,49 @@ describe('callLlmFinalizer', () => {
       },
       phase: 'human_abort',
     });
+  });
+
+  it('keeps the placeholder and marks a turn stopped before its first token', async () => {
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'claude',
+      output: createOutput({ content: '', finishReason: 'abort', thinkingContent: '' }),
+      provider: 'anthropic',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    const [, update] = vi.mocked(messages.update).mock.calls[0];
+    expect(update.content).toBeUndefined();
+    expect(update.metadata).toMatchObject({ interruptedMidStream: true });
+  });
+
+  // A row stopped earlier keeps `interruptedMidStream` when it is written again,
+  // because the message model merges metadata. A continuation that finished
+  // normally therefore still read as stopped.
+  //
+  // Before: the marker survived. After: a normal final write clears it.
+  it('clears the stopped marker when the row then finishes normally', async () => {
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'claude',
+      output: createOutput({ finishReason: 'stop' }),
+      provider: 'anthropic',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    const [, update] = vi.mocked(messages.update).mock.calls[0];
+    expect(update.content).toBe('Answer');
+    expect(update.metadata).toMatchObject({ interruptedMidStream: false });
   });
 
   it('records a client-executed attempt and its estimated usage on the message', async () => {
