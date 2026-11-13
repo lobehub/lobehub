@@ -11,6 +11,7 @@ import { CodexAppServerConnectionError } from './CodexAppServerClient';
 import type { CodexRunProvenance } from './environment';
 import { isSameCodexRunProvenance, withCodexThreadEnv } from './environment';
 import type {
+  ThreadItem,
   ThreadResumeParams,
   ThreadResumeResponse,
   ThreadStartParams,
@@ -33,6 +34,25 @@ const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
 /** An interrupted turn settled within 250 ms in probes; this bounds slow tool teardown. */
 const RESUME_SETTLE_DELAY_MS = 200;
 const RESUME_SETTLE_TIMEOUT_MS = 10_000;
+/**
+ * Longest a started turn may go without any native notification while no tool or user input
+ * is pending. Codex retries a model stream that is silent for 5 minutes (`stream_idle_timeout_ms`)
+ * and reports each retry as an `error` notification, so 10 minutes of total silence means the
+ * turn is wedged rather than slow.
+ */
+export const CODEX_TURN_IDLE_TIMEOUT_MS = 10 * 60_000;
+/** Native items whose work can run longer than the idle limit without any notification. */
+const SILENT_WAIT_ITEM_TYPES = new Set<ThreadItem['type']>([
+  'collabAgentToolCall',
+  'commandExecution',
+  'contextCompaction',
+  'dynamicToolCall',
+  'fileChange',
+  'imageGeneration',
+  'mcpToolCall',
+  'sleep',
+  'webSearch',
+]);
 
 const toThreadResumeParams = (threadId: string, params: ThreadStartParams): ThreadResumeParams => {
   const resumeParams = { ...params };
@@ -47,10 +67,14 @@ interface ActiveTurn {
   adapter: CodexAppServerAdapter;
   askUserBridge?: AskUserBridge;
   completion: Promise<void>;
+  idleTimer?: ReturnType<typeof setTimeout>;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
+  lastNotificationMethod?: string;
   notificationError?: Error;
   notificationQueue: Promise<void>;
+  /** Open silent-wait items and user-input requests that may run without notifications. */
+  openWaits: Set<string>;
   operationId: string;
   resolve: () => void;
   terminalNotificationReceived: boolean;
@@ -163,6 +187,7 @@ export class CodexThreadSession {
         completion,
         interruptRequested: this.interruptRequested,
         notificationQueue: Promise.resolve(),
+        openWaits: new Set(),
         operationId: options.operationId,
         resolve: resolveTurn,
         terminalNotificationReceived: false,
@@ -179,6 +204,7 @@ export class CodexThreadSession {
         await this.requestInterrupt(activeTurn);
       if (this.closedByHost) return;
       this.emitStatus('running', options.operationId);
+      this.armIdleWatchdog(activeTurn);
 
       await activeTurn.completion;
       await activeTurn.notificationQueue;
@@ -207,6 +233,7 @@ export class CodexThreadSession {
       this.emitStatus('error', options.operationId);
       throw error;
     } finally {
+      if (this.activeTurn) clearTimeout(this.activeTurn.idleTimer);
       this.activeTurn?.askUserBridge?.cancelAll('session_ended');
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
@@ -415,10 +442,20 @@ export class CodexThreadSession {
       activeTurn.transportInterrupted
     )
       return { answers: {} };
-    const answer = await bridge.pending(
-      { arguments: args, toolCallId: request.itemId },
-      request.autoResolutionMs ? { timeoutMs: request.autoResolutionMs } : {},
-    );
+    // A human answer can take longer than the idle limit; the native turn is silent meanwhile.
+    const waitKey = `userInput:${request.itemId}`;
+    activeTurn.openWaits.add(waitKey);
+    this.armIdleWatchdog(activeTurn);
+    let answer: Awaited<ReturnType<AskUserBridge['pending']>>;
+    try {
+      answer = await bridge.pending(
+        { arguments: args, toolCallId: request.itemId },
+        request.autoResolutionMs ? { timeoutMs: request.autoResolutionMs } : {},
+      );
+    } finally {
+      activeTurn.openWaits.delete(waitKey);
+      this.armIdleWatchdog(activeTurn);
+    }
     activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
       this.emitEvents(
         activeTurn.adapter.completeUserInput(request.itemId, answer),
@@ -473,6 +510,9 @@ export class CodexThreadSession {
         activeTurn.askUserBridge?.cancelAll('session_ended');
       }
     }
+    activeTurn.lastNotificationMethod = method;
+    this.trackSilentItem(method, params, activeTurn);
+    this.armIdleWatchdog(activeTurn);
 
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(async () => {
@@ -488,6 +528,69 @@ export class CodexThreadSession {
         activeTurn.resolve();
       });
     return activeTurn.notificationQueue;
+  }
+
+  private trackSilentItem(method: string, params: unknown, activeTurn: ActiveTurn): void {
+    if (method !== 'item/started' && method !== 'item/completed') return;
+    if (!isRecord(params) || !isRecord(params.item)) return;
+    const item = params.item as ThreadItem;
+    if (!SILENT_WAIT_ITEM_TYPES.has(item.type) || typeof item.id !== 'string') return;
+    const waitKey = `item:${item.id}`;
+    if (method === 'item/started') activeTurn.openWaits.add(waitKey);
+    else activeTurn.openWaits.delete(waitKey);
+  }
+
+  /**
+   * Restarts the no-activity deadline of a started turn.
+   *
+   * NOTICE:
+   * The app-server process can stay alive while a turn never produces a model or tool event
+   * (seen after `task_started` + the user message item, with nothing else for 25 minutes). The
+   * process heartbeat alone keeps such a run looking `running`, so the turn itself is bounded.
+   */
+  private armIdleWatchdog(activeTurn: ActiveTurn): void {
+    clearTimeout(activeTurn.idleTimer);
+    activeTurn.idleTimer = undefined;
+    if (
+      !activeTurn.turnId ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.transportInterrupted ||
+      activeTurn.notificationError ||
+      activeTurn.openWaits.size > 0
+    )
+      return;
+    activeTurn.idleTimer = setTimeout(
+      () => this.failIdleTurn(activeTurn),
+      CODEX_TURN_IDLE_TIMEOUT_MS,
+    );
+  }
+
+  private failIdleTurn(activeTurn: ActiveTurn): void {
+    if (
+      this.activeTurn !== activeTurn ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.transportInterrupted
+    )
+      return;
+    console.warn('Stopping a Codex turn with no native activity:', {
+      lastNotificationMethod: activeTurn.lastNotificationMethod,
+      operationId: activeTurn.operationId,
+      threadId: this.threadId,
+      timeoutMs: CODEX_TURN_IDLE_TIMEOUT_MS,
+      turnId: activeTurn.turnId,
+    });
+    this.recordNotificationError(
+      activeTurn,
+      new Error(
+        `Codex produced no model or tool activity for ${CODEX_TURN_IDLE_TIMEOUT_MS / 60_000} minutes, so the turn was stopped.`,
+      ),
+    );
+    activeTurn.askUserBridge?.cancelAll('session_ended');
+    // A wedged app-server may never answer the interrupt, so the run does not wait for it.
+    void this.requestInterrupt(activeTurn).catch((error) => {
+      console.error('Failed to interrupt an idle Codex turn:', error);
+    });
+    activeTurn.resolve();
   }
 
   private isCurrentTurnNotification(
