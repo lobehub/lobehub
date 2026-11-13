@@ -1,6 +1,9 @@
 import { type AgentState } from '@lobechat/agent-runtime';
+import type { AgentDocumentIndexFacts } from '@lobechat/context-engine/agent-document';
 import {
   type AgentShareVisitorContext,
+  type CancelVirtualSubAgentParams,
+  type CancelVirtualSubAgentResult,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
@@ -41,7 +44,21 @@ export interface RuntimeExecutorContext {
    * tools: [] for an intermediate graph node and continue to another node.
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
+  /**
+   * Receives the agent-document index facts a step froze (first sight, or a
+   * document that appeared mid-run). `executeStep` writes them into
+   * `binding.agentDocumentIndex` of the state it saves, so later steps render
+   * the same index rows and keep the prompt-cache prefix.
+   */
+  bindAgentDocumentIndex?: (facts: AgentDocumentIndexFacts) => void;
   botContext?: unknown;
+  /**
+   * Callback to stop a running `lobe-agent.callSubAgent` child dispatched by
+   * this run's agent (`lobe-agent.cancelSubAgent`).
+   */
+  cancelVirtualSubAgent?: (
+    params: CancelVirtualSubAgentParams,
+  ) => Promise<CancelVirtualSubAgentResult>;
   /**
    * Callback to fork a group member ("call agent member") under a
    * `lobe-group-management` tool call. Injected by AiAgentService; powers the

@@ -618,8 +618,8 @@ export class FlatListBuilder {
     processedIds: Set<string>,
     allMessages: Message[],
   ): FlatListWork {
-    // A text-only wake-up never hosts a follow-up, so a run ending on one is
-    // continued from the step before it.
+    // A text-only wake-up never hosts the run's next step, so a run ending on
+    // one is continued from the step before it.
     const lastAssistant =
       assistantChain.findLast((assistant) => !isToollessSignalTurn(assistant)) ??
       assistantChain.at(-1);
@@ -630,7 +630,7 @@ export class FlatListBuilder {
     yield this.continueGroupMemberReplies(assistantChain, flatList, processedIds, allMessages);
 
     const parentIds = [
-      ...(lastAssistant ? [lastAssistant.id] : []),
+      ...this.messageCollector.collectFollowUpHostIds(assistantChain, lastAssistant),
       ...allToolMessages.map((toolMessage) => toolMessage.id),
     ];
 

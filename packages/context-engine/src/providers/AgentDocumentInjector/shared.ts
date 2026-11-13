@@ -95,6 +95,70 @@ export function withRunStartedAt<T extends AgentDocumentFilterContext>(
     : { ...context, runStartedAt: lastUserMessage.createdAt };
 }
 
+/** The values one progressive-index row shows for a document. */
+export interface AgentDocumentIndexFact {
+  contentCharCount: number;
+  /** ISO timestamp; absent when the document had none. */
+  updatedAt?: string;
+}
+
+/** Progressive-index facts keyed by document id, as one run first saw them. */
+export type AgentDocumentIndexFacts = Record<string, AgentDocumentIndexFact>;
+
+const isProgressive = (doc: AgentContextDocument) =>
+  (doc.policyLoad ?? 'progressive') === 'progressive';
+
+const toIsoTimestamp = (at: Date | string | undefined): string | undefined => {
+  if (!at) return undefined;
+  const date = typeof at === 'string' ? new Date(at) : at;
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+};
+
+/**
+ * Pin the SIZE / UPDATED values (and the recency order derived from them) of
+ * progressive-index rows to what the run first saw.
+ *
+ * The `<agent_documents_index>` block sits at the very front of the prompt and
+ * is rebuilt every step. When the agent edits one of its own documents
+ * mid-run, the row's size and date change, so every cached token behind the
+ * block is written again — on a long conversation one `modifyNodes` re-writes
+ * the whole cached history. The index is only a directory —
+ * the edit itself is visible to the model through the tool result — so the row
+ * may lag behind until the next run.
+ *
+ * Only these display facts are pinned. The document list stays live (new and
+ * deleted documents still show), and `always` documents keep their current
+ * content. A document first seen mid-run is frozen from that step on.
+ *
+ * @returns the documents to render, and `facts` (the input plus every newly
+ * seen document) when it grew — the host persists it for the next step.
+ */
+export function freezeAgentDocumentIndexFacts(
+  docs: AgentContextDocument[],
+  frozen: AgentDocumentIndexFacts | undefined,
+): { documents: AgentContextDocument[]; facts?: AgentDocumentIndexFacts } {
+  let added: AgentDocumentIndexFacts | undefined;
+
+  const documents = docs.map((doc) => {
+    if (!doc.id || !isProgressive(doc)) return doc;
+
+    const fact = frozen?.[doc.id];
+    if (fact) {
+      return { ...doc, contentCharCount: fact.contentCharCount, updatedAt: fact.updatedAt };
+    }
+
+    added ??= {};
+    const updatedAt = toIsoTimestamp(doc.updatedAt);
+    added[doc.id] = {
+      contentCharCount: doc.contentCharCount ?? doc.content?.length ?? 0,
+      ...(updatedAt && { updatedAt }),
+    };
+    return doc;
+  });
+
+  return { documents, ...(added && { facts: { ...frozen, ...added } }) };
+}
+
 /**
  * Filter documents by load rules (always, by-keywords, by-regexp, by-time-range)
  */

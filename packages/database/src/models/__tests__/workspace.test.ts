@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -401,6 +401,82 @@ describe('WorkspaceModel', () => {
     await expect(new WorkspaceModel(serverDB, outsiderId).listUserWorkspaces()).resolves.toEqual(
       [],
     );
+  });
+
+  it('lists the same rows, roles and order as the former two-query lookup', async () => {
+    // The pre-join implementation: the caller's live memberships, then their
+    // workspaces newest-updated first, each tagged with the membership role.
+    const twoQueryLookup = async (userId: string) => {
+      const memberships = await serverDB.query.workspaceMembers.findMany({
+        where: and(eq(workspaceMembers.userId, userId), isNull(workspaceMembers.deletedAt)),
+      });
+      if (memberships.length === 0) return [];
+      const results = await serverDB.query.workspaces.findMany({
+        orderBy: [desc(workspaces.updatedAt)],
+        where: inArray(
+          workspaces.id,
+          memberships.map((m) => m.workspaceId),
+        ),
+      });
+      return results.map((ws) => ({
+        ...ws,
+        role: memberships.find((m) => m.workspaceId === ws.id)!.role,
+      }));
+    };
+
+    // Several workspaces, each with several members, distinct updatedAt values,
+    // a soft-deleted membership, one workspace the member never joined and one
+    // workspace with no members at all.
+    const ids = ['eq-ws-a', 'eq-ws-b', 'eq-ws-c'];
+    for (const [index, id] of ids.entries()) {
+      await createWorkspace(id);
+      await serverDB
+        .update(workspaces)
+        .set({ updatedAt: new Date(Date.UTC(2026, 0, [2, 3, 1][index])) })
+        .where(eq(workspaces.id, id));
+    }
+    await serverDB
+      .update(workspaceMembers)
+      .set({ role: 'viewer' })
+      .where(
+        and(eq(workspaceMembers.workspaceId, 'eq-ws-b'), eq(workspaceMembers.userId, memberId)),
+      );
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(workspaceMembers.workspaceId, 'eq-ws-c'), eq(workspaceMembers.userId, memberId)),
+      );
+    await serverDB.insert(workspaces).values({
+      id: 'eq-ws-owner-only',
+      name: 'owner only',
+      primaryOwnerId: ownerId,
+      slug: 'eq-ws-owner-only',
+    });
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'owner', userId: ownerId, workspaceId: 'eq-ws-owner-only' });
+    await serverDB.insert(workspaces).values({
+      id: 'eq-ws-empty',
+      name: 'empty',
+      primaryOwnerId: ownerId,
+      slug: 'eq-ws-empty',
+    });
+
+    for (const userId of [ownerId, memberId, secondOwnerId, outsiderId]) {
+      const expected = await twoQueryLookup(userId);
+      await expect(new WorkspaceModel(serverDB, userId).listUserWorkspaces()).resolves.toEqual(
+        expected,
+      );
+    }
+    await expect(
+      new WorkspaceModel(serverDB, memberId).listUserWorkspaces(),
+    ).resolves.toMatchObject([
+      { id: 'eq-ws-b', role: 'viewer' },
+      { id: 'eq-ws-a', role: 'member' },
+    ]);
+    expect(await new WorkspaceModel(serverDB, ownerId).listUserWorkspaces()).toHaveLength(4);
+    expect(await new WorkspaceModel(serverDB, outsiderId).listUserWorkspaces()).toEqual([]);
   });
 
   it('falls back to viewer role when a workspace has no matching membership row', async () => {

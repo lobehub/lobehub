@@ -2,6 +2,8 @@ import type { ExecAgentResult, ExecSubAgentParams } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
+
 import { AiAgentService } from '../index';
 
 // Mock trusted client to avoid server-side env access
@@ -13,6 +15,7 @@ vi.mock('@/libs/trusted-client', () => ({
 
 // Mock ThreadModel
 const mockThreadModel = {
+  attachRunOperation: vi.fn(),
   claimForRun: vi.fn(),
   create: vi.fn(),
   findById: vi.fn(),
@@ -21,6 +24,11 @@ const mockThreadModel = {
 
 const mockOperationFindById = vi.fn();
 const mockFindMessagePlugin = vi.fn();
+const mockQueueSubAgentSteer = vi.fn();
+
+vi.mock('../steerQueue/subAgent', () => ({
+  queueSubAgentSteer: (...args: unknown[]) => mockQueueSubAgentSteer(...args),
+}));
 
 vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(function () {
@@ -309,14 +317,45 @@ describe('AiAgentService.execSubAgent', () => {
       );
     });
 
+    it('keeps a callSubAgent child inside its eval attempt', async () => {
+      const execAgentSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({ operationId: 'op-child', success: true } as any);
+      const context = { sessionDate: '2026-07-24', timezone: 'America/New_York' };
+      const runtime = {
+        caseId: 'case-7',
+        memory: { fixtureHash: 'hash', scopeId: 'scope-1' },
+        toolForwarding: { twitter: { endpoint: 'http://mock/twitter' } },
+      };
+
+      await service.execVirtualSubAgent({
+        agentId: 'agent-1',
+        eval: { context, maxSteps: 20, runtime },
+        instruction: 'collect the posts',
+        parentMessageId: 'tool-msg-1',
+        parentOperationId: 'parent-op-1',
+        topicId: 'topic-1',
+      } as any);
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({ suppressSignal: true }),
+          evalContext: context,
+          evalRuntime: runtime,
+          maxSteps: 20,
+        }),
+      );
+    });
+
     it('should store operationId and startedAt in Thread metadata', async () => {
       vi.spyOn(service, 'execAgent').mockResolvedValue(createSuccessfulExecAgentResult());
 
       await service.execSubAgent(createSubAgentParams());
 
       // Second update call should be storing operationId and startedAt in metadata
-      expect(mockThreadModel.update).toHaveBeenCalledWith('thread-123', {
-        metadata: { operationId: 'op-123', startedAt: expect.any(String) },
+      expect(mockThreadModel.attachRunOperation).toHaveBeenCalledWith('thread-123', {
+        operationId: 'op-123',
+        startedAt: expect.any(String),
       });
     });
 
@@ -492,7 +531,7 @@ describe('AiAgentService.execSubAgent', () => {
       expect(mockThreadModel.claimForRun).toHaveBeenCalledWith(
         'thread-old',
         { operationId: 'op-old', status: ThreadStatus.Failed },
-        { startedAt: expect.any(String) },
+        { runUsageBaseline: {}, startedAt: expect.any(String) },
       );
       expect(execAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -544,16 +583,179 @@ describe('AiAgentService.execSubAgent', () => {
       });
     });
 
+    describe('while its previous run is still going', () => {
+      beforeEach(() => {
+        mockThreadModel.findById.mockResolvedValue({
+          agentId: 'agent-1',
+          id: 'thread-old',
+          metadata: { operationId: 'op-old' },
+          sourceMessageId: 'tool-msg-1',
+          status: ThreadStatus.Processing,
+          topicId: 'topic-1',
+          type: ThreadType.Isolation,
+        });
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-old' ? { status: 'running' } : { trigger: 'cli' },
+        );
+        mockQueueSubAgentSteer.mockResolvedValue({ queued: true });
+      });
+
+      it('queues the instruction for the running sub-agent instead of refusing it', async () => {
+        const execAgentSpy = vi.spyOn(service, 'execAgent');
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(mockQueueSubAgentSteer).toHaveBeenCalledWith(
+          { db: mockDb, userId, workspaceId: undefined },
+          {
+            agentId: 'agent-1',
+            groupId: undefined,
+            instruction: 'Hand over what you found so far',
+            operationId: 'op-old',
+            threadId: 'thread-old',
+            topicId: 'topic-1',
+          },
+        );
+        // No second run on the thread: the running one takes the instruction.
+        expect(mockThreadModel.claimForRun).not.toHaveBeenCalled();
+        expect(execAgentSpy).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          assistantMessageId: '',
+          operationId: 'op-old',
+          steered: true,
+          success: true,
+          threadId: 'thread-old',
+        });
+      });
+
+      it('refuses an instruction for a sub-agent another member’s turn is running', async () => {
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-old' ? { status: 'running', userId: 'another-member' } : { trigger: 'cli' },
+        );
+        const execAgentSpy = vi.spyOn(service, 'execAgent');
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        // It reads its queue as that member, so a steer from this turn would never arrive.
+        expect(mockQueueSubAgentSteer).not.toHaveBeenCalled();
+        expect(mockThreadModel.claimForRun).not.toHaveBeenCalled();
+        expect(execAgentSpy).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('is running for another member');
+      });
+
+      it('steers a sub-agent its own member’s earlier turn is running', async () => {
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-old' ? { status: 'running', userId } : { trigger: 'cli' },
+        );
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(mockQueueSubAgentSteer).toHaveBeenCalled();
+        expect(result).toMatchObject({ steered: true, success: true });
+      });
+
+      it('starts a new run when the sub-agent finished while the instruction was queued', async () => {
+        mockQueueSubAgentSteer.mockResolvedValue({ queued: false, reason: 'ended' });
+        let reads = 0;
+        mockOperationFindById.mockImplementation(async (id: string) => {
+          if (id !== 'op-old') return { trigger: 'cli' };
+          reads += 1;
+          return { status: reads === 1 ? 'running' : 'done' };
+        });
+        const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(mockThreadModel.claimForRun).toHaveBeenCalled();
+        expect(execAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ prompt: 'Hand over what you found so far' }),
+        );
+        expect(result).toMatchObject({ operationId: 'op-new', success: true });
+        expect(result.steered).toBeUndefined();
+      });
+
+      it('steers the run that won the thread when another follow-up claimed it first', async () => {
+        mockThreadModel.findById.mockResolvedValueOnce({
+          agentId: 'agent-1',
+          id: 'thread-old',
+          metadata: { operationId: 'op-done' },
+          sourceMessageId: 'tool-msg-1',
+          status: ThreadStatus.Completed,
+          topicId: 'topic-1',
+          type: ThreadType.Isolation,
+        });
+        mockOperationFindById.mockImplementation(async (id: string) =>
+          id === 'op-done' ? { status: 'done' } : { status: 'running' },
+        );
+        mockThreadModel.claimForRun.mockResolvedValue(false);
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(mockQueueSubAgentSteer).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ operationId: 'op-old' }),
+        );
+        expect(result).toMatchObject({ steered: true, success: true });
+      });
+
+      it('closes the call-agent hook pair for a steer', async () => {
+        const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+
+        await service.execVirtualSubAgent(followUp);
+
+        const events = dispatch.mock.calls.map(([, event]) => event);
+        expect(events).toEqual(['beforeCallAgent', 'afterCallAgent']);
+        expect(dispatch).toHaveBeenLastCalledWith(
+          'parent-op-2',
+          'afterCallAgent',
+          expect.objectContaining({
+            subOperationId: 'op-old',
+            success: true,
+            threadId: 'thread-old',
+          }),
+        );
+        dispatch.mockRestore();
+      });
+
+      it('tells the parent not to resend when the steer may already be queued', async () => {
+        mockQueueSubAgentSteer.mockResolvedValue({ queued: false, reason: 'unknown' });
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Do not send it again yet');
+      });
+
+      it('explains a full queue to the parent', async () => {
+        mockQueueSubAgentSteer.mockResolvedValue({ queued: false, reason: 'full' });
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('too many instructions waiting');
+      });
+    });
+
     it.each([
       [
-        'its previous run is still going',
-        () => mockOperationFindById.mockResolvedValue({ status: 'running' }),
-        'still running',
+        'another follow-up keeps winning the thread',
+        () => mockThreadModel.claimForRun.mockResolvedValue(false),
+        'busy with another instruction',
       ],
       [
-        'another follow-up claimed it first',
-        () => mockThreadModel.claimForRun.mockResolvedValue(false),
-        'still running',
+        'its run has not recorded an operation yet',
+        () =>
+          mockThreadModel.findById.mockResolvedValue({
+            agentId: 'agent-1',
+            id: 'thread-old',
+            metadata: {},
+            sourceMessageId: 'tool-msg-1',
+            status: ThreadStatus.Processing,
+            topicId: 'topic-1',
+            type: ThreadType.Isolation,
+          }),
+        'still starting',
       ],
       [
         'it belongs to another topic',
@@ -625,9 +827,10 @@ describe('AiAgentService.execSubAgent', () => {
         expect.anything(),
         expect.objectContaining(carried),
       );
-      expect(mockThreadModel.update).toHaveBeenCalledWith('thread-old', {
-        metadata: expect.objectContaining({ ...carried, operationId: 'op-new' }),
-      });
+      expect(mockThreadModel.attachRunOperation).toHaveBeenCalledWith(
+        'thread-old',
+        expect.objectContaining({ ...carried, operationId: 'op-new' }),
+      );
 
       const completion = execAgentSpy.mock.calls[0][0].hooks?.find(
         (h) => h.id === 'thread-completion',

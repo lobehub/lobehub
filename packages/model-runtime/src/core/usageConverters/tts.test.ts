@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
+  isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
 } from './tts';
 
@@ -85,5 +87,23 @@ describe('convertOpenAISpeechTokenUsage', () => {
   it('returns undefined for missing or partial usage', () => {
     expect(convertOpenAISpeechTokenUsage(undefined)).toBeUndefined();
     expect(convertOpenAISpeechTokenUsage({ input_tokens: 3 })).toBeUndefined();
+  });
+});
+
+describe('countMiniMaxSpeechCharacters', () => {
+  it('counts a Chinese character as 2 and everything else as 1', () => {
+    expect(countMiniMaxSpeechCharacters('你好，世界')).toBe(9);
+    expect(countMiniMaxSpeechCharacters('hello')).toBe(5);
+    expect(countMiniMaxSpeechCharacters('hi 👋')).toBe(4);
+  });
+});
+
+describe('isMiniMaxSpeechModel', () => {
+  it('matches MiniMax speech catalog and gateway ids only', () => {
+    expect(isMiniMaxSpeechModel('speech-2.8-hd')).toBe(true);
+    expect(isMiniMaxSpeechModel('minimax/speech-2.8-turbo')).toBe(true);
+    expect(isMiniMaxSpeechModel('tts-1')).toBe(false);
+    expect(isMiniMaxSpeechModel('openai/gpt-4o-mini-tts')).toBe(false);
+    expect(isMiniMaxSpeechModel(undefined)).toBe(false);
   });
 });

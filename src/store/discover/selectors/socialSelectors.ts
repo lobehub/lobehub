@@ -1,6 +1,7 @@
 import {
   type FavoriteAgentItem,
   type FavoritePluginItem,
+  type FavoriteStatus,
   type FollowCounts,
   type FollowStatus,
   type FollowUserItem,
@@ -34,6 +35,11 @@ const following =
   (s: DiscoverStore): PaginatedResponse<FollowUserItem> | undefined =>
     queryKey ? s.followingMap[queryKey] : undefined;
 
+const favoriteStatus =
+  (queryKey?: string) =>
+  (s: DiscoverStore): FavoriteStatus | undefined =>
+    queryKey ? s.favoriteStatusMap[queryKey] : undefined;
+
 const favoriteAgents =
   (queryKey?: string) =>
   (s: DiscoverStore): PaginatedResponse<FavoriteAgentItem> | undefined =>
@@ -47,6 +53,7 @@ const favoritePlugins =
 export const socialSelectors = {
   favoriteAgents,
   favoritePlugins,
+  favoriteStatus,
   followCounts,
   followStatus,
   followers,

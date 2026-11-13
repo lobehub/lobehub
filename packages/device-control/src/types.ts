@@ -6,12 +6,12 @@
  * desktop wiring can pass its own IPC-typed implementations directly.
  */
 
-import type { DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
+import type { DeviceClient, DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
 
 // ─── Workspace scan ───
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 export interface ProjectSkillItem {
   description?: string;
@@ -39,6 +39,8 @@ export interface InitWorkspaceParams {
 
 export interface WorkspaceInstructionsItem {
   content: string;
+  /** Absolute path of the file; the working directory or one of its parents. */
+  path: string;
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
 
@@ -551,6 +553,8 @@ export interface CreateTerminalSessionParams {
 }
 
 export interface CreateTerminalSessionResult {
+  /** The client hosting the session, so callers can keep its later calls there. */
+  client: DeviceClient;
   /** Directory the shell actually started in (the request's `cwd` may not exist). */
   cwd: string;
   id: string;

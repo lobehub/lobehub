@@ -41,6 +41,15 @@ afterEach(async () => {
   await serverDB.delete(aiModels).where(eq(aiModels.userId, userId));
 });
 
+const remoteReasoningModel = (): AiProviderModelListItem => ({
+  contextWindowTokens: 400_000,
+  displayName: 'GPT-5.6 Sol',
+  enabled: true,
+  id: 'gpt-5.6-sol',
+  source: 'remote',
+  type: 'chat',
+});
+
 describe('AiModelModel', () => {
   describe('create', () => {
     it('should create a new ai provider', async () => {
@@ -363,14 +372,7 @@ describe('AiModelModel', () => {
       });
 
       await aiProviderModel.batchUpdateAiModels('openai', [
-        {
-          contextWindowTokens: 400_000,
-          displayName: 'GPT-5.6 Sol',
-          enabled: true,
-          id: 'gpt-5.6-sol',
-          source: 'remote',
-          type: 'chat',
-        } as AiProviderModelListItem,
+        remoteReasoningModel() as AiProviderModelListItem,
       ]);
 
       expect(await aiProviderModel.getModelReasoningConfig('gpt-5.6-sol', 'openai')).toEqual({
@@ -387,14 +389,7 @@ describe('AiModelModel', () => {
       // stays clearable); clearRemoteModels demotes chatConfig-holding remote
       // rows instead of deleting them, so the preference still survives
       await aiProviderModel.batchUpdateAiModels('openai', [
-        {
-          contextWindowTokens: 400_000,
-          displayName: 'GPT-5.6 Sol',
-          enabled: true,
-          id: 'gpt-5.6-sol',
-          source: 'remote',
-          type: 'chat',
-        },
+        remoteReasoningModel(),
         { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
       ] as AiProviderModelListItem[]);
       await aiProviderModel.clearRemoteModels('openai');
@@ -415,14 +410,7 @@ describe('AiModelModel', () => {
     it('should survive clearing remote models saved in remote-first order', async () => {
       // Row created by the remote fetch first...
       await aiProviderModel.batchUpdateAiModels('openai', [
-        {
-          contextWindowTokens: 400_000,
-          displayName: 'GPT-5.6 Sol',
-          enabled: true,
-          id: 'gpt-5.6-sol',
-          source: 'remote',
-          type: 'chat',
-        },
+        remoteReasoningModel(),
         { enabled: true, id: 'some-remote-model', source: 'remote', type: 'chat' },
       ] as AiProviderModelListItem[]);
       // ...then the user saves a preference onto the remote row

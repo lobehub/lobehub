@@ -146,7 +146,9 @@ describe('executeDeviceRpc', () => {
     };
 
     expect(result.skills.map((s) => s.name)).toEqual(['spa-routes']);
-    expect(result.instructions).toEqual([{ content: '# Agents', source: 'AGENTS.md' }]);
+    expect(result.instructions).toEqual([
+      { content: '# Agents', path: path.join(root, 'AGENTS.md'), source: 'AGENTS.md' },
+    ]);
     expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
   });
 
@@ -318,6 +320,14 @@ describe('executeDeviceRpc', () => {
     // Not a git repo → the shared local-file-shell impl returns an empty list.
     const result = await executeDeviceRpc('listGitBranches', { path: root }, makeDeps());
     expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('rejects a failed git status instead of reporting a clean working tree', async () => {
+    // Not a git repo → `git status` fails. The client persists this overlay, so
+    // an empty result would wipe every cached dirty marker as "clean".
+    await expect(
+      executeDeviceRpc('getGitWorkingTreeFiles', { path: root }, makeDeps()),
+    ).rejects.toThrow();
   });
 
   it('routes moveLocalFiles to the shared local-file-shell impl', async () => {

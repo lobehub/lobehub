@@ -79,6 +79,8 @@ export type {
   AgentContextDocument,
   AgentDocumentBeforeSystemInjectorConfig,
   AgentDocumentContextInjectorConfig,
+  AgentDocumentIndexFact,
+  AgentDocumentIndexFacts,
   AgentDocumentInjectionPosition,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,

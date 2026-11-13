@@ -163,11 +163,23 @@ interface BrowserPaneProps {
   agentId?: string;
   composerTarget: ComposerTarget;
   onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
+  /**
+   * A host that owns its own open requests (the Portal) passes them here and retires
+   * them in `onRequestConsumed`. Without it the pane follows the working sidebar's
+   * global request.
+   */
+  onRequestConsumed?: () => void;
+  request?: BrowserOpenRequest | null;
   sessionId: string;
 }
 
+export interface BrowserOpenRequest {
+  nonce: number;
+  url: string;
+}
+
 const BrowserPane = memo<BrowserPaneProps>((props) => {
-  const { agentId, composerTarget, onMetadataChange, sessionId } = props;
+  const { agentId, composerTarget, onMetadataChange, onRequestConsumed, sessionId } = props;
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
@@ -179,8 +191,10 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
     BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY,
     false,
   );
-  const browserRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
+  const globalRequest = useGlobalStore((s) => s.status.workingSidebarBrowserRequest);
   const clearBrowserTabRequest = useGlobalStore((s) => s.clearBrowserTabRequest);
+  const ownsRequest = props.request !== undefined;
+  const browserRequest = ownsRequest ? props.request : globalRequest;
   const consumedNonce = useRef<number>(undefined);
   const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -343,7 +357,8 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
     if (!browserRequest || consumedNonce.current === browserRequest.nonce) return;
     consumedNonce.current = browserRequest.nonce;
     openUrl(browserRequest.url);
-    clearBrowserTabRequest();
+    if (ownsRequest) onRequestConsumed?.();
+    else clearBrowserTabRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browserRequest?.nonce]);
 

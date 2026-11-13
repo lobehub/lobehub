@@ -43,6 +43,14 @@ describe('Channel reply source topic', () => {
     expect((await state.reply(state.asMember)).sourceTopicId).toBe(state.topicId);
   });
 
+  it('carries the generated topic title for the member who ran it', async () => {
+    const state = await publishedReply();
+    await db.update(topics).set({ title: 'Named' }).where(eq(topics.id, state.topicId));
+
+    expect((await state.reply(state.asMember)).sourceTopicTitle).toBe('Named');
+    expect((await state.reply(state.asOwner)).sourceTopicTitle).toBeNull();
+  });
+
   it('hides the topic from other members and on requests', async () => {
     const state = await publishedReply();
 

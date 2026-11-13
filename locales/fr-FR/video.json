@@ -40,8 +40,6 @@
   "generation.editing.hint": "Décrivez ce qu'il faut changer ; tout le reste reste inchangé",
   "generation.editing.modelLocked": "Les modifications conservent le modèle de la vidéo originale",
   "generation.editing.title": "Modification V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 Votre utilisation gratuite est épuisée. Les vidéos utilisent désormais votre solde.",
-  "generation.freeQuota.remaining": "🎁 {{remaining}} vidéos gratuites aujourd'hui",
   "generation.status.editing": "Génération de la modification...",
   "generation.status.failed": "Échec de la génération",
   "generation.status.generating": "Génération en cours...",

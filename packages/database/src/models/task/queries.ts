@@ -45,7 +45,7 @@ export const groupList = async (
   ctx: TaskModelContext,
   options: TaskListFilterOptions & {
     excludeStatuses?: string[];
-    groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority';
+    groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -66,6 +66,8 @@ export const groupList = async (
     limit: number;
     offset: number;
     priority?: number;
+    /** Project column of a `project` board; null is the "no project" column. */
+    projectId?: string | null;
     tasks: TaskItem[];
     total: number;
   }>
@@ -91,6 +93,7 @@ export const groupList = async (
     offset: number;
     prefetchedTasks?: TaskItem[];
     priority?: number;
+    projectId?: string | null;
     total: number;
   }
 
@@ -176,11 +179,15 @@ export const groupList = async (
         total,
       };
     });
-  } else if (groupBy === 'agent' || groupBy === 'member') {
+  } else if (groupBy === 'agent' || groupBy === 'member' || groupBy === 'project') {
     const limit = 50;
-    const groupColumn = groupBy === 'agent' ? tasks.assigneeAgentId : tasks.assigneeUserId;
-    const groupPrefix = groupBy === 'agent' ? 'assignee:' : 'member:';
-    const unassignedKey = `${groupPrefix}unassigned`;
+    const groupColumn = {
+      agent: tasks.assigneeAgentId,
+      member: tasks.assigneeUserId,
+      project: tasks.projectId,
+    }[groupBy];
+    const groupPrefix = { agent: 'assignee:', member: 'member:', project: 'project:' }[groupBy];
+    const unassignedKey = groupBy === 'project' ? 'project:none' : `${groupPrefix}unassigned`;
     const assigneeGroupKey = sql<string>`case
       when ${groupColumn} is not null then ${groupPrefix} || ${groupColumn}
       else ${unassignedKey}
@@ -228,8 +235,12 @@ export const groupList = async (
 
     // Keep an empty Unassigned column as a stable drop target. Agent-scoped
     // boards omit the Agent-unassigned column because their base filter
-    // guarantees one assignee, while Member grouping remains independent.
-    if ((groupBy === 'member' || !assigneeAgentId) && !assigneeCounts.has(unassignedKey)) {
+    // guarantees one assignee, while Member grouping remains independent. A
+    // project board likewise keeps "No project" as the way out of a project.
+    if (
+      (groupBy === 'member' || groupBy === 'project' || !assigneeAgentId) &&
+      !assigneeCounts.has(unassignedKey)
+    ) {
       assigneeCounts.set(unassignedKey, 0);
     }
 
@@ -248,6 +259,7 @@ export const groupList = async (
         limit,
         offset: 0,
         prefetchedTasks: tasksByAssignee.get(key) ?? [],
+        projectId: groupBy === 'project' ? assigneeId : undefined,
         total,
       };
     });
@@ -364,6 +376,7 @@ export const groupList = async (
         limit: group.limit,
         offset: group.offset,
         ...(group.priority !== undefined ? { priority: group.priority } : {}),
+        ...(group.projectId !== undefined ? { projectId: group.projectId } : {}),
         tasks: groupTasks,
         total: group.total,
       };

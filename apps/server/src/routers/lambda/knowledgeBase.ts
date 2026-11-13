@@ -9,9 +9,12 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { AgentSpaceRepository } from '@/database/repositories/agentSpace';
+import { KnowledgeRepo } from '@/database/repositories/knowledge';
+import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { FileService } from '@/server/services/file';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -98,9 +101,20 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
+      knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
+
+/** A dedicated space follows its agent or project; it is never removed or moved on its own. */
+const assertNotDedicatedKnowledgeBase = (knowledgeBase: { type: string | null }) => {
+  if ((DEDICATED_KNOWLEDGE_BASE_TYPES as readonly (string | null)[]).includes(knowledgeBase.type)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This knowledge base belongs to an agent or project',
+    });
+  }
+};
 
 export const knowledgeBaseRouter = router({
   addFilesToKnowledgeBase: knowledgeBaseProcedure
@@ -139,6 +153,31 @@ export const knowledgeBaseRouter = router({
         }
         throw e;
       }
+    }),
+
+  reorderKnowledgeItems: knowledgeBaseProcedure
+    .use(withScopedPermission('knowledge_base:update'))
+    .input(
+      z.object({
+        knowledgeBaseId: z.string(),
+        dragIds: z.array(z.string()).min(1).max(10_000),
+        targetId: z.string(),
+        position: z.enum(['before', 'after']),
+        parentId: z.string().nullable(),
+        sorter: z.enum(['custom', 'name', 'createdAt', 'size', 'updatedAt']).optional(),
+        sortType: z.enum(['desc', 'asc']).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+      await assertKnowledgeItemsAccessible(ctx, [...input.dragIds, input.targetId]);
+      return ctx.knowledgeRepo.reorderItems(input);
     }),
 
   createKnowledgeBase: knowledgeBaseProcedure
@@ -379,6 +418,22 @@ export const knowledgeBaseRouter = router({
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
 
+  getAgentSpaces: knowledgeBaseProcedure.query(async ({ ctx }) => {
+    const { enableAgentKnowledgeSpace } = await getServerFeatureFlagsStateFromRuntimeConfig(
+      ctx.userId,
+    );
+    if (!enableAgentKnowledgeSpace) return [];
+
+    const spaces = await new AgentSpaceRepository(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    ).list();
+
+    // Same rule as the library list: a card must open for whoever can see it.
+    return filterRestrictedKnowledgeBases(ctx, spaces);
+  }),
+
   removeKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .input(z.object({ id: z.string() }))
@@ -386,6 +441,7 @@ export const knowledgeBaseRouter = router({
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertNotDedicatedKnowledgeBase(existing);
       await assertKnowledgeBaseBrowsable(ctx, input.id, {
         userId: existing.userId,
         visibility: existing.visibility ?? null,
@@ -432,6 +488,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertNotDedicatedKnowledgeBase(knowledgeBase);
       assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
       // The transfer rehomes every linked file/document — a non-owner member
       // must not move teammates' rows along with their own KB.

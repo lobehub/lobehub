@@ -2,6 +2,7 @@ import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
+import { freezeAgentDocumentIndexFacts } from '@lobechat/context-engine/agent-document';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
@@ -249,7 +250,14 @@ export const createServerContextFactProviders = ({
         undefined,
         documentAccessScope,
       ).getAgentContextDocuments(agentId);
-      return toAgentContextDocuments(docs);
+      // Render index rows from what this run first saw, so editing a document
+      // mid-run does not rewrite the prompt prefix behind the index.
+      const { documents, facts } = freezeAgentDocumentIndexFacts(
+        toAgentContextDocuments(docs),
+        state.binding?.agentDocumentIndex,
+      );
+      if (facts) ctx.bindAgentDocumentIndex?.(facts);
+      return documents;
     },
 
     // Connected = ACTIVE Composio connections across BOTH the legacy plugin

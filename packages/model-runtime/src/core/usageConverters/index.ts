@@ -8,7 +8,9 @@ export {
 export {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
+  isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
 } from './tts';
 export {

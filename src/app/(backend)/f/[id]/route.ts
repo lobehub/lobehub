@@ -1,7 +1,13 @@
 import debug from 'debug';
+import { NextRequest } from 'next/server';
 
 import { FileModel } from '@/database/models/file';
 import { getServerDB } from '@/database/server';
+import { createLambdaContext } from '@/libs/trpc/lambda/context';
+import {
+  resolveEnterpriseContentScopes,
+  resolveManagedContentReader,
+} from '@/server/services/enterpriseKnowledge/contentAccess';
 import { FileService } from '@/server/services/file';
 
 const log = debug('lobe-file:proxy');
@@ -17,10 +23,11 @@ type Params = Promise<{ id: string }>;
  * - Generate a temporary S3 presigned preview URL
  * - Return 302 redirect
  *
- * NOTE: This endpoint is intentionally unauthenticated. The proxy URL is
+ * Non-enterprise links remain public by id. The proxy URL is
  * embedded in bare `<img>` tags, download links, and links shared to AI — none
  * of which can attach auth headers/cookies. Adding `checkAuth` here would break
- * every previously-shared `/f/:id` link, so access stays public by id.
+ * every previously-shared `/f/:id` link. Distribution-managed enterprise
+ * content requires the current authenticated caller's library access.
  */
 export const GET = async (req: Request, segmentData: { params: Params }) => {
   try {
@@ -40,6 +47,21 @@ export const GET = async (req: Request, segmentData: { params: Params }) => {
       return new Response('File not found', {
         status: 404,
       });
+    }
+
+    // Classify with the owner's scope, then authorize the actual request. No
+    // storage URL may be created before the enterprise policy has passed.
+    try {
+      const scopes = await resolveEnterpriseContentScopes({ serverDB: db, userId: file.userId }, [
+        id,
+      ]);
+      if (scopes.has(id)) {
+        const reader = resolveManagedContentReader(await createLambdaContext(new NextRequest(req)));
+        if (!reader) return new Response('File not found', { status: 404 });
+        await resolveEnterpriseContentScopes({ serverDB: db, userId: reader }, [id]);
+      }
+    } catch {
+      return new Response('File not found', { status: 404 });
     }
 
     // Create file service with file owner's userId

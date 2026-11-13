@@ -1,4 +1,3 @@
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { cssVar } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +11,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { isInboxAgentId } from './isInboxAgent';
 
 interface AgentDisplayMeta {
-  avatar: string;
+  avatar?: string;
   backgroundColor: string;
   title: string;
 }
@@ -43,7 +42,7 @@ export const useAgentDisplayMeta = (
   const sidebarAvatar = typeof sidebarAgent?.avatar === 'string' ? sidebarAgent.avatar : undefined;
   const hasResolvedMeta =
     isInbox ||
-    !!meta?.avatar ||
+    Object.keys(meta ?? {}).length > 0 ||
     !!meta?.backgroundColor ||
     !!agentDisplayName(meta) ||
     !!sidebarAgent;
@@ -51,7 +50,7 @@ export const useAgentDisplayMeta = (
   if (!fallbackToDefault && !hasResolvedMeta) return undefined;
 
   return {
-    avatar: meta?.avatar || sidebarAvatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
+    avatar: meta?.avatar || sidebarAvatar || (isInbox ? DEFAULT_INBOX_AVATAR : undefined),
     backgroundColor:
       meta?.backgroundColor || sidebarAgent?.backgroundColor || cssVar.colorBgContainer,
     title:

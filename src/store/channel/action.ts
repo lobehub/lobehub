@@ -8,6 +8,7 @@ import {
   type ChannelAgentSelection,
   channelService,
   type ChannelViewParams,
+  type ChannelWakeConfig,
 } from '@/services/channel';
 import { getElectronStoreState } from '@/store/electron';
 
@@ -28,7 +29,8 @@ import { initialState, useChannelStore } from './store';
 
 /**
  * Gateway push is not delivered yet, so polling is the only refresh: views with work in
- * progress refresh every few seconds, idle views and the list once a minute.
+ * progress (and the list while a listed reply is) refresh every few seconds, idle ones once a
+ * minute.
  */
 export const CHANNEL_ACTIVE_REFRESH_MS = 3000;
 export const CHANNEL_IDLE_REFRESH_MS = 60_000;
@@ -47,7 +49,13 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
-  useFetchList = () => this.#private.list.useSync({}, { refreshInterval: CHANNEL_IDLE_REFRESH_MS });
+  useFetchList = () => {
+    const pending = useChannelStore(channelSelectors.listHasPendingWork);
+    return this.#private.list.useSync(
+      {},
+      { refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
+    );
+  };
   useFetchDetail = (params: ChannelViewParams | null) => {
     // Subscribe to the replica, not just SWR's last response: sending a message
     // updates this view imperatively and must shorten an already scheduled idle poll.
@@ -84,14 +92,20 @@ class ChannelActionImpl {
     return result.data.channel.id;
   };
   /**
-   * Marks the main channel read up to `sequence`. The listed unread count drops at once, so a
-   * conversation row does not keep its badge until the next list poll; a failed write restores it.
+   * Marks the main channel read up to `sequence`. The listed unread and mention counts drop at
+   * once, so a conversation row does not keep its badges until the next list poll; a failed write
+   * restores them.
+   *
+   * Mentions are counted from the same read position as `unreadCount`, so a read that reaches the
+   * known `sequence` consumes all of them. A partial read cannot be split client-side without the
+   * per-message mention data, so the cached count stays until the next list poll recomputes it.
    */
   markRead = (channelId: string, sequence: number) =>
     this.#private.entity.optimistic(
       channelId,
       (channel) => ({
         ...channel,
+        mentionCount: channel.sequence <= sequence ? 0 : channel.mentionCount,
         unreadCount: Math.min(channel.unreadCount ?? 0, Math.max(0, channel.sequence - sequence)),
       }),
       () => channelService.markRead(channelId, sequence),
@@ -183,6 +197,14 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.agentEnvironment(channelId, memberId), () =>
       channelService.agentEnvironment(channelId, memberId),
     );
+  useFetchWakeConfig = (channelId: string | null) =>
+    useClientDataSWR(channelId ? channelKeys.wakeConfig(channelId) : null, () =>
+      channelService.wakeConfig(channelId!),
+    );
+  updateWakeConfig = async (channelId: string, wake: ChannelWakeConfig) => {
+    await channelService.updateWakeConfig(channelId, wake);
+    await this.#refreshAfterWrite(() => mutate(channelKeys.wakeConfig(channelId)));
+  };
   updateAgentEnvironment = async (
     channelId: string,
     memberId: string,

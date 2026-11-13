@@ -1,3 +1,4 @@
+import type { BrowserWindowConstructorOptions } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App as AppCore } from '../../App';
@@ -58,6 +59,7 @@ const {
 
   return {
     mockAppModule: {
+      commandLine: { hasSwitch: vi.fn(() => false) },
       dock: {
         setBadge: vi.fn(),
         show: vi.fn(),
@@ -292,6 +294,18 @@ describe('Browser', () => {
 
     it('should create BrowserWindow on construction', () => {
       expect(MockBrowserWindow).toHaveBeenCalled();
+    });
+
+    it('tells the renderer to expose stores while remote debugging is on', () => {
+      const rendererArgs = (call: unknown[] | undefined) =>
+        (call?.[0] as BrowserWindowConstructorOptions).webPreferences?.additionalArguments;
+
+      expect(rendererArgs(MockBrowserWindow.mock.calls[0])).not.toContain('--lobe-expose-stores');
+
+      mockAppModule.commandLine.hasSwitch.mockReturnValueOnce(true);
+      new Browser({ ...defaultOptions, identifier: 'debug-window' }, mockApp);
+
+      expect(rendererArgs(MockBrowserWindow.mock.lastCall)).toContain('--lobe-expose-stores');
     });
 
     it('loads the renderer directly without a splash-page navigation', async () => {

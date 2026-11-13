@@ -189,6 +189,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  thinkingLevel5?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Tool-resolution mode. When set it overrides the `enableAgentMode` derivation:
    * - `agent`  full default toolset + plugins + always-on tools
@@ -306,6 +307,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
+    thinkingLevel5: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     toolResultMaxLength: z.number().default(25000),
     topicGroupMode: z
       .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])

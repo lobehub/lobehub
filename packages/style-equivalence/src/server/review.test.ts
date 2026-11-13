@@ -212,7 +212,7 @@ describe('review API', () => {
       base: ['<span className={styles.a}>'],
       head: ['<span {...stylex.props(styles.a)}>'],
     });
-    expect(variable.styles).toEqual({ blocks: [], source: {}, usage: {} });
+    expect(variable.styles).toEqual({ blocks: [], moved: {}, source: {}, usage: {} });
     const placed = payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
     expect(placed.styles.blocks.map((block: any) => [block.slot, block.standIn])).toEqual([
       ['icon', 'SkillsIcon'],

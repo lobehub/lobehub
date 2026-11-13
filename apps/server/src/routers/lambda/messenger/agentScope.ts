@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
@@ -6,17 +7,14 @@ import { WorkspaceModel } from '@/database/models/workspace';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notTrashed } from '@/database/utils/softDelete';
-import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 
-const WORKSPACE_FEATURE_DISABLED_MESSAGE = 'Workspace feature is not enabled for this user';
+const WORKSPACE_FEATURE_DISABLED_MESSAGE = 'Workspace feature is not enabled on this deployment';
 
-export const isWorkspaceFeatureEnabledForUser = async (userId: string): Promise<boolean> => {
-  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-  return featureFlags.enableWorkspace === true;
-};
+/** Workspaces exist wherever business features are enabled. */
+export const isWorkspaceFeatureEnabled = (): boolean => ENABLE_BUSINESS_FEATURES;
 
-export const assertWorkspaceFeatureEnabledForUser = async (userId: string): Promise<void> => {
-  if (await isWorkspaceFeatureEnabledForUser(userId)) return;
+export const assertWorkspaceFeatureEnabled = (): void => {
+  if (isWorkspaceFeatureEnabled()) return;
 
   throw new TRPCError({
     code: 'FORBIDDEN',
@@ -61,7 +59,7 @@ export const resolveAuthorizedAgentScope = async (
   }
 
   // Workspace agent — caller must be a member with `agent:update`.
-  await assertWorkspaceFeatureEnabledForUser(userId);
+  assertWorkspaceFeatureEnabled();
 
   const userWorkspaces = await new WorkspaceModel(serverDB, userId).listUserWorkspaces();
   const isMember = userWorkspaces.some((w) => w.id === agentRow.workspaceId);

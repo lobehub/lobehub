@@ -35,15 +35,10 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
 
   const data = useMessengerData('slack');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'slack',
   });
-  const disconnectInstallation = useDisconnectInstallation({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
-  });
+  const disconnectInstallation = useDisconnectInstallation();
 
   // For Slack, disconnecting an install row freezes the workspace's bot —
   // dispatch is token-gated, so removing the install effectively kills the

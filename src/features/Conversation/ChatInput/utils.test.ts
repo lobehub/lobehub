@@ -370,6 +370,7 @@ describe('sendQueuedMessageNow', () => {
       chat,
       context,
       contextKey: messageMapKey(context),
+      isQueued: () => true,
       msg,
       withdraw,
     });
@@ -389,6 +390,7 @@ describe('sendQueuedMessageNow', () => {
       chat,
       context,
       contextKey: messageMapKey(context),
+      isQueued: () => true,
       msg: { ...msg, forceRuntime: 'gateway' },
       withdraw: async () => true,
     });
@@ -398,18 +400,91 @@ describe('sendQueuedMessageNow', () => {
     );
   });
 
-  it('stops nothing and sends nothing when the run already took it', async () => {
+  it('stops nothing and sends nothing when the run already wrote it', async () => {
     const { chat } = chatWith(true);
 
-    await sendQueuedMessageNow({
+    const outcome = await sendQueuedMessageNow({
       chat,
       context,
       contextKey: messageMapKey(context),
+      isQueued: () => false,
       msg,
       withdraw: async () => false,
     });
 
+    expect(outcome).toBe('delivered');
     expect(chat.cancelOperation).not.toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  //
+  // A CLI agent run takes a follow-up from the server but only writes it
+  // between its own turns, so for minutes it stays "delivering". Send now read
+  // that as already sent: it showed "Already sent to the agent" and neither
+  // interrupted the run nor sent the message.
+  //
+  // Before: a refused withdrawal stopped nothing.
+  // After: one still in the tray interrupts the run, which hands it back, and
+  // is withdrawn again and sent.
+  it('interrupts a run that took it but has not written it yet, then sends it', async () => {
+    const { chat, order } = chatWith(true);
+    let delivering = true;
+    const withdraw = vi.fn(async () => {
+      order.push('withdraw');
+      return !delivering;
+    });
+    chat.cancelOperation.mockImplementation(async () => {
+      order.push('cancel');
+      delivering = false;
+      return true;
+    });
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      isQueued: () => true,
+      msg,
+      withdraw,
+    });
+
+    expect(outcome).toBe('sent');
+    expect(order).toEqual(['withdraw', 'cancel', 'withdraw', 'send']);
+  });
+
+  it('sends nothing when the run wrote it before the interrupt landed', async () => {
+    const { chat } = chatWith(true);
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      isQueued: () => true,
+      msg,
+      withdraw: async () => false,
+    });
+
+    expect(outcome).toBe('delivered');
+    expect(chat.cancelOperation).toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an item the run holds in the tray when the interrupt fails', async () => {
+    const { chat } = chatWith(false);
+
+    await expect(
+      sendQueuedMessageNow({
+        chat,
+        context,
+        contextKey: messageMapKey(context),
+        isQueued: () => true,
+        msg,
+        withdraw: async () => false,
+      }),
+    ).rejects.toThrow();
+
+    expect(chat.restoreQueuedMessage).not.toHaveBeenCalled();
     expect(chat.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -424,6 +499,7 @@ describe('sendQueuedMessageNow', () => {
         chat,
         context,
         contextKey: messageMapKey(context),
+        isQueued: () => true,
         msg,
         withdraw: async () => true,
       }),

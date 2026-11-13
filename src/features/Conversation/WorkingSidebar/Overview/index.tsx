@@ -41,7 +41,6 @@ import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSect
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
-import { useImLayout } from '@/features/NavRail/useImLayout';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { gitService } from '@/services/git';
 import { useAgentStore } from '@/store/agent';
@@ -59,7 +58,6 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
-import AgentProfilePanel from './AgentProfilePanel';
 import DeviceStatusSection from './DeviceStatusSection';
 import {
   collectChangeStats,
@@ -71,6 +69,7 @@ import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
 import { sectionStyles } from './sectionStyles';
+import { TerminalRow } from './TerminalRow';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -119,7 +118,6 @@ const Overview = memo<OverviewProps>(
     const { t: tDevice } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-    const imLayout = useImLayout();
     const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
@@ -446,8 +444,8 @@ const Overview = memo<OverviewProps>(
       )
     ) : null;
 
-    const workspaceBody = (
-      <Flexbox>
+    return (
+      <Flexbox className={styles.body}>
         {hasWorkspace && (
           <>
             <OverviewHeader
@@ -556,19 +554,8 @@ const Overview = memo<OverviewProps>(
               onClick={() => onOpenTab('documents')}
             />
           )}
+          <TerminalRow />
         </Flexbox>
-      </Flexbox>
-    );
-
-    // `im_layout`: with an agent, the panel opens as its profile and this
-    // overview becomes the profile's Workspace tab.
-    return (
-      <Flexbox className={styles.body}>
-        {imLayout && agentId ? (
-          <AgentProfilePanel agentId={agentId} key={agentId} workspace={workspaceBody} />
-        ) : (
-          workspaceBody
-        )}
       </Flexbox>
     );
   },

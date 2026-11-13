@@ -72,6 +72,39 @@ describe('direct Channel identity', () => {
     });
   });
 
+  // A list row only knew a reply was in progress once its conversation was opened.
+  it('lists the main-conversation replies still pending', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const replyJobs = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.replyJobs;
+    expect(await replyJobs()).toEqual([]);
+
+    const message = await repository.send(channel.id, sendInput);
+    const [job] = await jobsOf(db, message.id);
+    expect(await replyJobs()).toEqual([
+      {
+        blockedCode: null,
+        id: job.id,
+        memberId: job.memberId,
+        publicationRevoked: false,
+        status: 'queued',
+        threadId: null,
+        writerHeld: false,
+      },
+    ]);
+
+    await execution.claim(channel.id, job.id, lease);
+    expect(await replyJobs()).toMatchObject([{ id: job.id, status: 'running', writerHeld: true }]);
+
+    await execution.accepted(channel.id, job.id);
+    await execution.saveDraft(channel.id, job.id, 'Answer');
+    await execution.publish(channel.id, job.id);
+    await execution.releaseWriter(channel.id, job.id);
+    expect(await replyJobs()).toEqual([]);
+  });
+
   it.each([null, fixture.workspaceId])(
     'creates a private user/Agent conversation in scope %s',
     async (workspaceId) => {

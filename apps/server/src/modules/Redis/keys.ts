@@ -159,6 +159,12 @@ export const RedisKeys = {
      * Full key: agentRun:run_slots:v1:{userId}
      */
     runSlots: (userId: string): string => `run_slots:v1:${userId}`,
+    /**
+     * Whether one operation's `onComplete` delivery is settling or has settled
+     * its Task run, so a redelivery is not applied a second time.
+     * Full key: agentRun:task_run_delivery:v1:{operationId}
+     */
+    taskRunDelivery: (operationId: string): string => `task_run_delivery:v1:${operationId}`,
   },
   /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
@@ -200,6 +206,12 @@ export const RedisKeys = {
      * Full key: agentSteer:hetero_deliveries:v1:{operationId}
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Marks a sub-agent run whose final queue read came back empty: it ends
+     * without reading again, so a steer appended behind it must be taken back.
+     * Full key: agentSteer:sealed_run:v1:{operationId}
+     */
+    sealedRun: (operationId: string): string => `sealed_run:v1:${operationId}`,
   },
   /**
    * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.

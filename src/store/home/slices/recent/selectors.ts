@@ -10,6 +10,14 @@ const query = (queryKey: string) => (s: HomeStore) => s.recentListMap[queryKey];
 const conversationRecents = (queryKey: string) => (s: HomeStore) =>
   s.conversationRecentMap[queryKey];
 
+/**
+ * Whether a recents query has been answered by the server in this session. A
+ * hydrated snapshot may be stale or empty, so "no rows" only means empty once
+ * this is true.
+ */
+const isQueryConfirmed = (queryKey: string) => (s: HomeStore) =>
+  s.recentListReplica.entries[queryKey]?.source === 'server';
+
 const item = (queryKey: string, ref: RecentEntityRef) => (s: HomeStore) =>
   s.recentListMap[queryKey]?.find((recent) => toRecentEntityRef(recent) === ref);
 
@@ -19,6 +27,7 @@ const docsHome = (tab: DocsHomeTab) => (s: HomeStore) => s.docsHomeMap[tab];
 export const homeRecentSelectors = {
   conversationRecents,
   docsHome,
+  isQueryConfirmed,
   item,
   query,
 };

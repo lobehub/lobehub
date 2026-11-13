@@ -1,6 +1,10 @@
 import { type KnowledgeBaseStoreState } from '@/store/library/initialState';
 
-import { knowledgeBaseListKey, type KnowledgeBaseVisibility } from './projection';
+import {
+  AGENT_SPACE_LIST_KEY,
+  knowledgeBaseListKey,
+  type KnowledgeBaseVisibility,
+} from './projection';
 
 const activeKnowledgeBaseId = (s: KnowledgeBaseStoreState) => s.activeKnowledgeBaseId;
 
@@ -21,8 +25,12 @@ const isKnowledgeBaseListInit =
   (visibility?: KnowledgeBaseVisibility) => (s: KnowledgeBaseStoreState) =>
     s.knowledgeBaseListMap[knowledgeBaseListKey(visibility)] !== undefined;
 
+/** Agents' dedicated libraries; `undefined` until first read. */
+const agentSpaceList = (s: KnowledgeBaseStoreState) => s.agentSpaceListMap[AGENT_SPACE_LIST_KEY];
+
 export const knowledgeBaseSelectors = {
   activeKnowledgeBaseId,
+  agentSpaceList,
   getKnowledgeBaseById,
   getKnowledgeBaseList,
   getKnowledgeBaseNameById,

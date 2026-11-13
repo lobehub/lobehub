@@ -35,7 +35,12 @@ const renderSelection = (value?: TaskExecutionConfig) => {
   const onChange = vi.fn();
   const hook = renderHook(
     ({ current }: { current?: TaskExecutionConfig }) =>
-      useTaskExecutionSelection({ agentId: 'agent-1', onChange, value: current }),
+      useTaskExecutionSelection({
+        agentId: 'agent-1',
+        canPinPrivateDevices: true,
+        onChange,
+        value: current,
+      }),
     { initialProps: { current: value } },
   );
   return { onChange, ...hook };

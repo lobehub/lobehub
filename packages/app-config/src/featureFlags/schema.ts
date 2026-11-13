@@ -1,3 +1,4 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import type { IFeatureFlagsState } from '@lobechat/types';
 import { z } from 'zod';
 
@@ -28,7 +29,6 @@ export const FeatureFlagsSchema = z.object({
 
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
-  voice_dictation: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
 
   welcome_suggest: FeatureFlagValue.optional(),
@@ -40,13 +40,6 @@ export const FeatureFlagsSchema = z.object({
   rag_eval: FeatureFlagValue.optional(),
 
   /**
-   * LobeHub Mobile rollout switch for the multiplexed gateway socket and
-   * protocol-v2 payloads. Web needs no flag: it takes v2 wherever
-   * `serverConfig.agentGatewayProtocol === 2`. Array values are user ids.
-   */
-  agent_gateway_mux_mobile: FeatureFlagValue.optional(),
-
-  /**
    * Rollout gate for relaying LLM calls to the user's device: a model provider
    * only that device can reach (a local Ollama / LM Studio, a private-network
    * endpoint) runs one attempt at a time on the client that started the run,
@@ -54,6 +47,32 @@ export const FeatureFlagsSchema = z.object({
    * dialed by the server. Array values are user ids.
    */
   agent_llm_relay: FeatureFlagValue.optional(),
+
+  /**
+   * Rollout gate for deferring an operation's init: a plain chat send returns
+   * once its messages are durable and the step-0 worker runs tool discovery and
+   * context assembly. Off: the send path runs them before returning. Array
+   * values are user ids.
+   */
+  agent_deferred_init: FeatureFlagValue.optional(),
+
+  /**
+   * Rollout gate for answering a plain chat send to a heterogeneous agent
+   * (Claude Code, Codex, …) on an online device before the device dispatch
+   * completes; the dispatch runs after the response and a failure lands on the
+   * assistant message. Off: the send waits for the device to accept the run.
+   * Array values are user ids.
+   */
+  agent_deferred_hetero_dispatch: FeatureFlagValue.optional(),
+
+  /**
+   * Keep the immutable per-operation tool set out of the agent state blob that
+   * is rewritten at every step; it is written once to its own Redis key and
+   * re-attached on load. Off: the blob keeps its inline copy. Server only;
+   * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0|1` overrides it. Array values are
+   * user ids (the operation's owner).
+   */
+  agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
 
   /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
@@ -71,6 +90,13 @@ export const FeatureFlagsSchema = z.object({
    * tool results. Array values are user ids.
    */
   mcp_apps: FeatureFlagValue.optional(),
+
+  /**
+   * Rollout gate for moving an agent's documents into its dedicated knowledge
+   * base at runtime, and for showing those spaces in the library. Off: no space
+   * is created and existing ones stay hidden. Array values are user ids.
+   */
+  agent_knowledge_space: FeatureFlagValue.optional(),
 
   /**
    * Trial gate for the rail layout: icon rail + one wrapped list column and
@@ -106,10 +132,8 @@ export const FeatureFlagsSchema = z.object({
   auth_captcha: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
   onboarding_v2: FeatureFlagValue.optional(),
-  new_tier_plans: FeatureFlagValue.optional(),
   mobile_new_tier_sales: FeatureFlagValue.optional(),
-  storage_overage: FeatureFlagValue.optional(),
-  workspace: FeatureFlagValue.optional(),
+  mobile_sandbox_grant: FeatureFlagValue.optional(),
 
   // the flags below can only be used with commercial license
   // if you want to use it in the commercial usage
@@ -192,12 +216,11 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   knowledge_base: true,
   rag_eval: false,
 
-  // Off until an admin publishes a user allowlist or flips it to true; Mobile
-  // stays on the v1 socket until then.
-  agent_gateway_mux_mobile: false,
-
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
+  agent_deferred_init: false,
+  agent_deferred_hetero_dispatch: false,
+  agent_runtime_strip_operation_toolset: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -207,6 +230,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
+  agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
@@ -224,14 +248,13 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   onboarding_v2: isDev,
   // Cloud-only grayscale for the new subscription tiers: off until an admin
   // publishes a whitelist (array of user IDs) or flips it to true.
-  new_tier_plans: false,
   mobile_new_tier_sales: false,
-  storage_overage: true,
-  workspace: isDev,
+  // Server-only: Cloud lets a store sandbox purchase grant entitlement only for user IDs listed
+  // explicitly; `true` and percentage rollout count as off, and it never reaches the client state.
+  mobile_sandbox_grant: false,
 
   market: true,
   speech_to_text: true,
-  voice_dictation: false,
   changelog: true,
 
   // the flags below can only be used with commercial license
@@ -252,14 +275,31 @@ export const mapFeatureFlagsEnvToState = (
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId, 'edit_agent'),
 
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId, 'agent_share'),
-    enableGatewayMuxMobile: evaluateFeatureFlag(
-      config.agent_gateway_mux_mobile,
-      userId,
-      'agent_gateway_mux_mobile',
-    ),
+    // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
+    enableGatewayMuxMobile: ENABLE_BUSINESS_FEATURES,
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableDeferredInit: evaluateFeatureFlag(
+      config.agent_deferred_init,
+      userId,
+      'agent_deferred_init',
+    ),
+    enableDeferredHeteroDispatch: evaluateFeatureFlag(
+      config.agent_deferred_hetero_dispatch,
+      userId,
+      'agent_deferred_hetero_dispatch',
+    ),
+    enableStripOperationToolset: evaluateFeatureFlag(
+      config.agent_runtime_strip_operation_toolset,
+      userId,
+      'agent_runtime_strip_operation_toolset',
+    ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableAgentKnowledgeSpace: evaluateFeatureFlag(
+      config.agent_knowledge_space,
+      userId,
+      'agent_knowledge_space',
+    ),
     enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
     enableManagedCloudDevice: evaluateFeatureFlag(
@@ -287,20 +327,22 @@ export const mapFeatureFlagsEnvToState = (
     enableDevDock: evaluateFeatureFlag(config.dev_dock, userId, 'dev_dock'),
     enableAuthCaptcha: evaluateFeatureFlag(config.auth_captcha, userId, 'auth_captcha'),
     enableOnboardingV2: evaluateFeatureFlag(config.onboarding_v2, userId, 'onboarding_v2'),
-    enableNewTierPlans: evaluateFeatureFlag(config.new_tier_plans, userId, 'new_tier_plans'),
+    // Deprecated constant for released desktop clients; see IFeatureFlagsState.
+    enableNewTierPlans: true,
     enableMobileNewTierSales: evaluateFeatureFlag(
       config.mobile_new_tier_sales,
       userId,
       'mobile_new_tier_sales',
     ),
-    enableStorageOverage: evaluateFeatureFlag(config.storage_overage, userId, 'storage_overage'),
 
     showCloudPromotion: evaluateFeatureFlag(config.cloud_promotion, userId, 'cloud_promotion'),
-    enableWorkspace: evaluateFeatureFlag(config.workspace, userId, 'workspace'),
+    // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
+    enableWorkspace: ENABLE_BUSINESS_FEATURES,
 
     showMarket: evaluateFeatureFlag(config.market, userId, 'market'),
     enableSTT: evaluateFeatureFlag(config.speech_to_text, userId, 'speech_to_text'),
-    enableVoiceDictation: evaluateFeatureFlag(config.voice_dictation, userId, 'voice_dictation'),
+    // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
+    enableVoiceDictation: ENABLE_BUSINESS_FEATURES,
 
     hideGitHub: evaluateFeatureFlag(
       config.commercial_hide_github,
