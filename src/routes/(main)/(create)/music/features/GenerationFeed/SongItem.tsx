@@ -93,6 +93,7 @@ const SongItem = memo<SongItemProps>(({ batch, generation, index, topicId }) => 
       <MusicErrorItem
         generation={generation}
         isRetrying={isRetrying}
+        provider={batch.provider}
         onCopyError={handleCopyError}
         onDelete={handleDelete}
         onRetry={handleRetry}

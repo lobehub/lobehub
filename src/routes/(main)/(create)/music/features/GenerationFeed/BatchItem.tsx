@@ -11,10 +11,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ModelIcon } from '@/components/LobeIcons';
-import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useMusicStore } from '@/store/music';
-import { AsyncTaskErrorType } from '@/types/asyncTask';
 import type { GenerationBatch } from '@/types/generation';
 
 import SongItem from './SongItem';
@@ -99,19 +97,6 @@ export const MusicGenerationBatchItem = memo<MusicGenerationBatchItemProps>(({ b
   }, [activeTopicId, batch.id, removeGenerationBatch]);
 
   if (batch.generations.length === 0 || !activeTopicId) return null;
-
-  const isInvalidApiKey = batch.generations.some(
-    (generation) => generation.task.error?.name === AsyncTaskErrorType.InvalidProviderAPIKey,
-  );
-
-  if (isInvalidApiKey) {
-    return (
-      <GenerationInvalidAPIKey
-        provider={batch.provider}
-        onNavigate={() => removeGenerationBatch(batch.id, activeTopicId)}
-      />
-    );
-  }
 
   return (
     <Block
