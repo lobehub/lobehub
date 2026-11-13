@@ -5,18 +5,29 @@ export const MCP_EVENTS_EXTENSION_ID = 'io.modelcontextprotocol/events';
 export const MCP_EVENTS_CLIENT_CAPABILITIES = { extensions: { [MCP_EVENTS_EXTENSION_ID]: {} } };
 
 const record = z.record(z.string(), z.unknown());
+
+/**
+ * An optional response field that may also arrive as `null`, read as absent.
+ *
+ * The SEP marks these fields optional, and servers that serialize unset values as `null` (the Go
+ * reference server does, e.g. `lastDeliveryAt` before the first successful delivery) are common.
+ * Rejecting them turned a subscription the server had accepted into a failed one.
+ */
+const absent = <T extends z.ZodType>(schema: T) =>
+  schema.nullish().transform((value) => value ?? undefined);
+
 export const McpEventTypeSchema = z.looseObject({
   name: z.string().min(1),
-  description: z.string().optional(),
-  title: z.string().optional(),
+  description: absent(z.string()),
+  title: absent(z.string()),
   delivery: z.array(z.string()),
-  inputSchema: record.optional(),
-  payloadSchema: record.optional(),
+  inputSchema: absent(record),
+  payloadSchema: absent(record),
 });
 export const McpListEventsResultSchema = z.looseObject({
-  resultType: z.literal('complete').optional(),
+  resultType: absent(z.literal('complete')),
   events: z.array(McpEventTypeSchema),
-  nextCursor: z.string().optional(),
+  nextCursor: absent(z.string()),
 });
 export const McpSubscribeEventParamsSchema = z.looseObject({
   name: z.string().min(1),
@@ -26,22 +37,24 @@ export const McpSubscribeEventParamsSchema = z.looseObject({
   maxAgeMs: z.number().int().nonnegative().optional(),
   ttlMs: z.number().int().nonnegative().nullable().optional(),
 });
+const McpDeliveryStatusSchema = z.object({
+  active: absent(z.boolean()),
+  failedSince: absent(z.string()),
+  lastDeliveryAt: absent(z.string()),
+  // `null` is meaningful here: the SEP uses it for a subscription with no delivery error.
+  lastError: z.string().nullable().optional(),
+  retryAfterMs: absent(z.number()),
+  throttled: absent(z.boolean()),
+});
 export const McpSubscribeEventResultSchema = z.looseObject({
-  resultType: z.literal('complete').optional(),
+  resultType: absent(z.literal('complete')),
   id: z.string(),
   refreshBefore: z.iso.datetime({ offset: true }).nullable(),
   cursor: z.string().nullable().optional(),
-  truncated: z.boolean().optional(),
-  deliveryStatus: z
-    .looseObject({
-      active: z.boolean().optional(),
-      failedSince: z.string().optional(),
-      lastDeliveryAt: z.string().optional(),
-      lastError: z.string().nullable().optional(),
-      retryAfterMs: z.number().optional(),
-      throttled: z.boolean().optional(),
-    })
-    .optional(),
+  truncated: absent(z.boolean()),
+  // Advisory only. A delivery status the client cannot read must not fail a subscription the
+  // server accepted, so an unreadable one is dropped rather than rejected.
+  deliveryStatus: absent(McpDeliveryStatusSchema).catch(undefined),
 });
 export const McpUnsubscribeEventParamsSchema = z.looseObject({
   name: z.string().min(1),
