@@ -5,5 +5,7 @@ import {
 
 import { useArtboardStore } from '../store';
 
-export const addBoardReference = (ref: ArtboardReference) =>
-  !useArtboardStore.getState().gallery && insertArtboardReference(ref);
+export const addBoardReference = (ref: ArtboardReference) => {
+  const { fullscreen, gallery } = useArtboardStore.getState();
+  return !gallery && !fullscreen && insertArtboardReference(ref);
+};

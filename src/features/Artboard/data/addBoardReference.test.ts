@@ -26,6 +26,13 @@ describe('addBoardReference', () => {
     expect(insert).toHaveBeenCalledWith(ref);
   });
 
+  it('refuses while the board is full screen, where the conversation input is covered', () => {
+    artboardActions.setFullscreen(true);
+
+    expect(addBoardReference(ref)).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it('refuses while the board is opened from Works, where there is no conversation input', () => {
     artboardActions.setGallery(true);
 

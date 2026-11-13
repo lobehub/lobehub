@@ -1,5 +1,5 @@
 import type { ArtboardCommentThreadView, ArtboardCommentView } from '@lobechat/types';
-import { Button, Flexbox, Icon, Tag, Text, TextArea, toast } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Input, Tag, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { BotIcon } from 'lucide-react';
@@ -86,7 +86,7 @@ const Message = ({ comment }: { comment: ArtboardCommentView }) => {
 };
 
 interface ReplyBoxProps {
-  action: string;
+  action?: string;
   autoFocus?: boolean;
   extra?: React.ReactNode;
   onSend: (text: string) => Promise<unknown>;
@@ -117,10 +117,10 @@ const ReplyBox = ({ action, autoFocus, extra, onSend, placeholder, primary }: Re
   };
 
   return (
-    <Flexbox horizontal align="flex-end" gap={8}>
-      <TextArea
+    <Flexbox horizontal align="center" gap={8}>
+      <Input
         autoFocus={autoFocus}
-        autoSize={{ maxRows: 4, minRows: 1 }}
+        disabled={sending}
         placeholder={placeholder}
         style={{ flex: 1 }}
         value={text}
@@ -132,15 +132,16 @@ const ReplyBox = ({ action, autoFocus, extra, onSend, placeholder, primary }: Re
           }
         }}
       />
-      <Button
-        disabled={!text.trim()}
-        loading={sending}
-        size={'small'}
-        type={primary ? 'primary' : 'default'}
-        onClick={send}
-      >
-        {action}
-      </Button>
+      {action && (
+        <Button
+          disabled={!text.trim()}
+          loading={sending}
+          type={primary ? 'primary' : 'default'}
+          onClick={send}
+        >
+          {action}
+        </Button>
+      )}
       {extra}
     </Flexbox>
   );
@@ -195,19 +196,21 @@ export const ThreadCard = ({ thread }: { thread: ArtboardCommentThreadView }) =>
       <Flexbox gap={6} {...stylex.props(styles.footer)}>
         {resolved ? (
           <Flexbox horizontal justify="flex-end">
-            <Button loading={settling} size={'small'} onClick={() => settle(false)}>
+            <Button loading={settling} onClick={() => settle(false)}>
               {t('artboard.comment.reopen')}
             </Button>
           </Flexbox>
         ) : (
           <ReplyBox
-            action={t(question ? 'artboard.question.answer' : 'artboard.comment.send')}
+            action={question ? t('artboard.question.answer') : undefined}
             placeholder={t(question ? 'artboard.question.placeholder' : 'artboard.comment.reply')}
             primary={question && !isAnswered(thread)}
             extra={
-              <Button loading={settling} size={'small'} onClick={() => settle(true)}>
-                {t('artboard.comment.resolve')}
-              </Button>
+              (!question || isAnswered(thread)) && (
+                <Button loading={settling} onClick={() => settle(true)}>
+                  {t('artboard.comment.resolve')}
+                </Button>
+              )
             }
             onSend={(text) => replyThread(artboardId, thread.id, text)}
           />

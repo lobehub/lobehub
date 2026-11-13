@@ -46,7 +46,7 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
   const selected = useArtboardStore((s) =>
     s.mode === 'discuss' && s.selected ? board.boardById[s.selected] : undefined,
   );
-  const gallery = useArtboardStore((s) => s.gallery);
+  const noChatInput = useArtboardStore((s) => s.gallery || s.fullscreen);
   if (!selected || selected.pageId !== board.pageId) return null;
 
   const refer = () => {
@@ -79,7 +79,7 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
         title={t('artboard.selection.view')}
         onClick={openFull}
       />
-      {!gallery && (
+      {!noChatInput && (
         <ActionIcon
           icon={MessageSquareQuoteIcon}
           size={'small'}
