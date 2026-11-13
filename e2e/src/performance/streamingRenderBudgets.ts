@@ -74,30 +74,46 @@ const LOCAL: Record<StreamingScenario, StreamingBudget> = {
 };
 
 /**
- * GitHub-hosted `ubuntu-latest` runners. Counts and heap reuse the local
- * ceilings; durations and frame gaps start at 2.5 times local, the ratio the
- * chat switch budgets measured on CI, until a CI receipt calibrates them
- * (the `render-budget` artifact of the `Render Budget` job).
+ * GitHub-hosted `ubuntu-latest` runners. Render counts and heap growth match
+ * local, so they reuse the local ceilings. Durations and frame gaps allow about
+ * 2.5 times the first CI receipt (PR #22968, 1 run, p50):
+ *
+ * | scenario   | sidebar  | conversation | messages   | frame gap | heap   |
+ * | ---------- | -------- | ------------ | ---------- | --------- | ------ |
+ * | bigstream  | 32× 48ms | 350× 637ms   | 249× 447ms | 217ms     | 11.5MB |
+ * | toolstorm  | 23× 45ms | 105× 243ms   | 84× 110ms  | 217ms     | 23.4MB |
+ * | richreply  | 27× 43ms | 203× 615ms   | 154× 464ms | 533ms     | 13.1MB |
+ * | background | 17× 9ms  | 8× 13ms      | 5× 2ms     | 17ms      | 2.3MB  |
+ *
+ * Receipts are uploaded as the `render-budget` artifact of the
+ * `Render Budget` job.
  */
-const CI_TIMING_FACTOR = 2.5;
-
-const withCiTiming = (budget: StreamingBudget): StreamingBudget => ({
-  ...budget,
-  maxFrameGapMs: Math.round(budget.maxFrameGapMs * CI_TIMING_FACTOR),
+const withCiTiming = (
+  scenario: StreamingScenario,
+  maxFrameGapMs: number,
+  durations: Record<RenderRegion, number>,
+): StreamingBudget => ({
+  ...LOCAL[scenario],
+  maxFrameGapMs,
   regions: Object.fromEntries(
-    RENDER_REGIONS.map((region: RenderRegion) => [
+    RENDER_REGIONS.map((region) => [
       region,
-      {
-        actualDurationMs: Math.round(budget.regions[region].actualDurationMs * CI_TIMING_FACTOR),
-        renders: budget.regions[region].renders,
-      },
+      { actualDurationMs: durations[region], renders: LOCAL[scenario].regions[region].renders },
     ]),
   ) as StreamingBudget['regions'],
 });
 
-const CI = Object.fromEntries(
-  Object.entries(LOCAL).map(([scenario, budget]) => [scenario, withCiTiming(budget)]),
-) as Record<StreamingScenario, StreamingBudget>;
+const CI: Record<StreamingScenario, StreamingBudget> = {
+  // The frame gap stays at the local ceiling: an idle page paints every frame on both.
+  background: withCiTiming('background', 100, { conversation: 34, messages: 6, sidebar: 22 }),
+  bigstream: withCiTiming('bigstream', 540, { conversation: 1600, messages: 1100, sidebar: 120 }),
+  richreply: withCiTiming('richreply', 1330, {
+    conversation: 1540,
+    messages: 1160,
+    sidebar: 110,
+  }),
+  toolstorm: withCiTiming('toolstorm', 540, { conversation: 610, messages: 275, sidebar: 115 }),
+};
 
 export const STREAMING_RENDER_BUDGETS: Record<
   RunnerKind,
