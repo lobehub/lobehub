@@ -128,6 +128,18 @@ export type AgentProviderAccountItem = typeof agentProviderAccounts.$inferSelect
 // agent_account_bindings — agent → account pool (enables LB + UI switching)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The accounts an agent is authorized to schedule. Authorization is a
+ * permission, not ownership: the unique key is (agent, account), so any number
+ * of agents can authorize the same account without affecting each other.
+ *
+ * - authorized = a row with `enabled = true` and role `pool` or `pinned`;
+ * - role `disabled` / `enabled = false` / no row = not authorized, never a
+ *   load-balancing candidate;
+ * - `pinned` = Manual mode (legacy agent-wide pin; per-device picks live in
+ *   `agent_device_account_bindings`): the pinned account runs, no balancing.
+ */
+
 export const agentAccountBindings = pgTable(
   'agent_account_bindings',
   {
@@ -151,6 +163,12 @@ export const agentAccountBindings = pgTable(
     /** Weighted round-robin weight within the pool. */
     weight: integer('weight').notNull().default(1),
     enabled: boolean('enabled').notNull().default(true),
+    /**
+     * When this agent's load balancer last picked the account (Auto mode). Per
+     * binding, so agents sharing an account rotate independently; the ranking
+     * prefers the least recently selected healthy account.
+     */
+    lastSelectedAt: timestamptz('last_selected_at'),
 
     ...timestamps,
   },

@@ -9,7 +9,11 @@ import type {
   QuotaAccountIdentity,
   QuotaLimitReading,
 } from '@lobechat/heterogeneous-agents/quota';
-import type { QuotaDeviceAccount } from '@lobechat/types';
+import type {
+  QuotaAccountProvider,
+  QuotaDeviceAccount,
+  QuotaLoadBalanceConfig,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -85,6 +89,25 @@ class AgentQuotaService {
     lambdaClient.agentQuota.listActiveRuns.query({ accountId });
 
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
+
+  /** The global account pool, each account marked `authorized` for this agent. */
+  listAgentAccounts = async (agentId: string, provider?: QuotaAccountProvider) =>
+    lambdaClient.agentQuota.listAgentAccounts.query({ agentId, provider });
+
+  /** Replace the agent's authorized account set; returns the new load-balancing config. */
+  setAgentAccounts = async (
+    agentId: string,
+    accountIds: string[],
+    provider?: QuotaAccountProvider,
+  ): Promise<QuotaLoadBalanceConfig> =>
+    lambdaClient.agentQuota.setAgentAccounts.mutate({ accountIds, agentId, provider });
+
+  /** Auto / Manual mode and the candidates (= authorized, usable accounts). */
+  getLoadBalanceConfig = async (
+    agentId: string,
+    options?: { deviceId?: string; provider?: QuotaAccountProvider },
+  ): Promise<QuotaLoadBalanceConfig> =>
+    lambdaClient.agentQuota.getLoadBalanceConfig.query({ agentId, ...options });
 
   /** UI "switch account": pin one account for an agent (Manual mode). */
   switchAccount = async (agentId: string, accountId: string) =>
