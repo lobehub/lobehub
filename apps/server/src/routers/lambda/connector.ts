@@ -56,6 +56,7 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
+import { FileService } from '@/server/services/file';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -877,6 +878,7 @@ export const connectorRouter = router({
       try {
         return await callConnectorToolById(input, {
           ...ctx,
+          fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
           resolveCloudMcpCaller: () => resolveRequestCloudMcpCaller(ctx),
         });
       } catch (err: any) {

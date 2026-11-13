@@ -7,8 +7,10 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import type { PluginModel } from '@/database/models/plugin';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import type { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { callCloudMcpTool, type CloudMcpCaller } from '@/server/services/mcp/cloudTool';
+import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -31,6 +33,12 @@ export class ConnectorToolCallError extends Error {
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
   agentModel: Pick<AgentModel, 'existsById'>;
+  /**
+   * Stores an HTTP connector tool result's image / audio blocks as the
+   * caller's files, so the text result links to them, as `tools.mcp.callTool`
+   * does. None: the blocks are formatted as returned (base64 data).
+   */
+  fileService?: FileService;
   /**
    * The caller's legacy plugin rows, which stand in for an unmarked marketplace
    * install made before installs used connectors. None: no such row counts.
@@ -219,12 +227,16 @@ export const callConnectorToolById = async (
   }
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const { fileService } = ctx;
 
   return mcpService.callTool({
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,
     mcpApps: await isMcpAppsEnabled(ctx.userId),
+    processContentBlocks: fileService
+      ? (blocks) => processContentBlocks(blocks, fileService)
+      : undefined,
     toolName: params.toolName,
   });
 };

@@ -185,6 +185,37 @@ describe('callConnectorToolById', () => {
     );
   });
 
+  // Image / audio blocks become the caller's files, as `tools.mcp.callTool` stores them
+  it("stores a result's media blocks with the caller's file service", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const fileService = { uploadMedia: vi.fn() };
+    const blocks = [{ data: 'aGk=', mimeType: 'image/png', type: 'image' }];
+    processContentBlocks.mockResolvedValue([{ text: 'stored', type: 'text' }]);
+
+    await callConnectorToolById(
+      { identifier: 'my-conn', toolName: 'do_thing' },
+      { ...makeCtx([connector], [tool()]), fileService },
+    );
+
+    const { processContentBlocks: processor } = vi.mocked(mcpService.callTool).mock.calls[0][0];
+    expect(processor).toBeTypeOf('function');
+    await expect(processor!(blocks as any)).resolves.toEqual([{ text: 'stored', type: 'text' }]);
+    expect(processContentBlocks).toHaveBeenCalledWith(blocks, fileService);
+  });
+
+  it('formats media blocks as returned when no file service is given', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+
+    await callConnectorToolById(
+      { identifier: 'my-conn', toolName: 'do_thing' },
+      makeCtx([connector], [tool()]),
+    );
+
+    expect(mcpService.callTool).toHaveBeenCalledWith(
+      expect.objectContaining({ processContentBlocks: undefined }),
+    );
+  });
+
   it.each([true, false])('passes the caller mcp_apps flag (%s) through', async (enabled) => {
     mcpAppsEnabled.mockResolvedValueOnce(enabled);
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
