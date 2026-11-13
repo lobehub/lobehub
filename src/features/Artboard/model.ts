@@ -5,7 +5,9 @@ import {
   type ArtboardGroupView,
   type ArtboardItem,
   artboardJourneyOf,
+  type ArtboardPageView,
   type ArtboardRect,
+  type ArtboardRoundView,
 } from '@lobechat/types';
 
 export interface Rect {
@@ -24,8 +26,8 @@ export interface EdgePath {
 export type BoardEdge = ArtboardEdgeView & EdgePath;
 
 export type BoardBlocker =
-  | { id: string; kind: 'round'; text: string }
-  | { boardId: string | null; id: string; kind: 'question'; text: string };
+  | { groupId: string | null; id: string; kind: 'round'; pageId: string; text: string }
+  | { boardId: string | null; id: string; kind: 'question'; pageId: string | null; text: string };
 
 export interface BoardModel {
   artboard: ArtboardItem;
@@ -41,8 +43,12 @@ export interface BoardModel {
   journeyEdges: ArtboardEdgeView[];
   journeyEntryId: string | undefined;
   journeyGroupId: string | undefined;
+  openRounds: ArtboardRoundView[];
   pageId: string | undefined;
+  pageIdOf: (id: string) => string | undefined;
+  pages: ArtboardPageView[];
   recommendedIds: Set<string>;
+  roundByGroupId: Record<string, ArtboardRoundView>;
 }
 
 export const computeEdgePath = (from: ArtboardRect, to: ArtboardRect): EdgePath => {
@@ -94,9 +100,10 @@ const union = (rects: Rect[]): Rect =>
 export const buildBoardModel = (
   artboard: ArtboardItem,
   imageUrls: Record<string, string>,
+  requestedPageId?: string | null,
 ): BoardModel => {
   const { content } = artboard;
-  const pageId = content.pages[0]?.id;
+  const pageId = (content.pages.find((p) => p.id === requestedPageId) ?? content.pages[0])?.id;
   const boardById = Object.fromEntries(content.boards.map((b) => [b.id, b]));
 
   const boards = content.boards.filter((b) => b.pageId === pageId);
@@ -114,16 +121,34 @@ export const buildBoardModel = (
   const targets = new Set(journeyEdges.map((e) => e.to));
   const entries = journeyBoards.filter((b) => !targets.has(b.id));
 
+  const roundById = Object.fromEntries(content.rounds.map((r) => [r.id, r]));
+  const roundByGroupId: Record<string, ArtboardRoundView> = {};
+  const groupIdByRound: Record<string, string> = {};
+  for (const b of content.boards) {
+    if (!b.roundId || !b.groupId || !roundById[b.roundId]) continue;
+    roundByGroupId[b.groupId] = roundById[b.roundId];
+    groupIdByRound[b.roundId] = b.groupId;
+  }
+  const openRounds = content.rounds.filter((round) => round.status === 'open');
+  const pageIds = new Map<string, string>(
+    [...content.boards, ...content.groups, ...content.rounds].map((x) => [x.id, x.pageId]),
+  );
+
   return {
     artboard,
     blockers: [
-      ...content.rounds
-        .filter((round) => round.status === 'open')
-        .map((round) => ({ id: round.id, kind: 'round' as const, text: round.title })),
+      ...openRounds.map((round) => ({
+        groupId: groupIdByRound[round.id] ?? null,
+        id: round.id,
+        kind: 'round' as const,
+        pageId: round.pageId,
+        text: round.title,
+      })),
       ...content.questions.map((question) => ({
         boardId: question.boardId,
         id: question.id,
         kind: 'question' as const,
+        pageId: question.pageId,
         text: question.content,
       })),
     ],
@@ -141,11 +166,15 @@ export const buildBoardModel = (
     journeyEdges,
     journeyEntryId: entries.length === 1 ? entries[0].id : undefined,
     journeyGroupId: journey.group?.id,
+    openRounds,
     pageId,
+    pageIdOf: (id) => pageIds.get(id),
+    pages: content.pages,
     recommendedIds: new Set(
       content.rounds.flatMap((round) =>
         round.recommendedBoardId ? [round.recommendedBoardId] : [],
       ),
     ),
+    roundByGroupId,
   };
 };

@@ -1,7 +1,7 @@
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { BoardMode, CameraTarget, VerifyView } from '../types';
+import type { BoardMode, BoardTool, CameraTarget, VerifyView } from '../types';
 import { type ArtboardState, initialState } from './initialState';
 import { useArtboardStore } from './store';
 
@@ -32,10 +32,9 @@ export class ArtboardActionImpl {
         ...initialState,
         boardId,
         gallery: this.#get().gallery,
-        galleryDrafts: this.#get().galleryDrafts,
-        galleryRefs: this.#get().galleryRefs,
-        galleryText: this.#get().galleryText,
         outlineOpen: false,
+        pageByBoard: this.#get().pageByBoard,
+        pageId: this.#get().pageByBoard[boardId] ?? null,
         verifyOpen: !this.#narrow,
       },
       false,
@@ -60,73 +59,39 @@ export class ArtboardActionImpl {
     this.#flashTimer = setTimeout(() => this.#set({ flash: [] }, false, n('flashDone')), FLASH_MS);
   };
 
-  setGallery = (gallery: ArtboardState['gallery']) => {
-    const state = this.#get();
-    const galleryDrafts = { ...state.galleryDrafts };
-    if (state.gallery)
-      galleryDrafts[state.gallery.topicId] = { refs: state.galleryRefs, text: state.galleryText };
-    const draft = gallery ? galleryDrafts[gallery.topicId] : undefined;
+  setGallery = (gallery: boolean) => this.#set({ gallery }, false, n('gallery'));
+
+  setPage = (pageId: string) => {
+    const { boardId, pageByBoard, pageId: current } = this.#get();
+    if (pageId === current) return;
     this.#set(
       {
-        gallery,
-        galleryDrafts,
-        galleryRefs: draft?.refs ?? [],
-        galleryText: draft?.text ?? '',
+        openThreadId: null,
+        pageByBoard: boardId ? { ...pageByBoard, [boardId]: pageId } : pageByBoard,
+        pageId,
+        selected: null,
       },
       false,
-      n('gallery'),
+      n('setPage'),
     );
   };
 
-  setGalleryText = (galleryText: string) => this.#set({ galleryText }, false, n('galleryText'));
-
-  addGalleryRef = (ref: ArtboardState['galleryRefs'][number]) =>
-    this.#set({ galleryRefs: [...this.#get().galleryRefs, ref] }, false, n('addGalleryRef'));
-
-  removeGalleryRef = (index: number) =>
-    this.#set(
-      { galleryRefs: this.#get().galleryRefs.filter((_, i) => i !== index) },
-      false,
-      n('removeGalleryRef'),
-    );
-
-  clearGalleryRefs = () => {
-    const { gallery, galleryDrafts } = this.#get();
-    this.#set(
-      {
-        galleryDrafts: gallery
-          ? { ...galleryDrafts, [gallery.topicId]: { refs: [], text: '' } }
-          : galleryDrafts,
-        galleryRefs: [],
-        galleryText: '',
-      },
-      false,
-      n('clearGalleryRefs'),
-    );
+  goTo = (target: { id: string; kind: 'group' | 'item'; pageId?: string | null }) => {
+    if (this.#get().mode !== 'discuss') this.setMode('discuss');
+    if (target.pageId) this.setPage(target.pageId);
+    if (target.kind === 'item') return this.focusItem(target.id);
+    this.focus({ id: target.id, kind: 'group' });
   };
 
-  acceptGalleryDraft = (
-    topicId: string,
-    sent: { refs: ArtboardState['galleryRefs']; text: string },
-  ) => {
-    const state = this.#get();
-    const active = state.gallery?.topicId === topicId;
-    const current = active
-      ? { refs: state.galleryRefs, text: state.galleryText }
-      : state.galleryDrafts[topicId];
-    if (!current) return;
-    const draft = {
-      refs: current.refs.filter((ref) => !sent.refs.includes(ref)),
-      text: current.text === sent.text ? '' : current.text,
-    };
-    this.#set(
-      {
-        galleryDrafts: { ...state.galleryDrafts, [topicId]: draft },
-        ...(active && { galleryRefs: draft.refs, galleryText: draft.text }),
-      },
-      false,
-      n('acceptGalleryDraft'),
-    );
+  setTool = (tool: BoardTool) => this.#set({ selected: null, tool }, false, n('setTool'));
+
+  openThread = (openThreadId: string | null) => this.#set({ openThreadId }, false, n('openThread'));
+
+  showThread = (thread: { boardId: string | null; id: string; pageId: string | null }) => {
+    if (this.#get().mode !== 'discuss') this.setMode('discuss');
+    if (thread.pageId) this.setPage(thread.pageId);
+    this.#set({ openThreadId: thread.id, selected: null }, false, n('showThread'));
+    if (thread.boardId) this.focus({ id: thread.boardId, kind: 'item' });
   };
 
   setFullscreen = (fullscreen: boolean) => this.#set({ fullscreen }, false, n('fullscreen'));
@@ -161,7 +126,7 @@ export class ArtboardActionImpl {
   };
 
   setMode = (mode: BoardMode) => {
-    this.#set({ mode, selected: null }, false, n('setMode'));
+    this.#set({ mode, openThreadId: null, selected: null, tool: 'select' }, false, n('setMode'));
     if (mode === 'verify') {
       this.#set({ outlineOpen: false, verifyOpen: !this.#narrow }, false, n('verifyEnter'));
       this.focus({ kind: 'journey' });

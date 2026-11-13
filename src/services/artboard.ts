@@ -36,6 +36,9 @@ class ArtboardService {
   ): Promise<{ artboard: ArtboardItem }> =>
     lambdaClient.artboard.chooseBoard.mutate({ boardId, id, roundId });
 
+  countUndeliveredComments = (id: string): Promise<number> =>
+    lambdaClient.artboard.countUndeliveredComments.query({ id });
+
   finalize = (id: string, revision: number): Promise<ArtboardFinalize> =>
     lambdaClient.artboard.finalize.mutate({ id, revision });
 
@@ -60,6 +63,9 @@ class ArtboardService {
 
   submitRound = (id: string, roundId: string): Promise<{ artboard: ArtboardItem }> =>
     lambdaClient.artboard.submitRound.mutate({ id, roundId });
+
+  submitRounds = (id: string): Promise<{ artboard: ArtboardItem; submitted: number }> =>
+    lambdaClient.artboard.submitRounds.mutate({ id });
 }
 
 export const artboardService = new ArtboardService();

@@ -22,4 +22,9 @@ describe('serializeArtboardReference', () => {
       '> Re: b1 · A · artboard art_1\n> x\n\n> Re: b2 · B · artboard art_1\n> x',
     );
   });
+  it('quotes a board with no remark as a single line', () => {
+    expect(serializeArtboardReference({ ...ref, text: '' }, t)).toBe(
+      '> Re: b1 · A · artboard art_1',
+    );
+  });
 });

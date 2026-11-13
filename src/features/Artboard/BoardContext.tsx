@@ -2,6 +2,7 @@ import type { ArtboardItem } from '@lobechat/types';
 import { createContext, type ReactNode, use, useMemo } from 'react';
 
 import { type BoardModel, buildBoardModel } from './model';
+import { useArtboardStore } from './store';
 
 const BoardContext = createContext<BoardModel | null>(null);
 
@@ -12,7 +13,11 @@ interface BoardProviderProps {
 }
 
 export const BoardProvider = ({ artboard, children, imageUrls }: BoardProviderProps) => {
-  const model = useMemo(() => buildBoardModel(artboard, imageUrls), [artboard, imageUrls]);
+  const pageId = useArtboardStore((s) => s.pageId);
+  const model = useMemo(
+    () => buildBoardModel(artboard, imageUrls, pageId),
+    [artboard, imageUrls, pageId],
+  );
   return <BoardContext value={model}>{children}</BoardContext>;
 };
 

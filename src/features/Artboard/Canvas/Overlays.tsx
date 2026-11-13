@@ -1,4 +1,4 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -13,9 +13,10 @@ import { useTranslation } from 'react-i18next';
 import { openCanvasModal } from '@/features/CanvasModal/loader';
 import { sx } from '@/styles/sx';
 
-import { focusComposer } from '../Board/focusComposer';
 import { useBoard } from '../BoardContext';
-import { useArtboardStore } from '../store';
+import { addBoardReference } from '../data/addBoardReference';
+import { boardReference } from '../data/references';
+import { artboardActions, useArtboardStore } from '../store';
 import type { ViewState } from './useViewport';
 
 export const floatStyles = stylex.create({
@@ -42,7 +43,14 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
   const selected = useArtboardStore((s) =>
     s.mode === 'discuss' && s.selected ? board.boardById[s.selected] : undefined,
   );
+  const gallery = useArtboardStore((s) => s.gallery);
   if (!selected || selected.pageId !== board.pageId) return null;
+
+  const refer = () => {
+    const reference = boardReference(board, selected.id, '');
+    if (!reference || !addBoardReference(reference)) return toast.error(t('artboard.chat.noInput'));
+    artboardActions.select(null);
+  };
 
   const { rect, source } = selected;
   const imageUrl = source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
@@ -68,12 +76,14 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
         title={t('artboard.selection.view')}
         onClick={openFull}
       />
-      <ActionIcon
-        icon={MessageSquareQuoteIcon}
-        size={'small'}
-        title={t('artboard.selection.discuss')}
-        onClick={focusComposer}
-      />
+      {!gallery && (
+        <ActionIcon
+          icon={MessageSquareQuoteIcon}
+          size={'small'}
+          title={t('artboard.selection.discuss')}
+          onClick={refer}
+        />
+      )}
     </Flexbox>
   );
 };

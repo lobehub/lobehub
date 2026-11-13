@@ -14,7 +14,6 @@ import { artboardActions, useArtboardStore } from '../store';
 import { useArtboardFeature } from '../useArtboardFeature';
 import VerifyPanel from '../Verify';
 import FlowStage from '../Verify/FlowStage';
-import Composer from './Composer';
 import Header from './Header';
 import Outline from './Outline';
 import { VerifyBar } from './StageBars';
@@ -64,7 +63,6 @@ const Stage = ({ narrow }: { narrow: boolean }) => {
       {mode === 'verify' && verifyView === 'flow' ? <FlowStage /> : <Canvas narrow={narrow} />}
       {outlineOpen && !narrow && mode === 'discuss' && <Outline />}
       {mode === 'verify' && <VerifyBar />}
-      {mode === 'discuss' && <Composer />}
     </div>
   );
 };

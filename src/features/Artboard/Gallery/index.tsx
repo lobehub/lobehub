@@ -1,19 +1,23 @@
 'use client';
 
 import { createModal, Flexbox, useModalContext } from '@lobehub/ui';
+import { useEffect } from 'react';
 
 import BoardView from '../Board';
+import { artboardActions } from '../store';
 import { useArtboardFeature } from '../useArtboardFeature';
-import GalleryFooter from './GalleryFooter';
 
 const GalleryBoard = ({ artboardId }: { artboardId: string }) => {
   const { close } = useModalContext();
   const { enabled } = useArtboardFeature();
+  useEffect(() => {
+    artboardActions.setGallery(true);
+    return () => artboardActions.setGallery(false);
+  }, []);
   if (!enabled) return null;
   return (
     <Flexbox height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
       <BoardView artboardId={artboardId} onExitFullscreen={close} />
-      <GalleryFooter artboardId={artboardId} onLeave={close} />
     </Flexbox>
   );
 };

@@ -1,10 +1,10 @@
 import type { ArtboardItem } from '@lobechat/types';
 import { t } from 'i18next';
 
-import { serializeArtboardReferences } from '@/features/ChatInput/InputEditor/ReferArtboard';
 import { useChatStore } from '@/store/chat';
 
-import { artboardActions, useArtboardStore } from '../store';
+import { useArtboardStore } from '../store';
+import { resolveBoardConversation } from './boardConversation';
 
 interface AnnounceParams {
   acceptanceUrl: string;
@@ -15,21 +15,11 @@ interface AnnounceParams {
 const translate = (key: string, options?: Record<string, unknown>) =>
   t(key as 'artboard.chat.quote', { ...options, ns: 'project' }) as string;
 
-const resolveTarget = (topicId: string | null) => {
-  const { gallery, galleryRefs, galleryText } = useArtboardStore.getState();
-  if (gallery)
-    return {
-      clear: () =>
-        artboardActions.acceptGalleryDraft(gallery.topicId, {
-          refs: galleryRefs,
-          text: galleryText,
-        }),
-      context: gallery,
-      editor: null,
-      quoted: [serializeArtboardReferences(galleryRefs, translate), galleryText]
-        .filter(Boolean)
-        .join('\n\n'),
-    };
+const resolveTarget = async (topicId: string | null) => {
+  if (useArtboardStore.getState().gallery) {
+    const context = await resolveBoardConversation(topicId);
+    return context ? { clear: undefined, context, editor: null, quoted: '' } : undefined;
+  }
 
   const { activeAgentId, activeTopicId, mainInputEditor } = useChatStore.getState();
   if (!activeAgentId || !activeTopicId || activeTopicId !== topicId) return;
@@ -42,7 +32,7 @@ const resolveTarget = (topicId: string | null) => {
 };
 
 export const announceFinalized = async ({ acceptanceUrl, artboard, count }: AnnounceParams) => {
-  const target = resolveTarget(artboard.topicId);
+  const target = await resolveTarget(artboard.topicId);
   if (!target) return;
 
   const line = translate('artboard.finalize.message', { count, title: artboard.title });

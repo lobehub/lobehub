@@ -10,7 +10,7 @@ type Translate = (key: string, options?: Record<string, unknown>) => string;
 export const serializeArtboardReference = (ref: ArtboardReference, t: Translate) =>
   [
     `> ${t('artboard.chat.quote', { target: `${ref.itemId} · ${ref.itemTitle}` })} · artboard ${ref.artboardId}`,
-    ...ref.text.split('\n').map((line) => `> ${line}`),
+    ...(ref.text ? ref.text.split('\n').map((line) => `> ${line}`) : []),
   ].join('\n');
 
 export const serializeArtboardReferences = (refs: ArtboardReference[], t: Translate) =>

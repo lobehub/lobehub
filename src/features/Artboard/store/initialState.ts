@@ -1,26 +1,20 @@
-import type { ArtboardReference } from '@/features/ChatInput/InputEditor/ReferArtboard/serialize';
-
-import type { BoardMode, CameraTarget, VerifyView } from '../types';
-
-export interface GalleryConversation {
-  agentId: string;
-  topicId: string;
-}
+import type { BoardMode, BoardTool, CameraTarget, VerifyView } from '../types';
 
 export interface ArtboardState {
   boardId: string | null;
   camera: CameraTarget | null;
   flash: string[];
   fullscreen: boolean;
-  gallery: GalleryConversation | null;
-  galleryDrafts: Record<string, { refs: ArtboardReference[]; text: string }>;
-  galleryRefs: ArtboardReference[];
-  galleryText: string;
+  gallery: boolean;
   mode: BoardMode;
+  openThreadId: string | null;
   outlineOpen: boolean;
+  pageByBoard: Record<string, string>;
+  pageId: string | null;
   selected: string | null;
   showReal: boolean;
   staleRevision: number | null;
+  tool: BoardTool;
   verifyOpen: boolean;
   verifyView: VerifyView;
 }
@@ -30,15 +24,16 @@ export const initialState: ArtboardState = {
   camera: null,
   flash: [],
   fullscreen: false,
-  gallery: null,
-  galleryDrafts: {},
-  galleryRefs: [],
-  galleryText: '',
+  gallery: false,
   mode: 'discuss',
+  openThreadId: null,
   outlineOpen: false,
+  pageByBoard: {},
+  pageId: null,
   selected: null,
   showReal: false,
   staleRevision: null,
+  tool: 'select',
   verifyOpen: true,
   verifyView: 'flow',
 };

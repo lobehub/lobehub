@@ -3,7 +3,6 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
-import { focusComposer } from '../Board/focusComposer';
 import type { BoardBlocker } from '../model';
 import { artboardActions } from '../store';
 
@@ -25,14 +24,17 @@ interface PendingItemProps {
 
 const PendingItem = ({ blocker, onDiscuss }: PendingItemProps) => {
   const { t } = useTranslation('project');
-  const boardId = blocker.kind === 'question' ? blocker.boardId : null;
-
-  const discuss = () => {
-    if (!boardId) return;
+  const jump = () => {
     onDiscuss?.();
-    artboardActions.setMode('discuss');
-    artboardActions.focusItem(boardId);
-    focusComposer();
+    if (blocker.kind === 'question')
+      return artboardActions.showThread({
+        boardId: blocker.boardId,
+        id: blocker.id,
+        pageId: blocker.pageId,
+      });
+    if (blocker.groupId)
+      artboardActions.goTo({ id: blocker.groupId, kind: 'group', pageId: blocker.pageId });
+    else artboardActions.setPage(blocker.pageId);
   };
 
   return (
@@ -45,13 +47,15 @@ const PendingItem = ({ blocker, onDiscuss }: PendingItemProps) => {
             : 'artboard.finalize.pending.question',
         )}
       </Text>
-      {boardId && (
-        <Flexbox horizontal gap={8}>
-          <Button size={'small'} onClick={discuss}>
-            {t('artboard.finalize.pending.discuss')}
-          </Button>
-        </Flexbox>
-      )}
+      <Flexbox horizontal gap={8}>
+        <Button size={'small'} onClick={jump}>
+          {t(
+            blocker.kind === 'round'
+              ? 'artboard.finalize.pending.goChoose'
+              : 'artboard.finalize.pending.goAnswer',
+          )}
+        </Button>
+      </Flexbox>
     </Flexbox>
   );
 };

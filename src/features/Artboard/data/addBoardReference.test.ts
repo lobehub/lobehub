@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { artboardActions, useArtboardStore } from '../store';
+import { artboardActions } from '../store';
 import { addBoardReference } from './addBoardReference';
 
 const { insert } = vi.hoisted(() => ({ insert: vi.fn(() => true) }));
@@ -26,13 +26,10 @@ describe('addBoardReference', () => {
     expect(insert).toHaveBeenCalledWith(ref);
   });
 
-  it('collects it in the gallery composer while the board is opened from Works', () => {
-    artboardActions.setGallery({ agentId: 'agt_1', topicId: 'tpc_1' });
-    artboardActions.bindBoard('art_1');
+  it('refuses while the board is opened from Works, where there is no conversation input', () => {
+    artboardActions.setGallery(true);
 
-    addBoardReference(ref);
-
+    expect(addBoardReference(ref)).toBe(false);
     expect(insert).not.toHaveBeenCalled();
-    expect(useArtboardStore.getState().galleryRefs).toEqual([ref]);
   });
 });

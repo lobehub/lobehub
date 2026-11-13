@@ -185,9 +185,31 @@ describe('buildBoardModel', () => {
 
   it('lists open rounds and unanswered agent questions as what blocks finalizing', () => {
     expect(model.blockers).toEqual([
-      { id: 'r1', kind: 'round', text: '布局' },
-      { boardId: 'b1', id: 'c1', kind: 'question', text: '要保留吗？' },
+      { groupId: 'g1', id: 'r1', kind: 'round', pageId: 'p1', text: '布局' },
+      { boardId: 'b1', id: 'c1', kind: 'question', pageId: 'p1', text: '要保留吗？' },
     ]);
+  });
+
+  it('shows another page when asked, and falls back to the first for an unknown one', () => {
+    const second = buildBoardModel(item, {}, 'p2');
+    expect(second.pageId).toBe('p2');
+    expect(second.boards.map((b) => b.id)).toEqual(['b4']);
+    expect(second.groups.map((g) => g.id)).toEqual(['g3']);
+    expect(second.pages.map((p) => p.name)).toEqual(['Page 1', 'Page 2']);
+    expect(buildBoardModel(item, {}, 'gone').pageId).toBe('p1');
+  });
+
+  it('knows the page of any board, group or round, whatever page is shown', () => {
+    expect(model.pageIdOf('b4')).toBe('p2');
+    expect(model.pageIdOf('g3')).toBe('p2');
+    expect(model.pageIdOf('r1')).toBe('p1');
+    expect(model.pageIdOf('nope')).toBeUndefined();
+  });
+
+  it('ties an options group to its round and lists the rounds still open', () => {
+    expect(model.roundByGroupId.g1.id).toBe('r1');
+    expect(model.roundByGroupId.g2).toBeUndefined();
+    expect(model.openRounds.map((r) => r.id)).toEqual(['r1']);
   });
 
   it('bounds the groups and the boards outside any group on the page', () => {

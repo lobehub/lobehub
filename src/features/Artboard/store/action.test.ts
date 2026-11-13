@@ -68,4 +68,66 @@ describe('artboardActions', () => {
 
     expect(useArtboardStore.getState()).toMatchObject({ mode: 'verify', verifyOpen: false });
   });
+  it('remembers the page of each board for the session', () => {
+    artboardActions.bindBoard('art_1');
+    artboardActions.setPage('p2');
+    artboardActions.bindBoard('art_2');
+    expect(useArtboardStore.getState().pageId).toBeNull();
+
+    artboardActions.bindBoard('art_1');
+
+    expect(useArtboardStore.getState().pageId).toBe('p2');
+  });
+
+  it('switches page, selects and aims the camera when jumping to an item', () => {
+    artboardActions.bindBoard('art_1');
+    artboardActions.setMode('verify');
+
+    artboardActions.goTo({ id: 'b4', kind: 'item', pageId: 'p2' });
+
+    expect(useArtboardStore.getState()).toMatchObject({
+      camera: { id: 'b4', kind: 'item' },
+      mode: 'discuss',
+      pageId: 'p2',
+      selected: 'b4',
+    });
+  });
+
+  it('closes the open thread and the selection when the page changes', () => {
+    artboardActions.bindBoard('art_1');
+    artboardActions.select('b1');
+    artboardActions.openThread('t1');
+
+    artboardActions.setPage('p2');
+
+    expect(useArtboardStore.getState()).toMatchObject({ openThreadId: null, selected: null });
+  });
+
+  it('opens a thread on its page and aims the camera at its board', () => {
+    artboardActions.bindBoard('art_1');
+
+    artboardActions.showThread({ boardId: 'b4', id: 't9', pageId: 'p2' });
+
+    expect(useArtboardStore.getState()).toMatchObject({
+      camera: { id: 'b4', kind: 'item' },
+      openThreadId: 't9',
+      pageId: 'p2',
+    });
+  });
+
+  it('drops the selection when the comment tool is picked', () => {
+    artboardActions.bindBoard('art_1');
+    artboardActions.select('b1');
+
+    artboardActions.setTool('comment');
+
+    expect(useArtboardStore.getState()).toMatchObject({ selected: null, tool: 'comment' });
+  });
+
+  it('keeps the Works flag while boards change', () => {
+    artboardActions.setGallery(true);
+    artboardActions.bindBoard('art_3');
+
+    expect(useArtboardStore.getState().gallery).toBe(true);
+  });
 });
