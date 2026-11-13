@@ -48,7 +48,7 @@ tags:
 lh generate tts "你好，LobeHub" -m doubaospeech/seed-tts-2.0 -o hello.mp3
 ```
 
-- **音色**：未指定时使用 Vivi 2.0（`zh_female_vv_uranus_bigtts`）。可用 `--voice <voice_type>` 指定其他官方 2.0 音色，例如 `zh_male_m191_uranus_bigtts`（云舟）、`en_male_tim_uranus_bigtts`（Tim），或你自己的复刻音色。1.0 音色（`*_moon_bigtts`、`*_mars_bigtts`）不能用于 2.0 模型；
+- **音色**：未指定时使用 Vivi 2.0（`zh_female_vv_uranus_bigtts`）。可用 `--voice <voice_type>` 指定其他官方 2.0 音色，例如 `zh_male_m191_uranus_bigtts`（云舟）、`en_male_tim_uranus_bigtts`（Tim），或你自己的复刻音色（`S_…`，会自动改用声音复刻资源 `seed-icl-2.0`，需要开通豆包声音复刻模型 2.0）。1.0 音色（`*_moon_bigtts`、`*_mars_bigtts`）不能用于 2.0 模型；
 - **长度**：语音以单个响应返回，每次请求最多 4096 个字符，更长的文本请拆成多次请求；
 - **格式**：`mp3`（默认）或 `opus`（固定 48 kHz）；
 - **语速与音量**：`0.5` 至 `2`；

@@ -151,10 +151,19 @@ describe('createDoubaoSpeech', () => {
     expect(lastRequest(fetchMock).body.req_params.speaker).toBe(DOUBAO_SPEECH_DEFAULT_VOICE_ID);
   });
 
-  it('keeps an explicit voice it does not know, such as a voice clone', async () => {
+  it('speaks a voice clone through the voice-cloning resource, priced as the model', async () => {
     await createDoubaoSpeech({ input: 'Hi', model: 'seed-tts-2.0', voice: 'S_abc123' }, options);
 
-    expect(lastRequest(fetchMock).body.req_params.speaker).toBe('S_abc123');
+    const { body, headers } = lastRequest(fetchMock);
+    expect(body.req_params.speaker).toBe('S_abc123');
+    expect(headers['X-Api-Resource-Id']).toBe('seed-icl-2.0');
+    expect(getModelPricing).toHaveBeenCalledWith('seed-tts-2.0', 'doubaospeech', undefined);
+  });
+
+  it('keeps the synthesis resource for official voices', async () => {
+    await createDoubaoSpeech({ input: 'Hi', model: 'seed-tts-2.0', voice: VOICE }, options);
+
+    expect(lastRequest(fetchMock).headers['X-Api-Resource-Id']).toBe('seed-tts-2.0');
   });
 
   it('bills the billed text_words in CNY, converted to USD', async () => {

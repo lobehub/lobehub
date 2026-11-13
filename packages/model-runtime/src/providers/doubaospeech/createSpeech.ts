@@ -102,6 +102,22 @@ export const buildDoubaoSpeechAuthHeaders = ({
   }
 };
 
+/**
+ * Voice clones (`S_*`) are spoken by the voice-cloning resource of the same generation,
+ * not the synthesis one; a mismatched resource is rejected upstream. Both 2.0 resources
+ * are billed at the same per-character price.
+ * @see https://www.volcengine.com/docs/6561/1359370
+ */
+const DOUBAO_SPEECH_CLONE_RESOURCES: Record<string, string> = {
+  'seed-tts-1.0': 'seed-icl-1.0',
+  'seed-tts-1.0-concurr': 'seed-icl-1.0-concurr',
+  'seed-tts-2.0': 'seed-icl-2.0',
+};
+
+/** `X-Api-Resource-Id` for a model and voice: the cloning resource for a voice clone. */
+export const resolveDoubaoSpeechResource = (model: string, speaker: string) =>
+  speaker.startsWith('S_') ? (DOUBAO_SPEECH_CLONE_RESOURCES[model] ?? model) : model;
+
 export const DOUBAO_SPEECH_MISSING_CREDENTIALS_MESSAGE =
   'Doubao Speech needs an API Key, or an App ID together with its Access Token';
 
@@ -378,14 +394,11 @@ export async function createDoubaoSpeech(
     }
 
     const { body, format } = buildDoubaoSpeechRequest(payload, await hashUid(options.user));
+    const speaker = (body.req_params as { speaker: string }).speaker;
+    const resource = resolveDoubaoSpeechResource(requestModel, speaker);
     const pricing = await getModelPricing(payload.model, provider, options.pricingContext);
 
-    log(
-      'tts request: resource=%s speaker=%s format=%s',
-      requestModel,
-      (body.req_params as Record<string, unknown>).speaker,
-      format,
-    );
+    log('tts request: resource=%s speaker=%s format=%s', resource, speaker, format);
 
     const response = await fetch(`${baseURL}/api/v3/tts/unidirectional`, {
       body: JSON.stringify(body),
@@ -394,7 +407,7 @@ export async function createDoubaoSpeech(
         ...authHeaders,
         'Content-Type': 'application/json',
         'X-Api-Request-Id': crypto.randomUUID(),
-        'X-Api-Resource-Id': requestModel,
+        'X-Api-Resource-Id': resource,
         'X-Control-Require-Usage-Tokens-Return': 'text_words',
       },
       method: 'POST',

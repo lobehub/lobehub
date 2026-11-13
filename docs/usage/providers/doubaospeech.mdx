@@ -49,7 +49,7 @@ Speech synthesis runs through the LobeHub text-to-speech API, which the LobeHub 
 lh generate tts "你好，LobeHub" -m doubaospeech/seed-tts-2.0 -o hello.mp3
 ```
 
-- **Voice** — when no voice is given, Vivi 2.0 (`zh_female_vv_uranus_bigtts`) is used. Pass `--voice <voice_type>` to use another official 2.0 voice, for example `zh_male_m191_uranus_bigtts` (云舟) or `en_male_tim_uranus_bigtts` (Tim), or a voice clone of your own. 1.0 voices (`*_moon_bigtts`, `*_mars_bigtts`) do not work with the 2.0 model.
+- **Voice** — when no voice is given, Vivi 2.0 (`zh_female_vv_uranus_bigtts`) is used. Pass `--voice <voice_type>` to use another official 2.0 voice, for example `zh_male_m191_uranus_bigtts` (云舟) or `en_male_tim_uranus_bigtts` (Tim), or a voice clone of your own (`S_…`), which is sent to the voice-cloning resource `seed-icl-2.0` automatically and needs Doubao Voice Cloning 2.0 enabled. 1.0 voices (`*_moon_bigtts`, `*_mars_bigtts`) do not work with the 2.0 model.
 - **Length** — each request is limited to 4,096 characters, because the audio is returned in a single response. Split longer text into several requests.
 - **Format** — `mp3` (default) or `opus` (always 48 kHz).
 - **Speed and volume** — `0.5` to `2`.
