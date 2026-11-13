@@ -21,6 +21,12 @@ export type DeviceAccessReason =
    * 'allowlist'`), carried as `botContext.isDeviceTrusted`.
    */
   | 'bot-trusted'
+  /**
+   * Bot caller in a channel outside the owner's device channel list
+   * (`settings.deviceChannelPolicy = 'allowlist'`), carried as
+   * `botContext.isDeviceChannelRestricted` — DENY device tools, owner included.
+   */
+  | 'bot-channel-restricted'
   /** Bot caller, sender is identifiable but not the owner — DENY device tools. */
   | 'bot-external-sender'
   /**
@@ -95,6 +101,13 @@ export const resolveDeviceAccessPolicy = (
 
   if (!botContext) {
     return { canUseDevice: true, reason: 'first-party' };
+  }
+
+  // The channel scope narrows every people branch below: a sender must both
+  // pass the people check AND be in an allowed channel. It is only set when
+  // the owner configured a channel list, so unconfigured bots are unaffected.
+  if (botContext.isDeviceChannelRestricted) {
+    return { canUseDevice: false, reason: 'bot-channel-restricted' };
   }
 
   if (botContext.isOwner) {
