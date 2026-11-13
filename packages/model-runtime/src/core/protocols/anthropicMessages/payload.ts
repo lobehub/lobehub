@@ -14,10 +14,11 @@ type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
 export interface BuildDefaultAnthropicPayloadOptions {
   /**
-   * Honour `payload.contextCachingTTL` (`1h` breakpoints). Off by default: the builder is
-   * shared by Anthropic-compatible endpoints (Kimi, MiniMax, Moonshot, Copilot, custom
-   * proxies) that do not document the `ttl` field, so only providers that bill the 1h tier
-   * opt in. Usage pricing follows the `ttl` actually written (see `resolveCacheTTL`).
+   * Honour `payload.contextCachingTTL` (`ttl` on every breakpoint). Off by default: the builder
+   * is shared by Anthropic-compatible endpoints (Kimi, MiniMax, Moonshot, Copilot, custom
+   * proxies) that do not document the `ttl` field, so only the first-party Anthropic runtime
+   * opts in, and only while it targets Anthropic's own API (`isFirstPartyAnthropicBaseURL`).
+   * Usage pricing follows the `ttl` actually written (see `resolveCacheTTL`).
    */
   allowExtendedCacheTTL?: boolean;
 }

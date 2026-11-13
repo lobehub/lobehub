@@ -21,7 +21,8 @@ export const PROVIDER_DEFAULT_CONTEXT_CACHING_TTL: Readonly<Record<string, Conte
  * TTLs a provider's API lets a request choose, shortest (the API default) first. The request
  * writes the resolved one; elsewhere the TTL only tells context engineering how long a prefix
  * stays warm. Anthropic-compatible endpoints (Bedrock, Kimi, MiniMax, proxies…) are absent on
- * purpose: they don't document `cache_control.ttl`.
+ * purpose: they don't document `cache_control.ttl`. For the same reason the `anthropic` runtime
+ * leaves the TTL out when a custom base URL points it at a proxy (`isFirstPartyAnthropicBaseURL`).
  */
 export const PROVIDER_REQUESTABLE_CONTEXT_CACHING_TTLS: Readonly<
   Record<string, readonly ContextCachingTTL[]>

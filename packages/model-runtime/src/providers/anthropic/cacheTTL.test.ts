@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatStreamPayload } from '../../types/chat';
-import { LobeAnthropicAI } from './index';
+import { isFirstPartyAnthropicBaseURL, LobeAnthropicAI } from './index';
 
 const payload: ChatStreamPayload = {
   messages: [
@@ -13,8 +13,8 @@ const payload: ChatStreamPayload = {
   temperature: 0,
 };
 
-const sentPayload = async (request: ChatStreamPayload) => {
-  const instance = new LobeAnthropicAI({ apiKey: 'test' });
+const sentPayload = async (request: ChatStreamPayload, baseURL?: string) => {
+  const instance = new LobeAnthropicAI({ apiKey: 'test', ...(baseURL && { baseURL }) });
   const create = vi
     .spyOn(instance['client'].messages, 'create')
     .mockResolvedValue(new ReadableStream() as any);
@@ -52,5 +52,54 @@ describe('LobeAnthropicAI prompt cache TTL', () => {
       ttl: '1h',
       type: 'ephemeral',
     });
+  });
+
+  it('keeps the TTL when the base URL is Anthropic’s own API', async () => {
+    const sent = await sentPayload(
+      { ...payload, contextCachingTTL: '1h' },
+      'https://api.anthropic.com/v1/messages',
+    );
+
+    expect(sent.system[0].cache_control).toEqual({ ttl: '1h', type: 'ephemeral' });
+    expect(sent.messages.at(-1).content.at(-1).cache_control).toEqual({
+      ttl: '1h',
+      type: 'ephemeral',
+    });
+  });
+
+  it.each(['1h', '5m'] as const)(
+    'leaves the %s TTL out when a custom base URL points at a proxy',
+    async (contextCachingTTL) => {
+      const tools = [
+        {
+          function: { description: 'Look up', name: 'lookup', parameters: { type: 'object' } },
+          type: 'function' as const,
+        },
+      ];
+      const sent = await sentPayload(
+        { ...payload, contextCachingTTL, tools },
+        'https://claude-proxy.example.com',
+      );
+
+      expect(sent.system[0].cache_control).toEqual({ type: 'ephemeral' });
+      expect(sent.messages.at(-1).content.at(-1).cache_control).toEqual({ type: 'ephemeral' });
+      expect(sent.tools.at(-1).cache_control).toEqual({ type: 'ephemeral' });
+      expect(JSON.stringify(sent)).not.toContain('"ttl"');
+    },
+  );
+});
+
+describe('isFirstPartyAnthropicBaseURL', () => {
+  it.each([
+    [undefined, true],
+    ['', true],
+    ['https://api.anthropic.com', true],
+    ['https://api.anthropic.com/v1', true],
+    ['https://claude-proxy.example.com', false],
+    ['https://api.anthropic.com.example.com', false],
+    ['http://127.0.0.1:8080', false],
+    ['not a url', false],
+  ])('%s → %s', (baseURL, expected) => {
+    expect(isFirstPartyAnthropicBaseURL(baseURL)).toBe(expected);
   });
 });
