@@ -24,6 +24,8 @@ import { registerShellArtboardResult } from './artboardShellResult';
 import {
   findCanvasIdByWorkId,
   findCanvasIdsByDeploymentIds,
+  findCanvasSourcesByVersionIds,
+  findCanvasVersionId,
   findCanvasWork,
   findCanvasWorkVersion,
   findCanvasWorkVersionByToolCall,
@@ -107,6 +109,12 @@ export class WorkModel {
   findCanvas = (canvasId: string) => findCanvasWork(this.ctx, canvasId);
 
   findCanvasIdByWorkId = (workId: string) => findCanvasIdByWorkId(this.ctx, workId);
+
+  findCanvasVersionId = (canvasId: string, version: number) =>
+    findCanvasVersionId(this.ctx, canvasId, version);
+
+  findCanvasSourcesByVersionIds = (versionIds: string[]) =>
+    findCanvasSourcesByVersionIds(this.ctx, versionIds);
 
   findCanvasIdsByDeploymentIds = (deploymentIds: string[]) =>
     findCanvasIdsByDeploymentIds(this.ctx, deploymentIds);

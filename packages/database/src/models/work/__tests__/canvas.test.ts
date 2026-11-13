@@ -348,4 +348,39 @@ describe('WorkModel · canvas', () => {
     const legacy = await model.listSummariesByRootOperations({ rootOperationIds: ['op-canvas-1'] });
     expect(legacy['op-canvas-1'] ?? []).toEqual([]);
   });
+
+  describe('version lookups for artboard sources', () => {
+    it('finds the version row of a canvas and maps version rows back to their canvas', async () => {
+      const owner = new WorkModel(serverDB, userId);
+      await owner.registerCanvas(params());
+      await owner.registerCanvas(params({ toolCallId: 'call-canvas-2', toolName: 'updateCanvas' }));
+
+      const first = await owner.findCanvasVersionId('cvs_cost', 1);
+      const second = await owner.findCanvasVersionId('cvs_cost', 2);
+      expect(first).toBeTruthy();
+      expect(second).toBeTruthy();
+      expect(await owner.findCanvasVersionId('cvs_cost', 3)).toBeNull();
+
+      expect(await owner.findCanvasSourcesByVersionIds([first!, second!])).toEqual({
+        [first!]: { canvasId: 'cvs_cost', version: 1 },
+        [second!]: { canvasId: 'cvs_cost', version: 2 },
+      });
+    });
+
+    it('hides a canvas in the trash and a canvas of another user', async () => {
+      const owner = new WorkModel(serverDB, userId);
+      const work = await owner.registerCanvas(params());
+      const versionId = (await owner.findCanvasVersionId('cvs_cost', 1))!;
+
+      expect(await new WorkModel(serverDB, userId2).findCanvasSourcesByVersionIds([versionId])).toEqual(
+        {},
+      );
+
+      await serverDB
+        .update(works)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(works.id, work.id));
+      expect(await owner.findCanvasSourcesByVersionIds([versionId])).toEqual({});
+    });
+  });
 });

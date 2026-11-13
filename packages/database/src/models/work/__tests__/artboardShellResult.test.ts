@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { EMPTY_ARTBOARD_CONTENT } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -23,7 +22,6 @@ beforeEach(async () => {
     seq: 9,
   });
   const board = await new ArtboardModel(serverDB, userId).create({
-    content: EMPTY_ARTBOARD_CONTENT,
     projectId,
     taskId: 'task_artboard_shell',
     title: '首次进入',
@@ -36,7 +34,7 @@ afterEach(async () => {
   await cleanupWorkTestData();
 });
 
-const line = () => `artboard ${artboardId} · revision 1 · 0 groups · 0 frames`;
+const line = () => `artboard ${artboardId} · revision 1 · 0 groups · 0 boards`;
 
 describe('parseArtboardShellCreate', () => {
   it('reads the board id from a successful lh artboard create', () => {
@@ -44,7 +42,7 @@ describe('parseArtboardShellCreate', () => {
       parseArtboardShellCreate({
         command: `lh artboard create --title '首次进入'`,
         exitCode: 0,
-        output: 'art_1 created\nartboard art_1 · revision 1 · 2 groups · 4 frames\n',
+        output: 'art_1 created\nartboard art_1 · revision 1 · 2 groups · 4 boards\n',
       }),
     ).toEqual({ artboardId: 'art_1' });
   });
@@ -60,7 +58,7 @@ describe('parseArtboardShellCreate', () => {
   });
 
   it('ignores failed runs, reads and updates', () => {
-    const output = 'artboard art_3 · revision 2 · 1 groups · 1 frames';
+    const output = 'artboard art_3 · revision 2 · 1 groups · 1 boards';
     expect(
       parseArtboardShellCreate({ command: 'lh artboard create --title x', exitCode: 1, output }),
     ).toBeNull();
@@ -103,7 +101,7 @@ describe('WorkModel.registerShellArtboardResult', () => {
         data: {
           command: 'lh artboard create --title x',
           exitCode: 0,
-          output: 'artboard art_missing · revision 1 · 0 groups · 0 frames',
+          output: 'artboard art_missing · revision 1 · 0 groups · 0 boards',
         },
         toolIdentifier: 'codex',
         toolName: 'command_execution',

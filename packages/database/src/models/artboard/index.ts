@@ -126,6 +126,19 @@ export class ArtboardModel {
       .where(and(eq(artboards.projectId, projectId), this.scope()))
       .orderBy(desc(artboards.updatedAt));
 
+  setTask = async (id: string, taskId: string): Promise<ArtboardRow | undefined> => {
+    const [row] = await this.db
+      .update(artboards)
+      .set({ taskId, updatedAt: new Date() })
+      .where(and(eq(artboards.id, id), this.scope()))
+      .returning();
+    return row;
+  };
+
+  delete = async (id: string): Promise<void> => {
+    await this.db.delete(artboards).where(and(eq(artboards.id, id), this.scope()));
+  };
+
   getRevision = async (id: string): Promise<number | undefined> => {
     const [row] = await this.db
       .select({ revision: artboards.revision })

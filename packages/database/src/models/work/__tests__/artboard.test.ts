@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { EMPTY_ARTBOARD_CONTENT, type RegisterArtboardWorkParams } from '@lobechat/types';
+import type { RegisterArtboardWorkParams } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -30,7 +30,6 @@ beforeEach(async () => {
     seq: 1,
   });
   const board = await new ArtboardModel(serverDB, userId).create({
-    content: EMPTY_ARTBOARD_CONTENT,
     projectId,
     taskId: 'task_artboard_work',
     title: '新用户首次进入项目',
@@ -120,7 +119,7 @@ describe('WorkModel · artboard', () => {
   it('drops the Work from the gallery once its board is gone', async () => {
     const model = new WorkModel(serverDB, userId);
     await model.registerArtboard(params());
-    await serverDB.delete(tasks).where(eq(tasks.id, 'task_artboard_work'));
+    await new ArtboardModel(serverDB, userId).delete(artboardId);
 
     expect((await model.listByWorkspace({ includeArtboardWorks: true })).items).toEqual([]);
   });

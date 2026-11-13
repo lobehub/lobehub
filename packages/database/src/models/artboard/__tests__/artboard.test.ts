@@ -190,4 +190,29 @@ describe('ArtboardModel', () => {
       inWorkspace.update(artboard.id, { expectedRevision: 2, title: 'Trash edit' }),
     ).rejects.toThrow();
   });
+
+  describe('setTask and delete', () => {
+    it('attaches a task without bumping the revision', async () => {
+      const board = await personal.create({ title: 'Loose' });
+
+      const attached = await personal.setTask(board.id, 'task_art_1');
+
+      expect(attached).toMatchObject({ revision: 1, taskId: 'task_art_1' });
+    });
+
+    it('deletes the board with its pages, and only for someone who can reach it', async () => {
+      const board = await personal.create({ title: 'Loose' });
+
+      await new ArtboardModel(serverDB, otherUserId).delete(board.id);
+      expect(await personal.findById(board.id)).toBeDefined();
+
+      await personal.delete(board.id);
+      expect(await personal.findById(board.id)).toBeUndefined();
+      const pages = await serverDB
+        .select()
+        .from(artboardPages)
+        .where(eq(artboardPages.artboardId, board.id));
+      expect(pages).toEqual([]);
+    });
+  });
 });
