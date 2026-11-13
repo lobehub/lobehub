@@ -127,6 +127,8 @@
   "message.copied": "Copied",
   "message.copy": "Copy text",
   "message.expand": "Expand message",
+  "message.relayReplyFrom": "{{name}} replied in #{{channel}}",
+  "message.relayedBy": "Relayed by {{name}}",
   "moveToTrash": "Move channel to trash",
   "moveToTrashConfirm": "Move “{{title}}” to trash? Replies will stop. You can restore the channel and its history from Trash. Agents and files will be kept.",
   "moveToTrashSuccess": "Channel moved to trash",

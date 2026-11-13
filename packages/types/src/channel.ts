@@ -182,6 +182,69 @@ export type ChannelThreadMetadata = Record<string, unknown>;
 /** Free-form public message state that does not need its own column. */
 export type ChannelMessageMetadata = Record<string, unknown>;
 
+/**
+ * The Agent that wrote a request on its requester's behalf (`lobe-channel.sendMessage`). The
+ * person stays the sender and execution identity; this only says who relayed it.
+ */
+export interface ChannelMessageVia {
+  agentId: string;
+  name: string;
+}
+
+/**
+ * Where a relayed request came from (`metadata.via.origin`), kept server-side so the target's
+ * reply can be delivered back there as a receipt.
+ */
+export interface ChannelRelayOrigin {
+  channelId: string;
+  threadId: string | null;
+}
+
+/**
+ * `metadata.receipt` of a request that brings another Channel's reply back to the Agent that
+ * relayed the original message. Its `via` names the Agent that answered.
+ */
+export interface ChannelMessageReceipt {
+  channelId: string;
+  channelTitle: string;
+  /** The published reply in that Channel. */
+  messageId: string;
+}
+
+export const channelRelayOrigin = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelRelayOrigin | undefined => {
+  const origin = (metadata?.via as { origin?: Partial<ChannelRelayOrigin> } | undefined)?.origin;
+  return typeof origin?.channelId === 'string'
+    ? { channelId: origin.channelId, threadId: origin.threadId ?? null }
+    : undefined;
+};
+
+export const channelMessageReceipt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageReceipt | undefined => {
+  const receipt = metadata?.receipt as Partial<ChannelMessageReceipt> | undefined;
+  return typeof receipt?.channelId === 'string' &&
+    typeof receipt.channelTitle === 'string' &&
+    typeof receipt.messageId === 'string'
+    ? {
+        channelId: receipt.channelId,
+        channelTitle: receipt.channelTitle,
+        messageId: receipt.messageId,
+      }
+    : undefined;
+};
+
+/** `metadata.via` of a relayed request, or undefined for anything else. */
+export const channelMessageVia = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageVia | undefined => {
+  const via = metadata?.via as Partial<ChannelMessageVia> | undefined;
+  return typeof via?.agentId === 'string' && typeof via.name === 'string'
+    ? { agentId: via.agentId, name: via.name }
+    : undefined;
+};
+
 /** Effective Agent settings and Channel environment, frozen once when a job is claimed. */
 export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberConfig {
   provider: string;
@@ -279,9 +342,13 @@ export interface ChannelContextMessage {
   /** Stable references; URLs and document contents are resolved at execution time. */
   fileIds?: string[];
   id: string;
+  /** Set on a request that brings another Channel's reply back to the relaying Agent. */
+  receipt?: ChannelMessageReceipt;
   replyToId?: string | null;
   sequence: number;
   threadId: string | null;
+  /** Set on a request an Agent relayed for its author. */
+  via?: ChannelMessageVia;
 }
 
 /** Read-only history of the current Channel operation; scope is never supplied by the model. */
@@ -306,6 +373,49 @@ export interface ChannelHistoryPage {
   cutoffSequence: number;
   messages: ChannelHistoryMessage[];
   nextBeforeSequence: number | null;
+}
+
+/** Channels the run's requester belongs to, to find where to reach another Agent. */
+export interface ChannelListChannelsParams {
+  /** Only Channels where this Agent is an active member. */
+  agentId?: string;
+  limit?: number;
+  /** Case-insensitive match on the Channel title or an Agent member's name. */
+  query?: string;
+}
+
+export interface ChannelDirectoryEntry {
+  agents: Array<{ agentId: string; description: string | null; name: string }>;
+  /** The Channel this run answers in. */
+  current: boolean;
+  id: string;
+  /** `direct`: one person and its bound Agent; `group`: everything else. */
+  kind: 'direct' | 'group';
+  projectId: string | null;
+  title: string;
+}
+
+export interface ChannelDirectoryPage {
+  channels: ChannelDirectoryEntry[];
+  /** More Channels matched than were returned; narrow with `query` or `agentId`. */
+  hasMore: boolean;
+}
+
+/** A request posted into another Channel for the run's requester, @mentioning its Agents. */
+export interface ChannelSendMessageParams {
+  /** Agents to address; each must be an active member of the target Channel. */
+  agentIds: string[];
+  channelId: string;
+  content: string;
+}
+
+export interface ChannelSentMessage {
+  agents: Array<{ agentId: string; name: string }>;
+  channelId: string;
+  channelTitle: string;
+  messageId: string;
+  /** Link to the Channel the message was posted in, for the reply that mentions it. */
+  url: string;
 }
 
 export interface ChannelHistoryMessageDetail {
@@ -413,6 +523,8 @@ export interface ChannelPublicMessage {
   fileIds: string[];
   id: string;
   mentions: string[];
+  /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
+  receipt?: ChannelMessageReceipt | null;
   recipientMemberIds: string[];
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
@@ -427,6 +539,8 @@ export interface ChannelPublicMessage {
   sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
+  /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */
+  via?: (ChannelMessageVia & { avatar: string | null }) | null;
   /**
    * External Works a reply's run touched: the conversation's work summaries, for every member,
    * without the ids that link them to the requester's Work, topic and run. Empty on requests.
