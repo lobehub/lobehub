@@ -7,6 +7,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 
 export const SUNO_DEFAULT_BASE_URL = 'https://api.kie.ai';
 
+const API_V1_SUFFIX = '/api/v1';
+
 /**
  * Suno gateways speak one protocol in two dialects: kie.ai (`/api/v1/jobs/createTask`,
  * snake_case input) and sunoapi.org (`/api/v1/generate`, camelCase). The host picks the
@@ -39,8 +41,14 @@ interface SunoGatewayResponse<T> {
 }
 
 /** Strip trailing slashes and an `/api/v1` suffix so both `https://api.kie.ai` and `.../api/v1` work. */
-export const normalizeSunoBaseURL = (baseURL?: string | null) =>
-  (baseURL?.trim() || SUNO_DEFAULT_BASE_URL).replace(/\/+$/, '').replace(/\/api\/v1$/, '');
+export const normalizeSunoBaseURL = (baseURL?: string | null) => {
+  // Plain string trimming instead of a `/\/+$/` regex, which backtracks polynomially on user input.
+  let url = baseURL?.trim() || SUNO_DEFAULT_BASE_URL;
+  while (url.endsWith('/')) url = url.slice(0, -1);
+  if (url.endsWith(API_V1_SUFFIX)) url = url.slice(0, -API_V1_SUFFIX.length);
+
+  return url;
+};
 
 export const resolveSunoGatewayDialect = (baseURL: string): SunoGatewayDialect => {
   try {

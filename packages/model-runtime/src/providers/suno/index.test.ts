@@ -43,6 +43,8 @@ describe('LobeSunoAI', () => {
     it('defaults to kie.ai and tolerates a trailing /api/v1 or slash', () => {
       expect(normalizeSunoBaseURL()).toBe(SUNO_DEFAULT_BASE_URL);
       expect(normalizeSunoBaseURL('https://api.kie.ai/api/v1/')).toBe('https://api.kie.ai');
+      expect(normalizeSunoBaseURL('https://gw.example.com///')).toBe('https://gw.example.com');
+      expect(normalizeSunoBaseURL('   ')).toBe(SUNO_DEFAULT_BASE_URL);
       expect(new LobeSunoAI({ apiKey: 'k' }).dialect).toBe('kie');
     });
 
