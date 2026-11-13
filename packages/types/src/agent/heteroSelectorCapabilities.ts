@@ -360,6 +360,13 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
+  'antigravity': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'amp': {
     mode: {
       encodings: [{ flags: ['--mode'], kind: 'flag' }],
@@ -662,24 +669,7 @@ export const buildHeteroSpawnArgs = (
   provider: HeteroSpawnSelectionProvider | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'copilot' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
@@ -758,7 +748,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -817,24 +807,7 @@ export const buildHeteroExecArgs = (
   provider: HeteroSpawnSelectionProvider | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'copilot' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
@@ -933,7 +906,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&

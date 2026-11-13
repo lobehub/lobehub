@@ -51,6 +51,7 @@ export {
   type AgentStreamPipelineOptions,
   type UploadHeterogeneousImage,
 } from './agentStreamPipeline';
+export { ANTIGRAVITY_BASE_ARGS, buildAntigravityArgs } from './antigravity';
 export {
   classifyHeteroProcessFailure,
   type ClassifyHeteroProcessFailureParams,

@@ -1,3 +1,4 @@
+export { getAntigravityQuota } from './antigravityQuota';
 export {
   listClaudeCodeMemory,
   resolveClaudeCodeMemoryDir,
