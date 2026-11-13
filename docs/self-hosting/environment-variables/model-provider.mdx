@@ -414,12 +414,21 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 
 ## Minimax AI
 
+MiniMax chat, speech (TTS), and music generation (MiniMax Music) all use the same key and host. There is no separate MiniMax Music variable. See [Using MiniMax in LobeHub](/docs/usage/providers/minimax#generate-music) for model availability and request examples.
+
 ### `MINIMAX_API_KEY`
 
-- Type: Required
-- Description: This is the API key you applied for in the Minimax AI service
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in MiniMax provider settings, which takes precedence.
+- Description: An API key from the MiniMax Open Platform (**Account Management → API Keys**: [minimaxi.com](https://platform.minimaxi.com) for China accounts, [minimax.io](https://www.minimax.io/platform) for global accounts). Setting a non-empty key enables MiniMax in the server configuration. The same key is used for MiniMax Music (`music-3.0`, `music-2.6`, `music-cover`); music generation also requires that the account has paid music API access, because MiniMax stopped offering the music API to new accounts.
 - Default: -
 - Example: `xxxxxx...xxxxxx`
+
+### `MINIMAX_PROXY_URL`
+
+- Type: Optional
+- Description: Base URL of the MiniMax API. A key only works on its own region's host, so set this for a global account. Speech and music requests go to `<host>/v1/t2a_v2` and `<host>/v1/music_generation`.
+- Default: `https://api.minimaxi.com/v1`
+- Example: `https://api.minimax.io/v1`
 
 ## Mistral AI
 
@@ -826,6 +835,10 @@ Music generation through a third-party Suno API gateway. Suno's own API is invit
 - Description: Customizes the Suno model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
 - Default: Unset; uses the built-in model list.
 - Example: `-all,+suno-v6`
+
+<Callout type={'info'}>
+  The gateway rejects a Suno request without a callback URL, so LobeHub sends `<APP_URL>/api/webhooks/music/suno` (or `WEBHOOK_PROXY_URL` when set). The callback is only acknowledged; LobeHub polls the gateway every 5 seconds for the result, so the result does not depend on the callback reaching your server. Make sure `APP_URL` is set. See [Using Suno in LobeHub](/docs/usage/providers/suno) for setup and request examples.
+</Callout>
 
 ## BFL
 

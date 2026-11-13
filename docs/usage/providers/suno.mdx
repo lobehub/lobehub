@@ -1,0 +1,160 @@
+---
+title: Using Suno in LobeHub
+description: >-
+  Connect a Suno API gateway key to LobeHub and generate songs with lyrics, style, and title from
+  the Music page or the API.
+tags:
+  - Suno
+  - Music Generation
+  - Text to Music
+  - API Key
+---
+
+# Using Suno in LobeHub
+
+[Suno](https://suno.com) generates full songs with vocals, lyrics, and instrumentals. Suno's own API is invite-only, so LobeHub sends requests to a third-party Suno API gateway with your gateway key: [kie.ai](https://kie.ai) by default, or [sunoapi.org](https://sunoapi.org) or a compatible service. In LobeHub, Suno is a music generation provider only: it has no chat models.
+
+<Steps>
+  ### Step 1: Get a gateway API key
+
+  - Sign up at [kie.ai](https://kie.ai) and open [API Key](https://kie.ai/api-key). Create a key and copy it.
+  - To use sunoapi.org instead, create a key at [sunoapi.org/api-key](https://sunoapi.org/api-key).
+  - Add credits on the gateway. Each request is billed by the gateway, not by Suno.
+
+  <Callout type={'warning'}>
+    Check the gateway's terms and Suno's terms of service before you enable this provider.
+  </Callout>
+
+  ### Step 2: Configure Suno in LobeHub
+
+  - Open **Settings → AI Providers** and select **Suno**.
+  - Paste the key into **API Key**.
+  - For sunoapi.org, enter `https://api.sunoapi.org` in **API proxy URL**. Leave it empty for kie.ai (`https://api.kie.ai`).
+  - Click **Check**; a valid key shows **Check Passed**. LobeHub reads the gateway's credit balance, so the check generates nothing and costs nothing. A wrong key shows the gateway's own error, for example `Unauthorized – Authentication failed`.
+  - Turn on the switch next to the provider name.
+
+  ### Step 3: Choose models
+
+  The **Model List** shows Suno models under the **Music** tab. **Suno V6** and **Suno V6 Wild** are on by default; **Suno V6 Mini** can be turned on in the same list. Every request returns two songs.
+</Steps>
+
+## Generate music on the Music page
+
+1. Open the **Music** page. It is next to **Image** and **Video** in the creation mode switch, or go to `/music` directly.
+2. Choose **Suno V6** under **Model**.
+3. Describe the song in the prompt box, for example `A warm acoustic pop song about a late-night train ride`.
+4. Fill in any of these fields:
+   - **Style**: genre, mood, vocals, tempo, for example `acoustic pop, female vocals, 90 BPM`.
+   - **Lyrics**: one line per row, with section tags such as `[Verse]` and `[Chorus]`. Leave empty to let Suno write them.
+   - **Title**, **Exclude Styles**: setting either switches Suno to custom mode, which needs **Style** or **Lyrics**.
+   - **Instrumental**: no vocals; lyrics are ignored.
+   - **Duration**: 10 to 360 seconds, or **Auto**.
+5. Click **Generate**. Two song cards appear as **Queued…**, then **Generating…** (usually 1–3 minutes).
+6. When a song finishes, its card shows the cover, title, duration, and tags, with a player. Press play to listen, or download the file.
+
+A failed song shows the reason with **Retry** and **Copy Error Message**.
+
+## Generate music through the API
+
+The Music page calls the LobeHub `lambda` tRPC API. You can call it with a LobeHub API key from **Settings → API Keys**. Set these variables first:
+
+```bash
+export LOBEHUB_URL=https://your-lobehub.example.com   # or http://localhost:3010
+export LOBEHUB_API_KEY=sk-lh-xxxxxxxxxxxxxxxx
+```
+
+**1. Create a music topic.** Songs belong to a topic of type `music`.
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/generationTopic.createTopic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{"type":"music","title":"Suno test"}}'
+# → {"result":{"data":{"json":"<generationTopicId>"}}}
+```
+
+**2. Submit the generation.** `provider` is `suno`; `model` is `suno-v6`, `suno-v6-wild` or `suno-v6-mini`.
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"suno",
+    "model":"suno-v6",
+    "params":{
+      "prompt":"A warm acoustic pop song about a late-night train ride",
+      "style":"acoustic pop, female vocals, 90 BPM",
+      "title":"Night Train",
+      "lyrics":"[Verse]\nCity lights are fading slow\n[Chorus]\nRide the night train home",
+      "instrumental":false
+    }}}'
+```
+
+`params` accepts `prompt`, `style`, `lyrics`, `title`, `negativeStyle`, `instrumental`, `referenceAudioUrl` and `duration`. Unknown keys are rejected. The response contains the batch and one entry per song. Each song has a `generation.id` and an `asyncTaskId`:
+
+```json
+{ "result": { "data": { "json": {
+  "success": true,
+  "data": {
+    "batch": { "id": "<batchId>", "model": "suno-v6", "provider": "suno" },
+    "generations": [
+      { "id": "<generationId-1>", "asyncTaskId": "<asyncTaskId-1>" },
+      { "id": "<generationId-2>", "asyncTaskId": "<asyncTaskId-2>" }
+    ]
+  }
+} } } }
+```
+
+**3. Poll until each song finishes.** The server already polls the gateway every 5 seconds; you only read the task status. Call this for each song until `status` is `success` or `error`:
+
+```bash
+curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId-1>","generationId":"<generationId-1>"}}'
+```
+
+`status` moves through `pending` → `processing` → `success`. On `success`, `generation.asset.url` is the stored audio file, and `generation.asset` also has the duration, title, cover, and tags. On `error`, `error.body.detail` has the gateway's message.
+
+### What LobeHub sends to the gateway
+
+LobeHub maps the params above onto the gateway's generate API. The same request, sent directly to kie.ai, looks like this:
+
+```bash
+curl -s -X POST https://api.kie.ai/api/v1/generate \
+  -H "Authorization: Bearer $SUNO_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "V6",
+    "customMode": true,
+    "instrumental": false,
+    "prompt": "A warm acoustic pop song about a late-night train ride",
+    "style": "acoustic pop, female vocals, 90 BPM",
+    "title": "Night Train",
+    "lyrics": "[Verse]\nCity lights are fading slow\n[Chorus]\nRide the night train home",
+    "callBackUrl": "https://your-lobehub.example.com/api/webhooks/music/suno"
+  }'
+# → {"code":200,"msg":"success","data":{"taskId":"<taskId>"}}
+
+curl -s "https://api.kie.ai/api/v1/generate/record-info?taskId=<taskId>" \
+  -H "Authorization: Bearer $SUNO_API_KEY"
+# → data.status: PENDING → TEXT_SUCCESS → FIRST_SUCCESS → SUCCESS
+#   data.response.sunoData[].audioUrl: the finished songs
+```
+
+- `model` is the gateway version: `suno-v6` → `V6`, `suno-v6-wild` → `V6_WILD`, `suno-v6-mini` → `V6_MINI`.
+- `customMode` is `true` when `title` or `negativeStyle` is set; `negativeStyle` is sent as `negativeTags`.
+- `referenceAudioUrl` is sent as `audioUrls` and only works without custom mode.
+
+## Troubleshooting
+
+**"Suno needs a style, lyrics, or reference audio; a prompt alone is not accepted"**: add a **Style** or **Lyrics**.
+
+**"Suno custom mode … needs lyrics, a style, or a negative style"**: you set **Title** or **Exclude Styles**; also fill **Style** or **Lyrics**.
+
+**Check fails with `Unauthorized`**: the key is wrong or belongs to the other gateway. Make sure **API proxy URL** matches the gateway that issued the key.
+
+**Insufficient credits**: top up on the gateway.
+
+For self-hosted deployments, see `SUNO_API_KEY` and `SUNO_PROXY_URL` in the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#suno).

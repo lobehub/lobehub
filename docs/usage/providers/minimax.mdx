@@ -59,3 +59,71 @@ To configure this provider in LobeHub, open **App Settings → AI Providers**, s
 </Steps>
 
 You're all set! You can now start chatting with models powered by MiniMax in LobeHub.
+
+## Generate music
+
+MiniMax Music writes songs with vocals from lyrics and a style prompt, or covers a reference track. It uses the same MiniMax key and API host as chat; there is nothing extra to configure.
+
+<Callout type={'warning'}>
+  MiniMax stopped offering the music API to new accounts. Only accounts that already have paid music API access can generate music. Other keys pass the provider **Check** (it uses a chat model) but every music request fails with `This Music API is no longer available to new users` (MiniMax status code `2153`).
+</Callout>
+
+The **Model List** shows the music models under the **Music** tab:
+
+| Model         | Use                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `music-3.0`   | A song with vocals from lyrics and a style prompt, or an instrumental track.               |
+| `music-2.6`   | The previous generation of `music-3.0`.                                                    |
+| `music-cover` | Covers a reference track (6 seconds to 6 minutes, up to 50 MB) in the style of the prompt. |
+
+### On the Music page
+
+1. Open the **Music** page. It is next to **Image** and **Video** in the creation mode switch, or go to `/music` directly.
+2. Choose a MiniMax model under **Model**.
+3. For `music-3.0` or `music-2.6`: describe the style in the prompt box and enter **Lyrics** (up to 3,500 characters, with tags such as `[Verse]` and `[Chorus]`). Without lyrics, turn on **Write lyrics for me** or **Instrumental**.
+4. For `music-cover`: under **Reference Audio**, click **Upload Audio** or paste an audio URL and press Enter. Then describe the target style in the prompt box (10–300 characters). **Lyrics** are optional (10–1,000 characters) and replace the original words.
+5. Optional: adjust **Audio Format**, **Sample Rate**, and **Bitrate** under **Audio Settings**.
+6. Click **Generate**. The song card shows **Generating…**, then the player when the song is ready. Press play to listen, or download the file.
+
+### Through the API
+
+Use the same `lambda` tRPC calls as Suno (see [Generate music through the API](/docs/usage/providers/suno#generate-music-through-the-api)), with `provider` set to `minimax`. MiniMax returns one song per request. A cover with lyrics and a reference track:
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"minimax",
+    "model":"music-cover",
+    "params":{
+      "prompt":"Slow jazz ballad with soft piano and brushed drums",
+      "lyrics":"[Verse]\nRain on the window, coffee gone cold\n[Chorus]\nStay a little longer",
+      "referenceAudioUrl":"https://example.com/reference.mp3",
+      "format":"mp3",
+      "sampleRate":44100,
+      "bitrate":256000
+    }}}'
+```
+
+For `music-3.0` or `music-2.6`, drop `referenceAudioUrl` and send `prompt` with `lyrics`, or `instrumental: true`, or `autoLyrics: true`. Poll `generation.getGenerationStatus` with each returned `asyncTaskId` and `generation.id` until `status` is `success`; the audio is at `generation.asset.url`.
+
+LobeHub sends this to MiniMax as a single synchronous request; the music API itself has no task to poll:
+
+```bash
+curl -s -X POST https://api.minimaxi.com/v1/music_generation \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "music-cover",
+    "prompt": "Slow jazz ballad with soft piano and brushed drums",
+    "lyrics": "[Verse]\nRain on the window, coffee gone cold\n[Chorus]\nStay a little longer",
+    "audio_url": "https://example.com/reference.mp3",
+    "output_format": "url",
+    "audio_setting": { "format": "mp3", "sample_rate": 44100, "bitrate": 256000 }
+  }'
+# → {"data":{"audio":"<temporary audio URL>","status":2},"base_resp":{"status_code":0,"status_msg":"success"}}
+```
+
+`instrumental` is sent as `is_instrumental` and `autoLyrics` as `lyrics_optimizer`. Global accounts use `https://api.minimax.io/v1`; see `MINIMAX_PROXY_URL` in the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#minimax-ai).

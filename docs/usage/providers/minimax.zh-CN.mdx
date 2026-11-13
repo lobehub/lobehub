@@ -56,3 +56,71 @@ tags:
 </Steps>
 
 至此你已经可以在 LobeHub 中使用 MiniMax 提供的模型进行对话了。
+
+## 生成音乐
+
+MiniMax Music 可以根据歌词和风格提示词生成带人声的歌曲，也可以翻唱参考音频。它与对话使用同一个 MiniMax 密钥和 API 主机，无需额外配置。
+
+<Callout type={'warning'}>
+  MiniMax 已不再向新账号开放音乐 API，只有已开通付费音乐 API 的账号才能生成音乐。其他密钥可以通过服务商 **检查**（检查使用对话模型），但每次音乐请求都会失败，并返回 `This Music API is no longer available to new users`（MiniMax 状态码 `2153`）。
+</Callout>
+
+**模型列表** 的 **音乐** 标签页列出音乐模型：
+
+| 模型            | 用途                                    |
+| ------------- | ------------------------------------- |
+| `music-3.0`   | 根据歌词和风格提示词生成带人声的歌曲，或生成纯音乐。            |
+| `music-2.6`   | `music-3.0` 的上一代模型。                   |
+| `music-cover` | 按提示词描述的风格翻唱参考音频（6 秒到 6 分钟，不超过 50 MB）。 |
+
+### 在音乐页面生成
+
+1. 打开 **音乐** 页面：在创作模式切换中与 **图片**、**视频** 并列，也可以直接访问 `/music`。
+2. 在 **模型** 中选择一个 MiniMax 模型。
+3. 使用 `music-3.0` 或 `music-2.6` 时：在提示词输入框描述风格，并填写 **歌词**（最多 3,500 字符，可用 `[Verse]`、`[Chorus]` 等标签）。不填歌词时，打开 **帮我写歌词** 或 **纯音乐**。
+4. 使用 `music-cover` 时：在 **参考音频** 中点击 **上传音频**，或粘贴音频 URL 后按回车。然后在提示词输入框描述目标风格（10–300 字符）。**歌词** 可选（10–1,000 字符），用于替换原曲歌词。
+5. 可选：在 **音频设置** 中调整 **音频格式**、**采样率** 与 **码率**。
+6. 点击 **生成**。歌曲卡片显示 **生成中…**，完成后出现播放器。点击播放即可试听，也可以下载文件。
+
+### 通过 API 生成
+
+调用方式与 Suno 相同（见 [通过 API 生成](/zh/docs/usage/providers/suno)），把 `provider` 设为 `minimax`。MiniMax 每次请求返回一首歌。下面是带歌词和参考音频的翻唱请求：
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"minimax",
+    "model":"music-cover",
+    "params":{
+      "prompt":"Slow jazz ballad with soft piano and brushed drums",
+      "lyrics":"[Verse]\nRain on the window, coffee gone cold\n[Chorus]\nStay a little longer",
+      "referenceAudioUrl":"https://example.com/reference.mp3",
+      "format":"mp3",
+      "sampleRate":44100,
+      "bitrate":256000
+    }}}'
+```
+
+使用 `music-3.0` 或 `music-2.6` 时，去掉 `referenceAudioUrl`，并发送 `prompt` 加 `lyrics`，或 `instrumental: true`，或 `autoLyrics: true`。用返回的 `asyncTaskId` 和 `generation.id` 轮询 `generation.getGenerationStatus`，直到 `status` 为 `success`；音频地址在 `generation.asset.url`。
+
+LobeHub 向 MiniMax 发送的是一次同步请求，音乐 API 本身没有需要轮询的任务：
+
+```bash
+curl -s -X POST https://api.minimaxi.com/v1/music_generation \
+  -H "Authorization: Bearer $MINIMAX_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "music-cover",
+    "prompt": "Slow jazz ballad with soft piano and brushed drums",
+    "lyrics": "[Verse]\nRain on the window, coffee gone cold\n[Chorus]\nStay a little longer",
+    "audio_url": "https://example.com/reference.mp3",
+    "output_format": "url",
+    "audio_setting": { "format": "mp3", "sample_rate": 44100, "bitrate": 256000 }
+  }'
+# → {"data":{"audio":"<临时音频 URL>","status":2},"base_resp":{"status_code":0,"status_msg":"success"}}
+```
+
+`instrumental` 以 `is_instrumental` 发送，`autoLyrics` 以 `lyrics_optimizer` 发送。海外账号使用 `https://api.minimax.io/v1`，见 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider) 中的 `MINIMAX_PROXY_URL`。

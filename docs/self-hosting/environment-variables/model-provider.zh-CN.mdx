@@ -474,12 +474,21 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 ## Minimax AI
 
+MiniMax 的对话、语音合成（TTS）与音乐生成（MiniMax Music）使用同一个密钥和同一个主机，没有单独的 MiniMax Music 环境变量。模型可用性与请求示例见 [在 LobeHub 中使用 MiniMax](/zh/docs/usage/providers/minimax)。
+
 ### `MINIMAX_API_KEY`
 
-- 类型：必选
-- 描述：这是你在 Minimax AI 服务中申请的 API 密钥
+- 类型：部署时可选；提供共享服务端密钥时必填。用户也可以在 MiniMax 服务商设置中填写自己的密钥，用户密钥优先。
+- 描述：MiniMax 开放平台的 API 密钥（**账户管理 → 接口密钥**：国内账号在 [minimaxi.com](https://platform.minimaxi.com)，海外账号在 [minimax.io](https://www.minimax.io/platform)）。设置非空密钥后，服务端配置会启用 MiniMax。MiniMax Music（`music-3.0`、`music-2.6`、`music-cover`）复用这个密钥；生成音乐还要求账号已开通付费音乐 API，因为 MiniMax 已不再向新账号开放音乐 API。
 - 默认值：-
 - 示例：`xxxxxx...xxxxxx`
+
+### `MINIMAX_PROXY_URL`
+
+- 类型：可选
+- 描述：MiniMax API 的 Base URL。密钥只能在所属区域的主机上使用，海外账号需要设置此项。语音与音乐请求分别发往 `<host>/v1/t2a_v2` 和 `<host>/v1/music_generation`。
+- 默认值：`https://api.minimaxi.com/v1`
+- 示例：`https://api.minimax.io/v1`
 
 ## Mistral AI
 
@@ -824,6 +833,10 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 描述：使用通用的 [模型列表语法][model-list] 自定义 Suno 模型列表：`+` 增加模型，`-` 隐藏模型，`模型 ID=展示名` 自定义展示名，用英文逗号隔开。
 - 默认值：未设置，使用内置模型列表。
 - 示例：`-all,+suno-v6`
+
+<Callout type={'info'}>
+  网关会拒绝不带回调地址的 Suno 请求，因此 LobeHub 会发送 `<APP_URL>/api/webhooks/music/suno`（设置了 `WEBHOOK_PROXY_URL` 时使用它）。回调只做确认，结果由 LobeHub 每 5 秒轮询网关获取，结果不依赖回调能否到达你的服务器，但必须设置 `APP_URL`。配置步骤与请求示例见 [在 LobeHub 中使用 Suno](/zh/docs/usage/providers/suno)。
+</Callout>
 
 ## BFL
 
