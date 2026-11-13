@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import {
@@ -236,14 +237,14 @@ export const getKnowledgeBaseIdsMountedByBrowsers = async (
   const mounts = [...agentMounts, ...projectMounts];
   const mounters = [...new Set(mounts.flatMap(({ mountedBy }) => (mountedBy ? [mountedBy] : [])))];
   const restrictedByMounter = new Map(
-    await Promise.all(
-      mounters.map(
-        async (userId) =>
-          [
-            userId,
-            new Set(await getRestrictedKnowledgeBaseIds({ serverDB: db, userId, workspaceId })),
-          ] as const,
-      ),
+    await pMap(
+      mounters,
+      async (userId) =>
+        [
+          userId,
+          new Set(await getRestrictedKnowledgeBaseIds({ serverDB: db, userId, workspaceId })),
+        ] as const,
+      { concurrency: 5 },
     ),
   );
 
