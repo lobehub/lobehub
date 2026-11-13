@@ -174,7 +174,13 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
       // so a directory named `[v2] builds` matches nothing and the search silently answers
       // "0 files". Both interpolated values are quoted as PowerShell literals because a
       // `'` in either one would end the string early and turn the rest into source.
+      // The encoding line is what makes non-ASCII paths usable at all: Windows PowerShell
+      // writes stdout in the system ANSI code page (CP936 on a zh-CN box), and the pipe is
+      // decoded as UTF-8, so `季度报告.txt` arrives as `���ȱ���.txt`. `stat()` then throws
+      // on every path and `processFilePaths` swallows it, which is how a directory full of
+      // Chinese-named files answered "no files".
       const psCommand = `
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
         Get-ChildItem -LiteralPath '${toPowerShellLiteral(searchDir)}' -Filter '${toPowerShellLiteral(filter)}' -Recurse -File -Depth 10 -ErrorAction SilentlyContinue |
         Where-Object {
           $_.FullName -notlike '*\\node_modules\\*' -and

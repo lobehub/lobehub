@@ -84,5 +84,46 @@ describe.skipIf(process.platform !== 'win32')(
 
       expect(results.map((r) => r.name)).toEqual(['alpha[1].txt']);
     });
+
+    /*
+     * The reported "zero results on an ordinary directory" symptom. Windows PowerShell
+     * writes stdout in the system ANSI code page, so a non-ASCII name reaches Node as
+     * mojibake; `stat()` throws for each entry and `processFilePaths` swallows it. The
+     * caller gets `[]` even though the file is right there.
+     *
+     * The keyword is plain ASCII so this exercises the output side rather than the
+     * filter; the next test covers a non-ASCII keyword.
+     */
+    it.each([
+      ['Chinese', 'report-季度.txt'],
+      ['Japanese', 'report-日本語.md'],
+      ['accented Latin', 'report-Ünïcödé.txt'],
+      ['emoji', 'report-😀.txt'],
+    ])('finds a file with a non-ASCII %s name', async (_label, name) => {
+      fs.writeFileSync(path.join(root, name), 'x');
+
+      const results = await search(root, 'report');
+
+      expect(results.map((r) => r.name)).toEqual([name]);
+    });
+
+    it('finds a non-ASCII name when the keyword itself is non-ASCII', async () => {
+      fs.writeFileSync(path.join(root, '季度报告.txt'), 'x');
+
+      const results = await search(root, '季度报告');
+
+      expect(results.map((r) => r.name)).toEqual(['季度报告.txt']);
+    });
+
+    it('returns a path that can be stat()ed, not mojibake', async () => {
+      fs.writeFileSync(path.join(root, '季度报告.txt'), 'x');
+
+      const results = await search(root, '季度报告');
+
+      // `processFilePaths` drops any entry whose stat() fails, so a non-empty result
+      // already implies this — assert it directly so the reason stays visible.
+      expect(results).toHaveLength(1);
+      expect(fs.existsSync(results[0].path)).toBe(true);
+    });
   },
 );
