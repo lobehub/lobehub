@@ -10,12 +10,15 @@ const mocks = vi.hoisted(() => ({ find: vi.fn(), links: vi.fn(), call: vi.fn() }
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
     return {
+      context: { db: {}, userId: 'me' },
       findById: mocks.find,
-      getLinkModel: () => ({
-        adoptLegacyCredentials: async () => {},
-        listByConnectorIds: mocks.links,
-      }),
+      getLinkModel: () => ({ listByConnectorIds: mocks.links }),
     };
+  }),
+}));
+vi.mock('@/database/repositories/connectorAccount', () => ({
+  ConnectorAccountRepo: vi.fn(function () {
+    return { adoptLegacyCredentials: async () => {} };
   }),
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -66,6 +69,8 @@ beforeEach(() => {
     mcpConnectionType: 'http',
     mcpServerUrl: 'https://mcp.example',
     credentials: null,
+    // Accounts belong to OAuth connectors, which always carry their client.
+    oidcConfig: { clientId: 'client', scheme: 'dcr' },
   });
   mocks.links.mockResolvedValue(
     ['a', 'b'].map((id) => ({
@@ -99,6 +104,7 @@ describe('live connector account resolution at dispatch', () => {
       mcpConnectionType: 'http',
       mcpServerUrl: 'http://localhost:1234/mcp',
       credentials: null,
+      oidcConfig: { clientId: 'client', scheme: 'dcr' },
     });
     const result = await service.executeTool(
       payload,
@@ -139,6 +145,7 @@ describe('live connector account resolution at dispatch', () => {
       mcpConnectionType: 'http',
       mcpServerUrl: 'http://localhost:1234/mcp',
       credentials: null,
+      oidcConfig: { clientId: 'client', scheme: 'dcr' },
     });
     const result = await service.executeTool(
       payload,
@@ -157,6 +164,7 @@ describe('live connector account resolution at dispatch', () => {
       mcpConnectionType: 'http',
       mcpServerUrl: 'http://localhost:1234/mcp',
       credentials: null,
+      oidcConfig: { clientId: 'client', scheme: 'dcr' },
     });
     vi.mocked(deviceGateway.executeMcpCall).mockResolvedValueOnce({
       success: false,

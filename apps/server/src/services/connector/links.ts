@@ -6,25 +6,49 @@ import {
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
+import { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 
 import { ensureFreshLinkToken } from './tokens';
 
 export interface ConnectorLinksContext {
+  connectorAccountRepo?: ConnectorAccountRepo;
   connectorLinkModel?: ConnectorLinkModel;
   connectorModel: ConnectorModel;
 }
 export const getConnectorLinkModel = (ctx: ConnectorLinksContext) =>
   ctx.connectorLinkModel ?? ctx.connectorModel.getLinkModel();
+export const getConnectorAccountRepo = (ctx: ConnectorLinksContext) => {
+  if (ctx.connectorAccountRepo) return ctx.connectorAccountRepo;
+  const { db, gateKeeper, userId, workspaceId } = ctx.connectorModel.context;
+  return new ConnectorAccountRepo(db, userId, workspaceId, gateKeeper);
+};
+
+/** OAuth credentials still on the connector row, written before links existed. */
+const hasLegacyOAuthCredentials = (connector: DecryptedConnector) =>
+  connector.credentials?.type === 'oauth2';
+/**
+ * Accounts exist only for OAuth connectors: an authorization needs the
+ * connector's OAuth client, and replacing OAuth with static credentials
+ * removes both the client and the accounts.
+ */
+const mayHaveLinks = (connector: DecryptedConnector) =>
+  !!connector.oidcConfig || hasLegacyOAuthCredentials(connector);
 
 export const loadConnectorLinksMap = async (
   connectors: DecryptedConnector[],
   ctx: ConnectorLinksContext,
 ): Promise<Map<string, DecryptedConnectorLink[]>> => {
   const map = new Map<string, DecryptedConnectorLink[]>();
-  if (!connectors.length) return map;
+  const candidates = connectors.filter(mayHaveLinks);
+  if (!candidates.length) return map;
+  const legacy = candidates.filter(hasLegacyOAuthCredentials);
+  if (legacy.length) {
+    const repo = getConnectorAccountRepo(ctx);
+    // Sequential: each adoption locks its connector in its own transaction.
+    for (const connector of legacy) await repo.adoptLegacyCredentials(connector);
+  }
   const model = getConnectorLinkModel(ctx);
-  for (const connector of connectors) await model.adoptLegacyCredentials(connector);
-  for (const link of await model.listByConnectorIds(connectors.map((c) => c.id))) {
+  for (const link of await model.listByConnectorIds(candidates.map((c) => c.id))) {
     const links = map.get(link.userConnectorId) ?? [];
     links.push(link);
     map.set(link.userConnectorId, links);

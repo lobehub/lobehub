@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
+import type { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 
 import { loadConnectorLinksMap, pickPrimaryLink, resolveLinkedCall } from './links';
 import { ensureFreshLinkToken } from './tokens';
@@ -29,9 +30,9 @@ const links = [
   },
 ] as DecryptedConnectorLink[];
 const context = (rows = links) => ({
+  connectorAccountRepo: { adoptLegacyCredentials: vi.fn() } as unknown as ConnectorAccountRepo,
   connectorModel: {} as never,
   connectorLinkModel: {
-    adoptLegacyCredentials: vi.fn(),
     listByConnectorIds: vi.fn().mockResolvedValue(rows),
   } as unknown as ConnectorLinkModel,
 });
@@ -93,6 +94,28 @@ describe('resolveLinkedCall', () => {
   it('does no storage IO for an empty inventory and picks the earliest healthy primary', async () => {
     expect(await loadConnectorLinksMap([], context())).toEqual(new Map());
     expect(pickPrimaryLink([links[1], links[0]])).toBe(links[0]);
+  });
+  it('reads accounts only for OAuth connectors and adopts only legacy OAuth credentials', async () => {
+    const bearer = {
+      id: 'static',
+      credentials: { type: 'bearer', token: 't' },
+      oidcConfig: null,
+    } as DecryptedConnector;
+    const none = { id: 'open', credentials: null, oidcConfig: null } as DecryptedConnector;
+    const ctx = context();
+    expect(await loadConnectorLinksMap([bearer, none], ctx)).toEqual(new Map());
+    expect(ctx.connectorLinkModel.listByConnectorIds).not.toHaveBeenCalled();
+    expect(ctx.connectorAccountRepo.adoptLegacyCredentials).not.toHaveBeenCalled();
+
+    const legacy = {
+      id: 'legacy',
+      credentials: { type: 'oauth2', accessToken: 'old' },
+      oidcConfig: { clientId: 'client' },
+    } as DecryptedConnector;
+    await loadConnectorLinksMap([bearer, connector, legacy], ctx);
+    expect(ctx.connectorAccountRepo.adoptLegacyCredentials).toHaveBeenCalledTimes(1);
+    expect(ctx.connectorAccountRepo.adoptLegacyCredentials).toHaveBeenCalledWith(legacy);
+    expect(ctx.connectorLinkModel.listByConnectorIds).toHaveBeenCalledWith(['c', 'legacy']);
   });
   it('binds interactive views to an explicit host-provided account', async () => {
     await expect(

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 import { users } from '@/database/schemas';
 import { startOAuthMcpServer } from '@/libs/mcp/__tests__/fixtures/oauthMcpServer';
 import { ensureFreshLinkToken } from '@/server/services/connector/tokens';
@@ -22,6 +23,7 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 const db = await getTestDB();
 const model = new ConnectorModel(db, 'links-router', undefined, vault);
 const linkModel = model.getLinkModel();
+const accountRepo = new ConnectorAccountRepo(db, 'links-router', undefined, vault);
 const caller = connectorRouter.createCaller({ userId: 'links-router', serverDB: db } as never);
 const credentials = {
   type: 'oauth2' as const,
@@ -44,7 +46,7 @@ const create = async () => {
       scopes: ['tools'],
     },
   });
-  const link = await linkModel.saveAuthorization(row.id, {
+  const link = await accountRepo.saveAuthorization(row.id, {
     target: { kind: 'new' },
     credentials,
     tokenExpiresAt: null,
@@ -64,7 +66,7 @@ afterEach(async () => {
 describe('connector account APIs', () => {
   it('preserves a resolved DCR client on ordinary form save and both accounts stay usable', async () => {
     const { row } = await create();
-    await linkModel.saveAuthorization(row.id, {
+    await accountRepo.saveAuthorization(row.id, {
       target: { kind: 'new' },
       credentials,
       tokenExpiresAt: null,
@@ -111,7 +113,7 @@ describe('connector account APIs', () => {
   });
   it('renames, rejects duplicate names and disconnects only after removing the last account', async () => {
     const { row, link } = await create();
-    const second = await linkModel.saveAuthorization(row.id, {
+    const second = await accountRepo.saveAuthorization(row.id, {
       target: { kind: 'new' },
       credentials,
       tokenExpiresAt: null,
@@ -161,7 +163,7 @@ describe('connector account APIs', () => {
           mcpServerUrl: `${fixture.base}/mcp`,
           oidcConfig: oidc,
         });
-        const link = await linkModel.saveAuthorization(row.id, {
+        const link = await accountRepo.saveAuthorization(row.id, {
           target: { kind: 'new' },
           credentials: {
             type: 'oauth2',

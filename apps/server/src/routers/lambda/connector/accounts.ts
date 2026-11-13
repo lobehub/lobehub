@@ -1,7 +1,7 @@
+import type { ConnectorOIDCConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import type { OIDCConfig } from '@/database/schemas';
 import { loadConnectorLinksMap } from '@/server/services/connector/links';
 import {
   buildAuthorizationUrl,
@@ -62,7 +62,7 @@ export const connectorAccountProcedures = {
               : { kind: 'new' as const };
       if (linkTarget.kind === 'existing' && !links.some((link) => link.id === linkTarget.linkId))
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector account not found' });
-      const existing: OIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
+      const existing: ConnectorOIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
       const redirectUri = getConnectorRedirectUri();
 
       // 1. Discover the authorization server backing the MCP resource.
@@ -103,7 +103,7 @@ export const connectorAccountProcedures = {
         });
 
       // 3. Persist the resolved config so the callback + refresh can reuse it.
-      const resolvedOidc: OIDCConfig = {
+      const resolvedOidc: ConnectorOIDCConfig = {
         ...existing,
         authorizationEndpoint: metadata.authorization_endpoint,
         clientId,
@@ -195,6 +195,6 @@ export const connectorAccountProcedures = {
       if (!connector)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector account not found' });
       await assertConnectorMaintainable(ctx, connector);
-      await ctx.connectorLinkModel.delete(input.linkId);
+      await ctx.connectorAccountRepo.removeLink(input.linkId);
     }),
 };

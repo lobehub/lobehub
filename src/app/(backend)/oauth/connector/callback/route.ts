@@ -5,6 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -175,7 +176,12 @@ export const GET = async (req: NextRequest) => {
     const earliestLink = payload.linkTarget
       ? undefined
       : (await connectorLinkModel.listByConnectorIds([payload.connectorId]))[0];
-    const authorization = await connectorLinkModel.saveAuthorization(payload.connectorId, {
+    const authorization = await new ConnectorAccountRepo(
+      serverDB,
+      payload.lobeUserId,
+      payload.workspaceId,
+      gateKeeper,
+    ).saveAuthorization(payload.connectorId, {
       target:
         payload.linkTarget ??
         (earliestLink ? { kind: 'existing', linkId: earliestLink.id } : { kind: 'new' }),

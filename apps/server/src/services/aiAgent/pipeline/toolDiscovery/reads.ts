@@ -4,6 +4,7 @@ import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type { FrozenCredentialFacts } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { AgentAccountModel } from '@/database/models/agentAccount';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
@@ -13,6 +14,7 @@ import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
+  getConnectorLinkModel,
   loadConnectorLinksMap,
   pickPrimaryLink,
   withLinkCredentials,
@@ -105,6 +107,9 @@ export const readCredentialFacts = async (
   }
 };
 
+/** Connectors refreshed at once; each refresh may call its authorization server. */
+const CONNECTOR_REFRESH_CONCURRENCY = 5;
+
 /**
  * Manifests carry each connector's access token for the whole run, so refresh
  * expired OAuth tokens first. Rotated credentials are persisted encrypted,
@@ -119,13 +124,11 @@ const refreshConnectorTokens = async (
 ): Promise<DecryptedConnector[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
   const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
-  const linkModel = model.getLinkModel();
-  const map = await loadConnectorLinksMap(connectors, {
-    connectorModel: model,
-    connectorLinkModel: linkModel,
-  });
-  return Promise.all(
-    connectors.map(async (connector) => {
+  const linksContext = { connectorModel: model };
+  const map = await loadConnectorLinksMap(connectors, linksContext);
+  return pMap(
+    connectors,
+    async (connector) => {
       const links = map.get(connector.id) ?? [];
       const choices = links.map(({ id, name, userId }, index) => ({
         id,
@@ -134,18 +137,19 @@ const refreshConnectorTokens = async (
       }));
       if (links.length > 1) return { ...connector, credentials: null, links: choices };
       const primary = pickPrimaryLink(links);
-      if (primary)
-        return {
-          ...withLinkCredentials(
-            connector,
-            (
-              await refreshExpiredLinkTokens(connector, [primary], linkModel, model, { onTimeout })
-            )[0],
-          ),
-          links: choices,
-        };
+      if (primary) {
+        const [fresh] = await refreshExpiredLinkTokens(
+          connector,
+          [primary],
+          getConnectorLinkModel(linksContext),
+          model,
+          { onTimeout },
+        );
+        return { ...withLinkCredentials(connector, fresh), links: choices };
+      }
       return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
-    }),
+    },
+    { concurrency: CONNECTOR_REFRESH_CONCURRENCY },
   );
 };
 

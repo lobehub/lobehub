@@ -1,11 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../core/getTestDB';
-import { userConnectorLinks, userConnectors, users, workspaces } from '../../schemas';
-import { rehomeAgentConnectorsForRecipient } from '../../utils/agentConnectors';
-import { ConnectorModel } from '../connector';
-import { allocateLinkName, ConnectorLinkModel } from '../connectorLink';
+import { getTestDB } from '../../../core/getTestDB';
+import { ConnectorModel } from '../../../models/connector';
+import { allocateLinkName, ConnectorLinkModel } from '../../../models/connectorLink';
+import { userConnectorLinks, userConnectors, users, workspaces } from '../../../schemas';
+import { rehomeAgentConnectorsForRecipient } from '../../../utils/agentConnectors';
+import { ConnectorAccountRepo } from '../index';
 
 const db = await getTestDB();
 const vault = {
@@ -14,6 +15,7 @@ const vault = {
 };
 const model = new ConnectorModel(db, 'alice', undefined, vault);
 const links = new ConnectorLinkModel(db, 'alice', undefined, vault);
+const repo = new ConnectorAccountRepo(db, 'alice', undefined, vault);
 const credentials = { type: 'oauth2' as const, accessToken: 'alice-token', idToken: 'transient' };
 const create = (extra = {}) =>
   model.create({
@@ -26,7 +28,7 @@ const create = (extra = {}) =>
     ...extra,
   });
 const save = (id: string, externalAccountId?: string) =>
-  links.saveAuthorization(id, {
+  repo.saveAuthorization(id, {
     authorizerId: 'alice',
     credentials,
     tokenExpiresAt: null,
@@ -41,12 +43,12 @@ afterEach(async () => {
   await db.delete(users);
 });
 
-describe('ConnectorLinkModel', () => {
+describe('ConnectorAccountRepo', () => {
   it('adopts legacy OAuth once, removes the old ciphertext and never persists the id token', async () => {
     const row = await create({ credentials: JSON.stringify(credentials) });
     const connector = (await model.findById(row.id))!;
-    await links.adoptLegacyCredentials(connector);
-    await links.adoptLegacyCredentials(connector);
+    await repo.adoptLegacyCredentials(connector);
+    await repo.adoptLegacyCredentials(connector);
     const result = await links.listByConnectorIds([row.id]);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
@@ -61,7 +63,7 @@ describe('ConnectorLinkModel', () => {
   });
   it('leaves static credentials untouched', async () => {
     const row = await create({ credentials: JSON.stringify({ type: 'bearer', token: 'static' }) });
-    await links.adoptLegacyCredentials((await model.findById(row.id))!);
+    await repo.adoptLegacyCredentials((await model.findById(row.id))!);
     expect(await links.listByConnectorIds([row.id])).toEqual([]);
     expect((await model.findById(row.id))?.credentials).toEqual({
       type: 'bearer',
@@ -82,7 +84,7 @@ describe('ConnectorLinkModel', () => {
       'Account 2',
     ]);
     expect(
-      await links.saveAuthorization(row.id, {
+      await repo.saveAuthorization(row.id, {
         target: { kind: 'existing', linkId: second.linkId },
         authorizerId: 'bob',
         credentials,
@@ -90,10 +92,10 @@ describe('ConnectorLinkModel', () => {
       }),
     ).toEqual({ linkId: second.linkId, outcome: 'reauthorized' });
     await links.rename(second.linkId, ' Work ');
-    await links.delete(first.linkId);
+    await repo.removeLink(first.linkId);
     expect((await links.findById(second.linkId))?.name).toBe('Work');
     await expect(links.rename(second.linkId, ' ')).rejects.toThrow();
-    await links.delete(second.linkId);
+    await repo.removeLink(second.linkId);
     expect((await model.findById(row.id))?.status).toBe('disconnected');
   });
   it('enforces user and workspace scope for reads and writes', async () => {
@@ -103,10 +105,10 @@ describe('ConnectorLinkModel', () => {
     expect(await other.findById(linkId)).toBeNull();
     expect(await other.listByConnectorIds([row.id])).toEqual([]);
     await other.rename(linkId, 'stolen');
-    await other.delete(linkId);
+    await new ConnectorAccountRepo(db, 'bob', undefined, vault).removeLink(linkId);
     expect((await links.findById(linkId))?.name).toBe('Default');
     await expect(
-      other.saveAuthorization(row.id, {
+      new ConnectorAccountRepo(db, 'bob', undefined, vault).saveAuthorization(row.id, {
         target: { kind: 'new' },
         credentials,
         tokenExpiresAt: null,
@@ -123,13 +125,15 @@ describe('ConnectorLinkModel', () => {
       sourceType: 'custom',
       status: 'connected',
     });
-    const wsLinks = new ConnectorLinkModel(db, 'alice', 'ws', vault);
-    const shared = await wsLinks.saveAuthorization(ws.id, {
-      target: { kind: 'new' },
-      credentials,
-      tokenExpiresAt: null,
-      authorizerId: 'alice',
-    });
+    const shared = await new ConnectorAccountRepo(db, 'alice', 'ws', vault).saveAuthorization(
+      ws.id,
+      {
+        target: { kind: 'new' },
+        credentials,
+        tokenExpiresAt: null,
+        authorizerId: 'alice',
+      },
+    );
     expect(await links.findById(shared.linkId)).toBeNull();
     expect(
       await new ConnectorLinkModel(db, 'bob', 'ws', vault).findById(shared.linkId),
@@ -152,7 +156,7 @@ describe('ConnectorLinkModel', () => {
     }
   });
   it('copies links atomically along with connector tools', async () => {
-    const { agents } = await import('../../schemas');
+    const { agents } = await import('../../../schemas');
     await db.insert(agents).values({ id: 'agent', userId: 'alice' });
     const row = await create();
     await save(row.id);
@@ -169,7 +173,7 @@ describe('ConnectorLinkModel', () => {
     expect(allocateLinkName(['x'.repeat(64)], 'x'.repeat(64))).toHaveLength(64);
   });
   it('removes every linked identity when an agent connector is transferred to another owner', async () => {
-    const { agents } = await import('../../schemas');
+    const { agents } = await import('../../../schemas');
     await db.insert(agents).values({ id: 'handover-agent', userId: 'alice' });
     const row = await create({ agentId: 'handover-agent' });
     await save(row.id, 'issuer/alice');
@@ -212,8 +216,8 @@ describe('ConnectorLinkModel', () => {
         })
         .where(eq(userConnectors.id, row.id));
       const legacy = (await model.findById(row.id))!;
-      await links.adoptLegacyCredentials(legacy);
-      await links.adoptLegacyCredentials(legacy);
+      await repo.adoptLegacyCredentials(legacy);
+      await repo.adoptLegacyCredentials(legacy);
       const result = await links.listByConnectorIds([row.id]);
       expect(result).toHaveLength(2);
       expect(result[0]).toMatchObject({
@@ -244,7 +248,7 @@ describe('ConnectorLinkModel', () => {
         ),
       })
       .where(eq(userConnectors.id, row.id));
-    await links.adoptLegacyCredentials((await model.findById(row.id))!);
+    await repo.adoptLegacyCredentials((await model.findById(row.id))!);
     expect(await links.listByConnectorIds([row.id])).toMatchObject([
       { id: linkId, name: 'Default', credentials: { accessToken: 'replacement' } },
     ]);
@@ -278,7 +282,7 @@ describe('ConnectorLinkModel', () => {
     },
   ])('$label', async ({ customName, occupiedName, expected, noIdentity }) => {
     const row = await create();
-    const original = await links.saveAuthorization(row.id, {
+    const original = await repo.saveAuthorization(row.id, {
       target: { kind: 'new' },
       credentials,
       tokenExpiresAt: null,
@@ -290,7 +294,7 @@ describe('ConnectorLinkModel', () => {
       const other = await save(row.id, 'issuer/other');
       await links.rename(other.linkId, occupiedName);
     }
-    await links.saveAuthorization(row.id, {
+    await repo.saveAuthorization(row.id, {
       target: { kind: 'existing', linkId: original.linkId },
       credentials: { type: 'oauth2', accessToken: 'b-token' },
       tokenExpiresAt: null,

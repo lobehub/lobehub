@@ -3,6 +3,7 @@ import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -50,6 +51,9 @@ import {
 import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
 import { connectorAccountProcedures } from './accounts';
 import { connectorProcedure, connectorWriteProcedure } from './procedure';
+
+/** Connectors (or tools) read or written at once when a list fans out per row. */
+const CONNECTOR_LIST_CONCURRENCY = 5;
 
 const oidcConfigSchema = z.object({
   authorizationEndpoint: z.string().optional(),
@@ -127,8 +131,9 @@ export const connectorRouter = router({
       connectors.map((c) => resolveConnectorAuthorizerId(c)),
     );
 
-    const toolsByConnector = await Promise.all(
-      connectors.map(async (c) => {
+    const toolsByConnector = await pMap(
+      connectors,
+      async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -142,7 +147,8 @@ export const connectorRouter = router({
           oidcConfig: safeOidcConfig,
           tools,
         };
-      }),
+      },
+      { concurrency: CONNECTOR_LIST_CONCURRENCY },
     );
 
     return toolsByConnector;
@@ -166,8 +172,9 @@ export const connectorRouter = router({
         connectors.map((c) => resolveConnectorAuthorizerId(c)),
       );
 
-      return Promise.all(
-        connectors.map(async (c) => {
+      return pMap(
+        connectors,
+        async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
           const { credentials: _credentials, oidcConfig, ...rest } = c;
           const safeOidcConfig = oidcConfig
@@ -182,7 +189,8 @@ export const connectorRouter = router({
             oidcConfig: safeOidcConfig,
             tools,
           };
-        }),
+        },
+        { concurrency: CONNECTOR_LIST_CONCURRENCY },
       );
     }),
 
@@ -213,31 +221,27 @@ export const connectorRouter = router({
     // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
-    const presentation = await loadConnectorPresentation(
-      connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId)),
-      ctx,
-    );
+    const visibleConnectors = connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId));
+    const presentation = await loadConnectorPresentation(visibleConnectors, ctx);
 
-    return Promise.all(
-      connectors
-        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
-        .map(async (c) => {
-          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-          const { credentials: _credentials, oidcConfig, ...rest } = c;
-          const safeOidcConfig = oidcConfig
-            ? { ...oidcConfig, clientSecret: undefined }
-            : oidcConfig;
-          const meta = agentMetaById.get(c.agentId!);
-          return {
-            ...rest,
-            ...presentation.get(c.id),
-            agentAvatar: meta?.avatar ?? null,
-            agentName: meta?.name ?? null,
-            agentTitle: meta?.title ?? null,
-            oidcConfig: safeOidcConfig,
-            tools,
-          };
-        }),
+    return pMap(
+      visibleConnectors,
+      async (c) => {
+        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        const meta = agentMetaById.get(c.agentId!);
+        return {
+          ...rest,
+          ...presentation.get(c.id),
+          agentAvatar: meta?.avatar ?? null,
+          agentName: meta?.name ?? null,
+          agentTitle: meta?.title ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
+      },
+      { concurrency: CONNECTOR_LIST_CONCURRENCY },
     );
   }),
 
@@ -797,10 +801,10 @@ export const connectorRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
-      await Promise.all(
-        tools.map((t) =>
-          ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
-        ),
+      await pMap(
+        tools,
+        (t) => ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
+        { concurrency: CONNECTOR_LIST_CONCURRENCY },
       );
       return { toolCount: tools.length };
     }),

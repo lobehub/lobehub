@@ -7,6 +7,7 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
+import { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -18,6 +19,7 @@ export const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
   return opts.next({
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      connectorAccountRepo: new ConnectorAccountRepo(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorLinkModel: new ConnectorLinkModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),

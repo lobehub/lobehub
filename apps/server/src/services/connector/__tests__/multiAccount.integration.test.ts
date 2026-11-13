@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { getTestDB } from '@/database/core/getTestDB';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 import { users } from '@/database/schemas';
 import { startOAuthMcpServer } from '@/libs/mcp/__tests__/fixtures/oauthMcpServer';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
@@ -34,6 +35,7 @@ const vault = {
 };
 const model = new ConnectorModel(db, 'account-e2e', undefined, vault);
 const linkModel = model.getLinkModel();
+const accountRepo = new ConnectorAccountRepo(db, 'account-e2e', undefined, vault);
 const toolModel = new ConnectorToolModel(db, 'account-e2e');
 const ctx = {
   connectorModel: model,
@@ -104,7 +106,7 @@ describe('OAuth account routing over real HTTP and database', () => {
           });
           const { credentials, tokenExpiresAt } = tokensToCredentials(tokens);
           if (credentials.type !== 'oauth2') throw new Error('Expected OAuth credentials');
-          return linkModel.saveAuthorization(row.id, {
+          return accountRepo.saveAuthorization(row.id, {
             authorizerId: 'account-e2e',
             target: { kind: 'new' },
             credentials,

@@ -30,10 +30,12 @@ const {
 
 vi.mock('@/database/models/connectorLink', () => ({
   ConnectorLinkModel: vi.fn(function () {
-    return {
-      listByConnectorIds: mockListLinks,
-      saveAuthorization: mockSaveAuthorization,
-    };
+    return { listByConnectorIds: mockListLinks };
+  }),
+}));
+vi.mock('@/database/repositories/connectorAccount', () => ({
+  ConnectorAccountRepo: vi.fn(function () {
+    return { saveAuthorization: mockSaveAuthorization };
   }),
 }));
 vi.mock('@/server/services/connector/identity', () => ({

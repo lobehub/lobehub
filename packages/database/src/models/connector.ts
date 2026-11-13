@@ -98,6 +98,45 @@ export class ConnectorModel {
   getLinkModel = () =>
     new ConnectorLinkModel(this.db, this.userId, this.workspaceId, this.gateKeeper);
 
+  /** Constructor arguments, for the repositories of the connector domain. */
+  get context() {
+    return {
+      db: this.db,
+      gateKeeper: this.gateKeeper,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    };
+  }
+
+  /**
+   * Lock a connector for the surrounding transaction and read its credential
+   * slot. Call on a model bound to that transaction; `undefined` when the
+   * connector is out of scope.
+   */
+  lockCredentialSlot = async (
+    id: string,
+  ): Promise<
+    | Pick<DecryptedConnector, 'credentials' | 'id' | 'status' | 'tokenExpiresAt' | 'userId'>
+    | undefined
+  > => {
+    const [row] = await this.db
+      .select()
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .for('update');
+    if (!row) return;
+    const { credentials, status, tokenExpiresAt, userId } = await decryptRow(row, this.gateKeeper);
+    return { credentials, id: row.id, status, tokenExpiresAt, userId };
+  };
+
+  /** Empty the credential slot of a connector whose OAuth accounts live on links. */
+  clearCredentialSlot = async (id: string): Promise<void> => {
+    await this.db
+      .update(userConnectors)
+      .set({ credentials: null, tokenExpiresAt: null })
+      .where(and(eq(userConnectors.id, id), this.ownership()));
+  };
+
   private ownership = () =>
     connectorAccessScope(
       this.db,
@@ -590,7 +629,19 @@ export class ConnectorModel {
         (normalized.oidcConfig !== undefined &&
           normalized.oidcConfig?.clientId !== current.oidcConfig?.clientId)
       ) {
-        await tx.delete(userConnectorLinks).where(eq(userConnectorLinks.userConnectorId, id));
+        // `current` came from the ownership-scoped lock above; the subquery
+        // keeps this delete scoped on its own as well.
+        await tx
+          .delete(userConnectorLinks)
+          .where(
+            and(
+              eq(userConnectorLinks.userConnectorId, current.id),
+              inArray(
+                userConnectorLinks.userConnectorId,
+                tx.select({ id: userConnectors.id }).from(userConnectors).where(this.ownership()),
+              ),
+            ),
+          );
       }
       await tx
         .update(userConnectors)

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorAccountRepo } from '@/database/repositories/connectorAccount';
 import { users } from '@/database/schemas';
 import { startOAuthMcpServer } from '@/libs/mcp/__tests__/fixtures/oauthMcpServer';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
@@ -45,18 +46,21 @@ describe('server discovery account credentials and visitor privacy', () => {
           oidcConfig: { clientId: 'fixture-client', scheme: 'dcr', issuer: fixture.base },
         });
         for (const account of ['alice', 'bob'])
-          await model.getLinkModel().saveAuthorization(row.id, {
-            target: { kind: 'new' },
-            authorizerId: 'read-links',
-            credentials: {
-              type: 'oauth2',
-              accessToken: `tok-${account}-expired`,
-              refreshToken: `refresh-${account}-test`,
-              expiresAt: 1,
+          await new ConnectorAccountRepo(db, 'read-links', undefined, vault).saveAuthorization(
+            row.id,
+            {
+              target: { kind: 'new' },
+              authorizerId: 'read-links',
+              credentials: {
+                type: 'oauth2',
+                accessToken: `tok-${account}-expired`,
+                refreshToken: `refresh-${account}-test`,
+                expiresAt: 1,
+              },
+              tokenExpiresAt: new Date(1),
+              identity: { profile: { email: `${account}@private.example` } },
             },
-            tokenExpiresAt: new Date(1),
-            identity: { profile: { email: `${account}@private.example` } },
-          });
+          );
         await toolModel.upsertMany(row.id, [
           { toolName: 'echo', crudType: 'read', inputSchema: { type: 'object' } },
         ]);
