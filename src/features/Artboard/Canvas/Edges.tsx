@@ -1,4 +1,5 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { useState } from 'react';
 
 import { sx } from '@/styles/sx';
 
@@ -7,6 +8,8 @@ import type { BoardEdge } from '../model';
 import { useArtboardStore } from '../store';
 import { type FlowNodeState, nodeState } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
+import { EDGE_LABEL_FONT, edgeLabelMode, edgeLabelText } from './edgeLabel';
+import { arrowSize, sketchArrow, sketchLine, strokeWidthOf } from './sketch';
 import { canvasStyles } from './styles';
 
 interface EdgeTone {
@@ -25,7 +28,7 @@ const toneOf = (
     const ends = [states[edge.from], states[edge.to]];
     if (ends.includes('failed')) return { color: cssVar.colorError, strong: true };
     if (ends.every((x) => x === 'passed')) return { color: cssVar.colorSuccess, strong: true };
-    return { color: cssVar.colorTextQuaternary, dash: '8 6', strong: false };
+    return { color: cssVar.colorTextQuaternary, dash: '4 3', strong: false };
   }
   if (hot && (edge.from === hot || edge.to === hot))
     return { color: cssVar.colorPrimary, strong: true };
@@ -42,7 +45,17 @@ const Edges = ({ k }: { k: number }) => {
   const states = Object.fromEntries(
     board.edges.flatMap((e) => [e.from, e.to]).map((id) => [id, nodeState(journey, id)]),
   );
-  const shown = board.edges.map((edge) => ({ edge, tone: toneOf(edge, verify, states, hot) }));
+  const [hovered, setHovered] = useState<string | null>(null);
+  const shown = board.edges.map((edge) => {
+    const text = edgeLabelText(edge);
+    const linked = !!hot && (edge.from === hot || edge.to === hot);
+    return {
+      edge,
+      mode: edgeLabelMode({ hovered: edge.id === hovered, k, linked, room: edge.room, text }),
+      text,
+      tone: toneOf(edge, verify, states, hot),
+    };
+  });
 
   return (
     <>
@@ -58,39 +71,55 @@ const Edges = ({ k }: { k: number }) => {
         }}
       >
         {shown.map(({ edge, tone }) => {
-          const markerId = `artboard-edge-${edge.id}`;
+          const width = strokeWidthOf(k, tone.strong);
+          const line = {
+            fill: 'none',
+            stroke: tone.color,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            strokeWidth: width,
+          } as const;
           return (
             <g key={edge.id}>
-              <defs>
-                <marker
-                  id={markerId}
-                  markerHeight="8"
-                  markerWidth="8"
-                  orient="auto-start-reverse"
-                  refX="8"
-                  refY="4"
-                  viewBox="0 0 8 8"
-                >
-                  <path d="M0 0 L8 4 L0 8 z" fill={tone.color} />
-                </marker>
-              </defs>
+              <path
+                {...line}
+                d={sketchLine(edge.points, edge.id)}
+                strokeDasharray={tone.dash
+                  ?.split(' ')
+                  .map((v) => Number(v) * width)
+                  .join(' ')}
+              />
+              <path {...line} d={sketchArrow(edge.points, arrowSize(k), edge.id)} />
               <path
                 d={edge.d}
                 fill="none"
-                markerEnd={`url(#${markerId})`}
-                stroke={tone.color}
-                strokeWidth={(tone.strong ? 2.5 : 1.5) / k}
-                strokeDasharray={tone.dash
-                  ?.split(' ')
-                  .map((v) => Number(v) / k)
-                  .join(' ')}
+                stroke="transparent"
+                strokeWidth={16 / k}
+                style={{ pointerEvents: 'stroke' }}
+                onMouseEnter={() => setHovered(edge.id)}
+                onMouseLeave={() => setHovered((id) => (id === edge.id ? null : id))}
               />
             </g>
           );
         })}
       </svg>
-      {k >= 0.3 &&
-        shown.map(({ edge, tone }) => (
+      {shown.map(({ edge, mode, text, tone }) => {
+        if (mode === 'none') return null;
+        if (mode === 'inline')
+          return (
+            <div
+              key={edge.id}
+              {...sx(canvasStyles.edgeText, undefined, {
+                fontSize: EDGE_LABEL_FONT,
+                left: edge.lx,
+                maxWidth: edge.room,
+                top: edge.ly,
+              })}
+            >
+              {text}
+            </div>
+          );
+        return (
           <div
             key={edge.id}
             {...sx(canvasStyles.edgeLabel, undefined, {
@@ -101,9 +130,10 @@ const Edges = ({ k }: { k: number }) => {
               transform: `translate(-50%, -50%) scale(${1 / k})`,
             })}
           >
-            {edge.condition ? `${edge.label} · ${edge.condition}` : edge.label}
+            {text}
           </div>
-        ))}
+        );
+      })}
     </>
   );
 };

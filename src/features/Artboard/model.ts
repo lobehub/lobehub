@@ -10,6 +10,8 @@ import {
   type ArtboardRoundView,
 } from '@lobechat/types';
 
+import { spreadEdges } from './edgeSpread';
+
 export interface Rect {
   maxX: number;
   maxY: number;
@@ -21,6 +23,8 @@ export interface EdgePath {
   d: string;
   lx: number;
   ly: number;
+  points: [number, number][];
+  room: number;
 }
 
 export type BoardEdge = ArtboardEdgeView & EdgePath;
@@ -61,7 +65,18 @@ export const computeEdgePath = (from: ArtboardRect, to: ArtboardRect): EdgePath 
     const y1 = from.y + from.h / 2;
     const y2 = to.y + to.h / 2;
     const mx = (x1 + x2) / 2;
-    return { d: `M${x1} ${y1} H${mx} V${y2} H${x2}`, lx: mx, ly: (y1 + y2) / 2 };
+    return {
+      d: `M${x1} ${y1} H${mx} V${y2} H${x2}`,
+      lx: mx,
+      ly: (y1 + y2) / 2,
+      points: [
+        [x1, y1],
+        [mx, y1],
+        [mx, y2],
+        [x2, y2],
+      ],
+      room: Math.abs(x2 - x1),
+    };
   }
 
   const down = to.y >= from.y;
@@ -70,7 +85,18 @@ export const computeEdgePath = (from: ArtboardRect, to: ArtboardRect): EdgePath 
   const y1 = down ? from.y + from.h : from.y;
   const y2 = down ? to.y : to.y + to.h;
   const my = (y1 + y2) / 2;
-  return { d: `M${x1} ${y1} V${my} H${x2} V${y2}`, lx: (x1 + x2) / 2, ly: my };
+  return {
+    d: `M${x1} ${y1} V${my} H${x2} V${y2}`,
+    lx: (x1 + x2) / 2,
+    ly: my,
+    points: [
+      [x1, y1],
+      [x1, my],
+      [x2, my],
+      [x2, y2],
+    ],
+    room: Math.min(from.w, to.w),
+  };
 };
 
 export const toBounds = (rect: ArtboardRect): Rect => ({
@@ -109,10 +135,13 @@ export const buildBoardModel = (
   const boards = content.boards.filter((b) => b.pageId === pageId);
   const groups = content.groups.filter((g) => g.pageId === pageId);
   const onPage = new Set(boards.map((b) => b.id));
-  const edges = content.edges.flatMap((edge) =>
-    onPage.has(edge.from) && onPage.has(edge.to)
-      ? [{ ...edge, ...computeEdgePath(boardById[edge.from].rect, boardById[edge.to].rect) }]
-      : [],
+  const edges = spreadEdges(
+    content.edges.flatMap((edge) =>
+      onPage.has(edge.from) && onPage.has(edge.to)
+        ? [{ ...edge, ...computeEdgePath(boardById[edge.from].rect, boardById[edge.to].rect) }]
+        : [],
+    ),
+    (edge) => !!(edge.label || edge.condition),
   );
 
   const journey = artboardJourneyOf(content);
