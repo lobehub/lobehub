@@ -141,6 +141,8 @@ export class ChannelMessagingService {
             agentId: run.manifest.self.agentId,
             name: run.manifest.self.name,
             operationId: this.operationId,
+            // Where the addressed Agents' replies are delivered back (`deliverRelayReceipts`).
+            origin: { channelId: run.channelId, threadId: run.manifest.threadId },
           },
         },
         requestKey: `agent-relay:${this.operationId}:${requestId}`,

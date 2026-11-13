@@ -33,7 +33,7 @@ vi.mock('./ChannelService', () => ({
 const self = { agentId: 'agent-self', memberId: 'member-self', name: 'Project Agent' };
 const run = (requestVia?: { agentId: string; name: string }) => ({
   channelId: 'channel-current',
-  manifest: { self },
+  manifest: { self, threadId: null },
   requestVia,
 });
 const lobehub = {
@@ -100,7 +100,12 @@ describe('ChannelMessagingService', () => {
       content: '@LobeHub Agent Please fix T-1',
       mentions: ['member-lobehub'],
       metadata: {
-        via: { agentId: 'agent-self', name: 'Project Agent', operationId: 'op-current' },
+        via: {
+          agentId: 'agent-self',
+          name: 'Project Agent',
+          operationId: 'op-current',
+          origin: { channelId: 'channel-current', threadId: null },
+        },
       },
       requestKey: 'agent-relay:op-current:call-1',
     });

@@ -191,6 +191,50 @@ export interface ChannelMessageVia {
   name: string;
 }
 
+/**
+ * Where a relayed request came from (`metadata.via.origin`), kept server-side so the target's
+ * reply can be delivered back there as a receipt.
+ */
+export interface ChannelRelayOrigin {
+  channelId: string;
+  threadId: string | null;
+}
+
+/**
+ * `metadata.receipt` of a request that brings another Channel's reply back to the Agent that
+ * relayed the original message. Its `via` names the Agent that answered.
+ */
+export interface ChannelMessageReceipt {
+  channelId: string;
+  channelTitle: string;
+  /** The published reply in that Channel. */
+  messageId: string;
+}
+
+export const channelRelayOrigin = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelRelayOrigin | undefined => {
+  const origin = (metadata?.via as { origin?: Partial<ChannelRelayOrigin> } | undefined)?.origin;
+  return typeof origin?.channelId === 'string'
+    ? { channelId: origin.channelId, threadId: origin.threadId ?? null }
+    : undefined;
+};
+
+export const channelMessageReceipt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageReceipt | undefined => {
+  const receipt = metadata?.receipt as Partial<ChannelMessageReceipt> | undefined;
+  return typeof receipt?.channelId === 'string' &&
+    typeof receipt.channelTitle === 'string' &&
+    typeof receipt.messageId === 'string'
+    ? {
+        channelId: receipt.channelId,
+        channelTitle: receipt.channelTitle,
+        messageId: receipt.messageId,
+      }
+    : undefined;
+};
+
 /** `metadata.via` of a relayed request, or undefined for anything else. */
 export const channelMessageVia = (
   metadata: ChannelMessageMetadata | null | undefined,
@@ -298,6 +342,8 @@ export interface ChannelContextMessage {
   /** Stable references; URLs and document contents are resolved at execution time. */
   fileIds?: string[];
   id: string;
+  /** Set on a request that brings another Channel's reply back to the relaying Agent. */
+  receipt?: ChannelMessageReceipt;
   replyToId?: string | null;
   sequence: number;
   threadId: string | null;
@@ -477,6 +523,8 @@ export interface ChannelPublicMessage {
   fileIds: string[];
   id: string;
   mentions: string[];
+  /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
+  receipt?: ChannelMessageReceipt | null;
   recipientMemberIds: string[];
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
@@ -491,8 +539,8 @@ export interface ChannelPublicMessage {
   sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
-  /** The Agent that relayed this request for its author; null otherwise. */
-  via?: ChannelMessageVia | null;
+  /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */
+  via?: (ChannelMessageVia & { avatar: string | null }) | null;
   /**
    * External Works a reply's run touched: the conversation's work summaries, for every member,
    * without the ids that link them to the requester's Work, topic and run. Empty on requests.

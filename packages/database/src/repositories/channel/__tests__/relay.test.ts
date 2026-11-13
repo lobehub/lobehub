@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations, channels, workspaceMembers } from '../../../schemas';
+import { agentOperations, agents, channels, workspaceMembers } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
 import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
@@ -91,8 +91,42 @@ describe('Relaying a request into another Channel', () => {
     const view = await team.asOwner.detail(team.channel.id);
     expect(view.messages.find((message) => message.id === request.id)?.via).toEqual({
       agentId: via.agentId,
+      // The relaying Agent no longer exists here, so only its recorded name is left.
+      avatar: null,
       name: via.name,
     });
+  });
+
+  it("shows the answering Agent's avatar on a receipt and hands the run where it came from", async () => {
+    const team = await fixture.createTeamChannel();
+    const relayer = await fixture.addAgent(team.channel.id, 'Relayer');
+    const answerer = await fixture.addAgent(team.channel.id, 'Answerer');
+    await db.update(agents).set({ avatar: '🦊' }).where(eq(agents.id, answerer.agentId!));
+    const receipt = {
+      channelId: 'channel-elsewhere',
+      channelTitle: 'Platform',
+      messageId: 'reply-1',
+    };
+    const request = await team.asMember.send(team.channel.id, {
+      content: '@Relayer Fixed in the tokenizer',
+      mentions: [relayer.id],
+      metadata: { receipt, via: { agentId: answerer.agentId, name: 'Answerer' } },
+      requestKey: 'relay-receipt:reply-1',
+      routing: 'decision',
+    });
+
+    const message = (await team.asOwner.detail(team.channel.id)).messages.find(
+      (entry) => entry.id === request.id,
+    );
+    expect(message?.receipt).toEqual(receipt);
+    expect(message?.via).toEqual({ agentId: answerer.agentId, avatar: '🦊', name: 'Answerer' });
+
+    const [job] = await jobsOf(db, request.id);
+    const claim = (await execution.claim(team.channel.id, job.id, lease))!;
+    const [context] = await readManifestMessages(db, team.channel.id, claim.job.manifest!, {
+      messageId: request.id,
+    });
+    expect(context.receipt).toEqual(receipt);
   });
 
   it('reports no relay for an ordinary request', async () => {
@@ -118,6 +152,8 @@ describe('Relaying a request into another Channel', () => {
     ).currentRun(claim.job.operationId!);
     expect(run.requestVia).toBeUndefined();
     const view = await team.asOwner.detail(team.channel.id);
-    expect(view.messages.find((message) => message.id === request.id)?.via).toBeNull();
+    const plain = view.messages.find((message) => message.id === request.id);
+    expect(plain?.via).toBeNull();
+    expect(plain?.receipt).toBeNull();
   });
 });

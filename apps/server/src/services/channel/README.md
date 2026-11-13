@@ -214,8 +214,16 @@ chosen Agents (`ChannelMessagingService`).
   waking each other on the requester's behalf.
 - **Retries.** The request key is `agent-relay:<operationId>:<toolCallId>`, so a retried call
   returns the message already posted.
-- **Where the answer goes.** The addressed Agent answers in its own Channel. The tool returns a
-  link to that Channel for the relaying run's final answer; nothing reports back automatically yet.
+- **Where the answer goes.** The addressed Agent answers in its own Channel, and the tool returns
+  a link to it for the relaying run's final answer. When that reply is published,
+  `deliverRelayReceipt` (called from `ChannelCoordinator.complete`) posts it back into the Channel
+  and branch the relay came from (`metadata.via.origin`), as the same requester, @mentioning the
+  relaying Agent. That receipt carries `metadata.receipt` (the answering Channel and reply) and the
+  answering Agent in `via`. The timeline shows "<Agent> replied in #<Channel>", and the woken run
+  sees `via` and `reply_from` on its `channel_request`. Because the receipt has `via`, the run it
+  wakes cannot relay again: one hop each way. The receipt is best-effort: a relaying Agent,
+  Channel or branch that is gone, or a requester who left, gets none. It is keyed by the reply id,
+  so a repeated completion posts it once.
 - **External runtimes.** `lh channel list` and `lh channel send` call the same service through
   `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
   the `channel:message` capability that every Channel dispatch is minted alongside

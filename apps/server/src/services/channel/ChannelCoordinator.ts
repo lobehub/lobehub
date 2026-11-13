@@ -28,6 +28,7 @@ import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
+import { deliverRelayReceipt } from './relayReceipt';
 import { openChannelReply } from './replyOpening';
 import { createChannelWorktree } from './worktree';
 
@@ -329,9 +330,13 @@ export class ChannelCoordinator {
         await this.executions.saveDraft(channelId, jobId, content);
         reply = content;
       }
-      await this.executions.publish(channelId, jobId);
+      const replyMessageId = await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
       await notifyChannel(this.db, channelId);
+      // A reply to a relayed request also goes back to the Agent that relayed it.
+      await deliverRelayReceipt(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
+        console.error('[channel:relay-receipt]', error),
+      );
       this.summarizeTopicTitle(channelId, jobId, {
         lastAssistantContent: reply,
         topicId: job.topicId,

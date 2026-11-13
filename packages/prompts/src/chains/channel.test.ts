@@ -155,6 +155,17 @@ describe('Channel request prompt', () => {
     ).toMatchObject({ via: 'Project Agent' });
   });
 
+  it('marks a relayed reply brought back to the Agent that relayed the message', () => {
+    const receipt = message('current', 'Taking it', caller, {
+      receipt: { channelId: 'channel-platform', channelTitle: 'Platform', messageId: 'reply-1' },
+      via: { agentId: 'agent-answerer', name: 'Answerer' },
+    });
+    expect(buildChannelPrompt(manifest, [receipt], { boundary: 'b0' })).toContain(
+      '<channel_request from="Mia" type="user" via="Answerer" reply_from="#Platform" to="Codex" boundary="b0">',
+    );
+    expect(CHANNEL_INSTRUCTIONS).toContain('do not relay it again');
+  });
+
   it('points at the full message only when the excerpt is not enough', () => {
     const request = message('current', 'Read this', caller, { fileIds: ['f3'] });
     const prompt = buildChannelPrompt(manifest, [request], {

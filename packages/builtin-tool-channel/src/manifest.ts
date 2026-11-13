@@ -81,7 +81,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.sendMessage,
       description:
-        "Post a message into another Channel on your requester's behalf, @mentioning one or more of its Agents so they answer there. The message appears as your requester's, marked as relayed by you; the addressed Agent decides what to do with it, and its reply is published in that Channel. Get channelId and agentIds from listChannels. Not for the current Channel: your final answer is posted there. Returns a link to the Channel; include it in your final answer.",
+        "Post a message into another Channel on your requester's behalf, @mentioning one or more of its Agents so they answer there. The message appears as your requester's, marked as relayed by you; the addressed Agent decides what to do with it and answers in that Channel, and its reply is brought back to you here as a new request. Get channelId and agentIds from listChannels. Not for the current Channel: your final answer is posted there. Returns a link to the Channel; include it in your final answer.",
       parameters: {
         type: 'object',
         additionalProperties: false,
