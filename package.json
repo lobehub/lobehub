@@ -167,15 +167,15 @@
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.{mjs,cjs}": [
-      "oxlint --fix",
+      "oxlint --fix --no-error-on-unmatched-pattern",
       "prettier --write"
     ],
     "*.{js,jsx}": [
-      "oxlint --fix",
+      "oxlint --fix --no-error-on-unmatched-pattern",
       "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "oxlint --fix",
+      "oxlint --fix --no-error-on-unmatched-pattern",
       "prettier --parser=typescript --write"
     ],
     "*.{css,less}": [
