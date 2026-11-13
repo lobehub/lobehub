@@ -58,6 +58,32 @@ export interface VideoGenerationAsset extends BaseGenerationAsset {
   width?: number;
 }
 
+/**
+ * A generated song. `url` / `coverUrl` are storage keys in our own file storage (resolve with
+ * `FileService.getFullFileUrl`); `originalUrl` is the provider's temporary URL.
+ */
+export interface MusicGenerationAsset extends BaseGenerationAsset {
+  coverUrl?: string;
+  /** Track length in seconds */
+  duration?: number;
+  /** Lyrics the provider used, when it returned them */
+  lyrics?: string;
+  mimeType?: string;
+  originalUrl?: string;
+  /** Provider-side track id, e.g. a Suno clip id */
+  providerTrackId?: string;
+  /** Style tags the provider applied */
+  tags?: string;
+  title?: string;
+  type: 'audio';
+  url?: string;
+}
+
+/**
+ * Assets of image and video generations. Music assets are stored in the same column but kept
+ * out of this union, which image/video UI code reads `width` / `thumbnailUrl` from; narrow on
+ * `type === 'audio'` to read a {@link MusicGenerationAsset}.
+ */
 export type GenerationAsset = ImageGenerationAsset | VideoGenerationAsset;
 
 export interface GenerationConfig {

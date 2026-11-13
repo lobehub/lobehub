@@ -157,7 +157,6 @@ export const providerRuntimeMap = {
   siliconcloud: LobeSiliconCloudAI,
   spark: LobeSparkAI,
   stepfun: LobeStepfunAI,
-  suno: LobeSunoAI,
   straico: LobeStraicoAI,
   streamlake: LobeStreamLakeAI,
   suno: LobeSunoAI,
