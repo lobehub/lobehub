@@ -132,8 +132,12 @@ export const createOpenAICompatibleSpeech = async (
     }
   }
   // Fish Audio's default voice is "no reference voice": gateways (OpenRouter) reject the
-  // `default` sentinel with 400 but speak the default voice when `voice` is left out.
-  const omitVoice = fishAudio && (!payload.voice || payload.voice === FISH_AUDIO_DEFAULT_VOICE_ID);
+  // `default` sentinel with 400 but speak the default voice when `voice` is left out. A
+  // service fallback voice (`voiceIsDefault`, e.g. `alloy` for a gateway id with no card)
+  // means the caller gave none, so it is left out too.
+  const omitVoice =
+    fishAudio &&
+    (!payload.voice || payload.voice === FISH_AUDIO_DEFAULT_VOICE_ID || !!payload.voiceIsDefault);
 
   log(
     'textToSpeech called with input length: %d, voice: %s, format: %s, sse: %s',

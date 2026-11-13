@@ -218,6 +218,32 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it('omits a service fallback voice for a fully qualified gateway Fish model', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'fish-audio/s2.1-pro', voice: 'alloy', voiceIsDefault: true },
+      undefined,
+      { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create.mock.calls[0][0]).not.toHaveProperty('voice');
+  });
+
+  it('keeps a fallback voice for non-Fish models', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'tts-1', voice: 'alloy', voiceIsDefault: true },
+      undefined,
+      context,
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ voice: 'alloy' });
+  });
+
   it('keeps a voice named "default" for non-Fish models', async () => {
     create.mockResolvedValue(audioResponse([0]));
 
