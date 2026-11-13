@@ -17,8 +17,10 @@ const mocks = vi.hoisted(() => ({
       updateTools: [],
     },
     connectors: [] as Array<{
+      authKind?: string;
       authorizedByName?: string;
       id: string;
+      links?: Array<{ id: string; name: string }>;
       identifier: string;
       isEnabled?: boolean;
       metadata?: { description?: string };
@@ -86,6 +88,12 @@ vi.mock('@/store/tool/slices/connector', () => ({
 
 vi.mock('../CustomConnectorModal', () => ({
   default: () => <div data-testid="custom-connector-modal" />,
+}));
+
+vi.mock('./ConnectorAccounts', () => ({
+  default: ({ connector }: { connector: { links?: unknown[] } }) => (
+    <div data-testid="connector-accounts">{connector.links?.length ?? 0}</div>
+  ),
 }));
 
 vi.mock('./ToolPermissionGroup', () => ({
@@ -223,5 +231,40 @@ describe('ConnectorDetail', () => {
     render(<ConnectorDetail connectorId="connector-1" />);
 
     expect(screen.getByText('connector.enabled')).toBeInTheDocument();
+  });
+
+  it('shows accounts only for an OAuth connector, each naming its own authorizer', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      authorizedByName: 'Avery',
+      sourceType: ConnectorSourceType.custom,
+      status: 'connected',
+    };
+
+    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+    // A static credential has no accounts; its one authorizer stays on the connector.
+    expect(screen.queryByTestId('connector-accounts')).not.toBeInTheDocument();
+    expect(screen.getByText('Avery')).toBeInTheDocument();
+    unmount();
+
+    // Before any account is connected nobody has authorized it yet either.
+    mocks.toolState.connectors[0] = { ...mocks.toolState.connectors[0], authKind: 'oauth2' };
+    const { unmount: unmountEmpty } = render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.getByTestId('connector-accounts')).toHaveTextContent('0');
+    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
+    unmountEmpty();
+
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      links: [
+        { id: 'lnk_1', name: 'work@acme.com' },
+        { id: 'lnk_2', name: 'Personal' },
+      ],
+    };
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByTestId('connector-accounts')).toHaveTextContent('2');
+    expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
   });
 });

@@ -1,8 +1,10 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -10,16 +12,12 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
-import { ConnectorModel } from '@/database/models/connector';
 import {
   EvalConnectorUpdateError,
   withoutEvalConnectorMarker,
 } from '@/database/models/connectorEval';
-import { ConnectorToolModel } from '@/database/models/connectorTool';
-import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -29,25 +27,13 @@ import {
 import { getComposioClient } from '@/libs/composio';
 import { getMCPConnectionErrorType, inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   callConnectorToolById,
   ConnectorToolCallError,
   readConnectorUiResourceById,
 } from '@/server/services/connector/exec';
-import {
-  buildAuthorizationUrl,
-  discoverConnectorOAuth,
-  getConnectorRedirectUri,
-  resolveConnectorClient,
-  resolveConnectorOAuthScopes,
-  toClientInformation,
-} from '@/server/services/connector/oauth';
-import {
-  generateConnectorOAuthState,
-  saveConnectorOAuthState,
-} from '@/server/services/connector/stateStore';
+import { getConnectorRedirectUri } from '@/server/services/connector/oauth';
+import { loadConnectorPresentation } from '@/server/services/connector/presentation';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import {
   resolveConnectorAuthorizerId,
@@ -55,34 +41,20 @@ import {
   withTrustedLinkedByUserId,
 } from '@/server/utils/connectorAttribution';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
   canManageWorkspaceConnectors,
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
-} from './_helpers/connectorManagePolicy';
-import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
+} from '../_helpers/connectorManagePolicy';
+import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
+import { connectorAccountProcedures } from './accounts';
+import { connectorProcedure, connectorWriteProcedure } from './procedure';
 
-const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
-  const { ctx } = opts;
-  // Credentials (OAuth tokens) are encrypted at rest — give the model a gatekeeper.
-  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-  const wsId = ctx.workspaceId ?? undefined;
-  return opts.next({
-    ctx: {
-      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
-      connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
-      connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
-      pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),
-    },
-  });
-});
-
-// Writes: workspace mode requires at least the member role, gating viewers
-// out (read-only role) while personal mode passes through unrestricted.
-const connectorWriteProcedure = connectorProcedure.use(requireWorkspaceRoleWhenScoped('member'));
+/** Connectors (or tools) read or written at once when a list fans out per row. */
+const CONNECTOR_LIST_CONCURRENCY = 5;
 
 const oidcConfigSchema = z.object({
   authorizationEndpoint: z.string().optional(),
@@ -145,10 +117,12 @@ const createConnectorSchema = z.object({
 });
 
 export const connectorRouter = router({
+  ...connectorAccountProcedures,
   // ── Queries ──────────────────────────────────────────────────────────────
 
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
+    const presentation = await loadConnectorPresentation(connectors, ctx);
 
     // Attribution — resolve the member who authorized each connector (workspace
     // dimension), so the profile can tag "authorized by X". The ids come from
@@ -158,8 +132,9 @@ export const connectorRouter = router({
       connectors.map((c) => resolveConnectorAuthorizerId(c)),
     );
 
-    const toolsByConnector = await Promise.all(
-      connectors.map(async (c) => {
+    const toolsByConnector = await pMap(
+      connectors,
+      async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -167,12 +142,14 @@ export const connectorRouter = router({
         const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
         return {
           ...rest,
+          ...presentation.get(c.id),
           authorizedByAvatar: author?.avatar ?? null,
           authorizedByName: author?.name ?? null,
           oidcConfig: safeOidcConfig,
           tools,
         };
-      }),
+      },
+      { concurrency: CONNECTOR_LIST_CONCURRENCY },
     );
 
     return toolsByConnector;
@@ -187,6 +164,7 @@ export const connectorRouter = router({
     .input(z.object({ agentId: z.string() }))
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
+      const presentation = await loadConnectorPresentation(connectors, ctx);
 
       // Attribution — the member who authorized each agent-scoped connector, so
       // a teammate viewing the agent sees "authorized by X" on each chip.
@@ -195,8 +173,9 @@ export const connectorRouter = router({
         connectors.map((c) => resolveConnectorAuthorizerId(c)),
       );
 
-      return Promise.all(
-        connectors.map(async (c) => {
+      return pMap(
+        connectors,
+        async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
           const { credentials: _credentials, oidcConfig, ...rest } = c;
           const safeOidcConfig = oidcConfig
@@ -205,12 +184,14 @@ export const connectorRouter = router({
           const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
           return {
             ...rest,
+            ...presentation.get(c.id),
             authorizedByAvatar: author?.avatar ?? null,
             authorizedByName: author?.name ?? null,
             oidcConfig: safeOidcConfig,
             tools,
           };
-        }),
+        },
+        { concurrency: CONNECTOR_LIST_CONCURRENCY },
       );
     }),
 
@@ -241,26 +222,27 @@ export const connectorRouter = router({
     // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
+    const visibleConnectors = connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId));
+    const presentation = await loadConnectorPresentation(visibleConnectors, ctx);
 
-    return Promise.all(
-      connectors
-        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
-        .map(async (c) => {
-          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-          const { credentials: _credentials, oidcConfig, ...rest } = c;
-          const safeOidcConfig = oidcConfig
-            ? { ...oidcConfig, clientSecret: undefined }
-            : oidcConfig;
-          const meta = agentMetaById.get(c.agentId!);
-          return {
-            ...rest,
-            agentAvatar: meta?.avatar ?? null,
-            agentName: meta?.name ?? null,
-            agentTitle: meta?.title ?? null,
-            oidcConfig: safeOidcConfig,
-            tools,
-          };
-        }),
+    return pMap(
+      visibleConnectors,
+      async (c) => {
+        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        const meta = agentMetaById.get(c.agentId!);
+        return {
+          ...rest,
+          ...presentation.get(c.id),
+          agentAvatar: meta?.avatar ?? null,
+          agentName: meta?.name ?? null,
+          agentTitle: meta?.title ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
+      },
+      { concurrency: CONNECTOR_LIST_CONCURRENCY },
     );
   }),
 
@@ -597,102 +579,7 @@ export const connectorRouter = router({
       return { id: input.connectorId };
     }),
 
-  /**
-   * Begin the OAuth authorization-code flow for a custom MCP connector.
-   *
-   * Discovers the authorization server (RFC 9728 → RFC 8414), resolves the
-   * client (pre-registration when a client_id was provided, otherwise a Client
-   * ID Metadata Document or RFC 7591 dynamic registration), persists the
-   * resolved OIDC config, and returns the authorize URL for the client to open. The PKCE verifier is stashed in Redis
-   * keyed by `state`; the callback route completes the exchange.
-   */
-  startOAuth: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid(), returnTo: z.string().optional() }))
-    .mutation(async ({ input, ctx }) => {
-      const connector = await ctx.connectorModel.findById(input.id);
-      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Re-authorizing replaces the stored OAuth credentials with the caller's.
-      await assertConnectorMaintainable(ctx, connector);
-      if (!connector.mcpServerUrl) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
-      }
-
-      const existing: OIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
-      const redirectUri = getConnectorRedirectUri();
-
-      // 1. Discover the authorization server backing the MCP resource.
-      // Discovery and registration failures below are server-compatibility
-      // problems the user must fix in their OAuth setup, not internal errors —
-      // surface them as BAD_REQUEST with the reason so the form can show it.
-      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
-        (error: unknown) => {
-          throw new TRPCError({
-            cause: error,
-            code: 'BAD_REQUEST',
-            message: (error as Error)?.message ?? String(error),
-          });
-        },
-      );
-
-      const { authorizationServerUrl, metadata } = discovery;
-      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
-
-      // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
-      const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
-        await resolveConnectorClient({
-          authorizationServerUrl,
-          existing,
-          metadata,
-          redirectUri,
-          scopes,
-        }).catch((error: unknown) => {
-          throw new TRPCError({
-            cause: error,
-            code: 'BAD_REQUEST',
-            message: (error as Error)?.message ?? String(error),
-          });
-        });
-
-      // 3. Persist the resolved config so the callback + refresh can reuse it.
-      const resolvedOidc: OIDCConfig = {
-        ...existing,
-        authorizationEndpoint: metadata.authorization_endpoint,
-        clientId,
-        clientSecret,
-        issuer: authorizationServerUrl,
-        redirectUri,
-        registrationEndpoint: metadata.registration_endpoint,
-        scheme,
-        scopes,
-        tokenEndpoint: metadata.token_endpoint,
-        tokenEndpointAuthMethod,
-      };
-      await ctx.connectorModel.update(input.id, { oidcConfig: resolvedOidc });
-
-      // 4. Build the authorize URL (with PKCE) and stash the verifier under `state`.
-      const state = generateConnectorOAuthState();
-      const { authorizationUrl, codeVerifier } = await buildAuthorizationUrl({
-        authorizationServerUrl,
-        clientInformation: toClientInformation(resolvedOidc),
-        metadata,
-        redirectUri,
-        resource: connector.mcpServerUrl,
-        scopes,
-        state,
-      });
-
-      await saveConnectorOAuthState(state, {
-        authorizationServerUrl,
-        codeVerifier,
-        connectorId: input.id,
-        lobeUserId: ctx.userId,
-        returnTo: input.returnTo,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-
-      return { authorizationUrl };
-    }),
-
+  /** Update connector configuration while preserving server-resolved OAuth state. */
   update: connectorWriteProcedure
     .input(
       z.object({
@@ -715,6 +602,33 @@ export const connectorRouter = router({
       await assertConnectorCredentialsManageable(ctx, target);
 
       const { credentials, ...patch } = input.patch;
+      const changesUrl =
+        patch.mcpServerUrl !== undefined && patch.mcpServerUrl !== target.mcpServerUrl;
+      if (
+        changesUrl &&
+        target.oidcConfig &&
+        target.oidcConfig.scheme !== 'pre_registration' &&
+        !patch.oidcConfig?.clientId
+      ) {
+        // An automatic client is registered with the old authorization server.
+        // A new endpoint must resolve its own client and initial scopes.
+        patch.oidcConfig = { scheme: 'dcr' };
+      } else if (
+        patch.oidcConfig &&
+        !patch.oidcConfig.clientId &&
+        target.oidcConfig?.scheme !== 'pre_registration'
+      )
+        delete patch.oidcConfig;
+      if (patch.oidcConfig?.clientId && patch.oidcConfig.clientId === target.oidcConfig?.clientId) {
+        // A form/CLI may resend the client without its resolved server fields.
+        // Undefined fields mean omitted, including an unfilled client secret.
+        patch.oidcConfig = {
+          ...target.oidcConfig,
+          ...Object.fromEntries(
+            Object.entries(patch.oidcConfig).filter(([, value]) => value !== undefined),
+          ),
+        };
+      }
       // Preserve the server-owned `composio.linkedByUserId` from the stored row
       // and ignore whatever the client sent, so an edit can never spoof (or
       // silently clear) the connector's authorizer. Untouched when the patch
@@ -828,6 +742,7 @@ export const connectorRouter = router({
         args: z.string().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        linkId: z.string().optional(),
         identifier: z.string().min(1),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
@@ -861,6 +776,7 @@ export const connectorRouter = router({
         /** The server the result came from (`getMcpServerFingerprint`). */
         server: z.string().min(1),
         uri: z.string().startsWith('ui://'),
+        linkId: z.string().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -886,10 +802,10 @@ export const connectorRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
-      await Promise.all(
-        tools.map((t) =>
-          ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
-        ),
+      await pMap(
+        tools,
+        (t) => ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
+        { concurrency: CONNECTOR_LIST_CONCURRENCY },
       );
       return { toolCount: tools.length };
     }),
@@ -1015,7 +931,6 @@ export const connectorRouter = router({
   syncBuiltinTool: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      const { builtinTools } = await import('@lobechat/builtin-tools');
       const tool = builtinTools.find((t) => t.identifier === input.identifier);
 
       if (!tool) {

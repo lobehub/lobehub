@@ -294,6 +294,7 @@ describe('connector command', () => {
           name: 'DeepWiki',
           sourceType: 'custom',
           status: 'connected',
+          links: [{ id: 'a' }, { id: 'b' }],
           tools: [{}, {}, {}],
         },
       ]);
@@ -302,8 +303,9 @@ describe('connector command', () => {
 
       const output = consoleSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
       expect(output).toContain('TOOLS');
+      expect(output).toContain('ACCOUNTS');
       expect(output).toContain('deepwiki');
-      expect(output).toMatch(/custom\s+\S*connected\S*\s+3/);
+      expect(output).toMatch(/custom\s+\S*connected\S*\s+3\s+2/);
     });
 
     it('outputs JSON with toolCount and field selection', async () => {

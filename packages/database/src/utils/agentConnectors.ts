@@ -1,6 +1,6 @@
 import { and, count, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
-import { userConnectors, userConnectorTools } from '../schemas';
+import { userConnectorLinks, userConnectors, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 
 interface AgentConnectorHandoverParams {
@@ -58,6 +58,7 @@ export const rehomeAgentConnectorsForRecipient = async (
     .from(userConnectors)
     .where(foreignAgentScopedRows(params));
   for (const row of scopedRows) {
+    await db.delete(userConnectorLinks).where(eq(userConnectorLinks.userConnectorId, row.id));
     // The Composio ACCOUNT fields go with the credentials: a retained
     // `connectedAccountId` would let the recipient's delete/re-enable paths
     // operate on the previous owner's remote Composio connection. Config

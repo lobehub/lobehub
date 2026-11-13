@@ -4,6 +4,7 @@ import {
   isSyncedMcpToolVisibleTo,
   type McpServerAddress,
 } from '@lobechat/const/mcpApp';
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -175,6 +176,7 @@ class MCPService {
     {
       agentId,
       fromMcpApp,
+      linkId,
       onThisDevice,
       server,
       signal,
@@ -192,6 +194,7 @@ class MCPService {
        *   Conversation calls keep their existing route.
        */
       fromMcpApp?: boolean;
+      linkId?: string;
       /**
        * With `fromMcpApp`: the view's result came from this desktop's own MCP
        * process (it carries this device's id), so its calls run there too;
@@ -291,6 +294,7 @@ class MCPService {
         return (await lambdaClient.connector.callTool.mutate(
           {
             agentId,
+            linkId,
             args,
             // The server checks the view's server against the connector it resolves
             ...(fromMcpApp && { fromApp: true, server }),
@@ -486,10 +490,14 @@ class MCPService {
     uri: string,
     {
       agentId,
+      linkId,
+      toolArguments,
       onThisDevice = false,
       server,
     }: {
       agentId?: string;
+      linkId?: string;
+      toolArguments?: string;
       /**
        * The result came from this desktop's own MCP process (it carries this
        * device's id): read the view there, over IPC. Otherwise it came from the
@@ -520,6 +528,16 @@ class MCPService {
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    // Resolve only after the agent's confirmed list loads: a cold view may
+    // otherwise mistake a tool's business link_id for the account selector.
+    if (!linkId && toolArguments && connector) {
+      const param = resolveConnectorLinkParam(
+        connector.tools?.map((tool) => tool.inputSchema) ?? [],
+      );
+      const value = toRecord(safeParseJSON(toolArguments))?.[param];
+      if (typeof value === 'string') linkId = value;
+    }
+
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
     // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
     // tools are synced to) leaves it to the plugin.
@@ -586,6 +604,7 @@ class MCPService {
       return (await lambdaClient.connector.readUiResource.query({
         agentId,
         identifier,
+        linkId,
         server,
         uri,
       })) as ReadResourceResult;

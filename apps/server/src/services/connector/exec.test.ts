@@ -44,7 +44,9 @@ const tool = (over: Record<string, unknown> = {}) => ({
 const makeCtx = (connectors: any[], tools: any[], { agentVisible = true } = {}) =>
   ({
     agentModel: { existsById: vi.fn().mockResolvedValue(agentVisible) },
+    connectorAccountRepo: { adoptLegacyCredentials: async () => {} },
     connectorModel: {
+      getLinkModel: () => ({ listByConnectorIds: async () => [] }),
       queryByIdentifiers: vi.fn().mockResolvedValue(connectors),
       resolveByIdentifiers: vi.fn().mockResolvedValue(connectors),
     },

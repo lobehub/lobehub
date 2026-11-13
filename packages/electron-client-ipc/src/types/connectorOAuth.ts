@@ -1,6 +1,7 @@
 export interface ConnectorOAuthRequest {
   authorizationUrl: string;
   connectorId: string;
+  freshSession?: boolean;
   requestId?: string;
 }
 

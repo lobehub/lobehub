@@ -25,7 +25,8 @@ const {
 
 vi.mock('@/services/mcp', () => ({ mcpService: { invokeMcpToolCall } }));
 
-vi.mock('@/store/tool', () => ({ getToolStoreState: () => ({}) }));
+const toolState = vi.hoisted(() => ({ value: {} as any }));
+vi.mock('@/store/tool', () => ({ getToolStoreState: () => toolState.value }));
 
 vi.mock('./appName', () => ({ mcpAppNameSelector: () => () => 'Weather Demo' }));
 
@@ -38,7 +39,10 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const disposers: (() => void)[] = [];
 
 /** Connect a view in a fresh frame, as McpAppView does once the frame has loaded. */
-const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => {
+const setup = ({
+  canSendMessage = true,
+  args = '{"city":"Paris"}',
+}: { canSendMessage?: boolean; args?: string } = {}) => {
   const iframe = document.createElement('iframe');
   document.body.append(iframe);
   const target = iframe.contentWindow!;
@@ -51,7 +55,7 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
   const { dispose, teardown } = connectAppView({
     getContext: () => ({
       agentId: 'agt_1',
-      args: '{"city":"Paris"}',
+      args,
       canSendMessage,
       identifier: 'weather-demo',
       isDark: false,
@@ -152,6 +156,7 @@ describe('getAppViewPhase', () => {
 
 describe('connectAppView', () => {
   beforeEach(() => {
+    toolState.value = {};
     vi.clearAllMocks();
     getAppToolCallPolicy.mockResolvedValue('confirm');
     sendMessage.mockImplementation(async ({ onMessageAccepted }) => onMessageAccepted?.());
@@ -565,5 +570,20 @@ describe('connectAppView', () => {
 
     dispose();
     expect(signal.aborted).toBe(true);
+  });
+  it('keeps view tools/call bound to the initiating account including collision fallback', async () => {
+    toolState.value = {
+      connectors: [
+        { identifier: 'weather-demo', tools: [{ inputSchema: { properties: { link_id: {} } } }] },
+      ],
+    };
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockResolvedValue({ content: 'ok', success: true });
+    const { call } = setup({ args: '{"connector_link_id":"lnk_bob","link_id":"business"}' });
+    await call(401);
+    expect(invokeMcpToolCall).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fromMcpApp: true, linkId: 'lnk_bob' }),
+    );
   });
 });

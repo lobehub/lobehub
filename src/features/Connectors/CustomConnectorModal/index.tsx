@@ -1,15 +1,26 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
-import DevModal from '@/features/PluginDevModal';
+import DevModal, {
+  type DevModalOAuthFields,
+  type DevModalOAuthPlan,
+} from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import {
+  countDroppedAccounts,
+  isOAuthClientChanged,
+  isServerUrlChanged,
+  type OAuthBaseline,
+  requiresOAuth,
+} from './oauthPlan';
 
 interface CustomConnectorModalProps {
   connectorId?: string;
@@ -63,9 +74,12 @@ interface StdioConfig {
  * - Pre-fills the form from the existing connector record
  * - Calls updateConnector instead of createConnector on save
  * - Clears credentials when the server URL changes
+ * - Authorizes only when the URL or OAuth client changed, or no account is
+ *   connected yet (see `requiresOAuth`); other edits keep the accounts
  */
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
+    const { t } = useTranslation('tool');
     const createConnector = useToolStore((s) => s.createConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
@@ -199,6 +213,45 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
     }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
+    // The stored OAuth setup the form opened with. Undefined while creating,
+    // migrating or loading, where every OAuth save authorizes.
+    const oauthBaseline = useMemo((): OAuthBaseline | undefined => {
+      if (!isEditMode || !connector || editFetchedData === null) return undefined;
+      const { credentials, oidcConfig } = editFetchedData;
+      return {
+        accountCount: connector.links?.length ?? 0,
+        authType: oidcConfig ? 'oauth2' : (credentials?.type ?? 'none'),
+        clientId: oidcConfig?.scheme === 'pre_registration' ? oidcConfig.clientId : undefined,
+        mcpServerUrl: connector.mcpServerUrl,
+      };
+    }, [isEditMode, connector, editFetchedData]);
+
+    const getOAuthPlan = (fields: DevModalOAuthFields): DevModalOAuthPlan => {
+      const authorize = requiresOAuth(oauthBaseline, fields);
+      if (!oauthBaseline) return { authorize };
+
+      const dropped = countDroppedAccounts(oauthBaseline, fields);
+      if (dropped > 0)
+        return {
+          authorize,
+          notice: {
+            // Two keys rather than plural forms: zh has one form, and the many
+            // case says that only one account comes back on save.
+            text:
+              dropped === 1
+                ? t('connector.account.editDropsAccount')
+                : t('connector.account.editDropsAccounts', { count: dropped }),
+            type: 'warning',
+          },
+        };
+      if (!authorize)
+        return {
+          authorize,
+          notice: { text: t('connector.account.editKeepsAccounts'), type: 'info' },
+        };
+      return { authorize };
+    };
+
     const handleSave = async (
       value: LobeToolCustomPlugin,
       ctx?: { oauthPopup?: Window | null },
@@ -261,6 +314,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       if (isEditMode && connectorId) {
         const newUrl = isHttp ? mcp.url?.trim() : undefined;
         const urlChanged = newUrl !== (connector?.mcpServerUrl ?? undefined);
+        const oauthFields: DevModalOAuthFields = {
+          clientId: mcp.auth?.clientId,
+          clientSecret: mcp.auth?.clientSecret,
+          url: mcp.url,
+        };
 
         const patch: Record<string, any> = {};
 
@@ -295,7 +353,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           patch.credentials = null;
         }
 
-        if (authType === 'oauth2') {
+        // Write the OAuth client only when it (or the server it belongs to)
+        // changed. Re-sending the form's `{ clientId: undefined, scheme: 'dcr' }`
+        // on every save would replace the client the server resolved, and with
+        // it the refresh tokens of every connected account.
+        if (
+          authType === 'oauth2' &&
+          (!oauthBaseline ||
+            isServerUrlChanged(oauthBaseline, oauthFields) ||
+            isOAuthClientChanged(oauthBaseline, oauthFields))
+        ) {
           const clientId = mcp.auth?.clientId?.trim();
           patch.oidcConfig = {
             clientId: clientId || undefined,
@@ -306,7 +373,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         await updateConnector(connectorId, patch);
 
-        if (authType === 'oauth2' && isHttp) {
+        // Same rule DevModal used to decide whether to open the popup.
+        if (authType === 'oauth2' && isHttp && requiresOAuth(oauthBaseline, oauthFields)) {
           const popup = ctx?.oauthPopup;
           try {
             const authorizationUrl = await startConnectorOAuth(connectorId);
@@ -424,6 +492,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     return (
       <DevModal
         enableOAuth
+        getOAuthPlan={getOAuthPlan}
         mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
         value={editValue}

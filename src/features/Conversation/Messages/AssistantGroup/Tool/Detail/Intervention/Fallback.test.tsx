@@ -20,7 +20,7 @@ const metaMap: Record<string, { avatar?: string; title?: string }> = {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number; defaultValue?: string }) =>
+    t: (key: string, options?: { count?: number; defaultValue?: string; name?: string }) =>
       (
         ({
           'builtins.lobe-activator.apiName.activateTools': 'Activate Tools',
@@ -30,7 +30,9 @@ vi.mock('react-i18next', () => ({
       )[key] ||
       (key === 'tool.intervention.viewParameters'
         ? `View parameters (${options?.count ?? 0})`
-        : options?.defaultValue || key),
+        : key === 'connector.account.usingAccount'
+          ? `Account: ${options?.name}`
+          : options?.defaultValue || key),
   }),
 }));
 
@@ -82,6 +84,14 @@ vi.mock('@/store/tool', () => ({
     getPluginTitle: (meta?: { title?: string }) => meta?.title,
   },
   useToolStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+
+const accountNames: Record<string, string> = { lnk_work: 'work@acme.com' };
+
+vi.mock('@/store/tool/slices/connector', () => ({
+  connectorSelectors: {
+    connectorLinkNameById: (linkId: string) => () => accountNames[linkId],
+  },
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -170,6 +180,38 @@ describe('FallbackIntervention', () => {
     );
 
     expect(screen.getByText(reason)).toBeInTheDocument();
+  });
+
+  // Parameters start collapsed, so approving a connector call must name the
+  // account it acts as without expanding them.
+  it('names the account a multi-account connector call will use', () => {
+    render(
+      <FallbackIntervention
+        apiName="send_email"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="mail"
+        requestArgs={JSON.stringify({ link_id: 'lnk_work', to: 'a@b.c' })}
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.getByText('Account: work@acme.com')).toBeInTheDocument();
+  });
+
+  it('adds no account line when the id names no known account', () => {
+    render(
+      <FallbackIntervention
+        apiName="send_email"
+        assistantGroupId="assistant-group-1"
+        id="message-1"
+        identifier="mail"
+        requestArgs={JSON.stringify({ link_id: 'lnk_gone' })}
+        toolCallId="tool-call-1"
+      />,
+    );
+
+    expect(screen.queryByText(/^Account:/)).not.toBeInTheDocument();
   });
 
   it('renders URL avatars as images instead of visible text', () => {

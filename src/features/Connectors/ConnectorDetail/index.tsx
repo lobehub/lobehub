@@ -1,5 +1,5 @@
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { Button, confirmModal, Flexbox, Tabs, Text, toast, Tooltip } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Tabs, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
@@ -18,9 +18,12 @@ import { type ConnectorActionError, toConnectorActionError } from '@/utils/conne
 import ConnectorActionErrorText from '../ConnectorActionErrorText';
 import CustomConnectorModal from '../CustomConnectorModal';
 import { formatConnectorActionErrorToast } from '../formatConnectorActionError';
+import ConnectorAccounts from './ConnectorAccounts';
 import ConnectorDetailIcon from './ConnectorDetailIcon';
 import ConnectorOverviewInfo, { getConnectorKind } from './ConnectorOverviewInfo';
 import { getLocalizedConnectorDetail } from './localization';
+import ManageTooltip from './ManageTooltip';
+import Section from './Section';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
@@ -40,20 +43,6 @@ interface ConnectorDetailProps {
   middleSlot?: ReactNode;
   onDelete?: () => void;
 }
-
-/**
- * Tooltip wrapper for the manage gate. Disabled native buttons swallow hover
- * events, so the tooltip needs an enabled wrapper element to anchor on; when
- * there is no gate message, render children untouched.
- */
-const ManageTooltip = ({ children, title }: { children: ReactNode; title?: string }) =>
-  title ? (
-    <Tooltip title={title}>
-      <span style={{ display: 'inline-flex' }}>{children}</span>
-    </Tooltip>
-  ) : (
-    children
-  );
 
 type ConnectorDetailTab = 'overview' | 'tools';
 
@@ -85,11 +74,6 @@ const styles = stylex.create({
     flexDirection: 'column',
     height: '100%',
   },
-  sectionLabel: {
-    color: cssVar.colorTextTertiary,
-    fontSize: 12,
-    fontWeight: 500,
-  },
   tabs: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
@@ -104,13 +88,6 @@ const styles = stylex.create({
     marginBlock: 0,
   },
 });
-
-const Section = ({ children, label }: { children: ReactNode; label: string }) => (
-  <Flexbox gap={8}>
-    <span {...stylex.props(styles.sectionLabel)}>{label}</span>
-    {children}
-  </Flexbox>
-);
 
 const ConnectorDetail = memo<ConnectorDetailProps>(
   ({ agentTitle, connectorId, lifecycleActions, middleSlot, onDelete }) => {
@@ -236,6 +213,8 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const handleUninstall = () => {
       if (!connector) return;
       confirmModal({
+        // The modal's built-in label is not localized.
+        cancelText: t('cancel', { ns: 'common' }),
         content: deleteConfirmContent,
         okButtonProps: { danger: true },
         onOk: async () => {
@@ -363,6 +342,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                     size="small"
                     onClick={() => {
                       confirmModal({
+                        cancelText: t('cancel', { ns: 'common' }),
                         content: deleteConfirmContent,
                         okButtonProps: { danger: true },
                         onOk: async () => {
@@ -420,6 +400,17 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             {actions}
           </Flexbox>
         </Section>
+
+        {/* Accounts are their own section: removing one account is not the
+            connector-level Disconnect / Delete above. */}
+        {connector.authKind === 'oauth2' && (
+          <ConnectorAccounts
+            canManage={canManage}
+            connector={connector}
+            disabledReason={manageTooltip}
+            key={connectorId}
+          />
+        )}
 
         {middleSlot}
       </Flexbox>

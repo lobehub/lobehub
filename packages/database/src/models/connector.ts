@@ -1,10 +1,18 @@
+import { safeParseJSON } from '@lobechat/utils';
 import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
-import { agentEvalDatasets, ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
+import {
+  agentEvalDatasets,
+  ConnectorStatus,
+  userConnectorLinks,
+  userConnectors,
+  userConnectorTools,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
+import { ConnectorLinkModel } from './connectorLink';
 import { connectorAccessScope } from './connectorScope';
 
 interface GateKeeper {
@@ -14,6 +22,7 @@ interface GateKeeper {
 
 export interface DecryptedConnector extends Omit<UserConnectorItem, 'credentials'> {
   credentials: ConnectorCredentials | null;
+  links?: { id: string; name: string; userId?: string }[];
 }
 
 export interface ConnectorReference {
@@ -86,6 +95,48 @@ export class ConnectorModel {
     this.gateKeeper = gateKeeper;
   }
 
+  getLinkModel = () =>
+    new ConnectorLinkModel(this.db, this.userId, this.workspaceId, this.gateKeeper);
+
+  /** Constructor arguments, for the repositories of the connector domain. */
+  get context() {
+    return {
+      db: this.db,
+      gateKeeper: this.gateKeeper,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    };
+  }
+
+  /**
+   * Lock a connector for the surrounding transaction and read its credential
+   * slot. Call on a model bound to that transaction; `undefined` when the
+   * connector is out of scope.
+   */
+  lockCredentialSlot = async (
+    id: string,
+  ): Promise<
+    | Pick<DecryptedConnector, 'credentials' | 'id' | 'status' | 'tokenExpiresAt' | 'userId'>
+    | undefined
+  > => {
+    const [row] = await this.db
+      .select()
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .for('update');
+    if (!row) return;
+    const { credentials, status, tokenExpiresAt, userId } = await decryptRow(row, this.gateKeeper);
+    return { credentials, id: row.id, status, tokenExpiresAt, userId };
+  };
+
+  /** Empty the credential slot of a connector whose OAuth accounts live on links. */
+  clearCredentialSlot = async (id: string): Promise<void> => {
+    await this.db
+      .update(userConnectors)
+      .set({ credentials: null, tokenExpiresAt: null })
+      .where(and(eq(userConnectors.id, id), this.ownership()));
+  };
+
   private ownership = () =>
     connectorAccessScope(
       this.db,
@@ -116,7 +167,7 @@ export class ConnectorModel {
     avatar: sql<string | null>`${userConnectors.metadata} ->> 'avatar'`,
     createdAt: userConnectors.createdAt,
     description: sql<string | null>`${userConnectors.metadata} ->> 'description'`,
-    hasCredentials: sql<boolean>`${userConnectors.credentials} IS NOT NULL`,
+    hasCredentials: sql<boolean>`(${userConnectors.credentials} IS NOT NULL OR EXISTS (SELECT 1 FROM ${userConnectorLinks} WHERE ${userConnectorLinks.userConnectorId} = "user_connectors"."id"))`,
     id: userConnectors.id,
     identifier: userConnectors.identifier,
     isEnabled: userConnectors.isEnabled,
@@ -254,43 +305,56 @@ export class ConnectorModel {
    * is dropped so the copy is a standalone agent-owned connector.
    */
   copyToAgent = async (sourceId: string, agentId: string): Promise<UserConnectorItem | null> => {
-    const [source] = await this.db
-      .select()
-      .from(userConnectors)
-      .where(and(eq(userConnectors.id, sourceId), this.ownership()))
-      .limit(1);
-    if (!source || source.metadata?.agentEval) return null;
+    return this.db.transaction(async (tx) => {
+      const [source] = await tx
+        .select()
+        .from(userConnectors)
+        .where(and(eq(userConnectors.id, sourceId), this.ownership()))
+        .limit(1);
+      if (!source || source.metadata?.agentEval) return null;
 
-    const { id: _id, createdAt: _c, updatedAt: _u, metadata, ...rest } = source;
-    const cleanedMetadata = metadata
-      ? (() => {
-          const { mountedByAgentId: _m, ...restMeta } = metadata;
-          return restMeta;
-        })()
-      : metadata;
+      const { id: _id, createdAt: _c, updatedAt: _u, metadata, ...rest } = source;
+      const cleanedMetadata = metadata
+        ? (() => {
+            const { mountedByAgentId: _m, ...restMeta } = metadata;
+            return restMeta;
+          })()
+        : metadata;
 
-    const [created] = await this.db
-      .insert(userConnectors)
-      .values({ ...rest, agentId, metadata: cleanedMetadata })
-      .returning();
+      const [created] = await tx
+        .insert(userConnectors)
+        .values({ ...rest, agentId, metadata: cleanedMetadata })
+        .returning();
 
-    // Clone the connector's tools (user_connector_tools) onto the new row —
-    // otherwise the copy has no callable tools and the runtime resolves nothing.
-    const sourceTools = await this.db
-      .select()
-      .from(userConnectorTools)
-      .where(eq(userConnectorTools.userConnectorId, sourceId));
+      // Clone the connector's tools (user_connector_tools) onto the new row —
+      // otherwise the copy has no callable tools and the runtime resolves nothing.
+      const sourceTools = await tx
+        .select()
+        .from(userConnectorTools)
+        .where(eq(userConnectorTools.userConnectorId, sourceId));
 
-    if (sourceTools.length > 0) {
-      await this.db.insert(userConnectorTools).values(
-        sourceTools.map(({ id: _toolId, createdAt: _tc, updatedAt: _tu, ...toolRest }) => ({
-          ...toolRest,
-          userConnectorId: created.id,
-        })),
-      );
-    }
+      if (sourceTools.length > 0) {
+        await tx.insert(userConnectorTools).values(
+          sourceTools.map(({ id: _toolId, createdAt: _tc, updatedAt: _tu, ...toolRest }) => ({
+            ...toolRest,
+            userConnectorId: created.id,
+          })),
+        );
+      }
 
-    return created;
+      const links = await tx
+        .select()
+        .from(userConnectorLinks)
+        .where(eq(userConnectorLinks.userConnectorId, sourceId));
+      if (links.length)
+        await tx.insert(userConnectorLinks).values(
+          links.map(({ id: _linkId, createdAt: _lc, updatedAt: _lu, ...link }) => ({
+            ...link,
+            userConnectorId: created.id,
+          })),
+        );
+      return created;
+    });
   };
 
   delete = async (id: string): Promise<void> => {
@@ -536,6 +600,15 @@ export class ConnectorModel {
         patch,
         gateKeeper?.decrypt.bind(gateKeeper),
       );
+      if (
+        normalized.credentials !== undefined &&
+        normalized.oidcConfig === undefined &&
+        safeParseJSON<ConnectorCredentials>(normalized.credentials ?? undefined)?.type !== 'oauth2'
+      ) {
+        // Explicit static/no-auth credentials replace OAuth. Do not leave a
+        // stale client configuration presenting this as an OAuth connector.
+        normalized.oidcConfig = null;
+      }
       if (current.metadata?.agentEval && normalized.credentials && !gateKeeper) {
         throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
       }
@@ -548,6 +621,27 @@ export class ConnectorModel {
             throw new EvalConnectorUpdateError('Could not securely store the mock connection');
           throw error;
         }
+      }
+      if (
+        'credentials' in normalized ||
+        (normalized.mcpServerUrl !== undefined &&
+          normalized.mcpServerUrl !== current.mcpServerUrl) ||
+        (normalized.oidcConfig !== undefined &&
+          normalized.oidcConfig?.clientId !== current.oidcConfig?.clientId)
+      ) {
+        // `current` came from the ownership-scoped lock above; the subquery
+        // keeps this delete scoped on its own as well.
+        await tx
+          .delete(userConnectorLinks)
+          .where(
+            and(
+              eq(userConnectorLinks.userConnectorId, current.id),
+              inArray(
+                userConnectorLinks.userConnectorId,
+                tx.select({ id: userConnectors.id }).from(userConnectors).where(this.ownership()),
+              ),
+            ),
+          );
       }
       await tx
         .update(userConnectors)

@@ -1,6 +1,7 @@
 import type {
   ConnectorLinkProfile,
   ConnectorLinkStatus,
+  ConnectorOIDCConfig,
   CustomPluginParams,
   ToolManifest,
 } from '@lobechat/types';
@@ -27,66 +28,9 @@ import { workspaces } from './workspace';
 // user_connectors — types & consts
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface OIDCConfig {
-  authorizationEndpoint?: string;
-
-  /**
-   * Client identifier.
-   * - pre_registration: filled in by the user
-   * - dcr: written back after dynamic registration succeeds
-   * - client_id_metadata_document: this value IS the metadata URL
-   */
-  clientId?: string;
-
-  /**
-   * Client secret for confidential clients.
-   * - pre_registration: filled in by the user
-   * - dcr: written back after dynamic registration succeeds
-   * Stored in plaintext (non-token credential); access/refresh tokens live
-   * encrypted in `credentials` instead.
-   */
-  clientSecret?: string;
-
-  /** OIDC discovery issuer URL — preferred over manual endpoint overrides */
-  issuer?: string;
-  redirectUri?: string;
-  /** DCR only (RFC 7591) — dynamic client registration endpoint */
-  registrationEndpoint?: string;
-
-  scheme: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
-  scopes?: string[];
-  tokenEndpoint?: string;
-
-  /**
-   * How the client authenticates at the token endpoint. DCR records the method
-   * the server registered; otherwise it is learned from the first successful
-   * exchange. Servers that enforce the registered method reject any other one.
-   */
-  tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none';
-
-  /** Recommended for public clients */
-  usePKCE?: boolean;
-}
-
-/**
- * Decrypted shape of the `credentials` column.
- * Encrypted at rest via KeyVaultsGateKeeper (same as messengerInstallations).
- */
-export type ConnectorCredentials =
-  | {
-      type: 'oauth2';
-      accessToken: string;
-      refreshToken?: string;
-      clientSecret?: string;
-      /** DCR — token for managing the dynamic registration */
-      registrationAccessToken?: string;
-      expiresAt?: number;
-      scope?: string;
-      idToken?: string;
-    }
-  | { type: 'bearer'; token: string }
-  | { type: 'apikey'; apiKey: string }
-  | { type: 'header'; headers: Record<string, string> };
+/** Declared in `@lobechat/types`; re-exported for the existing schema imports. */
+export type OIDCConfig = ConnectorOIDCConfig;
+export type { ConnectorCredentials } from '@lobechat/types';
 
 export const ConnectorSourceType = {
   builtin: 'builtin',

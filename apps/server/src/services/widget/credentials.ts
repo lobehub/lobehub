@@ -4,7 +4,15 @@ import { ConnectorModel, type DecryptedConnector } from '@/database/models/conne
 import type { ConnectorCredentials } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import {
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from '@/server/services/connector/links';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+} from '@/server/services/connector/tokens';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 import {
@@ -286,7 +294,17 @@ export const resolveWidgetEnv = async (
 
     let connector = byIdentifier.get(requirement.connector);
     if (connector) {
-      connector = await ensureFreshConnectorToken(connector, connectorModel as ConnectorModel);
+      const model = connectorModel as ConnectorModel;
+      const link = pickPrimaryLink(
+        (await loadConnectorLinksMap([connector], { connectorModel: model })).get(connector.id) ??
+          [],
+      );
+      connector = link
+        ? withLinkCredentials(
+            connector,
+            await ensureFreshLinkToken(connector, link, model.getLinkModel(), model),
+          )
+        : await ensureFreshConnectorToken(connector, model);
     }
     const selection = selectConnectorSecret(connector?.credentials ?? null, requirement.field);
     if ('error' in selection) {

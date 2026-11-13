@@ -7,3 +7,4 @@ export type {
 } from './resolveAgentConfig';
 export { resolveAgentConfig } from './resolveAgentConfig';
 export * from './toolSet';
+export * from './toolSet/connectorLinks';

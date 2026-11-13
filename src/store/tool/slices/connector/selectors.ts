@@ -153,6 +153,20 @@ const agentOverriddenIdentifiers =
   };
 
 export const connectorSelectors = {
+  connectorLinkNameById:
+    (linkId: string) =>
+    (s: ToolStore): string | undefined => {
+      const pools = [
+        ...(s.connectors ?? []),
+        ...(s.agentBoundConnectors ?? []),
+        ...Object.values(s.agentConnectors ?? {}).flat(),
+      ];
+      for (const connector of pools) {
+        const link = connector.links?.find((item) => item.id === linkId);
+        if (link) return link.name;
+      }
+      return undefined;
+    },
   agentBoundConnectors,
   agentConnectors,
   agentOverriddenIdentifiers,

@@ -28,6 +28,10 @@ const connector = (overrides: Partial<DecryptedConnector>): DecryptedConnector =
   }) as DecryptedConnector;
 
 const modelReturning = (rows: DecryptedConnector[]) => ({
+  getLinkModel: () => ({
+    adoptLegacyCredentials: async () => {},
+    listByConnectorIds: async () => [],
+  }),
   resolveByIdentifiers: vi.fn().mockResolvedValue(rows),
   update: vi.fn(),
 });
