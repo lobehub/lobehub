@@ -130,7 +130,7 @@ describe('resolveToolRules', () => {
       }),
     );
     expect(noGateway.rules['lobe-remote-device']).toBe(false);
-    expect(noGateway.excludedIdentifiers).toEqual(new Set());
+    expect(noGateway.excludedIdentifiers).toEqual(new Set(['lobe-mcp-events']));
 
     const open = resolveToolRules(
       request({
@@ -164,6 +164,7 @@ describe('resolveToolRules', () => {
     expect(denied.excludedIdentifiers).toEqual(
       new Set([
         'my-plugin',
+        'lobe-mcp-events',
         'lobe-local-system',
         'lobe-remote-device',
         'lobe-browser',
