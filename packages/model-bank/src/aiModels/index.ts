@@ -84,6 +84,7 @@ import { default as vertexai } from './vertexai';
 import { default as vllm } from './vllm';
 import { default as volcengine } from './volcengine';
 import { default as volcenginecodingplan } from './volcengineCodingPlan';
+import { default as voyage } from './voyage';
 import { default as wenxin } from './wenxin';
 import { default as xai } from './xai';
 import { default as xiaomimimo } from './xiaomimimo';
@@ -201,6 +202,7 @@ const staticModelMap: ModelsMap = {
   vllm,
   volcengine,
   volcenginecodingplan,
+  voyage,
   wenxin,
   xai,
   xiaomimimo,
@@ -324,6 +326,7 @@ export { default as vertexai } from './vertexai';
 export { default as vllm } from './vllm';
 export { default as volcengine } from './volcengine';
 export { default as volcenginecodingplan } from './volcengineCodingPlan';
+export { default as voyage } from './voyage';
 export { default as wenxin } from './wenxin';
 export { default as xai } from './xai';
 export { default as xiaomimimo } from './xiaomimimo';
