@@ -46,10 +46,10 @@ tags:
 4. Fill in any of these fields:
    - **Style**: genre, mood, vocals, tempo, for example `acoustic pop, female vocals, 90 BPM`.
    - **Lyrics**: one line per row, with section tags such as `[Verse]` and `[Chorus]`. Leave empty to let Suno write them.
-   - **Title**, **Exclude Styles**, **Duration**: setting any of them switches Suno to custom mode, which needs **Style** or **Lyrics** and does not take reference audio.
+   - **Title**, **Exclude Styles**, **Duration**: setting any of them switches Suno to custom mode, which needs **Style** or **Lyrics**.
    - **Instrumental**: no vocals; lyrics are ignored.
    - **Duration**: 10 to 360 seconds, or **Auto** to let Suno decide.
-5. Click **Generate**. It stays disabled until the prompt comes with a **Style**, **Lyrics**, or reference audio, because Suno does not accept a prompt alone. Two song cards appear as **Queued…**, then **Generating…** (usually 1–3 minutes).
+5. Click **Generate**. It stays disabled until the prompt comes with a **Style** or **Lyrics**, because Suno does not accept a prompt alone. Two song cards appear as **Queued…**, then **Generating…** (usually 1–3 minutes).
 6. When a song finishes, its card shows the cover, title, duration, and tags, with a player. Press play to listen, or download the file.
 
 A failed song shows the reason with **Retry** and **Copy Error Message**.
@@ -92,7 +92,7 @@ curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
     }}}'
 ```
 
-`params` accepts `prompt`, `style`, `lyrics`, `title`, `negativeStyle`, `instrumental`, `referenceAudioUrl` and `duration`. Unknown keys are rejected. The response contains the batch and one entry per song in `data.generations`. Each entry has an `id` (the generation id) and an `asyncTaskId`:
+`params` accepts `prompt`, `style`, `lyrics`, `title`, `negativeStyle`, `instrumental` and `duration`. Unknown keys are rejected, and the built-in Suno models do not accept `referenceAudioUrl`. The response contains the batch and one entry per song in `data.generations`. Each entry has an `id` (the generation id) and an `asyncTaskId`:
 
 ```json
 { "result": { "data": { "json": {
@@ -146,7 +146,6 @@ curl -s "https://api.sunoapi.org/api/v1/generate/record-info?taskId=<taskId>" \
 
 - `model` is the gateway version: `suno-v6` → `V6`, `suno-v6-wild` → `V6_WILD`, `suno-v6-mini` → `V6_MINI`.
 - `customMode` is `true` when `title`, `negativeStyle` or `duration` is set; `negativeStyle` is sent as `negativeTags`, and `duration` (seconds) only in custom mode.
-- `referenceAudioUrl` is sent as `audioUrls` and only works without custom mode.
 
 ## Troubleshooting
 
