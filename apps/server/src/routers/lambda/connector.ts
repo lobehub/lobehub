@@ -999,7 +999,8 @@ export const connectorRouter = router({
             description: z.string().optional(),
             /**
              * A manifest tool's `humanIntervention` (cloud marketplace installs):
-             * `required` / `always` makes a newly synced tool need approval.
+             * `required` / `always`, or rules that ask for either, make a newly
+             * synced tool need approval.
              */
             humanIntervention: z.unknown().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
@@ -1019,7 +1020,7 @@ export const connectorRouter = router({
       const syncInputs = input.tools.map((t) => ({
         crudType: inferCrudType(t.toolName),
         // Applies to new tools only: a synced tool keeps the permission it has
-        defaultPermission: resolveDefaultPermission(t.humanIntervention),
+        defaultPermission: resolveConnectorToolPermission(t.humanIntervention),
         description: t.description,
         inputSchema: t.inputSchema,
         metadata: buildMcpToolMetadata(t.visibility),
@@ -1148,10 +1149,31 @@ export const connectorRouter = router({
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
-/** Map builtin manifest humanIntervention → default ConnectorToolPermission */
+const requiresApproval = (policy: unknown) => policy === 'required' || policy === 'always';
+
+/**
+ * Map a builtin or plugin manifest's humanIntervention → default
+ * ConnectorToolPermission. Their manifests keep their own rules at run time.
+ */
 function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPermission {
-  if (humanIntervention === 'required' || humanIntervention === 'always') {
-    return ConnectorToolPermission.needs_approval;
-  }
-  return ConnectorToolPermission.auto;
+  return requiresApproval(humanIntervention)
+    ? ConnectorToolPermission.needs_approval
+    : ConnectorToolPermission.auto;
+}
+
+/**
+ * Map a manifest tool's humanIntervention → the default permission of the
+ * connector tool that carries it from now on. The connector's manifest is
+ * built from that one permission, so argument rules cannot survive: rules that
+ * ask for approval for any argument make every call need it.
+ */
+function resolveConnectorToolPermission(humanIntervention: unknown): ConnectorToolPermission {
+  const rules = Array.isArray(humanIntervention) ? humanIntervention : [humanIntervention];
+  return rules.some((rule) =>
+    requiresApproval(
+      rule && typeof rule === 'object' ? (rule as { policy?: unknown }).policy : rule,
+    ),
+  )
+    ? ConnectorToolPermission.needs_approval
+    : ConnectorToolPermission.auto;
 }

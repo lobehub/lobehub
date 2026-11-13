@@ -128,6 +128,37 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     ]);
   });
 
+  // The connector manifest carries one permission per tool, so a rule list that
+  // asks for approval for some arguments must not land as `auto`
+  it('makes a new tool need approval when any of its intervention rules requires it', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        {
+          humanIntervention: [
+            { match: { path: '/tmp/*' }, policy: 'never' },
+            { match: { recursive: 'true' }, policy: 'always' },
+          ],
+          toolName: 'remove_path',
+        },
+        {
+          humanIntervention: [
+            { match: { mode: 'draft' }, policy: 'never' },
+            { policy: 'required' },
+          ],
+          toolName: 'publish_post',
+        },
+        { humanIntervention: [{ policy: 'never' }], toolName: 'list_posts' },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'remove_path' }),
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'publish_post' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'list_posts' }),
+    ]);
+  });
+
   it('rejects an unknown connector id', async () => {
     connectorModelMock.findById.mockResolvedValue(undefined);
 
