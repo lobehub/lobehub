@@ -32,7 +32,8 @@ import {
   teardownOtaFixture,
 } from './testUtils';
 
-const { electronMock, loggerMock } = vi.hoisted(() => ({
+const { electronMock, loggerMock, spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(() => ({ on: vi.fn().mockReturnThis(), unref: vi.fn() })),
   electronMock: {
     app: {
       getPath: vi.fn(),
@@ -49,6 +50,7 @@ const { electronMock, loggerMock } = vi.hoisted(() => ({
 
 vi.mock('@/utils/logger', () => ({ createLogger: () => loggerMock }));
 vi.mock('electron', () => electronMock);
+vi.mock('node:child_process', () => ({ spawn: spawnMock }));
 vi.mock('@/modules/updater/configs', () => ({
   BUILD_CHANNEL: 'stable',
   UPDATE_CHANNEL: 'stable',
@@ -656,6 +658,30 @@ describe('CoreUpdateManager checkForUpdates', () => {
     expect(electronMock.app.relaunch).toHaveBeenCalled();
     expect(electronMock.app.quit).toHaveBeenCalled();
     expect(app.rendererUrlManager.setActiveRenderer).not.toHaveBeenCalled();
+  });
+
+  it('relaunches an AppImage through a detached spawn instead of app.relaunch', async () => {
+    // app.relaunch() sets PR_SET_NO_NEW_PRIVS on Linux, so the relaunched AppImage
+    // runtime cannot use the setuid fusermount and fails to mount itself.
+    vi.stubEnv('APPIMAGE', '/opt/LobeHub.AppImage');
+    try {
+      serveLatest(mainChanged('1.0.1', 1));
+      const { manager } = await loadManager();
+      await manager.checkForUpdates();
+
+      expect(manager.applyStagedNow()).toBe(true);
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/opt/LobeHub.AppImage',
+        process.argv.slice(1),
+        expect.objectContaining({ detached: true, stdio: 'ignore' }),
+      );
+      expect(electronMock.app.relaunch).not.toHaveBeenCalled();
+      expect(electronMock.app.releaseSingleInstanceLock).toHaveBeenCalled();
+      expect(electronMock.app.quit).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('rolls back and blacklists the version when the boot check fails', async () => {

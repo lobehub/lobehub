@@ -20,7 +20,12 @@ import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
+import { resolveEnterpriseContentScopes } from '@/server/services/enterpriseKnowledge/contentAccess';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  type UsableKnowledgeBaseResolver,
+} from '@/server/services/knowledgeBaseAccess';
 
 export interface FileContentResult {
   content: string;
@@ -102,6 +107,7 @@ export class KnowledgeBaseSearchService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    private readonly askerId?: string | null,
   ) {
     this.serverDB = serverDB;
     this.userId = userId;
@@ -229,7 +235,61 @@ export class KnowledgeBaseSearchService {
     };
   }
 
-  async getFileContents(ids: string[]): Promise<FileContentResult[]> {
+  /**
+   * @param options.resolveUsableKnowledgeBaseIds Only agent tool runtimes pass it, so a
+   *   member's "No access" knowledge base stays readable by the agents it is mounted on while
+   *   direct reads keep the manager-only rule.
+   */
+  async getFileContents(
+    ids: string[],
+    options: { resolveUsableKnowledgeBaseIds?: UsableKnowledgeBaseResolver } = {},
+  ): Promise<FileContentResult[]> {
+    await assertContentsNotInRestrictedKnowledgeBase(
+      {
+        serverDB: this.serverDB,
+        userId: this.askerId ?? this.userId,
+        workspaceId: this.workspaceId,
+      },
+      ids,
+      options,
+    );
+    const scopes = await resolveEnterpriseContentScopes(
+      { serverDB: this.serverDB, userId: this.askerId, workspaceId: this.workspaceId },
+      ids,
+    );
+    // Validate the complete batch before reading or parsing any content.
+    if (scopes.size > 0) {
+      return (
+        await pMap(
+          ids,
+          (id) => {
+            // An enterprise owner's scope applies only to that exact item.
+            // Ordinary siblings in a mixed batch stay in the caller's scope.
+            const ownerId = scopes.get(id) ?? this.askerId ?? this.userId;
+            return new KnowledgeBaseSearchService(
+              this.serverDB,
+              ownerId,
+              undefined,
+              this.callerAgentVisibility,
+              this.askerId,
+            ).readScopedContents([id]);
+          },
+          { concurrency: 3 },
+        )
+      ).flat();
+    }
+    if (this.askerId && this.askerId !== this.userId)
+      return new KnowledgeBaseSearchService(
+        this.serverDB,
+        this.askerId,
+        this.workspaceId,
+        this.callerAgentVisibility,
+        this.askerId,
+      ).readScopedContents(ids);
+    return this.readScopedContents(ids);
+  }
+
+  private async readScopedContents(ids: string[]): Promise<FileContentResult[]> {
     return pMap(
       ids,
       async (id) => {

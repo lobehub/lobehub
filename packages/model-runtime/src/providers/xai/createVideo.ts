@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../core/openaiCompatible';
 import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 
 const log = createDebug('lobe-video:xai');

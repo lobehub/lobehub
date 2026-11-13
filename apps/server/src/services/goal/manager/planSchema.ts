@@ -63,6 +63,8 @@ export const planRolloutSchema = z
   .object({
     /** The one reusable recipe every unit follows; the batch's Template, revised on every break. */
     recipe: reason,
+    /** A short kebab-case name for the plan skill saying what the recipe does (e.g. "migrate-store-to-replica"). */
+    skillName: z.string().trim().max(80).optional(),
     /** Every unit after the probes in `tasks`, in delivery order; a unit may carry its own notes. */
     units: z
       .array(

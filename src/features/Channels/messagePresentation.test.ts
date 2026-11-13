@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TimelineItem } from './joinEvents';
 import {
-  channelDayLabel,
+  channelMessageTime,
   channelTimeFormatters,
   presentChannelTimeline,
 } from './messagePresentation';
@@ -79,11 +79,11 @@ describe('channel timestamps', () => {
   });
 });
 
-describe('channelDayLabel', () => {
+describe('channelMessageTime', () => {
   // Sunday 8 November 2026, a little past midnight: the day boundary is what matters.
   const now = new Date(2026, 10, 8, 0, 18);
   const label = (date: Date, locale = 'zh-CN') =>
-    channelDayLabel(date, { locale, now, yesterday: '昨天' });
+    channelMessageTime(date, { locale, now, yesterday: '昨天' });
 
   it('shows only the time today, and yesterday by calendar day, not by 24 hours', () => {
     expect(label(new Date(2026, 10, 8, 0, 1))).toBe('00:01');
@@ -92,11 +92,9 @@ describe('channelDayLabel', () => {
     expect(label(new Date(2026, 10, 6, 23, 59))).not.toMatch(/^昨天/);
   });
 
-  it('names the weekday within the past week, then the date, each with the time', () => {
-    expect(label(new Date(2026, 10, 6, 10, 15))).toBe('星期五 10:15');
-    expect(label(new Date(2026, 10, 2, 9, 0))).toBe('星期一 09:00');
-    expect(label(new Date(2026, 10, 1, 9, 0))).toBe('11月1日 09:00');
-    expect(label(new Date(2025, 10, 7, 9, 0))).toBe('2025年11月7日 09:00');
-    expect(label(new Date(2026, 10, 6, 10, 15), 'en-US')).toBe('Friday 10:15 AM');
+  it('gives the full numeric date before yesterday, even within the same week or year', () => {
+    expect(label(new Date(2026, 10, 6, 10, 15))).toBe('2026/11/6 10:15');
+    expect(label(new Date(2025, 5, 22, 1, 33))).toBe('2025/6/22 01:33');
+    expect(label(new Date(2026, 10, 6, 10, 15), 'en-US')).toBe('11/6/2026 10:15 AM');
   });
 });

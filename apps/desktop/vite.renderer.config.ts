@@ -13,6 +13,7 @@ import {
   createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
+  sharedRendererAlias,
   sharedRendererDedupe,
   sharedRendererDefine,
   sharedRendererPlugins,
@@ -267,6 +268,7 @@ export default defineConfig(async (env) => {
       }) as PluginOption[]),
     ],
     resolve: {
+      alias: sharedRendererAlias(),
       dedupe: sharedRendererDedupe,
       tsconfigPaths: !isCloudDesktop,
     },

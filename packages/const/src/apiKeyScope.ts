@@ -263,6 +263,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   generationBatch: { any: 'model:invoke' },
   generationTopic: { any: 'model:invoke' },
   goal: rw('agent:read', 'agent:write'),
+  // a share link publishes the goal's wrap-up to anyone holding it; restricted
+  // API keys must not flip it (full-access keys still can)
+  goalShare: 'blocked',
   group: rw('agent:read', 'agent:write'),
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),
@@ -387,6 +390,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.execAgents': AGENT_RUN_SCOPES,
   'aiAgent.execGroupAgent': AGENT_RUN_SCOPES,
   'aiAgent.execSubAgentTask': AGENT_RUN_SCOPES,
+  // a desktop-local external agent run holds and settles a real run fee
+  'aiAgent.beginLocalHeteroRunFee': AGENT_RUN_SCOPES,
+  'aiAgent.finishLocalHeteroRunFee': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
   // a queued follow-up is a deferred composer send: the run that drains it

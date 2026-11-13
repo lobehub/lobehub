@@ -913,8 +913,10 @@ Content`;
           hashes.push(result.zipHash!);
         }
       } finally {
-        process.env.TZ = originalTz;
+        if (originalTz === undefined) delete process.env.TZ;
+        else process.env.TZ = originalTz;
       }
+      expect(process.env.TZ).toBe(originalTz);
       expect(new Set(hashes).size).toBe(1);
     });
 

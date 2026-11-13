@@ -416,37 +416,25 @@ await ipc.system.updateLocale('en-US');
 
 ### 日志系统 (Logging)
 
-日志系统提供统一的日志记录接口：
+1. **写日志**：主进程用 `createLogger(namespace)`（`src/main/utils/logger.ts`），支持 debug、info、warn、error、verbose 五个级别。
+2. **结构化日志**：dev 和打包版都写 `<userData>/logs/`（`src/main/utils/structuredLog/`）：
+   - `main.jsonl`：`createLogger` 全部级别、主进程直接 `console.*`、electron-updater、渲染进程崩溃
+   - `renderer.jsonl`：每个应用窗口的 console（经 `webContents` 的 `console-message` 采集，不含 webview）
+   - `manifest.json`：pid、启动 / 退出时间、版本；没有 `endedAt` 且进程不在说明崩溃或被杀
+   - 默认级别：打包版 `info`，dev `debug`；打包版可在「设置 → 关于 → 调试日志」开启 debug（`debugLoggingEnabled`，立即生效）；单文件 20MB 轮转，保留 3 代
+   - 每行带 `ts`、`level`、`process`、`ns`、`msg`、`args`，并提取 `operationId`（`op_…`）/ `topicId`（`tpc_…`），用来与服务端 agent trace 对照
+3. **查询**：`pnpm logs <list|query|follow>`
 
-1. **日志工具**：
-   - 基于 debug 和 electron-log 实现
-   - 支持不同日志级别 (debug, info, warn, error, verbose)
-   - 根据环境自动调整日志行为
-
-```typescript
-// 创建日志记录器
-export const createLogger = (namespace: string) => {
-  const debugLogger = debug(namespace);
-
-  return {
-    debug: (message, ...args) => {
-      debugLogger(message, ...args);
-    },
-    error: (message, ...args) => {
-      if (process.env.NODE_ENV === 'production') {
-        electronLog.error(message, ...args);
-      }
-      debugLogger(`ERROR: ${message}`, ...args);
-    },
-    // 其他日志级别...
-  };
-};
+```bash
+pnpm logs list                                   # 本机所有带日志的 profile 与运行状态
+pnpm logs query --level warn --since 30m         # 最近 30 分钟 warn 及以上
+pnpm logs query --operation op_xxx --json        # 某次运行的客户端日志
+pnpm logs follow --process renderer --ns Gateway # 实时跟随
 ```
 
-2. **日志配置**：
-   - 开发环境显示详细日志
-   - 生产环境记录到文件
-   - 支持命名空间隔离日志
+未指定 `--profile` / `--dir` 时，自动选最近写入的 profile（打包版、默认 dev profile、仓库 `.cache/desktop-user-data*`）。
+
+4. **兼容**：打包版仍按原样写 `~/Library/Logs/<appName>/main.log`（info 起，`pnpm log:auth` 依赖它）。
 
 ### 自动更新 (Auto Updates)
 

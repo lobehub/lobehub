@@ -1488,8 +1488,15 @@
     {
       "idx": 212,
       "version": "7",
-      "when": 1794242937503,
-      "tag": "0212_add_documents_created_by_agent_id_fk",
+      "when": 1794296581452,
+      "tag": "0212_workspace_member_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 213,
+      "version": "7",
+      "when": 1794604107028,
+      "tag": "0213_add_documents_created_by_agent_id_fk",
       "breakpoints": true
     }
   ],

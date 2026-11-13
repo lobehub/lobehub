@@ -1,4 +1,5 @@
 import { parseRootSegment, RESERVED_ROOT_SEGMENTS } from '@/features/Workspace/rootSegments';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 import { normalizeTabUrl } from './url';
 
@@ -26,6 +27,20 @@ export const resolveTabScope = (url: string): TabScope => {
   if (!firstSegment || RESERVED_ROOT_SEGMENTS.has(firstSegment)) return PERSONAL_TAB_SCOPE;
 
   return { slug: firstSegment, type: 'workspace' };
+};
+
+/**
+ * Resolve the URL a new tab opens at, keeping it in the scope of the tab the
+ * user is looking at. Unprefixed app paths (`/`, or `/settings` sent by the
+ * macOS Preferences menu) get the active workspace prefix; without it,
+ * `addNewTab` resolves them as personal and swaps the whole strip to the
+ * personal bucket. Personal-only paths stay unprefixed.
+ */
+export const resolveNewTabUrl = (path: string, activeUrl: string): string => {
+  const scope = resolveTabScope(activeUrl);
+  const activeSlug = scope.type === 'workspace' ? scope.slug : null;
+
+  return buildWorkspaceAwarePath(path, activeSlug);
 };
 
 export const tabScopeHomeUrl = (scope: TabScope): string =>

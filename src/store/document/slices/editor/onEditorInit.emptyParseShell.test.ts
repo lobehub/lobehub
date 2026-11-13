@@ -48,7 +48,7 @@ describe('onEditorInit empty-parse shell tolerance (Lexical error #38)', () => {
     // throw Lexical error #38 on hydration — so the markdown fallback runs.
     expect(mockEditor.setDocument).not.toHaveBeenCalledWith(
       'json',
-      JSON.stringify({ root: { children: [], type: 'root' } }),
+      { root: { children: [], type: 'root' } },
       { keepId: true },
     );
     expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', '# Body');
@@ -73,7 +73,7 @@ describe('onEditorInit empty-parse shell tolerance (Lexical error #38)', () => {
       result.current.onEditorInit(mockEditor, 'doc-legacy');
     });
 
-    expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(legacy), {
+    expect(mockEditor.setDocument).toHaveBeenCalledWith('json', legacy, {
       keepId: true,
     });
   });

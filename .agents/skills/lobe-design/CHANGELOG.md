@@ -1,15 +1,141 @@
 # CHANGELOG
 
-版本规则见 learnings/README.md §6（patch 修误报 / minor 加规则或 WARN→FAIL / major 改 stage 与路由）。
+## 6.3.1 — 2026-11-11
+
+将第三方方法的出处、许可与改编对应关系集中到 `ATTRIBUTIONS.md` 与 `licenses/`；执行入口与 stage、reference 只保留设计规则与必要跨技能委托。不改规则含义。
+
+## 6.3.0 — 2026-11-11
+
+吸收 [oil-ui](https://github.com/oil-oil/oil-ui) 里、与现有规则不冲突的短方法（minor：只扩写已有 00 / 20 / 30 / 50 / 80 检查项；不删编号，不改 stage 主流程，不另增命令或规则系列）。
+
+补进的是「为什么、在什么场景用、要注意什么」：产品参考和交互参考分开、文档冲突按用户明确要求与项目约束处理、对外默认只推荐一个方向、去掉装饰后构图仍要成立、骨架里能指出主要内容和主动作、原型落代码走项目 token、关键图要有任务、与位置相关的过渡保持空间关系、落地页滚动不接管、没看真实画面不算视觉验收、演示内容符合语境但可能被当成事实的仍保留示例标识、会保存的界面要能刷新读回、Web 用 100% / 200% 缩放、移动端按系统大字体验证。完整署名写在相应 stage 节末，许可链接指向源提交的 LICENSE。仓库内同时存放 `licenses/LICENSE-oil-ui.txt`。钉扎提交 `28948c3d88e5d141fa0e943ff385560c5ffba979`，不随上游后续提交上移。
+
+整包不吸收：风格对比页生成器、截图 / 生图 / 测量 / 更新检查工具链、`.oil-ui/` 工作区约定、独立评审打分流程、字体表、色板、动效时长与弹簧参数表。不引入独立命令；应用层仍只走主题 token；动效曲线和时长仍按 K-06（入场 ease-out、离场 ease-in、≤300ms、错峰约 40ms）。为守 32768 加载预算，不改 70-detail、detail-checklist、craft、design、aesthetics、copy。
+
+- **00** 补产品参考与交互参考分开记录；设计文档或 Agent 指令冲突时挑明，按用户明确要求与项目约束处理，不能随意选一份指令。
+- **20** 补去掉装饰后构图仍要成立，结构问题回到 30 / 40 解决、不用装饰掩盖；对外默认只推荐并深化一个方向，只有用户要求比较时才并排多个首屏；0→1 视觉页按真实内容和主动作选择骨架，不把品类常见版式（如左右分栏）当默认，候选差异须有产品依据。控制台、存量界面和已有系统中的新功能沿用现有视觉与主题，不另起方向。
+- **30** 补每屏能指出当前任务的主要内容和主动作，次要动作与装饰不争同等权重；原型落代码用项目组件和主题 token，不要 iframe 或整段搬原型样式脚本。
+- **50** 补关键图要有任务、图是构图的一部分；与位置相关的过渡从操作处出发、方向保持空间关系，只有能解释关联时才让被带动元素延后、减小幅度；可打断、不从一点弹入，时长曲线仍按 K-06。落地 / 品牌页滚动叙事不接管滚动，后台保持原生滚动，不指定动效库。
+- **80** 补没看真实画面不算视觉已通过；演示内容符合产品语境，但不伪造评价、案例或指标，可能被当成事实的内容保留示例标识，交付中明确未接入的功能；会保存的界面要验证刷新读回；Web 在 100% 与 200% 缩放、移动端按系统大字体检查。
+- 不引入独立命令，也不新增规则系列。
+
+## 6.2.0 — 2026-11-10
+
+吸收 Pretzel Interface 13 项技能里、与现有规则不冲突的短方法（minor：只扩写已有 K / X 判据和 40 / 70 / 80 检查项；不删编号，不改 stage 主流程，不另增命令）。
+
+补进的是「为什么、在什么场景用、要注意什么」：彩底不用灰字、不要为分区套卡、标题和正文的换行方式、阴影与描边的职责、可打断的状态过渡、光学对齐、安全区、不要阻止粘贴、地址反映可分享状态、审查先用产品自己的证据证明、向上游提议新色时按感知明度来谈。完整署名写在相应 reference /stage 的节末。
+
+整包不吸收：canvas-design 的出图 / PDF 工具链、prototype 的现场选择器、extract-design-system 的抽 token 工具链。不引入独立命令，不搬硬阈值、字体表或色板；应用层仍禁止裸 hex / `oklch()`；动效曲线和时长仍按 K-06（入场 ease-out、离场 ease-in、≤300ms、错峰约 40ms）。Impeccable 钉扎仍为 `ec229b48547f24685ffb22aa51c462c5ae27908c`，不随上游后续提交上移。
+
+- **K-01** 补彩底上不用灰色字，改用同一色相更深的一级；不改主题色，缺口交上游（Impeccable quieter）。
+- **40** 补不要为分区套卡、更不要卡片套卡片；可分享的筛选 / 分页 / 面板状态应能从地址还原。
+- **K-02** 补标题可用 `text-wrap: balance`、正文可用 `text-wrap: pretty`；中文界面仍禁止字母间距加宽与全大写。
+- **K-03** 补阴影表达叠放关系、描边表达结构或状态，不用实线描边假装浮起。
+- **K-07** 补向上游提议新色时按感知明度谈对比，应用里仍只走 cssVar。
+- **X-3 / X-5 / X-6 / 70** 补光学对齐、可打断过渡、高频不错峰、不要从缩成一点弹入、浮层原点对准触发源、未保存离开前提醒、不要阻止粘贴、安全区；动效可在约一成速度回放核验。曲线和时长不改。
+- **80** 补证明门（证明不了就不断言，不发明产品意图），以及取值须映射到宿主主题、禁止用外部站点抽 token 覆盖已有系统。
+- 不引入独立命令，也不新增规则系列。
+
+## 6.1.0 — 2026-11-10
+
+吸收 unslop 的改动范围与「丰富度在重要内容」，并补 Impeccable 尚未落入既有 stage 的增量（minor：扩写已有 A/K/T/W 判据与 20 / 40 / 50 / 60 步骤；不删编号，不改 stage 主流程，路由修长短词重叠，不另增命令）。
+
+方法来自 [heydamir/unslop](https://github.com/heydamir/unslop)（[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)，Damir Sokolovsky / [@heydamir](https://x.com/heydamir)，源提交 `97daa3eb365670ea3f87ed85356cbfcee18105a5`），已按 Lobe 主题改写。完整署名写在 `aesthetics.md` / `craft.md` / `copy-core.md`；这些改编段落不适用 MIT 再许可。未纳入原作色板、字体清单、截图脚本和故事视频工具链。
+
+同时补了 [pbakaus/impeccable](https://github.com/pbakaus/impeccable)（[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)，Copyright 2025 Paul Bakaus，源提交 `ec229b48547f24685ffb22aa51c462c5ae27908c`）中既有 audit /critique/polish/simplify/clarify/normalize/harden/adapt 映射尚未覆盖的增量。完整署名写在 `craft.md` / `copy.md` 与 [NOTICE-impeccable.md](licenses/NOTICE-impeccable.md)；许可全文见 [LICENSE-impeccable.txt](licenses/LICENSE-impeccable.txt)。这些改编段落不适用 MIT 再许可。未引入独立命令，也未纳入检测 CLI、live /generate 工具链或 ios /android 平台参考。
+
+- **K-01** 补「丰富度放在重要内容，而不是导航、按钮等通用控件」和改动范围（完整打磨 / 只改列出项 / 已有设计成立就不制造改动）。通用控件沿用主题和组件语义，不靠额外特效抢焦点；主操作、状态色照常保留。控制台不另起方向，仍检查通用控件是否抢戏。
+- **K-01 / 50** 补加力与收束（调整表达强弱，优先用系统已有手法，不新造色、字体或组件；收束仍保留层级和气质），以及检查原生选择态、焦点与输入反馈是否与主题一致、清楚可见；已有主题 / 组件处理的不重复覆盖，确属组件缺口交上游。
+- **K-09** 补一句：表达强度跟来访者要做成的事走，不把落地页的戏剧用在控制台。
+- **A-01** 方向卡增加气质 / 产品意象 / 签名细节，均允许「无」；不虚构隐喻，不强求每页签名；产品意象不另造色板。
+- **A-04** 增补 16–19（无业务意义的循环脉冲、信息卡无目的整体 hover 放大、缺产品依据的装饰、社会证明要有来源），清单日期改为 2026-11。
+- **K-06 / K-08 / T-06** 作对应短补；20 / 50 步骤与检查清单同步。20 不新增必须等待用户同意的步骤；brief 已指定的气质、材料、字体和色板以 brief 为准，但字体和色板只走主题配置或上游方案，不就地覆盖。
+- **60** 明确打磨不夹带换方向；概念不成立时建议走 20 / 新建视觉，而不是改掉身份。
+- **40 / W-04** 补首次到达（尽快做到第一件有价值的事，能跳过、不挡住产品）和空态分型（首次使用写清会出现什么、为什么重要、怎么开始；用户清空从轻；无权限说明原因和如何获得）。
+- 路由：`product-polish` 增加 `unslop` / `去 AI 味` 触发词；50 增加 `加力` / `收束` / `太吵` / `更大胆` / `bolder` / `quieter`；40 增加 `新手引导` / `首次到达`。增加组合 launch 的 route-cases。不把 `unslop` / `去 AI 味` 写入 50 的 keywords 或 intentSignals。场景信号与 stage 关键词做包含命中过滤，避免长短词重叠把宏观打磨降成精细；独立关键词与规则编号仍直达。
+- 不引入独立 unslop 或 Impeccable 命令，也不新增规则系列。
+
+## 6.0.2 — 2026-11-10
+
+动手前先看灵感库（patch：不改 stage 拆合 / 路由 /lint）。
+
+- 入口 `SKILL.md` 在 00 之后增加「动手前先看灵感库」：带着 brief 去检索相关案例，判断沿用与改动，不临摹；找不到就写「未找到」。
+- `00-brief` 在产出后把检索交给下游；`project` / `reuse` 跳过。`20` / `30` / `40` 输入补上相关案例。
+- 检索用 `lobe-design search --kind case` 或设计站 `/archive/cases`。
+
+## 6.0.1 — 2026-11-03
+
+文档：archive admission gates（门禁）写入 CLI skill 并在本 skill 的 CLI 节加指针（patch：不改 stage / 路由 /lint）。
+
+- 新增 `skills/lobe-design-cli/references/gates.md`：设计灵感 admit/reject、设计产出拆条、STAR、好在哪 / 差在哪、rating、tracing。
+- `skills/lobe-design-cli/SKILL.md` → 0.2.0，正文增加 substantial 门禁节。
+- `references/cli.md` 增加 CLI-03a 门禁摘要并链到 gates.md。
+- 本文件 CLI 与灵感库小节补「写入前先过门禁」指针。
+
+## 6.0.0 — 2026-11-02
+
+重排生态 reference 编号（major：删除并重映射旧 E-xx 编号；路由 ruleOwners / 用例同步；不改 stage 拆合）。
+
+基础能力在前、边界在后，连续编号：
+
+| 新 id | 内容                                                     | 旧 id |
+| ----- | -------------------------------------------------------- | ----- |
+| E-01  | `@lobehub/ui`                                            | E-07  |
+| E-02  | `@lobehub/editor`                                        | E-08  |
+| E-03  | `@lobehub/charts`                                        | E-01  |
+| E-04  | `@lobehub/icons`                                         | E-03  |
+| E-05  | `@lobehub/fluent-emoji`                                  | E-04  |
+| E-06  | `@lobehub/streamdown`                                    | E-05  |
+| E-07  | `@lobehub/lint`                                          | E-09  |
+| E-08  | 边界                                                     | E-06  |
+| E-09  | 图表颜色必须走主题（仍挂在 charts 节下，路由 50-visual） | E-02  |
+
+- `references/ecosystem.md` 章节顺序与 `refs:meta`、边界表交叉引用同步。
+- `pipeline.json`：`30-structure` allowedRuleIds = E-01..E-08；`ruleOwners["E-09"]=50-visual`（原 E-02）。
+- stage 导读 / 症状表、`craft.md`、`evaluator.md`、`tests/route-cases.json`、`SKILL.md` 中的硬编码旧 id 已替换。
+- 历史 CHANGELOG /learnings 条目保留当时编号，不回溯改写。
+
+## 5.11.0 — 2026-11-02
+
+按项目依赖自动安装生态包 docs skills（minor：新增维护脚本；不删编号，不改 stage 与路由）。
+
+- **新增 `scripts/install-ecosystem-skills.mjs`**：扫描 `package.json`（含常见 workspace）里的 `@lobehub/*`，按 `scripts/ecosystem-skills.json` 映射拉取官方 `skills.md`，写入 `.agents/skills/<name>/SKILL.md`；用 etag /sha256 幂等更新；`status=missing` 跳过并告警。
+- **映射**：`@lobehub/ui` / `lint`（及各 `*-config`）/ `editor` / `icons` / `charts` / `tts` / `fluent-emoji` / `streamdown` → 对应 docs 站；`@lobehub/docs-kit`、`@lobehub/ui-rn` 标 missing。
+- **接入**：`bootstrap.mjs` 在写入托管块后自动跑一遍（`--skip-ecosystem-skills` 可关；`--check` / `--print` 不跑）；`install.sh` 提示同步。
+- `references/ecosystem.md` 增加「生态 skills」小节，与映射表对齐。
+
+版本规则见 learnings/README.md §6（patch 修误报 /minor 加规则或 WARN→FAIL /major 改 stage 与路由）。
+
+## 5.10.0 — 2026-11-02
+
+扩写生态 reference（minor：新增 E-07 / E-08 / E-09；不删编号，不改 stage 与路由）。
+
+- **E-07 `@lobehub/ui`**：组件库定位、安装与根部、入口表；仓库 [lobehub/lobe-ui](https://github.com/lobehub/lobe-ui)，文档 ui.lobehub.com。
+- **E-08 `@lobehub/editor`**：Lexical 富文本 / ChatInput、入口与 peer；仓库 [lobehub/lobe-editor](https://github.com/lobehub/lobe-editor)，文档 editor.lobehub.com。
+- **E-09 `@lobehub/lint`**：聚合 lint 配置与 `create-lobe-lint`；仓库 [lobehub/lobe-lint](https://github.com/lobehub/lobe-lint)。
+- E-06 边界表补上组件库 / 编辑器 /lint；`refs:meta`、30-structure 白名单与导读同步。
+
+## 5.9.0 — 2026-11-02
+
+内容后台整体重做的回流（minor：新增两条 WARN lint 规则、一项结构检查，扩写已有 reference；不删编号，不改 stage 与路由）。
+
+- **新增 `LOBE-HANDROLLED-TABLE`**（WARN，C-08，30-structure）：手拼表头 `role="columnheader"` / `"rowheader"`；记录列表用 `ProTable`。只认表头：主从页列表栏里可键盘导航的 `role="grid"` / `"row"` 不报。fixtures：`bad.tsx` 两行，`good.tsx` 的 grid 列表防误报。
+- **新增 `LOBE-REFETCH-OVERLAY`**（WARN，K-05，70-detail）：非按钮组件上的 `loading={isFetching && !…}` 且没有 `isPlaceholderData`，后台刷新会让表格周期性变暗。`Button` / `ActionIcon` 自己的 loading 不报。
+- **结构检查 `review-coverage`**：80-review 输出模板新增「截图覆盖：<路由 → 截图 | 证据缺失>」，委托 / 并行产出的页面同样要亲自打开；检查清单第 8 条、evaluator「证据要求」加「覆盖」一行。
+- **P-02** 新增「工具栏 / 单元格 / 分组」与常见错法（集合超过 3 项写成计数或进度、同一对象多行收成父行、工具栏一行内分配宽度、列多时固定表格布局）；**P-03** 新增「主从两栏」（零记录时整页 `Empty`）；**P-05** 新增「功能开关」（开启后才出现配置；关闭 / 恢复默认见 C-17）。
+- **K-05** 新增「后台刷新不盖遮罩」；**K-10** 新增「页面留白只由一层负责」；**T-31** 新增「状态词说真话」与「指标和计数带对象」。
+- 30-structure / 40-flow / 70-detail / 75-copy 的「症状 → 规则」表登记对应症状。
+- **误报**：项目层适用性解析把业务描述里的「停用」「关闭」当成不适用标记（`| 系统 | 用户 | P-02 / P-05 | 邀请或停用账号 |` 会静默关掉 P-02、P-05）。表格行改为必须有一格整格是标记；散文行只认「不适用 / N/A/not applicable」。
+- learnings：LRN-20261024-01 … LRN-20261024-08。
 
 ## 5.8.0 — 2026-10-23
 
 一批设计思路（minor：新增 reference 编号 C-19、C-20；不删编号，不改 stage 与路由）。
 
 - **M-01 判据 3**：先问题，后组件；不从现有页面、截图或组件清单出发修补。
-- **SKILL.md 输出契约 · 示意图**：只画被讨论的模块，编号标注设计理由，低密度。
+- **SKILL.md 输出契约・示意图**：只画被讨论的模块，编号标注设计理由，低密度。
 - **C-17**：状态由值本身表达，不加复述的 badge；关闭 / 恢复默认是同一控件里的选择；按功能分组命名；与已有设置页一致。
-- **新增 C-19**（web / desktop / mobile）：滚动边缘的模糊与淡出是为了扩大可读区域，只藏在框架身后，淡出到背景 token（web：`ProgressiveBlur`）；无模糊能力时只淡出、框架实底。C-02 布局行同步。
+- **新增 C-19**（web /desktop/mobile）：滚动边缘的模糊与淡出是为了扩大可读区域，只藏在框架身后，淡出到背景 token（web：`ProgressiveBlur`）；无模糊能力时只淡出、框架实底。C-02 布局行同步。
 - **新增 C-20**（仅 mobile）：导航与输入浮在内容上，内容用满屏幕。
 - **30-structure** 登记 C-19、C-20；`refs:meta` 补触发词；tests 加 `wording:` 断言。learnings：LRN-20261023-01..04。
 
@@ -17,7 +143,7 @@
 
 按环境绑定的凭证先按环境分组（minor：新增 reference 编号 C-18；不删编号，不改 stage 与路由）。
 
-- **新增 C-18**（`references/components.md`）：Vercel 环境变量、QStash、Redis 这类按环境配置的凭证 / 密钥 / secret / 环境变量，环境做顶层分组，每个环境下列出它的凭证（层级清楚用 `Tree`，环境少用 `Accordion`）；同名 key 在每个环境下各列一次；只有一个环境时不造分组。不要把 env 做成平铺表里的一列。
+- **新增 C-18**（`references/components.md`）：Vercel 环境变量、QStash、Redis 这类按环境配置的凭证 / 密钥 /secret/ 环境变量，环境做顶层分组，每个环境下列出它的凭证（层级清楚用 `Tree`，环境少用 `Accordion`）；同名 key 在每个环境下各列一次；只有一个环境时不造分组。不要把 env 做成平铺表里的一列。
 - **30-structure**：「只加载」与「症状 → 规则」登记 C-18；`components.md` 的 `refs:meta` 加 C-18 触发词（凭证、环境、env、token、密钥、secret、环境变量、轮换、作用域）。
 - learnings：LRN-20261022-01。
 
@@ -27,7 +153,7 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 
 - **`LOBE-RN-DOM-UI` 只报组件导入**：从 `@lobehub/ui` 根入口、组件子入口（`/form`、`/pro-table`、`/dashboard`、`/mobile`…）或 `@lobehub/ui/es/<Component>` 导入 PascalCase 名字（具名 / 默认 / `default as` / 命名空间）才报；`@lobehub/ui/es/hooks/*`、`Markdown/plugins/*`、`styles`、`utils`、`types`、`locale` 等工具子路径，以及 `useTheme` / `cssVar` 这类小写导出、`import type`、副作用导入不再误报（宿主实测 9 处误报）。
 - **`lint-allow:`**（`product.md`，可多行）：`lint-allow: LOBE-RN-DOM-UI src/components/hooks/**, src/components/styles/**` 按路径（相对项目根的 glob）关掉指定规则；报告头显示生效的 allow。
-- **托管块精简模式 + 宿主语言**：`bootstrap.mjs` 新增 `--compact`（默认，~16 行：入口、先读项目层、平台、优先级、lint、沉淀、升级）/ `--full`（原完整中文块）与 `--lang zh|en`（默认按宿主 `AGENTS.md` 块外文本判断，不足时看 README）。块内第一行写 `<!-- lobe-design:mode=… lang=… -->`，重跑沿用、flag 覆盖；BEGIN / END 标记不变，≤ 5.5.0 的旧块重跑时换成默认精简块。`--check` 同时识别 `skill 版本` 与 `skill version`。
+- **托管块精简模式 + 宿主语言**：`bootstrap.mjs` 新增 `--compact`（默认，\~16 行：入口、先读项目层、平台、优先级、lint、沉淀、升级）/ `--full`（原完整中文块）与 `--lang zh|en`（默认按宿主 `AGENTS.md` 块外文本判断，不足时看 README）。块内第一行写 `<!-- lobe-design:mode=… lang=… -->`，重跑沿用、flag 覆盖；BEGIN / END 标记不变，≤ 5.5.0 的旧块重跑时换成默认精简块。`--check` 同时识别 `skill 版本` 与 `skill version`。
 - **平台中立措辞**：SKILL.md frontmatter `description` 改为「原子层取自宿主组件库（web：`@lobehub/ui` + `cssVar`；React Native：项目组件库如 `@lobehub/ui-rn` + `useTheme()` token）」；`stages/50-visual.md` 取值规则按平台分写；`10-decode`、`30-structure`（硬性前提标注 web 作用域）、SKILL.md C-11 段、`references/design.md` D-01 同步。
 - **`LOBE-ICON-BUTTON-LABEL`**：mobile 规则集的提示只写 `accessibilityLabel`（非按钮可点元素补 `accessibilityRole="button"`），web 提示仍是 `title` / `aria-label`。
 - **tests**：RN fixture 增加 `@lobehub/ui/es` 工具导入（Markdown 插件、hooks、颜色种子）；`bad-rn.tsx` 增加 `es/Markdown` 组件导入与缺 `accessibilityLabel` 的图标按钮；新增 `== issue #2 (RN follow-ups)` 一节（组件导入判定、`lint-allow`、精简 / 语言 / 沿用 / 旧块迁移 / 幂等 / `--check`、措辞断言、RN 图标按钮提示）。
@@ -36,13 +162,13 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 
 05-init 识别出的平台真正生效（minor：新增 RN 专属 WARN 规则 `LOBE-RN-DOM-UI`、规则平台作用域与项目层适用性开关；不删编号，不改 stage 与路由）。Fixes [#1](https://github.com/lobehub/lobe-design-skill/issues/1)。
 
-- **lint 平台门控**：新增 `scripts/platform.mjs`（lint / bootstrap / project-scan 共用）。平台来源：`--platform` / 文件内 `lobe-design-platform:` 注释 / `*.native|ios|android.tsx` → `.agents/ux/product.md` 的 `平台：` 行 → `package.json`（`react-native` / `expo` / `@lobehub/ui-rn` → mobile）。每条规则声明 `platforms`（`--rules` 显示）；mobile 跳过 web 专属规则（`LOBE-ANTD-IMPORT`、`LOBE-FORM-ENTRY`、`LOBE-ANT-ICONS`、`LOBE-CREATE-STYLES`、`LOBE-I18N-PROVIDER`、`LOBE-CSS-LINE-COMMENT`、`LOBE-ANT-CLASS`、`LOBE-ANT-VAR-OVERRIDE`、`LOBE-REIMPLEMENT-ATOM`、`LOBE-FONT-FAMILY`、`LOBE-EYEBROW`、`LOBE-BLUR-CARD`、`LOBE-SIDE-STRIPE`、`LOBE-GLOW`、`LOBE-GRADIENT-TEXT`、`LOBE-OUTLINE-NONE`、`LOBE-IMG-ALT`、`LOBE-DIV-CLICK`、`LOBE-GRADIENT-ANIMATION-OVERUSE`）；`LOBE-RAW-COLOR` 在 mobile 上给 RN 主题 token 的修法而不是 `cssVar`。新增 `--platform` / `--root`，报告头显示 `platform=…（来源）`。
+- **lint 平台门控**：新增 `scripts/platform.mjs`（lint /bootstrap/project-scan 共用）。平台来源：`--platform` / 文件内 `lobe-design-platform:` 注释 / `*.native|ios|android.tsx` → `.agents/ux/product.md` 的 `平台：` 行 → `package.json`（`react-native` / `expo` / `@lobehub/ui-rn` → mobile）。每条规则声明 `platforms`（`--rules` 显示）；mobile 跳过 web 专属规则（`LOBE-ANTD-IMPORT`、`LOBE-FORM-ENTRY`、`LOBE-ANT-ICONS`、`LOBE-CREATE-STYLES`、`LOBE-I18N-PROVIDER`、`LOBE-CSS-LINE-COMMENT`、`LOBE-ANT-CLASS`、`LOBE-ANT-VAR-OVERRIDE`、`LOBE-REIMPLEMENT-ATOM`、`LOBE-FONT-FAMILY`、`LOBE-EYEBROW`、`LOBE-BLUR-CARD`、`LOBE-SIDE-STRIPE`、`LOBE-GLOW`、`LOBE-GRADIENT-TEXT`、`LOBE-OUTLINE-NONE`、`LOBE-IMG-ALT`、`LOBE-DIV-CLICK`、`LOBE-GRADIENT-ANIMATION-OVERUSE`）；`LOBE-RAW-COLOR` 在 mobile 上给 RN 主题 token 的修法而不是 `cssVar`。新增 `--platform` / `--root`，报告头显示 `platform=…（来源）`。
 - **项目层适用性关规则**：`product.md` 里标「不适用 / N/A」那一行的规则编号（含区间 `C-01..C-11`）与 lint id、以及 `lint-off: LOBE-XXX, D-01` 行，关掉对应 lint 规则（按 id 或其引用编号）。
 - **新增 `LOBE-RN-DOM-UI`**（WARN，C-01，仅 mobile）：RN 界面导入 `@lobehub/ui` / `antd` 这类 DOM 组件库（`import type` 不报）。fixtures：`bad-rn.tsx` / `good-rn.tsx`。
 - **误报**：`LOBE-ICON-BUTTON-LABEL`（K-07）接受 `accessibilityLabel`；`LOBE-REDUCED-MOTION` 接受 `isReduceMotionEnabled` / `ReduceMotion`。
-- **优先级改写**：删掉托管块的「冲突时以 skill 为准」，改为「项目层的平台与适用性优先于 skill 通用规则；其余冲突以 skill 为准；项目层违背通用原则须写明理由」。SKILL.md、`references/init.md`（新增 I-10）、`references/components.md` C-01（标注平台作用域 web / desktop）同步。
+- **优先级改写**：删掉托管块的「冲突时以 skill 为准」，改为「项目层的平台与适用性优先于 skill 通用规则；其余冲突以 skill 为准；项目层违背通用原则须写明理由」。SKILL.md、`references/init.md`（新增 I-10）、`references/components.md` C-01（标注平台作用域 web /desktop）同步。
 - **托管块按平台生成**：mobile 时加「平台：mobile（React Native）」一节（原子层用项目 RN 组件库、不改用 `@lobehub/ui`、web 专属条目不适用、可达性照常），lint 指令改为按 mobile 规则集、按项目主题修。skill 内文件统一写 `$LOBE_DESIGN/scripts/…`；尚不存在的项目层文件不再写成代码样式路径（宿主路径检查不再报死链）。
-- **Round 2 / project-scan 平台感知**：输出 `stack.platform`、`primaryUi`（mobile 时为 RN 组件库，含 tsconfig alias，如 `@lobehub/ui-rn → src/components`）、`depOnlyUi`（mobile 上的 `@lobehub/ui` 等 DOM 库只算依赖）、`navigation`（`expo-router` / `@react-navigation/*`）、`componentScheme` 与逐文件启发式初分 `componentClasses`。mobile 分类为「项目原子层 / 薄包装 / 业务组件」，不再出现「改用 lobe-ui」。05-init 与 I-08 同步。
+- **Round 2 /project-scan 平台感知**：输出 `stack.platform`、`primaryUi`（mobile 时为 RN 组件库，含 tsconfig alias，如 `@lobehub/ui-rn → src/components`）、`depOnlyUi`（mobile 上的 `@lobehub/ui` 等 DOM 库只算依赖）、`navigation`（`expo-router` / `@react-navigation/*`）、`componentScheme` 与逐文件启发式初分 `componentClasses`。mobile 分类为「项目原子层 / 薄包装 / 业务组件」，不再出现「改用 lobe-ui」。05-init 与 I-08 同步。
 - **75-copy 路由分区按路径段匹配**：`refs.mjs` 新增 `matchRoute`：`/api-keys` 命中 `/:wsSlug/api-keys`（任意位置的连续段），不再被 `/api-keys-legacy` 这类前缀误命中；支持 `/*/api-keys`（一段）、`/admin/**`（任意多段）、`^/admin`（从根）；多条命中取更具体的；新增 `--page <路由>`。
 - **文档**：`install.sh` 在 skill 仓库根目录（不在 `skills/lobe-design/` 下），`references/init.md` 与托管块的安装说明写明。
 - **tests**：新增 RN fixture 项目 `tests/fixtures/rn-project/`（expo + react-native + `@lobehub/ui-rn` alias，`StyleSheet` 组件）与 `== platform (mobile / RN)` 一节：0 web-only FAIL、强制 web 时仍报（门控而非失效）、`product.md` 平台 / 适用性、托管块无 web 专属指令与新优先级、project-scan 分类；75-copy 路由段匹配用例。`check-learnings` 读 fixtures 时跳过子目录。
@@ -74,7 +200,7 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 - **与 W- 去重**：W-01..W-07 编号与归属不变，`copy.md` 写明分工（W 管有没有、讲没讲到；T 管怎么说）。40 / 70 / 80 / 00 / 20 / 30 / 50 的「不负责」与回流表指向 75；80 只留一条文案核对项，细则在 75。
 - **lint（WARN，默认）**：`LOBE-CJK-LATIN-SPACE`（T-02，中文与英文 / 数字之间缺空格）、`LOBE-HALFWIDTH-PUNCT`（T-03，中文里夹半角 `, ; : ! ?`）。只看含中文的字符串字面量与 JSX 文本，去掉插值、URL 后判断；目录里的 zh-CN 语言包（`locales/zh-CN/*.json` 等）只跑这两条。fixtures：`bad-copy.tsx` / `good-copy.tsx`。
 - **05-init**：Round 1 的 `product.md` 增加 `copy-profile:` 行与人称（I-07）；托管块与 `project-scan` 提示同步。
-- route-cases：宏观 operate-build / product-polish 带 75；「优化一下删除确认框的文案」改为中等 40 + 75；新增 4 条 75 用例。LRN-20261016-02。
+- route-cases：宏观 operate-build /product-polish 带 75；「优化一下删除确认框的文案」改为中等 40 + 75；新增 4 条 75 用例。LRN-20261016-02。
 
 ## 5.3.0 — 2026-10-16
 
@@ -83,7 +209,7 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 - **C-01 重写**：组件从 `@lobehub/ui` 根入口取用，独立入口只有 `@lobehub/ui/form`、`@lobehub/ui/pro-table`、`@lobehub/ui/dashboard` 等；应用不用 `antd` / `antd-style`；「需要 → 用」表（卡片 `Block`、常驻导航 `ConsoleNav` / `SideNav` / `List`、命令式弹窗需 `ModalHost`、`DropdownMenu` 默认点击打开、`SplitButton` 等）。删掉「顶层导出禁用清单」与「等价导入」两段。
 - **C-02 / C-03 / C-05 / C-06 / C-08 / C-11**：去掉 `base-ui` / 顶层的来源区分；`DatePicker` 值为 `Dayjs`；`Text` 默认块级、行内用 `as="span"`；常驻导航不再指向 `Menu`，页内目录只用 `Anchor`；删除 `FormModal`、`Toc`、双 `List` 的对照行；C-06 加 `@lobehub/ui/pro-table`、去掉 `static-css`；主题变量示例改为 `--lobe-*`。
 - **design.md**：D-07 主色 / 中性色走 `data-primary-color` / `data-neutral-color`（`setLobeTheme` / `LobeThemeScript` / `ThemeScope`）；D-08 外观走 `data-theme`；D-04 字体来自 `theme.css`，自定义字体走 `ConfigProvider`；D-10.5 改为不写 `.ant-` 与哈希类名，新增 D-10.8 样式层叠（全局 reset 放进 lobe-ui 之前的层）。
-- **30-structure 硬性前提**、ecosystem 安装清单（去掉 antd / antd-style，`motion` ^13 | ^14，`@lobehub/icons` ^6，`@lobehub/fluent-emoji` ^5）、craft / aesthetics / evaluator / 20-direction / init / admin-archetypes / SKILL.md / README 同步。
+- **30-structure 硬性前提**、ecosystem 安装清单（去掉 antd /antd-style，`motion` ^13 | ^14，`@lobehub/icons` ^6，`@lobehub/fluent-emoji` ^5）、craft /aesthetics/evaluator/ 20-direction /init/admin-archetypes/ SKILL.md/ README 同步。
 - **lint**：`LOBE-ANTD-IMPORT` 拦任何 `antd` / `antd-style` 导入；`LOBE-FORM-ENTRY` 只认 `@lobehub/ui/form`；`LOBE-ANT-VAR-OVERRIDE` 同时拦 `--lobe-*` 的 `!important` 覆盖；`LOBE-CREATE-STYLES` / `LOBE-ANT-CLASS` / `LOBE-FONT-FAMILY` / `LOBE-REIMPLEMENT-ATOM` 等提示改为现行写法。`check-detail` 的标签判断改认 `Form.Field`。fixtures 全部改为 `@lobehub/ui` 导入。LRN-20261016-01。
 
 ## 5.2.0 — 2026-10-16
@@ -91,7 +217,7 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 安装后两轮自迭代：产品画像 + 组件盘点（minor：新增 I-07..I-09、`project-scan.mjs`；扩展 05-init 与托管块；不改 stage 编号与场景优先级）。
 
 - **05-init 扩展为三步**：① `bootstrap.mjs` 写入 AGENTS.md 托管块；② Round 1 扫描仓库写 `.agents/ux/product.md`（平台 / 产品类型 / 用户 / 核心任务 / 规则适用性）；③ Round 2 扫描项目组件写 `.agents/ux/components.md`（薄包装 / 与 lobe-ui 重复 / 业务组件用法）。**不改应用代码、不跑 build、不记实现细节。**
-- **新增 `scripts/project-scan.mjs`**：只读收集 package.json、框架（Next/Vite/Expo/RN/Electron/Tauri…）、路由与组件目录、README / i18n；`--check` 缺文件 → exit 1，指纹或 skill 版本过期 → WARN。文件头 `<!-- lobe-design-init: version=… fingerprint=… -->` 供幂等与过期检测。
+- **新增 `scripts/project-scan.mjs`**：只读收集 package.json、框架（Next/Vite/Expo/RN/Electron/Tauri…）、路由与组件目录、README /i18n；`--check` 缺文件 → exit 1，指纹或 skill 版本过期 → WARN。文件头 `<!-- lobe-design-init: version=… fingerprint=… -->` 供幂等与过期检测。
 - **新增 I-07 / I-08 / I-09**（`references/init.md`）：产品画像、组件盘点、触发与升级过期；I-02 / I-04 / I-05 / I-06 同步（项目层含 `components.md`；日常先读项目层；skill 目录保持通用，重装不覆盖 `.agents/ux/`）。
 - **bootstrap 托管块**：无 `.agents/ux/` 时提示装完先初始化；有项目层时列出 `product.md` / `components.md` 并写明两轮与「先读再进 stage」；触发表增加「初始化 / 升级后刷新」。`--check` 对项目层缺失 / 过期打 WARN（不单独 FAIL）。
 - **install.sh** 安装成功后提示跑 bootstrap + 对 Agent 说初始化。
@@ -156,7 +282,7 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 
 仓库重整（skill 迁到 `skills/lobe-design/`）+ 修路由漏报。规则语义未变，属 patch。
 
-- **仓库结构**：`skill/` → `skills/lobe-design/`（与 skills 仓库惯例一致，可整目录拷贝 / symlink 安装）。新增根 `README.md`（含各场景 prompt 模板）、`install.sh`、`LICENSE`、`.gitignore`、`.github/workflows/ci.yml`、`.claude-plugin/` 清单、根 `AGENTS.md`（由自身 bootstrap 生成）。
+- **仓库结构**：`skill/` → `skills/lobe-design/`（与 skills 仓库惯例一致，可整目录拷贝 /symlink 安装）。新增根 `README.md`（含各场景 prompt 模板）、`install.sh`、`LICENSE`、`.gitignore`、`.github/workflows/ci.yml`、`.claude-plugin/` 清单、根 `AGENTS.md`（由自身 bootstrap 生成）。
 - **清理**：删除 `temp/`（第三方参考 clone + playbook，786MB）、`.backup/`（已被 git tag `backup/pre-pipeline-refactor-20261014-141721` 完整覆盖：manifest 12/12 逐字核对通过）、12 个 `.verify-*.sh|.out.txt` 临时脚本。bootstrap 的文件系统级验收折进 `tests/run.mjs`，不再依赖外部脚本。
 - **新增路由信号**：会话 / 对话 / 聊天 / 消息流并入 `operate-build`（LobeHub 核心页面类型，此前「做一个会话页」会落到模糊指令）。
 - **新增 `modelSignals`**：模型的口语说法（双钻 / 格式塔 / 尼尔森 / Kano / 峰终 / 福格 / 旅程地图 / 认知负荷）→ 规则 id，由路由器在第 1 步解析。此前模型词挂在 stage 的 `keywords` 上，导致两个问题：`00-brief` 被排除在关注点表外（只归 00 的词永远解析不到）、同一模型挂多个 stage 时命中两次。
@@ -170,11 +296,11 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 六项能力升级（major：新增 stage、新增场景、路由新增归一化层）。
 
 - **经典模型层**：新增 `references/models.md`（M-01..M-08：双钻、格式塔、尼尔森十大启发式、Kano、峰终、福格、旅程地图、认知负荷）。每个模型挂载到具体 stage 并规定必须产出的字段：M-01/M-04 → 00，M-05 → 20，M-01/M-06/M-08 → 40，M-02/M-08 → 50，M-02/C-11 → 60，M-03/M-07 → 70。`ruleOwners` 新增 `M-*`；`check-structure.mjs` 的规则编号正则与白名单同步支持 `M` 命名空间。
-- **组件分层松绑**：`components.md` 新增 C-11「分层边界：原子层取用，组合层自建」（原子层 / 皮肤层 / 组合层 / 领域层四层，附三条自建判据）。C-01 的硬性约束明确限定在**原子层**；C-02 加注为原子层与皮肤层的选型表。新增 lint 规则 `LOBE-REIMPLEMENT-ATOM`（WARN，C-11）：在项目里重写原子层组件时报警——反过来的误用（组合层自建）不报。
-- **初始化流程**：新增 stage `05-init`（项目接入与初始化）与 `references/init.md`（I-01..I-05：探测顺序、AGENTS.md 托管块、自迭代规则、幂等、边界）。新增 `bootstrap` 场景（优先级最高，信号：初始化 / 接入 / agents.md / 项目指南）。新增 `scripts/bootstrap.mjs`：探测 `AGENTS.md` → `CLAUDE.md` → 都没有则建立，把入口与顺序、触发条件、执行纪律、自迭代规则写进托管块；**块外内容一字不改**（只做块级替换），支持 `--check` / `--print` / `--root`。00 新增 `project` brief 模式。
+- **组件分层松绑**：`components.md` 新增 C-11「分层边界：原子层取用，组合层自建」（原子层 / 皮肤层 / 组合层 / 领域层四层，附三条自建判据）。C-01 的硬性约束明确限定在**原子层**；C-02 加注为原子层与皮肤层的选型表。新增 lint 规则 `LOBE-REIMPLEMENT-ATOM`（WARN，C-11）：在项目里重写原子层组件时报警 —— 反过来的误用（组合层自建）不报。
+- **初始化流程**：新增 stage `05-init`（项目接入与初始化）与 `references/init.md`（I-01..I-05：探测顺序、AGENTS.md 托管块、自迭代规则、幂等、边界）。新增 `bootstrap` 场景（优先级最高，信号：初始化 / 接入 /agents.md/ 项目指南）。新增 `scripts/bootstrap.mjs`：探测 `AGENTS.md` → `CLAUDE.md` → 都没有则建立，把入口与顺序、触发条件、执行纪律、自迭代规则写进托管块；**块外内容一字不改**（只做块级替换），支持 `--check` / `--print` / `--root`。00 新增 `project` brief 模式。
 - **抽象指令翻译**：新增 `scripts/intent.mjs` 与 `pipeline.json` 的 `intentSignals`（8 组）。「体验不好 / 丑 / 难用 / 太乱 / 看不清 / 找不到 / 太慢 / 有点土」归一化为**可执行表述 + 要说明的量 + 目标 stage**，并并入关注点参与路由；归一化不了的（「感觉不对」「说不上来」）进入新的 `clarify` 颗粒度，先追问不猜着动手。
 - **refs 渐进式披露**：每份 reference 顶部新增 `refs:meta` 块（`tier` / `scope` / `entries`）。`tier: flat` 整份加载；`tier: index` 只加载 `always` 条目 + 命中本次指令的 `deep` 条目，其余只读标题。新增 `scripts/refs.mjs`（按指令解析每个 stage 的加载条目，`--audit` 审计 tier 与预算）。`check-structure.mjs` 新增 refs-meta 校验（块存在、tier 合法、index 必须有 entries、声明的编号必须真实存在）。`components.md` 48KB，一次任务通常只命中 C-01 + 2–3 条。
-- **消费方回流**：新增 `CONTRIBUTING.md` 与 `scripts/upstream.mjs`。回流判据机械化：`landed` 且带版本 · 层在 `structure/lint/rule`（style 不回流）· `occurrences ≥ 2` · 不含品牌或项目专有名词 · symptom / root_cause / artifacts 齐全。
+- **消费方回流**：新增 `CONTRIBUTING.md` 与 `scripts/upstream.mjs`。回流判据机械化：`landed` 且带版本・层在 `structure/lint/rule`（style 不回流）・`occurrences ≥ 2`・不含品牌或项目专有名词・symptom /root_cause/artifacts 齐全。
 - **路由**：`granularity` 新增 `clarify`；点名规则时只统计能真正解析到 stage 的 id（避免散文里的 `lobe-design` 被当成 lint id）；被点名的是 00 自己的规则时不再把 00 排两遍。
 - 回归：新增 `bad-composite.tsx` / `good-composite.tsx`（C-11 正反例）、refs 披露、bootstrap 幂等（块外内容不变）、intent 归一化与 `clarify` 的用例；`tests/run.mjs` 增加对应小节。
 
@@ -184,7 +310,7 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 
 ## 2.1.2 — 2026-10-14
 
-端到端验收（T-7）修复（patch：不改变任何 lint / detail 规则的通过条件）。
+端到端验收（T-7）修复（patch：不改变任何 lint /detail 规则的通过条件）。
 
 - `check-structure.mjs`：新增 `single-entry-git`，用 `git ls-files` 校验**提交树**中也只有一个 SKILL.md（忽略 temp/、.backup/）；非 git 目录自动跳过（LRN-20261014-08）。
 - 提交 `projects/*` 的删除：此前 5 份按项目复制的 SKILL.md 只在工作区删除，git HEAD 仍是 6 个入口。原内容保留在 git tag `backup/pre-pipeline-refactor-20261014-141721` 和 `.backup/` 归档中。
@@ -219,10 +345,10 @@ React Native 宿主上 5.5.0 的遗留问题（minor：托管块新增精简模�
 - check-detail 新增：`DETAIL-NO-RETRY`、`DETAIL-NO-RESULT-FEEDBACK`、`DETAIL-DANGER-NO-CONFIRM`、`DETAIL-DISABLED-NO-REASON`、`DETAIL-INPUT-NO-LABEL`。
 - 所有脚本提供 `--help`、路径参数校验与统一退出码（0 通过 / 1 FAIL / 2 用法错误）；lint 支持 `--stage` / `--only`，`--rules` 显示 `since` 版本。
 - 新增 `scripts/check-learnings.mjs`：校验结构化经验日志、回写约束 L-01..L-05、规则 ↔ 回归 ↔ 版本一致（V-01..V-03）。
-- learnings/ 改为结构化 ```learning 条目；README 写明选层流程、确定性判定、lint 回写七步与版本化策略。
+- learnings/ 改为结构化 \`\`\`learning 条目；README 写明选层流程、确定性判定、lint 回写七步与版本化策略。
 - references：aesthetics 新增 A-08 视觉密度取数表、A-09 LobeUI 兼容速查，A-02/A-05/A-06 标注 lint；detail-checklist 新增 X-3.6/3.7、X-4.5..4.7、X-7.5 与执行顺序。
-- 真实代码校准（lobehub/src/features，634 个文件有命中）：`LOBE-FIXED-WIDTH` 排除 media query / matchMedia 并只认 px 值；lint 与 detail 跳过 *.test / *.spec / *.stories；脚本改用 exitCode，管道输出 --json 不再被截断（LRN-20261014-07）。
-- 回归：新增 bad-visual / good-visual / detail-good / learnings-bad fixture；tests/run.mjs 增加「无意外 finding」、learnings 闸门与 CLI 契约检查。
+- 真实代码校准（lobehub/src/features，634 个文件有命中）：`LOBE-FIXED-WIDTH` 排除 media query /matchMedia 并只认 px 值；lint 与 detail 跳过 \*.test/ \*.spec/ \*.stories；脚本改用 exitCode，管道输出 --json 不再被截断（LRN-20261014-07）。
+- 回归：新增 bad-visual /good-visual/detail-good/learnings-bad fixture；tests/run.mjs 增加「无意外 finding」、learnings 闸门与 CLI 契约检查。
 
 ## 2.0.0 — 2026-10-14
 

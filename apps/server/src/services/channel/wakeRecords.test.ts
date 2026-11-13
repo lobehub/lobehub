@@ -107,6 +107,44 @@ describe('Channel wake decision rows', () => {
     });
   });
 
+  it('records which woken member led and which followed its reply', async () => {
+    await recordChannelWakeDecisions(
+      {} as never,
+      'chn',
+      input,
+      {
+        memberIds: ['reviewer', 'coder'],
+        reason: 'Selected by the Channel decision model; the others follow its reply',
+        status: 'assigned',
+        wakes: {
+          coder: { afterMemberId: 'reviewer', kind: 'followup', reason: 'routing-deferred' },
+        },
+      },
+      {
+        answers: {
+          coder: { probability: 0.8, type: 'boolean' },
+          reviewer: { probability: 0.95, type: 'boolean' },
+        },
+      },
+      { recipients: ['reviewer', 'coder'], status: 'assigned' },
+    );
+
+    expect(rowFor('reviewer')).toMatchObject({
+      decision: {
+        finalReason: 'routing-selected',
+        metadata: { stateSnapshot: { responder: 'primary' } },
+        outcome: 'wake',
+      },
+    });
+    expect(rowFor('coder')).toMatchObject({
+      decision: {
+        finalReason: 'routing-deferred',
+        metadata: { stateSnapshot: { primaryMemberId: 'reviewer', responder: 'deferred' } },
+        outcome: 'wake',
+      },
+    });
+  });
+
   it('records nothing for fallback routing, and survives a failed write', async () => {
     await recordChannelWakeDecisions(
       {} as never,

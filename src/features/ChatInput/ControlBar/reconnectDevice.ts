@@ -31,6 +31,59 @@ export const MANAGED_DEVICE_WAKE_POLL = { attempts: 40, intervalMs: 3000 };
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Poll the device list until `deviceId` is online. A failed refresh counts as
+ * one poll in which the device is not online yet. Resolves `true` once it is
+ * online, `false` when the attempts run out or `shouldStop` answers true.
+ */
+const pollDeviceOnline = async (
+  deviceId: string,
+  poll: { attempts: number; intervalMs: number },
+  {
+    refreshDevices,
+    shouldStop,
+    sleep,
+  }: Pick<ReconnectDeviceDeps, 'refreshDevices'> & {
+    shouldStop?: () => boolean;
+    sleep: (ms: number) => Promise<void>;
+  },
+): Promise<boolean> => {
+  for (let attempt = 0; attempt < poll.attempts; attempt += 1) {
+    if (shouldStop?.()) return false;
+    let nextDevices: DeviceListItem[] | undefined;
+    try {
+      nextDevices = await refreshDevices();
+    } catch (error) {
+      console.warn('Device list refresh failed while waiting for a device:', error);
+    }
+    if (nextDevices?.some((item) => item.deviceId === deviceId && item.online)) return true;
+    await sleep(poll.intervalMs);
+  }
+  return false;
+};
+
+/**
+ * Wake a managed cloud device through the server, then poll the device list
+ * until it is online (`connected`) or the wait runs out (`starting`). A
+ * surface that needs the device, such as the folder picker, calls this
+ * without the user pressing "Wake now". A failed wake request throws.
+ * `shouldStop` lets a closed surface stop polling; it then ends as `starting`.
+ */
+export const wakeManagedDeviceAndWait = async (
+  device: Pick<DeviceListItem, 'deviceId' | 'scope'>,
+  deps: Pick<ReconnectDeviceDeps, 'refreshDevices' | 'sleep' | 'wakeManagedDevice'> & {
+    shouldStop?: () => boolean;
+  },
+): Promise<Extract<ReconnectOutcome, 'connected' | 'starting'>> => {
+  await deps.wakeManagedDevice({ deviceId: device.deviceId, scope: device.scope });
+  const online = await pollDeviceOnline(device.deviceId, MANAGED_DEVICE_WAKE_POLL, {
+    refreshDevices: deps.refreshDevices,
+    shouldStop: deps.shouldStop,
+    sleep: deps.sleep ?? defaultSleep,
+  });
+  return online ? 'connected' : 'starting';
+};
+
+/**
  * Bring a device back online from the device picker, then poll the device
  * list until it is online. The list refresh also refreshes a managed
  * device's phase.
@@ -51,28 +104,17 @@ export const reconnectDevice = async (
   deps: ReconnectDeviceDeps,
 ): Promise<ReconnectOutcome> => {
   const { deviceId } = device;
-  const managed = isManagedCloudDevice(device);
-  const sleep = deps.sleep ?? defaultSleep;
+  if (isManagedCloudDevice(device)) return wakeManagedDeviceAndWait(device, deps);
 
-  if (managed) {
-    await deps.wakeManagedDevice({ deviceId, scope: device.scope });
-  } else if (isCurrentMachine) {
+  if (isCurrentMachine) {
     await deps.connectGateway();
   } else {
     deps.openDeepLink(`lobehub://device/reconnect?deviceId=${encodeURIComponent(deviceId)}`);
   }
 
-  const poll = managed ? MANAGED_DEVICE_WAKE_POLL : DEVICE_RECONNECT_POLL;
-  for (let attempt = 0; attempt < poll.attempts; attempt += 1) {
-    let nextDevices: DeviceListItem[] | undefined;
-    try {
-      nextDevices = await deps.refreshDevices();
-    } catch (error) {
-      console.warn('Device list refresh failed while waiting for a device:', error);
-    }
-    if (nextDevices?.some((item) => item.deviceId === deviceId && item.online)) return 'connected';
-    await sleep(poll.intervalMs);
-  }
-
-  return managed ? 'starting' : 'failed';
+  const online = await pollDeviceOnline(deviceId, DEVICE_RECONNECT_POLL, {
+    refreshDevices: deps.refreshDevices,
+    sleep: deps.sleep ?? defaultSleep,
+  });
+  return online ? 'connected' : 'failed';
 };

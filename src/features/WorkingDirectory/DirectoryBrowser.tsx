@@ -98,11 +98,13 @@ export const DirectoryBrowser = ({
     directory,
     entries,
     error,
+    errorLabel,
     hasMore,
     isLoading,
     isLoadingMore,
     isRefreshing,
     loadMore,
+    loadingLabel,
     notice,
     refresh,
     retry,
@@ -198,7 +200,7 @@ export const DirectoryBrowser = ({
         {isLoading ? (
           <Flexbox align={'center'} flex={1} gap={8} justify={'center'}>
             <Spin size="small" />
-            <Text type={'secondary'}>{t('workingDirectory.foldersLoading')}</Text>
+            <Text type={'secondary'}>{loadingLabel ?? t('workingDirectory.foldersLoading')}</Text>
           </Flexbox>
         ) : (
           <>
@@ -247,7 +249,7 @@ export const DirectoryBrowser = ({
             {error ? (
               <Flexbox align={'center'} gap={8} padding={16} role={'alert'}>
                 <Text style={{ textAlign: 'center', whiteSpace: 'normal' }} type={'secondary'}>
-                  {t(source.listErrorKey ?? 'workingDirectory.foldersLoadFailed')}
+                  {errorLabel ?? t(source.listErrorKey ?? 'workingDirectory.foldersLoadFailed')}
                 </Text>
                 <Button disabled={loading} onClick={() => void retry()}>
                   {tCommon('retry')}

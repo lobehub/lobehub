@@ -1,6 +1,7 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentDocumentIndexFacts,
   AgentGroupConfig,
   BotPlatformContext,
   DiscordContext,
@@ -350,6 +351,13 @@ export interface AgentWorldSnapshot {
  */
 export interface AgentRunBinding {
   /**
+   * SIZE / UPDATED of each progressive agent-document index row, as this run
+   * first saw it. Steps render the index from here so a document the run edits
+   * does not rewrite the prompt prefix behind the index (see
+   * `freezeAgentDocumentIndexFacts`). Grows when a new document shows up.
+   */
+  agentDocumentIndex?: AgentDocumentIndexFacts;
+  /**
    * Device routed for this run. `id` stays absent until a device is bound;
    * `systemInfo` may already carry a working directory for runs whose cwd was
    * resolved from a persisted device row.
@@ -372,8 +380,8 @@ export interface AgentState {
   activatedStepTools?: ActivatedStepTool[];
   // --- Late-bound execution facts ---
   /**
-   * Execution facts bound at a step boundary (device routing). The only
-   * business slot the host may write after creation.
+   * Execution facts bound at a step boundary (device routing, agent-document
+   * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
 

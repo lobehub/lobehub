@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPageSessions } from '../index';
 
-const { allowed, meta, roomOpen, roomOpenLive, row, storedOpen } = vi.hoisted(() => ({
+const { allowed, legacy, meta, roomOpen, roomOpenLive, row, storedOpen } = vi.hoisted(() => ({
   allowed: new Set<string>(),
+  legacy: { value: true },
   meta: { value: null as null | { userId: string; workspaceId: string | null } },
   roomOpen: vi.fn(),
   roomOpenLive: vi.fn(),
@@ -23,7 +24,10 @@ vi.mock('@/server/services/document', () => ({
   },
 }));
 
-vi.mock('../config', () => ({ isPageCollabEnabled: () => true }));
+vi.mock('../config', () => ({
+  isLegacyPageCollabEnabled: () => legacy.value,
+  isPageCollabEnabled: () => true,
+}));
 
 vi.mock('../roomSession', () => ({
   RoomPageSessions: class {
@@ -48,6 +52,7 @@ const writer = {
 describe('createPageSessions', () => {
   beforeEach(() => {
     allowed.clear();
+    legacy.value = true;
     meta.value = { userId: 'u1', workspaceId: 'ws_1' };
     row.value = { fileType: 'custom/document', id: 'doc_1', workspaceId: 'ws_1' };
     roomOpen.mockReset();
@@ -108,5 +113,17 @@ describe('createPageSessions', () => {
     expect(session).toBe(live);
     expect(roomOpen).not.toHaveBeenCalled();
     expect(storedOpen).not.toHaveBeenCalled();
+  });
+
+  it('ignores rooms on a personal page once older clients no longer join them', async () => {
+    legacy.value = false;
+    meta.value = { userId: 'u2', workspaceId: null };
+    row.value = { fileType: 'custom/document', id: 'doc_1', workspaceId: null };
+    roomOpenLive.mockResolvedValue({ commit: vi.fn() });
+
+    await createPageSessions({} as any, { ...writer, workspaceId: undefined }).openSession('doc_1');
+
+    expect(roomOpenLive).not.toHaveBeenCalled();
+    expect(storedOpen).toHaveBeenCalledWith('doc_1', undefined);
   });
 });

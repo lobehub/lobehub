@@ -6,23 +6,24 @@ import {
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
+  accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  cx,
   DropdownMenu,
   Flexbox,
+  Icon,
   Text,
 } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { UserRoundPlusIcon } from 'lucide-react';
+import { ArrowDownUpIcon, Pin, PinOff, UserRoundPlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { AVATAR_SIZE, ConversationRow, ListHeader } from '@/features/MessageList';
@@ -32,13 +33,15 @@ import { NAV_PANEL_CONTACTS_KEY } from '@/features/NavPanel/railRouteKey';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
+import { CONTACT_URL } from './const';
+import ContactAvatar from './ContactAvatar';
+import { CONTACT_SORT_BYS, groupContacts } from './sortContacts';
 import { styles } from './style';
-
-const byTitle = (fallback: string) => (a: SidebarAgentItem, b: SidebarAgentItem) =>
-  agentDisplayName(a, fallback).localeCompare(agentDisplayName(b, fallback), 'zh-Hans-CN');
 
 const useActiveRouteId = () => {
   const { pathname } = useActiveLocation();
@@ -46,41 +49,35 @@ const useActiveRouteId = () => {
   const segments = pathname.split('/').filter(Boolean);
   const [root, id] = slug && segments[0] === slug ? segments.slice(1) : segments;
 
-  return root === 'agent' || root === 'group' ? id : undefined;
+  return root === 'agents' || root === 'agent' || root === 'group' ? id : undefined;
 };
 
 const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, item }) => {
   const { t } = useTranslation('chat');
-  const isGroup = item.type === 'group';
-  const title = isGroup
-    ? item.title || t('untitledAgent')
-    : agentDisplayName(item, t('untitledAgent'));
-  const customAvatar = typeof item.avatar === 'string' ? item.avatar : undefined;
+  const { t: tCommon } = useTranslation('common');
+  const [pinAgent, pinAgentGroup] = useHomeStore((s) => [s.pinAgent, s.pinAgentGroup]);
+  const pinned = !!item.pinned;
+  const title =
+    item.type === 'group'
+      ? item.title || t('untitledAgent')
+      : agentDisplayName(item, t('untitledAgent'));
 
   return (
     <ConversationRow
       singleLine
       active={active}
+      avatar={<ContactAvatar item={item} name={title} size={AVATAR_SIZE} />}
       title={title}
-      url={isGroup ? `/group/${item.id}/profile` : `/agent/${item.id}/profile`}
-      avatar={
-        isGroup ? (
-          <AgentGroupAvatar
-            avatar={customAvatar}
-            backgroundColor={item.backgroundColor || undefined}
-            memberAvatars={Array.isArray(item.avatar) ? item.avatar : []}
-            size={AVATAR_SIZE}
-          />
-        ) : (
-          <AgentAvatar
-            agentId={item.id}
-            avatar={customAvatar}
-            background={item.backgroundColor || undefined}
-            name={title}
-            size={AVATAR_SIZE}
-          />
-        )
-      }
+      url={CONTACT_URL(item.id)}
+      contextMenuItems={() => [
+        {
+          icon: <Icon icon={pinned ? PinOff : Pin} />,
+          key: 'pin',
+          label: tCommon(pinned ? 'pinOff' : 'pin'),
+          onClick: () =>
+            item.type === 'group' ? pinAgentGroup(item.id, !pinned) : pinAgent(item.id, !pinned),
+        },
+      ]}
     />
   );
 });
@@ -94,15 +91,26 @@ const Body = memo(() => {
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const activeRouteId = useActiveRouteId();
+  const sortBy = useGlobalStore(systemStatusSelectors.contactListSortBy);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const { agents, groups } = useMemo(() => {
-    const unique = [...new Map(items.map((item) => [item.id, item])).values()];
-    const sort = byTitle(tChat('untitledAgent'));
-    return {
-      agents: unique.filter((item) => item.type !== 'group').sort(sort),
-      groups: unique.filter((item) => item.type === 'group').sort(sort),
-    };
-  }, [items, tChat]);
+  const { agents, groups, pinned } = useMemo(
+    () =>
+      groupContacts(
+        [...new Map(items.map((item) => [item.id, item])).values()],
+        sortBy,
+        tChat('untitledAgent'),
+      ),
+    [items, sortBy, tChat],
+  );
+
+  const sortMenuItems = CONTACT_SORT_BYS.map((by) => ({
+    checked: sortBy === by,
+    key: by,
+    label: t(`contacts.sort.${by}`),
+    onCheckedChange: () => updateSystemStatus({ contactListSortBy: by }),
+    type: 'checkbox' as const,
+  }));
 
   if (!isInit && items.length === 0)
     return error ? (
@@ -112,7 +120,9 @@ const Body = memo(() => {
     );
 
   const sections = [
-    // Groups first: there are few, and they would sink below every agent.
+    // Pinned contacts lead, like the Messages list; the section is left out until one is pinned.
+    ...(pinned.length > 0 ? [{ items: pinned, key: 'pinned', title: t('contacts.pinned') }] : []),
+    // Groups next: there are few, and they would sink below every agent.
     { items: groups, key: 'groups', title: t('contacts.groups') },
     { items: agents, key: 'agents', title: t('navPanel.agent') },
   ];
@@ -122,7 +132,8 @@ const Body = memo(() => {
   return (
     <Flexbox paddingBlock={'4px 12px'} paddingInline={4}>
       <AccordionRoot
-        defaultValue={sections.map((section) => section.key)}
+        // Listed up front so a section that appears later, like the first pin, opens expanded.
+        defaultValue={['pinned', 'groups', 'agents']}
         indicatorPlacement={'inline'}
         style={{ gap: 8 }}
       >
@@ -139,6 +150,24 @@ const Body = memo(() => {
                   </Text>
                 </Flexbox>
               </AccordionTrigger>
+              {/* One order for both sections; the hover action sits where the home sidebar keeps its section actions. */}
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={cx(
+                  'accordion-action',
+                  accordionStyles.action,
+                  accordionStyles.actionBorderless,
+                )}
+              >
+                <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
+                  <ActionIcon
+                    icon={ArrowDownUpIcon}
+                    size={'small'}
+                    title={t('contacts.sort.tooltip')}
+                  />
+                </DropdownMenu>
+              </Flexbox>
             </AccordionHeader>
             <AccordionPanel>
               <Flexbox gap={1} paddingBlock={1} paddingInline={2}>
@@ -187,8 +216,9 @@ const Header = memo(() => {
 Header.displayName = 'ContactListHeader';
 
 /**
- * Contacts tab list column: every agent and group, alphabetically. A row opens
- * the profile (`/agent/:id/profile`), which is the agent's edit surface.
+ * Contacts tab list column: every agent and group, by name or most recently updated. A row opens
+ * the contact card (`/agents/:id`) and keeps the list in place; the card is
+ * where the user starts a chat or goes on to edit the profile.
  */
 const ContactListPortal = () => (
   <NavPanelPortal navKey={NAV_PANEL_CONTACTS_KEY}>

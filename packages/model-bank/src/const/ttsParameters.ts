@@ -172,3 +172,194 @@ export const minimaxSpeech26Schema = createMiniMaxTTSSchema([
 ]);
 
 export const minimaxSpeech02Schema = createMiniMaxTTSSchema(MINIMAX_BASE_EMOTIONS);
+
+/**
+ * ElevenLabs voices that every account keeps using after the legacy Default voices
+ * (Rachel, George, Sarah, ...) expire on 2026-12-31. Each entry is the official
+ * replacement for one Default voice; `gender` follows the voice it replaces. They are
+ * Voice Library voices, so free-tier keys cannot call them through the API.
+ * ElevenLabs voices speak every language the selected model supports.
+ * @see https://elevenlabs.io/docs/help-center/product/voices/my-voices/what-are-default-voices
+ */
+export const elevenlabsTTSVoices: TTSVoice[] = [
+  /**
+   * Default voice: a legacy Default (premade) voice, so free-tier keys can call it
+   * through the API, unlike the Voice Library replacements below. ElevenLabs expires the
+   * Default voices on 2026-12-31; switch the default to a replacement by then.
+   */
+  {
+    description: 'Laid-back, casual, resonant',
+    displayName: 'Roger',
+    gender: 'male',
+    id: 'CwhRBWXzGAHq8TQ4Fs17',
+    language: 'multilingual',
+  },
+  {
+    description: 'Warm, grounded storyteller',
+    displayName: 'Darian',
+    gender: 'male',
+    id: 'gOupLcAkjEnguROwi4oS',
+    language: 'multilingual',
+  },
+  {
+    description: 'Warm, soft guide',
+    displayName: 'Talia',
+    gender: 'female',
+    id: 'OZ0L6eISlOejga3XjDFt',
+    language: 'multilingual',
+  },
+  {
+    description: 'Crisp professional narrator',
+    displayName: 'Elara',
+    gender: 'female',
+    id: 'WQP7cQUF5aAS6Axh5yaa',
+    language: 'multilingual',
+  },
+  {
+    description: 'Dry, calm Australian',
+    displayName: 'Baxter',
+    gender: 'male',
+    id: 'jSuBIjxMKhqIfb0wCK1F',
+    language: 'multilingual',
+  },
+  {
+    description: 'Crisp British baritone',
+    displayName: 'Eldrin',
+    gender: 'male',
+    id: '6WwXjDDEMyNmFG95zycZ',
+    language: 'multilingual',
+  },
+  {
+    description: 'Husky trickster',
+    displayName: 'Callum',
+    gender: 'male',
+    id: 'fs2OqxduwXgp9foh2xjK',
+    language: 'multilingual',
+  },
+  {
+    description: 'Upbeat modern narrator',
+    displayName: 'Elowen',
+    gender: 'neutral',
+    id: 'dvbL7qkNGZY1IqPGZAjM',
+    language: 'multilingual',
+  },
+  {
+    description: 'Amateur warrior',
+    displayName: 'Kaelen',
+    gender: 'male',
+    id: '10NkTYmU7tSz3Kkl3Lex',
+    language: 'multilingual',
+  },
+  {
+    description: 'Bright and informative',
+    displayName: 'Lawrence',
+    gender: 'male',
+    id: 'ktkP7Nsj67dw2zcplQYt',
+    language: 'multilingual',
+  },
+  {
+    description: 'Polished global anchor',
+    displayName: 'Alicia',
+    gender: 'female',
+    id: 'BFd5oBc2DDna33pSi4Gf',
+    language: 'multilingual',
+  },
+  {
+    description: 'Friendly, casual neighbor',
+    displayName: 'Maisie',
+    gender: 'female',
+    id: 'QtY3JBOUKEB5xzrRfOKc',
+    language: 'multilingual',
+  },
+  {
+    description: 'Effortless and cool',
+    displayName: 'Warren',
+    gender: 'male',
+    id: '7QN34D2r3hCNwbOYIeK0',
+    language: 'multilingual',
+  },
+  {
+    description: 'Upbeat and natural',
+    displayName: 'Jade',
+    gender: 'female',
+    id: 'g7LVvkPWALzPxOQbF6OE',
+    language: 'multilingual',
+  },
+  {
+    description: 'Natural and helpful',
+    displayName: 'Eddie',
+    gender: 'male',
+    id: 'l7kNoIfnJKPg7779LI2t',
+    language: 'multilingual',
+  },
+  {
+    description: 'Trusted guide',
+    displayName: 'Caleb',
+    gender: 'male',
+    id: 'AaOhDHYJ1XLZk74lXhdE',
+    language: 'multilingual',
+  },
+  {
+    description: 'Midnight storyteller',
+    displayName: 'Sawyer',
+    gender: 'male',
+    id: '8dEUmyPMdDdK91vboYih',
+    language: 'multilingual',
+  },
+  {
+    description: 'Articulate anchor',
+    displayName: 'Finley',
+    gender: 'male',
+    id: 'fnYMz3F5gMEDGMWcH1ex',
+    language: 'multilingual',
+  },
+  {
+    description: 'Atmospheric storyteller',
+    displayName: 'Florence',
+    gender: 'female',
+    id: '22N9cF8z0o7y23njdyaY',
+    language: 'multilingual',
+  },
+  {
+    description: 'Seasoned mentor',
+    displayName: 'Wyatt',
+    gender: 'male',
+    id: 'FrS6cKLB1wg4WYgPa9GW',
+    language: 'multilingual',
+  },
+];
+
+/**
+ * `output_format` covers mp3, opus, pcm and wav (plus telephony ulaw/alaw); there is no
+ * aac or flac output.
+ * @see https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+ */
+const ELEVENLABS_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
+  (format) => format !== 'aac' && format !== 'flac',
+);
+
+/**
+ * Roger, a Default (premade) voice: callable on every plan for accounts created before
+ * March 2026, until ElevenLabs retires the Default voices on 2026-12-31. The runtime falls
+ * back to a voice from the account when this one is unavailable.
+ */
+export const ELEVENLABS_DEFAULT_VOICE_ID = 'CwhRBWXzGAHq8TQ4Fs17';
+
+/** Voice ids in the built-in ElevenLabs catalog. */
+export const ELEVENLABS_VOICE_IDS: ReadonlySet<string> = new Set(
+  elevenlabsTTSVoices.map((voice) => voice.id),
+);
+const ELEVENLABS_DEFAULT_VOICE = ELEVENLABS_DEFAULT_VOICE_ID;
+
+/** Multilingual v2 and the Flash / Turbo family take `voice_settings.speed` from 0.7 to 1.2. */
+export const elevenlabsTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: ELEVENLABS_TTS_FORMATS },
+  speed: { default: 1, max: 1.2, min: 0.7, step: 0.05 },
+  voice: { default: ELEVENLABS_DEFAULT_VOICE },
+};
+
+/** Eleven v3 and v4 have no speed setting. */
+export const elevenlabsExpressiveTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: ELEVENLABS_TTS_FORMATS },
+  voice: { default: ELEVENLABS_DEFAULT_VOICE },
+};

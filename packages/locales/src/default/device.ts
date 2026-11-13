@@ -14,6 +14,9 @@ export default {
   'workingDirectory.foldersLoadFailed':
     'Could not load folders. Check the device connection and folder permissions, then retry or enter a path manually.',
   'workingDirectory.foldersLoading': 'Loading folders…',
+  'workingDirectory.deviceWaking': 'Waking the cloud device… This can take up to two minutes.',
+  'workingDirectory.deviceWakeFailed': 'Could not wake this cloud device. Try again.',
+  'workingDirectory.deviceWakeSlow': 'The cloud device is still starting. Try again in a moment.',
   'workingDirectory.home': 'Home folder',
   'workingDirectory.loadMoreFolders': 'Load more folders',
   'workingDirectory.newFolder': 'New folder',

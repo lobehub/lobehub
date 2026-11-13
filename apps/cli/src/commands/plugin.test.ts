@@ -10,8 +10,6 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       getMcpList: { query: vi.fn() },
     },
     plugin: {
-      createOrInstallPlugin: { mutate: vi.fn() },
-      createPlugin: { mutate: vi.fn() },
       getPlugins: { query: vi.fn() },
       removePlugin: { mutate: vi.fn() },
       updatePlugin: { mutate: vi.fn() },
@@ -61,7 +59,9 @@ describe('legacy-plugin command', () => {
 
       expect(command).toBeDefined();
       expect(command!.aliases()).toEqual(['plugin']);
-      expect(command!.description()).toBe('Manage legacy 1.0 plugins (user_installed_plugins)');
+      expect(command!.description()).toBe(
+        'Manage legacy 1.0 plugins (user_installed_plugins). Add new MCP servers with lh connector add',
+      );
       expect(program.commands.some((c) => c.name() === 'plugin')).toBe(false);
     });
 
@@ -73,14 +73,7 @@ describe('legacy-plugin command', () => {
           .commands.map((c) => c.name());
 
       expect(subcommands('plugin')).toEqual(subcommands('legacy-plugin'));
-      expect(subcommands('legacy-plugin')).toEqual([
-        'list',
-        'search',
-        'create',
-        'install',
-        'uninstall',
-        'update',
-      ]);
+      expect(subcommands('legacy-plugin')).toEqual(['list', 'search', 'uninstall', 'update']);
 
       mockTrpcClient.plugin.getPlugins.query.mockResolvedValue([
         { id: 'p1', identifier: 'search', type: 'plugin' },
@@ -172,92 +165,6 @@ describe('legacy-plugin command', () => {
         q: undefined,
       });
       expect(consoleSpy).toHaveBeenCalledWith('No plugins found.');
-    });
-  });
-
-  describe('create', () => {
-    it('should create a plugin', async () => {
-      mockTrpcClient.plugin.createPlugin.mutate.mockResolvedValue({ identifier: 'my-plugin' });
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'create',
-        '-i',
-        'my-plugin',
-        '--manifest',
-        '{"name":"test"}',
-      ]);
-
-      expect(mockTrpcClient.plugin.createPlugin.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          identifier: 'my-plugin',
-          manifest: { name: 'test' },
-          type: 'plugin',
-        }),
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created plugin'));
-    });
-
-    it('should reject invalid manifest JSON', async () => {
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'create',
-        '-i',
-        'my-plugin',
-        '--manifest',
-        'not-json',
-      ]);
-
-      expect(log.error).toHaveBeenCalledWith('Invalid manifest JSON.');
-      expect(exitSpy).toHaveBeenCalledWith(1);
-    });
-  });
-
-  describe('install', () => {
-    it('should install a plugin', async () => {
-      mockTrpcClient.plugin.createOrInstallPlugin.mutate.mockResolvedValue({});
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'install',
-        '-i',
-        'my-plugin',
-        '--manifest',
-        '{"name":"test"}',
-      ]);
-
-      expect(mockTrpcClient.plugin.createOrInstallPlugin.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          identifier: 'my-plugin',
-          manifest: { name: 'test' },
-        }),
-      );
-    });
-
-    it('should reject invalid manifest JSON', async () => {
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'legacy-plugin',
-        'install',
-        '-i',
-        'my-plugin',
-        '--manifest',
-        'not-json',
-      ]);
-
-      expect(log.error).toHaveBeenCalledWith('Invalid manifest JSON.');
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

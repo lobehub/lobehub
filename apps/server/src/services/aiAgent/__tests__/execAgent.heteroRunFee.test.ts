@@ -1,3 +1,5 @@
+import { ChatErrorType } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -318,5 +320,26 @@ describe('AiAgentService.execAgent - external agent run fee', () => {
 
     const [, , operationId] = fees.rebindAgentRunFee.mock.calls[0];
     expect(fees.releaseAgentRunFee).toHaveBeenCalledWith('test-user-id', operationId);
+  });
+
+  it('refuses a run the user cannot pay the fee for before writing anything', async () => {
+    fees.holdAgentRunFee.mockRejectedValue(
+      new TRPCError({
+        code: 'PAYMENT_REQUIRED',
+        message: ChatErrorType.InsufficientBudgetForAgentRunFee,
+      }),
+    );
+
+    await expect(
+      service.execAgent({ agentId: 'agent-1', prompt: 'Fix the bug' }),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_REQUIRED',
+      message: ChatErrorType.InsufficientBudgetForAgentRunFee,
+    });
+
+    expect(mockMessageCreate).not.toHaveBeenCalled();
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(fees.rebindAgentRunFee).not.toHaveBeenCalled();
+    expect(fees.releaseAgentRunFee).not.toHaveBeenCalled();
   });
 });

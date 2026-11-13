@@ -270,6 +270,14 @@ export interface AgentRunRequestMessage {
     candidates: Array<{ externalAccountId: string; name?: string }>;
     mode: 'balanced' | 'pinned';
   };
+  /**
+   * Entrypoint name the agent asked Claude Code to report instead of its
+   * headless default. The device validates it and sets it on the spawned CLI.
+   * An empty string means the agent turned the setting off, so the device
+   * clears an entrypoint it inherited. Optional — omitted when the agent never
+   * set it; an older device ignores it.
+   */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /**
    * Image attachments from the user message, as URLs the device can fetch

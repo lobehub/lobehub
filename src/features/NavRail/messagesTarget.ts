@@ -11,8 +11,8 @@ const scopedSegments = (pathname: string, activeWorkspaceSlug: string | null) =>
 
 /**
  * The Channel the Messages tab returns to after `pathname` is visited. Opening a Channel makes it
- * the active one; going back home clears it; any other page keeps the previous one. A project's
- * Channel belongs to the Projects tab, so it is ignored.
+ * the active one; going back home clears it; any other page keeps the previous one. A project
+ * Channel opened from the Projects tab (`/project/:id/channels/:id`) is not tracked.
  */
 export const nextActiveChannelId = (
   previous: string | undefined,

@@ -25,10 +25,14 @@ export interface DirectoryListing {
   directory?: { parentPath?: string | null; path: string; roots?: string[] };
   entries: DirectoryEntry[];
   error?: unknown;
+  /** In place of the generic failure text, when the source knows why it failed. */
+  errorLabel?: string;
   hasMore: boolean;
   isLoading: boolean;
   isLoadingMore: boolean;
   isRefreshing: boolean;
+  /** In place of the generic loading text, e.g. while a cloud device wakes. */
+  loadingLabel?: string;
   loadMore: () => void;
   /** Above the entries: something about this folder worth saying before its contents. */
   notice?: ReactNode;

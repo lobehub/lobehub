@@ -57,3 +57,43 @@ describe('OIDC default clients', () => {
     );
   });
 });
+
+describe('distribution OIDC clients', () => {
+  const nativeClient = {
+    application_type: 'native' as const,
+    client_id: 'native-app',
+    grant_types: ['authorization_code', 'refresh_token'],
+    redirect_uris: ['http://127.0.0.1/callback'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  };
+
+  const loadClients = async (clients: BusinessConst.BusinessOidcClientMetadata[]) => {
+    vi.resetModules();
+    vi.doMock('@lobechat/business-const', async (importOriginal) => ({
+      ...(await importOriginal<typeof BusinessConst>()),
+      BUSINESS_OIDC_CLIENTS: clients,
+    }));
+    await import('@lobechat/business-const');
+    return import('./config');
+  };
+
+  it('registers nothing extra by default', async () => {
+    const { defaultClients } = await import('./config');
+
+    expect(defaultClients.map((client) => client.client_id)).not.toContain('native-app');
+  });
+
+  it('appends the business slot clients after the built-in ones', async () => {
+    const { defaultClients } = await loadClients([nativeClient]);
+
+    expect(defaultClients.at(-1)).toEqual(nativeClient);
+    expect(defaultClients[0].client_id).toBe('lobehub-desktop');
+  });
+
+  it('refuses a business client that reuses a built-in client id', async () => {
+    await expect(loadClients([{ ...nativeClient, client_id: 'lobehub-desktop' }])).rejects.toThrow(
+      'OIDC client "lobehub-desktop" is registered more than once',
+    );
+  });
+});

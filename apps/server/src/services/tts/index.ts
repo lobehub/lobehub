@@ -1,8 +1,11 @@
+import type { ModelRuntime } from '@lobechat/model-runtime';
+import { countTextToSpeechCharacters } from '@lobechat/model-runtime';
 import type { ModelUsage } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import type { AITTSModelCard, TTSAudioFormat } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST, TTS_AUDIO_MIME_TYPES, validateTTSParams } from 'model-bank';
 import { ModelProvider } from 'model-bank/modelProvider';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -14,6 +17,16 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
  * has already billed the synthesis, so only compressed formats are offered.
  */
 export const INLINE_TTS_AUDIO_FORMATS = ['mp3', 'opus', 'aac'] as const;
+
+/**
+ * Input cap for providers whose models accept far more text than fits in one inline
+ * response. Audio comes back in a single base64 body, so a long ElevenLabs Flash request
+ * (up to 40,000 characters) would exceed the serverless response limit only after the
+ * synthesis was billed. Matches the OpenAPI `/audio/speech` input limit.
+ */
+export const INLINE_TTS_MAX_INPUT_CHARACTERS = 4096;
+
+const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([ModelProvider.ElevenLabs]);
 
 export interface TTSSynthesizeParams {
   emotion?: string;
@@ -75,15 +88,45 @@ export class TTSProviderError extends Error {
 const isRecord = (value: unknown): value is Record<string, any> =>
   typeof value === 'object' && value !== null;
 
+const providerDisplayName = (provider: string): string =>
+  DEFAULT_MODEL_PROVIDER_LIST.find((card) => card.id === provider)?.name ?? provider;
+
+/**
+ * The app's own `InvalidProviderAPIKey` copy, plus where to set the key. Server code renders
+ * source English, so this is the `modelRuntime.InvalidProviderAPIKey` source string (shown in
+ * chat and the provider checker); a test keeps the two in sync.
+ */
+export const invalidProviderAPIKeyMessage = (provider: string, upstreamMessage?: string) => {
+  const name = providerDisplayName(provider);
+  const copy = `${name} API Key is incorrect or empty, please check your ${name} API Key and try again`;
+  const hint = `Set it in Settings → AI Providers → ${name}, or in the server environment.`;
+
+  return upstreamMessage ? `${copy} (${upstreamMessage}). ${hint}` : `${copy}. ${hint}`;
+};
+
 const toProviderError = (error: unknown, provider: string): TTSProviderError => {
   if (!isRecord(error)) return new TTSProviderError(String(error), undefined, error);
 
   const errorType = typeof error.errorType === 'string' ? error.errorType : undefined;
   const detail = isRecord(error.error) ? error.error : undefined;
-  const message =
+  const upstreamMessage =
     (typeof error.message === 'string' && error.message) ||
     (typeof detail?.message === 'string' && detail.message) ||
     (typeof detail?.base_resp?.status_msg === 'string' && detail.base_resp.status_msg) ||
+    undefined;
+
+  // A missing or rejected key reads the same as everywhere else in the app, so the
+  // caller knows to configure the key rather than retry.
+  if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+    return new TTSProviderError(
+      invalidProviderAPIKeyMessage(provider, upstreamMessage),
+      errorType,
+      error,
+    );
+  }
+
+  const message =
+    upstreamMessage ||
     (errorType ? `${provider} text-to-speech failed: ${errorType}` : '') ||
     `${provider} text-to-speech failed`;
 
@@ -94,11 +137,14 @@ const toProviderError = (error: unknown, provider: string): TTSProviderError => 
  * Built-in card of a TTS model: the provider's own card first, then any provider
  * serving the same model id (aggregators reuse upstream cards).
  */
-export const findTTSModelCard = (provider: string, model: string): AITTSModelCard | undefined => {
+export const findTTSModelCard = (
+  provider: string,
+  model: string,
+): (AITTSModelCard & { providerId?: string }) | undefined => {
   const cards = LOBE_DEFAULT_MODEL_LIST.filter((card) => card.type === 'tts' && card.id === model);
 
   return (cards.find((card) => card.providerId === provider) ?? cards[0]) as
-    AITTSModelCard | undefined;
+    (AITTSModelCard & { providerId?: string }) | undefined;
 };
 
 const KNOWN_PROVIDERS = new Set<string>(Object.values(ModelProvider));
@@ -138,7 +184,21 @@ export class TTSService {
 
   async synthesize(request: TTSSynthesizeRequest): Promise<TTSSynthesizeResult> {
     const { input, model, provider } = request;
+
     const card = findTTSModelCard(provider, model);
+
+    // Capped by the model's vendor, so the LobeHub provider routing an ElevenLabs model is
+    // capped too. Counted in Unicode characters, as billing does: an emoji is one, not two.
+    const capped =
+      INLINE_INPUT_CAPPED_PROVIDERS.has(provider) ||
+      (!!card?.providerId && INLINE_INPUT_CAPPED_PROVIDERS.has(card.providerId));
+    const inputCharacters = capped ? countTextToSpeechCharacters(input) : 0;
+    if (inputCharacters > INLINE_TTS_MAX_INPUT_CHARACTERS) {
+      throw new TTSRequestError(
+        `input is ${inputCharacters} characters; ${model} speech is limited to ${INLINE_TTS_MAX_INPUT_CHARACTERS} characters per request. Split the text into shorter requests.`,
+        'invalid_params',
+      );
+    }
     const params: TTSSynthesizeParams = { ...request.params };
     // Older CLIs always send the deprecated top-level `speed`; drop it for models that
     // declare no speed instead of failing validation they never opted into.
@@ -159,12 +219,23 @@ export class TTSService {
 
     const voice = request.voice ?? card?.parameters?.voice?.default ?? 'alloy';
 
-    const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
+    let runtime: ModelRuntime;
+    try {
+      runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
+    } catch (error) {
+      // Runtimes reject a missing key at construction with a plain
+      // `{ errorType: 'InvalidProviderAPIKey' }` payload; surface it as a readable provider
+      // error instead of a bare 500. Anything else (e.g. a DB failure) propagates as is.
+      if (isRecord(error) && typeof error.errorType === 'string' && !(error instanceof Error)) {
+        throw toProviderError(error, provider);
+      }
+      throw error;
+    }
 
     let result: Awaited<ReturnType<typeof runtime.textToSpeech>>;
     try {
       result = await runtime.textToSpeech(
-        { input, model, params, voice },
+        { input, model, params, voice, voiceIsDefault: request.voice === undefined },
         { metadata: { trigger: RequestTrigger.Tts }, user: this.userId },
       );
     } catch (error) {

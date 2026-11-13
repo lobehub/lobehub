@@ -1,6 +1,6 @@
 'use client';
 
-import { Segmented } from '@lobehub/ui';
+import { Select } from '@lobehub/ui';
 import { type CSSProperties, memo } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -46,15 +46,19 @@ const MobileAgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId })
   // A lone segment is a label, not a switcher.
   if (options.length < 2) return null;
 
+  // A strip of segments cannot hold this many pages in the 44px header, so the current page is a
+  // compact menu that lists the rest.
   return (
-    <Segmented
+    <Select
       options={options}
       size={'small'}
+      style={{ maxWidth: 180, minWidth: 120 }}
       value={active}
-      // `Segmented` only fires on a *change*, so the active segment is inert —
-      // notably on `/channel/:platform`, where Channels stays selected. Going
-      // back to the platform list is the breadcrumb's job, not this switcher's.
-      onChange={(value) => navigate(buildAgentProfileTabPath(agentId, value as AgentProfileTab))}
+      // Picking the page already shown does nothing: on `/channel/:platform` Channels stays
+      // selected, and going back to the platform list is the breadcrumb's job.
+      onChange={(value) => {
+        if (value !== active) navigate(buildAgentProfileTabPath(agentId, value as AgentProfileTab));
+      }}
     />
   );
 });
@@ -62,8 +66,8 @@ const MobileAgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId })
 MobileAgentProfileTabs.displayName = 'MobileAgentProfileTabs';
 
 /**
- * Segmented switcher for the agent profile group — Profile / Channels /
- * Statistics / Share — on mobile, which has no room for a sidebar. Desktop
+ * Page switcher for the agent profile group — Profile, Instruction, Engine, Channels,
+ * Statistics, … — on mobile, which has no room for a sidebar. Desktop
  * switches them from the sidebar (`AgentSidebar/ProfileNav`). The surfaces are
  * separate routes, so a segment writes the URL rather than holding local state:
  * deep links and back/forward keep working.

@@ -1,9 +1,12 @@
-import { Center, Checkbox, cssVar, Flexbox } from '@lobehub/ui';
+import { Center, Checkbox, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useGlobalStore } from '@/store/global';
 import type { FileListItem } from '@/types/files';
+import { SortType } from '@/types/files';
 
 import {
   useExplorerSelectionActions,
@@ -37,6 +40,11 @@ const ListViewHeader = ({
 }: ListViewHeaderProps) => {
   const { t } = useTranslation(['components', 'file']);
   const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
+  const sorter = useResourceManagerStore((s) => s.sorter);
+  const sortType = useResourceManagerStore((s) => s.sortType);
+  const setSorter = useResourceManagerStore((s) => s.setSorter);
+  const setSortType = useResourceManagerStore((s) => s.setSortType);
+
   const { handleSelectAll, handleSelectAllResources } = useExplorerSelectionActions(data);
   const {
     allSelected,
@@ -73,6 +81,40 @@ const ListViewHeader = ({
     [handleSelectAll, handleSelectAllResources, hasMore],
   );
 
+  const handleSortClick = useCallback(
+    (field: 'name' | 'createdAt' | 'size') => {
+      if (sorter === field) {
+        setSortType(sortType === SortType.Asc ? SortType.Desc : SortType.Asc);
+        return;
+      }
+
+      setSorter(field);
+      // Names read naturally A-Z; times and sizes are most useful newest/largest first.
+      setSortType(field === 'name' ? SortType.Asc : SortType.Desc);
+    },
+    [setSorter, setSortType, sorter, sortType],
+  );
+  const handleSortKeyDown = useCallback(
+    (event: React.KeyboardEvent, field: 'name' | 'createdAt' | 'size') => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+
+      event.preventDefault();
+      handleSortClick(field);
+    },
+    [handleSortClick],
+  );
+  const renderSortIndicator = (field: 'createdAt' | 'name' | 'size') =>
+    sorter === field ? (
+      <Icon
+        color={cssVar.colorPrimary}
+        icon={sortType === SortType.Asc ? ArrowUp : ArrowDown}
+        size={12}
+      />
+    ) : null;
+  // The name column doubles as the multi-select summary; that text is not a
+  // sort control, so sorting is only wired while the column shows its label.
+  const showsSelectionText = selectedCount > 0 || selectAllState === 'all';
+
   return (
     <>
       <Flexbox
@@ -95,8 +137,10 @@ const ListViewHeader = ({
           />
         </Center>
         <Flexbox
-          className={styles.headerItem}
+          className={cx(styles.headerItem, !showsSelectionText && styles.headerItemSortable)}
           justify={'center'}
+          role={showsSelectionText ? undefined : 'button'}
+          tabIndex={showsSelectionText ? undefined : 0}
           style={{
             flexShrink: 0,
             maxWidth: columnWidths.name,
@@ -106,13 +150,20 @@ const ListViewHeader = ({
             position: 'relative',
             width: columnWidths.name,
           }}
+          onClick={showsSelectionText ? undefined : () => handleSortClick('name')}
+          onKeyDown={showsSelectionText ? undefined : (event) => handleSortKeyDown(event, 'name')}
         >
-          {selectedCount > 0 || selectAllState === 'all'
-            ? t(selectedLabelKey, {
-                count: selectedCount,
-                ns: 'components',
-              })
-            : t('FileManager.title.title')}
+          {showsSelectionText ? (
+            t(selectedLabelKey, {
+              count: selectedCount,
+              ns: 'components',
+            })
+          ) : (
+            <Flexbox horizontal align={'center'} gap={4}>
+              {t('FileManager.title.title')}
+              {renderSortIndicator('name')}
+            </Flexbox>
+          )}
           <ColumnResizeHandle
             column="name"
             currentWidth={columnWidths.name}
@@ -122,12 +173,19 @@ const ListViewHeader = ({
           />
         </Flexbox>
         <Flexbox
-          className={styles.headerItem}
+          className={cx(styles.headerItem, styles.headerItemSortable)}
           justify={'center'}
+          role={'button'}
           style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+          tabIndex={0}
           width={columnWidths.date}
+          onClick={() => handleSortClick('createdAt')}
+          onKeyDown={(event) => handleSortKeyDown(event, 'createdAt')}
         >
-          {t('FileManager.title.createdAt')}
+          <Flexbox horizontal align={'center'} gap={4}>
+            {t('FileManager.title.createdAt')}
+            {renderSortIndicator('createdAt')}
+          </Flexbox>
           <ColumnResizeHandle
             column="date"
             currentWidth={columnWidths.date}
@@ -154,12 +212,19 @@ const ListViewHeader = ({
           </Flexbox>
         )}
         <Flexbox
-          className={styles.headerItem}
+          className={cx(styles.headerItem, styles.headerItemSortable)}
           justify={'center'}
+          role={'button'}
           style={{ flexShrink: 0, paddingInlineEnd: 16, position: 'relative' }}
+          tabIndex={0}
           width={columnWidths.size}
+          onClick={() => handleSortClick('size')}
+          onKeyDown={(event) => handleSortKeyDown(event, 'size')}
         >
-          {t('FileManager.title.size')}
+          <Flexbox horizontal align={'center'} gap={4}>
+            {t('FileManager.title.size')}
+            {renderSortIndicator('size')}
+          </Flexbox>
           <ColumnResizeHandle
             column="size"
             currentWidth={columnWidths.size}

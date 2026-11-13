@@ -68,10 +68,27 @@ export class AgentProviderAccountModel {
     return this.gateKeeperPromise;
   }
 
+  /**
+   * The rows this member may see and use: public workspace accounts and their
+   * own private ones. A login does not widen this — the server cannot verify
+   * that a reporting device really holds the provider login, so a reported
+   * login is no proof of access. Sharing a private account is its creator's
+   * call (`setVisibility`). Personal scope ignores visibility.
+   */
   private mine = () =>
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       agentProviderAccounts,
+    );
+
+  /** Every row of the scope regardless of visibility: one real account is one row per workspace. */
+  private scope = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        userId: agentProviderAccounts.userId,
+        workspaceId: agentProviderAccounts.workspaceId,
+      },
     );
 
   create = async (
@@ -104,16 +121,25 @@ export class AgentProviderAccountModel {
    * Insert-or-update by real identity. The provider account UUID is the natural
    * dedupe key, so the same login observed on multiple devices collapses to one
    * row (that is exactly what lets multi-device usage merge).
+   *
+   * Dedupe looks past visibility: a teammate's private row for the same
+   * identity is still that account, and inserting a second one would collide
+   * with the workspace identity index. Finding such a row grants nothing —
+   * knowing an external id is not holding the login — so it is neither updated
+   * nor returned, and `undefined` comes back. A new workspace row starts
+   * `private`: a login reported from a member's machine is theirs until they
+   * publish it.
    */
   upsertByIdentity = async (
     provider: string,
     identity: AccountIdentityInput,
     defaults: Partial<NewAgentProviderAccount> = {},
-  ): Promise<SafeAccount> => {
+  ): Promise<SafeAccount | undefined> => {
     if (identity.externalAccountId) {
       const existing = await this.db.query.agentProviderAccounts.findFirst({
+        columns: { id: true },
         where: and(
-          this.mine(),
+          this.scope(),
           eq(agentProviderAccounts.provider, provider),
           eq(agentProviderAccounts.externalAccountId, identity.externalAccountId),
         ),
@@ -122,13 +148,14 @@ export class AgentProviderAccountModel {
         const [row] = await this.db
           .update(agentProviderAccounts)
           .set({ ...identity, lastValidatedAt: new Date(), updatedAt: new Date() })
-          .where(eq(agentProviderAccounts.id, existing.id))
+          .where(and(eq(agentProviderAccounts.id, existing.id), this.mine()))
           .returning();
-        return stripCredentials(row);
+        return row ? stripCredentials(row) : undefined;
       }
     }
 
     return this.create({
+      ...(this.workspaceId && { visibility: 'private' as const }),
       ...defaults,
       ...identity,
       credentialMode: defaults.credentialMode ?? QuotaCredentialMode.referenced,
@@ -198,11 +225,36 @@ export class AgentProviderAccountModel {
       .where(and(eq(agentProviderAccounts.id, id), this.mine()));
   };
 
-  update = async (id: string, patch: Partial<Omit<NewAgentProviderAccount, 'credentials'>>) =>
+  update = async (
+    id: string,
+    patch: Partial<Omit<NewAgentProviderAccount, 'credentials' | 'visibility'>>,
+  ) =>
     this.db
       .update(agentProviderAccounts)
       .set({ ...patch, updatedAt: new Date() })
       .where(and(eq(agentProviderAccounts.id, id), this.mine()));
+
+  /**
+   * Publish or hide a workspace account. Only its creator decides: another
+   * login holder hiding it would take it away from the rest of the team, and
+   * publishing it would expose someone else's subscription. Returns whether a
+   * row changed.
+   */
+  setVisibility = async (id: string, visibility: 'private' | 'public'): Promise<boolean> => {
+    if (!this.workspaceId) return false;
+    const rows = await this.db
+      .update(agentProviderAccounts)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(agentProviderAccounts.id, id),
+          this.scope(),
+          eq(agentProviderAccounts.userId, this.userId),
+        ),
+      )
+      .returning({ id: agentProviderAccounts.id });
+    return rows.length > 0;
+  };
 
   delete = async (id: string) =>
     this.db.delete(agentProviderAccounts).where(and(eq(agentProviderAccounts.id, id), this.mine()));
