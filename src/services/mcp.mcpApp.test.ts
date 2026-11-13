@@ -50,7 +50,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
       callTool: { mutate: connectorCall },
-      getForEdit: { query: connectorEdit },
+      getForRun: { query: connectorEdit },
       readUiResource: { query: connectorRead },
     },
   },
@@ -327,7 +327,12 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
       mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
     ).resolves.toEqual(view);
 
-    expect(connectorEdit).toHaveBeenCalledWith({ id: 'conn_1' });
+    // The row the server resolves for this conversation, as the tool call did
+    expect(connectorEdit).toHaveBeenCalledWith({
+      agentId: undefined,
+      identifier: 'files',
+      topicId: undefined,
+    });
     expect(deserializeMcpIpcPayload(ipcRead.mock.calls[0][0])).toEqual({
       env: { TOKEN: 'fresh-secret' },
       params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },

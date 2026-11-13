@@ -35,6 +35,7 @@ import {
   callConnectorToolById,
   ConnectorToolCallError,
   readConnectorUiResourceById,
+  resolveConnectorForRun,
 } from '@/server/services/connector/exec';
 import {
   buildAuthorizationUrl,
@@ -56,6 +57,7 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { toConnectorEditDetail } from './_helpers/connectorEditDetail';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -277,14 +279,8 @@ export const connectorRouter = router({
 
   /**
    * Return the connector record with decrypted user-set credentials so the
-   * edit form can pre-fill accurately. Only the connector owner can call this
-   * (enforced by connectorProcedure ownership check).
-   *
-   * Machine-managed secrets are intentionally excluded:
-   * - OAuth access/refresh tokens (type 'oauth2') → stripped, returned as null
-   * - oidcConfig.clientSecret (DCR-registered secret)  → stripped
-   * User-set credentials (bearer token, custom headers) are returned as-is so
-   * the edit form can display them.
+   * edit form can pre-fill accurately (see {@link toConnectorEditDetail} for
+   * what is stripped). Only the connector owner can call this.
    */
   // Member-gated even though it's a query: it returns decrypted credentials
   // for edit prefill, so a creator later downgraded to viewer must not reach it.
@@ -293,19 +289,40 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Edit-read returns decrypted credentials — creator/owner only. Not gated by
-      // the member policy: desktop stdio/local connectors read their config
-      // here at run time, so a restriction must not stop the creator using them.
+      // Edit-read returns decrypted credentials — creator/owner only.
       assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
 
-      const { oidcConfig, credentials, ...rest } = connector;
-      const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-      // OAuth tokens are machine-managed — don't return them; the UI only needs
-      // to know an OAuth flow is configured (reflected via oidcConfig presence).
-      const safeCredentials = credentials?.type === 'oauth2' ? null : credentials;
-
       const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
-      return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig, tools };
+      return toConnectorEditDetail(connector, tools);
+    }),
+
+  /**
+   * The edit-read of the connector a conversation's call runs on, for a desktop
+   * that runs a stdio connector itself. The server resolves the row exactly as
+   * `callTool` does (`connectorRunScope`, then priority), so the desktop runs
+   * the account the server offered the tool from, and a private connector only
+   * in a conversation that may use it — never on the client's guess.
+   */
+  getForRun: connectorWriteProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        identifier: z.string().min(1),
+        /** The conversation the call belongs to; see `callTool`. */
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const [connector] = await resolveConnectorForRun(input, ctx);
+      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      // Creator/owner only, like the edit-read; not gated by the member policy,
+      // which must not stop the creator running their own connector.
+      assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      // A private agent's run may resolve its owner's personal connector, whose
+      // tool rows live in the personal scope.
+      const wsId = ctx.workspaceId ?? undefined;
+      const toolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, { agentRun: true });
+      return toConnectorEditDetail(connector, await toolModel.queryByConnector(connector.id));
     }),
 
   /**

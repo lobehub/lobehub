@@ -29,14 +29,15 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 import { discoverService } from './discover';
 
 /**
- * Whether this call belongs to a private agent's own conversation — the only
- * place a private connector may run. Everywhere else (a workspace public agent,
- * a group or channel run) a private row of the same identifier must not shadow
- * the shared one: the server enforces the same scope, so leaving the connector
- * out here sends the call to it instead of executing locally.
+ * Whether this call may belong to a private agent's own conversation — the only
+ * place a private connector may run. It picks which row the client routes by;
+ * a desktop that then runs a stdio connector itself reads the row the server
+ * resolves for the conversation (`connector.getForRun`), since only the server
+ * can tell the agent's own topic from a group, channel or another agent's one.
+ * Without a topic the server never resolves a private row, so neither does this.
  */
-const isPrivateConnectorRun = (agentId?: string): boolean => {
-  if (!agentId) return false;
+const isPrivateConnectorRun = (agentId?: string, topicId?: string): boolean => {
+  if (!agentId || !topicId) return false;
   return useAgentStore.getState().agentMap[agentId]?.visibility === 'private';
 };
 
@@ -236,7 +237,7 @@ class MCPService {
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId, {
-      includePrivate: isPrivateConnectorRun(agentId),
+      includePrivate: isPrivateConnectorRun(agentId, topicId),
     })(s);
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
@@ -259,8 +260,14 @@ class MCPService {
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
       if (runsHere) {
         // Persisted connector projections omit env secrets and may be stale.
-        // This protected read retains the connector's credential ownership gate.
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+        // This protected read retains the connector's credential ownership gate,
+        // and runs the row the server resolves for this conversation: a private
+        // connector the conversation may not use never runs here.
+        const detail = await lambdaClient.connector.getForRun.query({
+          agentId,
+          identifier,
+          topicId,
+        });
         if (!detail.isEnabled) throw new Error('Connector is disabled');
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {
@@ -544,7 +551,7 @@ class MCPService {
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId, {
-      includePrivate: isPrivateConnectorRun(agentId),
+      includePrivate: isPrivateConnectorRun(agentId, topicId),
     })(s);
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
     // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
@@ -568,8 +575,10 @@ class MCPService {
 
       const { lambdaClient } = await import('@/libs/trpc/client');
       // Persisted connector projections omit env secrets and may be stale.
-      // This protected read retains the connector's credential ownership gate.
-      const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+      // This protected read retains the connector's credential ownership gate,
+      // and reads the row the server resolves for this conversation, as the
+      // tool call did.
+      const detail = await lambdaClient.connector.getForRun.query({ agentId, identifier, topicId });
       const config = detail.mcpStdioConfig;
       if (!detail.isEnabled || detail.mcpConnectionType !== 'stdio' || !config?.command) return;
       if (

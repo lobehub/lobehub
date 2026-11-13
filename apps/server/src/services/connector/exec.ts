@@ -42,10 +42,14 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
  * credentials. Only an agent the caller can see may be resolved; any other id
  * reads as not found. A private agent's own private connectors also need the
  * call's `topicId` to be that agent's own topic (see `ConnectorRunTarget`).
+ *
+ * The one resolution every connector call runs on, including a desktop that
+ * runs a stdio connector itself (`connector.getForRun`): which row serves a
+ * conversation is decided here, never by the client.
  */
-const findConnector = async (
+export const resolveConnectorForRun = async (
   params: { agentId?: string; identifier: string; topicId?: string },
-  ctx: ConnectorExecContext,
+  ctx: Pick<ConnectorExecContext, 'agentModel' | 'connectorModel'>,
 ) => {
   if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
@@ -94,12 +98,12 @@ export const callConnectorToolById = async (
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
     toolName: string;
-    /** The conversation the call belongs to; see {@link findConnector}. */
+    /** The conversation the call belongs to; see {@link resolveConnectorForRun}. */
     topicId?: string;
   },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
-  const [connector] = await findConnector(params, ctx);
+  const [connector] = await resolveConnectorForRun(params, ctx);
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }
@@ -204,7 +208,7 @@ export const readConnectorUiResourceById = async (
     throw new ConnectorToolCallError('FORBIDDEN', 'Interactive views are turned off');
   }
 
-  const [connector] = await findConnector(params, ctx);
+  const [connector] = await resolveConnectorForRun(params, ctx);
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }

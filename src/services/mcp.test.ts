@@ -54,7 +54,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
       callTool: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
+      getForRun: { query: vi.fn() },
     },
   },
   toolsClient: {
@@ -187,7 +187,7 @@ describe('MCPService', () => {
         environment.deviceGatewayConfigured = false;
         mockGetToolStoreState.mockReturnValue({ connectors: [connector] });
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(detail as never);
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(detail as never);
       });
 
       it('executes through local IPC with fresh configuration when no gateway is configured', async () => {
@@ -211,6 +211,43 @@ describe('MCPService', () => {
         expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
       });
 
+      it('runs the row the server resolves for the conversation, not the one ranked here', async () => {
+        // Regression: a private agent's private row was picked on the agent's
+        // visibility alone, so in a conversation the server keeps private rows
+        // out of (a group topic) the shared tool ran with the private account.
+        // The server names the row; the desktop runs that one.
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        const { useAgentStore } = await import('@/store/agent');
+        useAgentStore.setState({ agentMap: { agt_private: { visibility: 'private' } } } as never);
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [
+            { ...connector, id: 'connector-shared', visibility: 'public' },
+            { ...connector, id: 'connector-private', visibility: 'private' },
+          ],
+        });
+        const shared = {
+          ...detail,
+          id: 'connector-shared',
+          mcpStdioConfig: { command: 'node', args: ['mcp.js'], env: { TOKEN: 'shared-secret' } },
+        };
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(shared as never);
+        mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize({ success: true }));
+
+        await mcpService.invokeMcpToolCall(payload, {
+          agentId: 'agt_private',
+          topicId: 'tpc_group',
+        });
+
+        expect(lambdaClient.connector.getForRun.query).toHaveBeenCalledWith({
+          agentId: 'agt_private',
+          identifier: payload.identifier,
+          topicId: 'tpc_group',
+        });
+        expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toMatchObject({
+          env: { TOKEN: 'shared-secret' },
+        });
+      });
+
       it.each([
         { desktop: true, gateway: true },
         { desktop: true, gateway: undefined },
@@ -229,7 +266,7 @@ describe('MCPService', () => {
           vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
 
           await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
-          expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+          expect(lambdaClient.connector.getForRun.query).not.toHaveBeenCalled();
           expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
         },
       );
@@ -245,7 +282,7 @@ describe('MCPService', () => {
         },
       ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(current as never);
 
         await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow();
         expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
@@ -254,9 +291,7 @@ describe('MCPService', () => {
 
       it('does not execute when the protected configuration read is denied', async () => {
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockRejectedValue(
-          new Error('FORBIDDEN'),
-        );
+        vi.mocked(lambdaClient.connector.getForRun.query).mockRejectedValue(new Error('FORBIDDEN'));
 
         await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow('FORBIDDEN');
         expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 
@@ -76,6 +77,71 @@ describe('connectorRouter.getForEdit', () => {
 
   it('keeps credentials and tool reads behind the creator gate', async () => {
     await expect(caller('another-member').getForEdit({ id: connector.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(queryByConnector).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectorRouter.getForRun', () => {
+  const resolveByIdentifiers = vi.fn();
+  const existsById = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return { existsById } as never;
+    });
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return { resolveByIdentifiers } as never;
+    });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return { queryByConnector } as never;
+    });
+    existsById.mockResolvedValue(true);
+    resolveByIdentifiers.mockResolvedValue([connector]);
+    queryByConnector.mockResolvedValue(tools);
+  });
+
+  const caller = (userId: string) =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId,
+      workspaceId: 'workspace',
+      workspaceRole: 'member',
+    } as never);
+
+  const input = { agentId: 'agent-private', identifier: 'local-mcp', topicId: 'topic-group' };
+
+  it('returns the row the conversation resolves on the server, not one the client picked', async () => {
+    // A desktop runs a stdio connector itself. Only the server can tell a
+    // private agent's own topic from a group topic, so it names the row.
+    await expect(caller('creator').getForRun(input)).resolves.toMatchObject({
+      id: connector.id,
+      mcpStdioConfig: connector.mcpStdioConfig,
+      tools,
+    });
+
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['local-mcp'], {
+      agentId: 'agent-private',
+      topicId: 'topic-group',
+    });
+    // A private agent may resolve its owner's personal connector, whose tools
+    // live in the personal scope.
+    expect(ConnectorToolModel).toHaveBeenCalledWith(expect.anything(), 'creator', 'workspace', {
+      agentRun: true,
+    });
+  });
+
+  it('resolves nothing for an agent the caller cannot see', async () => {
+    existsById.mockResolvedValue(false);
+
+    await expect(caller('creator').getForRun(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(resolveByIdentifiers).not.toHaveBeenCalled();
+  });
+
+  it('keeps the resolved configuration behind the creator gate', async () => {
+    await expect(caller('another-member').getForRun(input)).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
     expect(queryByConnector).not.toHaveBeenCalled();

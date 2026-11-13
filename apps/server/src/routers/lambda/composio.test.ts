@@ -220,6 +220,23 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
     );
   });
 
+  it('updates the row holding the refreshed account, resolved once', async () => {
+    // Refreshing the shared account must not overwrite the caller's private
+    // connection of the same app: the account picks the row, and the policy
+    // check and the update use that same row.
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-shared' });
+
+    await caller().updateComposioPlugin(input);
+
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledTimes(1);
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-1',
+    );
+    expect(mocks.connectorUpdate).toHaveBeenCalledWith('conn-shared', expect.anything());
+  });
+
   it('updates an existing connector projection instead of duplicating it', async () => {
     mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
@@ -270,6 +287,26 @@ describe('composioRouter delete paths clean up the connector projection', () => 
 
     expect(mocks.pluginDelete).toHaveBeenCalledWith('gmail');
     expect(mocks.connectorDelete).toHaveBeenCalledWith('conn-existing');
+  });
+
+  it('deleteConnection removes the row holding the account it deletes', async () => {
+    // Regression: the row was looked up by identifier alone, so with a private
+    // and a shared connection of the same app, deleting the shared account
+    // removed the caller's private row and left the shared one pointing at a
+    // deleted account.
+    mocks.connectedAccountsDelete.mockResolvedValue(undefined);
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-shared' });
+
+    await caller().deleteConnection({ connectedAccountId: 'ca-shared', identifier: 'gmail' });
+
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledTimes(1);
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-shared',
+    );
+    expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-shared');
+    expect(mocks.connectorDelete).toHaveBeenCalledWith('conn-shared');
   });
 
   it('does not call connector delete when no projection exists', async () => {
