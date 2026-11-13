@@ -1,13 +1,8 @@
+import { isConnectorLinkParam } from '@lobechat/mecha';
 import isEqual from 'fast-deep-equal';
 
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
-
-/**
- * Arguments that pick the account of a multi-account connector. The tool gets
- * `connector_link_id` instead when it already declares a `link_id` of its own.
- */
-export const CONNECTOR_ACCOUNT_PARAMS = ['link_id', 'connector_link_id'] as const;
 
 const NO_NAMES: Record<string, string> = {};
 
@@ -21,9 +16,9 @@ export const useConnectorAccountNames = (args: unknown): Record<string, string> 
     if (!args || typeof args !== 'object') return NO_NAMES;
 
     let names: Record<string, string> | undefined;
-    for (const param of CONNECTOR_ACCOUNT_PARAMS) {
-      const value = (args as Record<string, unknown>)[param];
-      if (typeof value !== 'string') continue;
+    // `link_id`, or `connector_link_id…` when a tool declares `link_id` itself.
+    for (const [param, value] of Object.entries(args)) {
+      if (typeof value !== 'string' || !isConnectorLinkParam(param)) continue;
       const name = connectorSelectors.connectorLinkNameById(value)(s);
       if (name) (names ??= {})[param] = name;
     }

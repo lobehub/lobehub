@@ -8,15 +8,31 @@ export interface ConnectorLinkChoice {
 export const sanitizeConnectorPromptText = (value: string): string =>
   value.replaceAll(/\s+/g, ' ').replaceAll(/[<>]/g, '').trim().slice(0, 120);
 
-export const resolveConnectorLinkParam = (schemas: readonly unknown[]): string =>
-  schemas.some(
-    (schema) =>
-      isRecord(schema) &&
-      isRecord(schema.properties) &&
-      Object.hasOwn(schema.properties, CONNECTOR_LINK_ID_PARAM),
-  )
-    ? 'connector_link_id'
-    : CONNECTOR_LINK_ID_PARAM;
+const CONNECTOR_LINK_ID_FALLBACK_PARAM = 'connector_link_id';
+
+/** Whether an argument name is one the account selector can take. */
+export const isConnectorLinkParam = (name: string): boolean =>
+  name === CONNECTOR_LINK_ID_PARAM || /^connector_link_id(?:_\d+)?$/.test(name);
+
+/**
+ * The selector name for one connector: `link_id`, unless a tool of the
+ * connector declares that argument itself, then the first of
+ * `connector_link_id`, `connector_link_id_2`, … that no tool declares. A name
+ * a tool already uses would overwrite its schema and strip its argument.
+ */
+export const resolveConnectorLinkParam = (schemas: readonly unknown[]): string => {
+  const declared = new Set<string>();
+  for (const schema of schemas) {
+    if (!isRecord(schema) || !isRecord(schema.properties)) continue;
+    for (const name of Object.keys(schema.properties)) declared.add(name);
+  }
+  if (!declared.has(CONNECTOR_LINK_ID_PARAM)) return CONNECTOR_LINK_ID_PARAM;
+  if (!declared.has(CONNECTOR_LINK_ID_FALLBACK_PARAM)) return CONNECTOR_LINK_ID_FALLBACK_PARAM;
+  for (let suffix = 2; ; suffix++) {
+    const name = `${CONNECTOR_LINK_ID_FALLBACK_PARAM}_${suffix}`;
+    if (!declared.has(name)) return name;
+  }
+};
 
 export const injectConnectorLinkParam = (
   schema: Record<string, unknown>,

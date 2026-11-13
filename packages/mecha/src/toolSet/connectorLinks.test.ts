@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   injectConnectorLinkParam,
+  isConnectorLinkParam,
   resolveConnectorLinkParam,
   splitConnectorLinkArg,
 } from './connectorLinks';
@@ -31,6 +32,24 @@ describe('connector account selection', () => {
       'connector_link_id',
     );
     expect(resolveConnectorLinkParam([{}])).toBe('link_id');
+    // The fallback may be an upstream argument too, on the same tool or another.
+    expect(
+      resolveConnectorLinkParam([
+        { properties: { link_id: {} } },
+        { properties: { connector_link_id: {} } },
+      ]),
+    ).toBe('connector_link_id_2');
+    expect(
+      resolveConnectorLinkParam([
+        { properties: { connector_link_id: {}, connector_link_id_2: {}, link_id: {} } },
+      ]),
+    ).toBe('connector_link_id_3');
+    // Without an upstream `link_id` the plain name stays free.
+    expect(resolveConnectorLinkParam([{ properties: { connector_link_id: {} } }])).toBe('link_id');
+    expect(
+      ['link_id', 'connector_link_id', 'connector_link_id_2'].every(isConnectorLinkParam),
+    ).toBe(true);
+    expect(['x', 'link_ids', 'connector_link_id_x'].some(isConnectorLinkParam)).toBe(false);
     expect(
       splitConnectorLinkArg(
         '{"connector_link_id":"lnk_b","link_id":"business","x":1}',
