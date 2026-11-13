@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import doubaospeechModels from '../../aiModels/doubaospeech';
-import fishaudioModels from '../../aiModels/fishaudio';
+import fishaudioModels, {
+  FISH_AUDIO_DRAMA_3_PROMOTION_END,
+  getFishAudioDrama3Rate,
+} from '../../aiModels/fishaudio';
 import {
   TTSVoiceSchema,
   validateTTSModelParamsSchema,
@@ -60,11 +63,19 @@ describe('Fish Audio TTS model cards', () => {
       })),
     ).toEqual([
       { enabled: true, id: 's2.1-pro', legacy: false, rate: 15 },
-      { enabled: true, id: 'drama-3', legacy: false, rate: 50 },
+      { enabled: true, id: 'drama-3', legacy: false, rate: getFishAudioDrama3Rate() },
       { enabled: false, id: 's2-pro', legacy: false, rate: 15 },
       { enabled: false, id: 's1', legacy: true, rate: 15 },
     ]);
     expect(fishCards.every((card) => !card.pricing?.currency)).toBe(true);
+  });
+
+  it('prices Drama 3 at the $10 launch promotion until 2026-12-01 08:00 UTC, then $50', () => {
+    expect(FISH_AUDIO_DRAMA_3_PROMOTION_END).toBe(Date.parse('2026-12-01T08:00:00Z'));
+    expect(getFishAudioDrama3Rate(Date.parse('2026-11-13T00:00:00Z'))).toBe(10);
+    expect(getFishAudioDrama3Rate(FISH_AUDIO_DRAMA_3_PROMOTION_END - 1)).toBe(10);
+    expect(getFishAudioDrama3Rate(FISH_AUDIO_DRAMA_3_PROMOTION_END)).toBe(50);
+    expect(getFishAudioDrama3Rate(Date.parse('2027-01-01T00:00:00Z'))).toBe(50);
   });
 
   it('bundles no community voices, only the Fish Audio default', () => {

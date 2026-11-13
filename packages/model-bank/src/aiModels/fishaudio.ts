@@ -5,12 +5,24 @@ import {
 } from '../const/ttsParameters';
 import type { AITTSModelCard } from '../types/aiModel';
 
-// API list prices per million UTF-8 bytes: $15 for S2.1 Pro, S2 Pro and S1, $50 for Drama 3
-// (launch promotion $10 until 2026-12-01). The runtime reports the UTF-8 byte count as
+// API prices per million UTF-8 bytes: $15 for S2.1 Pro, S2 Pro and S1, $50 for Drama 3
+// ($10 launch promotion until 2026-12-01 08:00 UTC, see below). The runtime reports the UTF-8 byte count as
 // `inputCharacters`, so `millionCharacters` here bills exactly what Fish Audio bills.
 // `s2.1-pro-free` is left out: it is free only for a limited time.
 // @see https://docs.fish.audio/developer-guide/models-pricing/pricing-and-rate-limits
 // @see https://docs.fish.audio/developer-guide/models-pricing/models-overview
+
+/** End of the Drama 3 launch promotion: 2026-12-01 08:00 UTC. */
+export const FISH_AUDIO_DRAMA_3_PROMOTION_END = Date.UTC(2026, 11, 1, 8);
+
+/**
+ * Drama 3 price per million UTF-8 bytes at `now`: Fish Audio bills the $10 launch price until
+ * the promotion ends, then the $50 list price. Evaluated when the catalog loads, so a
+ * process started after the promotion picks up the list price without a code change.
+ */
+export const getFishAudioDrama3Rate = (now = Date.now()) =>
+  now < FISH_AUDIO_DRAMA_3_PROMOTION_END ? 10 : 50;
+
 const fishAudioTTSModels: AITTSModelCard[] = [
   {
     description:
@@ -35,7 +47,14 @@ const fishAudioTTSModels: AITTSModelCard[] = [
     isOfficial: true,
     parameters: fishAudioDirectedTTSSchema,
     pricing: {
-      units: [{ name: 'textInput', rate: 50, strategy: 'fixed', unit: 'millionCharacters' }],
+      units: [
+        {
+          name: 'textInput',
+          rate: getFishAudioDrama3Rate(),
+          strategy: 'fixed',
+          unit: 'millionCharacters',
+        },
+      ],
     },
     type: 'tts',
     voices: fishAudioTTSVoices,
