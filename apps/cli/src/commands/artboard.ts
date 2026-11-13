@@ -5,6 +5,8 @@ import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { outputJson } from '../utils/format';
+import { registerArtboardOpsCommand } from './artboardOps';
+import { registerArtboardSkillCommand } from './artboardSkill';
 
 interface BoardLike {
   content: ArtboardContent;
@@ -53,7 +55,7 @@ export const registerArtboardCommand = (program: Command) => {
     .option('--task <task>', 'Task id or identifier, such as PRJ-12')
     .option(
       '--ops <json>',
-      'Initial ops (addGroup, addBoard, addEdge, addRound, addPage, …) as a JSON array, or @file.json',
+      'Initial ops (addGroup, addBoard, addEdge, addRound, addPage, …) as a JSON array, or @file.json; shapes: lh artboard ops',
     )
     .option('--json', 'Print structured JSON')
     .action(
@@ -85,7 +87,7 @@ export const registerArtboardCommand = (program: Command) => {
     .requiredOption('--revision <n>', 'Revision you last read', positiveInteger)
     .requiredOption(
       '--ops <json>',
-      'Ops (add/update/remove Board, Group, Page; addRound, updateRound; addEdge, removeEdge; setCheck) as a JSON array, or @file.json',
+      'Ops (add/update/remove Board, Group, Page; addRound, updateRound; addEdge, removeEdge; setCheck) as a JSON array, or @file.json; shapes: lh artboard ops',
     )
     .option('--json', 'Print structured JSON')
     .action(async (id: string, options: { json?: boolean; ops: string; revision: number }) => {
@@ -125,4 +127,6 @@ export const registerArtboardCommand = (program: Command) => {
       for (const board of boards)
         console.log(`${board.id}  ${board.title}  ${board.phase}  revision ${board.revision}`);
     });
+  registerArtboardOpsCommand(artboard);
+  registerArtboardSkillCommand(artboard);
 };
