@@ -19,8 +19,12 @@ describe('loadConnectedComposioIds', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    pluginModelMock = { query: vi.fn().mockResolvedValue([]) };
-    connectorModelMock = { resolveAll: vi.fn().mockResolvedValue([]) };
+    pluginModelMock = { queryComposioMirrors: vi.fn().mockResolvedValue([]) };
+    connectorModelMock = {
+      // Pass-through by default: every projection row is a legacy connection.
+      pickLegacyComposioMirrors: vi.fn(async (mirrors: unknown[]) => mirrors),
+      resolveAll: vi.fn().mockResolvedValue([]),
+    };
     vi.mocked(PluginModel).mockImplementation(function () {
       return pluginModelMock;
     });
@@ -30,7 +34,7 @@ describe('loadConnectedComposioIds', () => {
   });
 
   it('includes an agent-scoped connector that is absent from the plugin table', async () => {
-    pluginModelMock.query.mockResolvedValueOnce([]); // nothing projected to plugins
+    pluginModelMock.queryComposioMirrors.mockResolvedValueOnce([]); // nothing projected to plugins
     connectorModelMock.resolveAll.mockResolvedValueOnce([
       {
         identifier: 'gmail',
@@ -53,14 +57,54 @@ describe('loadConnectedComposioIds', () => {
     });
   });
 
-  it('still counts a base connection projected into the plugin table', async () => {
-    pluginModelMock.query.mockResolvedValueOnce([
-      { customParams: { composio: { status: 'ACTIVE' } }, identifier: 'gmail' },
-    ]);
+  const projection = (status: string, userId = 'user_test') => ({
+    customParams: { composio: { connectedAccountId: 'ca_legacy', status } },
+    identifier: 'gmail',
+    userId,
+  });
+
+  it('still counts a legacy base connection projected into the plugin table', async () => {
+    pluginModelMock.queryComposioMirrors.mockResolvedValueOnce([projection('ACTIVE')]);
 
     const ids = await loadConnectedComposioIds({} as any, 'user_test', undefined, {});
 
     expect(ids.has('gmail')).toBe(true);
+    expect(connectorModelMock.pickLegacyComposioMirrors).toHaveBeenCalledWith([
+      expect.objectContaining({
+        connectedAccountId: 'ca_legacy',
+        identifier: 'gmail',
+        ownerUserId: 'user_test',
+      }),
+    ]);
+  });
+
+  // Regression: a teammate made the workspace's only Gmail connection private.
+  // Its projection row stays ACTIVE and workspace-wide, but a workspace agent
+  // does not load the private connector, so `ComposioService` serves it no
+  // Gmail tool. Counting the row told the model Gmail was authorized and hid
+  // it from the services it can connect.
+  it('does not count a projection row that mirrors a connector the run does not load', async () => {
+    pluginModelMock.queryComposioMirrors.mockResolvedValueOnce([projection('ACTIVE', 'mate')]);
+    connectorModelMock.pickLegacyComposioMirrors.mockResolvedValueOnce([]);
+    connectorModelMock.resolveAll.mockResolvedValueOnce([]); // private row is not resolved
+
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', {
+      agentId: 'workspace-agent',
+      topicId: 'tpc-1',
+    });
+
+    expect(ids.has('gmail')).toBe(false);
+    expect(connectorModelMock.pickLegacyComposioMirrors).toHaveBeenCalledWith([
+      expect.objectContaining({ identifier: 'gmail', ownerUserId: 'mate' }),
+    ]);
+  });
+
+  it('does not count an inactive legacy projection row', async () => {
+    pluginModelMock.queryComposioMirrors.mockResolvedValueOnce([projection('EXPIRED')]);
+
+    const ids = await loadConnectedComposioIds({} as any, 'user_test', undefined, {});
+
+    expect(ids.has('gmail')).toBe(false);
   });
 
   it('excludes a disabled connector and a non-Composio identifier', async () => {
@@ -96,9 +140,7 @@ describe('loadConnectedComposioIds', () => {
   });
 
   it('falls back to the plugin-based set if the connector lookup throws', async () => {
-    pluginModelMock.query.mockResolvedValueOnce([
-      { customParams: { composio: { status: 'ACTIVE' } }, identifier: 'gmail' },
-    ]);
+    pluginModelMock.queryComposioMirrors.mockResolvedValueOnce([projection('ACTIVE')]);
     connectorModelMock.resolveAll.mockRejectedValueOnce(new Error('db down'));
 
     const ids = await loadConnectedComposioIds({} as any, 'user_test', 'ws-1', {

@@ -1,14 +1,10 @@
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { CustomPluginParams, ResolvedConnectorRef } from '@lobechat/types';
+import type { ResolvedConnectorRef } from '@lobechat/types';
 import debug from 'debug';
 
-import {
-  type ComposioPluginMirror,
-  ConnectorModel,
-  type ConnectorRunTarget,
-} from '@/database/models/connector';
+import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import {
@@ -18,9 +14,9 @@ import {
 } from '@/libs/composio';
 import { type ToolExecutionResult } from '@/server/services/toolExecution/types';
 
-const log = debug('lobe-server:composio-service');
+import { selectLegacyComposioMirrors, VALID_COMPOSIO_IDENTIFIERS } from './legacyMirrors';
 
-const VALID_COMPOSIO_IDENTIFIERS = new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier));
+const log = debug('lobe-server:composio-service');
 
 export interface ComposioToolExecuteParams {
   /**
@@ -267,51 +263,12 @@ export class ComposioService {
 
     if (!this.pluginModel) return undefined;
 
-    const [mirror] = await this.legacyComposioMirrors(
+    const [mirror] = await selectLegacyComposioMirrors(
       await this.pluginModel.queryComposioMirrors([identifier]),
+      this.connectorModel,
     );
     if (!mirror) return undefined;
     return { connectedAccountId: mirror.connectedAccountId, ownerUserId: mirror.ownerUserId };
-  }
-
-  /**
-   * The projection rows the legacy fallback may serve, active ones first.
-   *
-   * A workspace keeps one projection row per member for the same app, and a
-   * row can mirror a connector this run did not resolve (a private connector
-   * read by another member, another agent's row): serving it would resurrect
-   * the very connection the run may not use. Only a legacy connection — no
-   * connector row behind its account — is served from the projection
-   * (see `ConnectorModel.pickLegacyComposioMirrors`).
-   */
-  private async legacyComposioMirrors<
-    T extends {
-      customParams?: CustomPluginParams | null;
-      identifier: string;
-      userId: string;
-    },
-  >(plugins: T[]): Promise<(ComposioPluginMirror & { plugin: T })[]> {
-    const mirrors = plugins.flatMap((plugin) => {
-      const composio = plugin.customParams?.composio;
-      if (!VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier) || !composio?.connectedAccountId) {
-        return [];
-      }
-      return [
-        {
-          connectedAccountId: composio.connectedAccountId,
-          identifier: plugin.identifier,
-          ownerUserId: composio.linkedByUserId ?? plugin.userId,
-          plugin,
-        },
-      ];
-    });
-
-    const legacy = this.connectorModel
-      ? await this.connectorModel.pickLegacyComposioMirrors(mirrors)
-      : mirrors;
-    const isActive = (mirror: (typeof legacy)[number]) =>
-      mirror.plugin.customParams?.composio?.status === 'ACTIVE';
-    return [...legacy.filter(isActive), ...legacy.filter((mirror) => !isActive(mirror))];
   }
 
   /**
@@ -402,7 +359,7 @@ export class ComposioService {
         const plugins = (await this.pluginModel.queryComposioMirrors(identifiers)).filter(
           (plugin) => !coveredIdentifiers.has(plugin.identifier),
         );
-        const mirrors = await this.legacyComposioMirrors(plugins);
+        const mirrors = await selectLegacyComposioMirrors(plugins, this.connectorModel);
 
         for (const { plugin } of mirrors) {
           if (plugin.customParams?.composio?.status !== 'ACTIVE') continue;
