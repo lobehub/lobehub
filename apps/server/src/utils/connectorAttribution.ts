@@ -27,38 +27,36 @@ export const resolveConnectorAuthorizerId = (connector: ConnectorAttributionRow)
 };
 
 /**
- * `linkedByUserId` marks the member whose credentials a Composio tool runs under
- * — it is server-owned, written only by the OAuth connect path
- * (`upsertComposioConnector`). The generic connector create/update accepts
- * free-form `metadata`, so without a guard a member could set
- * `metadata.composio.linkedByUserId` to another user's id and spoof both the
- * attribution tag and the runtime ownership note (and shift the Composio
- * execution entity). This forces the field to the TRUSTED value — the existing
- * DB row's `linkedByUserId` on update, or dropped on create (no server value
- * yet) — ignoring whatever the client supplied. All other metadata is preserved.
+ * A connector's `metadata.composio` block is server-owned, written only by the
+ * Composio connect paths (`upsertComposioConnector`, the plugin bootstrap
+ * sync). It names the account a tool runs (`connectedAccountId`) and the member
+ * whose credentials it runs under (`linkedByUserId`), and the rows naming an
+ * account decide who may refresh or delete it (`findComposioAccountConflict`).
+ *
+ * The generic connector create/update accepts free-form `metadata`, and every
+ * member reads the account ids of the workspace's shared connections. Without
+ * a guard a member could name a teammate's account on a row of their own:
+ * spoofing the attribution tag and the runtime ownership note, or, on a
+ * private row nobody else can see, claiming the account so its real owner can
+ * no longer refresh or remove it. This replaces whatever the client sent with
+ * the TRUSTED block (the stored row's on update; none on create, where there
+ * is no stored row). All other metadata is preserved.
  *
  * `serverMetadata` is the persisted row's metadata (pass `undefined` on create).
- * Returns the client metadata untouched when neither side has anything Composio.
+ * Returns the client metadata untouched when neither side has a Composio block.
  */
-export const withTrustedLinkedByUserId = (
+export const withTrustedComposio = (
   clientMetadata: Record<string, unknown> | null | undefined,
   serverMetadata: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null | undefined => {
   // undefined → "leave metadata untouched"; null → "clear it". Nothing to guard.
   if (!clientMetadata) return clientMetadata;
 
-  const serverLinked = (serverMetadata as { composio?: { linkedByUserId?: string } } | null)
-    ?.composio?.linkedByUserId;
-  const clientComposio = (clientMetadata as { composio?: Record<string, unknown> }).composio;
+  const trusted = (serverMetadata as { composio?: unknown } | null | undefined)?.composio;
+  if (trusted === undefined && !('composio' in clientMetadata)) return clientMetadata;
 
-  // No composio block from the client and no trusted server value → nothing to do.
-  if (!clientComposio && serverLinked === undefined) return clientMetadata;
-
-  const composio: Record<string, unknown> = { ...clientComposio };
-  if (serverLinked === undefined) delete composio.linkedByUserId;
-  else composio.linkedByUserId = serverLinked;
-
-  return { ...clientMetadata, composio };
+  const { composio: _untrusted, ...rest } = clientMetadata;
+  return trusted === undefined ? rest : { ...rest, composio: trusted };
 };
 
 export interface UserDisplayInfo {

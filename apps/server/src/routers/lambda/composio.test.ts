@@ -13,7 +13,9 @@ const mocks = vi.hoisted(() => ({
   connectedAccountsList: vi.fn(),
   connectorCreate: vi.fn(),
   connectorDelete: vi.fn(),
+  connectorFindManageableByIdentifier: vi.fn(),
   connectorFindScopedByIdentifier: vi.fn(),
+  connectorQueryComposioAccountHolders: vi.fn(),
   connectorToolDeleteToolsNotIn: vi.fn(),
   connectorToolUpsertMany: vi.fn(),
   connectorUpdate: vi.fn(),
@@ -24,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   pluginCreate: vi.fn(),
   pluginDelete: vi.fn(),
   pluginFindById: vi.fn(),
+  pluginQueryComposioMirrors: vi.fn(),
   pluginUpdate: vi.fn(),
 }));
 
@@ -39,6 +42,7 @@ vi.mock('@/database/models/plugin', () => ({
       create: mocks.pluginCreate,
       delete: mocks.pluginDelete,
       findById: mocks.pluginFindById,
+      queryComposioMirrors: mocks.pluginQueryComposioMirrors,
       update: mocks.pluginUpdate,
     };
   }),
@@ -49,7 +53,9 @@ vi.mock('@/database/models/connector', () => ({
     return {
       create: mocks.connectorCreate,
       delete: mocks.connectorDelete,
+      findManageableByIdentifier: mocks.connectorFindManageableByIdentifier,
       findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
+      queryComposioAccountHolders: mocks.connectorQueryComposioAccountHolders,
       update: mocks.connectorUpdate,
     };
   }),
@@ -81,9 +87,23 @@ const caller = () => composioRouter.createCaller({ userId: 'user-1' } as any);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
+  mocks.connectorFindManageableByIdentifier.mockResolvedValue(null);
   mocks.connectorCreate.mockResolvedValue({ id: 'conn-new' });
   mocks.pluginFindById.mockResolvedValue(undefined);
+  mocks.pluginQueryComposioMirrors.mockResolvedValue([]);
+  // By default the account a write names is held by the row the write resolves
+  // (the implementation is read without recording a lookup call).
+  mocks.connectorQueryComposioAccountHolders.mockImplementation(async () => {
+    const row = await mocks.connectorFindManageableByIdentifier.getMockImplementation()?.();
+    return row ? [{ agentId: null, userId: 'user-1', visibility: 'public', ...row }] : [];
+  });
+});
+
+/** The plugin projection row of a legacy connection, which no connector row runs. */
+const legacyMirror = (connectedAccountId: string) => ({
+  customParams: { composio: { connectedAccountId } },
+  identifier: 'gmail',
+  userId: 'user-1',
 });
 
 /** @example OAuth callback polling reports whether Gmail can be read. */
@@ -181,7 +201,9 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   };
 
   it('creates the connector projection (ACTIVE) + tools when none exists', async () => {
-    mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
+    // A legacy connection: only the plugin projection holds the account.
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue(null);
+    mocks.pluginQueryComposioMirrors.mockResolvedValue([legacyMirror('ca-1')]);
 
     const res = await caller().updateComposioPlugin(input);
 
@@ -198,8 +220,45 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
     expect(mocks.connectorToolDeleteToolsNotIn).toHaveBeenCalledWith('conn-new', ['GMAIL_SEND']);
   });
 
+  it('updates the private row a connector was switched to, instead of republishing it', async () => {
+    // A refresh resolves the caller's own row in either visibility; missing the
+    // private one would create a second, public row for the same account.
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({
+      agentId: null,
+      id: 'conn-private',
+      metadata: { composio: { connectedAccountId: 'ca-1' } },
+      userId: 'user-1',
+      visibility: 'private',
+    });
+
+    await caller().updateComposioPlugin(input);
+
+    expect(mocks.connectorCreate).not.toHaveBeenCalled();
+    expect(mocks.connectorUpdate).toHaveBeenCalledWith(
+      'conn-private',
+      expect.objectContaining({ status: 'connected' }),
+    );
+  });
+
+  it('updates the row holding the refreshed account, resolved once', async () => {
+    // Refreshing the shared account must not overwrite the caller's private
+    // connection of the same app: the account picks the row, and the policy
+    // check and the update use that same row.
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-shared' });
+
+    await caller().updateComposioPlugin(input);
+
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledTimes(1);
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-1',
+    );
+    expect(mocks.connectorUpdate).toHaveBeenCalledWith('conn-shared', expect.anything());
+  });
+
   it('updates an existing connector projection instead of duplicating it', async () => {
-    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().updateComposioPlugin(input);
 
@@ -220,7 +279,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   });
 
   it('prunes all connector tools when the refreshed list is empty', async () => {
-    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().updateComposioPlugin({ ...input, tools: [] });
 
@@ -232,7 +291,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
 
 describe('composioRouter delete paths clean up the connector projection', () => {
   it('removeComposioPlugin deletes the connector row when present', async () => {
-    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().removeComposioPlugin({ identifier: 'gmail' });
 
@@ -242,7 +301,7 @@ describe('composioRouter delete paths clean up the connector projection', () => 
 
   it('deleteConnection deletes both plugin and connector', async () => {
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
-    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().deleteConnection({ connectedAccountId: 'ca-1', identifier: 'gmail' });
 
@@ -250,8 +309,61 @@ describe('composioRouter delete paths clean up the connector projection', () => 
     expect(mocks.connectorDelete).toHaveBeenCalledWith('conn-existing');
   });
 
+  it('deleteConnection removes the row holding the account it deletes', async () => {
+    // Regression: the row was looked up by identifier alone, so with a private
+    // and a shared connection of the same app, deleting the shared account
+    // removed the caller's private row and left the shared one pointing at a
+    // deleted account.
+    mocks.connectedAccountsDelete.mockResolvedValue(undefined);
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-shared' });
+
+    await caller().deleteConnection({ connectedAccountId: 'ca-shared', identifier: 'gmail' });
+
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledTimes(1);
+    expect(mocks.connectorFindManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-shared',
+    );
+    expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-shared');
+    expect(mocks.connectorDelete).toHaveBeenCalledWith('conn-shared');
+  });
+
+  it('deleteConnection removes a legacy connection the plugin projection holds', async () => {
+    mocks.pluginQueryComposioMirrors.mockResolvedValue([legacyMirror('ca-legacy')]);
+
+    await caller().deleteConnection({ connectedAccountId: 'ca-legacy', identifier: 'gmail' });
+
+    expect(mocks.pluginQueryComposioMirrors).toHaveBeenCalledWith(['gmail']);
+    expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-legacy');
+    expect(mocks.pluginDelete).toHaveBeenCalledWith('gmail');
+  });
+
+  it('deleteConnection refuses an account that is none of the connection’s', async () => {
+    // The Composio client deletes by account id alone: an account neither a
+    // connector row nor the app's plugin projection holds is not the caller's
+    // to delete, nor is one another connector runs.
+    mocks.pluginQueryComposioMirrors.mockResolvedValue([legacyMirror('ca-legacy')]);
+
+    await expect(
+      caller().deleteConnection({ connectedAccountId: 'ca-elsewhere', identifier: 'gmail' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue({ id: 'conn-gmail' });
+    mocks.connectorQueryComposioAccountHolders.mockResolvedValue([
+      { agentId: null, id: 'conn-github', identifier: 'github', userId: 'user-1' },
+    ]);
+    await expect(
+      caller().deleteConnection({ connectedAccountId: 'ca-github', identifier: 'gmail' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
+    expect(mocks.pluginDelete).not.toHaveBeenCalled();
+    expect(mocks.connectorDelete).not.toHaveBeenCalled();
+  });
+
   it('does not call connector delete when no projection exists', async () => {
-    mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
+    mocks.connectorFindManageableByIdentifier.mockResolvedValue(null);
 
     await caller().removeComposioPlugin({ identifier: 'gmail' });
 

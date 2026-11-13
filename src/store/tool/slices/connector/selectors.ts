@@ -104,20 +104,42 @@ const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string
 };
 
 const connectorByIdentifierForAgent =
-  (identifier: string, agentId?: string) =>
+  (
+    identifier: string,
+    agentId?: string,
+    /**
+     * Whether the caller's private rows take part. Only the server can tell
+     * whether a conversation may run one (`connectorRunScope`), so executors
+     * resolve through `resolveRunConnector`, which asks it when this decides
+     * the row; management surfaces leave the default. A private row the run
+     * may not use must not shadow the shared row of the same identifier, or a
+     * public agent would execute a connection its scope explicitly excludes.
+     */
+    { includePrivate = true }: { includePrivate?: boolean } = {},
+  ) =>
   (s: ToolStore): ConnectorWithTools | undefined => {
     const agentRows = agentId
       ? (s.agentConnectors?.[agentId] ?? []).filter((c) => c.identifier === identifier)
       : [];
 
+    // A base connector another agent mounted serves only that agent, as the
+    // server's scope rule has it (`ConnectorModel.scopePredicate`).
+    const baseRows = (s.connectors ?? []).filter(
+      (c) =>
+        c.identifier === identifier &&
+        !isMountedByAnotherAgent(c, agentId) &&
+        (includePrivate || c.visibility !== 'private'),
+    );
+
     return (
       agentRows.find((c) => c.agentId === agentId) ??
       agentRows[0] ??
-      // A base connector another agent mounted serves only that agent, as the
-      // server's scope rule has it (`ConnectorModel.scopePredicate`)
-      (s.connectors ?? []).find(
-        (c) => c.identifier === identifier && !isMountedByAnotherAgent(c, agentId),
-      )
+      // Rank base rows the way `ConnectorModel.pickByPriority` does: the owner's
+      // private row shadows the shared one. Row order is not a ranking — with a
+      // shared row first, desktop IPC would run that row's command and
+      // credentials while the server resolves the private account.
+      baseRows.find((c) => c.visibility === 'private') ??
+      baseRows[0]
     );
   };
 

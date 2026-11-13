@@ -6,9 +6,9 @@ import type {
   ToolManifest,
 } from '@lobechat/types';
 
+import { resolveRunConnector, type RunConnector } from '@/services/connectorRun';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-import { connectorSelectors } from '@/store/tool/slices/connector';
 import { getUserStoreState } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -84,6 +84,11 @@ type ToolLookup = { intervention?: unknown } | { missingFrom: string } | null;
  * or null when the server doesn't offer the tool.
  */
 const findToolIntervention = (
+  /**
+   * The connector the call runs on ({@link resolveRunConnector}): approval is
+   * the executing row's, never a same-named row the conversation can't use.
+   */
+  connector: RunConnector | undefined,
   identifier: string,
   toolName: string,
   agentId: string | undefined,
@@ -93,7 +98,6 @@ const findToolIntervention = (
   const s = getToolStoreState();
   const confirmed = revalidated && s.isConnectorListConfirmed(agentId);
 
-  const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
   // Same routing as `mcpService.invokeMcpToolCall`
   if (
     connector?.isEnabled &&
@@ -198,16 +202,46 @@ const resyncConnectorTools = (connectorId: string): Promise<boolean> => {
   return resync;
 };
 
+/**
+ * The tool's setting on the connector the call runs on. Without an answer from
+ * the server about which row that is, it asks.
+ */
+const lookUpTool = async (
+  identifier: string,
+  toolName: string,
+  run: { agentId?: string; topicId?: string },
+  revalidated: boolean,
+): Promise<ToolLookup> => {
+  let connector: RunConnector | undefined;
+  try {
+    connector = await resolveRunConnector(identifier, run);
+  } catch (error) {
+    console.warn('[MCPApp] failed to resolve the connector of a view tool call:', error);
+    return { intervention: 'required' };
+  }
+  return findToolIntervention(connector, identifier, toolName, run.agentId, revalidated);
+};
+
 export const getAppToolCallPolicy = async (
   identifier: string,
   toolName: string,
-  { agentId, toolArgs = {} }: { agentId?: string; toolArgs?: Record<string, unknown> } = {},
+  {
+    agentId,
+    toolArgs = {},
+    topicId,
+  }: {
+    agentId?: string;
+    toolArgs?: Record<string, unknown>;
+    /** The conversation the view's result belongs to; its calls run in it. */
+    topicId?: string;
+  } = {},
 ): Promise<AppToolCallPolicy> => {
   const revalidated = await revalidateConnectors(agentId);
-  let tool = findToolIntervention(identifier, toolName, agentId, revalidated);
+  const run = { agentId, topicId };
+  let tool = await lookUpTool(identifier, toolName, run, revalidated);
   if (tool && 'missingFrom' in tool) {
     tool = (await resyncConnectorTools(tool.missingFrom))
-      ? findToolIntervention(identifier, toolName, agentId, revalidated)
+      ? await lookUpTool(identifier, toolName, run, revalidated)
       : null;
   }
   if (!tool || 'missingFrom' in tool) return 'deny';

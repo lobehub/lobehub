@@ -78,6 +78,26 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
     expect(connectorSelectors.connectorByIdentifierForAgent('oauth-market')(s)).toBe(undefined);
   });
 
+  it('skips a private base row when the run may not use one, so the shared row wins', () => {
+    const privateRow = connector({ id: 'private-row', visibility: 'private' });
+    const sharedRow = connector({ id: 'shared-row', visibility: 'public' });
+    // The shared row listed first: physical order is not a ranking
+    const s = state([sharedRow, privateRow]);
+
+    // A public agent's run: the private row must not shadow the shared one
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a', {
+        includePrivate: false,
+      })(s)?.id,
+    ).toBe('shared-row');
+    // A private agent's own run resolves its owner's private row first
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a', {
+        includePrivate: true,
+      })(s)?.id,
+    ).toBe('private-row');
+  });
+
   it('resolves a base connector that is free or mounted by this agent', () => {
     expect(
       connectorSelectors.connectorByIdentifierForAgent(

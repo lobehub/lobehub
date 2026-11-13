@@ -1,8 +1,14 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
-import { upsertPluginMode } from '@lobechat/types';
+import {
+  CONNECTOR_VISIBILITIES,
+  type ConnectorOidcConfig,
+  upsertPluginMode,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -10,16 +16,12 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
-import { ConnectorModel } from '@/database/models/connector';
 import {
   EvalConnectorUpdateError,
   withoutEvalConnectorMarker,
 } from '@/database/models/connectorEval';
-import { ConnectorToolModel } from '@/database/models/connectorTool';
-import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -27,15 +29,8 @@ import {
   ConnectorToolPermission,
 } from '@/database/schemas';
 import { getComposioClient } from '@/libs/composio';
-import { getMCPConnectionErrorType, inferCrudType } from '@/libs/mcp/utils';
-import { router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import {
-  callConnectorToolById,
-  ConnectorToolCallError,
-  readConnectorUiResourceById,
-} from '@/server/services/connector/exec';
+import { inferCrudType } from '@/libs/mcp/utils';
+import { mergeRouters, router } from '@/libs/trpc/lambda';
 import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
@@ -52,37 +47,28 @@ import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
-  withTrustedLinkedByUserId,
+  withTrustedComposio,
 } from '@/server/utils/connectorAttribution';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
+import { findComposioAccountConflict } from '../_helpers/composioAccountBinding';
+import { removeComposioProjection } from '../_helpers/composioProjection';
+import { toConnectorEditDetail } from '../_helpers/connectorEditDetail';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
   canManageWorkspaceConnectors,
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
-} from './_helpers/connectorManagePolicy';
-import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
-
-const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
-  const { ctx } = opts;
-  // Credentials (OAuth tokens) are encrypted at rest — give the model a gatekeeper.
-  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-  const wsId = ctx.workspaceId ?? undefined;
-  return opts.next({
-    ctx: {
-      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
-      connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
-      connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
-      pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),
-    },
-  });
-});
-
-// Writes: workspace mode requires at least the member role, gating viewers
-// out (read-only role) while personal mode passes through unrestricted.
-const connectorWriteProcedure = connectorProcedure.use(requireWorkspaceRoleWhenScoped('member'));
+} from '../_helpers/connectorManagePolicy';
+import {
+  assertPrivateConnectorTarget,
+  resolveVisibilityChange,
+  resolveWriteVisibility,
+} from '../_helpers/connectorVisibility';
+import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
+import { connectorProcedure, connectorWriteProcedure } from './procedures';
+import { connectorRunRouter } from './run';
 
 const oidcConfigSchema = z.object({
   authorizationEndpoint: z.string().optional(),
@@ -142,9 +128,15 @@ const createConnectorSchema = z.object({
     ConnectorSourceType.custom,
     ConnectorSourceType.marketplace,
   ]),
+  /**
+   * Workspace only: `private` keeps the connector to its creator and their
+   * private agents (私人); `public` (default) shares it with the workspace.
+   * Ignored in personal mode and for agent-scoped connectors.
+   */
+  visibility: z.enum(CONNECTOR_VISIBILITIES).optional(),
 });
 
-export const connectorRouter = router({
+const connectorManageRouter = router({
   // ── Queries ──────────────────────────────────────────────────────────────
 
   list: connectorProcedure.query(async ({ ctx }) => {
@@ -158,8 +150,9 @@ export const connectorRouter = router({
       connectors.map((c) => resolveConnectorAuthorizerId(c)),
     );
 
-    const toolsByConnector = await Promise.all(
-      connectors.map(async (c) => {
+    const toolsByConnector = await pMap(
+      connectors,
+      async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -172,7 +165,8 @@ export const connectorRouter = router({
           oidcConfig: safeOidcConfig,
           tools,
         };
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return toolsByConnector;
@@ -195,8 +189,9 @@ export const connectorRouter = router({
         connectors.map((c) => resolveConnectorAuthorizerId(c)),
       );
 
-      return Promise.all(
-        connectors.map(async (c) => {
+      return pMap(
+        connectors,
+        async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
           const { credentials: _credentials, oidcConfig, ...rest } = c;
           const safeOidcConfig = oidcConfig
@@ -210,7 +205,8 @@ export const connectorRouter = router({
             oidcConfig: safeOidcConfig,
             tools,
           };
-        }),
+        },
+        { concurrency: 5 },
       );
     }),
 
@@ -242,38 +238,30 @@ export const connectorRouter = router({
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 
-    return Promise.all(
-      connectors
-        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
-        .map(async (c) => {
-          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-          const { credentials: _credentials, oidcConfig, ...rest } = c;
-          const safeOidcConfig = oidcConfig
-            ? { ...oidcConfig, clientSecret: undefined }
-            : oidcConfig;
-          const meta = agentMetaById.get(c.agentId!);
-          return {
-            ...rest,
-            agentAvatar: meta?.avatar ?? null,
-            agentName: meta?.name ?? null,
-            agentTitle: meta?.title ?? null,
-            oidcConfig: safeOidcConfig,
-            tools,
-          };
-        }),
+    return pMap(
+      connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId)),
+      async (c) => {
+        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        const meta = agentMetaById.get(c.agentId!);
+        return {
+          ...rest,
+          agentAvatar: meta?.avatar ?? null,
+          agentName: meta?.name ?? null,
+          agentTitle: meta?.title ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
+      },
+      { concurrency: 5 },
     );
   }),
 
   /**
    * Return the connector record with decrypted user-set credentials so the
-   * edit form can pre-fill accurately. Only the connector owner can call this
-   * (enforced by connectorProcedure ownership check).
-   *
-   * Machine-managed secrets are intentionally excluded:
-   * - OAuth access/refresh tokens (type 'oauth2') → stripped, returned as null
-   * - oidcConfig.clientSecret (DCR-registered secret)  → stripped
-   * User-set credentials (bearer token, custom headers) are returned as-is so
-   * the edit form can display them.
+   * edit form can pre-fill accurately (see {@link toConnectorEditDetail} for
+   * what is stripped). Only the connector owner can call this.
    */
   // Member-gated even though it's a query: it returns decrypted credentials
   // for edit prefill, so a creator later downgraded to viewer must not reach it.
@@ -282,19 +270,11 @@ export const connectorRouter = router({
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Edit-read returns decrypted credentials — creator/owner only. Not gated by
-      // the member policy: desktop stdio/local connectors read their config
-      // here at run time, so a restriction must not stop the creator using them.
+      // Edit-read returns decrypted credentials — creator/owner only.
       assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
 
-      const { oidcConfig, credentials, ...rest } = connector;
-      const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
-      // OAuth tokens are machine-managed — don't return them; the UI only needs
-      // to know an OAuth flow is configured (reflected via oidcConfig presence).
-      const safeCredentials = credentials?.type === 'oauth2' ? null : credentials;
-
       const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
-      return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig, tools };
+      return toConnectorEditDetail(connector, tools);
     }),
 
   /**
@@ -374,12 +354,12 @@ export const connectorRouter = router({
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
-      // Drop any client-supplied `composio.linkedByUserId` — it is server-owned
-      // (written by the OAuth connect path), and trusting it here would let a
-      // member spoof connector attribution. No existing row on create → the
-      // field is simply removed.
-      metadata:
-        withoutEvalConnectorMarker(withTrustedLinkedByUserId(input.metadata, undefined)) ?? null,
+      // Drop any client-supplied `composio` block: the Composio account a row
+      // names and who linked it are server-owned (written by the Composio
+      // connect paths). Trusting them here would let a member spoof connector
+      // attribution, or name a teammate's account on a private row of their
+      // own so its real owner can no longer refresh or remove it.
+      metadata: withoutEvalConnectorMarker(withTrustedComposio(input.metadata, undefined)) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -403,14 +383,24 @@ export const connectorRouter = router({
     // enforcing "one connector per identifier per agent" at the app layer (the
     // DB indexes are non-unique so multiple same-identifier rows can coexist
     // across scopes).
-    const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
+    //
+    // A private connector is looked up among the caller's own private rows, so
+    // adding one never rewrites the shared connector of the same identifier.
+    const visibility = agentId ? 'public' : resolveWriteVisibility(ctx, input.visibility);
+    const existing = await ctx.connectorModel.findScopedByIdentifier(
+      input.identifier,
+      agentId,
+      undefined,
+      visibility,
+    );
     // Adding a workspace connector follows the member policy. Re-adding over
     // someone else's row rewrites its server/command while the row stays theirs
     // (their runs would execute it, and they could read the new credentials), so
-    // that keeps the creator-or-owner rule.
+    // that keeps the creator-or-owner rule. A private connector is the caller's
+    // own and skips the member policy.
     if (existing && existing.userId !== ctx.userId)
       await assertConnectorCredentialsManageable(ctx, existing);
-    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
+    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId, visibility });
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
@@ -432,6 +422,7 @@ export const connectorRouter = router({
       isEnabled: input.isEnabled ?? true,
       sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
+      visibility,
     });
     return { id: created.id, isNew: true };
   }),
@@ -456,6 +447,7 @@ export const connectorRouter = router({
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Rebinding routes the connector's credentials to the agent — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
+      await assertPrivateConnectorTarget(ctx, connector, input.agentId);
 
       const existingAgentRow = await ctx.connectorModel.findScopedByIdentifier(
         connector.identifier,
@@ -514,8 +506,10 @@ export const connectorRouter = router({
       const source = await ctx.connectorModel.findById(input.connectorId);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Cloning duplicates the source's encrypted credentials into a row the
-      // agent owner controls — creator/owner only.
+      // agent owner controls — creator/owner only. The copy keeps the source's
+      // visibility, so a private connector stays private on the agent.
       await assertConnectorCredentialsManageable(ctx, source);
+      await assertPrivateConnectorTarget(ctx, source, input.agentId);
 
       const existing = await ctx.connectorModel.findScopedByIdentifier(
         source.identifier,
@@ -551,6 +545,7 @@ export const connectorRouter = router({
       // Mounting routes the source's credentials to the agent and locks the
       // row (metadata.mountedByAgentId) — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
+      await assertPrivateConnectorTarget(ctx, connector, input.agentId);
       if (connector.agentId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -617,7 +612,7 @@ export const connectorRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
       }
 
-      const existing: OIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
+      const existing: ConnectorOidcConfig = connector.oidcConfig ?? { scheme: 'dcr' };
       const redirectUri = getConnectorRedirectUri();
 
       // 1. Discover the authorization server backing the MCP resource.
@@ -654,7 +649,7 @@ export const connectorRouter = router({
         });
 
       // 3. Persist the resolved config so the callback + refresh can reuse it.
-      const resolvedOidc: OIDCConfig = {
+      const resolvedOidc: ConnectorOidcConfig = {
         ...existing,
         authorizationEndpoint: metadata.authorization_endpoint,
         clientId,
@@ -714,15 +709,17 @@ export const connectorRouter = router({
       // URL, which would send them elsewhere — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, target);
 
-      const { credentials, ...patch } = input.patch;
-      // Preserve the server-owned `composio.linkedByUserId` from the stored row
-      // and ignore whatever the client sent, so an edit can never spoof (or
-      // silently clear) the connector's authorizer. Untouched when the patch
-      // omits metadata.
-      const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
+      const { credentials, visibility: requestedVisibility, ...patch } = input.patch;
+      const visibility = await resolveVisibilityChange(ctx, target, requestedVisibility);
+      // Keep the stored, server-owned `composio` block and ignore whatever the
+      // client sent, so an edit can never repoint the row at another Composio
+      // account, nor spoof (or silently clear) the connector's authorizer.
+      // Untouched when the patch omits metadata.
+      const metadata = withTrustedComposio(patch.metadata, target.metadata);
       try {
         await ctx.connectorModel.update(input.id, {
           ...patch,
+          ...(visibility && { visibility }),
           ...(patch.metadata === undefined ? {} : { metadata }),
           // undefined → leave untouched; null → clear; object → encrypt the JSON string.
           // When credentials are cleared, also drop the cached expiry timestamp so
@@ -750,7 +747,14 @@ export const connectorRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const connectedAccountId = target.metadata?.composio?.connectedAccountId;
-      if (connectedAccountId) {
+      // The account this row names may also be held by other rows: a
+      // teammate's private connector, or one the caller may not maintain. Then
+      // the remote account and its projection are not this row's to remove;
+      // the row itself still goes.
+      if (
+        connectedAccountId &&
+        !(await findComposioAccountConflict(ctx, target, connectedAccountId))
+      ) {
         try {
           await getComposioClient().connectedAccounts.delete(connectedAccountId);
         } catch (error) {
@@ -763,7 +767,9 @@ export const connectorRouter = router({
         // Personal Composio connections still carry the legacy plugin projection.
         // Agent-scoped connections never create one, so do not remove a base
         // plugin that may belong to a separate personal connection.
-        if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
+        if (!target.agentId) {
+          await removeComposioProjection(ctx.pluginModel, { ...target, connectedAccountId });
+        }
       }
 
       await ctx.connectorModel.delete(input.id);
@@ -816,65 +822,6 @@ export const connectorRouter = router({
     }),
 
   /**
-   * Execute a single connector tool by identifier (classic chat path). Resolves
-   * the connector, hard-blocks disabled tools, refreshes the OAuth token if
-   * needed, and calls the remote MCP server with the decrypted credentials.
-   */
-  callTool: connectorWriteProcedure
-    .input(
-      z.object({
-        /** Resolve the identifier for this agent (agent-owned connector first). */
-        agentId: z.string().optional(),
-        args: z.string().optional(),
-        /** An MCP App view's `tools/call`: only tools visible to the app run. */
-        fromApp: z.boolean().optional(),
-        identifier: z.string().min(1),
-        /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
-        server: z.string().optional(),
-        toolName: z.string().min(1),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      try {
-        return await callConnectorToolById(input, ctx);
-      } catch (err: any) {
-        if (err instanceof ConnectorToolCallError) {
-          throw new TRPCError({ cause: err, code: err.code, message: err.message });
-        }
-        if (err instanceof TRPCError && getMCPConnectionErrorType(err.cause)) throw err;
-        throw new TRPCError({
-          cause: err,
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Connector tool call failed: ${err?.message ?? 'unknown error'}`,
-        });
-      }
-    }),
-
-  /**
-   * Read the MCP Apps `ui://` resource a connector tool result renders with.
-   */
-  readUiResource: connectorProcedure
-    .input(
-      z.object({
-        agentId: z.string().optional(),
-        identifier: z.string().min(1),
-        /** The server the result came from (`getMcpServerFingerprint`). */
-        server: z.string().min(1),
-        uri: z.string().startsWith('ui://'),
-      }),
-    )
-    .query(async ({ input, ctx }) => {
-      try {
-        return await readConnectorUiResourceById(input, ctx);
-      } catch (err: any) {
-        if (err instanceof ConnectorToolCallError) {
-          throw new TRPCError({ cause: err, code: err.code, message: err.message });
-        }
-        throw err;
-      }
-    }),
-
-  /**
    * Reset all tool permissions for a connector back to 'auto' (fully open).
    */
   resetPermissions: connectorWriteProcedure
@@ -886,10 +833,10 @@ export const connectorRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
-      await Promise.all(
-        tools.map((t) =>
-          ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
-        ),
+      await pMap(
+        tools,
+        (t) => ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
+        { concurrency: 5 },
       );
       return { toolCount: tools.length };
     }),
@@ -1015,7 +962,6 @@ export const connectorRouter = router({
   syncBuiltinTool: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      const { builtinTools } = await import('@lobechat/builtin-tools');
       const tool = builtinTools.find((t) => t.identifier === input.identifier);
 
       if (!tool) {
@@ -1121,6 +1067,8 @@ export const connectorRouter = router({
       return { connectorId, toolCount: syncInputs.length };
     }),
 });
+
+export const connectorRouter = mergeRouters(connectorManageRouter, connectorRunRouter);
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 

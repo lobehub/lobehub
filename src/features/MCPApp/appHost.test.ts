@@ -60,6 +60,7 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
       sendMessage,
       server: 'weather-server',
       t: (key: string) => key,
+      topicId: 'tpc_1',
     }),
     onHeight,
     onNavigated,
@@ -398,6 +399,12 @@ describe('connectAppView', () => {
 
     await call(1, 'Rome');
 
+    // Approved and run in the view's conversation, so both resolve the same connector
+    expect(getAppToolCallPolicy).toHaveBeenCalledWith('weather-demo', 'get_forecast', {
+      agentId: 'agt_1',
+      toolArgs: { city: 'Rome' },
+      topicId: 'tpc_1',
+    });
     expect(invokeMcpToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
       // On the server, and where, the view came from
@@ -407,6 +414,7 @@ describe('connectAppView', () => {
         onThisDevice: true,
         server: 'weather-server',
         signal: expect.any(AbortSignal),
+        topicId: 'tpc_1',
       },
     );
   });

@@ -347,11 +347,15 @@ export const discoverTools = async (
     // 5d-1. Patch Lobehub/Composio manifests AND community-MCP plugin manifests
     // with connector tool permissions (see `patchConnectorPermissions`).
     ({ composioManifests, lobehubSkillManifests, pluginsWithoutConnectors } =
-      await patchConnectorPermissions(deps, resolvedAgentId, {
-        composioManifests,
-        lobehubSkillManifests,
-        pluginsWithoutConnectors,
-      }));
+      await patchConnectorPermissions(
+        deps,
+        { agentId: resolvedAgentId, topicId: ctx.topicId },
+        {
+          composioManifests,
+          lobehubSkillManifests,
+          pluginsWithoutConnectors,
+        },
+      ));
 
     await throwIfExecutionAborted('tool discovery');
 

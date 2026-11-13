@@ -1,6 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
-import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorToolPermission } from '@/database/schemas';
 
@@ -15,8 +15,9 @@ export { patchManifestWithPermissions } from './patchManifestPermissions';
  * @param identifier - Connector identifier (e.g. 'gmail', 'vercel')
  * @param toolName  - Tool API name (e.g. 'gmail_search_emails', 'deploy')
  * @param workspaceId - Workspace scope (omit for personal mode)
- * @param agentId - Agent scope: prefer the agent-owned connector row for this
- *   identifier (Agent > Workspace/Personal), matching runtime resolution.
+ * @param target - The run's agent and topic, so the gate resolves the same
+ *   row the run's manifests were built from (agent-owned rows, and a private
+ *   agent's own private connectors in its own topic).
  *
  * Returns the stored permission, or null if no connector/tool entry exists.
  */
@@ -26,14 +27,14 @@ export async function getConnectorToolPermission(
   identifier: string,
   toolName: string,
   workspaceId?: string,
-  agentId?: string,
+  target: ConnectorRunTarget = {},
 ): Promise<ConnectorToolPermission | null> {
   try {
     const connectorModel = new ConnectorModel(db, userId, workspaceId);
-    const [connector] = await connectorModel.resolveByIdentifiers([identifier], { agentId });
+    const [connector] = await connectorModel.resolveByIdentifiers([identifier], target);
     if (!connector) return null;
 
-    const toolModel = new ConnectorToolModel(db, userId, workspaceId);
+    const toolModel = new ConnectorToolModel(db, userId, workspaceId, { agentRun: true });
     const tools = await toolModel.queryByConnector(connector.id);
     return (
       (tools.find((t) => t.toolName === toolName)?.permission as ConnectorToolPermission) ?? null

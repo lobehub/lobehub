@@ -40,6 +40,12 @@ export interface AppViewContext {
   /** The MCP server the view came from; its tool calls reach no other. */
   server?: string;
   t: TFunction<'plugin'> | ((key: string, options?: Record<string, unknown>) => string);
+  /**
+   * The conversation the result belongs to: its calls resolve connectors with
+   * the same run scope the producing tool call had, so a private agent's own
+   * topic can reach its owner's private connectors.
+   */
+  topicId?: string;
 }
 
 export interface ConnectAppViewOptions {
@@ -128,8 +134,8 @@ export const connectAppView = ({
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
-      const { agentId, identifier, onThisDevice, server, t } = getContext();
-      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
+      const { agentId, identifier, onThisDevice, server, t, topicId } = getContext();
+      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs, topicId });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {
         if (pendingToolApprovals >= MAX_PENDING_TOOL_APPROVALS) {
@@ -177,7 +183,7 @@ export const connectAppView = ({
               type: 'mcp',
             },
             // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal },
+            { agentId, fromMcpApp: true, onThisDevice, server, signal, topicId },
           ),
         );
       } finally {

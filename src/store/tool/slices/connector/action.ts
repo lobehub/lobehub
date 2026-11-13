@@ -536,13 +536,14 @@ export class ConnectorActionImpl {
    * Sync tools from a client-provided list (for Lobehub OAuth skills / Composio
    * that already have their tool list available on the client side).
    * Idempotent — safe to call whenever the detail panel opens.
+   * Returns the connectorId, or `null` when no row was produced.
    */
   syncToolsFromClient = async (params: {
     identifier: string;
     name: string;
     sourceType: 'builtin' | 'custom' | 'marketplace';
     tools: Array<{ description?: string; inputSchema?: Record<string, unknown>; toolName: string }>;
-  }): Promise<string> => {
+  }): Promise<string | null> => {
     const result = await lambdaClient.connector.syncToolsFromClient.mutate(params);
     await this.fetchConnectors();
     return result.connectorId;
@@ -551,9 +552,9 @@ export class ConnectorActionImpl {
   /**
    * Bootstrap connector entry for a builtin tool (reads manifest server-side).
    * Idempotent — safe to call whenever the detail panel opens.
-   * Returns the connectorId.
+   * Returns the connectorId, or `null` when no row was produced.
    */
-  syncBuiltinTool = async (identifier: string): Promise<string> => {
+  syncBuiltinTool = async (identifier: string): Promise<string | null> => {
     const result = await lambdaClient.connector.syncBuiltinTool.mutate({ identifier });
     await this.fetchConnectors();
     return result.connectorId;
@@ -563,7 +564,8 @@ export class ConnectorActionImpl {
    * Bootstrap connector entry for an installed marketplace plugin.
    * Idempotent — safe to call whenever the detail panel opens.
    * Returns the connectorId, or `null` for legacy customPlugin rows that own
-   * an MCP endpoint (those go through the frontend migration flow instead).
+   * an MCP endpoint (those go through the frontend migration flow instead) and
+   * for a plugin whose Composio account sits on a teammate's private connector.
    */
   syncPluginTools = async (identifier: string): Promise<string | null> => {
     const result = await lambdaClient.connector.syncPluginTools.mutate({ identifier });

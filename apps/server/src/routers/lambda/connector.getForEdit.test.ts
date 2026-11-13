@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 
@@ -79,5 +80,139 @@ describe('connectorRouter.getForEdit', () => {
       code: 'FORBIDDEN',
     });
     expect(queryByConnector).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectorRouter.getForRun', () => {
+  const resolveByIdentifiers = vi.fn();
+  const existsById = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return { existsById } as never;
+    });
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return { resolveByIdentifiers } as never;
+    });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return { queryByConnector } as never;
+    });
+    existsById.mockResolvedValue(true);
+    resolveByIdentifiers.mockResolvedValue([connector]);
+    queryByConnector.mockResolvedValue(tools);
+  });
+
+  const caller = (userId: string) =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId,
+      workspaceId: 'workspace',
+      workspaceRole: 'member',
+    } as never);
+
+  const input = { agentId: 'agent-private', identifier: 'local-mcp', topicId: 'topic-group' };
+
+  it('returns the row the conversation resolves on the server, not one the client picked', async () => {
+    // A desktop runs a stdio connector itself. Only the server can tell a
+    // private agent's own topic from a group topic, so it names the row.
+    await expect(caller('creator').getForRun(input)).resolves.toMatchObject({
+      id: connector.id,
+      mcpStdioConfig: connector.mcpStdioConfig,
+      tools,
+    });
+
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['local-mcp'], {
+      agentId: 'agent-private',
+      topicId: 'topic-group',
+    });
+    // A private agent may resolve its owner's personal connector, whose tools
+    // live in the personal scope.
+    expect(ConnectorToolModel).toHaveBeenCalledWith(expect.anything(), 'creator', 'workspace', {
+      agentRun: true,
+    });
+  });
+
+  it('resolves nothing for an agent the caller cannot see', async () => {
+    existsById.mockResolvedValue(false);
+
+    await expect(caller('creator').getForRun(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(resolveByIdentifiers).not.toHaveBeenCalled();
+  });
+
+  it('keeps the resolved configuration behind the creator gate', async () => {
+    await expect(caller('another-member').getForRun(input)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(queryByConnector).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectorRouter.resolveForRun', () => {
+  const resolveByIdentifiers = vi.fn();
+  const existsById = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return { existsById } as never;
+    });
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return { resolveByIdentifiers } as never;
+    });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return { queryByConnector } as never;
+    });
+    existsById.mockResolvedValue(true);
+    resolveByIdentifiers.mockResolvedValue([connector]);
+    queryByConnector.mockResolvedValue(tools);
+  });
+
+  const caller = (userId: string) =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId,
+      workspaceId: 'workspace',
+      workspaceRole: 'viewer',
+    } as never);
+
+  const input = { agentId: 'agent-private', identifier: 'local-mcp', topicId: 'topic-group' };
+
+  it('names the row the conversation runs on, with its transport but not its configuration', async () => {
+    // Any member who can call the tool may ask: the answer routes the call and
+    // judges its approval, never the creator-gated stdio command and env that
+    // getForRun returns.
+    await expect(caller('another-member').resolveForRun(input)).resolves.toEqual({
+      id: connector.id,
+      identifier: 'local-mcp',
+      isEnabled: true,
+      mcpConnectionType: 'stdio',
+      mcpServerUrl: undefined,
+      tools,
+    });
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['local-mcp'], {
+      agentId: 'agent-private',
+      topicId: 'topic-group',
+    });
+  });
+
+  it("reads the tools of the owner's personal connector a private agent runs", async () => {
+    // Regression: the client's workspace lists never hold a personal row, so a
+    // desktop could not tell that the call runs a stdio connector and sent it
+    // to the server, which cannot run one.
+    await caller('creator').resolveForRun(input);
+
+    expect(ConnectorToolModel).toHaveBeenCalledWith(expect.anything(), 'creator', 'workspace', {
+      agentRun: true,
+    });
+    expect(queryByConnector).toHaveBeenCalledWith(connector.id);
+  });
+
+  it('answers null when the conversation resolves no row', async () => {
+    resolveByIdentifiers.mockResolvedValue([]);
+    await expect(caller('creator').resolveForRun(input)).resolves.toBeNull();
+
+    existsById.mockResolvedValue(false);
+    await expect(caller('creator').resolveForRun(input)).resolves.toBeNull();
   });
 });

@@ -2,6 +2,8 @@ import { type ChatToolPayload, type ToolManifest } from '@lobechat/types';
 import superjson from 'superjson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useAgentStore } from '@/store/agent';
+
 import { mcpService } from './mcp';
 
 const mockElectronIpc = {
@@ -54,7 +56,8 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
       callTool: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
+      getForRun: { query: vi.fn() },
+      resolveForRun: { query: vi.fn() },
     },
   },
   toolsClient: {
@@ -187,7 +190,7 @@ describe('MCPService', () => {
         environment.deviceGatewayConfigured = false;
         mockGetToolStoreState.mockReturnValue({ connectors: [connector] });
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(detail as never);
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(detail as never);
       });
 
       it('executes through local IPC with fresh configuration when no gateway is configured', async () => {
@@ -211,6 +214,115 @@ describe('MCPService', () => {
         expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
       });
 
+      it('runs the row the server resolves for the conversation, not the one ranked here', async () => {
+        // Regression: a private agent's private row was picked on the agent's
+        // visibility alone, so in a conversation the server keeps private rows
+        // out of (a group topic) the shared tool ran with the private account.
+        // The server names the row; the desktop runs that one.
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [
+            { ...connector, id: 'connector-shared', visibility: 'public' },
+            { ...connector, id: 'connector-private', visibility: 'private' },
+          ],
+        });
+        vi.mocked(lambdaClient.connector.resolveForRun.query).mockResolvedValue({
+          id: 'connector-shared',
+        });
+        const shared = {
+          ...detail,
+          id: 'connector-shared',
+          mcpStdioConfig: { command: 'node', args: ['mcp.js'], env: { TOKEN: 'shared-secret' } },
+        };
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(shared as never);
+        mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize({ success: true }));
+
+        await mcpService.invokeMcpToolCall(payload, {
+          agentId: 'agt_private',
+          topicId: 'tpc_group',
+        });
+
+        const run = {
+          agentId: 'agt_private',
+          identifier: payload.identifier,
+          topicId: 'tpc_group',
+        };
+        expect(lambdaClient.connector.resolveForRun.query).toHaveBeenCalledWith(run);
+        expect(lambdaClient.connector.getForRun.query).toHaveBeenCalledWith(run);
+        expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toMatchObject({
+          env: { TOKEN: 'shared-secret' },
+        });
+      });
+
+      it('sends the call to the server when the conversation runs a shared HTTP row', async () => {
+        // Regression: the private stdio row was ranked first and took the IPC
+        // route, then the server-resolved row turned out to be the shared HTTP
+        // one (a group topic keeps private rows out), and the stdio check threw
+        // instead of running the valid shared tool.
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        // A private agent, whose private row the conversation might use
+        useAgentStore.setState({ agentMap: { agt_private: { visibility: 'private' } } } as never);
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [
+            { ...connector, id: 'connector-private', visibility: 'private' },
+            {
+              ...connector,
+              id: 'connector-shared',
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://mcp.example.com/mcp',
+              visibility: 'public',
+            },
+          ],
+        });
+        vi.mocked(lambdaClient.connector.resolveForRun.query).mockResolvedValue({
+          id: 'connector-shared',
+        });
+        // What the server resolves: the shared HTTP row
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
+          ...detail,
+          id: 'connector-shared',
+          mcpConnectionType: 'http',
+          mcpStdioConfig: null,
+        } as never);
+        const result = { content: 'shared result', success: true };
+        vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
+
+        await expect(
+          mcpService.invokeMcpToolCall(payload, { agentId: 'agt_private', topicId: 'tpc_group' }),
+        ).resolves.toEqual(result);
+        expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ agentId: 'agt_private', topicId: 'tpc_group' }),
+          expect.anything(),
+        );
+        expect(lambdaClient.connector.getForRun.query).not.toHaveBeenCalled();
+        expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      });
+
+      it('runs the private stdio row over IPC once the server resolves it', async () => {
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [
+            { ...connector, id: 'connector-private', visibility: 'private' },
+            {
+              ...connector,
+              id: 'connector-shared',
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://mcp.example.com/mcp',
+              visibility: 'public',
+            },
+          ],
+        });
+        vi.mocked(lambdaClient.connector.resolveForRun.query).mockResolvedValue({
+          id: 'connector-private',
+        });
+        mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize({ success: true }));
+
+        await mcpService.invokeMcpToolCall(payload, { agentId: 'agt_private', topicId: 'tpc_own' });
+
+        expect(mockElectronIpc.mcp.callTool).toHaveBeenCalledTimes(1);
+        expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+      });
+
       it.each([
         { desktop: true, gateway: true },
         { desktop: true, gateway: undefined },
@@ -229,7 +341,7 @@ describe('MCPService', () => {
           vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
 
           await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
-          expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+          expect(lambdaClient.connector.getForRun.query).not.toHaveBeenCalled();
           expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
         },
       );
@@ -245,7 +357,7 @@ describe('MCPService', () => {
         },
       ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(current as never);
 
         await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow();
         expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
@@ -254,9 +366,7 @@ describe('MCPService', () => {
 
       it('does not execute when the protected configuration read is denied', async () => {
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockRejectedValue(
-          new Error('FORBIDDEN'),
-        );
+        vi.mocked(lambdaClient.connector.getForRun.query).mockRejectedValue(new Error('FORBIDDEN'));
 
         await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow('FORBIDDEN');
         expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();

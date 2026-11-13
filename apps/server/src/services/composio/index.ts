@@ -1,12 +1,12 @@
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ResolvedConnectorRef } from '@lobechat/types';
 import debug from 'debug';
 
-import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import type { UserConnectorToolItem } from '@/database/schemas';
 import {
   getComposioClient,
   isComposioClientAvailable,
@@ -14,9 +14,9 @@ import {
 } from '@/libs/composio';
 import { type ToolExecutionResult } from '@/server/services/toolExecution/types';
 
-const log = debug('lobe-server:composio-service');
+import { selectLegacyComposioMirrors, VALID_COMPOSIO_IDENTIFIERS } from './legacyMirrors';
 
-const VALID_COMPOSIO_IDENTIFIERS = new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier));
+const log = debug('lobe-server:composio-service');
 
 export interface ComposioToolExecuteParams {
   /**
@@ -28,6 +28,11 @@ export interface ComposioToolExecuteParams {
   args: Record<string, any>;
   identifier: string;
   toolSlug: string;
+  /**
+   * The topic the run writes into. A private agent's own topic lets it use its
+   * owner's private Composio connection (see `ConnectorRunTarget`).
+   */
+  topicId?: string;
 }
 
 export interface ComposioServiceOptions {
@@ -66,7 +71,7 @@ export class ComposioService {
       // connector model's resolve* methods.
       this.pluginModel = new PluginModel(db, userId, workspaceId);
       this.connectorModel = new ConnectorModel(db, userId, workspaceId);
-      this.connectorToolModel = new ConnectorToolModel(db, userId, workspaceId);
+      this.connectorToolModel = new ConnectorToolModel(db, userId, workspaceId, { agentRun: true });
     }
 
     log(
@@ -79,9 +84,9 @@ export class ComposioService {
   }
 
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
-    const { identifier, toolSlug, args, agentId } = params;
+    const { identifier, toolSlug, args, agentId, topicId } = params;
     let resolvedConnectedAccountId: string | undefined;
-    let resolvedConnectorId: string | undefined;
+    let resolvedConnector: ResolvedConnectorRef | undefined;
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
@@ -116,7 +121,7 @@ export class ComposioService {
     }
 
     try {
-      const account = await this.resolveComposioAccount(identifier, agentId);
+      const account = await this.resolveComposioAccount(identifier, { agentId, topicId });
       if (!account) {
         return {
           content: `Composio configuration not found for server "${identifier}"`,
@@ -130,7 +135,7 @@ export class ComposioService {
 
       const { connectedAccountId, ownerUserId } = account;
       resolvedConnectedAccountId = connectedAccountId;
-      resolvedConnectorId = account.connectorId;
+      resolvedConnector = account.connector;
 
       log(
         'executeComposioTool: calling Composio API with connectedAccountId=%s, ownerUserId=%s',
@@ -179,15 +184,17 @@ export class ComposioService {
       const err = error as Error;
       if (
         resolvedConnectedAccountId &&
-        resolvedConnectorId &&
+        resolvedConnector &&
         this.connectorModel &&
         isComposioConnectedAccountNotFoundError(error)
       ) {
         try {
-          await this.connectorModel.markComposioConnectionUnavailable(
-            resolvedConnectorId,
-            resolvedConnectedAccountId,
-          );
+          // The row may live in another scope than this service's (a private
+          // agent resolving its owner's personal row): write the health state
+          // through the row's own model, or the update silently matches nothing.
+          await this.connectorModel
+            .forRow(resolvedConnector)
+            .markComposioConnectionUnavailable(resolvedConnector.id, resolvedConnectedAccountId);
         } catch (healthError) {
           // Persisting connector health must not replace the original remote tool error.
           log('executeComposioTool: failed to persist connector health: %O', healthError);
@@ -222,37 +229,46 @@ export class ComposioService {
    * actually linked the current account) and falls back to the row creator
    * (`userId`) for rows written before that field existed — the two diverge when
    * a workspace owner reconnects a member-created connector.
+   *
+   * Every path that runs a Composio account resolves it here (the agent
+   * runtime and the manual `tools.composio.executeAction`), so a connector the
+   * caller may not use is not served from its plugin mirror on any of them.
    */
-  private async resolveComposioAccount(
+  async resolveComposioAccount(
     identifier: string,
-    agentId?: string,
+    target: ConnectorRunTarget,
   ): Promise<
-    { connectedAccountId: string; connectorId?: string; ownerUserId: string } | undefined
+    | {
+        connectedAccountId: string;
+        connector?: ResolvedConnectorRef;
+        ownerUserId: string;
+      }
+    | undefined
   > {
     if (this.connectorModel) {
-      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], { agentId });
+      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], target);
       const composio = connector?.metadata?.composio;
       if (composio?.connectedAccountId) {
         return {
           connectedAccountId: composio.connectedAccountId,
-          connectorId: connector.id,
+          connector: {
+            id: connector.id,
+            userId: connector.userId,
+            workspaceId: connector.workspaceId,
+          },
           ownerUserId: composio.linkedByUserId ?? connector.userId ?? this.userId!,
         };
       }
     }
 
-    if (this.pluginModel) {
-      const plugin = await this.pluginModel.findById(identifier);
-      const composio = plugin?.customParams?.composio;
-      if (composio?.connectedAccountId) {
-        return {
-          connectedAccountId: composio.connectedAccountId,
-          ownerUserId: composio.linkedByUserId ?? plugin?.userId ?? this.userId!,
-        };
-      }
-    }
+    if (!this.pluginModel) return undefined;
 
-    return undefined;
+    const [mirror] = await selectLegacyComposioMirrors(
+      await this.pluginModel.queryComposioMirrors([identifier]),
+      this.connectorModel,
+    );
+    if (!mirror) return undefined;
+    return { connectedAccountId: mirror.connectedAccountId, ownerUserId: mirror.ownerUserId };
   }
 
   /**
@@ -261,7 +277,7 @@ export class ComposioService {
    * grant.
    */
   async getComposioManifests(
-    agentId?: string,
+    target: ConnectorRunTarget = {},
     options?: { identifiers?: string[] },
   ): Promise<LobeToolManifest[]> {
     const manifests: LobeToolManifest[] = [];
@@ -277,8 +293,8 @@ export class ComposioService {
     if (this.connectorModel && this.connectorToolModel) {
       try {
         const connectors = identifiers
-          ? await this.connectorModel.resolveByIdentifiers(identifiers, { agentId })
-          : await this.connectorModel.resolveAll({ agentId });
+          ? await this.connectorModel.resolveByIdentifiers(identifiers, target)
+          : await this.connectorModel.resolveAll(target);
         const composioConnectors = connectors.filter(
           (c) =>
             VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&
@@ -290,7 +306,7 @@ export class ComposioService {
           const tools = await this.connectorToolModel.queryAllByConnectorIds(
             composioConnectors.map((c) => c.id),
           );
-          const toolsByConnector = new Map<string, UserConnectorToolItem[]>();
+          const toolsByConnector = new Map<string, typeof tools>();
           for (const tool of tools) {
             const list = toolsByConnector.get(tool.userConnectorId) ?? [];
             list.push(tool);
@@ -335,20 +351,20 @@ export class ComposioService {
 
     // 2. Plugin-based fallback (old path): only for identifiers not already
     //    covered by a connector projection. Preserves manifests for connections
-    //    created before dual-write, so no migration is needed.
+    //    created before dual-write, so no migration is needed. The same legacy
+    //    connection resolveComposioAccount runs: an active projection row no
+    //    connector row stands behind, one per app.
     if (this.pluginModel) {
       try {
-        const allPlugins = await this.pluginModel.query();
-        const composioPlugins = allPlugins.filter(
-          (plugin) =>
-            VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier) &&
-            plugin.customParams?.composio?.status === 'ACTIVE' &&
-            !coveredIdentifiers.has(plugin.identifier) &&
-            (!identifiers || identifiers.includes(plugin.identifier)),
+        const plugins = (await this.pluginModel.queryComposioMirrors(identifiers)).filter(
+          (plugin) => !coveredIdentifiers.has(plugin.identifier),
         );
+        const mirrors = await selectLegacyComposioMirrors(plugins, this.connectorModel);
 
-        for (const plugin of composioPlugins) {
-          if (!plugin.manifest) continue;
+        for (const { plugin } of mirrors) {
+          if (plugin.customParams?.composio?.status !== 'ACTIVE') continue;
+          if (coveredIdentifiers.has(plugin.identifier) || !plugin.manifest) continue;
+          coveredIdentifiers.add(plugin.identifier);
           const appType = COMPOSIO_APP_TYPES.find((t) => t.identifier === plugin.identifier);
 
           manifests.push({

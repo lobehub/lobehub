@@ -232,12 +232,18 @@ export class PluginActionImpl {
       agentId,
       onThisDevice = false,
       server,
-    }: { agentId?: string; onThisDevice?: boolean; server?: string },
+      topicId,
+    }: { agentId?: string; onThisDevice?: boolean; server?: string; topicId?: string },
   ): SWRResponse<ReadResourceResult | undefined> =>
     useClientDataSWR(
-      mcpAppKeys.resource(identifier, resourceUri, { agentId, onThisDevice, server }),
+      mcpAppKeys.resource(identifier, resourceUri, { agentId, onThisDevice, server, topicId }),
       () =>
-        mcpService.readMcpAppResource(identifier, resourceUri, { agentId, onThisDevice, server }),
+        mcpService.readMcpAppResource(identifier, resourceUri, {
+          agentId,
+          onThisDevice,
+          server,
+          topicId,
+        }),
       { revalidateOnFocus: false, revalidateOnReconnect: false },
     );
 

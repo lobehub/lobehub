@@ -19,9 +19,11 @@ afterEach(() => {
 });
 
 // Mock the store and helper dependencies
+let mockConnectors: any[] = [];
+
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
-    connectors: [],
+    connectors: mockConnectors,
     builtinTools: [
       { identifier: AuvManifest.identifier, manifest: AuvManifest, type: 'builtin' as const },
       {
@@ -214,10 +216,13 @@ vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
 }));
 
+let mockCurrentAgentVisibility: 'private' | 'public' | undefined;
+
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     currentAgentDisabledPlugins: () => mockCurrentAgentDisabledPlugins,
     currentAgentPlugins: () => mockCurrentAgentPlugins,
+    currentAgentVisibility: () => mockCurrentAgentVisibility,
     hasEnabledKnowledgeBases: () => false,
   },
   agentChatConfigSelectors: {
@@ -270,6 +275,8 @@ describe('toolEngineering', () => {
     mockImageOutputSupport = false;
     mockServerConfig = {};
     mockFeatureFlags = {};
+    mockConnectors = [];
+    mockCurrentAgentVisibility = undefined;
   });
 
   describe('feature-flagged tools', () => {
@@ -826,6 +833,73 @@ describe('toolEngineering', () => {
       });
 
       expect(result.enabledToolIds).toContain('http-mcp-plugin');
+    });
+  });
+
+  describe('private (私人) workspace connectors', () => {
+    const connector = (identifier: string, visibility: 'private' | 'public') => ({
+      credentials: null,
+      id: `${identifier}-id`,
+      identifier,
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: `https://${identifier}.example.com/mcp`,
+      metadata: null,
+      name: identifier,
+      sourceType: 'custom',
+      status: 'connected',
+      tools: [
+        {
+          crudType: 'read',
+          description: 'Search',
+          displayName: 'Search',
+          id: `${identifier}-search`,
+          inputSchema: { properties: {}, type: 'object' },
+          permission: 'auto',
+          toolName: 'search',
+          userConnectorId: `${identifier}-id`,
+        },
+      ],
+      visibility,
+    });
+
+    const enabledConnectorIds = (manifestContext?: { isSubAgent?: boolean; scope?: string }) => {
+      mockConnectors = [connector('ws-linear', 'public'), connector('my-notion', 'private')];
+      mockCurrentAgentPlugins = ['ws-linear', 'my-notion'];
+      return createAgentToolsEngine(
+        { model: 'gpt-4', provider: 'openai' },
+        undefined,
+        manifestContext,
+      )
+        .generateToolsDetailed({
+          model: 'gpt-4',
+          provider: 'openai',
+          toolIds: ['ws-linear', 'my-notion'],
+        })
+        .enabledToolIds.filter((id) => id === 'ws-linear' || id === 'my-notion')
+        .sort();
+    };
+
+    it('keeps them away from a workspace agent', () => {
+      mockCurrentAgentVisibility = 'public';
+
+      expect(enabledConnectorIds()).toEqual(['ws-linear']);
+    });
+
+    it("offers them in a private agent's own conversation", () => {
+      mockCurrentAgentVisibility = 'private';
+
+      expect(enabledConnectorIds({ scope: 'main' })).toEqual(['my-notion', 'ws-linear']);
+    });
+
+    it.each([
+      { scope: 'group' },
+      { scope: 'group_agent' },
+      { isSubAgent: true, scope: 'sub_agent' },
+    ])('keeps them out of a private agent run in %o', (manifestContext) => {
+      mockCurrentAgentVisibility = 'private';
+
+      expect(enabledConnectorIds(manifestContext)).toEqual(['ws-linear']);
     });
   });
 

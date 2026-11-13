@@ -4,33 +4,53 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { composioToolsRouter } from './composio';
 
 const mocks = vi.hoisted(() => ({
-  connectorQueryByIdentifiers: vi.fn(),
+  agentExistsById: vi.fn(),
+  connectorForRow: vi.fn(),
+  connectorPickLegacyMirrors: vi.fn(),
+  connectorResolveByIdentifiers: vi.fn(),
   isComposioNotFound: vi.fn(),
   markComposioUnavailable: vi.fn(),
-  pluginFindById: vi.fn(),
+  pluginQueryMirrors: vi.fn(),
   processToolCallResult: vi.fn(),
   toolsExecute: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
 
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn().mockImplementation(function () {
+    return { existsById: mocks.agentExistsById };
+  }),
+}));
+
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
-    return {
+    const model: Record<string, unknown> = {
+      forRow: mocks.connectorForRow,
+      pickLegacyComposioMirrors: mocks.connectorPickLegacyMirrors,
       markComposioConnectionUnavailable: mocks.markComposioUnavailable,
-      queryByIdentifiers: mocks.connectorQueryByIdentifiers,
+      resolveByIdentifiers: mocks.connectorResolveByIdentifiers,
     };
+    mocks.connectorForRow.mockReturnValue(model);
+    return model;
+  }),
+}));
+
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {};
   }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(function () {
-    return { findById: mocks.pluginFindById };
+    return { queryComposioMirrors: mocks.pluginQueryMirrors };
   }),
 }));
 
 vi.mock('@/libs/composio', () => ({
   getComposioClient: () => ({ tools: { execute: mocks.toolsExecute } }),
+  isComposioClientAvailable: () => true,
   isComposioConnectedAccountNotFoundError: mocks.isComposioNotFound,
 }));
 
@@ -43,7 +63,9 @@ const input = { identifier: 'gmail', toolArgs: { to: 'a@b.c' }, toolSlug: 'GMAIL
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+  mocks.agentExistsById.mockResolvedValue(true);
+  mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
+  mocks.connectorPickLegacyMirrors.mockImplementation(async (mirrors: unknown[]) => mirrors);
   mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
     return (
       typeof error === 'object' &&
@@ -53,14 +75,14 @@ beforeEach(() => {
     );
   });
   mocks.markComposioUnavailable.mockResolvedValue(false);
-  mocks.pluginFindById.mockResolvedValue(undefined);
+  mocks.pluginQueryMirrors.mockResolvedValue([]);
   mocks.toolsExecute.mockResolvedValue({ data: 'ok' });
   mocks.processToolCallResult.mockResolvedValue({ content: 'ok', success: true });
 });
 
 describe('composioToolsRouter.executeAction', () => {
   it('resolves connectedAccountId from connector metadata (new path)', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
       { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
     ]);
 
@@ -70,7 +92,9 @@ describe('composioToolsRouter.executeAction', () => {
       'GMAIL_SEND_EMAIL',
       expect.objectContaining({ connectedAccountId: 'ca-connector', userId: 'user-1' }),
     );
-    expect(mocks.pluginFindById).not.toHaveBeenCalled();
+    // No conversation is named, so only the rows any run may use resolve.
+    expect(mocks.connectorResolveByIdentifiers).toHaveBeenCalledWith(['gmail'], {});
+    expect(mocks.pluginQueryMirrors).not.toHaveBeenCalled();
   });
 
   /**
@@ -81,7 +105,7 @@ describe('composioToolsRouter.executeAction', () => {
     const notFound = Object.assign(new Error('connected account not found'), {
       code: 'CONNECTED_ACCOUNT_NOT_FOUND',
     });
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
       { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
     ]);
     mocks.toolsExecute.mockRejectedValue(notFound);
@@ -90,6 +114,9 @@ describe('composioToolsRouter.executeAction', () => {
     await expect(caller().executeAction(input)).rejects.toMatchObject({
       message: 'connected account not found',
     });
+    expect(mocks.connectorForRow).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'conn-gmail' }),
+    );
     expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('conn-gmail', 'ca-connector');
   });
 
@@ -102,7 +129,7 @@ describe('composioToolsRouter.executeAction', () => {
     //
     // Tool actions can return 404 for the target resource while their connected account is healthy.
     // Only Composio's explicit connected-account-not-found error may update connector health here.
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
       { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
     ]);
     mocks.toolsExecute.mockRejectedValue(
@@ -116,10 +143,14 @@ describe('composioToolsRouter.executeAction', () => {
   });
 
   it('falls back to plugin customParams when no connector projection exists', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
-    mocks.pluginFindById.mockResolvedValue({
-      customParams: { composio: { connectedAccountId: 'ca-plugin' } },
-    });
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
+    mocks.pluginQueryMirrors.mockResolvedValue([
+      {
+        customParams: { composio: { connectedAccountId: 'ca-plugin' } },
+        identifier: 'gmail',
+        userId: 'user-2',
+      },
+    ]);
 
     await caller().executeAction(input);
 
@@ -129,9 +160,90 @@ describe('composioToolsRouter.executeAction', () => {
     );
   });
 
+  /**
+   * @example
+   * expect(executeAction()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+   */
+  it('does not run the plugin mirror of a connector the caller cannot see', async () => {
+    // ROOT CAUSE:
+    //
+    // The shared-row lookup misses a connector its creator made private, and the route read
+    // that miss as a pre-connector legacy connection. The workspace-wide plugin projection
+    // still mirrors the account, so any member ran it as the creator's Composio entity.
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
+    mocks.connectorPickLegacyMirrors.mockResolvedValue([]);
+    mocks.pluginQueryMirrors.mockResolvedValue([
+      {
+        customParams: { composio: { connectedAccountId: 'ca-private', linkedByUserId: 'user-2' } },
+        identifier: 'gmail',
+        userId: 'user-2',
+      },
+    ]);
+
+    await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.pluginQueryMirrors).toHaveBeenCalledWith(['gmail']);
+    expect(mocks.connectorPickLegacyMirrors).toHaveBeenCalledWith([
+      expect.objectContaining({
+        connectedAccountId: 'ca-private',
+        identifier: 'gmail',
+        ownerUserId: 'user-2',
+      }),
+    ]);
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
+  it('resolves the account in the conversation the call came from', async () => {
+    // ROOT CAUSE:
+    //
+    // The client runtime ran every Composio call with no conversation named, so the server
+    // resolved the workspace's shared rows only. A private agent's own Composio connection,
+    // which the server runtime runs in that agent's direct topic, came back NOT_FOUND or ran
+    // the shared account of the same app. The scope proof (the caller's own private agent and
+    // its own direct topic) stays in SQL, in `connectorRunScope`.
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
+      { id: 'conn-private', metadata: { composio: { connectedAccountId: 'ca-private' } } },
+    ]);
+
+    await caller().executeAction({ ...input, agentId: 'agt-private', topicId: 'tpc-direct' });
+
+    expect(mocks.agentExistsById).toHaveBeenCalledWith('agt-private');
+    expect(mocks.connectorResolveByIdentifiers).toHaveBeenCalledWith(['gmail'], {
+      agentId: 'agt-private',
+      topicId: 'tpc-direct',
+    });
+    expect(mocks.toolsExecute).toHaveBeenCalledWith(
+      'GMAIL_SEND_EMAIL',
+      expect.objectContaining({ connectedAccountId: 'ca-private' }),
+    );
+  });
+
+  /**
+   * @example
+   * expect(executeAction({ agentId: hiddenAgent })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+   */
+  it('refuses to run as an agent the caller cannot see', async () => {
+    // ROOT CAUSE:
+    //
+    // The route forwarded the client's agentId to the resolver unchecked, and an agent's own
+    // rows (`agent_id = agentId`) are scoped by workspace only. A teammate who kept the id of
+    // an agent made private since ran its agent-owned Composio account with any tool and
+    // arguments. Connector calls check the agent first (`resolveConnectorForRun`).
+    mocks.agentExistsById.mockResolvedValue(false);
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
+      { id: 'conn-agent', metadata: { composio: { connectedAccountId: 'ca-agent' } } },
+    ]);
+
+    await expect(
+      caller().executeAction({ ...input, agentId: 'agt-hidden', topicId: 'tpc-any' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.agentExistsById).toHaveBeenCalledWith('agt-hidden');
+    expect(mocks.connectorResolveByIdentifiers).not.toHaveBeenCalled();
+    expect(mocks.pluginQueryMirrors).not.toHaveBeenCalled();
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
   it('throws NOT_FOUND when neither source has a connection', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
-    mocks.pluginFindById.mockResolvedValue(undefined);
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
 
     await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
