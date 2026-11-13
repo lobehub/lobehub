@@ -37,7 +37,12 @@ const launch = async (env: Record<string, string>, failure?: { code: number; scr
         },
       },
       require: (name: string) =>
-        modules[name] ?? { checkDeprecatedAuth: () => undefined, checkGatewayConfig: () => [] },
+        modules[name] ??
+        {
+          checkDeprecatedAuth: () => undefined,
+          checkGatewayConfig: () => [],
+          normalizeServerHostname: () => undefined,
+        },
     })
     .catch((error: Error) => {
       if (error.message !== 'launcher exited') throw error;
