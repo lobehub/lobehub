@@ -20,14 +20,19 @@ type ComposioAccountCtx = Parameters<typeof assertConnectorMaintainable>[0] & {
  * by its id alone, so the remote delete reaches every row that runs it:
  *
  * - an account a teammate's private connector holds is that member's, even
- *   when a row of the caller's names it too (a connector's metadata is
- *   client-written);
+ *   when a row of the caller's names it too;
  * - an account other rows hold is acted on only through one of them, and only
  *   when the caller may maintain each of them;
  * - an account no row holds is a legacy connection, which exists only as a
  *   plugin projection row of the app (`loadLegacyMirrors`). A write that has
  *   no legacy connection to act on (an agent's, which has no projection)
  *   omits it, and such an account is refused.
+ *
+ * The holders can be trusted because only the server writes the account a
+ * row names: the Composio connect paths link it, and the generic connector
+ * create/update drop any `composio` block a client sends
+ * (`withTrustedComposio`). A member cannot plant a private row naming a
+ * teammate's account to lock its owner out of it.
  */
 export const findComposioAccountConflict = async (
   ctx: ComposioAccountCtx,

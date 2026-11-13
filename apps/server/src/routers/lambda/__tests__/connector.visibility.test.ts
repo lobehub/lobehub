@@ -123,6 +123,22 @@ describe('connectorRouter visibility', () => {
       );
     });
 
+    it('never stores a Composio account a member names on a connector they add', async () => {
+      // Regression: a member read a shared connection's account id and added a
+      // private connector naming it. Every Composio write then found a
+      // teammate's private row holding the account and refused its real owner,
+      // while nobody else could see the planted row to remove it.
+      await member().create({
+        ...createInput,
+        metadata: { avatar: '🔌', composio: { connectedAccountId: 'acc-shared' } },
+        visibility: 'private',
+      });
+
+      expect(connectorModelMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { avatar: '🔌' } }),
+      );
+    });
+
     it('shares by default, and stores personal rows as shared', async () => {
       await member().create(createInput);
       await callerFor({}).create({ ...createInput, visibility: 'private' });
@@ -225,6 +241,30 @@ describe('connectorRouter visibility', () => {
         member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(connectorModelMock.update).not.toHaveBeenCalled();
+    });
+
+    it('keeps the Composio account a row names when an edit sends another', async () => {
+      connectorModelMock.findById.mockResolvedValue(
+        row({
+          metadata: { composio: { connectedAccountId: 'acc-1', linkedByUserId: 'me' } },
+          visibility: 'private',
+        }),
+      );
+
+      await member().update({
+        id: CONNECTOR_ID,
+        patch: { metadata: { avatar: '🔌', composio: { connectedAccountId: 'acc-shared' } } },
+      });
+
+      expect(connectorModelMock.update).toHaveBeenCalledWith(
+        CONNECTOR_ID,
+        expect.objectContaining({
+          metadata: {
+            avatar: '🔌',
+            composio: { connectedAccountId: 'acc-1', linkedByUserId: 'me' },
+          },
+        }),
+      );
     });
 
     it('never lets someone else change who a connector is shared with', async () => {

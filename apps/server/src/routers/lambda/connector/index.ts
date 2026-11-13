@@ -44,7 +44,7 @@ import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
-  withTrustedLinkedByUserId,
+  withTrustedComposio,
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
@@ -351,12 +351,12 @@ const connectorManageRouter = router({
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
-      // Drop any client-supplied `composio.linkedByUserId` — it is server-owned
-      // (written by the OAuth connect path), and trusting it here would let a
-      // member spoof connector attribution. No existing row on create → the
-      // field is simply removed.
-      metadata:
-        withoutEvalConnectorMarker(withTrustedLinkedByUserId(input.metadata, undefined)) ?? null,
+      // Drop any client-supplied `composio` block: the Composio account a row
+      // names and who linked it are server-owned (written by the Composio
+      // connect paths). Trusting them here would let a member spoof connector
+      // attribution, or name a teammate's account on a private row of their
+      // own so its real owner can no longer refresh or remove it.
+      metadata: withoutEvalConnectorMarker(withTrustedComposio(input.metadata, undefined)) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -708,11 +708,11 @@ const connectorManageRouter = router({
 
       const { credentials, visibility: requestedVisibility, ...patch } = input.patch;
       const visibility = await resolveVisibilityChange(ctx, target, requestedVisibility);
-      // Preserve the server-owned `composio.linkedByUserId` from the stored row
-      // and ignore whatever the client sent, so an edit can never spoof (or
-      // silently clear) the connector's authorizer. Untouched when the patch
-      // omits metadata.
-      const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
+      // Keep the stored, server-owned `composio` block and ignore whatever the
+      // client sent, so an edit can never repoint the row at another Composio
+      // account, nor spoof (or silently clear) the connector's authorizer.
+      // Untouched when the patch omits metadata.
+      const metadata = withTrustedComposio(patch.metadata, target.metadata);
       try {
         await ctx.connectorModel.update(input.id, {
           ...patch,
@@ -744,10 +744,10 @@ const connectorManageRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const connectedAccountId = target.metadata?.composio?.connectedAccountId;
-      // A connector's metadata is client-written, so the account it names may be
-      // one a teammate's private connector (or one the caller may not maintain)
-      // runs. Then the remote account and its projection are not this row's to
-      // remove; the row itself still goes.
+      // The account this row names may also be held by other rows: a
+      // teammate's private connector, or one the caller may not maintain. Then
+      // the remote account and its projection are not this row's to remove;
+      // the row itself still goes.
       if (
         connectedAccountId &&
         !(await findComposioAccountConflict(ctx, target, connectedAccountId))
