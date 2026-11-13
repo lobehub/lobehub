@@ -339,8 +339,9 @@ describe('buildServerCallLlmContext - workspace context', () => {
 });
 
 describe('buildServerCallLlmContext - prompt-cache TTL', () => {
-  it('prices the stale-tool-result trim with the TTL the payload writes', async () => {
+  it("prices the stale-tool-result trim with the model's cache TTL", async () => {
     resolveServerCallLlmContextHintsMock.mockResolvedValue({
+      contextCachingTTL: '1h',
       messagesForContext: [],
       resolvedExtendParams: { contextCachingTTL: '1h' },
       shouldReplayAssistantReasoning: false,
@@ -360,5 +361,27 @@ describe('buildServerCallLlmContext - prompt-cache TTL', () => {
     );
     // The same extend params become the LLM call's `modelParameters`.
     expect(result.resolvedExtendParams).toEqual({ contextCachingTTL: '1h' });
+  });
+
+  it('uses the TTL for providers whose request carries none (DeepSeek 72h)', async () => {
+    resolveServerCallLlmContextHintsMock.mockResolvedValue({
+      contextCachingTTL: '72h',
+      messagesForContext: [],
+      shouldReplayAssistantReasoning: false,
+    });
+
+    const result = await buildServerCallLlmContext({
+      ctx: createCtx(),
+      llmPayload,
+      model: 'deepseek-v4-pro',
+      provider: 'deepseek',
+      state,
+      tooling,
+    });
+
+    expect(serverMessagesEngineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contextCachingTTL: '72h' }),
+    );
+    expect(result.resolvedExtendParams?.contextCachingTTL).toBeUndefined();
   });
 });

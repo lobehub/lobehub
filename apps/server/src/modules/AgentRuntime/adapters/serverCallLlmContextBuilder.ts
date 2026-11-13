@@ -96,6 +96,7 @@ export const buildServerCallLlmContext = async ({
   });
   const {
     capabilities,
+    contextCachingTTL,
     enableAgentMode,
     historyCount,
     messagesForContext,
@@ -229,9 +230,10 @@ export const buildServerCallLlmContext = async ({
     },
     messages: messagesForContext,
     model,
-    // The TTL the payload writes (`modelParameters` spreads the same extend params), so
-    // the stale-tool-result trim prices warmth against the cache actually requested.
-    contextCachingTTL: resolvedExtendParams?.contextCachingTTL,
+    // The model's cache lifetime, resolved together with the TTL the payload writes
+    // (`resolvedExtendParams`), so the stale-tool-result trim prices warmth against the
+    // cache actually kept.
+    contextCachingTTL,
     modelDisplayName,
     modelKnowledgeCutoff,
     provider,

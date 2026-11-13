@@ -6,7 +6,7 @@ import type {
   ModelMediaCapabilities,
   UserModelRowFacts,
 } from '@lobechat/types';
-import type { AiModelReasoningConfig } from 'model-bank';
+import type { AiModelReasoningConfig, ContextCachingTTL } from 'model-bank';
 
 // The facts a host reads for the rules are also what an operation freezes onto
 // its state, so they are declared once in `@lobechat/types`.
@@ -83,6 +83,13 @@ export interface ResolvedModelParams extends ResolvedModelExtendParamList {
     isCanUseVideo: (model: string, provider: string) => boolean;
     isCanUseVision: (model: string, provider: string) => boolean;
   };
+  /**
+   * The model's prompt-cache lifetime in effect (`resolveContextCachingTTL`), for every
+   * provider. Context engineering tells warm prefixes from cold ones with it; the payload only
+   * carries the part the API takes (`resolvedExtendParams.contextCachingTTL`). Undefined when
+   * the agent turned context caching off.
+   */
+  contextCachingTTL?: ContextCachingTTL;
   /** The agent's stored mode, untouched: a model without function calling keeps it. */
   enableAgentMode?: boolean;
   /** History window incl. the current turn; undefined = no truncation. */

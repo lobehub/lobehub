@@ -36,6 +36,10 @@ export const pickModelConfigFormValues = (
     contextWindowTokens: values.contextWindowTokens as number | null | undefined,
     displayName: values.displayName as string | null | undefined,
     settings: {
+      // Cleared → undefined: the stored row drops it and the provider default applies.
+      contextCachingTTL: (settings.contextCachingTTL ?? undefined) as NonNullable<
+        UpdateAiModelParams['settings']
+      >['contextCachingTTL'],
       extendParams: (settings.extendParams ?? undefined) as NonNullable<
         UpdateAiModelParams['settings']
       >['extendParams'],

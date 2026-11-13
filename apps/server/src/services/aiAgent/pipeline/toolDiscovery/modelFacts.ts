@@ -91,6 +91,7 @@ export const resolveModelContext = async (
         activeModelMetadata
           ? {
               abilities: activeModelMetadata.abilities,
+              contextCachingTTL: activeModelMetadata.settings?.contextCachingTTL ?? undefined,
               // Deployment-catalog providers resolve the request model by the
               // user-configured alias when present (merged over the bundled
               // card when the facts freeze).

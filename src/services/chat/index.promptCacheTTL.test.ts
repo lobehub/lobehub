@@ -13,7 +13,7 @@ vi.mock('../_auth', () => ({
 
 const resolvedAgentConfig = {
   agentConfig: { chatConfig: {}, model: 'claude-sonnet-4-6', params: {}, provider: 'anthropic' },
-  chatConfig: { contextCachingTTL: '1h', searchMode: 'off' },
+  chatConfig: { searchMode: 'off' },
   enabledManifests: [],
   enabledToolIds: [],
   isBuiltinAgent: false,
@@ -22,11 +22,12 @@ const resolvedAgentConfig = {
 
 const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
 
-const resolvedModelParams = (contextCachingTTL?: '1h') =>
+const resolvedModelParams = (contextCachingTTL?: string, requestTTL?: string) =>
   ({
     capabilities: {},
+    contextCachingTTL,
     modelHasReasoningExtendParams: false,
-    resolvedExtendParams: contextCachingTTL ? { contextCachingTTL } : undefined,
+    resolvedExtendParams: requestTTL ? { contextCachingTTL: requestTTL } : undefined,
     shouldReplayAssistantReasoning: false,
     stream: true,
   }) as unknown as Awaited<ReturnType<typeof mechaModule.resolveBrowserModelParams>>;
@@ -46,11 +47,13 @@ afterEach(() => {
 
 /**
  * The payload writes the cache breakpoints and context engineering prices the
- * stale-tool-result trim's warmth check; both must use the one resolved TTL.
+ * stale-tool-result trim's warmth check; both come from the model's one resolved TTL.
  */
 describe('ChatService — prompt-cache TTL', () => {
   it('hands the resolved TTL to both context engineering and the payload', async () => {
-    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(resolvedModelParams('1h'));
+    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(
+      resolvedModelParams('1h', '1h'),
+    );
     const contextEngineeringSpy = vi.spyOn(mechaModule, 'contextEngineering').mockResolvedValue([]);
 
     const prepared = await chatService.buildAssistantMessageContext({
@@ -66,8 +69,27 @@ describe('ChatService — prompt-cache TTL', () => {
     expect(prepared.params.contextCachingTTL).toBe('1h');
   });
 
+  it('prices a provider without a request TTL by its window, writing nothing', async () => {
+    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(
+      resolvedModelParams('72h'),
+    );
+    const contextEngineeringSpy = vi.spyOn(mechaModule, 'contextEngineering').mockResolvedValue([]);
+
+    const prepared = await chatService.buildAssistantMessageContext({
+      messages,
+      model: 'deepseek-v4-pro',
+      provider: 'deepseek',
+      resolvedAgentConfig,
+    });
+
+    expect(contextEngineeringSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ contextCachingTTL: '72h' }),
+    );
+    expect(prepared.params.contextCachingTTL).toBeUndefined();
+  });
+
   it('drops a caller-supplied TTL the resolver did not grant', async () => {
-    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(resolvedModelParams());
+    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(resolvedModelParams('5m'));
     const contextEngineeringSpy = vi.spyOn(mechaModule, 'contextEngineering').mockResolvedValue([]);
 
     const prepared = await chatService.buildAssistantMessageContext({
@@ -78,10 +100,10 @@ describe('ChatService — prompt-cache TTL', () => {
       resolvedAgentConfig,
     });
 
-    // Context engineering priced the trim with the default 5m window, so the
+    // Context engineering priced the trim with the model's 5m window, so the
     // payload must not write 1h breakpoints behind its back.
     expect(contextEngineeringSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ contextCachingTTL: undefined }),
+      expect.objectContaining({ contextCachingTTL: '5m' }),
     );
     expect(prepared.params.contextCachingTTL).toBeUndefined();
   });

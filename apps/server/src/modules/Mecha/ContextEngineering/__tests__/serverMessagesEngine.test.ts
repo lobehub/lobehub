@@ -705,9 +705,9 @@ describe('serverMessagesEngine', () => {
       expect(payload).not.toContain('superseded by a later write');
     });
 
-    it('prices the warmth check with the forwarded prompt-cache TTL', async () => {
-      // A 30-minute turn gap over a large live prefix: cold under Anthropic's
-      // default 5m cache, warm under the opt-in 1h cache.
+    it("prices the warmth check with the model's forwarded cache TTL", async () => {
+      // A 30-minute turn gap over a large live prefix: cold under a 5m cache,
+      // warm under the 1h cache (Anthropic's provider default).
       const T0 = Date.parse('2026-11-10T08:00:00Z');
       const turnAfterGap = () =>
         [
