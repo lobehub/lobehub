@@ -419,10 +419,9 @@ export class ConversationLifecycleActionImpl {
     const deviceOverride = agent?.workspaceId
       ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
-    // Runtime selection must use the same per-user device override as the
-    // switcher. A workspace-local pick is intentionally private to this member
-    // and is therefore safe to execute in-process on their desktop. An existing
-    // conversation then stays on the machine it already ran on.
+    // Runtime selection uses the switcher's per-user device override (a private
+    // workspace-local pick is safe to run in-process on this member's desktop);
+    // an existing conversation then stays on the machine it already ran on.
     const topicBinding = applyTopicDeviceBinding(
       {
         agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
@@ -437,6 +436,7 @@ export class ConversationLifecycleActionImpl {
         agentId,
       ),
       getElectronStoreState().gatewayDeviceInfo?.deviceId,
+      { isHetero: isHeterogeneousAgentModelId(agentConfig?.model) },
     );
     const { workspaceScoped } = topicBinding;
     let { agencyConfig } = topicBinding;

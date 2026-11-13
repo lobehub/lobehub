@@ -127,6 +127,8 @@
   "message.copied": "已复制",
   "message.copy": "复制文本",
   "message.expand": "展开消息",
+  "message.relayReplyFrom": "{{name}} 在 #{{channel}} 的回复",
+  "message.relayedBy": "由 {{name}} 代发",
   "moveToTrash": "移至回收站",
   "moveToTrashConfirm": "将「{{title}}」移至回收站？进行中的回复会停止，你可以在回收站恢复频道和历史消息。Agent 和文件将保留。",
   "moveToTrashSuccess": "频道已移至回收站",

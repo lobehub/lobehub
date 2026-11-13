@@ -2619,7 +2619,6 @@ When I am ___, I need ___
   'workspace.billingPage.credits.packages.fallback': 'Package #{{index}}',
   'workspace.billingPage.credits.packages.loadMore': 'Load more',
   'workspace.billingPage.credits.packages.purchased': 'Purchased',
-  'workspace.billingPage.credits.packages.remaining': 'Remaining',
   'workspace.billingPage.credits.packages.source': 'Source',
   'workspace.billingPage.credits.packages.sourceLabel.autoTopUp': 'Auto top-up',
   'workspace.billingPage.credits.packages.sourceLabel.systemGift': 'System gift',
@@ -2633,7 +2632,6 @@ When I am ___, I need ___
   'workspace.billingPage.credits.status.cancelledCta': 'Resume subscription',
   'workspace.billingPage.credits.status.cancelledDesc':
     'Subscription is scheduled to end on {{date}}. Usage will stop refreshing after that.',
-  'workspace.billingPage.credits.balance.creditBalance': 'Top-up balance',
   'workspace.billingPage.credits.balance.basicDesc':
     'Basic workspaces do not include monthly usage — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.freeDesc':

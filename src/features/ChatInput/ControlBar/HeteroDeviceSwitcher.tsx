@@ -396,8 +396,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     selectExecutionTarget,
   });
 
-  // Auto-default to THIS desktop's local execution on first open, for both
-  // personal and workspace agents (workspace behaviour used to be a hostname
+  // Auto-default to THIS desktop's local execution on first open when the
+  // unset target does not resolve to `auto` (hetero agents, or gateway mode
+  // off), for both personal and workspace agents (workspace behaviour used to be a hostname
   // lookup against the workspace device pool — see — but with
   // per-user overrides that lookup is unnecessary: `useSelectExecutionTarget`
   // resolves `'local'` to this desktop's personal gateway `deviceId` and, for
@@ -413,6 +414,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     if (!isDesktop) return;
     if (!canShowExecutionTargetSelector) return;
     if (isWorkspacePreferenceLoading) return;
+    // the unset target already defaults to `auto` wherever the gateway routes,
+    // and canary's `getMachineDefaultTarget` below owns the stored-target
+    // decisions — this only keeps the auto default from being overwritten.
+    if (executionTarget === 'auto') return;
     if (!currentDeviceId) return;
     // Whether this machine has a workspace row is only known once the server
     // confirms the list; deciding earlier would write `local` and then move it.
@@ -439,6 +444,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     agencyConfig?.executionTarget,
     agencyConfig?.boundDeviceId,
     currentDeviceId,
+    executionTarget,
     canShowExecutionTargetSelector,
     deviceListError,
     isDeviceListConfirmed,

@@ -1,4 +1,4 @@
-import type { ChannelRoutingMode } from '@lobechat/types';
+import type { ChannelMessageMetadata, ChannelRoutingMode } from '@lobechat/types';
 import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
@@ -27,6 +27,8 @@ export interface ChannelSendInput {
   fileIds?: string[];
   /** Member ids. A human quote dispatches only its mentioned Agents. */
   mentions?: string[];
+  /** Stored with the message, e.g. `via` for a request an Agent relayed for the caller. */
+  metadata?: ChannelMessageMetadata;
   /** Quote a person (only mentions dispatch), or continue an Agent answer in its thread. */
   replyToId?: string;
   /** Client retry key; a retry with the same key returns the original message. */
@@ -257,6 +259,7 @@ export const sendMessage = async (
     channelId: channel.id,
     content: input.content,
     mentions,
+    ...(input.metadata && { metadata: input.metadata }),
     requestKey: input.requestKey,
     replyToId: input.replyToId,
     routingAttempt: routed.status === 'pending' ? 1 : 0,

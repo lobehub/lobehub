@@ -11,7 +11,7 @@ import type { DeviceClient, DeviceCliRestartParams, DeviceCliUpdateState } from 
 // ─── Workspace scan ───
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 export interface ProjectSkillItem {
   description?: string;
@@ -39,6 +39,8 @@ export interface InitWorkspaceParams {
 
 export interface WorkspaceInstructionsItem {
   content: string;
+  /** Absolute path of the file; the working directory or one of its parents. */
+  path: string;
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
 

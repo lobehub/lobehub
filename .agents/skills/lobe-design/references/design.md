@@ -25,7 +25,7 @@ entries:
 
 ## D-01 唯一事实源是 cssVar
 
-> 平台作用域：web / desktop。RN 项目的唯一事实源是项目主题（`useTheme()` token），写法见 50-visual；原则相同：组件里不写裸值。
+> 平台作用域：web /desktop。RN 项目的唯一事实源是项目主题（`useTheme()` token），写法见 50-visual；原则相同：组件里不写裸值。
 
 ```ts
 import { createStaticStyles } from '@lobehub/ui';
@@ -71,7 +71,7 @@ export const styles = createStaticStyles(({ css, cssVar, cx, responsive }) => ({
 
 ## D-03 状态色一律从基础 token 派生
 
-五组语义色，每组都有完整的角色派生。**不要为某个状态新造颜色**——没有派生机制，每个状态都会被重新发明一个值：今天按钮 hover 深一点，明天卡片 selected 浅一点，后天暗色模式又换一套。
+五组语义色，每组都有完整的角色派生。**不要为某个状态新造颜色**—— 没有派生机制，每个状态都会被重新发明一个值：今天按钮 hover 深一点，明天卡片 selected 浅一点，后天暗色模式又换一套。
 
 ```
 color{Primary|Success|Warning|Error|Info} 各自提供：
@@ -90,7 +90,7 @@ color{Primary|Success|Warning|Error|Info} 各自提供：
 | 用途     | token                                                                            |
 | -------- | -------------------------------------------------------------------------------- |
 | 圆角     | `borderRadiusXS` 4 · `borderRadiusSM` 6 · `borderRadius` 8 · `borderRadiusLG` 12 |
-| 控件高度 | `controlHeight` 36（组件尺寸另有常量：small 24 / middle 32 / large 40）          |
+| 控件高度 | `controlHeight` 36（组件尺寸另有常量：small 24 /middle 32 /large 40）            |
 | 字体     | `fontFamily`（西文 → 中文 → 回退 → emoji 的完整栈）                              |
 | 等宽字体 | `fontFamilyCode`                                                                 |
 
@@ -98,7 +98,7 @@ color{Primary|Success|Warning|Error|Info} 各自提供：
 
 圆角是嵌套关系：内层 = 外层 − padding。外层 `borderRadiusLG`（12）配 4px padding，内层取 `borderRadius`（8）。两层同值会出现可见缝隙。
 
-字体栈是 `theme.css` 里的 `fontFamily` token（`global.css` 把它设为页面字体），包含中文字体。需要自定义字体时走 `ConfigProvider` 的 `customFonts` / `enableCustomFonts`。**不要在组件里另写 `font-family`**——这是中文行高、标点和字重失真的主要来源。
+字体栈是 `theme.css` 里的 `fontFamily` token（`global.css` 把它设为页面字体），包含中文字体。需要自定义字体时走 `ConfigProvider` 的 `customFonts` / `enableCustomFonts`。**不要在组件里另写 `font-family`**—— 这是中文行高、标点和字重失真的主要来源。
 
 ## D-05 预设色阶用于「需要互相区分」的场合
 
@@ -146,7 +146,7 @@ export const styles = createStaticStyles(({ css, cx }) => ({
 | `active`                                                                    | 选中态（文字 + 填充）                            |
 | `disabled`                                                                  | `cursor: not-allowed; opacity: 0.5`              |
 | `shadow`                                                                    | 多层阴影，明暗模式取值不同                       |
-| `blur` / `blurStrong`                                                       | 模糊 10px / 36px——只给语义浮层，见 K-04          |
+| `blur` / `blurStrong`                                                       | 模糊 10px / 36px—— 只给语义浮层，见 K-04         |
 | `gradientAnimation`                                                         | 品牌循环渐变（gold → magenta → geekblue → cyan） |
 | `noScrollbar` / `bottomScrollbar`                                           | 滚动条处理                                       |
 | `resetLinkColor`                                                            | 次要文字色的链接                                 |
@@ -167,9 +167,9 @@ setLobeTheme({ primaryColor: 'geekblue', neutralColor: 'slate' }); // 客户端
 - `primaryColor`：`blue` `cyan` `geekblue` `gold` `green` `lime` `magenta` `orange` `purple` `red` `volcano` `yellow`
 - `neutralColor`：`mauve` `olive` `sage` `sand` `slate`
 
-中性色温决定页面底色偏暖、纯灰还是偏冷，会联动 `colorBgLayout` / `colorBgContainer` / `colorText` / `colorBorder` 一整组中性色。品牌色会派生出完整色阶，再挑出 hover / active / surface / border / text 各角色。
+中性色温决定页面底色偏暖、纯灰还是偏冷，会联动 `colorBgLayout` / `colorBgContainer` / `colorText` / `colorBorder` 一整组中性色。品牌色会派生出完整色阶，再挑出 hover /active/surface/border/text 各角色。
 
-**换品牌主色、定制企业色板、重调状态色或色阶时**，不要在本 skill 里手改 hex / 覆盖 `--lobe-color-primary*`：改去 lobe-ui 的 [`tuning-color-palettes`](https://github.com/lobehub/lobe-ui/tree/master/.agents/skills/tuning-color-palettes) skill（若本机已安装，按技能名 `tuning-color-palettes` 调用）。本规则只覆盖「用哪个具名主题声明」；生成 / 审计 / pin 色阶属于那个 skill。
+**换品牌主色、定制企业色板、重调状态色或色阶时**，不要在本 skill 里手改 hex / 覆盖 `--lobe-color-primary*`：改去 lobe-ui 的 [`tuning-color-palettes`](https://github.com/lobehub/lobe-ui/tree/master/.agents/skills/tuning-color-palettes) skill（若本机已安装，按技能名 `tuning-color-palettes` 调用）。本规则只覆盖「用哪个具名主题声明」；生成 / 审计 /pin 色阶属于那个 skill。
 
 项目自己的 token 用项目自己的前缀写在应用 CSS 里，不要写成 `--lobe-*`，也不要改写 lobe-ui 的变量。
 
@@ -177,7 +177,7 @@ setLobeTheme({ primaryColor: 'geekblue', neutralColor: 'slate' }); // 客户端
 
 外观由 `<html data-theme="light|dark">` 决定：客户端用 `setLobeTheme({ appearance })`，服务端渲染用 `LobeThemeScript`（跟随系统传 `appearance="system"`）；用 next-themes 时设 `attribute="data-theme"`，由它管这个属性。
 
-绝大多数样式不需要为暗色写任何分支——D-01 已经处理了。只在「token 选择本身要变」时才读运行时状态：
+绝大多数样式不需要为暗色写任何分支 ——D-01 已经处理了。只在「token 选择本身要变」时才读运行时状态：
 
 ```ts
 import { useThemeMode } from '@lobehub/ui';
@@ -219,7 +219,7 @@ createStaticStyles(({ css, responsive }) => ({
 
 遇到规范缺口时用约定格式暴露它。
 
-**有合理替代**——采用 fallback 并记录：
+**有合理替代**—— 采用 fallback 并记录：
 
 ```
 [low] 设计要求的 aurora 背景色不在 token 体系内
@@ -228,6 +228,6 @@ createStaticStyles(({ css, responsive }) => ({
       fallback: 内联写 0.97，违反 D-10.1 但无替代
 ```
 
-**没有合理替代**——拒绝生成那一部分，说明缺什么 token，等补齐。
+**没有合理替代**—— 拒绝生成那一部分，说明缺什么 token，等补齐。
 
 比起悄悄写一个 hex，明示缺口更有价值：它告诉团队哪些 token 还没覆盖真实场景，会进入下一轮设计系统迭代。悄悄写死的那个值只会在换品牌色、调密度或修暗色模式时，变成一个要逐个搜索替换的债。

@@ -193,11 +193,48 @@ would mean threading a Channel flag through the server context snapshot, `@lobec
 messages engine for no change in what the model sees. External runtimes keep getting it in
 their system context from `heteroDispatch/prepare.ts`.
 
+### Messaging Agents in other Channels
+
+A Native run can also reach Agents outside its Channel, so "tell / ask that Agent" is a message
+the Agent decides on, not a task created for it. `lobe-channel.listChannels` lists the requester's
+active Channels (archived and trashed ones are left out) with their active Agent members.
+`lobe-channel.sendMessage` posts into one of them through `ChannelService.send`, @mentioning the
+chosen Agents (`ChannelMessagingService`).
+
+- **Who sends it.** The run's requester is the sender and execution identity, as if they had
+  posted it, so the target Channel's membership, routing and Agent permissions apply unchanged.
+  A Channel message has exactly one sender and an Agent-authored row is always a `reply` that
+  routes nowhere, so the relaying Agent is recorded in `metadata.via` instead. The timeline shows
+  "Relayed by", and the woken run sees a `via` attribute on its `channel_request`.
+- **What it may do.** Every call first passes the same live-run check as a history read
+  (`ChannelHistoryRepository.currentRun`). The target must be one of the requester's Channels and
+  each `agentId` an active member there; at most five Agents, never the sender itself or the
+  Channel it is answering in (its final answer is posted there).
+- **One hop.** A run answering a relayed request cannot relay again, so two Agents cannot keep
+  waking each other on the requester's behalf.
+- **Retries.** The request key is `agent-relay:<operationId>:<toolCallId>`, so a retried call
+  returns the message already posted.
+- **Where the answer goes.** The addressed Agent answers in its own Channel, and the tool returns
+  a link to it for the relaying run's final answer. When that reply is published,
+  `deliverRelayReceipt` (called from `ChannelCoordinator.complete`) posts it back into the Channel
+  and branch the relay came from (`metadata.via.origin`), as the same requester, @mentioning the
+  relaying Agent. That receipt carries `metadata.receipt` (the answering Channel and reply) and the
+  answering Agent in `via`. The timeline shows "<Agent> replied in #<Channel>", and the woken run
+  sees `via` and `reply_from` on its `channel_request`. Because the receipt has `via`, the run it
+  wakes cannot relay again: one hop each way. The receipt is best-effort: a relaying Agent,
+  Channel or branch that is gone, or a requester who left, gets none. It is keyed by the reply id,
+  so a repeated completion posts it once.
+- **External runtimes.** `lh channel list` and `lh channel send` call the same service through
+  `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
+  the `channel:message` capability that every Channel dispatch is minted alongside
+  `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
+
 ### Why history reads stay on `lobe-channel`
 
 `lobe-message.readMessages` reads a bot platform by model-supplied `platform` / `channelId`
-arguments, authorised by the bot's platform credentials. `lobe-channel` takes no ids from the
-model: every read is scoped and re-authorised by the run's frozen manifest (branch, cutoff,
-membership, live operation). Folding Channel into `lobe-message` would either weaken that to
+arguments, authorised by the bot's platform credentials. `lobe-channel` history reads take no ids
+from the model: every read is scoped and re-authorised by the run's frozen manifest (branch,
+cutoff, membership, live operation). `sendMessage` does take a Channel id, but only one the
+requester is a member of, posted as the requester. Folding Channel into `lobe-message` would either weaken that to
 model-chosen ids or add a second authorisation mode to a tool built around the first, so the two
 stay separate and share only the model-facing projection.

@@ -35,6 +35,9 @@ export const Page = () => (
     <I18nProvider /> {/* expect: LOBE-I18N-PROVIDER */}
     <div className="x .ant-btn" /> {/* expect: LOBE-ANT-CLASS */}
     <ActionIcon icon={Trash2} onClick={remove} /> {/* expect: LOBE-ICON-BUTTON-LABEL */}
+    <div role="columnheader">标题</div> {/* expect: LOBE-HANDROLLED-TABLE */}
+    <span role="rowheader">ID</span> {/* expect: LOBE-HANDROLLED-TABLE */}
+    <ProTable loading={q.isFetching && !initialLoading} /> {/* expect: LOBE-REFETCH-OVERLAY */}
   </div>
 );
 const s = `--ant-color-border: red !important;`; // expect: LOBE-ANT-VAR-OVERRIDE

@@ -37,6 +37,7 @@ import {
   pickThreadCarryOver,
   type ThreadCarryOver,
 } from './hooks/threadRunHooks';
+import type { SubAgentSteerOutcome } from './steerQueue/subAgent';
 import type { InternalExecAgentParams } from './types';
 
 const HEADLESS_INTERVENTION: UserInterventionConfig = { approvalMode: 'headless' };
@@ -49,6 +50,15 @@ export interface SubAgentRunDeps {
   /** The facade's `execAgent` — thread runs delegate the actual turn to it. */
   execAgent: (params: InternalExecAgentParams) => Promise<ExecAgentResult>;
   messageModel: MessageModel;
+  /** Queue an instruction behind a running sub-agent (`queueSubAgentSteer`). */
+  queueSubAgentSteer: (params: {
+    agentId: string;
+    groupId?: string | null;
+    instruction: string;
+    operationId: string;
+    threadId: string;
+    topicId: string;
+  }) => Promise<SubAgentSteerOutcome>;
   threadModel: ThreadModel;
   userId: string;
 }
@@ -120,9 +130,10 @@ type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
  * Take over an earlier `callSubAgent` isolation thread for a new turn, so the
  * same sub-agent continues on its preserved history.
  *
- * Refuses threads outside the parent's topic/agent, threads not created by
- * `callSubAgent` (group members, `callAgent` children, …), and threads whose
- * previous run is still going. The final compare-and-set claim makes
+ * Refuses threads outside the parent's topic/agent and threads not created by
+ * `callSubAgent` (group members, `callAgent` children, …). A thread whose
+ * previous run is still going is not claimed: its run comes back as `running`,
+ * for the caller to steer instead. The final compare-and-set claim makes
  * concurrent follow-ups to one sub-agent race-safe.
  *
  * Returns what the thread carries (its spawning tool call and the usage it
@@ -165,12 +176,13 @@ const findCallSubAgentThread = async (
 const readSubAgentThreadRun = async (
   deps: Pick<SubAgentRunDeps, 'agentOperationModel'>,
   thread: ThreadRow,
-): Promise<{ operationId?: string; running: boolean }> => {
+): Promise<{ operationId?: string; ownerId?: string; running: boolean }> => {
   const operationId = (thread.metadata as ThreadMetadata | null)?.operationId;
   const operation = operationId ? await deps.agentOperationModel.findById(operationId) : null;
 
   return {
     operationId,
+    ownerId: operation?.userId ?? undefined,
     running: operation
       ? isAgentOperationInFlight(operation.status)
       : thread.status === ThreadStatus.Processing,
@@ -189,28 +201,45 @@ const isStopping = async (deps: SubAgentRunDeps, operationId: string): Promise<b
 const claimSubAgentThread = async (
   deps: SubAgentRunDeps,
   params: { agentId: string; startedAt: string; threadId: string; topicId: string },
-): Promise<{ error: string } | { thread: ThreadRow; carryOver: ThreadCarryOver }> => {
+): Promise<
+  | { error: string }
+  | { running: { operationId: string } }
+  | { thread: ThreadRow; carryOver: ThreadCarryOver }
+  | { claimLost: true }
+> => {
   const { agentId, startedAt, threadId, topicId } = params;
   const found = await findCallSubAgentThread(deps, { agentId, threadId, topicId });
   if ('error' in found) return found;
 
   const { thread } = found;
   const previousMetadata = thread.metadata as ThreadMetadata | null;
-  const { operationId: previousOperationId, running: stillRunning } = await readSubAgentThreadRun(
-    deps,
-    thread,
-  );
-  const busyError = `Sub-agent "${threadId}" is still running. Wait for its result before sending it another instruction.`;
+  const {
+    operationId: previousOperationId,
+    ownerId,
+    running: stillRunning,
+  } = await readSubAgentThreadRun(deps, thread);
 
   if (stillRunning) {
+    // A `processing` thread without an operation id names no run to queue behind.
+    if (!previousOperationId) {
+      return { error: `Sub-agent "${threadId}" is still starting. Try again in a moment.` };
+    }
     // A cancelled run only stops at its next step boundary, so a follow-up sent
-    // right after cancelSubAgent can still find it live.
-    if (previousOperationId && (await isStopping(deps, previousOperationId))) {
+    // right after cancelSubAgent can still find it live. Queuing behind it would
+    // strand the instruction: the stopped run never reads its queue again.
+    if (await isStopping(deps, previousOperationId)) {
       return {
         error: `Sub-agent "${threadId}" was cancelled and is still finishing its current step. Send this instruction again in a moment; its history is kept.`,
       };
     }
-    return { error: busyError };
+    // The run reads its steer queue as the member whose turn started it; an
+    // instruction from another member's turn would be queued where it never looks.
+    if (ownerId && ownerId !== deps.userId) {
+      return {
+        error: `Sub-agent "${threadId}" is running for another member's turn and cannot take your instruction while it runs. Wait for its result, then send this instruction again; its history is kept.`,
+      };
+    }
+    return { running: { operationId: previousOperationId } };
   }
 
   const carryOver = pickThreadCarryOver(previousMetadata);
@@ -220,7 +249,65 @@ const claimSubAgentThread = async (
     { ...carryOver, startedAt },
   );
 
-  return claimed ? { thread, carryOver } : { error: busyError };
+  // Another follow-up started a run on the thread first; the caller re-reads it.
+  return claimed ? { thread, carryOver } : { claimLost: true };
+};
+
+const STEER_REFUSALS: Record<'full' | 'unavailable' | 'unknown', (threadId: string) => string> = {
+  full: (threadId) =>
+    `Sub-agent "${threadId}" already has too many instructions waiting. Wait for its result before sending another.`,
+  unavailable: (threadId) =>
+    `The instruction could not be queued for sub-agent "${threadId}". Wait for its result, then send it again.`,
+  unknown: (threadId) =>
+    `The instruction may or may not have reached sub-agent "${threadId}". Do not send it again yet: wait for its result and check whether it followed the instruction.`,
+};
+
+/**
+ * Continue a `callSubAgent` thread with a new instruction: claim it for a new
+ * run when its previous run has ended, or — while that run is still going —
+ * queue the instruction behind it, to be read before its next LLM call
+ * (`steered`). A run that ends while the instruction is being queued, or a
+ * claim lost to a concurrent follow-up, is re-read once.
+ */
+const continueSubAgentThread = async (
+  deps: SubAgentRunDeps,
+  params: {
+    agentId: string;
+    groupId?: string | null;
+    instruction: string;
+    startedAt: string;
+    threadId: string;
+    topicId: string;
+  },
+): Promise<
+  | { error: string }
+  | { steered: { operationId: string } }
+  | { thread: ThreadRow; carryOver: ThreadCarryOver }
+> => {
+  const { groupId, instruction, ...claimParams } = params;
+  const { threadId } = claimParams;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const claim = await claimSubAgentThread(deps, claimParams);
+    if ('claimLost' in claim) continue;
+    if (!('running' in claim)) return claim;
+
+    const { operationId } = claim.running;
+    const outcome = await deps.queueSubAgentSteer({
+      agentId: claimParams.agentId,
+      groupId,
+      instruction,
+      operationId,
+      threadId,
+      topicId: claimParams.topicId,
+    });
+    if (outcome.queued) return { steered: { operationId } };
+    if (outcome.reason !== 'ended') return { error: STEER_REFUSALS[outcome.reason](threadId) };
+  }
+
+  return {
+    error: `Sub-agent "${threadId}" is finishing its run or busy with another instruction. Wait for its result, then send the instruction again.`,
+  };
 };
 
 export interface CancelSubAgentRunDeps extends Pick<
@@ -351,8 +438,8 @@ export const cancelSubAgentThreadRun = async (
   }
 
   // The run only ends at its next step boundary. Waiting for it lets the parent
-  // steer the sub-agent right away: a follow-up is refused while it still runs,
-  // and nothing would tell the parent when it finally stopped.
+  // steer the sub-agent right away: a follow-up is refused while the stopped run
+  // is still finishing, and nothing would tell the parent when it finally stopped.
   const stopped = await waitForRunToStop(deps, operationId, deps.stopWaitMs ?? STOP_WAIT_MS);
 
   // The interrupt mark can land after the run's last check but before it saves
@@ -413,8 +500,11 @@ export const execAgentThreadRun = async (
     // The new instruction lands as the next user turn on that thread, so the
     // sub-agent keeps its full history. Its original source message stays the
     // thread anchor; this run reports to the new placeholder (`parentMessageId`).
-    const claim = await claimSubAgentThread(deps, {
+    // While its previous run is still going, the instruction steers that run.
+    const claim = await continueSubAgentThread(deps, {
       agentId,
+      groupId,
+      instruction,
       startedAt,
       threadId: continueThreadId,
       topicId,
@@ -438,6 +528,32 @@ export const execAgentThreadRun = async (
         error: claim.error,
         operationId: '',
         success: false,
+        threadId: continueThreadId,
+      };
+    }
+
+    // Still running: the instruction waits in its queue and joins that run's
+    // next step. No new run, so the running one keeps reporting its result.
+    if ('steered' in claim) {
+      log('%s: steered running thread %s', options.logScope, continueThreadId);
+      // The call returned without starting a run; hooks still see it end.
+      if (parentOperationId) {
+        hookDispatcher
+          .dispatch(parentOperationId, 'afterCallAgent', {
+            agentId,
+            operationId: parentOperationId,
+            subOperationId: claim.steered.operationId,
+            success: true,
+            threadId: continueThreadId,
+            userId: deps.userId,
+          })
+          .catch(() => {});
+      }
+      return {
+        assistantMessageId: '',
+        operationId: claim.steered.operationId,
+        steered: true,
+        success: true,
         threadId: continueThreadId,
       };
     }

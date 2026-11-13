@@ -10,6 +10,7 @@ import { DocumentService } from '@/server/services/document';
 import { resolveDocumentWrite } from '@/server/services/document/editorData';
 import { FileService } from '@/server/services/file';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
+import { getKnowledgeBaseIdsMountedByBrowsers } from '@/server/services/knowledgeBaseAccess';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -59,7 +60,18 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
 
     return new KnowledgeBaseExecutionRuntime(
       {
-        getFileContents: (fileIds) => searchService.getFileContents(fileIds),
+        getFileContents: (fileIds) =>
+          searchService.getFileContents(fileIds, {
+            // "No access" keeps a knowledge base usable on the agents it is mounted on.
+            resolveUsableKnowledgeBaseIds: async (restrictedIds) => {
+              const mounted = new Set(await resolveAgentKnowledgeBaseIds());
+              return getKnowledgeBaseIdsMountedByBrowsers(
+                { serverDB, workspaceId },
+                { agentId, projectId, taskId },
+                restrictedIds.filter((id) => mounted.has(id)),
+              );
+            },
+          }),
         semanticSearchForChat: async ({ knowledgeIds, query, topK }) => {
           const effectiveKnowledgeIds = await resolveAgentKnowledgeBaseIds(knowledgeIds);
           // No enabled KB in scope (none attached, or all turned off) → both search paths would return nothing (BM25 is
