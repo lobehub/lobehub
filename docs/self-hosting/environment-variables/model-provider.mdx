@@ -806,6 +806,33 @@ Volcengine speech synthesis, text-to-speech only; separate from the Volcengine A
 - Default: Unset; uses the built-in model list.
 - Example: `-all,+seed-tts-2.0`
 
+## Voyage AI
+
+Embedding models only. See [Using Voyage AI in LobeHub](/docs/usage/providers/voyage) for setup instructions.
+
+### `VOYAGE_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in Voyage AI provider settings, which takes precedence.
+- Description: A key created on the [Voyage AI API Keys](https://dashboard.voyageai.com/organization/api-keys) page. Setting a non-empty key automatically enables Voyage AI in the server configuration. `ENABLED_VOYAGE` is derived from this key, not a separate environment switch. Without a key from either source, embedding requests to Voyage AI fail with an `InvalidProviderAPIKey` error.
+- Default: Unset; no shared server key.
+- Example: `pa-xxxxxx...xxxxxx`
+
+### `VOYAGE_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the Voyage AI API base URL. Only used together with the server key.
+- Default: `https://api.voyageai.com/v1`
+- Example: `https://voyage-proxy.example.com/v1`
+
+### `VOYAGE_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the Voyage AI model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+voyage-4-lite,+voyage-4`
+
+The example hides all default models and enables only `voyage-4-lite` and `voyage-4`.
+
 ## ComfyUI
 
 ### `ENABLED_COMFYUI`
