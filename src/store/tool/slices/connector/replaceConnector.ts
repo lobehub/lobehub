@@ -1,4 +1,4 @@
-import { hasCallableMcpEndpoint } from '@lobechat/const';
+import { hasCallableMcpEndpoint, hasMandatoryApproval } from '@lobechat/const';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -54,7 +54,8 @@ export const snapshotReplacedConnector = async (
  *   reaching the server.
  *
  * Either way the row's tool list replaces the one the install synced, so
- * tools only the failed install listed are dropped again.
+ * tools only the failed install listed are dropped again, and a tool the
+ * market made `always` keeps its mandatory approval.
  */
 export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => ToolStore) => {
   const { credentials, id, mcpServerUrl, mcpStdioConfig, oidcConfig, status, tools } = snapshot;
@@ -98,6 +99,9 @@ export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => T
     pruneMissingAutoTools: true,
     tools: tools.map((tool) => ({
       description: tool.description ?? undefined,
+      // The sync rebuilds each tool's metadata from what it is sent, so a
+      // tool the market made `always` must say so again to keep its mark
+      humanIntervention: hasMandatoryApproval(tool.metadata) ? ('always' as const) : undefined,
       inputSchema: (tool.inputSchema ?? undefined) as Record<string, unknown> | undefined,
       toolName: tool.toolName,
       visibility: (tool.metadata as { visibility?: string[] } | null)?.visibility,

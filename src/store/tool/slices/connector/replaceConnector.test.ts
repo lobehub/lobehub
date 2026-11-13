@@ -125,6 +125,50 @@ describe('restoreConnector', () => {
     expect(state.syncConnectorTools).not.toHaveBeenCalled();
   });
 
+  // The sync rebuilds metadata from what it is sent: a rollback that dropped
+  // the mark would leave an `always` tool on a `required` auto-run skips
+  it('keeps the mandatory approval of a cloud tool the market made always', async () => {
+    const { get } = makeStore([{ id: 'c1', mcpConnectionType: 'cloud', mcpServerUrl: null }]);
+
+    await restoreConnector(
+      snapshot({
+        mcpConnectionType: 'cloud',
+        mcpServerUrl: null,
+        tools: [
+          {
+            description: 'Delete a repo',
+            inputSchema: null,
+            metadata: { mandatoryApproval: true, visibility: ['model'] },
+            toolName: 'delete_repo',
+          },
+          { description: null, inputSchema: null, metadata: null, toolName: 'search' },
+        ],
+      }),
+      get,
+    );
+
+    expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
+      id: 'c1',
+      pruneMissingAutoTools: true,
+      tools: [
+        {
+          description: 'Delete a repo',
+          humanIntervention: 'always',
+          inputSchema: undefined,
+          toolName: 'delete_repo',
+          visibility: ['model'],
+        },
+        {
+          description: undefined,
+          humanIntervention: undefined,
+          inputSchema: undefined,
+          toolName: 'search',
+          visibility: undefined,
+        },
+      ],
+    });
+  });
+
   describe('an OAuth row, whose tokens the edit read withholds', () => {
     const oauth = { oidcConfig: { clientId: 'client', scheme: 'dcr' } };
 
