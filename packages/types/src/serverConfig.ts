@@ -78,6 +78,11 @@ export type IFeatureFlagsState = {
    */
   enableDeferredHeteroDispatch: boolean | undefined;
   /**
+   * Step 0 of a deferred-init chat send runs in the `execAgent` invocation after
+   * its response, with the queued delivery kept as a fallback (`agent_inline_first_step`).
+   */
+  enableInlineFirstStep: boolean | undefined;
+  /**
    * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
    * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
    * working.
