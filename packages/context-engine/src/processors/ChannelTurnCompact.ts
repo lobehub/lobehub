@@ -12,10 +12,11 @@ declare module '../types' {
 const log = debug('context-engine:processor:ChannelTurnCompactProcessor');
 
 /**
- * The envelope a Channel prompt ends with: its request, or the wake hint after it. Every block of
- * one prompt carries the run's random boundary, chosen so it appears in no participant's text.
+ * The envelope a Channel prompt ends with: its request, the acknowledgement the Agent posted
+ * before starting, or the wake hint after it. Every block of one prompt carries the run's random
+ * boundary, chosen so it appears in no participant's text.
  */
-const ENVELOPE_END = /<\/channel_(?:request|wake) boundary="([\da-z]+)">$/;
+const ENVELOPE_END = /<\/channel_(?:opening|request|wake) boundary="([\da-z]+)">$/;
 
 /**
  * The request block of a whole Channel prompt, or `undefined` when the message is not one.

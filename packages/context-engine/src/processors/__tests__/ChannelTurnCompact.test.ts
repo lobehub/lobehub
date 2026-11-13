@@ -123,6 +123,30 @@ describe('ChannelTurnCompactProcessor', () => {
     expect(result.messages).toEqual(messages);
   });
 
+  it('compacts a prompt that ends with the acknowledgement it posted before starting', async () => {
+    // An owed request carries no trailing `channel_wake`; when the Agent acknowledged first, the
+    // prompt ends with `channel_opening` instead, which is still a whole Channel prompt.
+    const first = buildChannelPrompt(manifest, [message('request', 'Ship the parser')], {
+      boundary: 'abc999',
+      context: [message('ctx-0', 'z'.repeat(500))],
+      omitted: 4,
+      opening: 'On it',
+    });
+    const latest = channelTurn('Now add tests', ['c'.repeat(200)], 'bbb222');
+    const result = await new ChannelTurnCompactProcessor({ enabled: true }).process(
+      createContext([user('1', first), assistant('2', 'Shipped.'), user('3', latest)]) as any,
+    );
+
+    expect(result.messages[0].content).toBe(
+      [
+        '<channel_request from="Mia" type="user" to="Codex" boundary="abc999">',
+        'Ship the parser',
+        '</channel_request boundary="abc999">',
+      ].join('\n'),
+    );
+    expect(result.metadata.channelTurnCompact?.compactedMessages).toBe(1);
+  });
+
   it.each([undefined, false])(
     'does nothing unless the run is a Channel run (%s)',
     async (enabled) => {
