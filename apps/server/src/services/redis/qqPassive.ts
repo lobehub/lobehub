@@ -222,8 +222,11 @@ export const qqPassive: QQPassiveStore = {
     }
 
     try {
-      // `NX`: a reply parked while this one was in flight is newer and must win.
-      await redis.set(RedisKeys.qqPassive.pending(key), text, 'EX', PENDING_TTL_SECONDS, 'NX');
+      // `nx`: a reply parked while this one was in flight is newer and must win.
+      await redis.set(RedisKeys.qqPassive.pending(key), text, {
+        ex: PENDING_TTL_SECONDS,
+        nx: true,
+      });
     } catch {
       await local.restorePending(key, text);
     }
