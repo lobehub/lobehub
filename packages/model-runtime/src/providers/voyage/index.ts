@@ -17,7 +17,7 @@ const log = debug('lobe-model-runtime:voyage');
 
 export const DEFAULT_VOYAGE_BASE_URL = 'https://api.voyageai.com/v1';
 
-/** Inputs per request accepted by every Voyage embedding endpoint. */
+/** Inputs per request accepted by every Voyage embedding endpoint; larger calls are refused. */
 export const VOYAGE_MAX_INPUTS_PER_REQUEST = 1000;
 
 /**
@@ -107,36 +107,32 @@ export class LobeVoyageAI implements LobeRuntimeAI {
       const { definition, inputs, model, outputDimension } = this.resolveRequest(payload);
       const requestOptions = { abortSignal: options?.signal, headers: options?.headers };
 
-      const vectors: Embeddings[] = [];
-      let totalTokens = 0;
+      let vectors: Embeddings[];
+      let totalTokens: number;
 
-      for (let start = 0; start < inputs.length; start += VOYAGE_MAX_INPUTS_PER_REQUEST) {
-        const batch = inputs.slice(start, start + VOYAGE_MAX_INPUTS_PER_REQUEST);
-
-        if (definition.contextualized) {
-          const result = await this.client.contextualizedEmbed(
-            {
-              chunkSize: VOYAGE_CONTEXTUALIZED_CHUNK_SIZE,
-              enableAutoChunking: true,
-              // Auto-chunking is only accepted for documents.
-              inputType: 'document',
-              inputs: batch,
-              model,
-              outputDimension,
-            },
-            requestOptions,
-          );
-          vectors.push(...this.readContextualizedVectors(result, batch.length));
-          // `result.totalTokens` turns a missing usage into 0, so read the raw response.
-          totalTokens += this.readTotalTokens(result.rawResponse.usage);
-        } else {
-          const response = await this.client.embed(
-            { input: batch, model, outputDimension },
-            requestOptions,
-          );
-          vectors.push(...this.readVectors(response, batch.length));
-          totalTokens += this.readTotalTokens(response.usage);
-        }
+      if (definition.contextualized) {
+        const result = await this.client.contextualizedEmbed(
+          {
+            chunkSize: VOYAGE_CONTEXTUALIZED_CHUNK_SIZE,
+            enableAutoChunking: true,
+            // Auto-chunking is only accepted for documents.
+            inputType: 'document',
+            inputs,
+            model,
+            outputDimension,
+          },
+          requestOptions,
+        );
+        vectors = this.readContextualizedVectors(result, inputs.length);
+        // `result.totalTokens` turns a missing usage into 0, so read the raw response.
+        totalTokens = this.readTotalTokens(result.rawResponse.usage);
+      } else {
+        const response = await this.client.embed(
+          { input: inputs, model, outputDimension },
+          requestOptions,
+        );
+        vectors = this.readVectors(response, inputs.length);
+        totalTokens = this.readTotalTokens(response.usage);
       }
 
       log(
@@ -177,7 +173,15 @@ export class LobeVoyageAI implements LobeRuntimeAI {
 
     if (inputs.length === 0) throw new VoyageRequestError('Embedding input must not be empty.');
 
-    if (inputs.some((item) => typeof item !== 'string' || item.trim() === '')) {
+    // One request per call: splitting here could leave charged batches unreported when a
+    // later one fails, so an oversized call is refused before anything is billed.
+    if (inputs.length > VOYAGE_MAX_INPUTS_PER_REQUEST) {
+      throw new VoyageRequestError(
+        `Voyage accepts at most ${VOYAGE_MAX_INPUTS_PER_REQUEST} inputs per request, got ${inputs.length}. Send smaller batches.`,
+      );
+    }
+
+    if (inputs.some((item) => typeof item !== 'string' || item === '')) {
       throw new VoyageRequestError('Embedding input must be non-empty strings.');
     }
 
@@ -214,7 +218,8 @@ export class LobeVoyageAI implements LobeRuntimeAI {
     result: ContextualizedEmbedResult,
     expectedDocuments: number,
   ): Embeddings[] {
-    const documents = [...result.results].sort((a, b) => a.index - b.index);
+    // The SDK numbers `results` by response position, so the API's order is kept as is.
+    const documents = result.results;
 
     if (documents.length !== expectedDocuments) {
       throw new VoyageRequestError(
@@ -224,9 +229,9 @@ export class LobeVoyageAI implements LobeRuntimeAI {
     }
 
     return documents.flatMap((document) => {
-      if (document.embeddings.length === 0) {
+      if (document.embeddings.length === 0 || document.embeddings.some((v) => v.length === 0)) {
         throw new VoyageRequestError(
-          'Voyage returned a document without any chunk embeddings.',
+          'Voyage returned a document without usable chunk embeddings.',
           AgentRuntimeErrorType.ProviderBizError,
         );
       }

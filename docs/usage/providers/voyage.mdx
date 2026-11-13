@@ -52,6 +52,8 @@ The built-in catalog has these models. There is no default model: wherever you u
 
 LobeHub stores vectors in 1024-dimension columns, so the default 1024 dimensions of every model fit. The runtime sends `output_dimension` only when a caller asks for a size, and rejects a size the model does not support before sending the request.
 
+Each call takes at most 1000 inputs and is not split for you, so keep batch sizes (for example `EMBEDDING_BATCH_SIZE`) at or below 1000.
+
 ## Contextualized embeddings
 
 `voyage-context-4` and `voyage-context-3` treat each input as one whole document. The document is split automatically (`enable_auto_chunking: true`, `chunk_size: 32000`) and each chunk's vector reflects the document it comes from. The result therefore holds one vector per chunk, which can be more than the number of inputs, and the chunk text that Voyage reports is not returned.

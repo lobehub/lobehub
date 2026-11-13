@@ -103,14 +103,11 @@ describe('LobeVoyageAI', () => {
       expect(error.error.message).toContain('supports output dimensions');
     });
 
-    it.each([[[]], [['ok', '']], [['  ']], [''] as unknown[]])(
-      'rejects empty input %j',
-      async (input) => {
-        const error = await rejects({ input: input as string[], model: 'voyage-4' });
+    it.each([[[]], [['ok', '']], [''] as unknown[]])('rejects empty input %j', async (input) => {
+      const error = await rejects({ input: input as string[], model: 'voyage-4' });
 
-        expect(error.errorType).toBe(AgentRuntimeErrorType.InvalidRequestFormat);
-      },
-    );
+      expect(error.errorType).toBe(AgentRuntimeErrorType.InvalidRequestFormat);
+    });
   });
 
   describe('text embeddings', () => {
@@ -146,26 +143,17 @@ describe('LobeVoyageAI', () => {
       expect(result).toEqual([[1], [2]]);
     });
 
-    it('splits more than the per-request input limit into several requests and sums the tokens', async () => {
-      const total = VOYAGE_MAX_INPUTS_PER_REQUEST + 5;
-      fetchMock.mockImplementation(async (_url, init) => {
-        const { input } = JSON.parse((init as RequestInit).body as string);
-        return json(embedResponse(input.length, 10));
-      });
-      const onUsage = vi.fn();
+    it('refuses more inputs than one request allows before sending anything', async () => {
+      const error = await runtime
+        .embeddings({
+          input: Array.from({ length: VOYAGE_MAX_INPUTS_PER_REQUEST + 1 }, (_, i) => `t${i}`),
+          model: 'voyage-4-lite',
+        })
+        .catch((e) => e);
 
-      const result = await runtime.embeddings(
-        { input: Array.from({ length: total }, (_, i) => `text ${i}`), model: 'voyage-4-lite' },
-        { onUsage, pricingContext: undefined },
-      );
-
-      expect(result).toHaveLength(total);
-      expect(requestBodies().map((body) => body.input.length)).toEqual([
-        VOYAGE_MAX_INPUTS_PER_REQUEST,
-        5,
-      ]);
-      expect(onUsage).toHaveBeenCalledTimes(1);
-      expect(onUsage.mock.calls[0][0]).toMatchObject({ totalInputTokens: 20, totalTokens: 20 });
+      expect(error).toMatchObject({ errorType: AgentRuntimeErrorType.InvalidRequestFormat });
+      expect(error.error.message).toContain('at most 1000 inputs');
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('prices the reported tokens from the catalog', async () => {
