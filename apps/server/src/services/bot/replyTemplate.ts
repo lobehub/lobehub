@@ -262,6 +262,7 @@ type SystemStrings = {
   errorInvalidProviderAPIKey: string;
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
+  errorDeviceNotFound: string;
   errorDeviceUnreachable: string;
   errorDeviceResponseTimeout: string;
   errorEmptyCompletion: string;
@@ -374,6 +375,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
     errorContentModeration:
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
+    errorDeviceNotFound:
+      "**Can't reach the device this agent is bound to right now.**\nTry again in a moment. If it still can't connect, check that the LobeHub desktop app or `lh` CLI on the device is connected, or switch to another online device.",
     errorDeviceResponseTimeout:
       "**The device didn't respond in time.**\nIt may be offline or asleep, or it may still be starting this run. Check that the LobeHub desktop app (or the `lh` CLI) is connected and whether this run is already in progress, then try again.",
     errorDeviceUnreachable:
@@ -502,6 +505,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
     errorContentModeration:
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
+    errorDeviceNotFound:
+      '**当前无法连接到此 Agent 绑定的设备**\n请稍后重试；如果仍无法连接，请检查设备上的 LobeHub 桌面端或 `lh` CLI 是否已连接，或切换到其他在线设备。',
     errorDeviceResponseTimeout:
       '**设备未及时响应**\n设备可能已离线或休眠，也可能仍在启动本次运行。请确认 LobeHub 桌面端（或 `lh` CLI）已连接、且没有正在进行的本次运行后，再重试。',
     errorDeviceUnreachable:
@@ -601,11 +606,10 @@ export function renderError(operationId?: string, lng?: BotReplyLocale): string 
 const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // ── user-fixable config / input (attribution: user) ──
   ContentModeration: 'errorContentModeration',
-  // Every "we could not reach a run device" flavour (gateway unconfigured,
-  // device offline, registration gone) arrives under this one type — see
-  // `HETERO_DISPATCH_ERROR_TYPES`. Without it a hetero dispatch failure fell to
-  // the legacy tier and told an IM user nothing but an Operation ID.
+  // Keep device dispatch errors aligned with `HETERO_DISPATCH_ERROR_TYPES`;
+  // otherwise IM replies fall back to a generic error and Operation ID.
   DeviceGatewayNotConfigured: 'errorDeviceUnreachable',
+  DeviceNotFound: 'errorDeviceNotFound',
   DeviceResponseTimeout: 'errorDeviceResponseTimeout',
   ExceededContextWindow: 'errorExceededContextWindow',
   // Managed credits: all three codes come out of the same cost-admission gate,

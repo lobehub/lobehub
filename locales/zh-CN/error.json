@@ -79,6 +79,7 @@
   "response.524": "等待上游响应超时，请稍后再试",
   "response.CreateMessageError": "消息未能发送。建议先复制内容再重试；刷新页面后该消息不会保留",
   "response.DeviceGatewayNotConfigured": "无法连接到运行此助理的设备。请先连接设备，或在服务端配置设备网关，然后重试。",
+  "response.DeviceNotFound": "当前无法连接到此 Agent 绑定的设备。请稍后重试；如果仍无法连接，请检查设备上的 LobeHub 桌面端或 `lh` CLI 是否已连接，或切换到其他在线设备。",
   "response.DeviceResponseTimeout": "设备未及时响应，可能已离线或休眠，也可能仍在启动本次运行。请确认设备已连接、且没有正在进行的本次运行后，再重试。",
   "response.ExceededContextWindowCloud": "当前对话内容过长，无法继续处理。请编辑最后一条消息减少输入内容或者删除一些消息重试。",
   "response.FreePlanLimit": "当前套餐不支持该功能。请升级到付费套餐后继续。",

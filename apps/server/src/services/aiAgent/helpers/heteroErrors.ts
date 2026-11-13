@@ -26,7 +26,7 @@ export const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
   DEVICE_GATEWAY_UNREACHABLE:
     "Couldn't reach the device connection service, so this run never started. Check the network, then try again.",
   DEVICE_NOT_FOUND:
-    'The device this agent is bound to is no longer registered with the connection service. Reconnect the device, or bind this agent to another online device.',
+    "Can't reach the device this agent is bound to right now. Try again in a moment. If it still can't connect, check that the LobeHub desktop app or `lh` CLI on the device is connected, or switch to another online device.",
   DEVICE_OFFLINE:
     "The device this agent runs on is offline, so the run couldn't start. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again.",
   DEVICE_RESPONSE_TIMEOUT:
@@ -124,12 +124,10 @@ export const humanizeHeteroDispatchError = (raw?: string): string => {
  * otherwise mask the specific message). Unknown codes keep the generic type.
  */
 const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
-  // Every "we could not reach a device" flavour shares the localized
-  // `DeviceGatewayNotConfigured` copy — the user-facing action ("connect a
-  // device") is the same whether the gateway is unconfigured, the device is
-  // offline, or its registration is gone.
+  // A missing live connection can be a brief reconnect, not a deleted device
+  // or an unconfigured gateway. Give it retry-first copy of its own.
   DEVICE_CHANNEL_UNAVAILABLE: ChatErrorType.DeviceGatewayNotConfigured,
-  DEVICE_NOT_FOUND: ChatErrorType.DeviceGatewayNotConfigured,
+  DEVICE_NOT_FOUND: ChatErrorType.DeviceNotFound,
   DEVICE_OFFLINE: ChatErrorType.DeviceGatewayNotConfigured,
   // Not an unreachable device: the run was delivered and may be running, so
   // "connect a device, then try again" would invite a duplicate run.

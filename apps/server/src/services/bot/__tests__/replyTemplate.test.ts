@@ -1,6 +1,10 @@
 import { ERROR_CODE_SPECS, formatErrorRef } from '@lobechat/model-runtime/errors';
 import { describe, expect, it } from 'vitest';
 
+import {
+  humanizeHeteroDispatchError,
+  resolveHeteroDispatchErrorType,
+} from '../../aiAgent/helpers/heteroErrors';
 import type { RenderStepParams } from '../replyTemplate';
 import {
   formatTokens,
@@ -399,7 +403,7 @@ describe('replyTemplate', () => {
     });
 
     it('names the unreachable device instead of falling to the legacy tier', () => {
-      // A hetero dispatch failure (device offline / unregistered / no gateway)
+      // A hetero dispatch failure (device offline / no gateway)
       // reaches the bot as `DeviceGatewayNotConfigured` with no attribution, so
       // without its own mapping it rendered a bare "Agent Execution Failed".
       const output = renderAgentError(
@@ -415,6 +419,28 @@ describe('replyTemplate', () => {
       const zh = renderAgentError('DeviceGatewayNotConfigured', undefined, 'op-device', 'zh-CN');
       expect(zh).toContain('无法连接到运行该 Agent 的设备');
       expect(zh).not.toContain('Agent 执行失败');
+    });
+
+    it.each([
+      [
+        'en-US',
+        "**Can't reach the device this agent is bound to right now.**\nTry again in a moment. If it still can't connect, check that the LobeHub desktop app or `lh` CLI on the device is connected, or switch to another online device.",
+      ],
+      [
+        'zh-CN',
+        '**当前无法连接到此 Agent 绑定的设备**\n请稍后重试；如果仍无法连接，请检查设备上的 LobeHub 桌面端或 `lh` CLI 是否已连接，或切换到其他在线设备。',
+      ],
+    ] as const)('renders retry-first device-not-found guidance in %s', (locale, copy) => {
+      const raw = '{"error":"DEVICE_NOT_FOUND","success":false}';
+      const output = renderAgentError(
+        resolveHeteroDispatchErrorType(raw),
+        humanizeHeteroDispatchError(raw),
+        'op-device',
+        locale,
+      );
+
+      expect(output).toBe(`${copy}\nOperation ID: \`op-device\``);
+      expect(output).not.toContain('DEVICE_NOT_FOUND');
     });
 
     it('classifies a legacy envelope before choosing IM copy', () => {
