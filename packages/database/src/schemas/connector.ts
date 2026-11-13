@@ -142,6 +142,8 @@ export interface ComposioConnectorMetadata {
 export interface ConnectorMetadata {
   [key: string]: unknown;
   avatar?: string;
+  /** Protocol capabilities learned when connector tools are synchronized. */
+  capabilities?: { events?: { supported: boolean } };
   composio?: ComposioConnectorMetadata;
   customHeaders?: Record<string, string>;
   description?: string;
