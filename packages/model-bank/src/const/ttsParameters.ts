@@ -363,3 +363,159 @@ export const elevenlabsExpressiveTTSSchema: TTSModelParamsSchema = {
   format: { default: 'mp3', enum: ELEVENLABS_TTS_FORMATS },
   voice: { default: ELEVENLABS_DEFAULT_VOICE },
 };
+
+/**
+ * Sentinel voice id: Fish Audio speaks with its default voice when a request carries no
+ * `reference_id`, so the runtime omits the field for this id.
+ * @see https://docs.fish.audio/developer-guide/getting-started/quickstart
+ */
+export const FISH_AUDIO_DEFAULT_VOICE_ID = 'default';
+
+/**
+ * Fish Audio publishes no catalog of voices it owns: the Voice Library is mostly
+ * community uploads, including unlicensed character and real-person clones, so none of it
+ * is bundled. The built-in entry is Fish Audio's own default voice; callers pass the
+ * `reference_id` of a voice they cloned or are licensed to use as `voice`.
+ */
+export const fishAudioTTSVoices: TTSVoice[] = [
+  {
+    description: 'The voice Fish Audio uses when no reference voice is given',
+    displayName: 'Fish Audio default',
+    gender: 'neutral',
+    id: FISH_AUDIO_DEFAULT_VOICE_ID,
+    language: 'multilingual',
+  },
+];
+
+/** `format`: mp3, wav, pcm and opus; there is no aac or flac output. */
+const FISH_AUDIO_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
+  (format) => format !== 'aac' && format !== 'flac',
+);
+
+/** Upper bound of the delivery direction placed in front of the text. */
+export const FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH = 200;
+
+/** S1 takes `prosody.speed` from 0.5 to 2 but no bracketed delivery directions. */
+export const fishAudioTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: FISH_AUDIO_TTS_FORMATS },
+  speed: { default: 1, max: 2, min: 0.5, step: 0.05 },
+  voice: { default: FISH_AUDIO_DEFAULT_VOICE_ID },
+};
+
+/**
+ * The S2 family and Drama 3 follow natural-language `[directions]` written into the text;
+ * `instructions` is sent that way, in front of the input, and is billed with it.
+ * @see https://docs.fish.audio/features/text-to-speech/drama-3
+ */
+export const fishAudioDirectedTTSSchema: TTSModelParamsSchema = {
+  ...fishAudioTTSSchema,
+  instructions: { default: '', maxLength: FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH },
+};
+
+/**
+ * Official Doubao Speech 2.0 voices (`*_uranus_bigtts`), which only the `seed-tts-2.0`
+ * resource can speak. Voice clones (`S_*`) belong to the account and are passed by id.
+ * @see https://www.volcengine.com/docs/6561/1257544
+ */
+export const doubaoSpeech20Voices: TTSVoice[] = [
+  {
+    description: 'Lively, multilingual',
+    displayName: 'Vivi 2.0',
+    gender: 'female',
+    id: 'zh_female_vv_uranus_bigtts',
+    language: 'multilingual',
+  },
+  {
+    displayName: '小何 2.0',
+    gender: 'female',
+    id: 'zh_female_xiaohe_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  { displayName: '云舟 2.0', gender: 'male', id: 'zh_male_m191_uranus_bigtts', language: 'zh-CN' },
+  {
+    displayName: '小天 2.0',
+    gender: 'male',
+    id: 'zh_male_taocheng_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  {
+    displayName: '团子 2.0',
+    gender: 'female',
+    id: 'zh_female_tuanzi_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  {
+    displayName: '爽快思思 2.0',
+    gender: 'female',
+    id: 'zh_female_shuangkuaisisi_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  {
+    displayName: '知性灿灿 2.0',
+    gender: 'female',
+    id: 'zh_female_cancan_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  {
+    displayName: '清新女声 2.0',
+    gender: 'female',
+    id: 'zh_female_qingxinnvsheng_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  {
+    displayName: '暖阳女声 2.0',
+    gender: 'female',
+    id: 'zh_female_kefunvsheng_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  {
+    displayName: '深夜播客 2.0',
+    gender: 'male',
+    id: 'zh_male_shenyeboke_uranus_bigtts',
+    language: 'zh-CN',
+  },
+  { displayName: 'Tim', gender: 'male', id: 'en_male_tim_uranus_bigtts', language: 'en-US' },
+  {
+    displayName: 'Dacey',
+    gender: 'female',
+    id: 'en_female_dacey_uranus_bigtts',
+    language: 'en-US',
+  },
+  {
+    displayName: 'Stokie',
+    gender: 'female',
+    id: 'en_female_stokie_uranus_bigtts',
+    language: 'en-US',
+  },
+  { displayName: 'Alex', gender: 'male', id: 'en_male_alex_uranus_bigtts', language: 'en-US' },
+  {
+    displayName: 'Charlotte',
+    gender: 'female',
+    id: 'en_female_authoritative-british_uranus_bigtts',
+    language: 'en-GB',
+  },
+  { displayName: 'Ryan', gender: 'male', id: 'en_male_ryan_uranus_bigtts', language: 'en-US' },
+];
+
+/** Vivi 2.0, the voice of the official Seed-TTS 2.0 examples. */
+export const DOUBAO_SPEECH_DEFAULT_VOICE_ID = 'zh_female_vv_uranus_bigtts';
+
+/** Voice ids in the built-in Doubao Speech catalog. */
+export const DOUBAO_SPEECH_VOICE_IDS: ReadonlySet<string> = new Set(
+  doubaoSpeech20Voices.map((voice) => voice.id),
+);
+
+/**
+ * V3 `audio_params`: format mp3 / ogg_opus / pcm / wav (opus is always 48 kHz),
+ * `speech_rate` and `loudness_rate` from -50 to 100 (0.5x to 2x), and
+ * `post_process.pitch` from -12 to 12 semitones.
+ * @see https://www.volcengine.com/docs/6561/2528925
+ */
+export const doubaoSpeechTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: ['mp3', 'opus', 'wav', 'pcm'] },
+  pitch: { default: 0, max: 12, min: -12, step: 1 },
+  sampleRate: { default: 24_000, enum: [8000, 16_000, 22_050, 24_000, 32_000, 44_100, 48_000] },
+  speed: { default: 1, max: 2, min: 0.5, step: 0.05 },
+  voice: { default: DOUBAO_SPEECH_DEFAULT_VOICE_ID },
+  volume: { default: 1, max: 2, min: 0.5, step: 0.05 },
+};
