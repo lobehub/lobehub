@@ -27,6 +27,7 @@ import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import type { TopicModel } from '@/database/models/topic';
+import { defaultsToAuto } from '@/helpers/executionTarget';
 import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
@@ -793,13 +794,19 @@ export const setupTurn = async (
       // grab whichever machine is online now.
       const topicDeviceBindingPinned =
         canUseTopicPin && existingTopic?.metadata?.deviceBindingPinned === true;
+      // An unset target is the same default as `auto` (see `defaultsToAuto`), so
+      // both re-pick a device on every turn instead of resurrecting an earlier
+      // pick — only a binding the caller chose explicitly pins the conversation.
+      const autoTargetSelected =
+        agentConfig.agencyConfig?.executionTarget === 'auto' ||
+        defaultsToAuto(agentConfig.agencyConfig, isHeterogeneousAgentModelId(model));
       // A project-directory topic already routed to its directory's device above.
       if (
         !requestedDeviceId &&
         !existingTopic?.projectWorkingDirectoryId &&
         topicPinnedDeviceId &&
         !isFixedExecutionTargetSelection &&
-        (agentConfig.agencyConfig?.executionTarget !== 'auto' || topicDeviceBindingPinned)
+        (!autoTargetSelected || topicDeviceBindingPinned)
       ) {
         resolvedRequestedDeviceId = topicPinnedDeviceId;
         effectiveRequestedDeviceId = topicPinnedDeviceId;
