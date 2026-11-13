@@ -34,12 +34,12 @@ vi.mock('@/store/tool/selectors', () => ({
   },
 }));
 
-vi.mock('@/store/tool/slices/connector', () => ({
-  connectorSelectors: {
-    connectorByIdentifierForAgent: (id: string, agentId?: string) => () =>
-      (agentId && toolStore.loaded.has(agentId) ? agentTools.get(agentId)?.get(id) : undefined) ??
-      connectors.get(id),
-  },
+// The row the conversation's call runs on; `toolCallPolicy.connectorScope.test.ts`
+// covers how it is resolved
+vi.mock('@/services/connectorRun', () => ({
+  resolveRunConnector: async (id: string, { agentId }: { agentId?: string } = {}) =>
+    (agentId && toolStore.loaded.has(agentId) ? agentTools.get(agentId)?.get(id) : undefined) ??
+    connectors.get(id),
 }));
 
 vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));

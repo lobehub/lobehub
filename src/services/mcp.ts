@@ -21,25 +21,12 @@ import { type MCPToolCallResult } from '@/libs/mcp';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
-import { useAgentStore } from '@/store/agent';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+import { resolveRunConnector } from './connectorRun';
 import { discoverService } from './discover';
-
-/**
- * Whether this call may belong to a private agent's own conversation — the only
- * place a private connector may run. It picks which row the client routes by;
- * a desktop that then runs a stdio connector itself reads the row the server
- * resolves for the conversation (`connector.getForRun`), since only the server
- * can tell the agent's own topic from a group, channel or another agent's one.
- * Without a topic the server never resolves a private row, so neither does this.
- */
-const isPrivateConnectorRun = (agentId?: string, topicId?: string): boolean => {
-  if (!agentId || !topicId) return false;
-  return useAgentStore.getState().agentMap[agentId]?.visibility === 'private';
-};
 
 /**
  * Calculate byte size of object
@@ -234,11 +221,10 @@ class MCPService {
     // gateways keep the existing server route for conversation calls.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
-    // original executor path.
-    const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId, {
-      includePrivate: isPrivateConnectorRun(agentId, topicId),
-    })(s);
+    // original executor path. The route follows the row the server resolves for
+    // this conversation: a private stdio row the conversation may not use must
+    // not send its call over IPC when the server runs a shared HTTP row.
+    const connector = await resolveRunConnector(identifier, { agentId, topicId });
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
@@ -549,10 +535,8 @@ class MCPService {
       s = getToolStoreState();
     }
 
-    const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId, {
-      includePrivate: isPrivateConnectorRun(agentId, topicId),
-    })(s);
+    // The row the conversation's calls run on, as in `invokeMcpToolCall`
+    const connector = await resolveRunConnector(identifier, { agentId, topicId });
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
     // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
     // tools are synced to) leaves it to the plugin.

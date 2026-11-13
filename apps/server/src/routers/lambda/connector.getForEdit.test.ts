@@ -147,3 +147,50 @@ describe('connectorRouter.getForRun', () => {
     expect(queryByConnector).not.toHaveBeenCalled();
   });
 });
+
+describe('connectorRouter.resolveForRun', () => {
+  const resolveByIdentifiers = vi.fn();
+  const existsById = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return { existsById } as never;
+    });
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return { resolveByIdentifiers } as never;
+    });
+    existsById.mockResolvedValue(true);
+    resolveByIdentifiers.mockResolvedValue([connector]);
+  });
+
+  const caller = (userId: string) =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId,
+      workspaceId: 'workspace',
+      workspaceRole: 'viewer',
+    } as never);
+
+  const input = { agentId: 'agent-private', identifier: 'local-mcp', topicId: 'topic-group' };
+
+  it('names the row the conversation runs on, and nothing of its configuration', async () => {
+    // Any member who can call the tool may ask: the answer is an id, not the
+    // creator-gated configuration getForRun returns.
+    await expect(caller('another-member').resolveForRun(input)).resolves.toEqual({
+      id: connector.id,
+    });
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['local-mcp'], {
+      agentId: 'agent-private',
+      topicId: 'topic-group',
+    });
+  });
+
+  it('answers null when the conversation resolves no row', async () => {
+    resolveByIdentifiers.mockResolvedValue([]);
+    await expect(caller('creator').resolveForRun(input)).resolves.toBeNull();
+
+    existsById.mockResolvedValue(false);
+    await expect(caller('creator').resolveForRun(input)).resolves.toBeNull();
+  });
+});

@@ -135,7 +135,7 @@ export const connectAppView = ({
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
       const { agentId, identifier, onThisDevice, server, t, topicId } = getContext();
-      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
+      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs, topicId });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {
         if (pendingToolApprovals >= MAX_PENDING_TOOL_APPROVALS) {

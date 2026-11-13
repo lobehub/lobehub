@@ -17,7 +17,8 @@ import { connectorProcedure, connectorWriteProcedure } from './procedures';
 
 /**
  * A conversation's use of a connector: calling its tools, reading the views
- * they render with, and the configuration a desktop needs to run one itself.
+ * they render with, which row it runs on, and the configuration a desktop
+ * needs to run one itself.
  * Every procedure resolves the connector the way the conversation's run does
  * (`resolveConnectorForRun`), so a private connector serves only the
  * conversations that may use it.
@@ -50,6 +51,29 @@ export const connectorRunRouter = router({
       const wsId = ctx.workspaceId ?? undefined;
       const toolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, { agentRun: true });
       return toConnectorEditDetail(connector, await toolModel.queryByConnector(connector.id));
+    }),
+
+  /**
+   * Which connector row a conversation's call of `identifier` runs on — the
+   * row `callTool` resolves — by id only, with no configuration or secret, so
+   * any member who can call the tool may ask. A client holding both a private
+   * and a shared row of the identifier asks here: only the server can tell a
+   * private agent's own topic from a group, channel or another agent's one, and
+   * the approval a view's call needs and the transport it takes must follow the
+   * row that executes, not the client's guess.
+   */
+  resolveForRun: connectorProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        identifier: z.string().min(1),
+        /** The conversation the call belongs to; see `callTool`. */
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const [connector] = await resolveConnectorForRun(input, ctx);
+      return connector ? { id: connector.id } : null;
     }),
 
   /**

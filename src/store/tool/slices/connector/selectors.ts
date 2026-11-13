@@ -108,11 +108,12 @@ const connectorByIdentifierForAgent =
     identifier: string,
     agentId?: string,
     /**
-     * Whether the caller's private rows take part. Executors pass the answer to
-     * `connectorRunScope` (only a private agent's own conversation may run one);
-     * management surfaces leave the default. A private row the run may not use
-     * must not shadow the shared row of the same identifier, or a public agent
-     * would execute a connection its scope explicitly excludes.
+     * Whether the caller's private rows take part. Only the server can tell
+     * whether a conversation may run one (`connectorRunScope`), so executors
+     * resolve through `resolveRunConnector`, which asks it when this decides
+     * the row; management surfaces leave the default. A private row the run
+     * may not use must not shadow the shared row of the same identifier, or a
+     * public agent would execute a connection its scope explicitly excludes.
      */
     { includePrivate = true }: { includePrivate?: boolean } = {},
   ) =>
