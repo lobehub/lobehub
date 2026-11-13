@@ -30,22 +30,63 @@ const exists = async (filePath: string) => {
   }
 };
 
+const SNAPSHOT_ATTEMPTS = 5;
+const SNAPSHOT_RETRY_MS = 20;
+
+type OpenFile = (filePath: string) => Promise<FileHandle>;
+
+const openOrSkip = (openFile: OpenFile, filePath: string) =>
+  openFile(filePath).catch(() => undefined);
+
+/** Every opened handle still is the file at its path, and no missing path has appeared. */
+const isConsistentSnapshot = async (paths: string[], handles: (FileHandle | undefined)[]) => {
+  const [opened, current] = await Promise.all([
+    Promise.all(handles.map((handle) => handle?.stat().then(({ ino }) => ino))),
+    Promise.all(
+      paths.map((filePath) =>
+        stat(filePath).then(
+          ({ ino }) => ino,
+          () => undefined,
+        ),
+      ),
+    ),
+  ]);
+  return opened.every((ino, index) => ino === current[index]);
+};
+
+const closeAll = (handles: (FileHandle | undefined)[]) =>
+  Promise.all(handles.map((handle) => handle?.close().catch(() => undefined)));
+
 /**
  * Opens a process's log files, oldest first: `main.jsonl.3` … `main.jsonl.1`, then
- * `main.jsonl`. All handles are opened before any is read: the writer may rotate
- * (rename every generation up by one) mid-export, and an open handle keeps reading the
- * file it was opened on, so no generation is skipped or read twice.
+ * `main.jsonl`, as one snapshot. The writer may rotate (rename every generation up by
+ * one) at any moment; an open handle keeps reading the file it was opened on, so once
+ * all are open no generation can be skipped or read twice. A rotation that lands
+ * between the opens is detected by comparing each handle with its path, and the
+ * snapshot is retaken.
  */
-export const openGenerations = async (logDirectory: string, fileName: string) => {
-  const candidates = [
+export const openGenerations = async (
+  logDirectory: string,
+  fileName: string,
+  openFile: OpenFile = (filePath) => open(filePath, 'r'),
+) => {
+  const paths = [
     ...Array.from({ length: MAX_LOG_GENERATIONS }, (_, index) =>
       path.join(logDirectory, `${fileName}.${MAX_LOG_GENERATIONS - index}`),
     ),
     path.join(logDirectory, fileName),
   ];
-  const handles = await Promise.all(
-    candidates.map((filePath) => open(filePath, 'r').catch(() => undefined)),
-  );
+
+  let handles: (FileHandle | undefined)[] = [];
+  for (let attempt = 1; attempt <= SNAPSHOT_ATTEMPTS; attempt += 1) {
+    handles = [];
+    for (const filePath of paths) handles.push(await openOrSkip(openFile, filePath));
+    if (attempt === SNAPSHOT_ATTEMPTS || (await isConsistentSnapshot(paths, handles))) break;
+    await closeAll(handles);
+    await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_RETRY_MS));
+  }
+  // After the last attempt the snapshot is kept as is: a bundle with a possible gap
+  // during sustained rotation is more useful than no bundle.
   return handles.filter((handle): handle is FileHandle => handle !== undefined);
 };
 

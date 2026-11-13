@@ -272,11 +272,19 @@ export default class SystemController extends ControllerModule {
     // Queued lines would otherwise miss the bundle, including the click that made it.
     await flushStructuredLogs();
 
-    const result = await writeDiagnosticsBundle({
-      logDirectory,
-      outputDirectory: safeGetPath('downloads') ?? logDirectory,
-      systemInfo: this.getDiagnosticsSystemInfo(),
-    });
+    const options = { logDirectory, now: new Date(), systemInfo: this.getDiagnosticsSystemInfo() };
+    const downloads = safeGetPath('downloads');
+    let result: DiagnosticsBundleResult | undefined;
+    if (downloads) {
+      // Downloads can resolve yet be missing or unwritable (redirected, sandboxed, removed).
+      result = await writeDiagnosticsBundle({ ...options, outputDirectory: downloads }).catch(
+        (error) => {
+          logger.warn('Diagnostics could not be written to Downloads; using the log folder', error);
+          return undefined;
+        },
+      );
+    }
+    result ??= await writeDiagnosticsBundle({ ...options, outputDirectory: logDirectory });
     shell.showItemInFolder(result.filePath);
     logger.info(`Diagnostics exported: ${result.fileName} (${result.size} bytes)`);
     return result;

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -123,6 +123,37 @@ describe('collectRecentLogLines', () => {
         .split('\n')
         .map((line) => JSON.parse(line).msg),
     ).toEqual(['gen 2', 'gen 1', 'live']);
+  });
+
+  it('retakes the snapshot when the writer rotates between opening two files', async () => {
+    const file = (suffix = '') => path.join(logDirectory, `main.jsonl${suffix}`);
+    await writeFile(file('.2'), `${record('gen 2', 3)}\n`);
+    await writeFile(file('.1'), `${record('gen 1', 2)}\n`);
+    await writeFile(file(), `${record('live', 1)}\n`);
+
+    let rotated = false;
+    const openFile = async (filePath: string) => {
+      const handle = await open(filePath, 'r');
+      // Rotate right after `.2` is opened: the next open of `.1` then gets the old live
+      // file, so a single pass would lose "gen 1".
+      if (!rotated && filePath === file('.2')) {
+        rotated = true;
+        await rename(file('.2'), file('.3'));
+        await rename(file('.1'), file('.2'));
+        await rename(file(), file('.1'));
+        await writeFile(file(), `${record('after rotation', 0)}\n`);
+      }
+      return handle;
+    };
+
+    const handles = await openGenerations(logDirectory, 'main.jsonl', openFile);
+    const content = await collectRecentLogLines(handles, NOW.getTime() - 24 * HOUR);
+    expect(
+      content
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line).msg),
+    ).toEqual(['gen 2', 'gen 1', 'live', 'after rotation']);
   });
 });
 

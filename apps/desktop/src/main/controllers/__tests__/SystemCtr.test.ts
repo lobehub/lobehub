@@ -302,6 +302,22 @@ describe('SystemController', () => {
       expect(result).toMatchObject({ size: 2048 });
     });
 
+    it('falls back to the log folder when Downloads cannot be written', async () => {
+      const { shell } = await import('electron');
+      diagnosticsBundleMock.writeDiagnosticsBundle.mockRejectedValueOnce(
+        Object.assign(new Error('EACCES'), { code: 'EACCES' }),
+      );
+
+      await invokeIpc('system.exportDiagnostics');
+
+      expect(diagnosticsBundleMock.writeDiagnosticsBundle).toHaveBeenLastCalledWith(
+        expect.objectContaining({ outputDirectory: '/mock/path/userData/logs' }),
+      );
+      expect(shell.showItemInFolder).toHaveBeenCalledWith(
+        '/mock/path/userData/logs/LobeHub-diagnostics-20261113-080000.zip',
+      );
+    });
+
     it('opens the structured log directory', async () => {
       const { shell } = await import('electron');
       await invokeIpc('system.openLogDirectory');
