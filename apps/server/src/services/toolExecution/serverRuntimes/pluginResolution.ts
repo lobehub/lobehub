@@ -27,7 +27,7 @@ export type PluginResolution =
   | { status: 'unknown'; suggestions: string[] };
 
 export interface PluginResolverDeps {
-  connectorModel: Pick<ConnectorModel, 'resolveAll'>;
+  connectorModel: Pick<ConnectorModel, 'queryAvailableForAgent'>;
   pluginModel: Pick<PluginModel, 'findById' | 'query'>;
 }
 
@@ -52,7 +52,10 @@ export const resolvePluginIdentifier = async (
 
   // A connector shadows a same-named installed plugin, but only once it is
   // enabled and connected — a disabled or disconnected row contributes no tools.
-  const connectors = await deps.connectorModel.resolveAll({ agentId: options.agentId });
+  // Checked against what the target agent loads in its own conversation, so an
+  // owner's private connector counts on their private agent: no topic is
+  // involved in editing a configuration.
+  const connectors = await deps.connectorModel.queryAvailableForAgent(options.agentId);
   const connector = connectors.find((c) => c.identifier === identifier);
   if (connector) {
     return connector.isEnabled && connector.status === 'connected'
